@@ -113,6 +113,12 @@ def main():
     # ── doctor ──
     sub.add_parser("doctor", help="Check platform availability")
 
+    # ── check-update ──
+    sub.add_parser("check-update", help="Check for new versions and changes")
+
+    # ── watch ──
+    sub.add_parser("watch", help="Quick health check + update check (for scheduled tasks)")
+
     # ── version ──
     sub.add_parser("version", help="Show version")
 
@@ -131,6 +137,10 @@ def main():
 
     if args.command == "doctor":
         _cmd_doctor()
+    elif args.command == "check-update":
+        _cmd_check_update()
+    elif args.command == "watch":
+        _cmd_watch()
     elif args.command == "setup":
         _cmd_setup()
     elif args.command == "install":
@@ -730,6 +740,130 @@ async def _cmd_search(args):
         extra = r.get("extra", {})
         if extra.get("stars"):
             print(f"   ⭐ {extra['stars']}  🍴 {extra.get('forks', 0)}  📝 {extra.get('language', '')}")
+
+
+def _cmd_check_update():
+    """Check for newer versions on GitHub."""
+    import requests
+    from agent_reach import __version__
+
+    print(f"📦 当前版本: v{__version__}")
+
+    try:
+        # Fetch latest version from GitHub
+        resp = requests.get(
+            "https://api.github.com/repos/Panniantong/Agent-Reach/releases/latest",
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            latest = data.get("tag_name", "").lstrip("v")
+            body = data.get("body", "")
+
+            if latest and latest != __version__:
+                print(f"🆕 最新版本: v{latest} ← 有更新！")
+                if body:
+                    print()
+                    print("更新内容：")
+                    # Show first 20 lines of release notes
+                    for line in body.strip().split("\n")[:20]:
+                        print(f"  {line}")
+                print()
+                print("更新命令:")
+                print("  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
+                return "update_available"
+            else:
+                print(f"✅ 已是最新版本")
+                return "up_to_date"
+        else:
+            # No releases yet, fall back to comparing commit
+            resp2 = requests.get(
+                "https://api.github.com/repos/Panniantong/Agent-Reach/commits/main",
+                timeout=10,
+            )
+            if resp2.status_code == 200:
+                commit = resp2.json()
+                sha = commit.get("sha", "")[:7]
+                msg = commit.get("commit", {}).get("message", "").split("\n")[0]
+                date = commit.get("commit", {}).get("committer", {}).get("date", "")[:10]
+                print(f"🔍 最新提交: {sha} ({date}) {msg}")
+                print()
+                print("更新命令:")
+                print("  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
+                return "unknown"
+            else:
+                print("⚠️ 无法检查更新（网络问题）")
+                return "error"
+    except Exception as e:
+        print(f"⚠️ 无法检查更新: {e}")
+        return "error"
+
+
+def _cmd_watch():
+    """Quick health check + update check, designed for scheduled tasks.
+
+    Only outputs problems. If everything is fine, outputs a single line.
+    """
+    from agent_reach.config import Config
+    from agent_reach.doctor import check_all
+    import requests
+    from agent_reach import __version__
+
+    config = Config()
+    issues = []
+
+    # Check channels
+    results = check_all(config)
+    ok = sum(1 for r in results.values() if r["status"] == "ok")
+    total = len(results)
+
+    # Find broken channels (were working, now broken)
+    for key, r in results.items():
+        if r["status"] in ("off", "error"):
+            issues.append(f"❌ {r['name']}：{r['message']}")
+        elif r["status"] == "warn":
+            issues.append(f"⚠️ {r['name']}：{r['message']}")
+
+    # Check for updates
+    update_available = False
+    new_version = ""
+    release_body = ""
+    try:
+        resp = requests.get(
+            "https://api.github.com/repos/Panniantong/Agent-Reach/releases/latest",
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            latest = data.get("tag_name", "").lstrip("v")
+            if latest and latest != __version__:
+                update_available = True
+                new_version = latest
+                release_body = data.get("body", "")
+    except Exception:
+        pass
+
+    # Output
+    if not issues and not update_available:
+        print(f"👁️ Agent Reach: 全部正常 ({ok}/{total} 渠道可用，v{__version__} 已是最新)")
+        return
+
+    print(f"👁️ Agent Reach 监控报告")
+    print(f"=" * 40)
+    print(f"📦 版本: v{__version__}  |  渠道: {ok}/{total}")
+
+    if issues:
+        print()
+        for issue in issues:
+            print(f"  {issue}")
+
+    if update_available:
+        print()
+        print(f"🆕 新版本可用: v{new_version}")
+        if release_body:
+            for line in release_body.strip().split("\n")[:10]:
+                print(f"    {line}")
+        print(f"  更新: pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
 
 
 if __name__ == "__main__":
