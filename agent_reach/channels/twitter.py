@@ -60,7 +60,8 @@ class TwitterChannel(Channel):
     async def _read_bird(self, url: str, bird: str, config=None) -> ReadResult:
         result = subprocess.run(
             [bird, "read", url],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, timeout=30,
+            encoding='utf-8', errors='replace',
             env=_bird_env(config),
         )
         if result.returncode != 0:
@@ -147,7 +148,8 @@ class TwitterChannel(Channel):
         try:
             result = subprocess.run(
                 [bird, "search", query, "-n", str(limit)],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True, timeout=30,
+                encoding='utf-8', errors='replace',
                 env=_bird_env(config),
             )
             if result.returncode != 0:
