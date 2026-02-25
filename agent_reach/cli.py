@@ -19,6 +19,14 @@ import argparse
 import json
 import os
 
+# Fix Windows console encoding — emoji/CJK characters crash on cp936/cp1252
+if sys.platform == 'win32':
+    import io
+    if hasattr(sys.stdout, 'buffer'):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'buffer'):
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 from agent_reach import __version__
 
 
