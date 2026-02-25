@@ -98,6 +98,18 @@ agent-reach install --env=auto
 ```
 </details>
 
+<details>
+<summary>以 Skill 形式安装（Claude Code / OpenClaw / 任何支持 Skills 的 Agent）</summary>
+
+```bash
+npx skills add Panniantong/Agent-Reach@agent-reach
+```
+
+安装后，Agent 会在 Skill 列表中看到 `agent-reach`，自动知道如何使用所有搜索和阅读能力。
+
+> 如果通过 `agent-reach install` 安装，Skill 会自动注册，无需额外操作。
+</details>
+
 ---
 
 ## 装好就能用

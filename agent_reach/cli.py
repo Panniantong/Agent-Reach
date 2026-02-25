@@ -234,11 +234,56 @@ def _cmd_install(args):
     print()
     print(format_report(results))
     print()
+
+    # ── Install agent skill ──
+    _install_skill()
+
     print(f"✅ Installation complete! {ok}/{total} channels active.")
 
     if ok < total:
         print()
         print("🤖 Some channels are not active yet. If you're an AI Agent, try to fix them yourself — then run `agent-reach doctor` again.")
+
+
+def _install_skill():
+    """Install Agent Reach as an agent skill (OpenClaw / Claude Code)."""
+    import os
+    import importlib.resources
+
+    # Determine skill install path
+    skill_dirs = [
+        os.path.expanduser("~/.openclaw/skills"),   # OpenClaw
+        os.path.expanduser("~/.claude/skills"),      # Claude Code (if exists)
+        os.path.expanduser("~/.agents/skills"),      # Generic agents
+    ]
+
+    installed = False
+    for skill_dir in skill_dirs:
+        if os.path.isdir(skill_dir):
+            target = os.path.join(skill_dir, "agent-reach")
+            try:
+                os.makedirs(target, exist_ok=True)
+                # Read SKILL.md from package data
+                skill_md = importlib.resources.files("agent_reach").joinpath("skill", "SKILL.md").read_text()
+                with open(os.path.join(target, "SKILL.md"), "w") as f:
+                    f.write(skill_md)
+                platform_name = "OpenClaw" if "openclaw" in skill_dir else "Claude Code" if "claude" in skill_dir else "Agent"
+                print(f"🧩 Skill installed for {platform_name}: {target}")
+                installed = True
+            except Exception:
+                pass
+
+    if not installed:
+        # No known skill directory found — create for OpenClaw by default
+        target = os.path.expanduser("~/.openclaw/skills/agent-reach")
+        try:
+            os.makedirs(target, exist_ok=True)
+            skill_md = importlib.resources.files("agent_reach").joinpath("skill", "SKILL.md").read_text()
+            with open(os.path.join(target, "SKILL.md"), "w") as f:
+                f.write(skill_md)
+            print(f"🧩 Skill installed: {target}")
+        except Exception:
+            print("  ⬜ Could not install agent skill (optional)")
 
 
 def _install_system_deps():
