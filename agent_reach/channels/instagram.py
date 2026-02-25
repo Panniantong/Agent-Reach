@@ -53,7 +53,10 @@ class InstagramChannel(Channel):
 
     async def _read_instaloader(self, url: str, config=None) -> ReadResult:
         """Read Instagram content using instaloader Python API."""
-        try:
+        import asyncio
+        import concurrent.futures
+
+        def _sync_read():
             import instaloader
             L = instaloader.Instaloader(
                 download_pictures=False,
@@ -63,6 +66,7 @@ class InstagramChannel(Channel):
                 download_comments=False,
                 save_metadata=False,
                 compress_json=False,
+                max_connection_attempts=1,  # Don't retry on rate limit
             )
 
             # Try to load session if available
@@ -74,26 +78,32 @@ class InstagramChannel(Channel):
 
             path = urlparse(url).path.strip("/")
 
-            # Detect URL type
             if "/p/" in url or "/reel/" in url:
-                return await self._read_post(L, url, path)
+                return self._read_post_sync(L, url, path)
             else:
-                return await self._read_profile(L, url, path)
+                return self._read_profile_sync(L, url, path)
 
-        except ImportError:
-            return await self._read_jina(url)
-        except Exception as e:
-            # Fallback to Jina on any error
+        try:
+            # Run with 15s timeout to avoid instaloader's 30-min retry
+            loop = asyncio.get_event_loop()
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                result = await asyncio.wait_for(
+                    loop.run_in_executor(pool, _sync_read),
+                    timeout=15,
+                )
+                return result
+        except (asyncio.TimeoutError, Exception):
+            # Any error or timeout → Jina fallback
             return await self._read_jina(url)
 
-    async def _read_post(self, L, url: str, path: str) -> ReadResult:
-        """Read a single Instagram post."""
+    def _read_post_sync(self, L, url: str, path: str) -> ReadResult:
+        """Read a single Instagram post (sync, runs in executor)."""
         import instaloader
 
         # Extract shortcode from URL
         match = re.search(r"/(?:p|reel)/([A-Za-z0-9_-]+)", url)
         if not match:
-            return await self._read_jina(url)
+            raise ValueError("Cannot extract shortcode from URL")
 
         shortcode = match.group(1)
         try:
@@ -123,16 +133,16 @@ class InstagramChannel(Channel):
                 extra={"likes": post.likes, "comments": post.comments},
             )
         except Exception:
-            return await self._read_jina(url)
+            raise  # Let executor timeout handle fallback
 
-    async def _read_profile(self, L, url: str, path: str) -> ReadResult:
-        """Read an Instagram profile."""
+    def _read_profile_sync(self, L, url: str, path: str) -> ReadResult:
+        """Read an Instagram profile (sync, runs in executor)."""
         import instaloader
 
         # Extract username from path
         username = path.split("/")[0] if path else ""
         if not username or username in ("p", "reel", "stories", "explore"):
-            return await self._read_jina(url)
+            raise ValueError("Cannot extract username from URL")
 
         try:
             profile = instaloader.Profile.from_username(L.context, username)
@@ -175,7 +185,7 @@ class InstagramChannel(Channel):
                 },
             )
         except Exception:
-            return await self._read_jina(url)
+            raise  # Let executor timeout handle fallback
 
     async def _read_jina(self, url: str) -> ReadResult:
         """Fallback: use Jina Reader."""
