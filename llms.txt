@@ -1,0 +1,32 @@
+# Agent Reach
+
+> Give your AI agent eyes to see the entire internet. A unified CLI tool that lets AI agents read and search across 12+ platforms — Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu, Instagram, LinkedIn, Boss直聘, RSS, and any web page. One install, zero API fees.
+
+## Quick Start
+
+- [Installation Guide](https://github.com/Panniantong/Agent-Reach/blob/main/docs/install.md): Step-by-step setup instructions for AI agents
+- [README (中文)](https://github.com/Panniantong/Agent-Reach/blob/main/README.md): Full documentation in Chinese
+- [README (English)](https://github.com/Panniantong/Agent-Reach/blob/main/docs/README_en.md): Full documentation in English
+
+## Core Commands
+
+- [CLI Usage](https://github.com/Panniantong/Agent-Reach/blob/main/docs/install.md): `agent-reach read <url>` reads any URL, `agent-reach search-twitter "query"` searches Twitter, etc.
+
+## Key Features
+
+- Read any URL: tweets, Reddit posts, YouTube videos (transcripts), GitHub repos, articles, XiaoHongShu notes, Bilibili videos, RSS feeds
+- Search across platforms: Twitter/X, Reddit, GitHub, YouTube, Bilibili, XiaoHongShu, Instagram, LinkedIn, Boss直聘, Web (via Exa)
+- Self-diagnosis: `agent-reach doctor` checks what works and what needs setup
+- Auto-installs dependencies: `agent-reach install --env=auto`
+- Cookie-based auth for platforms that require login (Twitter, XiaoHongShu, Instagram)
+- Proxy support for platforms that block server IPs (Reddit, Bilibili)
+- Zero API fees: all backends are free and open-source (bird CLI, yt-dlp, Jina Reader, instaloader, etc.)
+
+## Troubleshooting
+
+- [Troubleshooting Guide](https://github.com/Panniantong/Agent-Reach/blob/main/docs/troubleshooting.md): Common issues and solutions
+
+## Optional
+
+- [SKILL.md](https://github.com/Panniantong/Agent-Reach/blob/main/agent_reach/skill/SKILL.md): Integration guide for AI agent frameworks (OpenClaw, Claude Code, etc.)
+- [PyPI Package](https://pypi.org/project/agent-reach/): `pip install agent-reach`

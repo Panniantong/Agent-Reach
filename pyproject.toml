@@ -6,7 +6,15 @@ readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [{name = "Neo Reid"}]
-keywords = ["ai-agent", "web-reader", "search", "mcp", "agent-infrastructure", "llm-tools"]
+keywords = [
+    "ai-agent", "llm-tools", "agent-infrastructure", "mcp",
+    "web-reader", "web-scraper", "search",
+    "twitter-scraper", "reddit-scraper", "youtube-transcript",
+    "bilibili", "xiaohongshu", "instagram",
+    "ai-search", "cli", "automation",
+    "claude-code", "cursor", "openai",
+    "free-api", "no-api-key",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

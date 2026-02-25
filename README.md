@@ -225,6 +225,54 @@ Agent Reach 在设计上重视安全：
 
 Star 一下，下次需要的时候能找到。⭐
 
+---
+
+## 常见问题 / FAQ
+
+<details>
+<summary><strong>AI Agent 怎么搜索 Twitter / X？不想付 API 费用</strong></summary>
+
+Agent Reach 使用 [bird CLI](https://www.npmjs.com/package/@steipete/bird) 通过 Cookie 认证访问 Twitter，完全免费。安装 Agent Reach 后，用 Cookie-Editor 导出你的 Twitter Cookie，运行 `agent-reach configure twitter-cookies "your_cookies"` 即可。之后 Agent 就可以用 `agent-reach search-twitter "关键词"` 搜索推文了。
+</details>
+
+<details>
+<summary><strong>How to search Twitter/X with AI agent for free (no API)?</strong></summary>
+
+Agent Reach uses the bird CLI with cookie auth — zero API fees. After installing, export your Twitter cookies with the Cookie-Editor extension, run `agent-reach configure twitter-cookies "your_cookies"`, then your agent can search with `agent-reach search-twitter "query"`.
+</details>
+
+<details>
+<summary><strong>Reddit 返回 403 / 服务器 IP 被封怎么办？</strong></summary>
+
+Reddit 封锁数据中心 IP。配置一个住宅代理即可解决：`agent-reach configure proxy http://user:pass@ip:port`。推荐 Webshare ($1/月)。本地电脑一般不会遇到这个问题。
+</details>
+
+<details>
+<summary><strong>How to get YouTube video transcripts for AI?</strong></summary>
+
+`agent-reach read https://youtube.com/watch?v=xxx` automatically extracts the transcript. Uses yt-dlp under the hood, supports multiple languages. No API key needed.
+</details>
+
+<details>
+<summary><strong>怎么让 AI Agent 读小红书？</strong></summary>
+
+小红书需要通过 Docker 运行一个 MCP 服务。安装 Docker 后，运行 `agent-reach install` 会自动配置。之后 Agent 就能用 `agent-reach read <小红书链接>` 或 `agent-reach search-xhs "关键词"` 了。
+</details>
+
+<details>
+<summary><strong>Compatible with Claude Code / Cursor / OpenClaw / Windsurf?</strong></summary>
+
+Yes! Agent Reach is a standard CLI tool — any AI coding agent that can run shell commands can use it. Works with Claude Code, Cursor, OpenClaw, Windsurf, Codex, and more. Just `pip install agent-reach` and the agent can start using it immediately.
+</details>
+
+<details>
+<summary><strong>Is this free? Any API costs?</strong></summary>
+
+100% free. All backends are open-source tools (bird CLI, yt-dlp, Jina Reader, instaloader, Exa, etc.) that don't require paid API keys. The only optional cost is a residential proxy (~$1/month) if you need Reddit/Bilibili access from a server.
+</details>
+
+---
+
 ## 致谢
 
 [Jina Reader](https://github.com/jina-ai/reader) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [bird](https://www.npmjs.com/package/@steipete/bird) · [Exa](https://exa.ai) · [mcporter](https://github.com/steipete/mcporter) · [feedparser](https://github.com/kurtmckee/feedparser) · [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) · [instaloader](https://github.com/instaloader/instaloader) · [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) · [mcp-bosszp](https://github.com/mucsbr/mcp-bosszp)
