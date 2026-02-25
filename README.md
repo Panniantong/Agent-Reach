@@ -81,33 +81,24 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 
 ## 快速上手
 
-复制给你的 AI Agent（Claude Code、OpenClaw、Cursor 等）：
+复制这句话给你的 AI Agent（Claude Code、OpenClaw、Cursor 等）：
 
 ```
 帮我安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
 ```
 
-Agent 自动安装、检测环境、告诉你哪些功能已经可以用。
+就这一步。Agent 会自己完成剩下的所有事情。
 
 <details>
-<summary>手动安装</summary>
+<summary>它会做什么？（点击展开）</summary>
 
-```bash
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
-agent-reach install --env=auto
-```
-</details>
+1. **安装 CLI 工具** — `pip install` 装好 `agent-reach` 命令行
+2. **安装系统依赖** — 自动检测并安装 Node.js、gh CLI、mcporter、bird 等
+3. **配置搜索引擎** — 通过 MCP 接入 Exa（免费，无需 API Key）
+4. **检测环境** — 判断是本地电脑还是服务器，给出对应的配置建议
+5. **注册 Skill** — 在 Agent 的 skills 目录安装 SKILL.md，以后 Agent 遇到"搜推特"、"看视频"这类需求，会自动知道调用 Agent Reach
 
-<details>
-<summary>以 Skill 形式安装（Claude Code / OpenClaw / 任何支持 Skills 的 Agent）</summary>
-
-```bash
-npx skills add Panniantong/Agent-Reach@agent-reach
-```
-
-Skill 安装后，Agent 读取 SKILL.md 时会自动检测 `agent-reach` CLI 是否存在，不存在则引导安装。
-
-> 如果通过 `agent-reach install` 安装，Skill 会自动注册，无需额外操作。
+安装完之后，`agent-reach doctor` 一条命令告诉你每个渠道的状态。
 </details>
 
 ---
