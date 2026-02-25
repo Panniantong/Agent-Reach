@@ -58,9 +58,9 @@ Copy that to your Agent. A few minutes later, it can read tweets, search Reddit,
 | 🌐 **Web** | Read | Zero config | Any URL → clean Markdown ([Jina Reader](https://github.com/jina-ai/reader) ⭐9.8K) |
 | 🐦 **Twitter/X** | Read · Search | Zero config / Cookie | Single tweets readable out of the box. Cookie unlocks search, timeline, posting ([bird](https://github.com/steipete/bird)) |
 | 📕 **XiaoHongShu** | Read · Search · **Post · Comment · Like** | mcporter | Via [xiaohongshu-mcp](https://github.com/user/xiaohongshu-mcp) internal API, install and go |
-| 📷 **Instagram** | Read · Search | instaloader | Posts, profiles, hashtags ([instaloader](https://github.com/instaloader/instaloader) ⭐9.8K) |
-| 💼 **LinkedIn** | Read · Search | mcporter / Jina | Profiles, companies, job search ([linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) ⭐900+) |
-| 🏢 **Boss直聘** | Read · Search | mcporter / Jina | Job search, greet recruiters ([mcp-bosszp](https://github.com/mucsbr/mcp-bosszp)) |
+| 📷 **Instagram** | Search (via Exa) | Read posts and profiles | Tell your Agent "help me set up Instagram" |
+| 💼 **LinkedIn** | Jina Reader (public pages) | Full profiles, companies, job search | Tell your Agent "help me set up LinkedIn" |
+| 🏢 **Boss直聘** | Jina Reader (job pages) | Job search, greet recruiters | Tell your Agent "help me set up Boss直聘" |
 | 🔍 **Web Search** | Search | Auto-configured | Auto-configured during install, free, no API key ([Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter)) |
 | 📦 **GitHub** | Read · Search | Zero config | [gh CLI](https://cli.github.com) powered. Public repos work immediately. `gh auth login` unlocks Fork, Issue, PR |
 | 📺 **YouTube** | Read · **Search** | Zero config | Subtitles + search across 1800+ video sites ([yt-dlp](https://github.com/yt-dlp/yt-dlp) ⭐148K) |
