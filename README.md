@@ -50,7 +50,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 |---|---|
 | 💰 **完全免费** | 所有工具开源、所有 API 免费。唯一可能花钱的是服务器代理（$1/月），本地电脑不需要 |
 | 🔒 **隐私安全** | Cookie 只存在你本地，不上传不外传。代码完全开源，随时可审查 |
-| 🔄 **持续更新** | 底层工具（yt-dlp、birdx、Jina Reader 等）定期追踪更新到最新版，你不用自己盯 |
+| 🔄 **持续更新** | 底层工具（yt-dlp、bird、Jina Reader 等）定期追踪更新到最新版，你不用自己盯 |
 | 🤖 **兼容所有 Agent** | Claude Code、OpenClaw、Cursor、Windsurf……任何能跑命令行的 Agent 都能用 |
 | 🩺 **自带诊断** | `agent-reach doctor` 一条命令告诉你哪个通、哪个不通、怎么修 |
 
@@ -130,7 +130,7 @@ Agent Reach 做的事情很简单：**帮你把这些选型和配置的活儿做
 ```
 channels/
 ├── web.py          → Jina Reader     ← 可以换成 Firecrawl、Crawl4AI……
-├── twitter.py      → birdx           ← 可以换成 Nitter、官方 API……
+├── twitter.py      → bird           ← 可以换成 Nitter、官方 API……
 ├── youtube.py      → yt-dlp           ← 可以换成 YouTube API、Whisper……
 ├── github.py       → gh CLI          ← 可以换成 REST API、PyGithub……
 ├── bilibili.py     → yt-dlp           ← 可以换成 bilibili-api……
@@ -146,7 +146,7 @@ channels/
 | 场景 | 选型 | 为什么选它 |
 |------|------|-----------|
 | 读网页 | [Jina Reader](https://github.com/jina-ai/reader) | 9.8K Star，免费，不需要 API Key |
-| 读推特 | [birdx](https://github.com/runesleo/birdx) | Cookie 登录，免费。官方 API 按量付费（读一条 $0.005） |
+| 读推特 | [bird](https://github.com/steipete/bird) | Cookie 登录，免费。官方 API 按量付费（读一条 $0.005） |
 | 视频字幕 + 搜索 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | 148K Star，YouTube + B站 + 1800 站通吃 |
 | 搜全网 | [Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter) | AI 语义搜索，MCP 接入免 Key |
 | GitHub | [gh CLI](https://cli.github.com) | 官方工具，认证后完整 API 能力 |
@@ -183,7 +183,7 @@ Star 一下，下次需要的时候能找到。⭐
 
 ## 致谢
 
-[Jina Reader](https://github.com/jina-ai/reader) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [birdx](https://github.com/runesleo/birdx) · [Exa](https://exa.ai) · [feedparser](https://github.com/kurtmckee/feedparser)
+[Jina Reader](https://github.com/jina-ai/reader) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [bird](https://github.com/steipete/bird) · [Exa](https://exa.ai) · [feedparser](https://github.com/kurtmckee/feedparser)
 
 ## License
 

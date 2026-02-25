@@ -78,7 +78,7 @@ class AgentReach:
         return [r.to_dict() for r in results]
 
     async def search_twitter(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Search Twitter. Uses birdx if available, else Exa."""
+        """Search Twitter. Uses bird CLI if available, else Exa."""
         ch = get_channel("twitter")
         results = await ch.search(query, config=self.config, limit=limit)
         return [r.to_dict() for r in results]

@@ -45,7 +45,7 @@ Copy that to your Agent. A few minutes later, it can read tweets, search Reddit,
 |---|---|
 | 💰 **Completely free** | All tools are open source, all APIs are free. The only possible cost is a server proxy ($1/month) — local computers don't need one |
 | 🔒 **Privacy safe** | Cookies stay local. Never uploaded. Fully open source — audit anytime |
-| 🔄 **Kept up to date** | Upstream tools (yt-dlp, birdx, Jina Reader, etc.) are tracked and updated regularly |
+| 🔄 **Kept up to date** | Upstream tools (yt-dlp, bird, Jina Reader, etc.) are tracked and updated regularly |
 | 🤖 **Works with any Agent** | Claude Code, OpenClaw, Cursor, Windsurf… any Agent that can run commands |
 | 🩺 **Built-in diagnostics** | `agent-reach doctor` — one command shows what works, what doesn't, and how to fix it |
 
@@ -56,7 +56,7 @@ Copy that to your Agent. A few minutes later, it can read tweets, search Reddit,
 | Platform | Capabilities | Setup | Notes |
 |----------|-------------|:-----:|-------|
 | 🌐 **Web** | Read | Zero config | Any URL → clean Markdown ([Jina Reader](https://github.com/jina-ai/reader) ⭐9.8K) |
-| 🐦 **Twitter/X** | Read · Search | Zero config / Cookie | Single tweets readable out of the box. Cookie unlocks search, timeline, posting ([birdx](https://github.com/runesleo/birdx)) |
+| 🐦 **Twitter/X** | Read · Search | Zero config / Cookie | Single tweets readable out of the box. Cookie unlocks search, timeline, posting ([bird](https://github.com/steipete/bird)) |
 | 📕 **XiaoHongShu** | Read · Search · **Post · Comment · Like** | mcporter | Via [xiaohongshu-mcp](https://github.com/user/xiaohongshu-mcp) internal API, install and go |
 | 🔍 **Web Search** | Search | Auto-configured | Auto-configured during install, free, no API key ([Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter)) |
 | 📦 **GitHub** | Read · Search | Zero config | [gh CLI](https://cli.github.com) powered. Public repos work immediately. `gh auth login` unlocks Fork, Issue, PR |
@@ -164,7 +164,7 @@ Each platform is a single Python file implementing a unified interface. **Backen
 ```
 channels/
 ├── web.py          → Jina Reader     ← swap to Firecrawl, Crawl4AI…
-├── twitter.py      → birdx           ← swap to Nitter, official API…
+├── twitter.py      → bird           ← swap to Nitter, official API…
 ├── youtube.py      → yt-dlp           ← swap to YouTube API, Whisper…
 ├── github.py       → gh CLI          ← swap to REST API, PyGithub…
 ├── bilibili.py     → yt-dlp           ← swap to bilibili-api…
@@ -180,7 +180,7 @@ channels/
 | Scenario | Tool | Why |
 |----------|------|-----|
 | Read web pages | [Jina Reader](https://github.com/jina-ai/reader) | 9.8K stars, free, no API key needed |
-| Read tweets | [birdx](https://github.com/runesleo/birdx) | Cookie auth, free. Official API is pay-per-use ($0.005/post read) |
+| Read tweets | [bird](https://github.com/steipete/bird) | Cookie auth, free. Official API is pay-per-use ($0.005/post read) |
 | Video subtitles + search | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | 148K stars, YouTube + Bilibili + 1800 sites |
 | Search the web | [Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter) | AI semantic search, MCP integration, no API key |
 | GitHub | [gh CLI](https://cli.github.com) | Official tool, full API after auth |
@@ -203,7 +203,7 @@ This project was entirely vibe-coded 🎸 There might be rough edges here and th
 
 ## Credits
 
-[Jina Reader](https://github.com/jina-ai/reader) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [birdx](https://github.com/runesleo/birdx) · [Exa](https://exa.ai) · [feedparser](https://github.com/kurtmckee/feedparser)
+[Jina Reader](https://github.com/jina-ai/reader) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [bird](https://github.com/steipete/bird) · [Exa](https://exa.ai) · [feedparser](https://github.com/kurtmckee/feedparser)
 
 ## License
 

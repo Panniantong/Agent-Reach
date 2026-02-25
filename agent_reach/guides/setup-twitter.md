@@ -1,44 +1,36 @@
-# Twitter 高级功能配置指南（birdx）
+# Twitter 高级功能配置指南（bird CLI）
 
 ## 功能说明
 基础 Twitter 功能（搜索+读单条推文）无需配置，开箱即用。
 
-高级功能需要 birdx：
+高级功能需要 bird CLI：
 - 查看用户时间线
 - 深度搜索（更精确、更多结果）
 - 读取完整线程（thread）
 - 查看关注列表推文
 
-birdx 是免费开源工具，但需要你的 Twitter 账号 cookie。
+bird 是免费开源工具（npm 包 @steipete/bird），但需要你的 Twitter 账号 cookie。
 
 ## Agent 可自动完成的步骤
 
-1. 检查 birdx 是否安装：
+1. 检查 bird 是否安装：
 ```bash
-which birdx && echo "installed" || echo "not installed"
+which bird && echo "installed" || echo "not installed"
 ```
 
-2. 安装 birdx：
+2. 安装 bird：
 ```bash
-pip install birdx
+npm install -g @steipete/bird
 ```
 
-3. 检查是否已配置 cookie：
+3. 测试（需要先配置 cookie）：
 ```bash
-birdx whoami 2>&1
+AUTH_TOKEN="xxx" CT0="yyy" bird search "test" -n 1
 ```
 
-4. 如果用户提供了 cookie，配置 birdx：
+4. 用 agent-reach 配置 cookie（推荐）：
 ```bash
-# birdx 的 cookie 配置文件位置
-# 通常在 ~/.birdx/cookies.json 或通过环境变量
-export TWITTER_AUTH_TOKEN="用户提供的auth_token"
-export TWITTER_CT0="用户提供的ct0"
-```
-
-5. 测试：
-```bash
-birdx search "test" -n 1
+agent-reach configure twitter-cookies "auth_token=xxx; ct0=yyy"
 ```
 
 ## 需要用户手动做的步骤
@@ -47,7 +39,13 @@ birdx search "test" -n 1
 
 > Twitter 高级功能需要你的 Twitter 账号 cookie（完全免费）。
 >
-> 步骤：
+> **最简单的方式：**
+> 1. 安装 Chrome 插件 [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm)
+> 2. 打开 https://x.com 并确保已登录
+> 3. 点击 Cookie-Editor 插件图标 → Export → Header String
+> 4. 把导出的内容发给我
+>
+> **手动方式：**
 > 1. 用 Chrome 打开 https://x.com 并确保你已登录
 > 2. 按 **F12** 打开开发者工具（Mac 按 Cmd+Option+I）
 > 3. 点击顶部的 **Application**（应用）标签
@@ -62,8 +60,8 @@ birdx search "test" -n 1
 
 ## Agent 收到 cookie 后的操作
 
-1. 安装 birdx（如果没装）：`pip install birdx`
-2. 配置 cookie：写入 birdx 配置
-3. 测试：`birdx whoami` 确认身份
-4. 反馈："✅ Twitter 高级功能已开启！你的账号是 @xxx。现在我可以查看时间线、读取线程了。"
+1. 安装 bird（如果没装）：`npm install -g @steipete/bird`
+2. 配置 cookie：`agent-reach configure twitter-cookies "粘贴的内容"`
+3. 测试：运行 `agent-reach doctor` 确认 Twitter 状态
+4. 反馈："✅ Twitter 高级功能已开启！现在可以搜索推文、查看时间线了。"
 5. 如果失败："❌ Cookie 无效或已过期，请重新导出。"

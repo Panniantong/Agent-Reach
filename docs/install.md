@@ -23,7 +23,7 @@ pip install https://github.com/Panniantong/agent-reach/archive/main.zip
 agent-reach install --env=auto
 ```
 
-This auto-installs system dependencies (gh CLI, Node.js, mcporter, birdx), configures Exa search, detects environment, and tests all channels.
+This auto-installs system dependencies (gh CLI, Node.js, mcporter, bird), configures Exa search, detects environment, and tests all channels.
 
 **Read the output carefully**, then run:
 

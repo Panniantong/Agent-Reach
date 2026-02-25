@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Twitter/X — via birdx CLI (free) or Jina Reader fallback.
+"""Twitter/X — via bird CLI (free) or Jina Reader fallback.
 
-Backend: birdx (https://github.com/runesleo/birdx) for search/timeline
+Backend: bird (@steipete/bird npm package) for search/timeline
          Jina Reader for single tweets
 Swap to: any Twitter access tool
 """
@@ -14,10 +14,29 @@ from typing import List
 import requests
 
 
+def _bird_cmd():
+    """Find bird CLI binary."""
+    return shutil.which("bird") or shutil.which("birdx")
+
+
+def _bird_env(config=None):
+    """Build env dict with Twitter cookies for bird CLI."""
+    import os
+    env = os.environ.copy()
+    if config:
+        auth_token = config.get("twitter_auth_token")
+        ct0 = config.get("twitter_ct0")
+        if auth_token:
+            env["AUTH_TOKEN"] = auth_token
+        if ct0:
+            env["CT0"] = ct0
+    return env
+
+
 class TwitterChannel(Channel):
     name = "twitter"
     description = "Twitter/X 推文"
-    backends = ["birdx", "Jina Reader"]
+    backends = ["bird", "Jina Reader"]
     tier = 0  # Single tweet reading is zero-config
 
     def can_handle(self, url: str) -> bool:
@@ -26,21 +45,23 @@ class TwitterChannel(Channel):
 
     def check(self, config=None):
         # Basic reading always works (Jina fallback)
-        if shutil.which("birdx"):
+        if _bird_cmd():
             return "ok", "搜索、时间线、发推全部可用"
-        return "ok", "可读取推文。安装 birdx + 配置 Cookie 可解锁搜索和发推"
+        return "ok", "可读取推文。安装 bird + 配置 Cookie 可解锁搜索和发推"
 
     async def read(self, url: str, config=None) -> ReadResult:
-        # Try birdx first
-        if shutil.which("birdx"):
-            return await self._read_birdx(url)
+        # Try bird first
+        bird = _bird_cmd()
+        if bird:
+            return await self._read_bird(url, bird, config)
         # Fallback: Jina Reader
         return await self._read_jina(url)
 
-    async def _read_birdx(self, url: str) -> ReadResult:
+    async def _read_bird(self, url: str, bird: str, config=None) -> ReadResult:
         result = subprocess.run(
-            ["birdx", "read", url],
+            [bird, "read", url],
             capture_output=True, text=True, timeout=30,
+            env=_bird_env(config),
         )
         if result.returncode != 0:
             return await self._read_jina(url)
@@ -84,7 +105,7 @@ class TwitterChannel(Channel):
                             "The tweet may have been deleted, or the account is private.\n\n"
                             "Tips:\n"
                             "- Make sure the URL is correct\n"
-                            "- Try: birdx read <url> (if birdx is installed)\n"
+                            "- Try: bird read <url> (if bird CLI is installed)\n"
                             "- For protected tweets, configure Twitter cookies: "
                             "agent-reach configure twitter-cookies AUTH_TOKEN CT0",
                     url=url,
@@ -105,7 +126,7 @@ class TwitterChannel(Channel):
                         "The tweet may have been deleted, or the account is private.\n\n"
                         "Tips:\n"
                         "- Make sure the URL is correct\n"
-                        "- Try: birdx read <url> (if birdx is installed)\n"
+                        "- Try: bird read <url> (if bird CLI is installed)\n"
                         "- For protected tweets, configure Twitter cookies: "
                         "agent-reach configure twitter-cookies AUTH_TOKEN CT0",
                 url=url,
@@ -115,27 +136,29 @@ class TwitterChannel(Channel):
     async def search(self, query: str, config=None, **kwargs) -> List[SearchResult]:
         limit = kwargs.get("limit", 10)
 
-        if shutil.which("birdx"):
-            return await self._search_birdx(query, limit)
+        bird = _bird_cmd()
+        if bird:
+            return await self._search_bird(query, limit, bird, config)
 
         # Fallback to Exa
         return await self._search_exa(query, limit, config)
 
-    async def _search_birdx(self, query: str, limit: int) -> List[SearchResult]:
+    async def _search_bird(self, query: str, limit: int, bird: str, config=None) -> List[SearchResult]:
         try:
             result = subprocess.run(
-                ["birdx", "search", query, "-n", str(limit)],
+                [bird, "search", query, "-n", str(limit)],
                 capture_output=True, text=True, timeout=30,
+                env=_bird_env(config),
             )
             if result.returncode != 0:
                 return []
 
-            return self._parse_birdx_output(result.stdout)
+            return self._parse_bird_output(result.stdout)
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return []
 
-    def _parse_birdx_output(self, text: str) -> List[SearchResult]:
-        """Parse birdx text output into SearchResults."""
+    def _parse_bird_output(self, text: str) -> List[SearchResult]:
+        """Parse bird text output into SearchResults."""
         results = []
         current = {}
         text_lines = []

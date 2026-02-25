@@ -22,7 +22,7 @@ class Config:
     FEATURE_REQUIREMENTS = {
         "exa_search": ["exa_api_key"],
         "reddit_proxy": ["reddit_proxy"],
-        "twitter_birdx": ["twitter_auth_token", "twitter_ct0"],
+        "twitter_bird": ["twitter_auth_token", "twitter_ct0"],
         "groq_whisper": ["groq_api_key"],
         "github_token": ["github_token"],
     }

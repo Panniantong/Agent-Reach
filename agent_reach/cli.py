@@ -305,23 +305,24 @@ def _install_system_deps():
         except Exception:
             print("  ⚠️  Node.js install failed. Try: apt install nodejs npm, or nvm install 22, or download from https://nodejs.org")
 
-    # ── birdx (for Twitter search) ──
-    if shutil.which("birdx"):
-        print("  ✅ birdx already installed")
+    # ── bird CLI (for Twitter search) ──
+    if shutil.which("bird") or shutil.which("birdx"):
+        print("  ✅ bird CLI already installed")
     else:
-        if shutil.which("pip3") or shutil.which("pip"):
-            pip_cmd = "pip3" if shutil.which("pip3") else "pip"
+        if shutil.which("npm"):
             try:
                 subprocess.run(
-                    [pip_cmd, "install", "-q", "birdx"],
+                    ["npm", "install", "-g", "@steipete/bird"],
                     capture_output=True, text=True, timeout=120,
                 )
-                if shutil.which("birdx"):
-                    print("  ✅ birdx installed (Twitter search + timeline)")
+                if shutil.which("bird"):
+                    print("  ✅ bird CLI installed (Twitter search + timeline)")
                 else:
-                    print("  ⬜ birdx install failed (optional — Twitter reading still works via Jina)")
+                    print("  ⬜ bird CLI install failed (optional — Twitter reading still works via Jina)")
             except Exception:
-                print("  ⬜ birdx install failed (optional — Twitter reading still works via Jina)")
+                print("  ⬜ bird CLI install failed (optional — Twitter reading still works via Jina)")
+        else:
+            print("  ⬜ bird CLI requires Node.js (optional — Twitter reading still works via Jina)")
 
 
 def _install_mcporter():
@@ -435,6 +436,7 @@ def _detect_environment():
 
 def _cmd_configure(args):
     """Set a config value and test it, or auto-extract from browser."""
+    import shutil
     from agent_reach.config import Config
 
     config = Config()
@@ -525,17 +527,23 @@ def _cmd_configure(args):
             print("Testing Twitter access...", end=" ")
             try:
                 import subprocess
-                result = subprocess.run(
-                    ["birdx", "search", "test", "-n", "1",
-                     "--auth-token", auth_token, "--ct0", ct0],
-                    capture_output=True, text=True, timeout=15,
-                )
-                if result.returncode == 0 and result.stdout.strip():
-                    print("✅ Twitter Advanced works!")
+                bird = shutil.which("bird") or shutil.which("birdx")
+                if not bird:
+                    print("⚠️ bird CLI not installed. Run: npm install -g @steipete/bird")
                 else:
-                    print(f"⚠️ Test returned no results (cookies might be wrong)")
-            except FileNotFoundError:
-                print("⚠️ birdx not installed. Run: pip install birdx")
+                    import os
+                    env = os.environ.copy()
+                    env["AUTH_TOKEN"] = auth_token
+                    env["CT0"] = ct0
+                    result = subprocess.run(
+                        [bird, "search", "test", "-n", "1"],
+                        capture_output=True, text=True, timeout=15,
+                        env=env,
+                    )
+                    if result.returncode == 0 and result.stdout.strip():
+                        print("✅ Twitter Advanced works!")
+                    else:
+                        print(f"⚠️ Test returned no results (cookies might be wrong)")
             except Exception as e:
                 print(f"❌ Failed: {e}")
         else:
