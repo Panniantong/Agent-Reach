@@ -82,9 +82,18 @@ Some channels need credentials only the user can provide. Based on the doctor ou
 
 > 🔒 **Security tip:** For platforms that need cookies (Twitter, XiaoHongShu), we recommend using a **dedicated/secondary account** rather than your main account. Cookie-based auth grants full account access — using a separate account limits the blast radius if credentials are ever compromised.
 
-**Twitter search & posting (server users):**
+> 🍪 **Cookie 导入（所有需要登录的平台通用）：**
+>
+> 所有需要 Cookie 的平台（Twitter、小红书等），**优先使用 Cookie-Editor 导入**，这是最简单最可靠的方式：
+> 1. 用户在自己的浏览器上登录对应平台
+> 2. 安装 [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) Chrome 插件
+> 3. 点击插件 → Export → Header String
+> 4. 把导出的字符串发给 Agent
+>
+> **本地电脑用户**也可以用 `agent-reach configure --from-browser chrome` 一键自动提取（支持 Twitter + 小红书）。
+
+**Twitter search & posting:**
 > "To unlock Twitter search, I need your Twitter cookies. Install the Cookie-Editor Chrome extension, go to x.com/twitter.com, click the extension → Export → Header String, and paste it to me."
-> Extension: https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm
 
 ```bash
 agent-reach configure twitter-cookies "PASTED_STRING"
@@ -121,9 +130,13 @@ mcporter config add xiaohongshu http://localhost:18060/mcp
 > 如果在服务器上，建议加代理避免 IP 风控：
 > `docker run -d --name xiaohongshu-mcp -p 18060:18060 -e XHS_PROXY=http://user:pass@ip:port xpzouying/xiaohongshu-mcp`
 >
-> **登录方式：**
-> - **本地电脑（有浏览器）：** 打开 http://localhost:18060 扫码登录即可。
-> - **服务器（无 UI 界面）：** 服务器上通常没有浏览器，无法直接扫码。最方便的方式是在自己的电脑上用浏览器登录小红书，然后用 [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) 插件导出 Cookie（Header String 格式），发给 Agent 即可完成配置。详见 [Cookie 导出指南](cookie-export.md)。
+> **登录方式（优先用 Cookie-Editor，最简单）：**
+> 1. 用户在自己的浏览器登录小红书 (xiaohongshu.com)
+> 2. 用 [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) 插件导出 Cookie（Header String 格式）
+> 3. 把 Cookie 字符串发给 Agent
+> 4. Agent 将 Cookie 写入 MCP 服务的 cookie 文件完成登录
+>
+> **备选：** 本地电脑如果有浏览器，也可以打开 http://localhost:18060 扫码登录。
 
 **LinkedIn (可选 — linkedin-scraper-mcp):**
 > "LinkedIn 基本内容可通过 Jina Reader 读取。完整功能（Profile 详情、职位搜索）需要 linkedin-scraper-mcp。"

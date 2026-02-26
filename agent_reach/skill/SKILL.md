@@ -48,15 +48,26 @@ When a user asks to configure/enable any channel:
 1. Run `agent-reach doctor`
 2. Find the channel — it shows status (✅/⚠️/⬜) and **what to do next**
 3. Execute what you can automatically (install packages, start services)
-4. For human-required steps (scan QR, paste cookies), tell the user what to do
+4. For human-required steps (paste cookies), tell the user what to do
 5. Run `agent-reach doctor` again to verify
 
 **Do NOT memorize per-channel steps.** Always rely on `doctor` output.
 
-### Common human actions
+### Cookie 导入（所有需要登录的平台通用）
 
-- **Paste cookies:** User installs [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) → goes to the website → exports Header String → sends it to you → you run `agent-reach configure <platform>-cookies "..."`
-- **Scan QR code:** User opens the URL on their phone/browser and scans with the platform's app
+所有需要 Cookie 的平台（Twitter、小红书等），**优先使用 Cookie-Editor 导入**：
+
+1. 用户在自己的浏览器登录对应平台
+2. 安装 [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) Chrome 插件
+3. 点击插件 → Export → Header String
+4. 把导出的字符串发给 Agent
+
+本地电脑用户也可以用 `agent-reach configure --from-browser chrome` 一键自动提取。
+
+扫码登录是备选方案（仅限本地有浏览器的情况），Cookie-Editor 更简单可靠。
+
+### Other human actions
+
 - **Proxy:** Reddit/Bilibili/XiaoHongShu may block server IPs — suggest a residential proxy if on a server
 
 ---
