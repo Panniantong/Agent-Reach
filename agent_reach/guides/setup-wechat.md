@@ -18,7 +18,7 @@ playwright install chromium
 
 3. 安装完成后测试：
 ```bash
-agent-reach read "https://mp.weixin.qq.com/s/一个测试链接"
+curl -s "https://r.jina.ai/https://mp.weixin.qq.com/s/一个测试链接" -H "Accept: text/markdown"
 ```
 
 ## 需要用户手动做的步骤

@@ -22,8 +22,8 @@ mcporter config add exa https://mcp.exa.ai/mcp
 
 ### 3. 验证
 ```bash
-agent-reach doctor | grep "Web Search"
-agent-reach search "test" -n 1
+agent-reach doctor | grep "Search"
+mcporter call 'exa.web_search_exa(query: "test", numResults: 1)'
 ```
 
 ## 需要用户手动做的步骤
