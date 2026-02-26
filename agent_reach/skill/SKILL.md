@@ -55,6 +55,8 @@ When a user asks to configure/enable any channel:
 
 ### Cookie 导入（所有需要登录的平台通用）
 
+> ⚠️ **重要提醒：** 使用 Cookie 登录的平台存在封号风险，请提醒用户务必使用**专用小号**。
+
 所有需要 Cookie 的平台（Twitter、小红书等），**优先使用 Cookie-Editor 导入**：
 
 1. 用户在自己的浏览器登录对应平台

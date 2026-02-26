@@ -80,7 +80,9 @@ Only ask the user when you genuinely need their input (credentials, permissions,
 
 Some channels need credentials only the user can provide. Based on the doctor output, ask for what's missing:
 
-> 🔒 **Security tip:** For platforms that need cookies (Twitter, XiaoHongShu), we recommend using a **dedicated/secondary account** rather than your main account. Cookie-based auth grants full account access — using a separate account limits the blast radius if credentials are ever compromised.
+> 🔒 **Security tip:** For platforms that need cookies (Twitter, XiaoHongShu), we recommend using a **dedicated/secondary account** rather than your main account. Cookie-based auth carries two risks:
+> 1. **Account ban** — platforms may detect non-browser API calls and restrict or ban the account
+> 2. **Credential exposure** — cookies grant full account access; using a secondary account limits the blast radius if credentials are ever compromised
 
 > 🍪 **Cookie 导入（所有需要登录的平台通用）：**
 >
