@@ -41,7 +41,7 @@ class Config:
     def load(self):
         """Load config from YAML file."""
         if self.config_path.exists():
-            with open(self.config_path, "r") as f:
+            with open(self.config_path, "r", encoding="utf-8") as f:
                 self.data = yaml.safe_load(f) or {}
         else:
             self.data = {}
@@ -49,7 +49,7 @@ class Config:
     def save(self):
         """Save config to YAML file."""
         self._ensure_dir()
-        with open(self.config_path, "w") as f:
+        with open(self.config_path, "w", encoding="utf-8") as f:
             yaml.dump(self.data, f, default_flow_style=False, allow_unicode=True)
         # Restrict permissions — config may contain credentials
         try:

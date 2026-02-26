@@ -71,6 +71,13 @@ def main():
     # ── doctor ──
     sub.add_parser("doctor", help="Check platform availability")
 
+    # ── uninstall ──
+    p_uninstall = sub.add_parser("uninstall", help="Remove all Agent Reach config, tokens, and skill files")
+    p_uninstall.add_argument("--dry-run", action="store_true",
+                             help="Show what would be removed without making any changes")
+    p_uninstall.add_argument("--keep-config", action="store_true",
+                             help="Remove skill files only, keep ~/.agent-reach/ config and tokens")
+
     # ── check-update ──
     sub.add_parser("check-update", help="Check for new versions and changes")
 
@@ -105,6 +112,8 @@ def main():
         _cmd_install(args)
     elif args.command == "configure":
         _cmd_configure(args)
+    elif args.command == "uninstall":
+        _cmd_uninstall(args)
 
 
 # ── Command handlers ────────────────────────────────
@@ -680,25 +689,110 @@ def _cmd_configure(args):
         print(f"✅ Groq key configured!")
 
 
+def _cmd_uninstall(args):
+    """Remove all Agent Reach config, tokens, and skill files."""
+    import shutil
+    import subprocess
+
+    dry_run = args.dry_run
+    keep_config = args.keep_config
+
+    print()
+    print("Agent Reach Uninstaller")
+    print("=" * 40)
+
+    if dry_run:
+        print("DRY RUN — showing what would be removed (no changes)")
+        print()
+
+    removed_any = False
+
+    # ── 1. Config directory (~/.agent-reach/) ──
+    config_dir = os.path.expanduser("~/.agent-reach")
+    if not keep_config:
+        if os.path.isdir(config_dir):
+            if dry_run:
+                print(f"[dry-run] Would remove config directory: {config_dir}")
+                print("          (contains config.yaml with all tokens/cookies/API keys)")
+            else:
+                try:
+                    shutil.rmtree(config_dir)
+                    print(f"  Removed config directory: {config_dir}")
+                    removed_any = True
+                except Exception as e:
+                    print(f"  Could not remove {config_dir}: {e}")
+        else:
+            print(f"  Config directory not found (already clean): {config_dir}")
+    else:
+        print(f"  Skipping config directory (--keep-config): {config_dir}")
+
+    # ── 2. Skill files ──
+    skill_dirs = [
+        ("~/.openclaw/skills/agent-reach", "OpenClaw"),
+        ("~/.claude/skills/agent-reach", "Claude Code"),
+        ("~/.agents/skills/agent-reach", "Agent"),
+    ]
+
+    for skill_path_template, platform_name in skill_dirs:
+        skill_path = os.path.expanduser(skill_path_template)
+        if os.path.isdir(skill_path):
+            if dry_run:
+                print(f"[dry-run] Would remove {platform_name} skill: {skill_path}")
+            else:
+                try:
+                    shutil.rmtree(skill_path)
+                    print(f"  Removed {platform_name} skill: {skill_path}")
+                    removed_any = True
+                except Exception as e:
+                    print(f"  Could not remove {skill_path}: {e}")
+
+    # ── 3. mcporter MCP entries ──
+    if shutil.which("mcporter"):
+        for mcp_name in ("exa", "xiaohongshu"):
+            try:
+                r = subprocess.run(
+                    ["mcporter", "list"], capture_output=True, text=True, timeout=10
+                )
+                if mcp_name in r.stdout:
+                    if dry_run:
+                        print(f"[dry-run] Would remove mcporter entry: {mcp_name}")
+                    else:
+                        subprocess.run(
+                            ["mcporter", "config", "remove", mcp_name],
+                            capture_output=True, text=True, timeout=10,
+                        )
+                        print(f"  Removed mcporter entry: {mcp_name}")
+                        removed_any = True
+            except Exception:
+                pass
+
+    # ── 4. Summary and optional steps ──
+    print()
+    if dry_run:
+        print("Dry run complete. No changes were made.")
+        print("Run without --dry-run to actually remove the above.")
+    else:
+        if removed_any:
+            print("Agent Reach data removed.")
+        else:
+            print("Nothing to remove — already clean.")
+
+    print()
+    print("Optional: remove the Agent Reach Python package itself:")
+    print("  pip uninstall agent-reach")
+    print()
+    print("Optional: remove tools installed by Agent Reach:")
+    print("  npm uninstall -g mcporter")
+    print("  npm uninstall -g @steipete/bird")
+    print("  npm uninstall -g undici")
+
+
 def _cmd_doctor():
     from agent_reach.config import Config
     from agent_reach.doctor import check_all, format_report
     config = Config()
     results = check_all(config)
     print(format_report(results))
-
-
-def _parse_cookie_header(cookie_str: str) -> dict:
-    """Parse Cookie-Editor 'Header String' format into a dict."""
-    cookies = {}
-    for part in cookie_str.split(";"):
-        part = part.strip()
-        if "=" in part:
-            k, v = part.split("=", 1)
-            cookies[k.strip()] = v.strip()
-    return cookies
-
-
 
 
 def _cmd_setup():

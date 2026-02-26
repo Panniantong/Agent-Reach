@@ -200,6 +200,24 @@ Agent Reach 在设计上重视安全：
 | 安全模式 | `agent-reach install --env=auto --safe` | 生产服务器、多人共用机器 |
 | 仅预览 | `agent-reach install --env=auto --dry-run` | 先看看会做什么 |
 
+### 🗑️ 卸载
+
+```bash
+agent-reach uninstall
+```
+
+会清除：`~/.agent-reach/`（含所有 token/cookie）、各 Agent 的 skill 文件、mcporter 中的 MCP 配置。
+
+```bash
+# 只预览，不实际删除
+agent-reach uninstall --dry-run
+
+# 只删 skill 文件，保留 token 配置（重装时用）
+agent-reach uninstall --keep-config
+```
+
+卸载 Python 包本身：`pip uninstall agent-reach`
+
 ---
 
 ## 贡献

@@ -74,11 +74,12 @@ def format_report(results: Dict[str, dict]) -> str:
     if ok_count < total:
         lines.append("运行 `agent-reach setup` 解锁更多渠道")
 
-    # Security check: config file permissions
+    # Security check: config file permissions (Unix only)
     import os
     import stat
+    import sys
     config_path = Config.CONFIG_DIR / "config.yaml"
-    if config_path.exists():
+    if config_path.exists() and sys.platform != "win32":
         try:
             mode = config_path.stat().st_mode
             if mode & (stat.S_IRGRP | stat.S_IROTH):
