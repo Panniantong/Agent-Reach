@@ -20,7 +20,7 @@ Copy this to your AI Agent:
 
 ### Goal
 
-Install Agent Reach and make sure **all channels are working**. Your user expects you to have full internet access capabilities when this is done — reading tweets, searching Reddit, watching YouTube, browsing GitHub, and more.
+Install Agent Reach and all upstream tools so your user's agent has full internet access. After installation, you'll use the upstream tools directly (bird CLI, yt-dlp, mcporter, gh CLI, etc.) — Agent Reach is just the installer and health checker.
 
 ### ⚠️ Boundaries
 
@@ -228,13 +228,19 @@ If the user wants a different agent to handle it, let them choose.
 | `agent-reach check-update` | Check for new versions |
 | `agent-reach configure twitter-cookies "..."` | Unlock Twitter search + posting |
 | `agent-reach configure proxy URL` | Unlock Reddit + Bilibili on servers |
-| `agent-reach read <url>` | Read any URL |
-| `agent-reach search "query"` | Search the web |
-| `agent-reach search-reddit "query"` | Search Reddit |
-| `agent-reach search-twitter "query"` | Search Twitter |
-| `agent-reach search-github "query"` | Search GitHub |
-| `agent-reach search-youtube "query"` | Search YouTube |
-| `agent-reach search-bilibili "query"` | Search Bilibili |
-| `agent-reach search-xhs "query"` | Search XiaoHongShu |
-| `agent-reach search-linkedin "query"` | Search LinkedIn |
-| `agent-reach search-bosszhipin "query"` | Search Boss直聘 |
+
+After installation, use upstream tools directly. See SKILL.md for the full command reference:
+
+| Platform | Upstream Tool | Example |
+|----------|--------------|---------|
+| Twitter/X | `bird` | `bird search "query" --json` |
+| YouTube | `yt-dlp` | `yt-dlp --dump-json URL` |
+| Bilibili | `yt-dlp` | `yt-dlp --dump-json URL` |
+| Reddit | `curl` | `curl -s "https://reddit.com/r/xxx.json"` |
+| GitHub | `gh` | `gh search repos "query"` |
+| Web | `curl` + Jina | `curl -s "https://r.jina.ai/URL"` |
+| Exa Search | `mcporter` | `mcporter call 'exa.web_search_exa(...)'` |
+| 小红书 | `mcporter` | `mcporter call 'xiaohongshu.search_feeds(...)'` |
+| LinkedIn | `mcporter` | `mcporter call 'linkedin.get_person_profile(...)'` |
+| Boss直聘 | `mcporter` | `mcporter call 'bosszhipin.search_jobs_tool(...)'` |
+| RSS | `feedparser` | `python3 -c "import feedparser; ..."` |

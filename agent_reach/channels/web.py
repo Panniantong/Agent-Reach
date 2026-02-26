@@ -1,49 +1,17 @@
 # -*- coding: utf-8 -*-
-"""Web pages — via Jina Reader API (free, no config needed).
+"""Web — any URL via Jina Reader. Always available."""
 
-Backend: Jina Reader (https://r.jina.ai)
-Swap to: Firecrawl, Trafilatura, or any other reader API
-"""
-
-import requests
-from .base import Channel, ReadResult
+from .base import Channel
 
 
 class WebChannel(Channel):
     name = "web"
-    description = "网页（任意 URL）"
-    backends = ["Jina Reader API"]
+    description = "任意网页"
+    backends = ["Jina Reader"]
     tier = 0
 
-    JINA_URL = "https://r.jina.ai/"
-
     def can_handle(self, url: str) -> bool:
-        # Fallback — handles any URL not matched by other channels
-        return True
+        return True  # Fallback — handles any URL
 
-    async def read(self, url: str, config=None) -> ReadResult:
-        resp = requests.get(
-            f"{self.JINA_URL}{url}",
-            headers={"Accept": "text/markdown"},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        text = resp.text
-
-        # Extract title from first markdown heading
-        title = url
-        for line in text.split("\n"):
-            line = line.strip()
-            if line.startswith("# "):
-                title = line[2:].strip()
-                break
-            if line.startswith("Title:"):
-                title = line[6:].strip()
-                break
-
-        return ReadResult(
-            title=title,
-            content=text,
-            url=url,
-            platform="web",
-        )
+    def check(self, config=None):
+        return "ok", "通过 Jina Reader 读取任意网页（curl https://r.jina.ai/URL）"

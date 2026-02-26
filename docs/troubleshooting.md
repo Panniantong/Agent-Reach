@@ -26,11 +26,10 @@
 
 ### 方案 3：不用 bird，用 Exa 搜索替代
 
-Agent Reach 在 bird 失败时会自动 fallback 到 Exa 搜索。Exa 支持搜索 x.com 上的内容，虽然不如 bird 实时，但不受代理限制：
+bird 不可用时，可以直接用 Exa 搜索 Twitter 内容：
 
 ```bash
-agent-reach search-twitter "query"  # bird 失败时自动用 Exa
-agent-reach search "site:x.com query"  # 直接用 Exa 搜索
+mcporter call 'exa.web_search_exa(query: "site:x.com query", numResults: 10)'
 ```
 
 ### 方案 4：配置 Node.js 全局代理（高级）

@@ -108,14 +108,14 @@ After the Skill is installed, the Agent will auto-detect whether `agent-reach` C
 
 No configuration needed — just tell your Agent:
 
-- "Read this link" → any web page
-- "What's this GitHub repo about?" → repos, issues, code
-- "What does this video cover?" → YouTube / Bilibili subtitles
-- "Read this tweet" → Twitter posts
-- "Subscribe to this RSS" → RSS / Atom feeds
-- "Search GitHub for LLM frameworks" → GitHub search
+- "Read this link" → `curl https://r.jina.ai/URL` for any web page
+- "What's this GitHub repo about?" → `gh repo view owner/repo`
+- "What does this video cover?" → `yt-dlp --dump-json URL` for subtitles
+- "Read this tweet" → `bird read URL --json`
+- "Subscribe to this RSS" → `feedparser` to parse feeds
+- "Search GitHub for LLM frameworks" → `gh search repos "LLM framework"`
 
-**No commands to remember.** The Agent knows what to call.
+**No commands to remember.** The Agent reads SKILL.md and knows what to call.
 
 ---
 
@@ -171,25 +171,29 @@ Every time you spin up a new Agent, you spend time finding tools, installing dep
 
 Agent Reach does one simple thing: **it makes those tool selection and configuration decisions for you.**
 
+After installation, your Agent calls the upstream tools directly (bird CLI, yt-dlp, mcporter, gh CLI, etc.) — no wrapper layer in between.
+
 ### 🔌 Every Channel is Pluggable
 
-Each platform is a single Python file implementing a unified interface. **Backends can be swapped anytime** — when a better tool comes along, change one file and nothing else breaks.
+Each platform maps to an upstream tool. **Don't like one? Swap it out.**
 
 ```
 channels/
 ├── web.py          → Jina Reader     ← swap to Firecrawl, Crawl4AI…
-├── twitter.py      → bird           ← swap to Nitter, official API…
-├── youtube.py      → yt-dlp           ← swap to YouTube API, Whisper…
+├── twitter.py      → bird            ← swap to Nitter, official API…
+├── youtube.py      → yt-dlp          ← swap to YouTube API, Whisper…
 ├── github.py       → gh CLI          ← swap to REST API, PyGithub…
-├── bilibili.py     → yt-dlp           ← swap to bilibili-api…
+├── bilibili.py     → yt-dlp          ← swap to bilibili-api…
 ├── reddit.py       → JSON API + Exa  ← swap to PRAW, Pushshift…
 ├── xiaohongshu.py  → mcporter MCP    ← swap to other XHS tools…
 ├── linkedin.py     → linkedin-mcp    ← swap to LinkedIn API…
 ├── bosszhipin.py   → mcp-bosszp      ← swap to other job tools…
-├── rss.py          → feedparser       ← swap to atoma…
+├── rss.py          → feedparser      ← swap to atoma…
 ├── exa_search.py   → mcporter MCP    ← swap to Tavily, SerpAPI…
-└── __init__.py     → Channel registry
+└── __init__.py     → Channel registry (for doctor checks)
 ```
+
+Each channel file only checks whether its upstream tool is installed and working (`check()` method for `agent-reach doctor`). The actual reading and searching is done by calling the upstream tools directly.
 
 ### Current Tool Choices
 
@@ -226,13 +230,13 @@ This project was entirely vibe-coded 🎸 There might be rough edges here and th
 <details>
 <summary><strong>How to search Twitter/X with AI agent without paying for API?</strong></summary>
 
-Agent Reach uses the [bird CLI](https://www.npmjs.com/package/@steipete/bird) with cookie-based authentication — completely free, no Twitter API subscription needed. After installing Agent Reach, export your Twitter cookies using the Cookie-Editor Chrome extension, run `agent-reach configure twitter-cookies "your_cookies"`, and your agent can search with `agent-reach search-twitter "query"`.
+Agent Reach uses the [bird CLI](https://www.npmjs.com/package/@steipete/bird) with cookie-based authentication — completely free, no Twitter API subscription needed. After installing Agent Reach, export your Twitter cookies using the Cookie-Editor Chrome extension, run `agent-reach configure twitter-cookies "your_cookies"`, and your agent can search with `bird search "query" --json`.
 </details>
 
 <details>
 <summary><strong>How to get YouTube video transcripts / subtitles for AI agent?</strong></summary>
 
-Simply run `agent-reach read https://youtube.com/watch?v=xxx`. It automatically extracts transcripts using yt-dlp. Supports multiple languages, no API key required.
+`yt-dlp --dump-json "https://youtube.com/watch?v=xxx"` extracts video metadata; `yt-dlp --write-sub --skip-download "URL"` extracts subtitles. Supports multiple languages, no API key required.
 </details>
 
 <details>
@@ -244,7 +248,7 @@ Reddit blocks datacenter IPs. Configure a residential proxy: `agent-reach config
 <details>
 <summary><strong>Does Agent Reach work with Claude Code / Cursor / Windsurf / OpenClaw?</strong></summary>
 
-Yes! Agent Reach is a standard CLI tool. Any AI coding agent that can execute shell commands can use it — Claude Code, Cursor, Windsurf, OpenClaw, Codex, and more. Just `pip install agent-reach` and start using it.
+Yes! Agent Reach is an installer + configuration tool. Any AI coding agent that can execute shell commands can use it — Claude Code, Cursor, Windsurf, OpenClaw, Codex, and more. Just `pip install agent-reach`, run `agent-reach install`, and the agent can start using the upstream tools immediately.
 </details>
 
 <details>
@@ -262,7 +266,7 @@ Agent Reach uses bird CLI which accesses Twitter via cookie auth — same as you
 <details>
 <summary><strong>How to read XiaoHongShu / 小红书 content programmatically?</strong></summary>
 
-Agent Reach integrates with xiaohongshu-mcp (runs in Docker). After setup, use `agent-reach read <xiaohongshu_url>` or `agent-reach search-xhs "query"` to search and read XiaoHongShu notes.
+Agent Reach integrates with xiaohongshu-mcp (runs in Docker). After setup, use `mcporter call 'xiaohongshu.get_feed_detail(...)'` to read notes or `mcporter call 'xiaohongshu.search_feeds(keyword: "query")'` to search.
 </details>
 
 ---

@@ -1,110 +1,36 @@
 # -*- coding: utf-8 -*-
-"""Exa semantic search — via mcporter + Exa MCP server.
+"""Exa Search — check if mcporter + Exa MCP is available."""
 
-Backend: Exa MCP at mcp.exa.ai (OAuth, no API key needed)
-Requires: mcporter CLI
-"""
-
-import json
 import shutil
 import subprocess
-from .base import Channel, SearchResult
-from typing import List
+from .base import Channel
 
 
 class ExaSearchChannel(Channel):
     name = "exa_search"
-    description = "全网语义搜索（同时支持 Reddit/Twitter 搜索）"
-    backends = ["exa-mcp"]
-    tier = 1
-
-    def _mcporter_ok(self) -> bool:
-        if not shutil.which("mcporter"):
-            return False
-        try:
-            r = subprocess.run(
-                ["mcporter", "list"], capture_output=True, text=True, timeout=10
-            )
-            return "exa" in r.stdout
-        except Exception:
-            return False
-
-    def _call(self, expr: str, timeout: int = 30) -> str:
-        r = subprocess.run(
-            ["mcporter", "call", expr],
-            capture_output=True, text=True, timeout=timeout,
-        )
-        if r.returncode != 0:
-            raise RuntimeError(r.stderr or r.stdout)
-        return r.stdout
-
-    # ── Channel interface ──
+    description = "全网语义搜索"
+    backends = ["Exa via mcporter"]
+    tier = 0
 
     def can_handle(self, url: str) -> bool:
-        return False  # search-only
-
-    async def read(self, url: str, config=None):
-        raise NotImplementedError("Exa is a search engine, not a reader")
+        return False  # Search-only channel
 
     def check(self, config=None):
         if not shutil.which("mcporter"):
             return "off", (
-                "需要 mcporter。安装：npm install -g mcporter && "
-                "mcporter config add exa https://mcp.exa.ai/mcp"
-            )
-        if not self._mcporter_ok():
-            return "off", "mcporter 已装但 Exa 未配置。运行：mcporter config add exa https://mcp.exa.ai/mcp"
-        return "ok", "MCP 已连接，免 Key 直接可用（全网搜索 + Reddit + Twitter）"
-
-    async def search(self, query: str, config=None, **kwargs) -> List[SearchResult]:
-        if not self._mcporter_ok():
-            raise ValueError(
-                "Exa 搜索需要 mcporter。安装：\n"
+                "需要 mcporter + Exa MCP。安装：\n"
                 "  npm install -g mcporter\n"
                 "  mcporter config add exa https://mcp.exa.ai/mcp"
             )
-
-        limit = kwargs.get("limit", 5)
-        safe_q = query.replace('"', '\\"')
-        out = self._call(
-            f'exa.web_search_exa(query: "{safe_q}", numResults: {min(limit, 10)})',
-            timeout=30,
-        )
-        return self._parse_output(out, limit)
-
-    # ── Parse mcporter text output ──
-
-    def _parse_output(self, text: str, limit: int) -> List[SearchResult]:
-        """Parse mcporter's Title/URL/Text block format."""
-        results = []
-        cur = {}
-
-        for line in text.split("\n"):
-            line = line.strip()
-            if line.startswith("Title: "):
-                if cur.get("title"):
-                    results.append(self._make_result(cur))
-                cur = {"title": line[7:]}
-            elif line.startswith("URL: "):
-                cur["url"] = line[5:]
-            elif line.startswith("Published Date: "):
-                cur["date"] = line[16:]
-            elif line.startswith("Text: "):
-                cur["text"] = line[6:]
-            elif "text" in cur and line:
-                cur["text"] += " " + line
-
-        if cur.get("title"):
-            results.append(self._make_result(cur))
-
-        return results[:limit]
-
-    @staticmethod
-    def _make_result(d: dict) -> SearchResult:
-        return SearchResult(
-            title=d.get("title", ""),
-            url=d.get("url", ""),
-            snippet=d.get("text", "")[:500],
-            date=d.get("date", ""),
-            score=0,
-        )
+        try:
+            r = subprocess.run(
+                ["mcporter", "list"], capture_output=True, text=True, timeout=10
+            )
+            if "exa" in r.stdout.lower():
+                return "ok", "全网语义搜索可用（免费，无需 API Key）"
+            return "off", (
+                "mcporter 已装但 Exa 未配置。运行：\n"
+                "  mcporter config add exa https://mcp.exa.ai/mcp"
+            )
+        except Exception:
+            return "off", "mcporter 连接异常"

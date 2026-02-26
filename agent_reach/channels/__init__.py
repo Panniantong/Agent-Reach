@@ -1,14 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Channel registry — routes URLs to the right channel.
-
-This is the core of Agent Reach' pluggable architecture.
-Add a new channel: just create a file and register it here.
-Swap a backend: just change the implementation inside the channel file.
+Channel registry — lists all supported platforms for doctor checks.
 """
 
-from typing import Dict, List, Optional
-from .base import Channel, ReadResult, SearchResult
+from typing import List, Optional
+from .base import Channel
 
 # Import all channels
 from .web import WebChannel
@@ -24,7 +20,7 @@ from .linkedin import LinkedInChannel
 from .bosszhipin import BossZhipinChannel
 
 
-# Channel registry — order matters (first match wins, web is last as fallback)
+# Channel registry
 ALL_CHANNELS: List[Channel] = [
     GitHubChannel(),
     TwitterChannel(),
@@ -36,21 +32,8 @@ ALL_CHANNELS: List[Channel] = [
     BossZhipinChannel(),
     RSSChannel(),
     ExaSearchChannel(),
-    WebChannel(),        # Fallback — handles any URL
+    WebChannel(),
 ]
-
-# Search-capable channels
-SEARCH_CHANNELS: Dict[str, Channel] = {
-    ch.name: ch for ch in ALL_CHANNELS if ch.can_search()
-}
-
-
-def get_channel_for_url(url: str) -> Channel:
-    """Find the right channel for a URL."""
-    for channel in ALL_CHANNELS:
-        if channel.can_handle(url):
-            return channel
-    return WebChannel()  # Should never reach here, but just in case
 
 
 def get_channel(name: str) -> Optional[Channel]:
@@ -67,7 +50,7 @@ def get_all_channels() -> List[Channel]:
 
 
 __all__ = [
-    "Channel", "ReadResult", "SearchResult",
-    "ALL_CHANNELS", "SEARCH_CHANNELS",
-    "get_channel_for_url", "get_channel", "get_all_channels",
+    "Channel",
+    "ALL_CHANNELS",
+    "get_channel", "get_all_channels",
 ]

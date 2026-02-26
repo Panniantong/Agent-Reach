@@ -1,20 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Agent Reach CLI — command-line interface.
+Agent Reach CLI — installer, doctor, and configuration tool.
 
 Usage:
-    agent-reach read <url>
-    agent-reach search <query>
-    agent-reach search-reddit <query> [--sub <subreddit>]
-    agent-reach search-github <query> [--lang <language>]
-    agent-reach search-twitter <query>
-    agent-reach setup
+    agent-reach install --env=auto
     agent-reach doctor
-    agent-reach version
+    agent-reach configure twitter-cookies "auth_token=xxx; ct0=yyy"
+    agent-reach setup
 """
 
 import sys
-import asyncio
 import argparse
 import json
 import os
@@ -48,57 +43,6 @@ def main():
     sub = parser.add_subparsers(dest="command", help="Available commands")
 
     # ── read ──
-    p_read = sub.add_parser("read", help="Read content from a URL")
-    p_read.add_argument("url", help="URL to read")
-    p_read.add_argument("--json", dest="as_json", action="store_true", help="Output as JSON")
-
-    # ── search ──
-    p_search = sub.add_parser("search", help="Search the web (Exa)")
-    p_search.add_argument("query", nargs="+", help="Search query")
-    p_search.add_argument("-n", "--num", type=int, default=5, help="Number of results")
-
-    # ── search-reddit ──
-    p_sr = sub.add_parser("search-reddit", help="Search Reddit")
-    p_sr.add_argument("query", nargs="+", help="Search query")
-    p_sr.add_argument("--sub", help="Subreddit filter")
-    p_sr.add_argument("-n", "--num", type=int, default=10, help="Number of results")
-
-    # ── search-github ──
-    p_sg = sub.add_parser("search-github", help="Search GitHub")
-    p_sg.add_argument("query", nargs="+", help="Search query")
-    p_sg.add_argument("--lang", help="Language filter")
-    p_sg.add_argument("-n", "--num", type=int, default=5, help="Number of results")
-
-    # ── search-twitter ──
-    p_st = sub.add_parser("search-twitter", help="Search Twitter")
-    p_st.add_argument("query", nargs="+", help="Search query")
-    p_st.add_argument("-n", "--num", type=int, default=10, help="Number of results")
-
-    # ── search-youtube ──
-    p_sy = sub.add_parser("search-youtube", help="Search YouTube")
-    p_sy.add_argument("query", nargs="+", help="Search query")
-    p_sy.add_argument("-n", "--num", type=int, default=5, help="Number of results")
-
-    # ── search-bilibili ──
-    p_sb = sub.add_parser("search-bilibili", help="Search Bilibili")
-    p_sb.add_argument("query", nargs="+", help="Search query")
-    p_sb.add_argument("-n", "--num", type=int, default=5, help="Number of results")
-
-    # ── search-xhs ──
-    p_sx = sub.add_parser("search-xhs", help="Search XiaoHongShu")
-    p_sx.add_argument("query", nargs="+", help="Search query")
-    p_sx.add_argument("-n", "--num", type=int, default=10, help="Number of results")
-
-    # ── search-linkedin ──
-    p_sl = sub.add_parser("search-linkedin", help="Search LinkedIn")
-    p_sl.add_argument("query", nargs="+", help="Search query")
-    p_sl.add_argument("-n", "--num", type=int, default=10, help="Number of results")
-
-    # ── search-bosszhipin ──
-    p_sbz = sub.add_parser("search-bosszhipin", help="Search Boss直聘")
-    p_sbz.add_argument("query", nargs="+", help="Search query")
-    p_sbz.add_argument("-n", "--num", type=int, default=10, help="Number of results")
-
     # ── setup ──
     sub.add_parser("setup", help="Interactive configuration wizard")
 
@@ -161,10 +105,6 @@ def main():
         _cmd_install(args)
     elif args.command == "configure":
         _cmd_configure(args)
-    elif args.command == "read":
-        asyncio.run(_cmd_read(args))
-    elif args.command.startswith("search"):
-        asyncio.run(_cmd_search(args))
 
 
 # ── Command handlers ────────────────────────────────
@@ -847,98 +787,6 @@ def _cmd_setup():
     print(f"✅ 配置已保存到 {config.config_path}")
     print("运行 agent-reach doctor 查看完整状态")
     print()
-
-
-async def _cmd_read(args):
-    from agent_reach.core import AgentReach
-    eyes = AgentReach()
-    try:
-        result = await eyes.read(args.url)
-        if args.as_json:
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-        else:
-            print(f"\n📖 {result.get('title', 'Untitled')}")
-            print(f"🔗 {result.get('url', '')}")
-            if result.get("author"):
-                print(f"👤 {result['author']}")
-            print(f"\n{result.get('content', '')}")
-    except Exception as e:
-        error_str = str(e)
-        if "400" in error_str and "Bad Request" in error_str:
-            print(f"❌ Invalid URL: {args.url}", file=sys.stderr)
-            print("   Please provide a valid URL (e.g., https://example.com)", file=sys.stderr)
-        elif "ConnectionError" in type(e).__name__ or "Timeout" in type(e).__name__:
-            print(f"❌ Could not connect to: {args.url}", file=sys.stderr)
-            print("   Check your internet connection or the URL.", file=sys.stderr)
-        else:
-            print(f"❌ Error: {e}", file=sys.stderr)
-        sys.exit(1)
-
-
-async def _cmd_search(args):
-    from agent_reach.core import AgentReach
-    eyes = AgentReach()
-    query = " ".join(args.query).strip()
-    num = args.num
-
-    if not query:
-        print("Please provide a search query.", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        if args.command == "search":
-            results = await eyes.search(query, num_results=num)
-        elif args.command == "search-reddit":
-            results = await eyes.search_reddit(query, subreddit=getattr(args, "sub", None), limit=num)
-        elif args.command == "search-github":
-            results = await eyes.search_github(query, language=getattr(args, "lang", None), limit=num)
-        elif args.command == "search-twitter":
-            results = await eyes.search_twitter(query, limit=num)
-        elif args.command == "search-youtube":
-            results = await eyes.search_youtube(query, limit=num)
-        elif args.command == "search-bilibili":
-            results = await eyes.search_bilibili(query, limit=num)
-        elif args.command == "search-xhs":
-            results = await eyes.search_xhs(query, limit=num)
-        elif args.command == "search-linkedin":
-            results = await eyes.search_linkedin(query, limit=num)
-        elif args.command == "search-bosszhipin":
-            results = await eyes.search_bosszhipin(query, limit=num)
-        else:
-            print(f"Unknown command: {args.command}", file=sys.stderr)
-            sys.exit(1)
-    except Exception as e:
-        error_str = str(e)
-        if "401" in error_str or "Unauthorized" in error_str:
-            print("⚠️  Exa API key not configured or invalid.")
-            print("Get a free key at https://exa.ai (1000 searches/month free)")
-            print("Then run: agent-reach configure exa-key YOUR_KEY")
-            sys.exit(1)
-        elif "exa" in error_str.lower() or "api_key" in error_str.lower():
-            print("⚠️  Exa API key not configured.")
-            print("Get a free key at https://exa.ai")
-            print("Then run: agent-reach configure exa-key YOUR_KEY")
-            sys.exit(1)
-        else:
-            print(f"❌ Error: {e}", file=sys.stderr)
-            sys.exit(1)
-
-    if not results:
-        print("No results found.")
-        return
-
-    for i, r in enumerate(results, 1):
-        title = r.get("title") or r.get("name") or r.get("text", "")[:60]
-        url = r.get("url", "")
-        snippet = r.get("snippet") or r.get("description") or r.get("text", "")
-        print(f"\n{i}. {title}")
-        print(f"   🔗 {url}")
-        if snippet:
-            print(f"   {snippet[:200]}")
-        # Extra info for GitHub
-        extra = r.get("extra", {})
-        if extra.get("stars"):
-            print(f"   ⭐ {extra['stars']}  🍴 {extra.get('forks', 0)}  📝 {extra.get('language', '')}")
 
 
 def _cmd_check_update():

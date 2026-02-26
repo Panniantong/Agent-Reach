@@ -1,72 +1,39 @@
 ---
 name: agent-reach
 description: >
-  Give your AI agent eyes to see the entire internet. Read and search across
-  Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu, LinkedIn,
-  Boss直聘, RSS, and any web page — all from a single CLI.
-  Use when: (1) reading content from URLs (tweets, Reddit posts, articles, videos),
-  (2) searching across platforms (web, Twitter, Reddit, GitHub, YouTube, Bilibili,
-  XiaoHongShu, LinkedIn, Boss直聘),
-  (3) user asks to configure/enable a platform channel,
-  (4) checking channel health or updating Agent Reach.
-  Triggers: "search Twitter/Reddit/YouTube", "read this URL", "find posts about",
-  "搜索", "读取", "查一下", "看看这个链接",
-  "帮我配", "帮我添加", "帮我安装".
+  Give your AI agent eyes to see the entire internet. Install and configure
+  upstream tools for Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu,
+  LinkedIn, Boss直聘, RSS, and any web page — then call them directly.
+  Use when: (1) setting up platform access tools for the first time,
+  (2) checking which platforms are available,
+  (3) user asks to configure/enable a platform channel.
+  Triggers: "帮我配", "帮我添加", "帮我安装", "agent reach", "install channels",
+  "configure twitter", "enable reddit".
 ---
 
 # Agent Reach
 
-Read and search the internet across 12+ platforms via unified CLI.
+Install and configure upstream tools for 12+ platforms. After setup, call them directly — no wrapper layer.
 
 ## Setup
 
-First check if agent-reach is installed:
-```bash
-agent-reach doctor
-```
-
-If command not found, install it:
 ```bash
 pip install https://github.com/Panniantong/agent-reach/archive/main.zip
 agent-reach install --env=auto
+agent-reach doctor
 ```
 
-`install` auto-detects your environment and installs core dependencies (Node.js, mcporter, bird CLI, gh CLI). Read the output and run `agent-reach doctor` to see what's active.
+`install` auto-detects your environment and installs core dependencies (Node.js, mcporter, bird CLI, gh CLI, yt-dlp, feedparser). Run `doctor` to see what's active.
 
-## Commands
-
-### Read any URL
-```bash
-agent-reach read <url>
-agent-reach read <url> --json    # structured output
-```
-Handles: tweets, Reddit posts, articles, YouTube/Bilibili (transcripts), GitHub repos, LinkedIn profiles, Boss直聘 jobs, XiaoHongShu notes, RSS feeds, and any web page.
-
-### Search
-
-```bash
-agent-reach search "query"             # web search (Exa)
-agent-reach search-twitter "query"     # Twitter/X
-agent-reach search-reddit "query"      # Reddit (--sub <subreddit>)
-agent-reach search-github "query"      # GitHub (--lang <language>)
-agent-reach search-youtube "query"     # YouTube
-agent-reach search-bilibili "query"    # Bilibili (B站)
-agent-reach search-xhs "query"        # XiaoHongShu (小红书)
-agent-reach search-linkedin "query"    # LinkedIn
-agent-reach search-bosszhipin "query"  # Boss直聘
-```
-
-All search commands support `-n <count>` for number of results.
-
-### Management
+## Management
 
 ```bash
 agent-reach doctor        # channel status overview
-agent-reach watch         # quick health + update check (for scheduled tasks)
+agent-reach watch         # quick health + update check
 agent-reach check-update  # check for new versions
 ```
 
-### Configure channels
+## Configure channels
 
 ```bash
 agent-reach configure twitter-cookies "auth_token=xxx; ct0=yyy"
@@ -76,45 +43,188 @@ agent-reach configure --from-browser chrome    # auto-extract cookies from local
 
 ## Configuring a channel ("帮我配 XXX")
 
-All channels follow the same flow. When a user asks to configure/enable any channel:
+When a user asks to configure/enable any channel:
 
 1. Run `agent-reach doctor`
-2. Find the channel in the output — it shows the current status (✅/⚠️/⬜) and **what to do next**
-3. Execute whatever you can automatically (install packages, start services, register MCP)
-4. For steps that require human action (scan QR code, paste cookies, login), tell the user exactly what to do
-5. After the user completes their part, run `agent-reach doctor` again to verify
+2. Find the channel — it shows status (✅/⚠️/⬜) and **what to do next**
+3. Execute what you can automatically (install packages, start services)
+4. For human-required steps (scan QR, paste cookies), tell the user what to do
+5. Run `agent-reach doctor` again to verify
 
-**Do NOT memorize per-channel steps.** Always rely on `doctor` output — it stays up-to-date even when backends change.
+**Do NOT memorize per-channel steps.** Always rely on `doctor` output.
 
 ### Common human actions
 
-These are things only the user can do. When `doctor` indicates one is needed, explain it clearly:
+- **Paste cookies:** User installs [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) → goes to the website → exports Header String → sends it to you → you run `agent-reach configure <platform>-cookies "..."`
+- **Scan QR code:** User opens the URL on their phone/browser and scans with the platform's app
+- **Proxy:** Reddit/Bilibili/XiaoHongShu may block server IPs — suggest a residential proxy if on a server
 
-- **Paste cookies:** User installs [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) Chrome extension → goes to the website → exports Header String → sends it to you → you run `agent-reach configure <platform>-cookies "..."`
-- **Scan QR code:** User opens the URL shown in `doctor` output on their phone/browser and scans with the platform's app
-- **Browser login:** Some MCP services need a one-time browser login; on servers without a display, user may need VNC
-- **Proxy:** Reddit/Bilibili/XiaoHongShu block server IPs — suggest a residential proxy (~$1/month) if on a server
+---
 
-## Tips
+## Using Upstream Tools Directly
 
-- Always try `agent-reach read <url>` first for any URL — it auto-detects the platform
-- If a channel is ⬜ but the user hasn't asked for it, don't push — let them opt in
-- If a channel breaks, run `agent-reach doctor` to diagnose
-- LinkedIn and Boss直聘 have Jina Reader fallback even without full setup
-- Twitter search 在 bird 失败时会自动 fallback 到 Exa 搜索
+After `agent-reach install`, call the upstream tools directly. No need for `agent-reach read` or `agent-reach search`.
+
+### Twitter/X (bird CLI)
+
+```bash
+# Search tweets
+bird search "query" --json -n 10
+
+# Read a specific tweet
+bird read https://x.com/user/status/123 --json
+
+# Read a user's timeline
+bird timeline @username --json -n 20
+```
+
+### YouTube (yt-dlp)
+
+```bash
+# Get video metadata
+yt-dlp --dump-json "https://www.youtube.com/watch?v=xxx"
+
+# Download subtitles only
+yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -o "/tmp/%(id)s" "URL"
+# Then read the .vtt file
+
+# Search (yt-dlp ytsearch)
+yt-dlp --dump-json "ytsearch5:query"
+```
+
+### Bilibili (yt-dlp)
+
+```bash
+# Get video metadata
+yt-dlp --dump-json "https://www.bilibili.com/video/BVxxx"
+
+# Download subtitles
+yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --convert-subs vtt --skip-download -o "/tmp/%(id)s" "URL"
+```
+
+### Reddit (JSON API)
+
+```bash
+# Read a subreddit
+curl -s "https://www.reddit.com/r/python/hot.json?limit=10" -H "User-Agent: agent-reach/1.0"
+
+# Read a post with comments
+curl -s "https://www.reddit.com/r/python/comments/POST_ID.json" -H "User-Agent: agent-reach/1.0"
+
+# Search
+curl -s "https://www.reddit.com/search.json?q=query&limit=10" -H "User-Agent: agent-reach/1.0"
+```
+
+Note: On servers, Reddit may block your IP. Use proxy or search via Exa instead.
+
+### 小红书 / XiaoHongShu (mcporter + xiaohongshu-mcp)
+
+```bash
+# Search notes
+mcporter call 'xiaohongshu.search_feeds(keyword: "query")'
+
+# Read a note
+mcporter call 'xiaohongshu.get_feed_detail(feed_id: "xxx", xsec_token: "yyy")'
+
+# Get comments
+mcporter call 'xiaohongshu.get_feed_comments(feed_id: "xxx", xsec_token: "yyy")'
+
+# Post a note
+mcporter call 'xiaohongshu.create_image_feed(title: "标题", desc: "内容", image_paths: ["/path/to/img.jpg"])'
+```
+
+### GitHub (gh CLI)
+
+```bash
+# Search repos
+gh search repos "query" --sort stars --limit 10
+
+# View a repo
+gh repo view owner/repo
+
+# Search code
+gh search code "query" --language python
+
+# List issues
+gh issue list -R owner/repo --state open
+
+# View a specific issue/PR
+gh issue view 123 -R owner/repo
+```
+
+### Web — Any URL (Jina Reader)
+
+```bash
+# Read any webpage as markdown
+curl -s "https://r.jina.ai/URL" -H "Accept: text/markdown"
+
+# Search the web
+curl -s "https://s.jina.ai/query" -H "Accept: text/markdown"
+```
+
+### Exa Search (mcporter + exa MCP)
+
+```bash
+# Web search
+mcporter call 'exa.web_search_exa(query: "query", numResults: 5)'
+
+# Code search (GitHub, StackOverflow, docs)
+mcporter call 'exa.get_code_context_exa(query: "how to parse JSON in Python", tokensNum: 3000)'
+
+# Company research
+mcporter call 'exa.company_research_exa(companyName: "OpenAI")'
+```
+
+### LinkedIn (mcporter + linkedin-scraper-mcp)
+
+```bash
+# View a profile
+mcporter call 'linkedin.get_person_profile(linkedin_url: "https://linkedin.com/in/username")'
+
+# Search people
+mcporter call 'linkedin.search_people(keyword: "AI engineer", limit: 10)'
+
+# View company
+mcporter call 'linkedin.get_company_profile(linkedin_url: "https://linkedin.com/company/xxx")'
+```
+
+Fallback: `curl -s "https://r.jina.ai/https://linkedin.com/in/username"`
+
+### Boss直聘 (mcporter + mcp-bosszp)
+
+```bash
+# Browse recommended jobs
+mcporter call 'bosszhipin.get_recommend_jobs_tool(page: 1)'
+
+# Search jobs
+mcporter call 'bosszhipin.search_jobs_tool(keyword: "Python", city: "北京", page: 1)'
+
+# View job details
+mcporter call 'bosszhipin.get_job_detail_tool(job_url: "https://www.zhipin.com/job_detail/xxx")'
+```
+
+Fallback: `curl -s "https://r.jina.ai/https://www.zhipin.com/job_detail/xxx"`
+
+### RSS (feedparser)
+
+```python
+python3 -c "
+import feedparser
+d = feedparser.parse('https://example.com/feed')
+for e in d.entries[:5]:
+    print(f'{e.title} — {e.link}')
+"
+```
 
 ## Troubleshooting
 
 ### Twitter "fetch failed"
 
-bird CLI 用 Node.js 原生 `fetch()`，不走 `HTTP_PROXY`/`HTTPS_PROXY` 环境变量。
-Agent Reach 已内置解决方案：通过 `undici` 的 `EnvHttpProxyAgent` 自动注入代理。
+bird CLI uses Node.js native `fetch()`, which doesn't respect `HTTP_PROXY`. Solutions:
+1. Ensure `undici` is installed: `npm install -g undici`
+2. Configure proxy: `agent-reach configure proxy http://user:pass@ip:port`
+3. If still failing, use transparent proxy (Clash TUN, Proxifier)
 
-**你（Agent）需要确认：**
-1. `undici` 已全局安装：`npm list -g undici`，没有就装：`npm install -g undici`
-2. 用户已配置代理：`agent-reach configure proxy http://user:pass@ip:port`
-3. Agent Reach 会自动处理注入，不需要用户额外操作
+### Channel broken?
 
-如果以上都没问题仍然 "fetch failed"，建议用户使用透明代理（如 Clash TUN 模式、Proxifier）。
-
-详见 https://github.com/Panniantong/Agent-Reach/blob/main/docs/troubleshooting.md
+Run `agent-reach doctor` — it shows what's wrong and how to fix it.
