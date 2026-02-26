@@ -138,6 +138,35 @@ mcporter config add xiaohongshu http://localhost:18060/mcp
 >
 > **备选：** 本地电脑如果有浏览器，也可以打开 http://localhost:18060 扫码登录。
 
+**抖音 / Douyin (douyin-mcp-server):**
+> "抖音视频解析需要一个 MCP 服务。安装 douyin-mcp-server 后即可解析视频、获取无水印下载链接。"
+
+```bash
+# 1. 安装
+pip install douyin-mcp-server
+
+# 2. 启动 HTTP 服务（端口 18070）
+# 方式一：用 uv（推荐）
+git clone https://github.com/yzfly/douyin-mcp-server.git && cd douyin-mcp-server
+uv sync && uv run python run_http.py
+
+# 方式二：直接用 Python 启动
+python -c "
+from douyin_mcp_server.server import mcp
+mcp.settings.host = '127.0.0.1'
+mcp.settings.port = 18070
+mcp.run(transport='streamable-http')
+"
+
+# 3. 注册到 mcporter
+mcporter config add douyin http://localhost:18070/mcp
+```
+
+> 无需认证即可解析视频信息和获取下载链接。
+> 如需 AI 语音识别提取文案功能，需要配置硅基流动 API Key（`export API_KEY="sk-xxx"`）。
+>
+> 详见 https://github.com/yzfly/douyin-mcp-server
+
 **LinkedIn (可选 — linkedin-scraper-mcp):**
 > "LinkedIn 基本内容可通过 Jina Reader 读取。完整功能（Profile 详情、职位搜索）需要 linkedin-scraper-mcp。"
 
@@ -254,6 +283,7 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 | Web | `curl` + Jina | `curl -s "https://r.jina.ai/URL"` |
 | Exa Search | `mcporter` | `mcporter call 'exa.web_search_exa(...)'` |
 | 小红书 | `mcporter` | `mcporter call 'xiaohongshu.search_feeds(...)'` |
+| 抖音 | `mcporter` | `mcporter call 'douyin.parse_douyin_video_info(...)'` |
 | LinkedIn | `mcporter` | `mcporter call 'linkedin.get_person_profile(...)'` |
 | Boss直聘 | `mcporter` | `mcporter call 'bosszhipin.search_jobs_tool(...)'` |
 | RSS | `feedparser` | `python3 -c "import feedparser; ..."` |

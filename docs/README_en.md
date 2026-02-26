@@ -58,6 +58,7 @@ Copy that to your Agent. A few minutes later, it can read tweets, search Reddit,
 | 🌐 **Web** | Read | Zero config | Any URL → clean Markdown ([Jina Reader](https://github.com/jina-ai/reader) ⭐9.8K) |
 | 🐦 **Twitter/X** | Read · Search | Zero config / Cookie | Single tweets readable out of the box. Cookie unlocks search, timeline, posting ([bird](https://github.com/steipete/bird)) |
 | 📕 **XiaoHongShu** | Read · Search · **Post · Comment · Like** | mcporter | Via [xiaohongshu-mcp](https://github.com/user/xiaohongshu-mcp) internal API, install and go |
+| 🎵 **Douyin** | Video parsing · Watermark-free download | mcporter | Via [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server), no login needed |
 | 💼 **LinkedIn** | Jina Reader (public pages) | Full profiles, companies, job search | Tell your Agent "help me set up LinkedIn" |
 | 🏢 **Boss直聘** | Jina Reader (job pages) | Job search, greet recruiters | Tell your Agent "help me set up Boss直聘" |
 | 🔍 **Web Search** | Search | Auto-configured | Auto-configured during install, free, no API key ([Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter)) |
@@ -186,6 +187,7 @@ channels/
 ├── bilibili.py     → yt-dlp          ← swap to bilibili-api…
 ├── reddit.py       → JSON API + Exa  ← swap to PRAW, Pushshift…
 ├── xiaohongshu.py  → mcporter MCP    ← swap to other XHS tools…
+├── douyin.py       → mcporter MCP    ← swap to other Douyin tools…
 ├── linkedin.py     → linkedin-mcp    ← swap to LinkedIn API…
 ├── bosszhipin.py   → mcp-bosszp      ← swap to other job tools…
 ├── rss.py          → feedparser      ← swap to atoma…
@@ -206,6 +208,7 @@ Each channel file only checks whether its upstream tool is installed and working
 | GitHub | [gh CLI](https://cli.github.com) | Official tool, full API after auth |
 | Read RSS | [feedparser](https://github.com/kurtmckee/feedparser) | Python ecosystem standard, 2.3K stars |
 | XiaoHongShu | [xiaohongshu-mcp](https://github.com/user/xiaohongshu-mcp) | Internal API, bypasses anti-bot |
+| Douyin | [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) | MCP server, no login needed, video parsing + watermark-free download |
 | LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | 900+ stars, MCP server, browser automation |
 | Boss直聘 | [mcp-bosszp](https://github.com/mucsbr/mcp-bosszp) | MCP server, job search + recruiter greeting |
 
@@ -269,11 +272,17 @@ Agent Reach uses bird CLI which accesses Twitter via cookie auth — same as you
 Agent Reach integrates with xiaohongshu-mcp (runs in Docker). After setup, use `mcporter call 'xiaohongshu.get_feed_detail(...)'` to read notes or `mcporter call 'xiaohongshu.search_feeds(keyword: "query")'` to search.
 </details>
 
+<details>
+<summary><strong>How to parse Douyin / 抖音 videos with AI agent?</strong></summary>
+
+Install douyin-mcp-server, then your agent can use `mcporter call 'douyin.parse_douyin_video_info(share_link: "share_url")'` to parse video info and get watermark-free download links. No login required — just share the Douyin link. See https://github.com/yzfly/douyin-mcp-server
+</details>
+
 ---
 
 ## Credits
 
-[Jina Reader](https://github.com/jina-ai/reader) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [bird](https://github.com/steipete/bird) · [Exa](https://exa.ai) · [feedparser](https://github.com/kurtmckee/feedparser) · [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) · [mcp-bosszp](https://github.com/mucsbr/mcp-bosszp)
+[Jina Reader](https://github.com/jina-ai/reader) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [bird](https://github.com/steipete/bird) · [Exa](https://exa.ai) · [feedparser](https://github.com/kurtmckee/feedparser) · [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) · [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) · [mcp-bosszp](https://github.com/mucsbr/mcp-bosszp)
 
 ## License
 

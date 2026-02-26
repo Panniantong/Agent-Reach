@@ -69,6 +69,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 | 📺 **B站** | 本地：字幕提取 + 搜索 | 服务器也能用 | 告诉 Agent「帮我配代理」 |
 | 📖 **Reddit** | 搜索（通过 Exa 免费） | 读帖子和评论 | 告诉 Agent「帮我配代理」 |
 | 📕 **小红书** | — | 阅读、搜索、发帖、评论、点赞 | 告诉 Agent「帮我配小红书」 |
+| 🎵 **抖音** | — | 视频解析、无水印下载链接获取 | 告诉 Agent「帮我配抖音」 |
 | 💼 **LinkedIn** | Jina Reader 读公开页面 | Profile 详情、公司页面、职位搜索 | 告诉 Agent「帮我配 LinkedIn」 |
 | 🏢 **Boss直聘** | Jina Reader 读职位页 | 搜索职位、向 HR 打招呼 | 告诉 Agent「帮我配 Boss直聘」 |
 
@@ -149,6 +150,7 @@ channels/
 ├── bilibili.py     → yt-dlp          ← 可以换成 bilibili-api……
 ├── reddit.py       → JSON API + Exa  ← 可以换成 PRAW、Pushshift……
 ├── xiaohongshu.py  → mcporter MCP    ← 可以换成其他 XHS 工具……
+├── douyin.py       → mcporter MCP    ← 可以换成其他抖音工具……
 ├── linkedin.py     → linkedin-mcp    ← 可以换成 LinkedIn API……
 ├── bosszhipin.py   → mcp-bosszp      ← 可以换成其他招聘工具……
 ├── rss.py          → feedparser      ← 可以换成 atoma……
@@ -169,6 +171,7 @@ channels/
 | GitHub | [gh CLI](https://cli.github.com) | 官方工具，认证后完整 API 能力 |
 | 读 RSS | [feedparser](https://github.com/kurtmckee/feedparser) | Python 生态标准选择，2.3K Star |
 | 小红书 | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) | ⭐9K+，Go 语言，Docker 一键部署 |
+| 抖音 | [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) | MCP 服务，无需登录，视频解析 + 无水印下载 |
 | LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | ⭐900+，MCP 服务，浏览器自动化 |
 | Boss直聘 | [mcp-bosszp](https://github.com/mucsbr/mcp-bosszp) | MCP 服务，支持职位搜索和打招呼 |
 
@@ -261,6 +264,12 @@ Reddit 封锁数据中心 IP。配置一个住宅代理即可解决：`agent-rea
 </details>
 
 <details>
+<summary><strong>怎么让 AI Agent 解析抖音视频？</strong></summary>
+
+安装 douyin-mcp-server 后，Agent 就能用 `mcporter call 'douyin.parse_douyin_video_info(share_link: "分享链接")'` 解析视频信息、获取无水印下载链接。不需要登录，把抖音分享链接发给 Agent 就行。详见 https://github.com/yzfly/douyin-mcp-server
+</details>
+
+<details>
 <summary><strong>Compatible with Claude Code / Cursor / OpenClaw / Windsurf?</strong></summary>
 
 Yes! Agent Reach is an installer + configuration tool — any AI coding agent that can run shell commands can use it. Works with Claude Code, Cursor, OpenClaw, Windsurf, Codex, and more. Just `pip install agent-reach`, run `agent-reach install`, and the agent can start using the upstream tools immediately.
@@ -276,7 +285,7 @@ Yes! Agent Reach is an installer + configuration tool — any AI coding agent th
 
 ## 致谢
 
-[Jina Reader](https://github.com/jina-ai/reader) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [bird](https://www.npmjs.com/package/@steipete/bird) · [Exa](https://exa.ai) · [mcporter](https://github.com/steipete/mcporter) · [feedparser](https://github.com/kurtmckee/feedparser) · [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) · [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) · [mcp-bosszp](https://github.com/mucsbr/mcp-bosszp)
+[Jina Reader](https://github.com/jina-ai/reader) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [bird](https://www.npmjs.com/package/@steipete/bird) · [Exa](https://exa.ai) · [mcporter](https://github.com/steipete/mcporter) · [feedparser](https://github.com/kurtmckee/feedparser) · [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) · [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) · [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) · [mcp-bosszp](https://github.com/mucsbr/mcp-bosszp)
 
 ## License
 
