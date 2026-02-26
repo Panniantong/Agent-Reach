@@ -3,7 +3,7 @@ name: agent-reach
 description: >
   Give your AI agent eyes to see the entire internet. Install and configure
   upstream tools for Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu,
-  LinkedIn, Boss直聘, RSS, and any web page — then call them directly.
+  Douyin, LinkedIn, Boss直聘, RSS, and any web page — then call them directly.
   Use when: (1) setting up platform access tools for the first time,
   (2) checking which platforms are available,
   (3) user asks to configure/enable a platform channel.
@@ -143,6 +143,21 @@ mcporter call 'xiaohongshu.get_feed_comments(feed_id: "xxx", xsec_token: "yyy")'
 # Post a note
 mcporter call 'xiaohongshu.create_image_feed(title: "标题", desc: "内容", image_paths: ["/path/to/img.jpg"])'
 ```
+
+### 抖音 / Douyin (mcporter + douyin-mcp-server)
+
+```bash
+# 解析抖音视频信息（分享链接 → 标题、作者、无水印视频URL等）
+mcporter call 'douyin.parse_douyin_video_info(share_link: "https://v.douyin.com/xxx/")'
+
+# 获取无水印视频下载链接
+mcporter call 'douyin.get_douyin_download_link(share_link: "https://v.douyin.com/xxx/")'
+
+# AI 提取视频语音文案（需要配置硅基流动 API Key）
+mcporter call 'douyin.extract_douyin_text(share_link: "https://v.douyin.com/xxx/")'
+```
+
+> 无需登录即可解析视频。支持抖音分享链接和直接链接。
 
 ### GitHub (gh CLI)
 
