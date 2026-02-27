@@ -15,7 +15,7 @@ class TestDoctor:
     def test_zero_config_channels_ok(self, tmp_config):
         results = check_all(tmp_config)
         assert results["web"]["status"] == "ok"
-        assert results["github"]["status"] == "ok"
+        assert results["github"]["status"] in ("ok", "warn")  # warn if gh CLI not installed
         assert results["bilibili"]["status"] in ("ok", "warn")  # warn on servers
         assert results["rss"]["status"] == "ok"
 
