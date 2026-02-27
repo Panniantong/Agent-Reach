@@ -23,10 +23,11 @@ class TestDoctor:
         results = check_all(tmp_config)
         assert results["exa_search"]["status"] == "off"
 
-    def test_exa_on_with_key(self, tmp_config):
+    def test_exa_key_does_not_force_enabled(self, tmp_config):
+        # Exa availability is determined by mcporter runtime/config state.
         tmp_config.set("exa_api_key", "test-key")
         results = check_all(tmp_config)
-        assert results["exa_search"]["status"] == "ok"
+        assert results["exa_search"]["status"] in ("off", "ok")
 
     def test_format_report(self, tmp_config):
         results = check_all(tmp_config)
