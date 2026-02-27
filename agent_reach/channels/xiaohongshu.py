@@ -1,9 +1,31 @@
 # -*- coding: utf-8 -*-
-"""XiaoHongShu — check if mcporter + xiaohongshu MCP is available."""
+"""XiaoHongShu -- check if mcporter + xiaohongshu MCP is available."""
 
+import platform
 import shutil
 import subprocess
 from .base import Channel
+
+
+def _is_arm64() -> bool:
+    """Detect ARM64 architecture (e.g. Apple Silicon)."""
+    machine = platform.machine().lower()
+    return machine in ("arm64", "aarch64")
+
+
+def _docker_run_hint() -> str:
+    """Return the docker run command, with --platform flag for ARM64."""
+    if _is_arm64():
+        return (
+            "  docker run -d --name xiaohongshu-mcp -p 18060:18060 "
+            "--platform linux/amd64 xpzouying/xiaohongshu-mcp\n"
+            "  # ARM64 also: build from source: "
+            "https://github.com/xpzouying/xiaohongshu-mcp"
+        )
+    return (
+        "  docker run -d --name xiaohongshu-mcp -p 18060:18060 "
+        "xpzouying/xiaohongshu-mcp"
+    )
 
 
 class XiaoHongShuChannel(Channel):
@@ -22,7 +44,7 @@ class XiaoHongShuChannel(Channel):
             return "off", (
                 "需要 mcporter + xiaohongshu-mcp。安装步骤：\n"
                 "  1. npm install -g mcporter\n"
-                "  2. docker run -d --name xiaohongshu-mcp -p 18060:18060 xpzouying/xiaohongshu-mcp\n"
+                "  2. " + _docker_run_hint().strip() + "\n"
                 "  3. mcporter config add xiaohongshu http://localhost:18060/mcp\n"
                 "  详见 https://github.com/xpzouying/xiaohongshu-mcp"
             )
@@ -33,7 +55,7 @@ class XiaoHongShuChannel(Channel):
             if "xiaohongshu" not in r.stdout:
                 return "off", (
                     "mcporter 已装但小红书 MCP 未配置。运行：\n"
-                    "  docker run -d --name xiaohongshu-mcp -p 18060:18060 xpzouying/xiaohongshu-mcp\n"
+                    + _docker_run_hint() + "\n"
                     "  mcporter config add xiaohongshu http://localhost:18060/mcp"
                 )
         except Exception:

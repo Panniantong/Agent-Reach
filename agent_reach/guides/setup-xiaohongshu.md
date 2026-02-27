@@ -67,5 +67,25 @@ docker run -d \
 **Q: 服务器上小红书提示 IP 风险？**
 A: 加代理参数 `-e XHS_PROXY=http://user:pass@ip:port`，推荐住宅代理。
 
+**Q: Docker 镜像不支持 ARM64 / Apple Silicon？**
+A: 上游镜像暂无 ARM64 版本，两种解决办法：
+
+方法一：使用 Rosetta 模拟运行（推荐，最简单）
+```bash
+docker run -d \
+  --name xiaohongshu-mcp \
+  -p 18060:18060 \
+  --platform linux/amd64 \
+  xpzouying/xiaohongshu-mcp
+```
+
+方法二：从源码编译原生 ARM64 版本
+```bash
+git clone https://github.com/xpzouying/xiaohongshu-mcp
+cd xiaohongshu-mcp
+docker build -t xiaohongshu-mcp .
+docker run -d --name xiaohongshu-mcp -p 18060:18060 xiaohongshu-mcp
+```
+
 **Q: 我不想用 Docker？**
 A: 可以从源码编译：https://github.com/xpzouying/xiaohongshu-mcp
