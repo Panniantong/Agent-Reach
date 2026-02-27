@@ -26,7 +26,7 @@ class LinkedInChannel(Channel):
             )
         try:
             r = subprocess.run(
-                ["mcporter", "list"], capture_output=True, text=True, timeout=10
+                ["mcporter", "config", "list"], capture_output=True, text=True, timeout=5
             )
             if "linkedin" in r.stdout.lower():
                 return "ok", "完整可用（Profile、公司、职位搜索）"

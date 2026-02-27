@@ -28,7 +28,7 @@ class XiaoHongShuChannel(Channel):
             )
         try:
             r = subprocess.run(
-                ["mcporter", "list"], capture_output=True, text=True, timeout=10
+                ["mcporter", "config", "list"], capture_output=True, text=True, timeout=5
             )
             if "xiaohongshu" not in r.stdout:
                 return "off", (
