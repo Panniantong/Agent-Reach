@@ -93,6 +93,8 @@ xreach tweets @username --json -n 20
 
 ### YouTube (yt-dlp)
 
+> ⚠️ 服务器 IP 可能触发 YouTube 反爬（"Sign in to confirm you're not a bot"）。遇到时加 `--cookies-from-browser chrome` 或通过代理。
+
 ```bash
 # Get video metadata
 yt-dlp --dump-json "https://www.youtube.com/watch?v=xxx"
@@ -103,9 +105,14 @@ yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -
 
 # Search (yt-dlp ytsearch)
 yt-dlp --dump-json "ytsearch5:query"
+
+# If blocked ("Sign in to confirm you're not a bot"):
+yt-dlp --cookies-from-browser chrome --dump-json "URL"
 ```
 
 ### Bilibili (yt-dlp)
+
+> ⚠️ 服务器 IP 可能被 Bilibili 拦截（412 错误）。建议通过代理访问，或加 `--cookies-from-browser chrome`。
 
 ```bash
 # Get video metadata
@@ -113,6 +120,9 @@ yt-dlp --dump-json "https://www.bilibili.com/video/BVxxx"
 
 # Download subtitles
 yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --convert-subs vtt --skip-download -o "/tmp/%(id)s" "URL"
+
+# If blocked (412 / login required):
+yt-dlp --cookies-from-browser chrome --dump-json "URL"
 ```
 
 ### Reddit (JSON API)
