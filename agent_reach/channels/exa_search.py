@@ -24,7 +24,7 @@ class ExaSearchChannel(Channel):
             )
         try:
             r = subprocess.run(
-                ["mcporter", "list"], capture_output=True, text=True, timeout=10
+                ["mcporter", "config", "list"], capture_output=True, text=True, timeout=5
             )
             if "exa" in r.stdout.lower():
                 return "ok", "全网语义搜索可用（免费，无需 API Key）"
