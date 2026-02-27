@@ -1,0 +1,17 @@
+# Agent Reach tested dependency set
+# Usage:
+#   pip install -c constraints.txt -e .[dev]
+
+requests==2.32.5
+feedparser==6.0.12
+python-dotenv==1.2.1
+loguru==0.7.3
+PyYAML==6.0.3
+rich==14.3.2
+yt-dlp==2025.5.22
+
+pytest==8.0.0
+ruff==0.15.1
+mypy==1.19.1
+types-requests==2.32.4.20260107
+types-PyYAML==6.0.12.20250915

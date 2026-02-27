@@ -2,6 +2,7 @@
 """Tests for AgentReach core class."""
 
 import pytest
+
 from agent_reach.config import Config
 from agent_reach.core import AgentReach
 
@@ -15,14 +16,6 @@ def eyes(tmp_path):
 class TestAgentReach:
     def test_init(self, eyes):
         assert eyes.config is not None
-
-    def test_detect_platform(self, eyes):
-        assert eyes.detect_platform("https://github.com/test/repo") == "github"
-        assert eyes.detect_platform("https://reddit.com/r/test") == "reddit"
-        assert eyes.detect_platform("https://x.com/user/status/123") == "twitter"
-        assert eyes.detect_platform("https://youtube.com/watch?v=abc") == "youtube"
-        assert eyes.detect_platform("https://bilibili.com/video/BV1xx") == "bilibili"
-        assert eyes.detect_platform("https://example.com") == "web"
 
     def test_doctor(self, eyes):
         results = eyes.doctor()

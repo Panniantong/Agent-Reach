@@ -41,6 +41,13 @@ dependencies = [
 browser = ["playwright>=1.40"]
 cookies = ["browser-cookie3>=0.19"]
 all = ["playwright>=1.40", "mcp[cli]>=1.0", "browser-cookie3>=0.19"]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.8",
+    "mypy>=1.12",
+    "types-requests>=2.32",
+    "types-PyYAML>=6.0",
+]
 
 [project.scripts]
 agent-reach = "agent_reach.cli:main"
@@ -60,3 +67,20 @@ packages = ["agent_reach"]
 [tool.hatch.build.targets.wheel.force-include]
 "agent_reach/guides" = "agent_reach/guides"
 "agent_reach/skill" = "agent_reach/skill"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+check_untyped_defs = true
+ignore_missing_imports = true
+exclude = ["^tests/"]
