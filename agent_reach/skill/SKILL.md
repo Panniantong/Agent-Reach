@@ -93,6 +93,9 @@ xreach tweets @username --json -n 20
 
 ### YouTube (yt-dlp)
 
+> ⚠️ yt-dlp 需要 JS runtime 才能下载 YouTube。`agent-reach install` 会自动配置 Node.js 作为 runtime。
+> 如果遇到 "Sign in to confirm you're not a bot"，是 IP 被 YouTube 反爬，换代理或加 cookies。
+
 ```bash
 # Get video metadata
 yt-dlp --dump-json "https://www.youtube.com/watch?v=xxx"
@@ -103,9 +106,14 @@ yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -
 
 # Search (yt-dlp ytsearch)
 yt-dlp --dump-json "ytsearch5:query"
+
+# If "no JS runtime" warning: ensure Node.js is installed, then run:
+#   mkdir -p ~/.config/yt-dlp && echo "--js-runtimes node" >> ~/.config/yt-dlp/config
 ```
 
 ### Bilibili (yt-dlp)
+
+> ⚠️ 服务器 IP 可能被 Bilibili 拦截（412 错误）。建议通过代理访问，或加 `--cookies-from-browser chrome`。
 
 ```bash
 # Get video metadata
@@ -113,6 +121,9 @@ yt-dlp --dump-json "https://www.bilibili.com/video/BVxxx"
 
 # Download subtitles
 yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --convert-subs vtt --skip-download -o "/tmp/%(id)s" "URL"
+
+# If blocked (412 / login required):
+yt-dlp --cookies-from-browser chrome --dump-json "URL"
 ```
 
 ### Reddit (JSON API)
