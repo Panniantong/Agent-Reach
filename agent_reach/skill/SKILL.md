@@ -76,7 +76,9 @@ When a user asks to configure/enable any channel:
 
 ## Using Upstream Tools Directly
 
-After `agent-reach install`, call the upstream tools directly. No need for `agent-reach read` or `agent-reach search`.
+After `agent-reach install`, call the upstream tools directly.
+
+> **Note:** `agent-reach` is an installer and config tool — it does NOT have `read`, `search`, or content-fetching commands. Use the upstream tools below instead.
 
 ### Twitter/X (xreach CLI)
 

@@ -57,7 +57,6 @@ def main():
     parser.add_argument("--version", action="version", version=f"Agent Reach v{__version__}")
     sub = parser.add_subparsers(dest="command", help="Available commands")
 
-    # ── read ──
     # ── setup ──
     sub.add_parser("setup", help="Interactive configuration wizard")
 
