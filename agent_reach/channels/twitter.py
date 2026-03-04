@@ -26,7 +26,8 @@ class TwitterChannel(Channel):
             )
         try:
             r = subprocess.run(
-                [xreach, "auth", "check"], capture_output=True, text=True, timeout=10
+                [xreach, "auth", "check"], capture_output=True,
+                encoding="utf-8", errors="replace", timeout=10
             )
             if r.returncode == 0:
                 return "ok", "完整可用（读取、搜索推文）"

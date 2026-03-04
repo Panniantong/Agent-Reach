@@ -17,12 +17,13 @@ class GitHubChannel(Channel):
         return "github.com" in urlparse(url).netloc.lower()
 
     def check(self, config=None):
-        if not shutil.which("gh"):
+        gh = shutil.which("gh")
+        if not gh:
             return "warn", "gh CLI 未安装。安装：https://cli.github.com"
         try:
             r = subprocess.run(
-                ["gh", "auth", "status"],
-                capture_output=True, text=True, timeout=5
+                [gh, "auth", "status"],
+                capture_output=True, encoding="utf-8", errors="replace", timeout=5
             )
             if r.returncode == 0:
                 return "ok", "完整可用（读取、搜索、Fork、Issue、PR 等）"

@@ -319,7 +319,7 @@ def _install_system_deps():
                 list_path = "/etc/apt/sources.list.d/github-cli.list"
                 arch = subprocess.run(
                     ["dpkg", "--print-architecture"],
-                    capture_output=True, text=True, timeout=10,
+                    capture_output=True, encoding="utf-8", errors="replace", timeout=10,
                 ).stdout.strip() or "amd64"
                 subprocess.run(
                     ["curl", "-fsSL", "https://cli.github.com/packages/githubcli-archive-keyring.gpg", "-o", keyring_path],
@@ -394,7 +394,7 @@ def _install_system_deps():
             try:
                 subprocess.run(
                     ["npm", "install", "-g", "xreach-cli"],
-                    capture_output=True, text=True, timeout=120,
+                    capture_output=True, encoding="utf-8", errors="replace", timeout=120,
                 )
                 if shutil.which("xreach"):
                     print("  ✅ xreach CLI installed (Twitter search + timeline)")
@@ -407,13 +407,13 @@ def _install_system_deps():
 
     # ── undici (proxy support for Node.js fetch) ──
     if shutil.which("npm"):
-        npm_root = subprocess.run(["npm", "root", "-g"], capture_output=True, text=True, timeout=5).stdout.strip()
+        npm_root = subprocess.run(["npm", "root", "-g"], capture_output=True, encoding="utf-8", errors="replace", timeout=5).stdout.strip()
         undici_path = os.path.join(npm_root, "undici", "index.js") if npm_root else ""
         if os.path.exists(undici_path):
             print("  ✅ undici already installed (Node.js proxy support)")
         else:
             try:
-                subprocess.run(["npm", "install", "-g", "undici"], capture_output=True, text=True, timeout=60)
+                subprocess.run(["npm", "install", "-g", "undici"], capture_output=True, encoding="utf-8", errors="replace", timeout=60)
                 print("  ✅ undici installed (Node.js proxy support)")
             except Exception:
                 print("  ⬜ undici install failed (optional — xreach may not work behind proxies)")
@@ -506,7 +506,7 @@ def _install_mcporter():
         try:
             subprocess.run(
                 ["npm", "install", "-g", "mcporter"],
-                capture_output=True, text=True, timeout=120,
+                capture_output=True, encoding="utf-8", errors="replace", timeout=120,
             )
             if shutil.which("mcporter"):
                 print("  ✅ mcporter installed")
@@ -520,12 +520,12 @@ def _install_mcporter():
     # Configure Exa MCP (free, no key needed)
     try:
         r = subprocess.run(
-            ["mcporter", "config", "list"], capture_output=True, text=True, timeout=5
+            ["mcporter", "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=5
         )
         if "exa" not in r.stdout:
             subprocess.run(
                 ["mcporter", "config", "add", "exa", "https://mcp.exa.ai/mcp"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True, encoding="utf-8", errors="replace", timeout=10,
             )
             print("  ✅ Exa search configured (free, no API key needed)")
         else:
@@ -536,7 +536,7 @@ def _install_mcporter():
     # Check XiaoHongShu MCP (only if server is running)
     try:
         r = subprocess.run(
-            ["mcporter", "config", "list"], capture_output=True, text=True, timeout=5
+            ["mcporter", "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=5
         )
         if "xiaohongshu" in r.stdout:
             print("  ✅ XiaoHongShu MCP already configured")
@@ -547,7 +547,7 @@ def _install_mcporter():
                 requests.get("http://localhost:18060/", timeout=3)
                 subprocess.run(
                     ["mcporter", "config", "add", "xiaohongshu", "http://localhost:18060/mcp"],
-                    capture_output=True, text=True, timeout=10,
+                    capture_output=True, encoding="utf-8", errors="replace", timeout=10,
                 )
                 print("  ✅ XiaoHongShu MCP auto-detected and configured")
             except Exception:
@@ -606,7 +606,7 @@ def _detect_environment():
     # systemd-detect-virt
     try:
         import subprocess
-        result = subprocess.run(["systemd-detect-virt"], capture_output=True, text=True, timeout=3)
+        result = subprocess.run(["systemd-detect-virt"], capture_output=True, encoding="utf-8", errors="replace", timeout=3)
         if result.returncode == 0 and result.stdout.strip() != "none":
             indicators += 1
     except:
@@ -737,7 +737,7 @@ def _cmd_configure(args):
                     env["CT0"] = ct0
                     result = subprocess.run(
                         [xreach, "search", "test", "-n", "1"],
-                        capture_output=True, text=True, timeout=15,
+                        capture_output=True, encoding="utf-8", errors="replace", timeout=15,
                         env=env,
                     )
                     if result.returncode == 0 and result.stdout.strip():
@@ -828,7 +828,7 @@ def _cmd_uninstall(args):
         for mcp_name in ("exa", "xiaohongshu"):
             try:
                 r = subprocess.run(
-                    ["mcporter", "list"], capture_output=True, text=True, timeout=10
+                    ["mcporter", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=10
                 )
                 if mcp_name in r.stdout:
                     if dry_run:
@@ -836,7 +836,7 @@ def _cmd_uninstall(args):
                     else:
                         subprocess.run(
                             ["mcporter", "config", "remove", mcp_name],
-                            capture_output=True, text=True, timeout=10,
+                            capture_output=True, encoding="utf-8", errors="replace", timeout=10,
                         )
                         print(f"  Removed mcporter entry: {mcp_name}")
                         removed_any = True
@@ -896,7 +896,7 @@ def _cmd_setup():
     else:
         try:
             r = subprocess.run(
-                ["mcporter", "config", "list"], capture_output=True, text=True, timeout=10
+                ["mcporter", "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=10
             )
             if "exa" in r.stdout.lower():
                 print("  当前状态: ✅ 已配置")
@@ -906,7 +906,7 @@ def _cmd_setup():
                 if setup_now in ("", "y", "yes"):
                     add_r = subprocess.run(
                         ["mcporter", "config", "add", "exa", "https://mcp.exa.ai/mcp"],
-                        capture_output=True, text=True, timeout=10,
+                        capture_output=True, encoding="utf-8", errors="replace", timeout=10,
                     )
                     if add_r.returncode == 0:
                         print("  ✅ Exa 已配置")

@@ -16,7 +16,8 @@ class ExaSearchChannel(Channel):
         return False  # Search-only channel
 
     def check(self, config=None):
-        if not shutil.which("mcporter"):
+        mcporter = shutil.which("mcporter")
+        if not mcporter:
             return "off", (
                 "需要 mcporter + Exa MCP。安装：\n"
                 "  npm install -g mcporter\n"
@@ -24,7 +25,8 @@ class ExaSearchChannel(Channel):
             )
         try:
             r = subprocess.run(
-                ["mcporter", "config", "list"], capture_output=True, text=True, timeout=5
+                [mcporter, "config", "list"], capture_output=True,
+                encoding="utf-8", errors="replace", timeout=5
             )
             if "exa" in r.stdout.lower():
                 return "ok", "全网语义搜索可用（免费，无需 API Key）"

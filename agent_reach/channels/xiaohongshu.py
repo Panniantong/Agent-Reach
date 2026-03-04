@@ -40,7 +40,8 @@ class XiaoHongShuChannel(Channel):
         return "xiaohongshu.com" in d or "xhslink.com" in d
 
     def check(self, config=None):
-        if not shutil.which("mcporter"):
+        mcporter = shutil.which("mcporter")
+        if not mcporter:
             return "off", (
                 "需要 mcporter + xiaohongshu-mcp。安装步骤：\n"
                 "  1. npm install -g mcporter\n"
@@ -50,7 +51,8 @@ class XiaoHongShuChannel(Channel):
             )
         try:
             r = subprocess.run(
-                ["mcporter", "config", "list"], capture_output=True, text=True, timeout=5
+                [mcporter, "config", "list"], capture_output=True,
+                encoding="utf-8", errors="replace", timeout=5
             )
             if "xiaohongshu" not in r.stdout:
                 return "off", (
@@ -62,8 +64,8 @@ class XiaoHongShuChannel(Channel):
             return "off", "mcporter 连接异常"
         try:
             r = subprocess.run(
-                ["mcporter", "call", "xiaohongshu.check_login_status()"],
-                capture_output=True, text=True, timeout=10
+                [mcporter, "call", "xiaohongshu.check_login_status()"],
+                capture_output=True, encoding="utf-8", errors="replace", timeout=10
             )
             if "已登录" in r.stdout or "logged" in r.stdout.lower():
                 return "ok", "完整可用（阅读、搜索、发帖、评论、点赞）"

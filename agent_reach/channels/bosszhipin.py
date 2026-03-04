@@ -18,7 +18,8 @@ class BossZhipinChannel(Channel):
         return "zhipin.com" in domain or "boss.com" in domain
 
     def check(self, config=None):
-        if not shutil.which("mcporter"):
+        mcporter = shutil.which("mcporter")
+        if not mcporter:
             return "off", (
                 "可通过 Jina Reader 读取职位页面。完整功能需要：\n"
                 "  1. git clone https://github.com/mucsbr/mcp-bosszp.git\n"
@@ -28,7 +29,8 @@ class BossZhipinChannel(Channel):
             )
         try:
             r = subprocess.run(
-                ["mcporter", "list"], capture_output=True, text=True, timeout=10
+                [mcporter, "list"], capture_output=True,
+                encoding="utf-8", errors="replace", timeout=10
             )
             out = r.stdout.lower()
             if "boss" in out or "zhipin" in out:

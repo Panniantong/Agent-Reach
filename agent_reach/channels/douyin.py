@@ -18,7 +18,8 @@ class DouyinChannel(Channel):
         return "douyin.com" in d or "iesdouyin.com" in d
 
     def check(self, config=None):
-        if not shutil.which("mcporter"):
+        mcporter = shutil.which("mcporter")
+        if not mcporter:
             return "off", (
                 "需要 mcporter + douyin-mcp-server。安装步骤：\n"
                 "  1. npm install -g mcporter\n"
@@ -29,7 +30,8 @@ class DouyinChannel(Channel):
             )
         try:
             r = subprocess.run(
-                ["mcporter", "config", "list"], capture_output=True, text=True, timeout=5
+                [mcporter, "config", "list"], capture_output=True,
+                encoding="utf-8", errors="replace", timeout=5
             )
             if "douyin" not in r.stdout:
                 return "off", (
@@ -42,8 +44,8 @@ class DouyinChannel(Channel):
             return "off", "mcporter 连接异常"
         try:
             r = subprocess.run(
-                ["mcporter", "call", "douyin.parse_douyin_video_info(share_link: \"https://www.douyin.com\")"],
-                capture_output=True, text=True, timeout=15
+                [mcporter, "call", "douyin.parse_douyin_video_info(share_link: \"https://www.douyin.com\")"],
+                capture_output=True, encoding="utf-8", errors="replace", timeout=15
             )
             if r.returncode == 0:
                 return "ok", "完整可用（视频解析、下载链接获取）"
