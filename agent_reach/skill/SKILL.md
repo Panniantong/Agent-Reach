@@ -253,20 +253,37 @@ mcporter call 'bosszhipin.get_job_detail_tool(job_url: "https://www.zhipin.com/j
 
 Fallback: `curl -s "https://r.jina.ai/https://www.zhipin.com/job_detail/xxx"`
 
-### 微信公众号 (wechat-article-for-ai)
+### 微信公众号 (wechat-article-for-ai + miku_ai)
 
-Uses Camoufox (stealth Firefox) to bypass WeChat's anti-bot detection and extract full article content.
+**Search** (miku_ai — Sogou WeChat search):
+
+```python
+# Search WeChat articles by keyword
+python3 -c "
+import asyncio
+from miku_ai import get_wexin_article
+
+async def search():
+    articles = await get_wexin_article('AI Agent', 5)
+    for a in articles:
+        print(f'{a[\"title\"]} | {a[\"source\"]} | {a[\"date\"]}')
+        print(f'  {a[\"url\"]}')
+
+asyncio.run(search())
+"
+```
+
+**Read** (Camoufox — stealth Firefox, bypasses WeChat anti-bot):
 
 ```bash
 # Read a WeChat article (returns Markdown with images)
 cd /path/to/wechat-article-for-ai && python3 main.py "https://mp.weixin.qq.com/s/ARTICLE_ID"
 
-# Batch convert multiple articles
-python3 main.py "URL1" "URL2" "URL3" -o ./output
-
 # Run as MCP server (for AI agent integration)
 python3 mcp_server.py
 ```
+
+Typical agent workflow: search → get URLs → immediately read full content.
 
 Note: WeChat articles require a real browser to render. Jina Reader and curl cannot read them.
 
