@@ -12,6 +12,10 @@ Copy this to your AI Agent:
 
 ## For AI Agents
 
+### ⚠️ Workspace Rules
+
+**Never create files, clone repos, or run commands in the agent workspace.** Use `/tmp/` for temporary work and `~/.agent-reach/` for persistent data.
+
 ### Goal
 
 Update Agent Reach to the latest version, then verify everything still works.

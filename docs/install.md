@@ -30,7 +30,21 @@ When fixing issues, stay within these limits:
 - **DO NOT** modify system files outside `~/.agent-reach/`
 - **DO NOT** install packages not listed in this guide
 - **DO NOT** disable firewalls, security settings, or system protections
+- **DO NOT** clone repos, create files, or run commands inside the agent workspace / working directory
 - If something requires elevated permissions, **tell the user** what's needed and let them decide
+
+### 📁 Directory Rules
+
+All Agent Reach files go in dedicated directories — **never in the agent workspace**:
+
+| Purpose | Directory | Example |
+|---------|-----------|---------|
+| Config & tokens | `~/.agent-reach/` | `~/.agent-reach/config.json` |
+| Upstream tool repos | `~/.agent-reach/tools/` | `~/.agent-reach/tools/douyin-mcp-server/` |
+| Temporary files | `/tmp/` | `/tmp/yt-dlp-output/` |
+| Skills | `~/.openclaw/skills/agent-reach/` | SKILL.md |
+
+**Why?** If you clone repos or create files in the workspace, it pollutes the user's project directory and can break their agent over time. Keep the workspace clean.
 
 ### Step 1: Install
 
@@ -149,6 +163,7 @@ pip install douyin-mcp-server
 
 # 2. 启动 HTTP 服务（端口 18070）
 # 方式一：用 uv（推荐）
+mkdir -p ~/.agent-reach/tools && cd ~/.agent-reach/tools
 git clone https://github.com/yzfly/douyin-mcp-server.git && cd douyin-mcp-server
 uv sync && uv run python run_http.py
 
@@ -212,6 +227,7 @@ pip install linkedin-scraper-mcp
 > "Boss直聘职位页面可直接读取。完整搜索和打招呼功能需要 mcp-bosszp。"
 
 ```bash
+mkdir -p ~/.agent-reach/tools && cd ~/.agent-reach/tools
 git clone https://github.com/mucsbr/mcp-bosszp.git && cd mcp-bosszp
 pip install -r requirements.txt && playwright install chromium
 ```

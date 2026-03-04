@@ -13,7 +13,19 @@ description: >
 
 # Agent Reach
 
-Install and configure upstream tools for 12+ platforms. After setup, call them directly — no wrapper layer.
+Install and configure upstream tools for 13+ platforms. After setup, call them directly — no wrapper layer.
+
+## ⚠️ Workspace Rules
+
+**Never create files, clone repos, or write output in the agent workspace.** Use these directories instead:
+
+| Purpose | Directory |
+|---------|-----------|
+| Temporary output (subtitles, downloads) | `/tmp/` |
+| Upstream tool repos | `~/.agent-reach/tools/` |
+| Config & tokens | `~/.agent-reach/` |
+
+Violating this will pollute the user's workspace and degrade their agent experience over time.
 
 ## Setup
 
@@ -277,7 +289,7 @@ asyncio.run(search())
 
 ```bash
 # Read a WeChat article (returns Markdown with images)
-cd /path/to/wechat-article-for-ai && python3 main.py "https://mp.weixin.qq.com/s/ARTICLE_ID"
+cd ~/.agent-reach/tools/wechat-article-for-ai && python3 main.py "https://mp.weixin.qq.com/s/ARTICLE_ID"
 
 # Run as MCP server (for AI agent integration)
 python3 mcp_server.py

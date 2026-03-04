@@ -147,6 +147,10 @@ def _cmd_install(args):
     print("👁️  Agent Reach Installer")
     print("=" * 40)
 
+    # Ensure tools directory exists (for upstream tool repos)
+    tools_dir = os.path.expanduser("~/.agent-reach/tools")
+    os.makedirs(tools_dir, exist_ok=True)
+
     if dry_run:
         print("🔍 DRY RUN — showing what would be done (no changes)")
         print()
