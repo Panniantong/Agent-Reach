@@ -3,7 +3,7 @@ name: agent-reach
 description: >
   Give your AI agent eyes to see the entire internet. Install and configure
   upstream tools for Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu,
-  Douyin, LinkedIn, Boss直聘, RSS, and any web page — then call them directly.
+  Douyin, LinkedIn, Boss直聘, WeChat (微信公众号), RSS, and any web page — then call them directly.
   Use when: (1) setting up platform access tools for the first time,
   (2) checking which platforms are available,
   (3) user asks to configure/enable a platform channel.
@@ -252,6 +252,23 @@ mcporter call 'bosszhipin.get_job_detail_tool(job_url: "https://www.zhipin.com/j
 ```
 
 Fallback: `curl -s "https://r.jina.ai/https://www.zhipin.com/job_detail/xxx"`
+
+### 微信公众号 (wechat-article-for-ai)
+
+Uses Camoufox (stealth Firefox) to bypass WeChat's anti-bot detection and extract full article content.
+
+```bash
+# Read a WeChat article (returns Markdown with images)
+cd /path/to/wechat-article-for-ai && python3 main.py "https://mp.weixin.qq.com/s/ARTICLE_ID"
+
+# Batch convert multiple articles
+python3 main.py "URL1" "URL2" "URL3" -o ./output
+
+# Run as MCP server (for AI agent integration)
+python3 mcp_server.py
+```
+
+Note: WeChat articles require a real browser to render. Jina Reader and curl cannot read them.
 
 ### RSS (feedparser)
 
