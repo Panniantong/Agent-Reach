@@ -326,3 +326,7 @@ Yes! Agent Reach is an installer + configuration tool — any AI coding agent th
 ## License
 
 [MIT](LICENSE)
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Panniantong/Agent-Reach&type=Date)](https://star-history.com/#Panniantong/Agent-Reach&Date)
