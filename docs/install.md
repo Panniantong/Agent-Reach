@@ -139,6 +139,9 @@ agent-reach configure proxy http://user:pass@ip:port
 > "小红书需要一个 MCP 服务。需要你的机器上有 Docker。安装好 Docker 后我来搞定剩下的。"
 
 ```bash
+# 设置 mcporter 配置路径（推荐添加到 ~/.zshrc 或 ~/.bashrc）
+export MCPORTER_CONFIG=~/.mcporter/mcporter.json
+
 docker run -d --name xiaohongshu-mcp -p 18060:18060 xpzouying/xiaohongshu-mcp
 mcporter config add xiaohongshu http://localhost:18060/mcp
 ```
@@ -174,6 +177,9 @@ mcp.settings.host = '127.0.0.1'
 mcp.settings.port = 18070
 mcp.run(transport='streamable-http')
 "
+
+# 设置 mcporter 配置路径
+export MCPORTER_CONFIG=~/.mcporter/mcporter.json
 
 # 3. 注册到 mcporter
 mcporter config add douyin http://localhost:18070/mcp

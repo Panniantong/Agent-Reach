@@ -14,6 +14,7 @@ class BossZhipinChannel(Channel):
 
     def can_handle(self, url: str) -> bool:
         from urllib.parse import urlparse
+
         domain = urlparse(url).netloc.lower()
         return "zhipin.com" in domain or "boss.com" in domain
 
@@ -25,12 +26,17 @@ class BossZhipinChannel(Channel):
                 "  1. git clone https://github.com/mucsbr/mcp-bosszp.git\n"
                 "  2. cd mcp-bosszp && pip install -r requirements.txt && playwright install chromium\n"
                 "  3. python boss_zhipin_fastmcp_v2.py（启动后扫码登录）\n"
-                "  4. mcporter config add bosszhipin http://localhost:8000/mcp"
+                "  4. export MCPORTER_CONFIG=~/.mcporter/mcporter.json\n"
+                "  5. mcporter config add bosszhipin http://localhost:8000/mcp"
             )
         try:
             r = subprocess.run(
-                [mcporter, "list"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=10
+                [mcporter, "list"],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
+                env=self.get_mcporter_env(),
             )
             out = r.stdout.lower()
             if "boss" in out or "zhipin" in out:
@@ -38,6 +44,7 @@ class BossZhipinChannel(Channel):
         except Exception:
             pass
         return "off", (
-            "mcporter 已装但 Boss直聘 MCP 未配置。\n"
+            "mcporter 已装但 Boss直聘 MCP 未配置。运行：\n"
+            "  export MCPORTER_CONFIG=~/.mcporter/mcporter.json\n"
             "  详见 https://github.com/mucsbr/mcp-bosszp"
         )

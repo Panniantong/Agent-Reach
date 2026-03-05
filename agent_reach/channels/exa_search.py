@@ -25,13 +25,18 @@ class ExaSearchChannel(Channel):
             )
         try:
             r = subprocess.run(
-                [mcporter, "config", "list"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=5
+                [mcporter, "config", "list"],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+                env=self.get_mcporter_env(),
             )
             if "exa" in r.stdout.lower():
                 return "ok", "全网语义搜索可用（免费，无需 API Key）"
             return "off", (
                 "mcporter 已装但 Exa 未配置。运行：\n"
+                "  export MCPORTER_CONFIG=~/.mcporter/mcporter.json\n"
                 "  mcporter config add exa https://mcp.exa.ai/mcp"
             )
         except Exception:

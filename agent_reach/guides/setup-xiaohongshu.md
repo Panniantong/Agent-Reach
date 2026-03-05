@@ -10,7 +10,12 @@
 ## Agent 可自动完成的步骤
 
 ### 1. 安装 mcporter
+
 ```bash
+# 添加到 ~/.zshrc 或 ~/.bashrc
+export MCPORTER_CONFIG=~/.mcporter/mcporter.json
+
+# 安装 mcporter
 npm install -g mcporter
 ```
 
@@ -57,10 +62,11 @@ agent-reach doctor
 **Q: Docker 容器重启后 cookie 丢了？**
 A: 挂载数据卷持久化：
 ```bash
+mkdir -p ~/.agent-reach/xhs-data
 docker run -d \
   --name xiaohongshu-mcp \
   -p 18060:18060 \
-  -v xhs-data:/app/data \
+  -v ~/.agent-reach/xhs-data:/app/data \
   xpzouying/xiaohongshu-mcp
 ```
 

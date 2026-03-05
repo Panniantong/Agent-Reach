@@ -11,7 +11,12 @@ Exa 是一个 AI 语义搜索引擎。通过 MCP 接入，**免费、无需 API 
 `agent-reach install --env=auto` 会自动完成以下步骤，通常不需要手动操作。
 
 ### 1. 安装 mcporter
+
 ```bash
+# 添加到 ~/.zshrc 或 ~/.bashrc
+export MCPORTER_CONFIG=~/.mcporter/mcporter.json
+
+# 安装 mcporter
 npm install -g mcporter
 ```
 

@@ -36,6 +36,7 @@ class XiaoHongShuChannel(Channel):
 
     def can_handle(self, url: str) -> bool:
         from urllib.parse import urlparse
+
         d = urlparse(url).netloc.lower()
         return "xiaohongshu.com" in d or "xhslink.com" in d
 
@@ -45,19 +46,27 @@ class XiaoHongShuChannel(Channel):
             return "off", (
                 "需要 mcporter + xiaohongshu-mcp。安装步骤：\n"
                 "  1. npm install -g mcporter\n"
-                "  2. " + _docker_run_hint().strip() + "\n"
-                "  3. mcporter config add xiaohongshu http://localhost:18060/mcp\n"
+                "  2. export MCPORTER_CONFIG=~/.mcporter/mcporter.json\n"
+                "  3. " + _docker_run_hint().strip() + "\n"
+                "  4. mcporter config add xiaohongshu http://localhost:18060/mcp\n"
                 "  详见 https://github.com/xpzouying/xiaohongshu-mcp"
             )
         try:
+            env = self.get_mcporter_env()
             r = subprocess.run(
-                [mcporter, "config", "list"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=5
+                [mcporter, "config", "list"],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+                env=env,
             )
             if "xiaohongshu" not in r.stdout:
                 return "off", (
                     "mcporter 已装但小红书 MCP 未配置。运行：\n"
-                    + _docker_run_hint() + "\n"
+                    "  export MCPORTER_CONFIG=~/.mcporter/mcporter.json\n"
+                    + _docker_run_hint()
+                    + "\n"
                     "  mcporter config add xiaohongshu http://localhost:18060/mcp"
                 )
         except Exception:
@@ -65,7 +74,11 @@ class XiaoHongShuChannel(Channel):
         try:
             r = subprocess.run(
                 [mcporter, "call", "xiaohongshu.check_login_status()"],
-                capture_output=True, encoding="utf-8", errors="replace", timeout=10
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
+                env=env,
             )
             if "已登录" in r.stdout or "logged" in r.stdout.lower():
                 return "ok", "完整可用（阅读、搜索、发帖、评论、点赞）"

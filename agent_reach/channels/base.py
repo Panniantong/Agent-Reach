@@ -10,6 +10,7 @@ and provides:
 After installation, agents call upstream tools directly.
 """
 
+import os
 import shutil
 from abc import ABC, abstractmethod
 from typing import List, Tuple
@@ -22,6 +23,13 @@ class Channel(ABC):
     description: str = ""             # e.g. "YouTube 视频和字幕"
     backends: List[str] = []          # e.g. ["yt-dlp"] — what upstream tool is used
     tier: int = 0                     # 0=zero-config, 1=needs free key, 2=needs setup
+
+    @staticmethod
+    def get_mcporter_env() -> dict:
+        """Get environment with MCPORTER_CONFIG set for all mcporter commands."""
+        env = os.environ.copy()
+        env["MCPORTER_CONFIG"] = os.path.expanduser("~/.mcporter/mcporter.json")
+        return env
 
     @abstractmethod
     def can_handle(self, url: str) -> bool:

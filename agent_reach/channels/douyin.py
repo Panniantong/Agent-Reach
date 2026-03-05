@@ -14,6 +14,7 @@ class DouyinChannel(Channel):
 
     def can_handle(self, url: str) -> bool:
         from urllib.parse import urlparse
+
         d = urlparse(url).netloc.lower()
         return "douyin.com" in d or "iesdouyin.com" in d
 
@@ -25,17 +26,24 @@ class DouyinChannel(Channel):
                 "  1. npm install -g mcporter\n"
                 "  2. pip install douyin-mcp-server\n"
                 "  3. 启动服务（见下方说明）\n"
-                "  4. mcporter config add douyin http://localhost:18070/mcp\n"
+                "  4. export MCPORTER_CONFIG=~/.mcporter/mcporter.json\n"
+                "  5. mcporter config add douyin http://localhost:18070/mcp\n"
                 "  详见 https://github.com/yzfly/douyin-mcp-server"
             )
         try:
+            env = self.get_mcporter_env()
             r = subprocess.run(
-                [mcporter, "config", "list"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=5
+                [mcporter, "config", "list"],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+                env=env,
             )
             if "douyin" not in r.stdout:
                 return "off", (
                     "mcporter 已装但抖音 MCP 未配置。运行：\n"
+                    "  export MCPORTER_CONFIG=~/.mcporter/mcporter.json\n"
                     "  pip install douyin-mcp-server\n"
                     "  # 启动服务后：\n"
                     "  mcporter config add douyin http://localhost:18070/mcp"
@@ -44,8 +52,16 @@ class DouyinChannel(Channel):
             return "off", "mcporter 连接异常"
         try:
             r = subprocess.run(
-                [mcporter, "call", "douyin.parse_douyin_video_info(share_link: \"https://www.douyin.com\")"],
-                capture_output=True, encoding="utf-8", errors="replace", timeout=15
+                [
+                    mcporter,
+                    "call",
+                    'douyin.parse_douyin_video_info(share_link: "https://www.douyin.com")',
+                ],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=15,
+                env=env,
             )
             if r.returncode == 0:
                 return "ok", "完整可用（视频解析、下载链接获取）"
