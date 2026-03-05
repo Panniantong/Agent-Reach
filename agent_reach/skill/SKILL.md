@@ -162,6 +162,7 @@ for e in feedparser.parse('FEED_URL').entries[:5]:
 
 ## Setting Up a Channel ("帮我配 XXX")
 
-When user asks to configure or set up a platform, read [references/channel-setup.md](references/channel-setup.md) for install steps.
+If a channel needs setup (cookies, Docker, etc.), fetch the install guide:
+https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
 
-**Principle:** User only provides cookies. Everything else (installing deps, starting services, registering MCP) is your job.
+User only provides cookies. Everything else is your job.
