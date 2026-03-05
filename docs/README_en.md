@@ -39,6 +39,12 @@ Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/m
 
 Copy that to your Agent. A few minutes later, it can read tweets, search Reddit, and watch Bilibili.
 
+**Already installed? Update in one command:**
+
+```
+Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+```
+
 ### ✅ Before you start, you might want to know
 
 | | |
@@ -82,6 +88,11 @@ Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/m
 ```
 
 The Agent auto-installs, detects your environment, and tells you what's ready.
+
+> 🔄 **Already installed?** Update in one command:
+> ```
+> Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+> ```
 
 <details>
 <summary>Manual install</summary>

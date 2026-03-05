@@ -8,6 +8,12 @@ Copy this to your AI Agent:
 帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
 ```
 
+Or in English:
+
+```
+Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+```
+
 ---
 
 ## For AI Agents
