@@ -7,12 +7,14 @@ description: >
   Use when: (1) user asks to search or read any of these platforms,
   (2) user shares a URL from any supported platform,
   (3) user asks to search the web, find information online, or research a topic,
-  (4) user asks to post, comment, or interact on supported platforms.
+  (4) user asks to post, comment, or interact on supported platforms,
+  (5) user asks to configure or set up a platform channel.
   Triggers: "搜推特", "搜小红书", "看视频", "搜一下", "上网搜", "帮我查", "全网搜索",
   "search twitter", "read tweet", "youtube transcript", "search reddit",
   "read this link", "看这个链接", "B站", "bilibili", "抖音视频",
   "微信文章", "公众号", "LinkedIn", "GitHub issue", "RSS",
-  "search online", "web search", "find information", "research".
+  "search online", "web search", "find information", "research",
+  "帮我配", "configure twitter", "configure proxy", "帮我安装".
 ---
 
 # Agent Reach — Usage Guide
@@ -157,4 +159,10 @@ for e in feedparser.parse('FEED_URL').entries[:5]:
 
 - **Channel not working?** Run `agent-reach doctor` — shows status and fix instructions.
 - **Twitter fetch failed?** Ensure `undici` is installed: `npm install -g undici`. Configure proxy: `agent-reach configure proxy URL`.
-- **Need to configure a channel?** Run `agent-reach doctor`, follow its instructions, or tell user to run the install guide.
+
+## Setting Up a Channel ("帮我配 XXX")
+
+If a channel needs setup (cookies, Docker, etc.), fetch the install guide:
+https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+
+User only provides cookies. Everything else is your job.
