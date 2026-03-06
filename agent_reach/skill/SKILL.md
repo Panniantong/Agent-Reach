@@ -1,9 +1,10 @@
 ---
 name: agent-reach
 description: >
-  Use the internet: search, read, and interact with 13+ platforms including
+  Use the internet: search, read, and interact with 14+ platforms including
   Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu (小红书), Douyin (抖音),
-  WeChat Articles (微信公众号), LinkedIn, Boss直聘, RSS, Exa web search, and any web page.
+  WeChat Articles (微信公众号), LinkedIn, Boss直聘, 猎聘/智联/51Job,
+  RSS, Exa web search, and any web page.
   Use when: (1) user asks to search or read any of these platforms,
   (2) user shares a URL from any supported platform,
   (3) user asks to search the web, find information online, or research a topic,
@@ -13,13 +14,14 @@ description: >
   "search twitter", "read tweet", "youtube transcript", "search reddit",
   "read this link", "看这个链接", "B站", "bilibili", "抖音视频",
   "微信文章", "公众号", "LinkedIn", "GitHub issue", "RSS",
+  "猎聘", "智联", "51Job", "招聘", "找工作",
   "search online", "web search", "find information", "research",
   "帮我配", "configure twitter", "configure proxy", "帮我安装".
 ---
 
 # Agent Reach — Usage Guide
 
-Upstream tools for 13+ platforms. Call them directly.
+Upstream tools for 14+ platforms. Call them directly.
 
 Run `agent-reach doctor` to check which channels are available.
 
@@ -144,6 +146,21 @@ mcporter call 'bosszhipin.search_jobs_tool(keyword: "Python", city: "北京")'
 ```
 
 Fallback: `curl -s "https://r.jina.ai/https://www.zhipin.com/job_detail/xxx"`
+
+## 招聘聚合 — 猎聘、智联、51Job (mcp-jobs)
+
+```bash
+# 搜索职位（自然语言，聚合多平台）
+mcporter call 'jobs.search_jobs(keyword: "Python开发", city: "北京")'
+
+# 获取职位详情
+mcporter call 'jobs.get_job_detail(url: "https://www.liepin.com/job/xxx")'
+```
+
+> 零配置，无需 API Key。启动：`npx -y mcp-jobs`
+> 然后：`mcporter config add jobs http://localhost:3000/mcp`
+> 支持猎聘、智联招聘、51Job 等多平台聚合
+> 详见 https://github.com/mergedao/mcp-jobs
 
 ## RSS
 
