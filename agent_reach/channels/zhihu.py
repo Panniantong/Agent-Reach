@@ -18,14 +18,6 @@ class ZhihuChannel(Channel):
         return "zhihu.com" in d
 
     def check(self, config=None):
-        # zhihuMcpServer runs via npx from GitHub clone
-        npx = shutil.which("npx")
-        if not npx:
-            return "off", (
-                "需要 Node.js。安装后克隆 zhihuMcpServer：\n"
-                "  git clone https://github.com/morrain/zhihuMcpServer.git\n"
-                "  cd zhihuMcpServer && npm install && npm run build"
-            )
         # Check if mcporter has zhihu configured
         mcporter = shutil.which("mcporter")
         if mcporter:
@@ -39,9 +31,9 @@ class ZhihuChannel(Channel):
             except Exception:
                 pass
         return "warn", (
-            "需要安装 zhihuMcpServer（知乎 MCP 服务）：\n"
+            "知乎反爬极严，所有 API 需登录。安装 zhihuMcpServer：\n"
             "  git clone https://github.com/morrain/zhihuMcpServer.git\n"
             "  cd zhihuMcpServer && npm install && npm run build\n"
-            "  mcporter config add zhihu --stdio \"node /path/to/zhihuMcpServer/build/index.js\"\n"
+            "  mcporter config add zhihu --stdio \"node /path/to/build/index.js\"\n"
             "  # 启动后需扫码登录知乎"
         )

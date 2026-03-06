@@ -60,6 +60,7 @@ class TestQuoraChannel(unittest.TestCase):
 
     def test_backends(self):
         self.assertIn("Exa", self.ch.backends)
+        self.assertNotIn("Jina Reader", self.ch.backends)
 
     def test_handle_question(self):
         self.assertTrue(self.ch.can_handle("https://www.quora.com/What-is-AI"))
