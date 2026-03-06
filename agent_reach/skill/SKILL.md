@@ -1,9 +1,9 @@
 ---
 name: agent-reach
 description: >
-  Use the internet: search, read, and interact with 13+ platforms including
+  Use the internet: search, read, and interact with 14+ platforms including
   Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu (小红书), Douyin (抖音),
-  WeChat Articles (微信公众号), LinkedIn, Boss直聘, RSS, Exa web search, and any web page.
+  WeChat Articles (微信公众号), Weibo (微博), LinkedIn, Boss直聘, RSS, Exa web search, and any web page.
   Use when: (1) user asks to search or read any of these platforms,
   (2) user shares a URL from any supported platform,
   (3) user asks to search the web, find information online, or research a topic,
@@ -13,13 +13,14 @@ description: >
   "search twitter", "read tweet", "youtube transcript", "search reddit",
   "read this link", "看这个链接", "B站", "bilibili", "抖音视频",
   "微信文章", "公众号", "LinkedIn", "GitHub issue", "RSS",
+  "微博", "Weibo", "热搜",
   "search online", "web search", "find information", "research",
   "帮我配", "configure twitter", "configure proxy", "帮我安装".
 ---
 
 # Agent Reach — Usage Guide
 
-Upstream tools for 13+ platforms. Call them directly.
+Upstream tools for 14+ platforms. Call them directly.
 
 Run `agent-reach doctor` to check which channels are available.
 
@@ -144,6 +145,31 @@ mcporter call 'bosszhipin.search_jobs_tool(keyword: "Python", city: "北京")'
 ```
 
 Fallback: `curl -s "https://r.jina.ai/https://www.zhipin.com/job_detail/xxx"`
+
+## 微博 / Weibo (mcporter)
+
+```bash
+# 热搜榜
+mcporter call 'weibo.get_hot_searches()'
+
+# 搜索用户
+mcporter call 'weibo.search_users(keyword: "AI agent", limit: 5)'
+
+# 获取用户信息
+mcporter call 'weibo.get_profile(uid: "1669879400")'
+
+# 获取用户动态
+mcporter call 'weibo.get_statuses(uid: "1669879400", limit: 10)'
+
+# 搜索微博内容
+mcporter call 'weibo.search_content(keyword: "人工智能", limit: 5)'
+
+# 获取粉丝/关注列表
+mcporter call 'weibo.get_followers(uid: "1669879400", limit: 10)'
+```
+
+> Requires mcp-server-weibo. Install: `docker run -d --name mcp-server-weibo -p 4200:4200 mcp-server-weibo`
+> Then: `mcporter config add weibo http://localhost:4200/mcp`
 
 ## RSS
 
