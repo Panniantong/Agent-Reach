@@ -1,8 +1,8 @@
 ---
 name: agent-reach
 description: >
-  Use the internet: search, read, and interact with 13+ platforms including
-  Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu (小红书), Douyin (抖音),
+  Use the internet: search, read, and interact with 16+ platforms including
+  Twitter/X, Reddit, YouTube, GitHub, Amazon, Bilibili, XiaoHongShu (小红书), Douyin (抖音),
   WeChat Articles (微信公众号), LinkedIn, Boss直聘, RSS, Exa web search, and any web page.
   Use when: (1) user asks to search or read any of these platforms,
   (2) user shares a URL from any supported platform,
@@ -14,12 +14,13 @@ description: >
   "read this link", "看这个链接", "B站", "bilibili", "抖音视频",
   "微信文章", "公众号", "LinkedIn", "GitHub issue", "RSS",
   "search online", "web search", "find information", "research",
+  "amazon", "search amazon", "亚马逊", "product search",
   "帮我配", "configure twitter", "configure proxy", "帮我安装".
 ---
 
 # Agent Reach — Usage Guide
 
-Upstream tools for 13+ platforms. Call them directly.
+Upstream tools for 16+ platforms. Call them directly.
 
 Run `agent-reach doctor` to check which channels are available.
 
@@ -135,6 +136,19 @@ mcporter call 'linkedin.search_people(keyword: "AI engineer", limit: 10)'
 ```
 
 Fallback: `curl -s "https://r.jina.ai/https://linkedin.com/in/username"`
+
+## Amazon (Jina Reader)
+
+```bash
+# Read product details
+curl -s "https://r.jina.ai/https://www.amazon.com/dp/ASIN"
+
+# Search products
+curl -s "https://r.jina.ai/https://www.amazon.com/s?k=query"
+```
+
+> Zero-config. Works on all Amazon domains (amazon.com, amazon.co.jp, amazon.de, etc.).
+> Direct curl to Amazon gets 503 — always use Jina Reader.
 
 ## Boss直聘 (mcporter)
 
