@@ -2,8 +2,9 @@
 name: agent-reach
 description: >
   Use the internet: search, read, and interact with 13+ platforms including
-  Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu (小红书), Douyin (抖音),
-  WeChat Articles (微信公众号), LinkedIn, Boss直聘, RSS, Exa web search, and any web page.
+  Twitter/X, Reddit, YouTube, GitHub, Stack Exchange (StackOverflow), Bilibili,
+  XiaoHongShu (小红书), Douyin (抖音), WeChat Articles (微信公众号), LinkedIn,
+  Boss直聘, RSS, Exa web search, and any web page.
   Use when: (1) user asks to search or read any of these platforms,
   (2) user shares a URL from any supported platform,
   (3) user asks to search the web, find information online, or research a topic,
@@ -13,6 +14,7 @@ description: >
   "search twitter", "read tweet", "youtube transcript", "search reddit",
   "read this link", "看这个链接", "B站", "bilibili", "抖音视频",
   "微信文章", "公众号", "LinkedIn", "GitHub issue", "RSS",
+  "stackoverflow", "stack exchange", "stackexchange",
   "search online", "web search", "find information", "research",
   "帮我配", "configure twitter", "configure proxy", "帮我安装".
 ---
@@ -75,6 +77,22 @@ curl -s "https://www.reddit.com/search.json?q=QUERY&limit=10" -H "User-Agent: ag
 ```
 
 > Server IPs may get 403. Search via Exa instead, or configure proxy.
+
+## Stack Exchange / StackOverflow (API)
+
+```bash
+# Search questions (170+ sites: stackoverflow, bioinformatics, biology, stats, etc.)
+curl -s --compressed "https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=votes&q=QUERY&site=stackoverflow&pagesize=10"
+
+# Get question details with body
+curl -s --compressed "https://api.stackexchange.com/2.3/questions/QUESTION_ID?site=stackoverflow&filter=withbody"
+
+# Get answers for a question
+curl -s --compressed "https://api.stackexchange.com/2.3/questions/QUESTION_ID/answers?order=desc&sort=votes&site=stackoverflow&filter=withbody"
+```
+
+> Zero-config. Free API, no key needed (300 req/day; register for 10,000/day).
+> Change `site=` to target different communities: `bioinformatics`, `biology`, `stats`, `datascience`, etc.
 
 ## GitHub (gh CLI)
 

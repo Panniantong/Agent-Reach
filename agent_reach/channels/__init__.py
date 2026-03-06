@@ -20,6 +20,7 @@ from .douyin import DouyinChannel
 from .linkedin import LinkedInChannel
 from .bosszhipin import BossZhipinChannel
 from .wechat import WeChatChannel
+from .stackexchange import StackExchangeChannel
 
 
 # Channel registry
@@ -27,6 +28,7 @@ ALL_CHANNELS: List[Channel] = [
     GitHubChannel(),
     TwitterChannel(),
     YouTubeChannel(),
+    StackExchangeChannel(),
     RedditChannel(),
     BilibiliChannel(),
     XiaoHongShuChannel(),
