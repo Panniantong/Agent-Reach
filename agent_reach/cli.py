@@ -201,16 +201,16 @@ def _cmd_install(args):
         print("🍪 Trying to import cookies from browser...")
         try:
             from agent_reach.cookie_extract import configure_from_browser
-            results = configure_from_browser("chrome", config)
+            cookie_results = configure_from_browser("chrome", config)
             found = False
-            for platform, success, message in results:
+            for platform, success, message in cookie_results:
                 if success:
                     print(f"  ✅ {platform}: {message}")
                     found = True
             if not found:
                 # Try firefox
-                results = configure_from_browser("firefox", config)
-                for platform, success, message in results:
+                cookie_results = configure_from_browser("firefox", config)
+                for platform, success, message in cookie_results:
                     if success:
                         print(f"  ✅ {platform}: {message}")
                         found = True
@@ -279,7 +279,7 @@ def _install_skill():
             try:
                 os.makedirs(target, exist_ok=True)
                 # Read SKILL.md from package data
-                skill_md = importlib.resources.files("agent_reach").joinpath("skill", "SKILL.md").read_text()
+                skill_md = (importlib.resources.files("agent_reach") / "skill" / "SKILL.md").read_text()
                 with open(os.path.join(target, "SKILL.md"), "w") as f:
                     f.write(skill_md)
                 platform_name = "OpenClaw" if "openclaw" in skill_dir else "Claude Code" if "claude" in skill_dir else "Agent"
@@ -293,7 +293,7 @@ def _install_skill():
         target = os.path.expanduser("~/.openclaw/skills/agent-reach")
         try:
             os.makedirs(target, exist_ok=True)
-            skill_md = importlib.resources.files("agent_reach").joinpath("skill", "SKILL.md").read_text()
+            skill_md = (importlib.resources.files("agent_reach") / "skill" / "SKILL.md").read_text()
             with open(os.path.join(target, "SKILL.md"), "w") as f:
                 f.write(skill_md)
             print(f"🧩 Skill installed: {target}")
