@@ -3,7 +3,8 @@ name: agent-reach
 description: >
   Use the internet: search, read, and interact with 13+ platforms including
   Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu (小红书), Douyin (抖音),
-  WeChat Articles (微信公众号), LinkedIn, Boss直聘, RSS, Exa web search, and any web page.
+  WeChat Articles (微信公众号), 知乎 (Zhihu), Quora, LinkedIn, Boss直聘, RSS,
+  Exa web search, and any web page.
   Use when: (1) user asks to search or read any of these platforms,
   (2) user shares a URL from any supported platform,
   (3) user asks to search the web, find information online, or research a topic,
@@ -13,6 +14,7 @@ description: >
   "search twitter", "read tweet", "youtube transcript", "search reddit",
   "read this link", "看这个链接", "B站", "bilibili", "抖音视频",
   "微信文章", "公众号", "LinkedIn", "GitHub issue", "RSS",
+  "知乎", "zhihu", "quora",
   "search online", "web search", "find information", "research",
   "帮我配", "configure twitter", "configure proxy", "帮我安装".
 ---
@@ -144,6 +146,33 @@ mcporter call 'bosszhipin.search_jobs_tool(keyword: "Python", city: "北京")'
 ```
 
 Fallback: `curl -s "https://r.jina.ai/https://www.zhipin.com/job_detail/xxx"`
+
+## 知乎 / Zhihu (zhihuMcpServer)
+
+```bash
+# 获取热榜
+mcporter call 'zhihu.get-hot-question(type: "day")'
+
+# 抓取问题/文章页面（转 Markdown）
+mcporter call 'zhihu.scrape-webpage(url: "https://www.zhihu.com/question/123456")'
+
+# 发布回答（需登录）
+mcporter call 'zhihu.publish-answer(url: "https://www.zhihu.com/question/123456", answer: "回答内容")'
+```
+
+> 需要安装 zhihuMcpServer 并扫码登录。
+> 安装：`git clone https://github.com/morrain/zhihuMcpServer.git && cd zhihuMcpServer && npm install && npm run build`
+> 配置：`mcporter config add zhihu --stdio "node /path/to/build/index.js"`
+
+## Quora (Exa)
+
+```bash
+# 搜索 Quora 内容（通过 Exa 语义搜索）
+mcporter call 'exa.web_search_exa(query: "site:quora.com YOUR_QUERY", numResults: 5)'
+```
+
+> Quora 反爬极严（Cloudflare），无法直接 curl 或 Jina Reader。
+> 通过 Exa 搜索可获取 Quora 问答的标题和 URL。
 
 ## RSS
 
