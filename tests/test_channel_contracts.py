@@ -40,6 +40,7 @@ def test_channel_can_handle_contract():
         "douyin": "https://www.douyin.com/video/123",
         "linkedin": "https://www.linkedin.com/in/test",
         "bosszhipin": "https://www.zhipin.com/web/geek/job?query=python",
+        "weibo": "https://weibo.com/u/1749127163",
         "rss": "https://example.com/feed.xml",
         "exa_search": "https://example.com",
         "web": "https://example.com",
