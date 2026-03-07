@@ -49,14 +49,22 @@ class Config:
     def save(self):
         """Save config to YAML file."""
         self._ensure_dir()
-        with open(self.config_path, "w", encoding="utf-8") as f:
-            yaml.dump(self.data, f, default_flow_style=False, allow_unicode=True)
-        # Restrict permissions — config may contain credentials
+        # Create file with restricted permissions from the start to avoid
+        # a race window where credentials are briefly world-readable.
         try:
             import stat
-            self.config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0o600
+            fd = os.open(
+                str(self.config_path),
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                stat.S_IRUSR | stat.S_IWUSR,  # 0o600
+            )
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                yaml.dump(self.data, f, default_flow_style=False, allow_unicode=True)
         except OSError:
-            pass  # Windows or permission edge cases
+            # Fallback for Windows or other edge cases where os.open flags
+            # are not fully supported.
+            with open(self.config_path, "w", encoding="utf-8") as f:
+                yaml.dump(self.data, f, default_flow_style=False, allow_unicode=True)
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a config value. Also checks environment variables (uppercase)."""

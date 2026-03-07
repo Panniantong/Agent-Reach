@@ -42,13 +42,15 @@ class DouyinChannel(Channel):
                 )
         except Exception:
             return "off", "mcporter 连接异常"
+        # Verify MCP connectivity by listing available tools instead of
+        # calling with a hardcoded (invalid) share link that always fails.
         try:
             r = subprocess.run(
-                [mcporter, "call", "douyin.parse_douyin_video_info(share_link: \"https://www.douyin.com\")"],
+                [mcporter, "list", "douyin"],
                 capture_output=True, encoding="utf-8", errors="replace", timeout=15
             )
-            if r.returncode == 0:
+            if r.returncode == 0 and r.stdout.strip():
                 return "ok", "完整可用（视频解析、下载链接获取）"
-            return "warn", "MCP 已连接但调用异常，检查 douyin-mcp-server 服务是否在运行"
+            return "warn", "MCP 已连接但工具列表为空，检查 douyin-mcp-server 服务是否在运行"
         except Exception:
             return "warn", "MCP 连接异常，检查 douyin-mcp-server 服务是否在运行"
