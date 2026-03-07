@@ -25,8 +25,6 @@ def _ensure_utf8_console():
     # Avoid interfering with pytest/captured streams.
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return
-    if not getattr(sys.stdout, "isatty", lambda: False)():
-        return
     try:
         import io
         if hasattr(sys.stdout, "buffer"):
