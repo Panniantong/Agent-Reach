@@ -5,6 +5,30 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install lint deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -c constraints.txt -e .[dev]
+
+      - name: Lint (ruff)
+        run: ruff check agent_reach
+        continue-on-error: true
+
+      - name: Type check (mypy)
+        run: mypy agent_reach --ignore-missing-imports
+        continue-on-error: true
+
   test:
     runs-on: ubuntu-latest
     strategy:
