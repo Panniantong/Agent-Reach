@@ -29,15 +29,35 @@ class BossZhipinChannel(Channel):
             )
         try:
             r = subprocess.run(
-                [mcporter, "list"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=10
+                [mcporter, "config", "get", "bosszhipin", "--json"],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+            )
+            if r.returncode != 0 or "bosszhipin" not in r.stdout.lower():
+                return "off", (
+                    "mcporter 已装但 Boss直聘 MCP 未配置。\n"
+                    "  详见 https://github.com/mucsbr/mcp-bosszp"
+                )
+        except Exception:
+            return "off", "mcporter 连接异常"
+
+        try:
+            r = subprocess.run(
+                [mcporter, "call", "bosszhipin.get_login_info_tool", "--output", "json"],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
             )
             out = r.stdout.lower()
-            if "boss" in out or "zhipin" in out:
-                return "ok", "可搜索职位、向 HR 打招呼"
+            if r.returncode == 0 and "\"is_logged_in\": true" in out:
+                return "ok", "完整可用（职位搜索、登录态检查、向 HR 打招呼）"
+            if r.returncode == 0:
+                return "ok", "MCP 已连接，可搜索职位；打招呼前可能需要先登录"
+            return "warn", "MCP 已配置，但连接异常；请检查 mcp-bosszp 服务状态"
+        except subprocess.TimeoutExpired:
+            return "warn", "MCP 已配置，但健康检查超时；请检查 mcp-bosszp 服务状态"
         except Exception:
-            pass
-        return "off", (
-            "mcporter 已装但 Boss直聘 MCP 未配置。\n"
-            "  详见 https://github.com/mucsbr/mcp-bosszp"
-        )
+            return "warn", "MCP 已配置，但连接异常；请检查 mcp-bosszp 服务状态"

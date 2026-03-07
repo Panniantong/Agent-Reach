@@ -51,10 +51,13 @@ class XiaoHongShuChannel(Channel):
             )
         try:
             r = subprocess.run(
-                [mcporter, "config", "list"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=5
+                [mcporter, "config", "get", "xiaohongshu", "--json"],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
             )
-            if "xiaohongshu" not in r.stdout:
+            if r.returncode != 0 or "xiaohongshu" not in r.stdout.lower():
                 return "off", (
                     "mcporter 已装但小红书 MCP 未配置。运行：\n"
                     + _docker_run_hint() + "\n"
@@ -62,13 +65,20 @@ class XiaoHongShuChannel(Channel):
                 )
         except Exception:
             return "off", "mcporter 连接异常"
+
         try:
             r = subprocess.run(
-                [mcporter, "call", "xiaohongshu.check_login_status()"],
-                capture_output=True, encoding="utf-8", errors="replace", timeout=10
+                [mcporter, "list", "xiaohongshu", "--json"],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
             )
-            if "已登录" in r.stdout or "logged" in r.stdout.lower():
-                return "ok", "完整可用（阅读、搜索、发帖、评论、点赞）"
-            return "warn", "MCP 已连接但未登录，需扫码登录"
+            out = r.stdout.lower()
+            if r.returncode == 0 and '"status": "ok"' in out:
+                return "ok", "MCP 已连接（阅读、搜索、发帖、评论、点赞）"
+            return "warn", "MCP 已配置，但连接异常；请检查 xiaohongshu-mcp 服务状态"
+        except subprocess.TimeoutExpired:
+            return "warn", "MCP 已配置，但健康检查超时；请检查 xiaohongshu-mcp 服务状态"
         except Exception:
-            return "warn", "MCP 连接异常，检查 xiaohongshu-mcp 服务是否在运行"
+            return "warn", "MCP 已配置，但连接异常；请检查 xiaohongshu-mcp 服务状态"
