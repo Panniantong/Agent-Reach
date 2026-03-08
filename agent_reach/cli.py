@@ -450,8 +450,58 @@ def _install_system_deps():
     # ── Weibo (mcp-server-weibo fork with visitor passport fix) ──
     _install_weibo_deps()
 
+    # ── Xiaoyuzhou Podcast (transcribe.sh + ffmpeg) ──
+    _install_xiaoyuzhou_deps()
+
     # ── WeChat Articles (miku_ai + camoufox + wechat-article-for-ai) ──
     _install_wechat_deps()
+
+
+def _install_xiaoyuzhou_deps():
+    """Install Xiaoyuzhou podcast transcription script."""
+    print("Setting up Xiaoyuzhou podcast transcription...")
+
+    tools_dir = os.path.expanduser("~/.agent-reach/tools/xiaoyuzhou")
+    script_dst = os.path.join(tools_dir, "transcribe.sh")
+
+    if os.path.isfile(script_dst):
+        print("  ✅ Xiaoyuzhou transcription script already installed")
+    else:
+        # Copy script from package
+        script_src = os.path.join(os.path.dirname(__file__), "scripts", "transcribe_xiaoyuzhou.sh")
+        if os.path.isfile(script_src):
+            try:
+                os.makedirs(tools_dir, exist_ok=True)
+                import shutil as _shutil
+                _shutil.copy2(script_src, script_dst)
+                os.chmod(script_dst, 0o755)
+                print("  ✅ Xiaoyuzhou transcription script installed")
+            except Exception as e:
+                print(f"  [!]  Failed to install script: {e}")
+        else:
+            print("  [!]  Script source not found in package")
+
+    # Check ffmpeg
+    if shutil.which("ffmpeg"):
+        print("  ✅ ffmpeg available")
+    else:
+        print("  -- ffmpeg not found. Install: apt install -y ffmpeg (or brew install ffmpeg)")
+
+    # Check GROQ_API_KEY
+    config_path = os.path.expanduser("~/.agent-reach/config.json")
+    has_key = bool(os.environ.get("GROQ_API_KEY"))
+    if not has_key and os.path.isfile(config_path):
+        try:
+            with open(config_path) as f:
+                cfg = json.load(f)
+            has_key = bool(cfg.get("groq_api_key"))
+        except Exception:
+            pass
+    if has_key:
+        print("  ✅ Groq API key configured")
+    else:
+        print("  -- Groq API key not set. Get free key at https://console.groq.com")
+        print("     Then run: agent-reach configure groq-api-key gsk_xxxxx")
 
 
 def _install_weibo_deps():

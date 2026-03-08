@@ -21,6 +21,7 @@ from .linkedin import LinkedInChannel
 from .bosszhipin import BossZhipinChannel
 from .wechat import WeChatChannel
 from .weibo import WeiboChannel
+from .xiaoyuzhou import XiaoyuzhouChannel
 
 
 # Channel registry
@@ -36,6 +37,7 @@ ALL_CHANNELS: List[Channel] = [
     BossZhipinChannel(),
     WeChatChannel(),
     WeiboChannel(),
+    XiaoyuzhouChannel(),
     RSSChannel(),
     ExaSearchChannel(),
     WebChannel(),

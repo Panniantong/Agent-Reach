@@ -67,6 +67,7 @@ packages = ["agent_reach"]
 [tool.hatch.build.targets.wheel.force-include]
 "agent_reach/guides" = "agent_reach/guides"
 "agent_reach/skill" = "agent_reach/skill"
+"agent_reach/scripts" = "agent_reach/scripts"
 
 [tool.ruff]
 target-version = "py310"
