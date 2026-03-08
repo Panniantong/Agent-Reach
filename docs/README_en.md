@@ -304,6 +304,7 @@ Install douyin-mcp-server, then your agent can use `mcporter call 'douyin.parse_
 Interested in collaboration, have feature ideas, or just want to chat about AI Agents? Reach out:
 
 - 📧 **Email:** pnt01@foxmail.com
+- 🐦 **Twitter/X:** [@Neo_Reidlab](https://x.com/Neo_Reidlab)
 - 💬 **WeChat:** Scan to add (please mention your intent)
 
 <p align="center">
