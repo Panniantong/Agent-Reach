@@ -299,6 +299,16 @@ Install douyin-mcp-server, then your agent can use `mcporter call 'douyin.parse_
 
 [Jina Reader](https://github.com/jina-ai/reader) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [xreach](https://www.npmjs.com/package/xreach-cli) · [Exa](https://exa.ai) · [feedparser](https://github.com/kurtmckee/feedparser) · [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) · [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) · [mcp-bosszp](https://github.com/mucsbr/mcp-bosszp)
 
+## Contact
+
+Interested in collaboration, have feature ideas, or just want to chat about AI Agents? Add me on WeChat:
+
+<p align="center">
+  <img src="wechat-qr.jpg" width="280" alt="WeChat QR">
+</p>
+
+> For bug reports and feature requests, please use [GitHub Issues](https://github.com/Panniantong/Agent-Reach/issues) — easier to track.
+
 ## License
 
 [MIT](../LICENSE)
