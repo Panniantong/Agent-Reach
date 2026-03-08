@@ -23,9 +23,9 @@ class WeiboChannel(Channel):
             return "off", (
                 "需要 mcporter + mcp-server-weibo。安装步骤：\n"
                 "  1. npm install -g mcporter\n"
-                "  2. uvx mcp-server-weibo（或 pip install mcp-server-weibo）\n"
-                "  3. mcporter config add weibo --command 'uvx mcp-server-weibo'\n"
-                "  详见 https://github.com/qinyuanpei/mcp-server-weibo"
+                "  2. pip install git+https://github.com/Panniantong/mcp-server-weibo.git\n"
+                "  3. mcporter config add weibo --command 'mcp-server-weibo'\n"
+                "  详见 https://github.com/Panniantong/mcp-server-weibo"
             )
         try:
             r = subprocess.run(
@@ -35,10 +35,8 @@ class WeiboChannel(Channel):
             if "weibo" not in r.stdout:
                 return "off", (
                     "mcporter 已装但微博 MCP 未配置。运行：\n"
-                    "  uvx mcp-server-weibo  # 或 pip install mcp-server-weibo\n"
-                    "  mcporter config add weibo --command 'uvx mcp-server-weibo'\n"
-                    "  # 海外服务器需配置 WEIBO_COOKIE 环境变量，\n"
-                    "  # 详见 SKILL.md 微博章节"
+                    "  pip install git+https://github.com/Panniantong/mcp-server-weibo.git\n"
+                    "  mcporter config add weibo --command 'mcp-server-weibo'"
                 )
         except Exception:
             return "off", "mcporter 连接异常"

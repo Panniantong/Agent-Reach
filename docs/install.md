@@ -163,14 +163,16 @@ mcporter config add xiaohongshu http://localhost:18060/mcp
 > **备选：** 本地电脑如果有浏览器，也可以打开 http://localhost:18060 扫码登录。
 
 **微博 / Weibo (mcp-server-weibo):**
-> "微博需要一个 MCP 服务。安装后可搜索微博内容、查看热搜、获取用户动态和评论。"
+> "微博已默认安装，装好即用。可搜索微博内容、查看热搜、获取用户动态和评论。"
+
+如果自动安装失败，手动安装：
 
 ```bash
-pip install mcp-server-weibo
+pip install git+https://github.com/Panniantong/mcp-server-weibo.git
 mcporter config add weibo --command 'mcp-server-weibo'
 ```
 
-> **注意：** 微博 API (m.weibo.cn) 海外访问时需要 Cookie 认证。首次使用前建议在浏览器登录微博，用 Cookie-Editor 导出 Cookie 并配置到 `WEIBO_COOKIE` 环境变量中，否则 API 请求可能返回空响应。
+> 无需登录、无需 Cookie、无需代理。海外服务器也可以直接访问。
 
 **抖音 / Douyin (douyin-mcp-server):**
 > "抖音视频解析需要一个 MCP 服务。安装 douyin-mcp-server 后即可解析视频、获取无水印下载链接。"
@@ -319,6 +321,7 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 | Web | `curl` + Jina | `curl -s "https://r.jina.ai/URL"` |
 | Exa Search | `mcporter` | `mcporter call 'exa.web_search_exa(...)'` |
 | 小红书 | `mcporter` | `mcporter call 'xiaohongshu.search_feeds(...)'` |
+| 微博 | `mcporter` | `mcporter call 'weibo.get_trendings(limit: 10)'` |
 | 抖音 | `mcporter` | `mcporter call 'douyin.parse_douyin_video_info(...)'` |
 | LinkedIn | `mcporter` | `mcporter call 'linkedin.get_person_profile(...)'` |
 | Boss直聘 | `mcporter` | `mcporter call 'bosszhipin.search_jobs_tool(...)'` |

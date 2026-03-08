@@ -447,8 +447,57 @@ def _install_system_deps():
             except Exception:
                 print("  -- Could not configure yt-dlp JS runtime (YouTube may not work)")
 
+    # ── Weibo (mcp-server-weibo fork with visitor passport fix) ──
+    _install_weibo_deps()
+
     # ── WeChat Articles (miku_ai + camoufox + wechat-article-for-ai) ──
     _install_wechat_deps()
+
+
+def _install_weibo_deps():
+    """Install Weibo MCP server (Panniantong fork with visitor passport auth)."""
+    import subprocess
+
+    print("Setting up Weibo MCP server...")
+
+    # Check if already installed and working
+    mcporter = shutil.which("mcporter")
+    if mcporter:
+        try:
+            r = subprocess.run(
+                [mcporter, "config", "list"], capture_output=True,
+                encoding="utf-8", errors="replace", timeout=5
+            )
+            if "weibo" in r.stdout:
+                print("  ✅ Weibo MCP already configured")
+                return
+        except Exception:
+            pass
+
+    # Install from our fork (has visitor passport auth fix)
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-q",
+             "git+https://github.com/Panniantong/mcp-server-weibo.git"],
+            check=True, timeout=120
+        )
+        print("  ✅ mcp-server-weibo installed (Panniantong fork)")
+    except Exception as e:
+        print(f"  [!]  mcp-server-weibo install failed: {e}")
+        return
+
+    # Register with mcporter
+    if mcporter:
+        try:
+            subprocess.run(
+                [mcporter, "config", "add", "weibo", "--command", "mcp-server-weibo"],
+                check=True, capture_output=True, timeout=10
+            )
+            print("  ✅ Weibo MCP registered with mcporter")
+        except Exception:
+            print("  [!]  mcporter config add failed. Run manually: mcporter config add weibo --command 'mcp-server-weibo'")
+    else:
+        print("  -- mcporter not found, skipping MCP registration. Install mcporter first, then run: mcporter config add weibo --command 'mcp-server-weibo'")
 
 
 def _install_wechat_deps():
