@@ -456,6 +456,7 @@ def _install_system_deps():
 
 def _install_weibo_deps():
     """Install Weibo MCP server (Panniantong fork with visitor passport auth)."""
+    import shutil
     import subprocess
 
     print("Setting up Weibo MCP server...")
