@@ -336,6 +336,16 @@ Yes! Agent Reach is an installer + configuration tool — any AI coding agent th
 
 [Jina Reader](https://github.com/jina-ai/reader) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [xreach](https://www.npmjs.com/package/xreach-cli) · [Exa](https://exa.ai) · [mcporter](https://github.com/steipete/mcporter) · [feedparser](https://github.com/kurtmckee/feedparser) · [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) · [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) · [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) · [mcp-bosszp](https://github.com/mucsbr/mcp-bosszp)
 
+## 联系
+
+有合作意向、功能建议，或者想聊聊 AI Agent 的——欢迎加我微信：
+
+<p align="center">
+  <img src="docs/wechat-qr.jpg" width="280" alt="WeChat QR">
+</p>
+
+> Bug 反馈和功能请求请用 [GitHub Issues](https://github.com/Panniantong/Agent-Reach/issues)，更容易跟踪。
+
 ## License
 
 [MIT](LICENSE)
