@@ -338,7 +338,7 @@ Yes! Agent Reach is an installer + configuration tool — any AI coding agent th
 
 ## 联系
 
-有合作意向、功能建议，或者想聊聊 AI Agent 的——欢迎加我微信：
+有合作意向、功能建议，或者想聊聊 AI Agent 的——欢迎加我微信（注明意图）：
 
 <p align="center">
   <img src="docs/wechat-qr.jpg" width="280" alt="WeChat QR">
