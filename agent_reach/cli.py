@@ -720,10 +720,11 @@ def _detect_environment():
     for cloud_file in ["/sys/hypervisor/uuid", "/sys/class/dmi/id/product_name"]:
         if os.path.exists(cloud_file):
             try:
-                content = open(cloud_file).read().lower()
+                with open(cloud_file) as f:
+                    content = f.read().lower()
                 if any(x in content for x in ["amazon", "google", "microsoft", "digitalocean", "linode", "vultr", "hetzner"]):
                     indicators += 2
-            except:
+            except Exception:
                 pass
 
     # systemd-detect-virt
@@ -732,7 +733,7 @@ def _detect_environment():
         result = subprocess.run(["systemd-detect-virt"], capture_output=True, encoding="utf-8", errors="replace", timeout=3)
         if result.returncode == 0 and result.stdout.strip() != "none":
             indicators += 1
-    except:
+    except Exception:
         pass
 
     return "server" if indicators >= 2 else "local"

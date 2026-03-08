@@ -78,3 +78,16 @@ class TestConfig:
         masked = tmp_config.to_dict()
         assert masked["exa_api_key"] == "super-se..."
         assert masked["normal_setting"] == "visible"
+
+    def test_save_creates_file_with_restricted_permissions(self, tmp_path):
+        import stat
+        import sys
+        config_file = tmp_path / "secure_config.yaml"
+        config = Config(config_path=config_file)
+        config.set("secret_key", "my-secret")
+
+        if sys.platform != "win32":
+            mode = config_file.stat().st_mode
+            # File should be owner-only read/write (0o600)
+            assert not (mode & stat.S_IRGRP), "group read should not be set"
+            assert not (mode & stat.S_IROTH), "other read should not be set"

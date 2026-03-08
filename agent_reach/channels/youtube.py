@@ -28,13 +28,17 @@ class YouTubeChannel(Channel):
                 "  安装 Node.js 或 deno，然后运行：agent-reach install"
             )
         # Check yt-dlp config for --js-runtimes
-        ytdlp_config = os.path.expanduser("~/.config/yt-dlp/config")
+        # Deno works out of the box; Node.js requires explicit config
         has_deno = shutil.which("deno")
-        if not has_deno and os.path.exists(ytdlp_config):
-            with open(ytdlp_config, "r") as f:
-                if "--js-runtimes" not in f.read():
-                    return "warn", (
-                        "yt-dlp 已安装但未配置 JS runtime。运行：\n"
-                        "  mkdir -p ~/.config/yt-dlp && echo '--js-runtimes node' >> ~/.config/yt-dlp/config"
-                    )
+        if not has_deno:
+            ytdlp_config = os.path.expanduser("~/.config/yt-dlp/config")
+            has_js_config = False
+            if os.path.exists(ytdlp_config):
+                with open(ytdlp_config, "r") as f:
+                    has_js_config = "--js-runtimes" in f.read()
+            if not has_js_config:
+                return "warn", (
+                    "yt-dlp 已安装但未配置 JS runtime。运行：\n"
+                    "  mkdir -p ~/.config/yt-dlp && echo '--js-runtimes node' >> ~/.config/yt-dlp/config"
+                )
         return "ok", "可提取视频信息和字幕"
