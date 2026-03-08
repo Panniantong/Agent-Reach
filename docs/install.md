@@ -148,9 +148,17 @@ mcporter config add xiaohongshu http://localhost:18060/mcp
 >
 > **登录方式（优先用 Cookie-Editor，最简单）：**
 > 1. 用户在自己的浏览器登录小红书 (xiaohongshu.com)
-> 2. 用 [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) 插件导出 Cookie（Header String 格式）
+> 2. 用 [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) 插件导出 Cookie（JSON 或 Header String 格式均可）
 > 3. 把 Cookie 字符串发给 Agent
-> 4. Agent 将 Cookie 写入 MCP 服务的 cookie 文件完成登录
+> 4. Agent 运行命令完成登录：
+>
+> ```bash
+> # JSON 格式（Cookie-Editor → Export → JSON）
+> agent-reach configure xhs-cookies '[{"name":"web_session","value":"xxx","domain":".xiaohongshu.com",...}]'
+>
+> # 或 Header String 格式（Cookie-Editor → Export → Header String）
+> agent-reach configure xhs-cookies "key1=val1; key2=val2; ..."
+> ```
 >
 > **备选：** 本地电脑如果有浏览器，也可以打开 http://localhost:18060 扫码登录。
 

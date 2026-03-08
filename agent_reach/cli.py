@@ -73,7 +73,8 @@ def main():
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
     p_conf.add_argument("key", nargs="?", default=None,
                         choices=["proxy", "github-token", "groq-key",
-                                 "twitter-cookies", "youtube-cookies"],
+                                 "twitter-cookies", "youtube-cookies",
+                                 "xhs-cookies"],
                         help="What to configure (omit if using --from-browser)")
     p_conf.add_argument("value", nargs="*", help="The value(s) to set")
     p_conf.add_argument("--from-browser", metavar="BROWSER",
@@ -879,6 +880,9 @@ def _cmd_configure(args):
         print(f"✅ YouTube cookie source configured: {value}")
         print("   yt-dlp will use cookies from this browser for age-restricted/member videos.")
 
+    elif args.key == "xhs-cookies":
+        _configure_xhs_cookies(value)
+
     elif args.key == "github-token":
         config.set("github_token", value)
         print(f"✅ GitHub token configured!")
@@ -886,6 +890,171 @@ def _cmd_configure(args):
     elif args.key == "groq-key":
         config.set("groq_api_key", value)
         print(f"✅ Groq key configured!")
+
+
+def _configure_xhs_cookies(value):
+    """Import cookies into xiaohongshu-mcp Docker container.
+
+    Accepts two formats:
+    1. Cookie-Editor JSON export (array of cookie objects)
+    2. Header String: "name1=value1; name2=value2; ..."
+
+    The xiaohongshu-mcp container stores cookies at $COOKIES_PATH
+    (default: /app/data/cookies.json or cookies.json in workdir).
+    Format: JSON array of {name, value, domain, path, expires, httpOnly, secure, sameSite}.
+    """
+    import json
+    import shutil
+    import subprocess
+
+    value = value.strip()
+    if not value:
+        print("[X] Missing cookie value.")
+        print("   Usage: agent-reach configure xhs-cookies '<cookie JSON or header string>'")
+        return
+
+    # Detect format and parse
+    cookies_json = None
+
+    # Try JSON format first (Cookie-Editor JSON export)
+    if value.startswith("["):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list) and parsed:
+                # Validate it looks like cookie objects
+                first = parsed[0]
+                if isinstance(first, dict) and "name" in first and "value" in first:
+                    cookies_json = json.dumps(parsed)
+                    print(f"  Parsed {len(parsed)} cookies from JSON format")
+                else:
+                    print("[X] JSON array doesn't contain cookie objects (need name/value fields)")
+                    return
+            else:
+                print("[X] Empty or invalid JSON array")
+                return
+        except json.JSONDecodeError as e:
+            print(f"[X] Invalid JSON: {e}")
+            return
+
+    # Header String format: "key1=val1; key2=val2; ..."
+    if cookies_json is None and "=" in value:
+        cookies = []
+        for part in value.split(";"):
+            part = part.strip()
+            if "=" not in part:
+                continue
+            name, val = part.split("=", 1)
+            name = name.strip()
+            val = val.strip()
+            if name:
+                cookies.append({
+                    "name": name,
+                    "value": val,
+                    "domain": ".xiaohongshu.com",
+                    "path": "/",
+                    "expires": -1,
+                    "size": len(name) + len(val),
+                    "httpOnly": False,
+                    "secure": False,
+                    "session": True,
+                    "sameSite": "Lax",
+                })
+        if cookies:
+            cookies_json = json.dumps(cookies)
+            print(f"  Parsed {len(cookies)} cookies from Header String format")
+        else:
+            print("[X] Could not parse any cookies from input")
+            return
+
+    if not cookies_json:
+        print("[X] Could not parse cookies. Accepted formats:")
+        print('   1. JSON array: \'[{"name":"x","value":"y","domain":".xiaohongshu.com",...}]\'')
+        print('   2. Header String: "key1=val1; key2=val2; ..."')
+        return
+
+    # Find the container
+    docker = shutil.which("docker")
+    if not docker:
+        # No Docker - write to a local file for manual import
+        cookie_path = os.path.expanduser("~/.agent-reach/xhs-cookies.json")
+        with open(cookie_path, "w") as f:
+            f.write(cookies_json)
+        os.chmod(cookie_path, 0o600)
+        print(f"  Cookies saved to {cookie_path}")
+        print("  Docker not found. Copy manually:")
+        print(f"  docker cp {cookie_path} xiaohongshu-mcp:/app/data/cookies.json")
+        return
+
+    # Check if xiaohongshu-mcp container is running
+    try:
+        result = subprocess.run(
+            [docker, "ps", "--filter", "name=xiaohongshu-mcp", "--format", "{{.Names}}"],
+            capture_output=True, encoding="utf-8", timeout=5,
+        )
+        container_name = result.stdout.strip()
+        if not container_name:
+            print("[X] xiaohongshu-mcp container is not running.")
+            print("   Start it first:")
+            print("   docker run -d --name xiaohongshu-mcp -p 18060:18060 xpzouying/xiaohongshu-mcp")
+            return
+    except Exception as e:
+        print(f"[X] Could not check Docker: {e}")
+        return
+
+    # Find the cookies path inside the container
+    try:
+        result = subprocess.run(
+            [docker, "exec", container_name, "printenv", "COOKIES_PATH"],
+            capture_output=True, encoding="utf-8", timeout=5,
+        )
+        cookie_path_in_container = result.stdout.strip()
+        if not cookie_path_in_container:
+            cookie_path_in_container = "cookies.json"  # fallback to workdir
+    except Exception:
+        cookie_path_in_container = "cookies.json"
+
+    # Write cookies into the container
+    try:
+        # Write to temp file then docker cp
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            f.write(cookies_json)
+            tmp_path = f.name
+
+        result = subprocess.run(
+            [docker, "cp", tmp_path, f"{container_name}:{cookie_path_in_container}"],
+            capture_output=True, encoding="utf-8", timeout=10,
+        )
+        os.unlink(tmp_path)
+
+        if result.returncode != 0:
+            print(f"[X] Failed to copy cookies: {result.stderr}")
+            return
+
+        print(f"✅ Cookies written to {container_name}:{cookie_path_in_container}")
+    except Exception as e:
+        print(f"[X] Failed to write cookies: {e}")
+        return
+
+    # Verify login status via mcporter
+    mcporter = shutil.which("mcporter")
+    if mcporter:
+        print("  Verifying login status...", end=" ")
+        try:
+            result = subprocess.run(
+                [mcporter, "call", "xiaohongshu.check_login_status()"],
+                capture_output=True, encoding="utf-8", errors="replace", timeout=15,
+            )
+            if "已登录" in result.stdout or "logged" in result.stdout.lower():
+                print("✅ Login verified!")
+            else:
+                print("[!] Login check returned unexpected result:")
+                print(f"  {result.stdout.strip()[:200]}")
+                print("  Cookies were written but login might not be valid. Try fresh cookies.")
+        except Exception as e:
+            print(f"[!] Could not verify: {e}")
+    else:
+        print("  (mcporter not found, skipping verification)")
 
 
 def _cmd_uninstall(args):
