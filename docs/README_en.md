@@ -301,7 +301,10 @@ Install douyin-mcp-server, then your agent can use `mcporter call 'douyin.parse_
 
 ## Contact
 
-Interested in collaboration, have feature ideas, or just want to chat about AI Agents? Add me on WeChat:
+Interested in collaboration, have feature ideas, or just want to chat about AI Agents? Reach out:
+
+- 📧 **Email:** pnt01@foxmail.com
+- 💬 **WeChat:** Scan to add (please mention your intent)
 
 <p align="center">
   <img src="wechat-qr.jpg" width="280" alt="WeChat QR">
