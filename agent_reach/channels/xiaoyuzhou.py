@@ -3,6 +3,7 @@
 
 import os
 import shutil
+from agent_reach.config import Config
 from .base import Channel
 
 
@@ -35,18 +36,14 @@ class XiaoyuzhouChannel(Channel):
                 "  或手动复制 transcribe.sh 到 ~/.agent-reach/tools/xiaoyuzhou/"
             )
 
-        # Check GROQ_API_KEY — prefer env var, fall back to config file
+        # Check GROQ_API_KEY — prefer env var, fall back to Agent Reach config
         has_key = bool(os.environ.get("GROQ_API_KEY"))
         if not has_key:
-            config_path = os.path.expanduser("~/.agent-reach/config.json")
-            if os.path.isfile(config_path):
-                try:
-                    import json
-                    with open(config_path) as f:
-                        cfg = json.load(f)
-                    has_key = bool(cfg.get("groq_api_key"))
-                except Exception:
-                    pass
+            try:
+                cfg = config if config is not None else Config()
+                has_key = bool(cfg.get("groq_api_key"))
+            except Exception:
+                has_key = False
         if not has_key:
             return "warn", (
                 "需要配置 Groq API Key（免费）。步骤：\n"
