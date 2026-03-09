@@ -35,11 +35,10 @@ class XiaoyuzhouChannel(Channel):
                 "  或手动复制 transcribe.sh 到 ~/.agent-reach/tools/xiaoyuzhou/"
             )
 
-        # Check GROQ_API_KEY
-        if not os.environ.get("GROQ_API_KEY"):
-            # Check if saved in config
+        # Check GROQ_API_KEY — prefer env var, fall back to config file
+        has_key = bool(os.environ.get("GROQ_API_KEY"))
+        if not has_key:
             config_path = os.path.expanduser("~/.agent-reach/config.json")
-            has_key = False
             if os.path.isfile(config_path):
                 try:
                     import json
@@ -48,11 +47,11 @@ class XiaoyuzhouChannel(Channel):
                     has_key = bool(cfg.get("groq_api_key"))
                 except Exception:
                     pass
-            if not has_key:
-                return "warn", (
-                    "需要配置 Groq API Key（免费）。步骤：\n"
-                    "  1. 注册 https://console.groq.com\n"
-                    "  2. 运行: agent-reach configure groq-api-key gsk_xxxxx"
-                )
+        if not has_key:
+            return "warn", (
+                "需要配置 Groq API Key（免费）。步骤：\n"
+                "  1. 注册 https://console.groq.com\n"
+                "  2. 运行: agent-reach configure groq-key gsk_xxxxx"
+            )
 
         return "ok", "完整可用（播客下载 + Whisper 转录）"

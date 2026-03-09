@@ -503,7 +503,7 @@ def _install_xiaoyuzhou_deps():
         print("  ✅ Groq API key configured")
     else:
         print("  -- Groq API key not set. Get free key at https://console.groq.com")
-        print("     Then run: agent-reach configure groq-api-key gsk_xxxxx")
+        print("     Then run: agent-reach configure groq-key gsk_xxxxx")
 
 
 def _install_weibo_deps():
