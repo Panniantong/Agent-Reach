@@ -18,7 +18,6 @@ from .exa_search import ExaSearchChannel
 from .xiaohongshu import XiaoHongShuChannel
 from .douyin import DouyinChannel
 from .linkedin import LinkedInChannel
-from .bosszhipin import BossZhipinChannel
 from .wechat import WeChatChannel
 from .weibo import WeiboChannel
 from .xiaoyuzhou import XiaoyuzhouChannel
@@ -34,7 +33,6 @@ ALL_CHANNELS: List[Channel] = [
     XiaoHongShuChannel(),
     DouyinChannel(),
     LinkedInChannel(),
-    BossZhipinChannel(),
     WeChatChannel(),
     WeiboChannel(),
     XiaoyuzhouChannel(),

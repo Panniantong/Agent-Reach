@@ -272,36 +272,6 @@ pip install linkedin-scraper-mcp
 >
 > 详见 https://github.com/stickerdaniel/linkedin-mcp-server
 
-**Boss直聘 (可选 — mcp-bosszp):**
-> "Boss直聘职位页面可直接读取。完整搜索和打招呼功能需要 mcp-bosszp。"
-
-```bash
-mkdir -p ~/.agent-reach/tools && cd ~/.agent-reach/tools
-git clone https://github.com/mucsbr/mcp-bosszp.git && cd mcp-bosszp
-pip install -r requirements.txt && playwright install chromium
-```
-
-> **登录方式（手机 App 扫码）：**
->
-> mcp-bosszp 使用二维码登录，需要 Boss直聘 App 扫码。
->
-> ```bash
-> # 1. 启动 MCP 服务
-> python boss_zhipin_fastmcp_v2.py
-> 
-> # 2. 通过 MCP 触发登录（会生成二维码图片）
-> mcporter call 'bosszhipin.start_login()'
-> 
-> # 3. 浏览器打开二维码图片（服务器上用 http://服务器IP:8000/static/qrcode_xxx.png）
-> # 4. 用 Boss直聘 App 扫码确认
-> ```
->
-> 扫码成功后 session 自动保存，之后可以搜索职位和自动打招呼。
->
-> 或用 Docker：`docker-compose up -d`
->
-> 详见 https://github.com/mucsbr/mcp-bosszp
-
 ### Step 4: Final check
 
 Run `agent-reach doctor` one final time and report the results to your user.
@@ -355,5 +325,4 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 | 小宇宙播客 | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 | 抖音 | `mcporter` | `mcporter call 'douyin.parse_douyin_video_info(...)'` |
 | LinkedIn | `mcporter` | `mcporter call 'linkedin.get_person_profile(...)'` |
-| Boss直聘 | `mcporter` | `mcporter call 'bosszhipin.search_jobs_tool(...)'` |
 | RSS | `feedparser` | `python3 -c "import feedparser; ..."` |

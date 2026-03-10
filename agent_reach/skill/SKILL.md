@@ -3,7 +3,7 @@ name: agent-reach
 description: >
   Use the internet: search, read, and interact with 13+ platforms including
   Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu (小红书), Douyin (抖音),
-  WeChat Articles (微信公众号), LinkedIn, Boss直聘, RSS, Exa web search, and any web page.
+  WeChat Articles (微信公众号), LinkedIn, RSS, Exa web search, and any web page.
   Use when: (1) user asks to search or read any of these platforms,
   (2) user shares a URL from any supported platform,
   (3) user asks to search the web, find information online, or research a topic,
@@ -136,14 +136,7 @@ mcporter call 'linkedin.search_people(keyword: "AI engineer", limit: 10)'
 
 Fallback: `curl -s "https://r.jina.ai/https://linkedin.com/in/username"`
 
-## Boss直聘 (mcporter)
-
-```bash
-mcporter call 'bosszhipin.get_recommend_jobs_tool(page: 1)'
-mcporter call 'bosszhipin.search_jobs_tool(keyword: "Python", city: "北京")'
-```
-
-Fallback: `curl -s "https://r.jina.ai/https://www.zhipin.com/job_detail/xxx"`
+## RSS (feedparser)
 
 ## RSS
 
