@@ -102,14 +102,24 @@ mcporter call 'xiaohongshu.publish_content(title: "标题", content: "正文", i
 
 > Requires login. Use Cookie-Editor to import cookies.
 
-## 抖音 / Douyin (mcporter)
+## 抖音 / Douyin
+
+优先使用 Agent Reach 自带脚本：
+
+```bash
+python3 -m agent_reach.scripts.douyin_cli --link "https://v.douyin.com/xxx/" --action info
+python3 -m agent_reach.scripts.douyin_cli --link "https://v.douyin.com/xxx/" --action download --output /tmp/agent-reach-douyin
+python3 -m agent_reach.scripts.douyin_cli --link "https://v.douyin.com/xxx/" --action extract --output /tmp/agent-reach-douyin --save-video
+```
+
+兼容模式（如果本地脚本依赖不完整）：
 
 ```bash
 mcporter call 'douyin.parse_douyin_video_info(share_link: "https://v.douyin.com/xxx/")'
 mcporter call 'douyin.get_douyin_download_link(share_link: "https://v.douyin.com/xxx/")'
 ```
 
-> No login needed.
+> `info` 和 `download` 无需登录。`extract` 需要 `API_KEY`（硅基流动语音识别）。输出目录默认按视频 ID 保存 `transcript.md`。
 
 ## 微信公众号 / WeChat Articles
 
