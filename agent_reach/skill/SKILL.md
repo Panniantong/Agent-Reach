@@ -139,7 +139,7 @@ python3 -m agent_reach.scripts.douyin_cli --link "https://v.douyin.com/xxx/" --a
 - Transcript quality depends on the source audio and SiliconFlow recognition quality.
 - Some videos may return an empty transcript even when the extraction flow succeeds.
 
-See `docs/douyin-output.md` for output structure and `docs/douyin-validation.md` for real-world validation notes.
+See `references/douyin-output.md` for output structure and `references/douyin-validation.md` for real-world validation notes.
 
 ## 微信公众号 / WeChat Articles
 
