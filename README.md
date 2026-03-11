@@ -173,7 +173,7 @@ channels/
 ├── bilibili.py     → yt-dlp          ← 可以换成 bilibili-api……
 ├── reddit.py       → JSON API + Exa  ← 可以换成 PRAW、Pushshift……
 ├── xiaohongshu.py  → mcporter MCP    ← 可以换成其他 XHS 工具……
-├── douyin.py       → mcporter MCP    ← 可以换成其他抖音工具……
+├── douyin.py       → 内置脚本工作流   ← 可以换成其他抖音工具……
 ├── linkedin.py     → linkedin-mcp    ← 可以换成 LinkedIn API……
 ├── wechat.py       → camoufox+miku   ← 搜索+阅读微信公众号文章
 ├── rss.py          → feedparser      ← 可以换成 atoma……
@@ -194,7 +194,7 @@ channels/
 | GitHub | [gh CLI](https://cli.github.com) | 官方工具，认证后完整 API 能力 |
 | 读 RSS | [feedparser](https://github.com/kurtmckee/feedparser) | Python 生态标准选择，2.3K Star |
 | 小红书 | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) | ⭐9K+，Go 语言，Docker 一键部署 |
-| 抖音 | [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) | MCP 服务，无需登录，视频解析 + 无水印下载 |
+| 抖音 | 内置 Python + FFmpeg 工作流 | 无需登录，视频解析 + 无水印下载 + 文案提取 |
 | LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | ⭐900+，MCP 服务，浏览器自动化 |
 | 微信公众号 | [wechat-article-for-ai](https://github.com/bzd6661/wechat-article-for-ai) + [miku_ai](https://github.com/GobinFan/Miku_Spider) | Camoufox 隐身浏览器读全文 + 搜狗搜索 |
 
@@ -311,7 +311,7 @@ Reddit 封锁数据中心 IP。配置一个住宅代理即可解决：`agent-rea
 <details>
 <summary><strong>怎么让 AI Agent 解析抖音视频？</strong></summary>
 
-安装 douyin-mcp-server 后，Agent 就能用 `mcporter call 'douyin.parse_douyin_video_info(share_link: "分享链接")'` 解析视频信息、获取无水印下载链接。不需要登录，把抖音分享链接发给 Agent 就行。详见 https://github.com/yzfly/douyin-mcp-server
+抖音能力已内置到 Agent Reach 脚本工作流中。使用 `python3 -m agent_reach.scripts.douyin_cli --link "分享链接" --action info` 可解析视频信息，`--action download` 可下载无水印视频，`--action extract` 可提取文案。不需要登录，把抖音分享链接发给 Agent 就行。
 </details>
 
 <details>
@@ -332,7 +332,7 @@ Yes! Agent Reach is an installer + configuration tool — any AI coding agent th
 
 ## 致谢
 
-[Jina Reader](https://github.com/jina-ai/reader) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [xreach](https://www.npmjs.com/package/xreach-cli) · [Exa](https://exa.ai) · [mcporter](https://github.com/steipete/mcporter) · [feedparser](https://github.com/kurtmckee/feedparser) · [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) · [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) · [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server)
+[Jina Reader](https://github.com/jina-ai/reader) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [xreach](https://www.npmjs.com/package/xreach-cli) · [Exa](https://exa.ai) · [mcporter](https://github.com/steipete/mcporter) · [feedparser](https://github.com/kurtmckee/feedparser) · [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) · [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server)
 
 ## 联系
 
