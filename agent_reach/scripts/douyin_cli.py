@@ -38,9 +38,16 @@ def cmd_extract(link: str, output: str, api_key: str | None, save_video: bool, q
     video_path = processor.download_video(info, show_progress=not quiet)
     audio_path = processor.extract_audio(video_path, show_progress=not quiet)
     text = processor.extract_text_from_audio(audio_path, show_progress=not quiet)
-    saved_dir = save_transcript(info, text, output, save_video_path=video_path if save_video else None)
+    warning = None
+    if not text or not text.strip():
+        warning = "语音识别完成，但未提取到有效文本；可能是视频无清晰口播、仅环境音/BGM，或模型未识别出可用内容。"
+        text = ""
+    saved_dir = save_transcript(info, text if text else "（未识别到有效文本，可能是视频无清晰口播或仅背景音）", output, save_video_path=video_path if save_video else None)
     processor.cleanup_files(video_path, audio_path)
-    print(json.dumps({"video_info": info, "text": text, "output_path": saved_dir}, ensure_ascii=False, indent=2))
+    payload = {"video_info": info, "text": text, "output_path": saved_dir}
+    if warning:
+        payload["warning"] = warning
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 
 
