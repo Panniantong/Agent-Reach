@@ -203,35 +203,28 @@ agent-reach configure groq-key gsk_xxxxx
 > - 转录质量高（Whisper large-v3），但不区分说话人
 > - 2 小时以上的播客建议分批处理
 
-**抖音 / Douyin (douyin-mcp-server):**
-> "抖音视频解析需要一个 MCP 服务。安装 douyin-mcp-server 后即可解析视频、获取无水印下载链接。"
+**抖音 / Douyin（内置脚本模式）:**
+> "抖音能力已内置到 Agent Reach 的脚本工作流中，无需 MCP 服务。"
 
 ```bash
-# 1. 安装
-pip install douyin-mcp-server
+# 1. 安装 Python 依赖
+pip install requests ffmpeg-python
 
-# 2. 启动 HTTP 服务（端口 18070）
-# 方式一：用 uv（推荐）
-mkdir -p ~/.agent-reach/tools && cd ~/.agent-reach/tools
-git clone https://github.com/yzfly/douyin-mcp-server.git && cd douyin-mcp-server
-uv sync && uv run python run_http.py
+# 2. 安装系统依赖（音频提取必需）
+# Ubuntu / Debian
+apt install -y ffmpeg
 
-# 方式二：直接用 Python 启动
-python -c "
-from douyin_mcp_server.server import mcp
-mcp.settings.host = '127.0.0.1'
-mcp.settings.port = 18070
-mcp.run(transport='streamable-http')
-"
+# macOS
+brew install ffmpeg
 
-# 3. 注册到 mcporter
-mcporter config add douyin http://localhost:18070/mcp
+# 3. 使用方式
+python3 -m agent_reach.scripts.douyin_cli --link "分享链接" --action info
+python3 -m agent_reach.scripts.douyin_cli --link "分享链接" --action download --output /tmp/agent-reach-douyin
+python3 -m agent_reach.scripts.douyin_cli --link "分享链接" --action extract --output /tmp/agent-reach-douyin --save-video
 ```
 
-> 无需认证即可解析视频信息和获取下载链接。
+> 无需登录即可解析视频、下载无水印视频。
 > 如需 AI 语音识别提取文案功能，需要配置硅基流动 API Key（`export API_KEY="sk-xxx"`）。
->
-> 详见 https://github.com/yzfly/douyin-mcp-server
 
 **LinkedIn (可选 — linkedin-scraper-mcp):**
 > "LinkedIn 基本内容可通过 Jina Reader 读取。完整功能（Profile 详情、职位搜索）需要 linkedin-scraper-mcp。"
@@ -323,6 +316,6 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 | 小红书 | `mcporter` | `mcporter call 'xiaohongshu.search_feeds(...)'` |
 | 微博 | `mcporter` | `mcporter call 'weibo.get_trendings(limit: 10)'` |
 | 小宇宙播客 | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
-| 抖音 | `mcporter` | `mcporter call 'douyin.parse_douyin_video_info(...)'` |
+| 抖音 | `python3 -m agent_reach.scripts.douyin_cli` | `python3 -m agent_reach.scripts.douyin_cli --link "分享链接" --action info` |
 | LinkedIn | `mcporter` | `mcporter call 'linkedin.get_person_profile(...)'` |
 | RSS | `feedparser` | `python3 -c "import feedparser; ..."` |

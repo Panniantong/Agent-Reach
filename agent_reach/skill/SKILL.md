@@ -112,13 +112,6 @@ python3 -m agent_reach.scripts.douyin_cli --link "https://v.douyin.com/xxx/" --a
 python3 -m agent_reach.scripts.douyin_cli --link "https://v.douyin.com/xxx/" --action extract --output /tmp/agent-reach-douyin --save-video
 ```
 
-兼容模式（如果本地脚本依赖不完整）：
-
-```bash
-mcporter call 'douyin.parse_douyin_video_info(share_link: "https://v.douyin.com/xxx/")'
-mcporter call 'douyin.get_douyin_download_link(share_link: "https://v.douyin.com/xxx/")'
-```
-
 > `info` 和 `download` 无需登录。`extract` 需要 `API_KEY`（硅基流动语音识别）。输出目录默认按视频 ID 保存 `transcript.md`。
 
 ## 微信公众号 / WeChat Articles
