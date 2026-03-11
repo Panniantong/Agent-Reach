@@ -112,7 +112,34 @@ python3 -m agent_reach.scripts.douyin_cli --link "https://v.douyin.com/xxx/" --a
 python3 -m agent_reach.scripts.douyin_cli --link "https://v.douyin.com/xxx/" --action extract --output /tmp/agent-reach-douyin --save-video
 ```
 
-> `info` 和 `download` 无需登录。`extract` 需要 `API_KEY`（硅基流动语音识别）。输出目录默认按视频 ID 保存 `transcript.md`。
+### Recommended workflow
+
+1. Run `--action info` first to confirm the link resolves and inspect `video_id`, title, and download URL.
+2. Run `--action download` when the user wants the local video file only.
+3. Run `--action extract` when the user wants transcript extraction; set `API_KEY` first.
+4. Treat empty transcript as a soft failure, not a hard crash. The CLI returns a `warning` field when audio is present but no useful text is extracted.
+
+### Input notes
+
+- Accept either a clean Douyin URL or a full share text block copied from the app.
+- The script extracts the first valid Douyin URL from the text automatically.
+- Output defaults to `/tmp/agent-reach-douyin` unless the caller passes `--output`.
+
+### Output notes
+
+- `info` prints JSON with `video_id`, `title`, and direct video `url`.
+- `download` prints JSON with `video_info` and `video_path`.
+- `extract` prints JSON with `video_info`, `text`, `output_path`, and optional `warning`.
+- Transcript output is saved under `<output>/<video_id>/transcript.md`.
+- When `--save-video` is set, the downloaded `.mp4` is copied into the same video folder.
+
+### Known limitations
+
+- Search is not built in yet. Current Douyin support is link-first: parse, download, and extract after the user provides a share link.
+- Transcript quality depends on the source audio and SiliconFlow recognition quality.
+- Some videos may return an empty transcript even when the extraction flow succeeds.
+
+See `docs/douyin-output.md` for output structure and `docs/douyin-validation.md` for real-world validation notes.
 
 ## 微信公众号 / WeChat Articles
 
