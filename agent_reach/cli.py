@@ -460,7 +460,9 @@ def _install_system_deps():
 def _install_xiaoyuzhou_deps():
     """Install Xiaoyuzhou podcast transcription script."""
     import shutil
+    from agent_reach.config import Config
 
+    config = Config()
     print("Setting up Xiaoyuzhou podcast transcription...")
 
     tools_dir = os.path.expanduser("~/.agent-reach/tools/xiaoyuzhou")
