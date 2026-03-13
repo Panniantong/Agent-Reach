@@ -74,9 +74,26 @@ class XiaoHongShuChannel(Channel):
                 errors="replace",
                 timeout=10,
             )
-            out = r.stdout.lower()
-            if r.returncode == 0 and '"status": "ok"' in out:
-                return "ok", "MCP 已连接（阅读、搜索、发帖、评论、点赞）"
+            # More robust JSON parsing instead of string matching
+            # Handle different JSON formats and Windows line endings
+            import json
+            try:
+                # Try to parse the JSON output directly
+                output = r.stdout.strip()
+                # Handle potential BOM or whitespace
+                if output.startswith('\ufeff'):
+                    output = output[1:]
+                data = json.loads(output)
+                # Check various possible status field names and values
+                status = data.get('status', '').lower() if isinstance(data, dict) else ''
+                if r.returncode == 0 and status == 'ok':
+                    return "ok", "MCP 已连接（阅读、搜索、发帖、评论、点赞）"
+            except (json.JSONDecodeError, ValueError):
+                # Fallback to string matching for backward compatibility
+                # Make it case-insensitive and handle Windows-style output
+                out = r.stdout.lower().replace('\r\n', '\n').replace('\r', '\n')
+                if r.returncode == 0 and '"status":"ok"' in out.replace(' ', ''):
+                    return "ok", "MCP 已连接（阅读、搜索、发帖、评论、点赞）"
             return "warn", "MCP 已配置，但连接异常；请检查 xiaohongshu-mcp 服务状态"
         except subprocess.TimeoutExpired:
             return "warn", "MCP 已配置，但健康检查超时；请检查 xiaohongshu-mcp 服务状态"
