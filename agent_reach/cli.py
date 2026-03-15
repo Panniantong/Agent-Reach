@@ -27,6 +27,7 @@ def _ensure_utf8_console():
         return
     try:
         import io
+
         if hasattr(sys.stdout, "buffer"):
             sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
         if hasattr(sys.stderr, "buffer"):
@@ -39,6 +40,7 @@ def _ensure_utf8_console():
 def _configure_logging(verbose: bool = False):
     """Suppress loguru output unless --verbose is set."""
     from loguru import logger
+
     logger.remove()  # Remove default stderr handler
     if verbose:
         logger.add(sys.stderr, level="INFO")
@@ -60,36 +62,67 @@ def main():
 
     # ── install ──
     p_install = sub.add_parser("install", help="One-shot installer with flags")
-    p_install.add_argument("--env", choices=["local", "server", "auto"], default="auto",
-                           help="Environment: local, server, or auto-detect")
-    p_install.add_argument("--proxy", default="",
-                           help="Residential proxy for Reddit/Bilibili (http://user:pass@ip:port)")
-    p_install.add_argument("--safe", action="store_true",
-                           help="Safe mode: skip automatic system changes, show what's needed instead")
-    p_install.add_argument("--dry-run", action="store_true",
-                           help="Show what would be done without making any changes")
+    p_install.add_argument(
+        "--env",
+        choices=["local", "server", "auto"],
+        default="auto",
+        help="Environment: local, server, or auto-detect",
+    )
+    p_install.add_argument(
+        "--proxy",
+        default="",
+        help="Residential proxy for Reddit/Bilibili (http://user:pass@ip:port)",
+    )
+    p_install.add_argument(
+        "--safe",
+        action="store_true",
+        help="Safe mode: skip automatic system changes, show what's needed instead",
+    )
+    p_install.add_argument(
+        "--dry-run", action="store_true", help="Show what would be done without making any changes"
+    )
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
-    p_conf.add_argument("key", nargs="?", default=None,
-                        choices=["proxy", "github-token", "groq-key",
-                                 "twitter-cookies", "youtube-cookies",
-                                 "xhs-cookies"],
-                        help="What to configure (omit if using --from-browser)")
+    p_conf.add_argument(
+        "key",
+        nargs="?",
+        default=None,
+        choices=[
+            "proxy",
+            "github-token",
+            "groq-key",
+            "twitter-cookies",
+            "youtube-cookies",
+            "xhs-cookies",
+        ],
+        help="What to configure (omit if using --from-browser)",
+    )
     p_conf.add_argument("value", nargs="*", help="The value(s) to set")
-    p_conf.add_argument("--from-browser", metavar="BROWSER",
-                        choices=["chrome", "firefox", "edge", "brave", "opera"],
-                        help="Auto-extract ALL platform cookies from browser (chrome/firefox/edge/brave/opera)")
+    p_conf.add_argument(
+        "--from-browser",
+        metavar="BROWSER",
+        choices=["chrome", "firefox", "edge", "brave", "opera"],
+        help="Auto-extract ALL platform cookies from browser (chrome/firefox/edge/brave/opera)",
+    )
 
     # ── doctor ──
     sub.add_parser("doctor", help="Check platform availability")
 
     # ── uninstall ──
-    p_uninstall = sub.add_parser("uninstall", help="Remove all Agent Reach config, tokens, and skill files")
-    p_uninstall.add_argument("--dry-run", action="store_true",
-                             help="Show what would be removed without making any changes")
-    p_uninstall.add_argument("--keep-config", action="store_true",
-                             help="Remove skill files only, keep ~/.agent-reach/ config and tokens")
+    p_uninstall = sub.add_parser(
+        "uninstall", help="Remove all Agent Reach config, tokens, and skill files"
+    )
+    p_uninstall.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be removed without making any changes",
+    )
+    p_uninstall.add_argument(
+        "--keep-config",
+        action="store_true",
+        help="Remove skill files only, keep ~/.agent-reach/ config and tokens",
+    )
 
     # ── check-update ──
     sub.add_parser("check-update", help="Check for new versions and changes")
@@ -161,7 +194,7 @@ def _cmd_install(args):
     env = args.env
     if env == "auto":
         env = _detect_environment()
-    
+
     if env == "server":
         print(f"Environment: Server/VPS (auto-detected)")
     else:
@@ -200,6 +233,7 @@ def _cmd_install(args):
         print("Trying to import cookies from browser...")
         try:
             from agent_reach.cookie_extract import configure_from_browser
+
             results = configure_from_browser("chrome", config)
             found = False
             for platform, success, message in results:
@@ -253,7 +287,9 @@ def _cmd_install(args):
 
         if ok < total:
             print()
-            print("Some channels are not active yet. If you're an AI Agent, try to fix them yourself — then run `agent-reach doctor` again.")
+            print(
+                "Some channels are not active yet. If you're an AI Agent, try to fix them yourself — then run `agent-reach doctor` again."
+            )
 
         # Star reminder
         print()
@@ -272,9 +308,9 @@ def _install_skill():
 
     # Determine skill install path
     skill_dirs = [
-        os.path.expanduser("~/.openclaw/skills"),   # OpenClaw
-        os.path.expanduser("~/.claude/skills"),      # Claude Code (if exists)
-        os.path.expanduser("~/.agents/skills"),      # Generic agents
+        os.path.expanduser("~/.openclaw/skills"),  # OpenClaw
+        os.path.expanduser("~/.claude/skills"),  # Claude Code (if exists)
+        os.path.expanduser("~/.agents/skills"),  # Generic agents
     ]
 
     installed = False
@@ -284,10 +320,20 @@ def _install_skill():
             try:
                 os.makedirs(target, exist_ok=True)
                 # Read SKILL.md from package data
-                skill_md = importlib.resources.files("agent_reach").joinpath("skill", "SKILL.md").read_text()
+                skill_md = (
+                    importlib.resources.files("agent_reach")
+                    .joinpath("skill", "SKILL.md")
+                    .read_text()
+                )
                 with open(os.path.join(target, "SKILL.md"), "w") as f:
                     f.write(skill_md)
-                platform_name = "OpenClaw" if "openclaw" in skill_dir else "Claude Code" if "claude" in skill_dir else "Agent"
+                platform_name = (
+                    "OpenClaw"
+                    if "openclaw" in skill_dir
+                    else "Claude Code"
+                    if "claude" in skill_dir
+                    else "Agent"
+                )
                 print(f"Skill installed for {platform_name}: {target}")
                 installed = True
             except Exception:
@@ -298,7 +344,9 @@ def _install_skill():
         target = os.path.expanduser("~/.openclaw/skills/agent-reach")
         try:
             os.makedirs(target, exist_ok=True)
-            skill_md = importlib.resources.files("agent_reach").joinpath("skill", "SKILL.md").read_text()
+            skill_md = (
+                importlib.resources.files("agent_reach").joinpath("skill", "SKILL.md").read_text()
+            )
             with open(os.path.join(target, "SKILL.md"), "w") as f:
                 f.write(skill_md)
             print(f"Skill installed: {target}")
@@ -326,13 +374,26 @@ def _install_system_deps():
                 # Official GitHub apt source setup without invoking a shell.
                 keyring_path = "/usr/share/keyrings/githubcli-archive-keyring.gpg"
                 list_path = "/etc/apt/sources.list.d/github-cli.list"
-                arch = subprocess.run(
-                    ["dpkg", "--print-architecture"],
-                    capture_output=True, encoding="utf-8", errors="replace", timeout=10,
-                ).stdout.strip() or "amd64"
+                arch = (
+                    subprocess.run(
+                        ["dpkg", "--print-architecture"],
+                        capture_output=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        timeout=10,
+                    ).stdout.strip()
+                    or "amd64"
+                )
                 subprocess.run(
-                    ["curl", "-fsSL", "https://cli.github.com/packages/githubcli-archive-keyring.gpg", "-o", keyring_path],
-                    capture_output=True, timeout=60,
+                    [
+                        "curl",
+                        "-fsSL",
+                        "https://cli.github.com/packages/githubcli-archive-keyring.gpg",
+                        "-o",
+                        keyring_path,
+                    ],
+                    capture_output=True,
+                    timeout=60,
                 )
                 repo_line = (
                     f"deb [arch={arch} signed-by={keyring_path}] "
@@ -341,13 +402,19 @@ def _install_system_deps():
                 with open(list_path, "w", encoding="utf-8") as f:
                     f.write(repo_line)
                 subprocess.run(["apt-get", "update", "-qq"], capture_output=True, timeout=60)
-                subprocess.run(["apt-get", "install", "-y", "-qq", "gh"], capture_output=True, timeout=60)
+                subprocess.run(
+                    ["apt-get", "install", "-y", "-qq", "gh"], capture_output=True, timeout=60
+                )
                 if shutil.which("gh"):
                     print("  ✅ gh CLI installed")
                 else:
-                    print("  [!]  gh CLI install failed. You can try: snap install gh, or download from https://github.com/cli/cli/releases")
+                    print(
+                        "  [!]  gh CLI install failed. You can try: snap install gh, or download from https://github.com/cli/cli/releases"
+                    )
             except Exception:
-                print("  [!]  gh CLI install failed. You can try: snap install gh, or download from https://github.com/cli/cli/releases")
+                print(
+                    "  [!]  gh CLI install failed. You can try: snap install gh, or download from https://github.com/cli/cli/releases"
+                )
         elif os_type == "darwin":
             if shutil.which("brew"):
                 try:
@@ -374,11 +441,13 @@ def _install_system_deps():
                 script_path = tf.name
             subprocess.run(
                 ["curl", "-fsSL", "https://deb.nodesource.com/setup_22.x", "-o", script_path],
-                capture_output=True, timeout=60,
+                capture_output=True,
+                timeout=60,
             )
             subprocess.run(
                 ["bash", script_path],
-                capture_output=True, timeout=120,
+                capture_output=True,
+                timeout=120,
             )
             try:
                 os.unlink(script_path)
@@ -386,14 +455,19 @@ def _install_system_deps():
                 pass
             subprocess.run(
                 ["apt-get", "install", "-y", "-qq", "nodejs"],
-                capture_output=True, timeout=120,
+                capture_output=True,
+                timeout=120,
             )
             if shutil.which("node"):
                 print("  ✅ Node.js installed")
             else:
-                print("  [!]  Node.js install failed. Try: apt install nodejs npm, or nvm install 22, or download from https://nodejs.org")
+                print(
+                    "  [!]  Node.js install failed. Try: apt install nodejs npm, or nvm install 22, or download from https://nodejs.org"
+                )
         except Exception:
-            print("  [!]  Node.js install failed. Try: apt install nodejs npm, or nvm install 22, or download from https://nodejs.org")
+            print(
+                "  [!]  Node.js install failed. Try: apt install nodejs npm, or nvm install 22, or download from https://nodejs.org"
+            )
 
     # ── xreach CLI (for Twitter search) ──
     if shutil.which("xreach"):
@@ -403,27 +477,48 @@ def _install_system_deps():
             try:
                 subprocess.run(
                     ["npm", "install", "-g", "xreach-cli"],
-                    capture_output=True, encoding="utf-8", errors="replace", timeout=120,
+                    capture_output=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=120,
                 )
                 if shutil.which("xreach"):
                     print("  ✅ xreach CLI installed (Twitter search + timeline)")
                 else:
-                    print("  -- xreach CLI install failed (optional — Twitter reading still works via Jina)")
+                    print(
+                        "  -- xreach CLI install failed (optional — Twitter reading still works via Jina)"
+                    )
             except Exception:
-                print("  -- xreach CLI install failed (optional — Twitter reading still works via Jina)")
+                print(
+                    "  -- xreach CLI install failed (optional — Twitter reading still works via Jina)"
+                )
         else:
-            print("  -- xreach CLI requires Node.js (optional — Twitter reading still works via Jina)")
+            print(
+                "  -- xreach CLI requires Node.js (optional — Twitter reading still works via Jina)"
+            )
 
     # ── undici (proxy support for Node.js fetch) ──
     npm_cmd = shutil.which("npm")
     if npm_cmd:
-        npm_root = subprocess.run([npm_cmd, "root", "-g"], capture_output=True, encoding="utf-8", errors="replace", timeout=5).stdout.strip()
+        npm_root = subprocess.run(
+            [npm_cmd, "root", "-g"],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+        ).stdout.strip()
         undici_path = os.path.join(npm_root, "undici", "index.js") if npm_root else ""
         if os.path.exists(undici_path):
             print("  ✅ undici already installed (Node.js proxy support)")
         else:
             try:
-                subprocess.run([npm_cmd, "install", "-g", "undici"], capture_output=True, encoding="utf-8", errors="replace", timeout=60)
+                subprocess.run(
+                    [npm_cmd, "install", "-g", "undici"],
+                    capture_output=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=60,
+                )
                 print("  ✅ undici installed (Node.js proxy support)")
             except Exception:
                 print("  -- undici install failed (optional — xreach may not work behind proxies)")
@@ -477,6 +572,7 @@ def _install_xiaoyuzhou_deps():
             try:
                 os.makedirs(tools_dir, exist_ok=True)
                 import shutil as _shutil
+
                 _shutil.copy2(script_src, script_dst)
                 os.chmod(script_dst, 0o755)
                 print("  ✅ Xiaoyuzhou transcription script installed")
@@ -512,8 +608,11 @@ def _install_weibo_deps():
     if mcporter:
         try:
             r = subprocess.run(
-                [mcporter, "config", "list"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=5
+                [mcporter, "config", "list"],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
             )
             if "weibo" in r.stdout:
                 print("  ✅ Weibo MCP already configured")
@@ -524,9 +623,16 @@ def _install_weibo_deps():
     # Install from our fork (has visitor passport auth fix)
     try:
         subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-q",
-             "git+https://github.com/Panniantong/mcp-server-weibo.git"],
-            check=True, timeout=120
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "-q",
+                "git+https://github.com/Panniantong/mcp-server-weibo.git",
+            ],
+            check=True,
+            timeout=120,
         )
         print("  ✅ mcp-server-weibo installed (Panniantong fork)")
     except Exception as e:
@@ -538,13 +644,19 @@ def _install_weibo_deps():
         try:
             subprocess.run(
                 [mcporter, "config", "add", "weibo", "--command", "mcp-server-weibo"],
-                check=True, capture_output=True, timeout=10
+                check=True,
+                capture_output=True,
+                timeout=10,
             )
             print("  ✅ Weibo MCP registered with mcporter")
         except Exception:
-            print("  [!]  mcporter config add failed. Run manually: mcporter config add weibo --command 'mcp-server-weibo'")
+            print(
+                "  [!]  mcporter config add failed. Run manually: mcporter config add weibo --command 'mcp-server-weibo'"
+            )
     else:
-        print("  -- mcporter not found, skipping MCP registration. Install mcporter first, then run: mcporter config add weibo --command 'mcp-server-weibo'")
+        print(
+            "  -- mcporter not found, skipping MCP registration. Install mcporter first, then run: mcporter config add weibo --command 'mcp-server-weibo'"
+        )
 
 
 def _install_wechat_deps():
@@ -558,11 +670,13 @@ def _install_wechat_deps():
     has_miku = False
     try:
         import camoufox  # noqa: F401
+
         has_camoufox = True
     except ImportError:
         pass
     try:
         import miku_ai  # noqa: F401
+
         has_miku = True
     except ImportError:
         pass
@@ -578,11 +692,14 @@ def _install_wechat_deps():
             pkgs.append("miku_ai")
         try:
             cmd = [sys.executable, "-m", "pip", "install", "--break-system-packages", "-q"] + pkgs
-            subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=120)
+            subprocess.run(
+                cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=120
+            )
             # Verify
             ok = True
             try:
                 import importlib
+
                 if not has_camoufox:
                     importlib.import_module("camoufox")
                 if not has_miku:
@@ -592,7 +709,9 @@ def _install_wechat_deps():
             if ok:
                 print(f"  ✅ WeChat Python packages installed ({', '.join(pkgs)})")
             else:
-                print(f"  [!]  Some WeChat packages failed to install. Try: pip install {' '.join(pkgs)}")
+                print(
+                    f"  [!]  Some WeChat packages failed to install. Try: pip install {' '.join(pkgs)}"
+                )
         except Exception:
             print(f"  [!]  WeChat packages install failed. Try: pip install {' '.join(pkgs)}")
 
@@ -605,16 +724,31 @@ def _install_wechat_deps():
         try:
             os.makedirs(tools_dir, exist_ok=True)
             subprocess.run(
-                ["git", "clone", "--depth", "1",
-                 "https://github.com/Panniantong/wechat-article-for-ai.git", wechat_dir],
-                capture_output=True, encoding="utf-8", errors="replace", timeout=60,
+                [
+                    "git",
+                    "clone",
+                    "--depth",
+                    "1",
+                    "https://github.com/Panniantong/wechat-article-for-ai.git",
+                    wechat_dir,
+                ],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=60,
             )
             if os.path.isfile(os.path.join(wechat_dir, "main.py")):
                 print("  ✅ wechat-article-for-ai tool installed")
             else:
-                print("  [!]  wechat-article-for-ai clone failed. Try: git clone https://github.com/Panniantong/wechat-article-for-ai.git " + wechat_dir)
+                print(
+                    "  [!]  wechat-article-for-ai clone failed. Try: git clone https://github.com/Panniantong/wechat-article-for-ai.git "
+                    + wechat_dir
+                )
         except Exception:
-            print("  [!]  wechat-article-for-ai clone failed. Try: git clone https://github.com/Panniantong/wechat-article-for-ai.git " + wechat_dir)
+            print(
+                "  [!]  wechat-article-for-ai clone failed. Try: git clone https://github.com/Panniantong/wechat-article-for-ai.git "
+                + wechat_dir
+            )
 
 
 def _install_system_deps_safe():
@@ -624,7 +758,12 @@ def _install_system_deps_safe():
     print("Checking system dependencies (safe mode — no auto-install)...")
 
     deps = [
-        ("gh", ["gh"], "GitHub CLI", "https://cli.github.com — or: apt install gh / brew install gh"),
+        (
+            "gh",
+            ["gh"],
+            "GitHub CLI",
+            "https://cli.github.com — or: apt install gh / brew install gh",
+        ),
         ("node", ["node", "npm"], "Node.js", "https://nodejs.org — or: apt install nodejs npm"),
         ("xreach", ["xreach"], "xreach CLI (Twitter)", "npm install -g xreach-cli"),
     ]
@@ -650,11 +789,13 @@ def _install_system_deps_safe():
     has_camoufox = has_miku = False
     try:
         import camoufox  # noqa: F401
+
         has_camoufox = True
     except ImportError:
         pass
     try:
         import miku_ai  # noqa: F401
+
         has_miku = True
     except ImportError:
         pass
@@ -693,18 +834,22 @@ def _install_system_deps_dryrun():
     has_camoufox = has_miku = False
     try:
         import camoufox  # noqa: F401
+
         has_camoufox = True
     except ImportError:
         pass
     try:
         import miku_ai  # noqa: F401
+
         has_miku = True
     except ImportError:
         pass
     if has_camoufox and has_miku:
         print("  ✅ WeChat article tools: already installed, skip")
     else:
-        print("  WeChat article tools: would install via: pip install camoufox[geoip] markdownify beautifulsoup4 httpx miku_ai")
+        print(
+            "  WeChat article tools: would install via: pip install camoufox[geoip] markdownify beautifulsoup4 httpx miku_ai"
+        )
 
 
 def _install_mcporter():
@@ -725,12 +870,17 @@ def _install_mcporter():
         try:
             subprocess.run(
                 ["npm", "install", "-g", "mcporter"],
-                capture_output=True, encoding="utf-8", errors="replace", timeout=120,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=120,
             )
             if shutil.which("mcporter"):
                 print("  ✅ mcporter installed")
             else:
-                print("  [X] mcporter install failed. Retry: npm install -g mcporter (check network/timeout), or try: npx mcporter@latest list")
+                print(
+                    "  [X] mcporter install failed. Retry: npm install -g mcporter (check network/timeout), or try: npx mcporter@latest list"
+                )
                 return
         except Exception as e:
             print(f"  [X] mcporter install failed: {e}")
@@ -739,39 +889,58 @@ def _install_mcporter():
     # Configure Exa MCP (free, no key needed)
     try:
         r = subprocess.run(
-            ["mcporter", "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=5
+            ["mcporter", "config", "list"],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
         )
         if "exa" not in r.stdout:
             subprocess.run(
                 ["mcporter", "config", "add", "exa", "https://mcp.exa.ai/mcp"],
-                capture_output=True, encoding="utf-8", errors="replace", timeout=10,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
             )
             print("  ✅ Exa search configured (free, no API key needed)")
         else:
             print("  ✅ Exa search already configured")
     except Exception:
-        print("  [!]  Could not configure Exa. Run manually: mcporter config add exa https://mcp.exa.ai/mcp")
+        print(
+            "  [!]  Could not configure Exa. Run manually: mcporter config add exa https://mcp.exa.ai/mcp"
+        )
 
     # Check XiaoHongShu MCP (only if server is running)
     try:
         r = subprocess.run(
-            ["mcporter", "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=5
+            ["mcporter", "config", "list"],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
         )
         if "xiaohongshu" in r.stdout:
             print("  ✅ XiaoHongShu MCP already configured")
         else:
             # Check if XHS MCP server is running on localhost:18060
             import requests
+
             try:
                 requests.get("http://localhost:18060/", timeout=3)
                 subprocess.run(
                     ["mcporter", "config", "add", "xiaohongshu", "http://localhost:18060/mcp"],
-                    capture_output=True, encoding="utf-8", errors="replace", timeout=10,
+                    capture_output=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=10,
                 )
                 print("  ✅ XiaoHongShu MCP auto-detected and configured")
             except Exception:
                 print("  -- XiaoHongShu MCP not detected (optional)")
-                print("     Install: docker run -d --name xiaohongshu-mcp -p 18060:18060 xpzouying/xiaohongshu-mcp")
+                print(
+                    "     Install: docker run -d --name xiaohongshu-mcp -p 18060:18060 xpzouying/xiaohongshu-mcp"
+                )
                 print("     Then:    mcporter config add xiaohongshu http://localhost:18060/mcp")
                 print("     Repo:    https://github.com/xpzouying/xiaohongshu-mcp")
     except Exception:
@@ -818,7 +987,18 @@ def _detect_environment():
             try:
                 with open(cloud_file) as f:
                     content = f.read().lower()
-                if any(x in content for x in ["amazon", "google", "microsoft", "digitalocean", "linode", "vultr", "hetzner"]):
+                if any(
+                    x in content
+                    for x in [
+                        "amazon",
+                        "google",
+                        "microsoft",
+                        "digitalocean",
+                        "linode",
+                        "vultr",
+                        "hetzner",
+                    ]
+                ):
                     indicators += 2
             except Exception:
                 pass
@@ -826,7 +1006,14 @@ def _detect_environment():
     # systemd-detect-virt
     try:
         import subprocess
-        result = subprocess.run(["systemd-detect-virt"], capture_output=True, encoding="utf-8", errors="replace", timeout=3)
+
+        result = subprocess.run(
+            ["systemd-detect-virt"],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=3,
+        )
         if result.returncode == 0 and result.stdout.strip() != "none":
             indicators += 1
     except Exception:
@@ -887,9 +1074,12 @@ def _cmd_configure(args):
         print("Testing Reddit access...", end=" ")
         try:
             import requests
+
             resp = requests.get(
                 "https://www.reddit.com/r/test.json?limit=1",
-                headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"},
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+                },
                 proxies={"http": value, "https": value},
                 timeout=10,
             )
@@ -927,6 +1117,7 @@ def _cmd_configure(args):
             # Sync credentials to xreach's session.json so xreach auth check works
             try:
                 import json
+
                 xfetch_dir = os.path.join(os.path.expanduser("~"), ".config", "xfetch")
                 os.makedirs(xfetch_dir, exist_ok=True)
                 session_path = os.path.join(xfetch_dir, "session.json")
@@ -947,17 +1138,22 @@ def _cmd_configure(args):
             print("Testing Twitter access...", end=" ")
             try:
                 import subprocess
+
                 xreach = shutil.which("xreach")
                 if not xreach:
                     print("[!] xreach CLI not installed. Run: npm install -g xreach-cli")
                 else:
                     import os
+
                     env = os.environ.copy()
                     env["AUTH_TOKEN"] = auth_token
                     env["CT0"] = ct0
                     result = subprocess.run(
                         [xreach, "search", "test", "-n", "1"],
-                        capture_output=True, encoding="utf-8", errors="replace", timeout=15,
+                        capture_output=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        timeout=15,
                         env=env,
                     )
                     if result.returncode == 0 and result.stdout.strip():
@@ -1044,18 +1240,20 @@ def _configure_xhs_cookies(value):
             name = name.strip()
             val = val.strip()
             if name:
-                cookies.append({
-                    "name": name,
-                    "value": val,
-                    "domain": ".xiaohongshu.com",
-                    "path": "/",
-                    "expires": -1,
-                    "size": len(name) + len(val),
-                    "httpOnly": False,
-                    "secure": False,
-                    "session": True,
-                    "sameSite": "Lax",
-                })
+                cookies.append(
+                    {
+                        "name": name,
+                        "value": val,
+                        "domain": ".xiaohongshu.com",
+                        "path": "/",
+                        "expires": -1,
+                        "size": len(name) + len(val),
+                        "httpOnly": False,
+                        "secure": False,
+                        "session": True,
+                        "sameSite": "Lax",
+                    }
+                )
         if cookies:
             cookies_json = json.dumps(cookies)
             print(f"  Parsed {len(cookies)} cookies from Header String format")
@@ -1086,13 +1284,17 @@ def _configure_xhs_cookies(value):
     try:
         result = subprocess.run(
             [docker, "ps", "--filter", "name=xiaohongshu-mcp", "--format", "{{.Names}}"],
-            capture_output=True, encoding="utf-8", timeout=5,
+            capture_output=True,
+            encoding="utf-8",
+            timeout=5,
         )
         container_name = result.stdout.strip()
         if not container_name:
             print("[X] xiaohongshu-mcp container is not running.")
             print("   Start it first:")
-            print("   docker run -d --name xiaohongshu-mcp -p 18060:18060 xpzouying/xiaohongshu-mcp")
+            print(
+                "   docker run -d --name xiaohongshu-mcp -p 18060:18060 xpzouying/xiaohongshu-mcp"
+            )
             return
     except Exception as e:
         print(f"[X] Could not check Docker: {e}")
@@ -1102,7 +1304,9 @@ def _configure_xhs_cookies(value):
     try:
         result = subprocess.run(
             [docker, "exec", container_name, "printenv", "COOKIES_PATH"],
-            capture_output=True, encoding="utf-8", timeout=5,
+            capture_output=True,
+            encoding="utf-8",
+            timeout=5,
         )
         cookie_path_in_container = result.stdout.strip()
         if not cookie_path_in_container:
@@ -1114,13 +1318,16 @@ def _configure_xhs_cookies(value):
     try:
         # Write to temp file then docker cp
         import tempfile
+
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             f.write(cookies_json)
             tmp_path = f.name
 
         result = subprocess.run(
             [docker, "cp", tmp_path, f"{container_name}:{cookie_path_in_container}"],
-            capture_output=True, encoding="utf-8", timeout=10,
+            capture_output=True,
+            encoding="utf-8",
+            timeout=10,
         )
         os.unlink(tmp_path)
 
@@ -1140,7 +1347,10 @@ def _configure_xhs_cookies(value):
         try:
             result = subprocess.run(
                 [mcporter, "call", "xiaohongshu.check_login_status()"],
-                capture_output=True, encoding="utf-8", errors="replace", timeout=15,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=15,
             )
             if "已登录" in result.stdout or "logged" in result.stdout.lower():
                 print("✅ Login verified!")
@@ -1216,7 +1426,11 @@ def _cmd_uninstall(args):
         for mcp_name in ("exa", "xiaohongshu"):
             try:
                 r = subprocess.run(
-                    ["mcporter", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=10
+                    ["mcporter", "list"],
+                    capture_output=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=10,
                 )
                 if mcp_name in r.stdout:
                     if dry_run:
@@ -1224,7 +1438,10 @@ def _cmd_uninstall(args):
                     else:
                         subprocess.run(
                             ["mcporter", "config", "remove", mcp_name],
-                            capture_output=True, encoding="utf-8", errors="replace", timeout=10,
+                            capture_output=True,
+                            encoding="utf-8",
+                            errors="replace",
+                            timeout=10,
                         )
                         print(f"  Removed mcporter entry: {mcp_name}")
                         removed_any = True
@@ -1255,9 +1472,14 @@ def _cmd_uninstall(args):
 def _cmd_doctor():
     from agent_reach.config import Config
     from agent_reach.doctor import check_all, format_report
+
+    try:
+        from rich import print as rprint
+    except ImportError:
+        rprint = print
     config = Config()
     results = check_all(config)
-    print(format_report(results))
+    rprint(format_report(results))
 
 
 def _cmd_setup():
@@ -1284,7 +1506,11 @@ def _cmd_setup():
     else:
         try:
             r = subprocess.run(
-                ["mcporter", "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=10
+                ["mcporter", "config", "list"],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
             )
             if "exa" in r.stdout.lower():
                 print("  当前状态: ✅ 已配置")
@@ -1294,7 +1520,10 @@ def _cmd_setup():
                 if setup_now in ("", "y", "yes"):
                     add_r = subprocess.run(
                         ["mcporter", "config", "add", "exa", "https://mcp.exa.ai/mcp"],
-                        capture_output=True, encoding="utf-8", errors="replace", timeout=10,
+                        capture_output=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        timeout=10,
                     )
                     if add_r.returncode == 0:
                         print("  ✅ Exa 已配置")
@@ -1480,7 +1709,9 @@ def _cmd_check_update():
                     print(f"  {line}")
             print()
             print("更新命令:")
-            print("  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
+            print(
+                "  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip"
+            )
             return "update_available"
         print(f"✅ 已是最新版本")
         return "up_to_date"
@@ -1576,7 +1807,9 @@ def _cmd_watch():
         if release_body:
             for line in release_body.strip().split("\n")[:10]:
                 print(f"    {line}")
-        print(f"  更新: pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
+        print(
+            f"  更新: pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip"
+        )
 
 
 if __name__ == "__main__":
