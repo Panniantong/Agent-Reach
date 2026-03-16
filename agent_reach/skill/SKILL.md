@@ -2,15 +2,16 @@
 name: agent-reach
 description: >
   Give your AI agent eyes to see the entire internet.
-  Search and read 16 platforms: Twitter/X, Reddit, YouTube, GitHub, Bilibili,
+  Search and read 17 platforms: Twitter/X, Reddit, YouTube, GitHub, Bilibili,
   XiaoHongShu, Douyin, Weibo, WeChat Articles, Xiaoyuzhou Podcast, LinkedIn,
-  Instagram, V2EX, RSS, Exa web search, and any web page.
+  Instagram, V2EX, Xueqiu, RSS, Exa web search, and any web page.
   Zero config for 8 channels. Use when user asks to search, read, or interact
   on any supported platform, shares a URL, or asks to search the web.
   Triggers: "搜推特", "搜小红书", "看视频", "搜一下", "上网搜", "帮我查",
   "search twitter", "youtube transcript", "search reddit", "read this link",
   "B站", "bilibili", "抖音视频", "微信文章", "公众号", "微博", "V2EX",
-  "小宇宙", "播客", "podcast", "web search", "research", "帮我安装".
+  "小宇宙", "播客", "podcast", "雪球", "股票", "stock quote",
+  "web search", "research", "帮我安装".
 metadata:
   openclaw:
     homepage: https://github.com/Panniantong/Agent-Reach
@@ -246,6 +247,40 @@ print(result[0]["error"])  # 提示使用站内搜索或 Exa channel
 ```
 
 > No auth required. Results are public JSON. V2EX 节点名见 https://www.v2ex.com/planes
+
+## 雪球 / Xueqiu (public API)
+
+```python
+from agent_reach.channels.xueqiu import XueqiuChannel
+
+ch = XueqiuChannel()
+
+# 获取股票行情（符号格式：SH600519 沪市、SZ000858 深市、AAPL 美股、00700 港股）
+# 返回字段：symbol, name, current, percent, chg, high, low, open, last_close,
+#           volume, amount, market_capital, turnover_rate, pe_ttm, timestamp
+quote = ch.get_stock_quote("SH600519")
+print(f"{quote['name']} ({quote['symbol']}): {quote['current']} ({quote['percent']}%)")
+
+# 搜索股票
+# 返回字段：symbol, name, exchange
+stocks = ch.search_stock("茅台", limit=5)
+for s in stocks:
+    print(f"{s['name']} ({s['symbol']}) - {s['exchange']}")
+
+# 热门帖子
+# 返回字段：id, title, text(前200字), author, likes, url
+posts = ch.get_hot_posts(limit=10)
+for p in posts:
+    print(f"{p['author']}: {p['text'][:50]}... ({p['likes']} 赞)")
+
+# 热门股票（stock_type=10 人气榜，stock_type=12 关注榜）
+# 返回字段：symbol, name, current, percent, rank
+hot = ch.get_hot_stocks(limit=10, stock_type=10)
+for s in hot:
+    print(f"#{s['rank']} {s['name']} ({s['symbol']}): {s['current']} ({s['percent']}%)")
+```
+
+> 无需登录。自动获取会话 Cookie，所有公开 API 均可直接使用。
 
 ## RSS (feedparser)
 

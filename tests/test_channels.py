@@ -8,6 +8,7 @@ from urllib.error import URLError
 
 from agent_reach.channels import get_all_channels, get_channel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
+from agent_reach.channels.xueqiu import XueqiuChannel
 from agent_reach.channels.v2ex import V2EXChannel
 
 
@@ -325,6 +326,273 @@ class TestV2EXChannel:
         assert len(result) == 1
         assert "error" in result[0]
         assert "V2EX" in result[0]["error"]
+
+
+class TestXueqiuChannel:
+    def test_can_handle_xueqiu_urls(self):
+        ch = XueqiuChannel()
+        assert ch.can_handle("https://xueqiu.com/S/SH600519")
+        assert ch.can_handle("https://stock.xueqiu.com/v5/stock/batch/quote.json")
+        assert ch.can_handle("https://www.xueqiu.com/1234567890/12345")
+        assert not ch.can_handle("https://github.com/user/repo")
+        assert not ch.can_handle("https://v2ex.com/t/123")
+
+    def test_check_ok_when_api_reachable(self, monkeypatch):
+        import agent_reach.channels.xueqiu as xueqiu_mod
+
+        monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
+
+        fake_response_data = {
+            "data": {
+                "items": [
+                    {"quote": {"symbol": "SH000001", "name": "上证指数", "current": 3200.0}}
+                ]
+            }
+        }
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(fake_response_data).encode()
+
+        monkeypatch.setattr(xueqiu_mod._opener, "open", lambda req, timeout=None: FakeResponse())
+        status, msg = XueqiuChannel().check()
+        assert status == "ok"
+        assert "公开 API 可用" in msg
+
+    def test_check_warn_when_api_unreachable(self, monkeypatch):
+        import agent_reach.channels.xueqiu as xueqiu_mod
+
+        monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
+
+        def raise_error(req, timeout=None):
+            raise URLError("connection refused")
+
+        monkeypatch.setattr(xueqiu_mod._opener, "open", raise_error)
+        status, msg = XueqiuChannel().check()
+        assert status == "warn"
+        assert "失败" in msg
+
+    # ------------------------------------------------------------------ #
+    # get_stock_quote
+    # ------------------------------------------------------------------ #
+
+    def test_get_stock_quote(self, monkeypatch):
+        import agent_reach.channels.xueqiu as xueqiu_mod
+
+        monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
+
+        fake_data = {
+            "data": {
+                "items": [
+                    {
+                        "quote": {
+                            "symbol": "SH600519",
+                            "name": "贵州茅台",
+                            "current": 1800.0,
+                            "percent": 1.5,
+                            "chg": 26.6,
+                            "high": 1810.0,
+                            "low": 1770.0,
+                            "open": 1775.0,
+                            "last_close": 1773.4,
+                            "volume": 12345678,
+                            "amount": 22000000000,
+                            "market_capital": 2260000000000,
+                            "turnover_rate": 0.098,
+                            "pe_ttm": 30.5,
+                            "timestamp": 1700000000000,
+                        }
+                    }
+                ]
+            }
+        }
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(fake_data).encode()
+
+        monkeypatch.setattr(xueqiu_mod._opener, "open", lambda req, timeout=None: FakeResponse())
+        quote = XueqiuChannel().get_stock_quote("SH600519")
+        assert quote["symbol"] == "SH600519"
+        assert quote["name"] == "贵州茅台"
+        assert quote["current"] == 1800.0
+        assert quote["percent"] == 1.5
+        assert quote["volume"] == 12345678
+
+    # ------------------------------------------------------------------ #
+    # search_stock
+    # ------------------------------------------------------------------ #
+
+    def test_search_stock(self, monkeypatch):
+        import agent_reach.channels.xueqiu as xueqiu_mod
+
+        monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
+
+        fake_data = {
+            "stocks": [
+                {"code": "SH600519", "name": "贵州茅台", "exchange": "SHA"},
+                {"code": "SZ000858", "name": "五粮液", "exchange": "SZA"},
+            ]
+        }
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(fake_data).encode()
+
+        monkeypatch.setattr(xueqiu_mod._opener, "open", lambda req, timeout=None: FakeResponse())
+        results = XueqiuChannel().search_stock("茅台", limit=5)
+        assert len(results) == 2
+        assert results[0]["symbol"] == "SH600519"
+        assert results[0]["name"] == "贵州茅台"
+        assert results[1]["exchange"] == "SZA"
+
+    # ------------------------------------------------------------------ #
+    # get_hot_posts
+    # ------------------------------------------------------------------ #
+
+    def test_get_hot_posts_returns_list(self, monkeypatch):
+        import agent_reach.channels.xueqiu as xueqiu_mod
+
+        monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
+
+        fake_data = {
+            "data": {
+                "items": [
+                    {
+                        "original_status": {
+                            "id": 111,
+                            "title": "市场分析",
+                            "text": "<p>今天大盘走势&amp;分析</p>",
+                            "user": {"screen_name": "投资者A"},
+                            "like_count": 42,
+                            "target": "/1234567890/111",
+                        }
+                    },
+                    {
+                        "original_status": {
+                            "id": 222,
+                            "title": "",
+                            "text": "短评",
+                            "user": {"screen_name": "投资者B"},
+                            "like_count": 10,
+                            "target": "/9876543210/222",
+                        }
+                    },
+                ]
+            }
+        }
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(fake_data).encode()
+
+        monkeypatch.setattr(xueqiu_mod._opener, "open", lambda req, timeout=None: FakeResponse())
+        posts = XueqiuChannel().get_hot_posts(limit=10)
+        assert len(posts) == 2
+        assert posts[0]["id"] == 111
+        assert posts[0]["author"] == "投资者A"
+        assert posts[0]["likes"] == 42
+        assert "今天大盘走势&分析" in posts[0]["text"]  # HTML stripped
+        assert "<p>" not in posts[0]["text"]
+        assert posts[0]["url"] == "https://xueqiu.com/1234567890/111"
+
+    def test_get_hot_posts_respects_limit(self, monkeypatch):
+        import agent_reach.channels.xueqiu as xueqiu_mod
+
+        monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
+
+        fake_data = {
+            "data": {
+                "items": [
+                    {
+                        "original_status": {
+                            "id": i,
+                            "title": f"Post {i}",
+                            "text": f"Content {i}",
+                            "user": {"screen_name": f"User {i}"},
+                            "like_count": i,
+                            "target": f"/user/{i}",
+                        }
+                    }
+                    for i in range(10)
+                ]
+            }
+        }
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(fake_data).encode()
+
+        monkeypatch.setattr(xueqiu_mod._opener, "open", lambda req, timeout=None: FakeResponse())
+        posts = XueqiuChannel().get_hot_posts(limit=3)
+        assert len(posts) == 3
+
+    # ------------------------------------------------------------------ #
+    # get_hot_stocks
+    # ------------------------------------------------------------------ #
+
+    def test_get_hot_stocks(self, monkeypatch):
+        import agent_reach.channels.xueqiu as xueqiu_mod
+
+        monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
+
+        fake_data = {
+            "data": {
+                "items": [
+                    {"code": "SH600519", "name": "贵州茅台", "current": 1800.0, "percent": 1.5},
+                    {"code": "SZ000858", "name": "五粮液", "current": 160.0, "percent": -0.8},
+                    {"code": "SH601318", "name": "中国平安", "current": 45.0, "percent": 0.3},
+                ]
+            }
+        }
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(fake_data).encode()
+
+        monkeypatch.setattr(xueqiu_mod._opener, "open", lambda req, timeout=None: FakeResponse())
+        stocks = XueqiuChannel().get_hot_stocks(limit=10, stock_type=10)
+        assert len(stocks) == 3
+        assert stocks[0]["symbol"] == "SH600519"
+        assert stocks[0]["rank"] == 1
+        assert stocks[1]["percent"] == -0.8
+        assert stocks[2]["rank"] == 3
 
 
 class TestXiaoHongShuChannel:
