@@ -4,7 +4,7 @@ description: >
   Give your AI agent eyes to see the entire internet.
   Search and read 17 platforms: Twitter/X, Reddit, YouTube, GitHub, Bilibili,
   XiaoHongShu, Douyin, Weibo, WeChat Articles, Xiaoyuzhou Podcast, LinkedIn,
-  Instagram, V2EX, Xueqiu, RSS, Exa web search, and any web page.
+  V2EX, Xueqiu, RSS, Exa web search, and any web page.
   Zero config for 8 channels. Use when user asks to search, read, or interact
   on any supported platform, shares a URL, or asks to search the web.
   Triggers: "搜推特", "搜小红书", "看视频", "搜一下", "上网搜", "帮我查",
