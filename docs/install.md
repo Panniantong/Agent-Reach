@@ -94,6 +94,17 @@ Shows what would be done without making any changes.
 agent-reach doctor
 ```
 
+### Step 1.5: Install OpenClaw Skill (Optional but recommended)
+
+If you're using OpenClaw, install the skill for better integration:
+
+```bash
+mkdir -p ~/.openclaw/skills/agent-reach
+cp agent_reach/skill/SKILL.md ~/.openclaw/skills/agent-reach/
+```
+
+> This enables OpenClaw to understand Agent Reach commands. Without it, you'll need to manually describe the commands.
+
 ### Step 2: Fix what's broken
 
 `agent-reach doctor` shows you which channels are active and which aren't.
