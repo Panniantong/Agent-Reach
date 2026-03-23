@@ -30,6 +30,18 @@ class TestCLI:
         assert "Agent Reach" in captured.out
         assert "✅" in captured.out
 
+    def test_parse_twitter_cookie_input_separate_values(self):
+        auth_token, ct0 = cli._parse_twitter_cookie_input("token123 ct0abc")
+        assert auth_token == "token123"
+        assert ct0 == "ct0abc"
+
+    def test_parse_twitter_cookie_input_cookie_header(self):
+        auth_token, ct0 = cli._parse_twitter_cookie_input(
+            "auth_token=token123; ct0=ct0abc; other=value"
+        )
+        assert auth_token == "token123"
+        assert ct0 == "ct0abc"
+
 
 class TestCheckUpdateRetry:
     def test_retry_timeout_classification(self):
