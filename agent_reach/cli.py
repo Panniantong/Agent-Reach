@@ -271,11 +271,20 @@ def _install_skill():
     import importlib.resources
 
     # Determine skill install path
+    # Priority 1: OPENCLAW_HOME environment variable (if set)
+    # Priority 2: ~/.openclaw/skills (default)
+    # Priority 3: ~/.claude/skills (Claude Code)
+    # Priority 4: ~/.agents/skills (Generic agents)
     skill_dirs = [
         os.path.expanduser("~/.openclaw/skills"),   # OpenClaw
         os.path.expanduser("~/.claude/skills"),      # Claude Code (if exists)
         os.path.expanduser("~/.agents/skills"),      # Generic agents
     ]
+
+    # Insert OPENCLAW_HOME path at the beginning if environment variable is set
+    openclaw_home = os.environ.get("OPENCLAW_HOME")
+    if openclaw_home:
+        skill_dirs.insert(0, os.path.join(openclaw_home, ".openclaw", "skills"))
 
     installed = False
     for skill_dir in skill_dirs:
