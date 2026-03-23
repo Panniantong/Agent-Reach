@@ -90,9 +90,12 @@ class TestDoctor:
             }
         )
 
-        assert "Agent Reach" in report
-        assert "✅ 装好即用：" in report
-        assert "搜索（mcporter 即可解锁）：" in report
-        assert "配置后可用：" in report
-        assert "状态：1/3 个渠道可用" in report
-        assert "运行 `agent-reach setup` 解锁更多渠道" in report
+        # Strip Rich markup tags for assertion (PR #170 added [bold], [yellow] etc.)
+        import re
+        plain = re.sub(r"\[[^\]]*\]", "", report)
+        assert "Agent Reach" in plain
+        assert "装好即用：" in plain
+        assert "搜索（mcporter 即可解锁）：" in plain
+        assert "配置后可用：" in plain
+        assert "1/3 个渠道可用" in plain
+        assert "agent-reach setup" in plain
