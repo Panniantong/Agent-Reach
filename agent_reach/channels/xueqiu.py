@@ -3,9 +3,10 @@
 
 import http.cookiejar
 import json
+import os
 import re
 import urllib.request
-from typing import Any
+from typing import Any, Optional
 
 from .base import Channel
 
@@ -20,22 +21,55 @@ _opener = urllib.request.build_opener(
     urllib.request.HTTPCookieProcessor(_cookie_jar),
 )
 _cookies_initialized = False
+_configured_cookie: Optional[str] = None
 
 
-def _ensure_cookies() -> None:
-    """Visit xueqiu.com homepage once to obtain session cookies."""
-    global _cookies_initialized
+def _ensure_cookies(configured_cookie: Optional[str] = None) -> None:
+    """Initialize cookies for Xueqiu API access.
+
+    Priority:
+    1. Use configured cookie (xq_a_token) if provided
+    2. Otherwise, visit xueqiu.com homepage to obtain session cookies
+    """
+    global _cookies_initialized, _configured_cookie
+
+    if configured_cookie:
+        _configured_cookie = configured_cookie
+
     if _cookies_initialized:
         return
-    req = urllib.request.Request(_XUEQIU_HOME, headers={"User-Agent": _UA})
-    _opener.open(req, timeout=_TIMEOUT)
+
+    # If user configured a cookie, inject it into the jar
+    if _configured_cookie:
+        # Parse cookie string and add to jar
+        cookie_str = _configured_cookie
+        if not cookie_str.startswith("xq_a_token="):
+            cookie_str = f"xq_a_token={cookie_str}"
+
+        # Create a mock response to set the cookie
+        from http.client import HTTPMessage
+        resp = urllib.request.addinfourl(
+            None,
+            HTTPMessage(),
+            _XUEQIU_HOME,
+        )
+        resp.headers["Set-Cookie"] = f"{cookie_str}; Domain=.xueqiu.com; Path=/"
+        _cookie_jar.extract_cookies(resp, urllib.request.Request(_XUEQIU_HOME))
+    else:
+        # Fallback: visit homepage to get anonymous session cookies
+        req = urllib.request.Request(_XUEQIU_HOME, headers={"User-Agent": _UA})
+        _opener.open(req, timeout=_TIMEOUT)
+
     _cookies_initialized = True
 
 
-def _get_json(url: str) -> Any:
+def _get_json(url: str, configured_cookie: Optional[str] = None) -> Any:
     """Fetch *url* with Xueqiu session cookies and return parsed JSON."""
-    _ensure_cookies()
-    req = urllib.request.Request(url, headers={"User-Agent": _UA})
+    _ensure_cookies(configured_cookie)
+    headers = {"User-Agent": _UA}
+    if _configured_cookie:
+        headers["Cookie"] = _configured_cookie if _configured_cookie.startswith("xq_a_token=") else f"xq_a_token={_configured_cookie}"
+    req = urllib.request.Request(url, headers=headers)
     with _opener.open(req, timeout=_TIMEOUT) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
@@ -69,14 +103,21 @@ class XueqiuChannel(Channel):
     # ------------------------------------------------------------------ #
 
     def check(self, config=None):
+        # Get configured cookie from config
+        configured_cookie = None
+        if config:
+            configured_cookie = config.get("xueqiu_cookie") or config.get("xueqiu_token")
         try:
-            data = _get_json("https://stock.xueqiu.com/v5/stock/batch/quote.json?symbol=SH000001")
+            data = _get_json("https://stock.xueqiu.com/v5/stock/batch/quote.json?symbol=SH000001", configured_cookie)
             items = (data.get("data") or {}).get("items") or []
             if items:
-                return "ok", "公开 API 可用（行情、搜索、热帖、热股）"
+                cookie_hint = "（已配置 cookie）" if configured_cookie else "（匿名访问）"
+                return "ok", f"公开 API 可用{cookie_hint}"
             return "warn", "API 响应异常（返回数据为空）"
         except Exception as e:
-            return "warn", f"Xueqiu API 连接失败（可能需要代理）：{e}"
+            if configured_cookie:
+                return "warn", f"Xueqiu API 连接失败（cookie 可能过期）：{e}"
+            return "warn", f"Xueqiu API 连接失败（需要配置 xueqiu_cookie）：{e}"
 
     # ------------------------------------------------------------------ #
     # Data-fetching methods
