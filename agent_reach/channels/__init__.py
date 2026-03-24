@@ -15,6 +15,7 @@ from .reddit import RedditChannel
 from .rss import RSSChannel
 from .bilibili import BilibiliChannel
 from .exa_search import ExaSearchChannel
+from .tavily_search import TavilySearchChannel
 from .xiaohongshu import XiaoHongShuChannel
 from .douyin import DouyinChannel
 from .linkedin import LinkedInChannel
@@ -42,6 +43,7 @@ ALL_CHANNELS: List[Channel] = [
     XueqiuChannel(),
     RSSChannel(),
     ExaSearchChannel(),
+    TavilySearchChannel(),
     WebChannel(),
 ]
 
