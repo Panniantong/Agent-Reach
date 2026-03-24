@@ -95,7 +95,7 @@ class TestDoctor:
         plain = re.sub(r"\[[^\]]*\]", "", report)
         assert "Agent Reach" in plain
         assert "装好即用：" in plain
-        assert "搜索（mcporter 即可解锁）：" in plain
+        assert "搜索（需 API Key / mcporter）：" in plain
         assert "配置后可用：" in plain
         assert "1/3 个渠道可用" in plain
         assert "agent-reach setup" in plain

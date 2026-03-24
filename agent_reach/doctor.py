@@ -55,7 +55,7 @@ def format_report(results: Dict[str, dict]) -> str:
     tier1 = {k: r for k, r in results.items() if r["tier"] == 1}
     if tier1:
         lines.append("")
-        lines.append("[bold]搜索（mcporter 即可解锁）：[/bold]")
+        lines.append("[bold]搜索（需 API Key / mcporter）：[/bold]")
         for key, r in tier1.items():
             name_msg = f"[bold]{escape(r['name'])}[/bold] — {escape(r['message'])}"
             if r["status"] == "ok":
