@@ -23,6 +23,8 @@ from .weibo import WeiboChannel
 from .xiaoyuzhou import XiaoyuzhouChannel
 from .v2ex import V2EXChannel
 from .xueqiu import XueqiuChannel
+from .instagram import InstagramChannel
+from .tiktok import TikTokChannel
 
 
 
@@ -40,6 +42,8 @@ ALL_CHANNELS: List[Channel] = [
     XiaoyuzhouChannel(),
     V2EXChannel(),
     XueqiuChannel(),
+    InstagramChannel(),
+    TikTokChannel(),
     RSSChannel(),
     ExaSearchChannel(),
     WebChannel(),
