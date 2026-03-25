@@ -118,6 +118,7 @@ def test_channel_can_handle_contract():
         "weibo": "https://weibo.com/u/1749127163",
         "rss": "https://example.com/feed.xml",
         "xueqiu": "https://xueqiu.com/S/SH600519",
+        "toutiao": "https://so.toutiao.com/search?keyword=test",
         "exa_search": "https://example.com",
         "web": "https://example.com",
     }
