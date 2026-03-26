@@ -359,6 +359,8 @@ Yes! Agent Reach is an installer + configuration tool — any AI coding agent th
 
 [OpenClaw for Enterprise](https://github.com/littleben/openclaw-for-enterprise) — 企业级 OpenClaw 多用户部署方案，飞书里直接用 AI，容器隔离，一条命令管理。
 
+[腾讯云 OpenClaw](https://www.tencentcloud.com/act/pro/intl-openclaw?referral_code=G76Y819A&lang=zh&pg=) — 在腾讯云Lighthouse秒级部署OpenClaw全能助手，可通过对话丝滑接入Agent Reach，给你的OpenClaw一键装上互联网能力。
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Panniantong/Agent-Reach&type=Date&v=20260309)](https://star-history.com/#Panniantong/Agent-Reach&Date)
