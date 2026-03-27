@@ -294,6 +294,33 @@ Agent Reach integrates with xiaohongshu-mcp (runs in Docker). After setup, use `
 Install douyin-mcp-server, then your agent can use `mcporter call 'douyin.parse_douyin_video_info(share_link: "share_url")'` to parse video info and get watermark-free download links. No login required — just share the Douyin link. See https://github.com/yzfly/douyin-mcp-server
 </details>
 
+<details>
+<summary><strong>How to extract scripts from both Douyin and XiaoHongShu with one MCP?</strong></summary>
+
+If you want one MCP server that can handle:
+
+- Douyin videos
+- XiaoHongShu video notes
+- XiaoHongShu image notes
+
+and directly write `script.md` + `info.json`, you can point the existing `douyin` mcporter alias at:
+
+- https://github.com/JNHFlow21/social-post-extractor-mcp
+
+It keeps backward compatibility with:
+
+- `parse_douyin_video_info`
+- `get_douyin_download_link`
+- `extract_douyin_text`
+
+and adds unified tools:
+
+- `parse_social_post_info`
+- `extract_social_post_script`
+
+This is useful when your agent workflow is “paste a link, get a script file”.
+</details>
+
 ---
 
 ## Credits

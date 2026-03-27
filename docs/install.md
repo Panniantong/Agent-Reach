@@ -244,6 +244,45 @@ mcporter config add douyin http://localhost:18070/mcp
 >
 > 详见 https://github.com/yzfly/douyin-mcp-server
 
+**可选实现：Douyin + XiaoHongShu unified extractor**
+> "如果你想把抖音和小红书统一成一个 MCP，并直接输出 `script.md` 和 `info.json`，可以改用 social-post-extractor-mcp。"
+
+适用场景：
+
+- 抖音视频转文字稿
+- 小红书视频笔记转文字稿
+- 小红书图文笔记正文 + 图片文字提取
+
+兼容性：
+
+- 仍然可以注册成 `douyin` 这个 mcporter server 名称
+- 兼容旧工具名 `parse_douyin_video_info` / `get_douyin_download_link` / `extract_douyin_text`
+- 同时新增 `parse_social_post_info` / `extract_social_post_script`
+
+示例配置：
+
+```bash
+git clone https://github.com/JNHFlow21/social-post-extractor-mcp.git
+cd social-post-extractor-mcp
+uv sync
+
+mcporter config add douyin \
+  --command /bin/zsh \
+  --arg -lc \
+  --arg "cd '$PWD' && exec '.venv/bin/python' -m social_post_extractor_mcp" \
+  --env ASR_PROVIDER=bailian \
+  --env ASR_MODEL=paraformer-v2 \
+  --env VISION_PROVIDER=bailian \
+  --env VISION_MODEL=qwen3-vl-flash \
+  --env CLEAN_PROVIDER=bailian \
+  --env CLEAN_MODEL=qwen-flash \
+  --env BAILIAN_API_KEY=YOUR_BAILIAN_API_KEY
+```
+
+> 这个实现更适合“把链接直接交给 Agent，然后拿到脚本文件”的工作流。
+>
+> 详见 https://github.com/JNHFlow21/social-post-extractor-mcp
+
 **LinkedIn (可选 — linkedin-scraper-mcp):**
 > "LinkedIn 基本内容可通过 Jina Reader 读取。完整功能（Profile 详情、职位搜索）需要 linkedin-scraper-mcp。"
 

@@ -202,6 +202,32 @@ channels/
 
 > 📌 这些都是「当前选型」。不满意？换掉对应文件就行。这正是脚手架的意义。
 
+### 抖音 / 小红书脚本提取的可选实现
+
+如果你不只是想“解析抖音视频信息”，还想统一处理：
+
+- 抖音视频脚本提取
+- 小红书视频笔记脚本提取
+- 小红书图文笔记正文 + 图片文字提取
+- 固定输出 `script.md` 和 `info.json`
+
+可以把 `douyin` 这个 mcporter alias 指向另一个兼容实现：
+
+- [social-post-extractor-mcp](https://github.com/JNHFlow21/social-post-extractor-mcp)
+
+这个实现保留了旧工具名兼容性：
+
+- `parse_douyin_video_info`
+- `get_douyin_download_link`
+- `extract_douyin_text`
+
+同时新增统一工具：
+
+- `parse_social_post_info`
+- `extract_social_post_script`
+
+所以从 Agent Reach 的视角看，它依然只是一个 `mcporter` 里的 `douyin` server，只是能力更完整。
+
 ---
 
 ## 安全性
