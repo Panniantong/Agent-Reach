@@ -50,6 +50,28 @@ def test_youtube_warns_when_node_only_and_no_config(monkeypatch, tmp_path):
     assert "--js-runtimes" in message
 
 
+def test_youtube_warns_with_windows_specific_fix_command(monkeypatch, tmp_path):
+    """Windows guidance should use a PowerShell-style yt-dlp config command."""
+    from agent_reach.channels.youtube import YouTubeChannel
+
+    def fake_which(cmd):
+        if cmd == "yt-dlp":
+            return "C:/yt-dlp.exe"
+        if cmd == "node":
+            return "C:/node.exe"
+        return None
+
+    monkeypatch.setattr("shutil.which", fake_which)
+    monkeypatch.setattr("agent_reach.utils.paths.sys.platform", "win32")
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData" / "Roaming"))
+
+    ch = YouTubeChannel()
+    status, message = ch.check()
+    assert status == "warn"
+    assert "Select-String" in message
+    assert "--js-runtimes node" in message
+
+
 def test_youtube_ok_when_deno_installed(monkeypatch):
     """YouTube should return ok when Deno is installed (no config needed)."""
     from agent_reach.channels.youtube import YouTubeChannel
@@ -81,19 +103,25 @@ def test_douyin_check_does_not_call_with_invalid_url(monkeypatch, tmp_path):
         calls.append(cmd)
         # Simulate mcporter config list returning douyin
         if "config" in cmd and "list" in cmd:
+
             class R:
                 stdout = "douyin  http://localhost:18070/mcp"
                 returncode = 0
+
             return R()
         # Simulate mcporter list douyin returning tools
         if "list" in cmd and "douyin" in cmd:
+
             class R:
                 stdout = "parse_douyin_video_info"
                 returncode = 0
+
             return R()
         return original_run(cmd, **kwargs)
 
-    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/mcporter" if cmd == "mcporter" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda cmd: "/usr/bin/mcporter" if cmd == "mcporter" else None
+    )
     monkeypatch.setattr("subprocess.run", tracking_run)
 
     ch = DouyinChannel()
