@@ -35,23 +35,30 @@ mcporter call 'douyin.extract_douyin_text(share_link: "https://v.douyin.com/xxx/
 
 > **无需登录**
 
-## Twitter/X (bird CLI)
+## Twitter/X (twitter-cli)
 
 ```bash
 # 搜索推文
-bird search "query" -n 10
+twitter search "query" --limit 10
 
-# 读取单条推文 (支持 /status/ 和 /article/ URL)
-bird read URL_OR_ID
+# 读取单条推文（含回复）
+twitter tweet URL_OR_ID
+
+# 读取长文 / X Article
+twitter article URL_OR_ID
 
 # 用户时间线
-bird user-tweets @username -n 20
+twitter user-posts @username --limit 20
 
-# 读取完整 thread
-bird thread URL_OR_ID
+# 用户资料
+twitter user @username
+
+# 首页时间线
+twitter feed --limit 20
 ```
 
-> **需要配置**: `agent-reach configure twitter-auth ...` 或通过环境变量配置。
+> **安装**: `pipx install twitter-cli` 或 `uv tool install twitter-cli`
+> **认证**: 设置 `TWITTER_AUTH_TOKEN` + `TWITTER_CT0` 环境变量，或确保浏览器已登录 x.com。
 
 ## 微博 / Weibo
 

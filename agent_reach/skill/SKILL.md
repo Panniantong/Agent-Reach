@@ -58,7 +58,7 @@ curl -s "https://r.jina.ai/URL"
 gh search repos "query" --sort stars --limit 10
 
 # Twitter 搜索
-bird search "query" -n 10
+twitter search "query" --limit 10
 
 # YouTube/B站字幕
 yt-dlp --write-sub --skip-download -o "/tmp/%(id)s" "URL"
