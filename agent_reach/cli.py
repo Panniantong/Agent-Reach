@@ -334,12 +334,17 @@ def _install_skill():
                 shutil.rmtree(target)
             os.makedirs(target, exist_ok=True)
 
-            # Get skill directory from package
-            skill_pkg = importlib.resources.files("agent_reach").joinpath("skill")
+            # Get skill directory from package (with fallback for editable installs)
+            try:
+                skill_pkg = importlib.resources.files("agent_reach").joinpath("skill")
+                skill_md = skill_pkg.joinpath("SKILL.md").read_text(encoding="utf-8")
+            except Exception:
+                from pathlib import Path
+                skill_pkg = Path(__file__).resolve().parent / "skill"
+                skill_md = (skill_pkg / "SKILL.md").read_text(encoding="utf-8")
 
             # Copy SKILL.md
-            skill_md = skill_pkg.joinpath("SKILL.md").read_text()
-            with open(os.path.join(target, "SKILL.md"), "w") as f:
+            with open(os.path.join(target, "SKILL.md"), "w", encoding="utf-8") as f:
                 f.write(skill_md)
 
             # Copy references/ directory
@@ -348,9 +353,10 @@ def _install_skill():
             os.makedirs(refs_target, exist_ok=True)
 
             for ref_file in refs_pkg.iterdir():
-                if ref_file.suffix == ".md":
-                    content = ref_file.read_text()
-                    with open(os.path.join(refs_target, ref_file.name), "w") as f:
+                name = ref_file.name if hasattr(ref_file, 'name') else str(ref_file).split('/')[-1]
+                if name.endswith(".md"):
+                    content = ref_file.read_text(encoding="utf-8") if hasattr(ref_file, 'read_text') else ref_file.read_text()
+                    with open(os.path.join(refs_target, name), "w", encoding="utf-8") as f:
                         f.write(content)
 
             return True
