@@ -871,30 +871,24 @@ def _install_mcporter():
     except Exception:
         print("  [!]  Could not configure Exa. Run manually: mcporter config add exa https://mcp.exa.ai/mcp")
 
-    # Check XiaoHongShu MCP (only if server is running)
-    try:
-        r = subprocess.run(
-            ["mcporter", "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=5
-        )
-        if "xiaohongshu" in r.stdout:
-            print("  ✅ XiaoHongShu MCP already configured")
-        else:
-            # Check if XHS MCP server is running on localhost:18060
-            import requests
+    # Check XiaoHongShu CLI
+    if shutil.which("xhs"):
+        print("  ✅ xhs-cli already installed (xiaohongshu-cli)")
+    else:
+        if shutil.which("pipx"):
             try:
-                requests.get("http://localhost:18060/", timeout=3)
                 subprocess.run(
-                    ["mcporter", "config", "add", "xiaohongshu", "http://localhost:18060/mcp"],
-                    capture_output=True, encoding="utf-8", errors="replace", timeout=10,
+                    ["pipx", "install", "xiaohongshu-cli"],
+                    capture_output=True, encoding="utf-8", errors="replace", timeout=120,
                 )
-                print("  ✅ XiaoHongShu MCP auto-detected and configured")
+                if shutil.which("xhs"):
+                    print("  ✅ xhs-cli installed (run `xhs login` to authenticate)")
+                else:
+                    print("  -- xhs-cli install failed (optional). Run: pipx install xiaohongshu-cli")
             except Exception:
-                print("  -- XiaoHongShu MCP not detected (optional)")
-                print("     Install: docker run -d --name xiaohongshu-mcp -p 18060:18060 xpzouying/xiaohongshu-mcp")
-                print("     Then:    mcporter config add xiaohongshu http://localhost:18060/mcp")
-                print("     Repo:    https://github.com/xpzouying/xiaohongshu-mcp")
-    except Exception:
-        pass
+                print("  -- xhs-cli install failed (optional). Run: pipx install xiaohongshu-cli")
+        else:
+            print("  -- xhs-cli requires pipx (optional). Run: pipx install xiaohongshu-cli")
 
 
 def _install_mcporter_safe():

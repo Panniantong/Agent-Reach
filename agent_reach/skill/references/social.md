@@ -2,23 +2,35 @@
 
 小红书、抖音、Twitter/X、微博、B站、V2EX、Reddit。
 
-## 小红书 / XiaoHongShu
+## 小红书 / XiaoHongShu (xhs-cli)
 
 ```bash
 # 搜索笔记
-mcporter call 'xiaohongshu.search_feeds(keyword: "query")'
+xhs search "query"
 
-# 获取笔记详情
-mcporter call 'xiaohongshu.get_feed_detail(feed_id: "xxx", xsec_token: "yyy")'
+# 阅读笔记详情
+xhs read NOTE_ID_OR_URL
 
-# 获取笔记详情 + 评论
-mcporter call 'xiaohongshu.get_feed_detail(feed_id: "xxx", xsec_token: "yyy", load_all_comments: true)'
+# 查看评论
+xhs comments NOTE_ID_OR_URL
 
-# 发布内容
-mcporter call 'xiaohongshu.publish_content(title: "标题", content: "正文", images: ["/path/img.jpg"], tags: ["tag"])'
+# 浏览热门
+xhs hot
+
+# 推荐 feed
+xhs feed
+
+# 用户主页
+xhs user USER_ID
+xhs user-posts USER_ID
+
+# 发帖/互动
+xhs post --title "标题" --content "正文" --images img1.jpg img2.jpg
+xhs like NOTE_ID
+xhs comment NOTE_ID "评论内容"
 ```
 
-> **需要登录**: 使用 Cookie-Editor 浏览器插件导出 cookies。运行 `agent-reach doctor` 检查状态。
+> **安装**: `pipx install xiaohongshu-cli`，然后 `xhs login`（自动从浏览器提取 Cookie）。
 
 ## 抖音 / Douyin
 

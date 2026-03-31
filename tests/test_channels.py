@@ -649,19 +649,32 @@ class TestXueqiuChannel:
 
 
 class TestXiaoHongShuChannel:
-    def test_reports_ok_when_server_health_is_ok(self, monkeypatch):
-        monkeypatch.setattr(shutil, "which", lambda _: "/opt/homebrew/bin/mcporter")
+    def test_reports_ok_when_cli_authenticated(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/xhs")
 
         def fake_run(cmd, **kwargs):
-            if cmd[:4] == ["/opt/homebrew/bin/mcporter", "config", "get", "xiaohongshu"]:
-                return subprocess.CompletedProcess(cmd, 0, '{"name":"xiaohongshu"}', "")
-            if cmd[:4] == ["/opt/homebrew/bin/mcporter", "list", "xiaohongshu", "--json"]:
-                return subprocess.CompletedProcess(cmd, 0, '{"status": "ok"}', "")
-            raise AssertionError(f"unexpected command: {cmd}")
+            return subprocess.CompletedProcess(cmd, 0, "ok: true\nusername: testuser\n", "")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
 
-        assert XiaoHongShuChannel().check() == (
-            "ok",
-            "MCP 已连接（阅读、搜索、发帖、评论、点赞）",
-        )
+        status, msg = XiaoHongShuChannel().check()
+        assert status == "ok"
+        assert "完整可用" in msg
+
+    def test_reports_warn_when_not_authenticated(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/xhs")
+
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 1, "", "ok: false\nerror:\n  code: not_authenticated\n")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        status, msg = XiaoHongShuChannel().check()
+        assert status == "warn"
+        assert "xhs login" in msg
+
+    def test_reports_off_when_not_installed(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: None)
+        status, msg = XiaoHongShuChannel().check()
+        assert status == "off"
+        assert "xiaohongshu-cli" in msg
