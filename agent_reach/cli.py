@@ -243,9 +243,9 @@ def _cmd_install(args):
     # Environment-specific advice
     if env == "server":
         print()
-        print("Tip: Reddit and Bilibili block server IPs.")
-        print("   Reddit search still works via Exa (free).")
-        print("   For full access: agent-reach configure proxy http://user:pass@ip:port")
+        print("Tip: Bilibili may block server IPs.")
+        print("   Reddit: rdt-cli works without proxy (pipx install rdt-cli).")
+        print("   For Bilibili full access: agent-reach configure proxy http://user:pass@ip:port")
         print("   Cheap option: https://www.webshare.io ($1/month)")
 
     # Test channels
@@ -1000,7 +1000,7 @@ def _cmd_configure(args):
     if args.key == "proxy":
         config.set("bilibili_proxy", value)
         print(f"✅ Proxy configured for Bilibili!")
-        print("  Note: Reddit 已改为通过 Exa 访问，无需代理。")
+        print("  Note: Reddit 已改为通过 rdt-cli 访问，无需代理。")
 
     elif args.key == "twitter-cookies":
         # Accept two formats:
@@ -1433,9 +1433,9 @@ def _cmd_setup():
             print("  跳过。公开 API 也能用")
     print()
 
-    # Step 3: Reddit — no config needed (uses Exa)
-    print("【信息】Reddit — 通过 Exa 搜索和阅读，无需配置")
-    print("  搜索和阅读 Reddit 内容已通过 Exa 自动完成，免费无需代理。")
+    # Step 3: Reddit — rdt-cli
+    print("【信息】Reddit — 通过 rdt-cli 搜索和阅读，无需配置")
+    print("  安装：pipx install rdt-cli")
     print()
 
     # Step 4: Groq (Whisper)

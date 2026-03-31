@@ -142,20 +142,23 @@ user = ch.get_user("Livid")
 
 > **节点列表**: https://www.v2ex.com/planes
 
-## Reddit (通过 Exa)
-
-Reddit 封锁了几乎所有非浏览器访问（包括代理 IP）。搜索和阅读全部通过 Exa 完成，免费且无需代理。
-
-### 搜索 Reddit 内容
+## Reddit (rdt-cli)
 
 ```bash
-mcporter call 'exa.web_search_exa(query: "your search query", numResults: 5, includeDomains: ["reddit.com"])'
+# 搜索帖子
+rdt search "query" --limit 10
+
+# 读帖子全文 + 评论
+rdt read POST_ID
+
+# 浏览 subreddit
+rdt sub python --limit 20
+
+# 浏览热门
+rdt popular --limit 10
+
+# 浏览 /r/all
+rdt all --limit 10
 ```
 
-### 阅读完整帖子和评论
-
-```bash
-mcporter call 'exa.crawling_exa(urls: ["https://www.reddit.com/r/SUBREDDIT/comments/POST_ID/TITLE/"], maxCharacters: 10000)'
-```
-
-> **零配置**: 只需安装 Exa MCP（`agent-reach install --env=auto` 自动完成）。无需代理，无需 API Key。
+> **安装**: `pipx install rdt-cli`。无需登录即可搜索和阅读。

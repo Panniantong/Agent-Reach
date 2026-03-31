@@ -63,11 +63,11 @@ twitter search "query" --limit 10
 # YouTube/B站字幕
 yt-dlp --write-sub --skip-download -o "/tmp/%(id)s" "URL"
 
-# Reddit 搜索（通过 Exa，免费无需代理）
-mcporter call 'exa.web_search_exa(query: "query", numResults: 5, includeDomains: ["reddit.com"])'
+# Reddit 搜索
+rdt search "query" --limit 10
 
-# Reddit 读帖（通过 Exa）
-mcporter call 'exa.crawling_exa(urls: ["https://www.reddit.com/r/.../comments/.../"], maxCharacters: 10000)'
+# Reddit 读帖 + 评论
+rdt read POST_ID
 
 # V2EX 热门
 curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1.0"
