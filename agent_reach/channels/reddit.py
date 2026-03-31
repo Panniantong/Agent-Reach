@@ -9,7 +9,7 @@ from .base import Channel
 class RedditChannel(Channel):
     name = "reddit"
     description = "Reddit 帖子和评论"
-    backends = ["rdt-cli"]
+    backends = ["rdt-cli", "Exa", "Tavily"]
     tier = 0
 
     def can_handle(self, url: str) -> bool:
@@ -27,5 +27,6 @@ class RedditChannel(Channel):
             "需要安装 rdt-cli：\n"
             "  pipx install rdt-cli\n"
             "或：\n"
-            "  uv tool install rdt-cli"
+            "  uv tool install rdt-cli\n"
+            "搜索也可使用 Exa（免费）或 Tavily（需 API Key）作为替代"
         )

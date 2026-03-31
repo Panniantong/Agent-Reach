@@ -21,6 +21,7 @@ class Config:
     # Feature → required config keys
     FEATURE_REQUIREMENTS = {
         "exa_search": ["exa_api_key"],
+        "tavily_search": ["tavily_api_key"],
         "twitter_xreach": ["twitter_auth_token", "twitter_ct0"],  # legacy key name; used by bird CLI
         "groq_whisper": ["groq_api_key"],
         "github_token": ["github_token"],
