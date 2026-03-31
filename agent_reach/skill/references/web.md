@@ -31,28 +31,27 @@ mcporter call 'web-reader.webReader(url: "https://example.com", return_format: "
 
 ## 微信公众号 / WeChat Articles
 
-**注意**: 微信公众号文章无法用 Jina Reader 或 curl 直接读取，必须使用专用工具。
+### 搜索公众号文章（通过 Exa）
 
-### 搜索文章 (miku_ai)
-
-```python
-python3 -c "
-import asyncio
-from miku_ai import get_wexin_article
-async def s():
-    for a in await get_wexin_article('query', 5):
-        print(f'{a[\"title\"]} | {a[\"url\"]}')
-asyncio.run(s())
-"
+```bash
+# 搜索微信公众号文章
+mcporter call 'exa.web_search_exa(query: "搜索关键词", numResults: 5, includeDomains: ["mp.weixin.qq.com"])'
 ```
 
-### 读取文章 (Camoufox - 绕过微信反爬)
+### 阅读公众号文章全文（通过 Exa）
+
+```bash
+# 抓取文章全文
+mcporter call 'exa.crawling_exa(urls: ["https://mp.weixin.qq.com/s/ARTICLE_ID"], maxCharacters: 10000)'
+```
+
+### 可选：Camoufox 阅读（反爬更强）
 
 ```bash
 cd ~/.agent-reach/tools/wechat-article-for-ai && python3 main.py "https://mp.weixin.qq.com/s/ARTICLE_ID"
 ```
 
-> **重要**: 微信文章必须用 Camoufox 读取，其他方法会失败。
+> **注意**: Jina Reader 无法读取微信文章（被 CAPTCHA 拦截），推荐用 Exa。
 
 ## RSS (feedparser)
 
@@ -72,6 +71,6 @@ for e in feedparser.parse('FEED_URL').entries[:5]:
 |-----|---------|
 | 通用网页 | Jina Reader (`curl r.jina.ai`) |
 | 需要图片/格式控制 | web-reader MCP |
-| 微信公众号 | Camoufox (读取) + miku_ai (搜索) |
+| 微信公众号 | Exa (搜索+阅读) / Camoufox (可选阅读) |
 | RSS 订阅 | feedparser |
 | 微博/知乎等 | Jina Reader |

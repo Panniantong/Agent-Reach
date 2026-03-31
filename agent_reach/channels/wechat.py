@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """WeChat Official Account articles — read and search.
 
-Read:   wechat-article-for-ai (Camoufox stealth browser)
-Search: miku_ai (Sogou WeChat search)
+Read:   Exa crawling (primary) / Camoufox stealth browser (optional)
+Search: Exa web_search with includeDomains mp.weixin.qq.com
 """
 
 import shutil
@@ -10,11 +10,25 @@ import subprocess
 from .base import Channel
 
 
+def _exa_available() -> bool:
+    mcporter = shutil.which("mcporter")
+    if not mcporter:
+        return False
+    try:
+        r = subprocess.run(
+            [mcporter, "config", "list"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return "exa" in r.stdout.lower()
+    except Exception:
+        return False
+
+
 class WeChatChannel(Channel):
     name = "wechat"
     description = "微信公众号文章"
-    backends = ["wechat-article-for-ai (Camoufox)", "miku_ai (搜狗搜索)"]
-    tier = 2
+    backends = ["Exa via mcporter (搜索+阅读)", "Camoufox (可选阅读)"]
+    tier = 0
 
     def can_handle(self, url: str) -> bool:
         from urllib.parse import urlparse
@@ -22,36 +36,28 @@ class WeChatChannel(Channel):
         return "mp.weixin.qq.com" in d or "weixin.qq.com" in d
 
     def check(self, config=None):
-        has_read = False
-        has_search = False
-
+        has_exa = _exa_available()
+        has_camoufox = False
         try:
             import camoufox  # noqa: F401
-            has_read = True
+            has_camoufox = True
         except ImportError:
             pass
 
-        try:
-            import miku_ai  # noqa: F401
-            has_search = True
-        except ImportError:
-            pass
-
-        if has_read and has_search:
-            return "ok", "完整可用（搜索 + 阅读公众号文章）"
-        elif has_read:
-            return "ok", "可阅读公众号文章（URL → Markdown）。安装 miku_ai 可解锁搜索：pip install miku_ai"
-        elif has_search:
+        if has_exa and has_camoufox:
+            return "ok", "完整可用（Exa 搜索 + Exa/Camoufox 阅读公众号文章）"
+        elif has_exa:
+            return "ok", (
+                "通过 Exa 搜索和阅读微信公众号文章（免费，无需额外配置）。"
+                "可选安装 Camoufox 获得更好的全文阅读效果。"
+            )
+        elif has_camoufox:
             return "warn", (
-                "可搜索公众号文章但无法阅读全文。安装阅读工具：\n"
-                "  pip install camoufox[geoip] markdownify beautifulsoup4 httpx mcp"
+                "Camoufox 可阅读公众号文章，但搜索功能需要 Exa。"
+                "运行 `agent-reach install --env=auto` 安装 Exa。"
             )
         else:
             return "off", (
-                "需要安装微信公众号工具：\n"
-                "  # 阅读（URL → Markdown）：\n"
-                "  pip install camoufox[geoip] markdownify beautifulsoup4 httpx mcp\n"
-                "  # 搜索（关键词 → 文章列表）：\n"
-                "  pip install miku_ai\n"
-                "  详见 https://github.com/bzd6661/wechat-article-for-ai"
+                "需要 mcporter + Exa MCP 来搜索和阅读微信公众号文章。\n"
+                "运行 `agent-reach install --env=auto` 安装。"
             )
