@@ -16,17 +16,6 @@
 
 ---
 
-## 开发快速启动
-
-在本地开发和运行测试前，请先在项目根目录执行：
-
-```bash
-pip install -e .
-pytest -q
-```
-
-这将避免出现 `ModuleNotFoundError: No module named 'agent_reach'`。
-
 ## 为什么需要 Agent Reach？
 
 AI Agent 已经能帮你写代码、改文档、管项目——但你让它去网上找点东西，它就抓瞎了：
