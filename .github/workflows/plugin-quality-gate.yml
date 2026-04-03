@@ -1,0 +1,20 @@
+name: Plugin Quality Gate
+
+on:
+  pull_request:
+    paths:
+      - ".codex-plugin/**"
+      - "skills/**"
+      - ".mcp.json"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Codex plugin quality gate
+        uses: hashgraph-online/hol-codex-plugin-scanner-action@v1
+        with:
+          plugin_dir: "."
+          min_score: 80
+          fail_on_severity: high
