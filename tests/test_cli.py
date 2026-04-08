@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 """Tests for Agent Reach CLI."""
 
+from pathlib import Path
 import pytest
 import requests
+import subprocess
+from types import SimpleNamespace
 from unittest.mock import patch
 import agent_reach.cli as cli
 from agent_reach.cli import main
+from agent_reach.config import Config
 
 
 class TestCLI:
@@ -23,7 +27,9 @@ class TestCLI:
                 main()
         assert exc_info.value.code == 0
 
-    def test_doctor_runs(self, capsys):
+    def test_doctor_runs(self, capsys, monkeypatch, tmp_path):
+        monkeypatch.setattr(Config, "CONFIG_DIR", Path(tmp_path) / ".agent-reach")
+        monkeypatch.setattr(Config, "CONFIG_FILE", Path(tmp_path) / ".agent-reach" / "config.yaml")
         with patch("sys.argv", ["agent-reach", "doctor"]):
             main()
         captured = capsys.readouterr()
@@ -89,7 +95,7 @@ class TestCheckUpdateRetry:
 
         sequence = [
             R(429, headers={"Retry-After": "3"}),
-            R(200, payload={"tag_name": "v1.4.0"}),
+            R(200, payload={"tag_name": "v1.3.0"}),
         ]
 
         with patch("requests.get", side_effect=sequence):
@@ -124,3 +130,48 @@ class TestCheckUpdateRetry:
         assert result == "error"
         assert "网络超时" in captured.out
         assert "已重试 3 次" in captured.out
+
+
+class TestCliXianyuFlows:
+    def test_install_mcporter_mentions_optional_xianyu_setup(self, monkeypatch, capsys):
+        def fake_which(cmd):
+            return f"/usr/bin/{cmd}" if cmd in {"mcporter", "npx"} else None
+
+        def fake_run(cmd, **kwargs):
+            if cmd == ["mcporter", "config", "list"]:
+                return subprocess.CompletedProcess(cmd, 0, "exa\n", "")
+            raise AssertionError(f"unexpected command: {cmd}")
+
+        monkeypatch.setattr("shutil.which", fake_which)
+        monkeypatch.setattr("subprocess.run", fake_run)
+
+        cli._install_mcporter()
+
+        captured = capsys.readouterr()
+        assert "Xianyu MCP not configured yet" in captured.out
+        assert "cookies/session" in captured.out
+
+    def test_uninstall_removes_xianyu_mcporter_entries(self, monkeypatch, capsys):
+        commands = []
+
+        monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/mcporter" if cmd == "mcporter" else None)
+        monkeypatch.setattr("os.path.isdir", lambda path: False)
+        monkeypatch.setattr("os.path.expanduser", lambda path: path)
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            if cmd == ["mcporter", "list"]:
+                return subprocess.CompletedProcess(cmd, 0, "exa\nxianyu\ngoofish\n", "")
+            if cmd[:3] == ["mcporter", "config", "remove"]:
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            raise AssertionError(f"unexpected command: {cmd}")
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+
+        cli._cmd_uninstall(SimpleNamespace(dry_run=False, keep_config=False))
+
+        captured = capsys.readouterr()
+        assert "Removed mcporter entry: xianyu" in captured.out
+        assert "Removed mcporter entry: goofish" in captured.out
+        assert ["mcporter", "config", "remove", "xianyu"] in commands
+        assert ["mcporter", "config", "remove", "goofish"] in commands

@@ -20,7 +20,7 @@ Copy this to your AI Agent:
 
 ### Goal
 
-Install Agent Reach and all upstream tools so your user's agent has full internet access. After installation, you'll use the upstream tools directly (twitter-cli, rdt-cli, xhs-cli, yt-dlp, mcporter, gh CLI, etc.) — Agent Reach is just the installer and health checker.
+Install Agent Reach and all upstream tools so your user's agent has full internet access. After installation, you'll use the upstream tools directly (bird CLI, yt-dlp, mcporter, gh CLI, etc.) — Agent Reach is just the installer and health checker.
 
 ### ⚠️ Boundaries
 
@@ -46,7 +46,9 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 
 **Why?** If you clone repos or create files in the workspace, it pollutes the user's project directory and can break their agent over time. Keep the workspace clean.
 
-### Step 1: Install the basics
+### Step 1: Install
+
+**Default (fully automatic):**
 
 ```bash
 # 推荐：pipx（最省心）
@@ -61,53 +63,40 @@ pip install https://github.com/Panniantong/agent-reach/archive/main.zip
 agent-reach install --env=auto
 ```
 
-This installs core infrastructure (gh CLI, Node.js, mcporter, Exa search, yt-dlp config) and activates these zero-config channels:
-
-- Web (Jina Reader), YouTube, GitHub, RSS, Exa Search, V2EX, Bilibili (basic)
+This auto-installs system dependencies (gh CLI, Node.js, mcporter, bird), configures Exa search, detects environment, and tests all channels.
 
 > 💡 **macOS / Homebrew Python 提示 `externally-managed-environment`？**
 > 这是 PEP 668 保护，不是 Agent Reach 本身的问题。优先用 `pipx install ...`，或先创建 `venv` 再安装。
 
-**Safe mode / Dry run:**
+
+**Safe mode (no automatic system changes):**
+
+If the user asked for safe mode, or you're on a production machine:
 
 ```bash
-agent-reach install --env=auto --safe      # Check only, no auto-install
-agent-reach install --env=auto --dry-run   # Preview what would be done
+pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+agent-reach install --env=auto --safe
 ```
 
-### Step 2: Ask the user which optional channels they want
+Safe mode checks what's installed and tells you what's missing, but doesn't auto-install system packages. You can then install each dependency manually.
 
-After installing the basics, **ask the user** which additional channels they need. Present this list:
-
-> 基础渠道装好了！你现在可以让我搜网页、看 YouTube、读 GitHub 等。
->
-> 还有这些可选渠道，你需要哪些？
->
-> - 🐦 **Twitter/X** — 搜推文、看时间线（需要登录 Cookie）
-> - 📰 **微博** — 热搜、搜索、用户动态
-> - 💬 **微信公众号** — 搜索和阅读公众号文章
-> - 📈 **雪球** — 股票行情、热门帖子（需要登录 Cookie）
-> - 🎙️ **小宇宙播客** — 音频转文字（需要免费 Groq Key）
-> - 📕 **小红书** — 阅读、搜索、发帖（需要登录）
-> - 📖 **Reddit** — 搜索和阅读帖子
-> - 📺 **B站完整版** — 热门、排行、搜索
-> - 🎵 **抖音** — 视频解析
-> - 💼 **LinkedIn** — Profile、职位搜索
->
-> 告诉我你要哪些，比如"帮我装微博和 Twitter"。或者说"全部装"。
-
-Based on the user's choice, run:
+**Dry run (preview only):**
 
 ```bash
-agent-reach install --env=auto --channels=twitter,weibo   # Example: user chose Twitter + Weibo
-agent-reach install --env=auto --channels=all              # User wants everything
+agent-reach install --env=auto --dry-run
 ```
 
-Supported channel names: `twitter`, `weibo`, `wechat`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `bilibili`, `douyin`, `linkedin`, `all`
+Shows what would be done without making any changes.
 
-### Step 3: Fix what's broken
+**Read the output carefully**, then run:
 
-Run `agent-reach doctor` and check the output.
+```bash
+agent-reach doctor
+```
+
+### Step 2: Fix what's broken
+
+`agent-reach doctor` shows you which channels are active and which aren't.
 
 Try to get as many channels to ✅ as possible. If something failed during install or shows as ❌/⚠️ in doctor, diagnose the problem and try to fix it — but stay within the boundaries above. If a fix requires elevated permissions or system changes, ask the user first.
 
@@ -140,12 +129,12 @@ agent-reach configure twitter-cookies "PASTED_STRING"
 
 > **代理说明（中国大陆等需要翻墙的网络环境）：**
 >
-> twitter-cli 和 rdt-cli 使用 Python，在需要代理的网络环境下可通过环境变量配置代理。
+> bird CLI 使用 Node.js，在需要代理的网络环境下可通过环境变量配置代理。
+> Agent Reach 安装时会自动安装 `undici`（`npm install -g undici`）以提供代理支持。
 >
 > **你（Agent）需要做的：**
 > 1. 确认用户配了代理：`agent-reach configure proxy http://user:pass@ip:port`
 > 2. 设置环境变量：`export HTTP_PROXY="..." HTTPS_PROXY="..."`
-> 3. Agent Reach 会自动处理剩下的，不需要用户做额外操作
 >
 > 如果用户报告 "fetch failed"，参考 [troubleshooting.md](troubleshooting.md)
 
@@ -156,17 +145,18 @@ agent-reach configure twitter-cookies "PASTED_STRING"
 agent-reach configure proxy http://user:pass@ip:port
 ```
 
-**XiaoHongShu / 小红书 (xhs-cli):**
-> "小红书通过 xhs-cli 访问，pipx 一行安装，不需要 Docker。"
+**XiaoHongShu / 小红书 (需要 Docker):**
+> "小红书需要一个 MCP 服务。需要你的机器上有 Docker。安装好 Docker 后我来搞定剩下的。"
 
 ```bash
-pipx install xiaohongshu-cli
-xhs login
+docker run -d --name xiaohongshu-mcp -p 18060:18060 xpzouying/xiaohongshu-mcp
+mcporter config add xiaohongshu http://localhost:18060/mcp
 ```
 
-> `xhs login` 会自动从浏览器提取 Cookie。如果自动提取失败，可以手动导入：
+> 如果在服务器上，建议加代理避免 IP 风控：
+> `docker run -d --name xiaohongshu-mcp -p 18060:18060 -e XHS_PROXY=http://user:pass@ip:port xpzouying/xiaohongshu-mcp`
 >
-> **手动导入 Cookie（Cookie-Editor 方式）：**
+> **登录方式（优先用 Cookie-Editor，最简单）：**
 > 1. 用户在自己的浏览器登录小红书 (xiaohongshu.com)
 > 2. 用 [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) 插件导出 Cookie（JSON 或 Header String 格式均可）
 > 3. 把 Cookie 字符串发给 Agent
@@ -180,14 +170,7 @@ xhs login
 > agent-reach configure xhs-cookies "key1=val1; key2=val2; ..."
 > ```
 >
-> **注意：** 推荐使用 Cookie-Editor 导出方式，不要依赖 QR 扫码登录。
->
-> **备选方案：Docker MCP**
-> 如果你已经在使用 [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) Docker 方案，它也能正常工作：
-> ```bash
-> docker run -d --name xiaohongshu-mcp -p 18060:18060 xpzouying/xiaohongshu-mcp
-> mcporter config add xiaohongshu http://localhost:18060/mcp
-> ```
+> **注意：** `http://localhost:18060` 根路径可能返回 404，MCP 服务在 `/mcp` 路径。推荐使用 Cookie-Editor 导出方式，不要依赖 Docker 容器内的 QR 扫码登录。
 
 **微博 / Weibo (mcp-server-weibo):**
 > "微博已默认安装，装好即用。可搜索微博内容、查看热搜、获取用户动态和评论。"
@@ -200,6 +183,24 @@ mcporter config add weibo --command 'mcp-server-weibo'
 ```
 
 > 无需登录、无需 Cookie、无需代理。海外服务器也可以直接访问。
+
+**闲鱼 / Xianyu (mcp-goofish):**
+> "闲鱼需要一个基于 Node.js 的 MCP 服务，并提供已认证的闲鱼登录态 / Cookie。配置完成后，Agent 就能搜索商品、查看详情和做关键词监控。"
+
+```bash
+# 1. 确认已安装 Node.js 18+ 与 mcporter
+npm install -g mcporter
+
+# 2. 注册闲鱼 MCP
+mcporter config add xianyu --command 'npx' --args 'mcp-goofish'
+
+# 3. 按 mcp-goofish 文档配置闲鱼 Cookie / 登录态
+#    具体方式以该项目当前说明为准
+```
+
+> 完成认证配置后，可用 `mcporter list xianyu` 检查工具是否已就绪。
+>
+> 详见 https://github.com/mercy719/mcp-goofish
 
 **雪球 / Xueqiu (股票行情 + 热门帖子):**
 > "雪球需要登录后的 Cookie。请先在 Chrome 里登录 xueqiu.com，然后运行："
@@ -374,9 +375,7 @@ If the user wants a different agent to handle it, let them choose.
 
 | Command | What it does |
 |---------|-------------|
-| `agent-reach install --env=auto` | Install core channels (lightweight, zero-config) |
-| `agent-reach install --env=auto --channels=twitter,weibo` | Install core + optional channels |
-| `agent-reach install --env=auto --channels=all` | Install everything |
+| `agent-reach install --env=auto` | Full auto-setup (installs deps + configures) |
 | `agent-reach install --env=auto --safe` | Safe setup (no auto system changes) |
 | `agent-reach install --env=auto --dry-run` | Preview what would be done |
 | `agent-reach doctor` | Show channel status |
@@ -390,14 +389,15 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 
 | Platform | Upstream Tool | Example |
 |----------|--------------|---------|
-| Twitter/X | `twitter` | `twitter search "query" -n 10` |
+| Twitter/X | `bird` | `bird search "query" -n 10` |
 | YouTube | `yt-dlp` | `yt-dlp --dump-json URL` |
-| Bilibili | `yt-dlp` + `bili` | `bili hot` / `bili search "query" --type video` |
-| Reddit | `rdt` | `rdt search "query"` / `rdt read POST_ID` |
+| Bilibili | `yt-dlp` | `yt-dlp --dump-json URL` |
+| Reddit | `mcporter` (Exa) | `mcporter call 'exa.web_search_exa(query: "...", includeDomains: ["reddit.com"])'` |
 | GitHub | `gh` | `gh search repos "query"` |
 | Web | `curl` + Jina | `curl -s "https://r.jina.ai/URL"` |
 | Exa Search | `mcporter` | `mcporter call 'exa.web_search_exa(...)'` |
 | 小红书 | `mcporter` | `mcporter call 'xiaohongshu.search_feeds(...)'` |
+| 闲鱼 | `mcporter` | `mcporter list xianyu` |
 | 微博 | `mcporter` | `mcporter call 'weibo.get_trendings(limit: 10)'` |
 | 小宇宙播客 | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 | 抖音 | `mcporter` | `mcporter call 'douyin.parse_douyin_video_info(...)'` |

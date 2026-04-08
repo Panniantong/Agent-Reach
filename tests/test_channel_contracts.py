@@ -148,6 +148,7 @@ def test_channel_can_handle_contract():
         "xueqiu": "https://xueqiu.com/S/SH600519",
         "exa_search": "https://example.com",
         "web": "https://example.com",
+        "xianyu": "https://www.goofish.com/item?id=123456",
     }
     for ch in get_all_channels():
         sample = url_samples.get(ch.name, "https://example.com")

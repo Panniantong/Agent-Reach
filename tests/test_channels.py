@@ -7,9 +7,10 @@ import subprocess
 from urllib.error import URLError
 
 from agent_reach.channels import get_all_channels, get_channel
+from agent_reach.channels.v2ex import V2EXChannel
+from agent_reach.channels.xianyu import XianyuChannel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
 from agent_reach.channels.xueqiu import XueqiuChannel
-from agent_reach.channels.v2ex import V2EXChannel
 
 
 class TestChannelRegistry:
@@ -28,6 +29,8 @@ class TestChannelRegistry:
         assert "github" in names
         assert "twitter" in names
         assert "v2ex" in names
+        assert "xueqiu" in names
+        assert "xianyu" in names
 
 
 class TestV2EXChannel:
@@ -378,10 +381,6 @@ class TestXueqiuChannel:
         assert status == "warn"
         assert "失败" in msg
 
-    # ------------------------------------------------------------------ #
-    # get_stock_quote
-    # ------------------------------------------------------------------ #
-
     def test_get_stock_quote(self, monkeypatch):
         import agent_reach.channels.xueqiu as xueqiu_mod
 
@@ -431,10 +430,6 @@ class TestXueqiuChannel:
         assert quote["percent"] == 1.5
         assert quote["volume"] == 12345678
 
-    # ------------------------------------------------------------------ #
-    # search_stock
-    # ------------------------------------------------------------------ #
-
     def test_search_stock(self, monkeypatch):
         import agent_reach.channels.xueqiu as xueqiu_mod
 
@@ -463,10 +458,6 @@ class TestXueqiuChannel:
         assert results[0]["symbol"] == "SH600519"
         assert results[0]["name"] == "贵州茅台"
         assert results[1]["exchange"] == "SZA"
-
-    # ------------------------------------------------------------------ #
-    # get_hot_posts
-    # ------------------------------------------------------------------ #
 
     def test_get_hot_posts_returns_list(self, monkeypatch):
         import agent_reach.channels.xueqiu as xueqiu_mod
@@ -508,7 +499,7 @@ class TestXueqiuChannel:
         assert posts[0]["id"] == 111
         assert posts[0]["author"] == "投资者A"
         assert posts[0]["likes"] == 42
-        assert "今天大盘走势&分析" in posts[0]["text"]  # HTML stripped
+        assert "今天大盘走势&分析" in posts[0]["text"]
         assert "<p>" not in posts[0]["text"]
         assert posts[0]["url"] == "https://xueqiu.com/1234567890/111"
 
@@ -547,10 +538,6 @@ class TestXueqiuChannel:
         monkeypatch.setattr(xueqiu_mod._opener, "open", lambda req, timeout=None: FakeResponse())
         posts = XueqiuChannel().get_hot_posts(limit=3)
         assert len(posts) == 3
-
-    # ------------------------------------------------------------------ #
-    # get_hot_stocks
-    # ------------------------------------------------------------------ #
 
     def test_get_hot_stocks(self, monkeypatch):
         import agent_reach.channels.xueqiu as xueqiu_mod
@@ -656,7 +643,6 @@ class TestXiaoHongShuChannel:
             return subprocess.CompletedProcess(cmd, 0, "ok: true\nusername: testuser\n", "")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
-
         status, msg = XiaoHongShuChannel().check()
         assert status == "ok"
         assert "完整可用" in msg
@@ -678,3 +664,200 @@ class TestXiaoHongShuChannel:
         status, msg = XiaoHongShuChannel().check()
         assert status == "off"
         assert "xiaohongshu-cli" in msg
+
+
+class TestXianyuChannel:
+    # ------------------------------------------------------------------ #
+    # can_handle
+    # ------------------------------------------------------------------ #
+
+    def test_can_handle_goofish_urls(self):
+        ch = XianyuChannel()
+        assert ch.can_handle("https://www.goofish.com/item?id=123")
+        assert ch.can_handle("https://goofish.com/search?q=iphone")
+        assert not ch.can_handle("https://github.com/user/repo")
+        assert not ch.can_handle("https://taobao.com/item/123")
+
+    def test_can_handle_xianyu_taobao_urls(self):
+        ch = XianyuChannel()
+        assert ch.can_handle("https://xianyu.taobao.com/item_detail.htm?id=123")
+        assert not ch.can_handle("https://www.taobao.com/item/123")
+
+    # ------------------------------------------------------------------ #
+    # check — node missing
+    # ------------------------------------------------------------------ #
+
+    def test_check_off_when_node_missing(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: None)
+        status, msg = XianyuChannel().check()
+        assert status == "off"
+        assert "Node.js" in msg
+        assert "nodejs.org" in msg
+
+    # ------------------------------------------------------------------ #
+    # check — mcporter missing
+    # ------------------------------------------------------------------ #
+
+    def test_check_off_when_mcporter_missing(self, monkeypatch):
+        def fake_which(cmd):
+            return "/usr/bin/node" if cmd == "node" else None
+
+        monkeypatch.setattr(shutil, "which", fake_which)
+        status, msg = XianyuChannel().check()
+        assert status == "off"
+        assert "mcporter" in msg
+
+    # ------------------------------------------------------------------ #
+    # check — xianyu not in mcporter config
+    # ------------------------------------------------------------------ #
+
+    def test_check_off_when_xianyu_not_configured(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/mcporter")
+
+        def fake_run(cmd, **kwargs):
+            if "config" in cmd and "list" in cmd:
+                return subprocess.CompletedProcess(cmd, 0, "douyin\nxiaohongshu\n", "")
+            raise AssertionError(f"unexpected command: {cmd}")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        status, msg = XianyuChannel().check()
+        assert status == "off"
+        assert "mcporter config add" in msg
+
+    def test_check_off_accepts_goofish_alias_in_config(self, monkeypatch):
+        """If mcporter config list shows 'goofish' instead of 'xianyu', must not error."""
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/mcporter")
+
+        def fake_run(cmd, **kwargs):
+            if "config" in cmd and "list" in cmd:
+                return subprocess.CompletedProcess(cmd, 0, "goofish\ndouyin\n", "")
+            assert cmd == ["/usr/bin/mcporter", "list", "goofish"]
+            return subprocess.CompletedProcess(cmd, 0, "search_items\nget_item_detail\n", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        status, _ = XianyuChannel().check()
+        assert status == "ok"
+
+    # ------------------------------------------------------------------ #
+    # check — mcporter config exception
+    # ------------------------------------------------------------------ #
+
+    def test_check_off_when_config_list_raises(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/mcporter")
+
+        def fake_run(cmd, **kwargs):
+            raise OSError("mcporter crashed")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        status, msg = XianyuChannel().check()
+        assert status == "off"
+        assert "mcporter" in msg
+
+    # ------------------------------------------------------------------ #
+    # check — ok path
+    # ------------------------------------------------------------------ #
+
+    def test_check_ok_when_mcp_list_returns_tools(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/mcporter")
+
+        def fake_run(cmd, **kwargs):
+            if "config" in cmd and "list" in cmd:
+                return subprocess.CompletedProcess(cmd, 0, "xianyu\ndouyin\n", "")
+            return subprocess.CompletedProcess(cmd, 0, "search_items\nget_item_detail\n", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        status, msg = XianyuChannel().check()
+        assert status == "ok"
+        assert "商品搜索" in msg
+
+    # ------------------------------------------------------------------ #
+    # check — warn paths
+    # ------------------------------------------------------------------ #
+
+    def test_check_warn_when_mcp_list_empty(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/mcporter")
+
+        def fake_run(cmd, **kwargs):
+            if "config" in cmd and "list" in cmd:
+                return subprocess.CompletedProcess(cmd, 0, "xianyu\n", "")
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        status, msg = XianyuChannel().check()
+        assert status == "warn"
+        assert "mcp-goofish" in msg
+
+    def test_check_warn_when_tools_unavailable_is_reported(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/mcporter")
+
+        def fake_run(cmd, **kwargs):
+            if "config" in cmd and "list" in cmd:
+                return subprocess.CompletedProcess(cmd, 0, "xianyu\n", "")
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                "xianyu\n  tools unavailable\n  Reason: MCP error -32000: Connection closed\n",
+                "npm error code E404",
+            )
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        status, msg = XianyuChannel().check()
+        assert status == "warn"
+        assert "mcp-goofish" in msg
+
+    def test_check_warn_when_mcp_list_nonzero_returncode(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/mcporter")
+
+        def fake_run(cmd, **kwargs):
+            if "config" in cmd and "list" in cmd:
+                return subprocess.CompletedProcess(cmd, 0, "xianyu\n", "")
+            return subprocess.CompletedProcess(cmd, 1, "", "error")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        status, _msg = XianyuChannel().check()
+        assert status == "warn"
+
+    def test_check_warn_when_mcp_list_times_out(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/mcporter")
+
+        def fake_run(cmd, **kwargs):
+            if "config" in cmd and "list" in cmd:
+                return subprocess.CompletedProcess(cmd, 0, "xianyu\n", "")
+            raise subprocess.TimeoutExpired(cmd, 15)
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        status, msg = XianyuChannel().check()
+        assert status == "warn"
+        assert "Cookie" in msg or "登录态" in msg or "超时" in msg
+
+    def test_check_warn_when_mcp_list_raises_generic(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/mcporter")
+
+        def fake_run(cmd, **kwargs):
+            if "config" in cmd and "list" in cmd:
+                return subprocess.CompletedProcess(cmd, 0, "xianyu\n", "")
+            raise OSError("connection reset")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        status, msg = XianyuChannel().check()
+        assert status == "warn"
+        assert "mcp-goofish" in msg
+
+    # ------------------------------------------------------------------ #
+    # channel metadata
+    # ------------------------------------------------------------------ #
+
+    def test_channel_metadata(self):
+        ch = XianyuChannel()
+        assert ch.name == "xianyu"
+        assert ch.tier == 2
+        assert "mcp-goofish" in ch.backends
+        assert ch.description
+
+    def test_check_returns_tuple_of_str(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: None)
+        result = XianyuChannel().check()
+        assert isinstance(result, tuple) and len(result) == 2
+        status, msg = result
+        assert isinstance(status, str)
+        assert isinstance(msg, str) and msg.strip()

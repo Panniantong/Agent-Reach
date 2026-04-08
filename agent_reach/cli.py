@@ -68,10 +68,6 @@ def main():
                            help="Safe mode: skip automatic system changes, show what's needed instead")
     p_install.add_argument("--dry-run", action="store_true",
                            help="Show what would be done without making any changes")
-    p_install.add_argument("--channels", default="",
-                           help="Comma-separated optional channels to install "
-                                "(twitter,weibo,wechat,xiaoyuzhou,xueqiu,xiaohongshu,"
-                                "reddit,bilibili,douyin,linkedin,all)")
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
@@ -177,33 +173,11 @@ def _cmd_install(args):
         print("SAFE MODE — skipping automatic system changes")
         print()
 
-    # ── Parse --channels ──
-    CHANNEL_INSTALLERS = {
-        "twitter":     _install_twitter_deps,
-        "weibo":       _install_weibo_deps,
-        "wechat":      _install_wechat_deps,
-        "xiaoyuzhou":  _install_xiaoyuzhou_deps,
-        "xiaohongshu": _install_xhs_deps,
-        "reddit":      _install_reddit_deps,
-        "bilibili":    _install_bili_deps,
-        # xueqiu: cookie-only, no install step
-        # douyin/linkedin: manual setup, no auto-install
-    }
-    COOKIE_CHANNELS = {"twitter", "xueqiu", "bilibili"}
-
-    requested_channels = set()
-    if args.channels:
-        raw = [c.strip().lower() for c in args.channels.split(",") if c.strip()]
-        if "all" in raw:
-            requested_channels = set(CHANNEL_INSTALLERS.keys()) | {"xueqiu", "douyin", "linkedin"}
-        else:
-            requested_channels = set(raw)
-
     # Auto-detect environment
     env = args.env
     if env == "auto":
         env = _detect_environment()
-
+    
     if env == "server":
         print(f"Environment: Server/VPS (auto-detected)")
     else:
@@ -217,7 +191,7 @@ def _cmd_install(args):
             config.set("bilibili_proxy", args.proxy)
             print(f"✅ Proxy configured for Bilibili")
 
-    # ── Install core system dependencies (lightweight, always) ──
+    # ── Install system dependencies ──
     print()
     if dry_run:
         _install_system_deps_dryrun()
@@ -226,7 +200,7 @@ def _cmd_install(args):
     else:
         _install_system_deps()
 
-    # ── mcporter (for Exa search) ──
+    # ── mcporter (for Exa search + XiaoHongShu) ──
     print()
     if dry_run:
         print("[dry-run] Would install mcporter and configure Exa search")
@@ -235,26 +209,10 @@ def _cmd_install(args):
     else:
         _install_mcporter()
 
-    # ── Install optional channels (only if --channels specified) ──
-    if requested_channels and not dry_run and not safe_mode:
+    # Auto-import cookies on local computers
+    if env == "local" and not safe_mode and not dry_run:
         print()
-        print("Installing optional channels...")
-        for ch_name in sorted(requested_channels):
-            installer = CHANNEL_INSTALLERS.get(ch_name)
-            if installer:
-                installer()
-
-    if requested_channels and dry_run:
-        print()
-        print(f"[dry-run] Would install optional channels: {', '.join(sorted(requested_channels))}")
-
-    # ── Auto-import cookies (only if cookie-needing channels are requested) ──
-    needs_cookies = bool(requested_channels & COOKIE_CHANNELS)
-    if env == "local" and needs_cookies and not safe_mode and not dry_run:
-        print()
-        print("Importing cookies from browser...")
-        print("  (macOS may ask for your login password to access the Keychain — this is normal,")
-        print("   it only happens once during install. Enter your password or click 'Allow'.)")
+        print("Trying to import cookies from browser...")
         try:
             from agent_reach.cookie_extract import configure_from_browser
             results = configure_from_browser("chrome", config)
@@ -264,6 +222,7 @@ def _cmd_install(args):
                     print(f"  ✅ {platform}: {message}")
                     found = True
             if not found:
+                # Try firefox
                 results = configure_from_browser("firefox", config)
                 for platform, success, message in results:
                     if success:
@@ -272,8 +231,12 @@ def _cmd_install(args):
             if not found:
                 print("  -- No cookies found (normal if you haven't logged into these sites)")
         except Exception:
-            print("  -- Could not read browser cookies (browser might be open or password was denied)")
-    elif env == "local" and needs_cookies and dry_run:
+            print("  -- Could not read browser cookies (browser might be open)")
+    elif env == "local" and safe_mode:
+        print()
+        print("Skipped auto cookie import (safe mode).")
+        print("   To import manually: agent-reach configure --from-browser chrome")
+    elif env == "local" and dry_run:
         print()
         print("[dry-run] Would try to import cookies from Chrome/Firefox")
 
@@ -303,12 +266,9 @@ def _cmd_install(args):
 
         print(f"✅ Installation complete! {ok}/{total} channels active.")
 
-        if not requested_channels:
-            # First install — hint about optional channels
+        if ok < total:
             print()
-            print("More channels available! Use --channels to install:")
-            print("   agent-reach install --channels=twitter,weibo,xiaohongshu,...")
-            print("   agent-reach install --channels=all  (install everything)")
+            print("Some channels are not active yet. If you're an AI Agent, try to fix them yourself — then run `agent-reach doctor` again.")
 
         # Star reminder
         print()
@@ -334,17 +294,12 @@ def _install_skill():
                 shutil.rmtree(target)
             os.makedirs(target, exist_ok=True)
 
-            # Get skill directory from package (with fallback for editable installs)
-            try:
-                skill_pkg = importlib.resources.files("agent_reach").joinpath("skill")
-                skill_md = skill_pkg.joinpath("SKILL.md").read_text(encoding="utf-8")
-            except Exception:
-                from pathlib import Path
-                skill_pkg = Path(__file__).resolve().parent / "skill"
-                skill_md = (skill_pkg / "SKILL.md").read_text(encoding="utf-8")
+            # Get skill directory from package
+            skill_pkg = importlib.resources.files("agent_reach").joinpath("skill")
 
             # Copy SKILL.md
-            with open(os.path.join(target, "SKILL.md"), "w", encoding="utf-8") as f:
+            skill_md = skill_pkg.joinpath("SKILL.md").read_text()
+            with open(os.path.join(target, "SKILL.md"), "w") as f:
                 f.write(skill_md)
 
             # Copy references/ directory
@@ -353,10 +308,9 @@ def _install_skill():
             os.makedirs(refs_target, exist_ok=True)
 
             for ref_file in refs_pkg.iterdir():
-                name = ref_file.name if hasattr(ref_file, 'name') else str(ref_file).split('/')[-1]
-                if name.endswith(".md"):
-                    content = ref_file.read_text(encoding="utf-8") if hasattr(ref_file, 'read_text') else ref_file.read_text()
-                    with open(os.path.join(refs_target, name), "w", encoding="utf-8") as f:
+                if ref_file.suffix == ".md":
+                    content = ref_file.read_text()
+                    with open(os.path.join(refs_target, ref_file.name), "w") as f:
                         f.write(content)
 
             return True
@@ -548,6 +502,37 @@ def _install_system_deps():
         except Exception:
             print("  [!]  Node.js install failed. Try: apt install nodejs npm, or nvm install 22, or download from https://nodejs.org")
 
+    # ── twitter-cli (for Twitter search) ──
+    if shutil.which("twitter"):
+        print("  ✅ twitter-cli already installed")
+    else:
+        if shutil.which("pipx"):
+            try:
+                subprocess.run(
+                    ["pipx", "install", "twitter-cli"],
+                    capture_output=True, encoding="utf-8", errors="replace", timeout=120,
+                )
+                if shutil.which("twitter"):
+                    print("  ✅ twitter-cli installed (Twitter search + timeline + article)")
+                else:
+                    print("  -- twitter-cli install failed (optional — Twitter reading still works via Jina)")
+            except Exception:
+                print("  -- twitter-cli install failed (optional — Twitter reading still works via Jina)")
+        elif shutil.which("uv"):
+            try:
+                subprocess.run(
+                    ["uv", "tool", "install", "twitter-cli"],
+                    capture_output=True, encoding="utf-8", errors="replace", timeout=120,
+                )
+                if shutil.which("twitter"):
+                    print("  ✅ twitter-cli installed (Twitter search + timeline + article)")
+                else:
+                    print("  -- twitter-cli install failed (optional)")
+            except Exception:
+                print("  -- twitter-cli install failed (optional)")
+        else:
+            print("  -- twitter-cli requires pipx or uv (optional — Twitter reading still works via Jina)")
+
     # ── undici (proxy support for Node.js fetch) ──
     npm_cmd = shutil.which("npm")
     if npm_cmd:
@@ -581,9 +566,14 @@ def _install_system_deps():
             except Exception:
                 print("  -- Could not configure yt-dlp JS runtime (YouTube may not work)")
 
-    # NOTE: twitter-cli, weibo, xiaoyuzhou, wechat, xhs-cli etc. are optional.
-    # They are installed via --channels flag, not here.
-    # See CHANNEL_INSTALLERS in _cmd_install().
+    # ── Weibo (mcp-server-weibo fork with visitor passport fix) ──
+    _install_weibo_deps()
+
+    # ── Xiaoyuzhou Podcast (transcribe.sh + ffmpeg) ──
+    _install_xiaoyuzhou_deps()
+
+    # ── WeChat Articles (miku_ai + camoufox + wechat-article-for-ai) ──
+    _install_wechat_deps()
 
 
 def _install_xiaoyuzhou_deps():
@@ -627,98 +617,6 @@ def _install_xiaoyuzhou_deps():
     else:
         print("  -- Groq API key not set. Get free key at https://console.groq.com")
         print("     Then run: agent-reach configure groq-key gsk_xxxxx")
-
-
-def _install_twitter_deps():
-    """Install twitter-cli for Twitter search + timeline."""
-    import shutil
-    import subprocess
-
-    print("Setting up Twitter (twitter-cli)...")
-    if shutil.which("twitter"):
-        print("  ✅ twitter-cli already installed")
-        return
-    for tool, cmd in [("pipx", ["pipx", "install", "twitter-cli"]),
-                      ("uv", ["uv", "tool", "install", "twitter-cli"])]:
-        if shutil.which(tool):
-            try:
-                subprocess.run(cmd, capture_output=True, encoding="utf-8",
-                               errors="replace", timeout=120)
-                if shutil.which("twitter"):
-                    print("  ✅ twitter-cli installed")
-                    return
-            except Exception:
-                pass
-    print("  [!]  twitter-cli install failed. Run: pipx install twitter-cli")
-
-
-def _install_xhs_deps():
-    """Install xhs-cli (xiaohongshu-cli) for XiaoHongShu."""
-    import shutil
-    import subprocess
-
-    print("Setting up XiaoHongShu (xhs-cli)...")
-    if shutil.which("xhs"):
-        print("  ✅ xhs-cli already installed")
-        return
-    for tool, cmd in [("pipx", ["pipx", "install", "xiaohongshu-cli"]),
-                      ("uv", ["uv", "tool", "install", "xiaohongshu-cli"])]:
-        if shutil.which(tool):
-            try:
-                subprocess.run(cmd, capture_output=True, encoding="utf-8",
-                               errors="replace", timeout=120)
-                if shutil.which("xhs"):
-                    print("  ✅ xhs-cli installed (run `xhs login` to authenticate)")
-                    return
-            except Exception:
-                pass
-    print("  [!]  xhs-cli install failed. Run: pipx install xiaohongshu-cli")
-
-
-def _install_reddit_deps():
-    """Install rdt-cli for Reddit search + reading."""
-    import shutil
-    import subprocess
-
-    print("Setting up Reddit (rdt-cli)...")
-    if shutil.which("rdt"):
-        print("  ✅ rdt-cli already installed")
-        return
-    for tool, cmd in [("pipx", ["pipx", "install", "rdt-cli"]),
-                      ("uv", ["uv", "tool", "install", "rdt-cli"])]:
-        if shutil.which(tool):
-            try:
-                subprocess.run(cmd, capture_output=True, encoding="utf-8",
-                               errors="replace", timeout=120)
-                if shutil.which("rdt"):
-                    print("  ✅ rdt-cli installed")
-                    return
-            except Exception:
-                pass
-    print("  [!]  rdt-cli install failed. Run: pipx install rdt-cli")
-
-
-def _install_bili_deps():
-    """Install bili-cli for Bilibili hot/rank/search."""
-    import shutil
-    import subprocess
-
-    print("Setting up Bilibili (bili-cli)...")
-    if shutil.which("bili"):
-        print("  ✅ bili-cli already installed")
-        return
-    for tool, cmd in [("pipx", ["pipx", "install", "bilibili-cli"]),
-                      ("uv", ["uv", "tool", "install", "bilibili-cli"])]:
-        if shutil.which(tool):
-            try:
-                subprocess.run(cmd, capture_output=True, encoding="utf-8",
-                               errors="replace", timeout=120)
-                if shutil.which("bili"):
-                    print("  ✅ bili-cli installed")
-                    return
-            except Exception:
-                pass
-    print("  [!]  bili-cli install failed. Run: pipx install bilibili-cli")
 
 
 def _install_weibo_deps():
@@ -847,6 +745,7 @@ def _install_system_deps_safe():
     deps = [
         ("gh", ["gh"], "GitHub CLI", "https://cli.github.com — or: apt install gh / brew install gh"),
         ("node", ["node", "npm"], "Node.js", "https://nodejs.org — or: apt install nodejs npm"),
+        ("twitter", ["twitter"], "twitter-cli (Twitter)", "pipx install twitter-cli"),
     ]
 
     missing = []
@@ -866,6 +765,29 @@ def _install_system_deps_safe():
     else:
         print("  All system dependencies are installed!")
 
+    # WeChat check (Python packages, not binaries)
+    has_camoufox = has_miku = False
+    try:
+        import camoufox  # noqa: F401
+        has_camoufox = True
+    except ImportError:
+        pass
+    try:
+        import miku_ai  # noqa: F401
+        has_miku = True
+    except ImportError:
+        pass
+    if has_camoufox and has_miku:
+        print("  ✅ WeChat article tools already installed")
+    else:
+        pkgs = []
+        if not has_camoufox:
+            pkgs.extend(["camoufox[geoip]", "markdownify", "beautifulsoup4", "httpx"])
+        if not has_miku:
+            pkgs.append("miku_ai")
+        print(f"  -- WeChat article tools not found")
+        print(f"    Install: pip install {' '.join(pkgs)}")
+
 
 def _install_system_deps_dryrun():
     """Dry-run: just show what would be checked/installed."""
@@ -876,6 +798,7 @@ def _install_system_deps_dryrun():
     checks = [
         ("gh CLI", ["gh"], "apt install gh / brew install gh"),
         ("Node.js", ["node"], "curl NodeSource setup | bash + apt install nodejs"),
+        ("twitter-cli", ["twitter"], "pipx install twitter-cli"),
     ]
 
     for label, binaries, method in checks:
@@ -885,14 +808,30 @@ def _install_system_deps_dryrun():
         else:
             print(f"  {label}: would install via: {method}")
 
+    # WeChat
+    has_camoufox = has_miku = False
+    try:
+        import camoufox  # noqa: F401
+        has_camoufox = True
+    except ImportError:
+        pass
+    try:
+        import miku_ai  # noqa: F401
+        has_miku = True
+    except ImportError:
+        pass
+    if has_camoufox and has_miku:
+        print("  ✅ WeChat article tools: already installed, skip")
+    else:
+        print("  WeChat article tools: would install via: pip install camoufox[geoip] markdownify beautifulsoup4 httpx miku_ai")
 
 
 def _install_mcporter():
-    """Install mcporter and configure Exa search."""
+    """Install mcporter and configure Exa + XiaoHongShu MCP servers."""
     import shutil
     import subprocess
 
-    print("Setting up mcporter (search backend)...")
+    print("Setting up mcporter (search + XiaoHongShu backend)...")
 
     if shutil.which("mcporter"):
         print("  ✅ mcporter already installed")
@@ -932,7 +871,40 @@ def _install_mcporter():
     except Exception:
         print("  [!]  Could not configure Exa. Run manually: mcporter config add exa https://mcp.exa.ai/mcp")
 
-    # NOTE: xhs-cli is now optional, installed via --channels=xiaohongshu
+    # Check XiaoHongShu CLI
+    if shutil.which("xhs"):
+        print("  ✅ xhs-cli already installed (xiaohongshu-cli)")
+    else:
+        if shutil.which("pipx"):
+            try:
+                subprocess.run(
+                    ["pipx", "install", "xiaohongshu-cli"],
+                    capture_output=True, encoding="utf-8", errors="replace", timeout=120,
+                )
+                if shutil.which("xhs"):
+                    print("  ✅ xhs-cli installed (run `xhs login` to authenticate)")
+                else:
+                    print("  -- xhs-cli install failed (optional). Run: pipx install xiaohongshu-cli")
+            except Exception:
+                print("  -- xhs-cli install failed (optional). Run: pipx install xiaohongshu-cli")
+        else:
+            print("  -- xhs-cli requires pipx (optional). Run: pipx install xiaohongshu-cli")
+
+    # Check Xianyu MCP (optional, requires authenticated cookies/session)
+    try:
+        r = subprocess.run(
+            ["mcporter", "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=5
+        )
+        lower_stdout = r.stdout.lower()
+        if "xianyu" in lower_stdout or "goofish" in lower_stdout:
+            print("  ✅ Xianyu MCP already configured")
+        elif shutil.which("npx"):
+            print("  -- Xianyu MCP not configured yet (optional)")
+            print("     Configure: mcporter config add xianyu --command 'npx' --args 'mcp-goofish'")
+            print("     Auth:      configure Xianyu cookies/session via mcp-goofish")
+            print("     Repo:      https://github.com/mercy719/mcp-goofish")
+    except Exception:
+        pass
 
 
 def _install_mcporter_safe():
@@ -944,10 +916,14 @@ def _install_mcporter_safe():
     if shutil.which("mcporter"):
         print("  ✅ mcporter already installed")
         print("  To configure Exa search: mcporter config add exa https://mcp.exa.ai/mcp")
+        print("  To configure Xianyu: mcporter config add xianyu --command 'npx' --args 'mcp-goofish'")
+        print("  Then configure Xianyu cookies/session via mcp-goofish")
     else:
         print("  -- mcporter not installed")
         print("  To install: npm install -g mcporter")
         print("  Then configure Exa: mcporter config add exa https://mcp.exa.ai/mcp")
+        print("  Optional Xianyu: mcporter config add xianyu --command 'npx' --args 'mcp-goofish'")
+        print("  Then configure Xianyu cookies/session via mcp-goofish")
 
 
 def _detect_environment():
@@ -1355,7 +1331,7 @@ def _cmd_uninstall(args):
 
     # ── 3. mcporter MCP entries ──
     if shutil.which("mcporter"):
-        for mcp_name in ("exa", "xiaohongshu"):
+        for mcp_name in ("exa", "xiaohongshu", "xianyu", "goofish"):
             try:
                 r = subprocess.run(
                     ["mcporter", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=10
@@ -1476,7 +1452,31 @@ def _cmd_setup():
     print("  安装：pipx install rdt-cli")
     print()
 
-    # Step 4: Groq (Whisper)
+    # Step 4: Xianyu MCP
+    print("【可选】闲鱼 / Xianyu")
+    print("  需要 Node.js + mcporter + mcp-goofish，并配置闲鱼登录态 / Cookie")
+    if not shutil.which("mcporter"):
+        print("  当前状态: -- mcporter 未安装")
+        print("  配置：mcporter config add xianyu --command 'npx' --args 'mcp-goofish'")
+        print("  认证：按 mcp-goofish 文档配置闲鱼 Cookie / 登录态")
+    else:
+        try:
+            r = subprocess.run(
+                ["mcporter", "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=10
+            )
+            if "xianyu" in r.stdout.lower() or "goofish" in r.stdout.lower():
+                print("  当前状态: ✅ 已配置")
+            else:
+                print("  当前状态: -- 未配置")
+                print("  配置：mcporter config add xianyu --command 'npx' --args 'mcp-goofish'")
+                print("  认证：按 mcp-goofish 文档配置闲鱼 Cookie / 登录态")
+        except Exception:
+            print("  [!] 无法检查闲鱼配置，请手动执行：")
+            print("     mcporter config add xianyu --command 'npx' --args 'mcp-goofish'")
+            print("     然后按 mcp-goofish 文档配置闲鱼 Cookie / 登录态")
+    print()
+
+    # Step 5: Groq (Whisper)
     print("【可选】Groq API — 视频无字幕时的语音转文字")
     print("  免费额度，注册: https://console.groq.com")
     current = config.get("groq_api_key")
