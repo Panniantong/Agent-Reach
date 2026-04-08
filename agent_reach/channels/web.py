@@ -1,31 +1,34 @@
 # -*- coding: utf-8 -*-
-"""Web — any URL via Jina Reader. Always available."""
+"""Generic web reading through Jina Reader."""
+
+from __future__ import annotations
 
 import urllib.request
+
 from .base import Channel
 
-_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
 
 class WebChannel(Channel):
     name = "web"
-    description = "任意网页"
+    description = "Any web page"
     backends = ["Jina Reader"]
     tier = 0
 
     def can_handle(self, url: str) -> bool:
-        return True  # Fallback — handles any URL
+        return True
 
     def check(self, config=None):
-        return "ok", "通过 Jina Reader 读取任意网页（curl https://r.jina.ai/URL）"
+        return "ok", "Reads arbitrary pages via https://r.jina.ai/"
 
     def read(self, url: str) -> str:
-        """通过 Jina Reader 读取网页，返回 Markdown 全文。"""
+        """Read a URL as markdown through Jina Reader."""
+
         if not url.startswith(("http://", "https://")):
             url = "https://" + url
-        jina_url = f"https://r.jina.ai/{url}"
         req = urllib.request.Request(
-            jina_url,
+            f"https://r.jina.ai/{url}",
             headers={"User-Agent": _UA, "Accept": "text/plain"},
         )
         with urllib.request.urlopen(req, timeout=30) as resp:

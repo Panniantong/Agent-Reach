@@ -7,6 +7,18 @@ import sys
 from pathlib import Path
 
 
+def get_mcporter_config_path() -> Path:
+    """Return the user-scoped mcporter config file path."""
+
+    return Path.home() / ".mcporter" / "mcporter.json"
+
+
+def render_mcporter_command(command: str) -> str:
+    """Render a Windows-friendly mcporter command using the user config path."""
+
+    return f'mcporter --config "{get_mcporter_config_path()}" {command}'
+
+
 def get_ytdlp_config_dir() -> Path:
     """Return the recommended yt-dlp user config directory for this OS."""
 

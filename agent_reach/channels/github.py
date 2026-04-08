@@ -1,32 +1,41 @@
 # -*- coding: utf-8 -*-
-"""GitHub — check if gh CLI is available."""
+"""GitHub channel health checks."""
 
-import shutil
-import subprocess
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from agent_reach.utils.commands import find_command
+
 from .base import Channel
 
 
 class GitHubChannel(Channel):
     name = "github"
-    description = "GitHub 仓库和代码"
+    description = "GitHub repositories and code search"
     backends = ["gh CLI"]
     tier = 0
 
     def can_handle(self, url: str) -> bool:
         from urllib.parse import urlparse
+
         return "github.com" in urlparse(url).netloc.lower()
 
     def check(self, config=None):
-        gh = shutil.which("gh")
+        gh = find_command("gh")
         if not gh:
-            return "warn", "gh CLI 未安装。安装：https://cli.github.com"
-        try:
-            r = subprocess.run(
-                [gh, "auth", "status"],
-                capture_output=True, encoding="utf-8", errors="replace", timeout=5
-            )
-            if r.returncode == 0:
-                return "ok", "完整可用（读取、搜索、Fork、Issue、PR 等）"
-            return "warn", "gh CLI 已安装但未认证。运行 gh auth login 可解锁完整功能"
-        except Exception:
-            return "warn", "gh CLI 状态检查失败，运行 gh auth status 查看详情"
+            return "warn", "gh CLI is missing. Install it with winget install --id GitHub.cli -e"
+
+        if _has_gh_auth_material():
+            return "ok", "Ready for repo view, code search, issues, PRs, and forks"
+        return "warn", "gh CLI is installed but not authenticated. Run gh auth login"
+
+
+def _has_gh_auth_material() -> bool:
+    appdata = os.environ.get("APPDATA", "")
+    candidates = [
+        Path(appdata) / "GitHub CLI" / "hosts.yml",
+        Path.home() / ".config" / "gh" / "hosts.yml",
+    ]
+    return any(candidate.exists() and candidate.stat().st_size > 0 for candidate in candidates)

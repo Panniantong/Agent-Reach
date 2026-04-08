@@ -1,65 +1,41 @@
 # -*- coding: utf-8 -*-
-"""
-Channel registry — lists all supported platforms for doctor checks.
-"""
+"""Registry of channels supported by the Windows/Codex fork."""
+
+from __future__ import annotations
 
 from typing import List, Optional
+
 from .base import Channel
-
-# Import all channels
-from .web import WebChannel
-from .github import GitHubChannel
-from .twitter import TwitterChannel
-from .youtube import YouTubeChannel
-from .reddit import RedditChannel
-from .rss import RSSChannel
-from .bilibili import BilibiliChannel
 from .exa_search import ExaSearchChannel
-from .xiaohongshu import XiaoHongShuChannel
-from .douyin import DouyinChannel
-from .linkedin import LinkedInChannel
-from .wechat import WeChatChannel
-from .weibo import WeiboChannel
-from .xiaoyuzhou import XiaoyuzhouChannel
-from .v2ex import V2EXChannel
-from .xueqiu import XueqiuChannel
-
+from .github import GitHubChannel
+from .rss import RSSChannel
+from .twitter import TwitterChannel
+from .web import WebChannel
+from .youtube import YouTubeChannel
 
 ALL_CHANNELS: List[Channel] = [
-    GitHubChannel(),
-    TwitterChannel(),
-    YouTubeChannel(),
-    RedditChannel(),
-    BilibiliChannel(),
-    XiaoHongShuChannel(),
-    DouyinChannel(),
-    LinkedInChannel(),
-    WeChatChannel(),
-    WeiboChannel(),
-    XiaoyuzhouChannel(),
-    V2EXChannel(),
-    XueqiuChannel(),
-    RSSChannel(),
-    ExaSearchChannel(),
     WebChannel(),
+    ExaSearchChannel(),
+    GitHubChannel(),
+    YouTubeChannel(),
+    RSSChannel(),
+    TwitterChannel(),
 ]
 
 
 def get_channel(name: str) -> Optional[Channel]:
-    """Get a channel by name."""
-    for ch in ALL_CHANNELS:
-        if ch.name == name:
-            return ch
+    """Return a channel by its stable name."""
+
+    for channel in ALL_CHANNELS:
+        if channel.name == name:
+            return channel
     return None
 
 
 def get_all_channels() -> List[Channel]:
-    """Get all registered channels."""
+    """Return all registered channels."""
+
     return ALL_CHANNELS
 
 
-__all__ = [
-    "Channel",
-    "ALL_CHANNELS",
-    "get_channel", "get_all_channels",
-]
+__all__ = ["Channel", "ALL_CHANNELS", "get_channel", "get_all_channels"]

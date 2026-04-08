@@ -1,44 +1,29 @@
 # CLAUDE.md
 
 ## Project
-Agent Reach — Python CLI + library that gives AI agents read/search access to 14+ internet platforms.
-Positioning: installer + doctor + config tool. NOT a wrapper — after install, agents call upstream tools directly.
-Repo: github.com/Panniantong/Agent-Reach | License: MIT | Version: 1.3.0
+Agent Reach is a Windows-first Python CLI for Codex-style research workflows.
+Supported channels: `web`, `exa_search`, `github`, `youtube`, `rss`, and optional `twitter`.
 
 ## Commands
-- `pip install -e .` — Dev install
-- `pytest tests/ -v` — All tests
-- `pytest tests/test_cli.py -v` — CLI tests only
-- `bash test.sh` — Full integration test (creates venv, installs, runs doctor + channel tests)
-- `python -m agent_reach.cli doctor` — Run diagnostics
-- `python -m agent_reach.cli install --env=auto` — Auto-configure
+- `python -m pytest`
+- `uvx ruff check .`
+- `uvx mypy agent_reach`
+- `uvx --from build pyproject-build --wheel --sdist`
+- `python -m agent_reach.cli doctor`
+- `python -m agent_reach.cli install --env=auto`
 
 ## Structure
-- `agent_reach/cli.py` — CLI entry point (argparse)
-- `agent_reach/core.py` — Core read/search routing logic
-- `agent_reach/config.py` — Config management (YAML, env vars)
-- `agent_reach/doctor.py` — Diagnostics engine
-- `agent_reach/channels/` — One file per platform (twitter.py, reddit.py, youtube.py, etc.)
-- `agent_reach/channels/base.py` — Base channel class (all channels inherit from this)
-- `agent_reach/integrations/mcp_server.py` — MCP server integration
-- `agent_reach/skill/` — OpenClaw skill files
-- `agent_reach/guides/` — Usage guides
-- `tests/` — pytest tests
-- `config/mcporter.json` — MCP tool config
-
-## Conventions
-- Python 3.10+ with type hints
-- Each channel is a single file in `channels/`, inherits from `BaseChannel`
-- Channel contract: must implement `can_handle(url)`, `read(url)`, `search(query)`, `check()` methods
-- Use `loguru` for logging, `rich` for CLI output
-- Commit format: `type(scope): message` (one commit = one thing)
-- All upstream tool calls go through public API/CLI, never hack internals
+- `agent_reach/cli.py` - CLI entry point
+- `agent_reach/core.py` - health-check wrapper
+- `agent_reach/config.py` - YAML config handling
+- `agent_reach/doctor.py` - doctor output
+- `agent_reach/channels/` - supported channel checks
+- `agent_reach/skill/` - bundled Codex skill
+- `docs/` - Windows/Codex-facing docs
+- `tests/` - pytest suite
 
 ## Rules
-- NEVER modify upstream open source projects' source code
-- Agent Reach is a "glue layer" — only route and call, don't reimagine
-- Version in THREE places must match: `pyproject.toml`, `__init__.py`, `tests/test_cli.py`
-- Always new branch for changes, PR to main, never push to main directly
-- Run `pytest tests/ -v` before committing — all tests must pass
-- Cookie-based auth (Twitter, XHS): use Cookie-Editor export method only, no QR scan
-- XHS login: Cookie-Editor browser export only (QR will hang)
+- Keep the public surface aligned with the supported channels only.
+- Prefer Windows-native install paths and commands.
+- Do not reintroduce hidden legacy channels through docs, tests, or CLI help.
+- Keep `pyproject.toml`, `agent_reach/__init__.py`, and tests consistent when versioning changes.

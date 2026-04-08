@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Tests for doctor module."""
+"""Tests for doctor output."""
+
+import re
 
 import pytest
 
@@ -25,76 +27,72 @@ def tmp_config(tmp_path):
     return Config(config_path=tmp_path / "config.yaml")
 
 
-class TestDoctor:
-    def test_check_all_collects_channel_results(self, tmp_config, monkeypatch):
-        monkeypatch.setattr(
-            doctor,
-            "get_all_channels",
-            lambda: [
-                _StubChannel("web", "网页", 0, "ok", "可抓取网页", ["requests"]),
-                _StubChannel("github", "GitHub", 0, "warn", "gh 未安装", ["gh"]),
-                _StubChannel("exa_search", "全网语义搜索", 1, "off", "mcporter 未配置", ["Exa"]),
-            ],
-        )
+def test_check_all_collects_channel_results(tmp_config, monkeypatch):
+    monkeypatch.setattr(
+        doctor,
+        "get_all_channels",
+        lambda: [
+            _StubChannel("web", "Any web page", 0, "ok", "Jina Reader is ready", ["Jina"]),
+            _StubChannel("github", "GitHub repositories and code search", 0, "warn", "gh missing", ["gh"]),
+            _StubChannel("twitter", "Twitter/X search and timeline access", 1, "warn", "twitter missing", ["twitter-cli"]),
+        ],
+    )
 
-        results = doctor.check_all(tmp_config)
+    assert doctor.check_all(tmp_config) == {
+        "web": {
+            "status": "ok",
+            "name": "Any web page",
+            "message": "Jina Reader is ready",
+            "tier": 0,
+            "backends": ["Jina"],
+        },
+        "github": {
+            "status": "warn",
+            "name": "GitHub repositories and code search",
+            "message": "gh missing",
+            "tier": 0,
+            "backends": ["gh"],
+        },
+        "twitter": {
+            "status": "warn",
+            "name": "Twitter/X search and timeline access",
+            "message": "twitter missing",
+            "tier": 1,
+            "backends": ["twitter-cli"],
+        },
+    }
 
-        assert results == {
+
+def test_format_report_groups_core_and_optional():
+    report = doctor.format_report(
+        {
             "web": {
                 "status": "ok",
-                "name": "网页",
-                "message": "可抓取网页",
+                "name": "Any web page",
+                "message": "Jina Reader is ready",
                 "tier": 0,
-                "backends": ["requests"],
-            },
-            "github": {
-                "status": "warn",
-                "name": "GitHub",
-                "message": "gh 未安装",
-                "tier": 0,
-                "backends": ["gh"],
+                "backends": ["Jina"],
             },
             "exa_search": {
                 "status": "off",
-                "name": "全网语义搜索",
-                "message": "mcporter 未配置",
+                "name": "Cross-web search via Exa",
+                "message": "mcporter missing",
+                "tier": 0,
+                "backends": ["mcporter"],
+            },
+            "twitter": {
+                "status": "warn",
+                "name": "Twitter/X search and timeline access",
+                "message": "not authenticated",
                 "tier": 1,
-                "backends": ["Exa"],
+                "backends": ["twitter-cli"],
             },
         }
+    )
 
-    def test_format_report(self):
-        report = doctor.format_report(
-            {
-                "web": {
-                    "status": "ok",
-                    "name": "网页",
-                    "message": "可抓取网页",
-                    "tier": 0,
-                    "backends": ["requests"],
-                },
-                "exa_search": {
-                    "status": "off",
-                    "name": "全网语义搜索",
-                    "message": "mcporter 未配置",
-                    "tier": 1,
-                    "backends": ["Exa"],
-                },
-                "xiaohongshu": {
-                    "status": "warn",
-                    "name": "小红书",
-                    "message": "MCP 已配置，但健康检查超时",
-                    "tier": 2,
-                    "backends": ["mcporter"],
-                },
-            }
-        )
-
-        # Strip Rich markup tags for assertion (PR #170 added [bold], [yellow] etc.)
-        import re
-        plain = re.sub(r"\[[^\]]*\]", "", report)
-        assert "Agent Reach" in plain
-        assert "装好即用：" in plain
-        assert "1/3 个渠道可用" in plain
-        # Inactive optional channels should be summarized in one line
-        assert "可选渠道可以解锁" in plain
+    plain = re.sub(r"\[[^\]]*\]", "", report)
+    assert "Agent Reach Health" in plain
+    assert "Core channels" in plain
+    assert "Optional channels" in plain
+    assert "Summary: 1/3 channels ready" in plain
+    assert "Not ready: Cross-web search via Exa, Twitter/X search and timeline access" in plain

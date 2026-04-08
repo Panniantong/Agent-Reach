@@ -1,7 +1,7 @@
 [project]
 name = "agent-reach"
 version = "1.4.0"
-description = "Give your AI Agent eyes to see the entire internet. Search + Read 10+ platforms."
+description = "Windows-first research tooling for Codex: web, GitHub, YouTube, RSS, Exa, and optional Twitter/X."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
@@ -9,10 +9,9 @@ authors = [{name = "Neo Reid"}]
 keywords = [
     "ai-agent", "llm-tools", "agent-infrastructure", "mcp",
     "web-reader", "web-scraper", "search",
-    "twitter-scraper", "reddit-scraper", "youtube-transcript",
-    "bilibili", "xiaohongshu",
+    "twitter-scraper", "youtube-transcript",
     "ai-search", "cli", "automation",
-    "claude-code", "cursor", "openai",
+    "claude-code", "cursor", "codex", "openai",
     "free-api", "no-api-key",
 ]
 classifiers = [
@@ -30,17 +29,13 @@ classifiers = [
 dependencies = [
     "requests>=2.28",
     "feedparser>=6.0",
-    "python-dotenv>=1.0",
+    "browser-cookie3>=0.20",
     "loguru>=0.7",
     "pyyaml>=6.0",
     "rich>=13.0",
-    "yt-dlp>=2024.0",
 ]
 
 [project.optional-dependencies]
-browser = ["playwright>=1.40"]
-cookies = ["browser-cookie3>=0.19"]
-all = ["playwright>=1.40", "mcp[cli]>=1.0", "browser-cookie3>=0.19"]
 dev = [
     "pytest>=8.0",
     "ruff>=0.8",
@@ -53,9 +48,7 @@ dev = [
 agent-reach = "agent_reach.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Panniantong/agent-reach"
-Repository = "https://github.com/Panniantong/agent-reach"
-Issues = "https://github.com/Panniantong/agent-reach/issues"
+Upstream = "https://github.com/Panniantong/Agent-Reach"
 
 [build-system]
 requires = ["hatchling"]
@@ -63,11 +56,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["agent_reach"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"agent_reach/guides" = "agent_reach/guides"
-"agent_reach/skill" = "agent_reach/skill"
-"agent_reach/scripts" = "agent_reach/scripts"
 
 [tool.ruff]
 target-version = "py310"
@@ -84,4 +72,5 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 check_untyped_defs = true
 ignore_missing_imports = true
+disable_error_code = ["import-untyped"]
 exclude = ["^tests/"]

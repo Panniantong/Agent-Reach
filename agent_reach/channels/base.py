@@ -1,36 +1,26 @@
 # -*- coding: utf-8 -*-
-"""
-Channel base class — platform availability checking.
+"""Base types for supported research channels."""
 
-Each channel represents a platform (YouTube, Twitter, GitHub, etc.)
-and provides:
-  - can_handle(url) → does this URL belong to this platform?
-  - check(config) → is the upstream tool installed and configured?
+from __future__ import annotations
 
-After installation, agents call upstream tools directly.
-"""
-
-import shutil
 from abc import ABC, abstractmethod
 from typing import List, Tuple
 
 
 class Channel(ABC):
-    """Base class for all channels."""
+    """A research source that Agent Reach can diagnose for availability."""
 
-    name: str = ""                    # e.g. "youtube"
-    description: str = ""             # e.g. "YouTube 视频和字幕"
-    backends: List[str] = []          # e.g. ["yt-dlp"] — what upstream tool is used
-    tier: int = 0                     # 0=zero-config, 1=needs free key, 2=needs setup
+    name: str = ""
+    description: str = ""
+    backends: List[str] = []
+    tier: int = 0  # 0 = core, 1 = optional login/setup, 2 = advanced/manual
 
     @abstractmethod
     def can_handle(self, url: str) -> bool:
-        """Check if this channel can handle this URL."""
-        ...
+        """Return True when this channel is a natural fit for the URL."""
 
     def check(self, config=None) -> Tuple[str, str]:
-        """
-        Check if this channel's upstream tool is available.
-        Returns (status, message) where status is 'ok'/'warn'/'off'/'error'.
-        """
-        return "ok", f"{'、'.join(self.backends) if self.backends else '内置'}"
+        """Return a health tuple: (status, message)."""
+
+        summary = ", ".join(self.backends) if self.backends else "configured"
+        return "ok", summary

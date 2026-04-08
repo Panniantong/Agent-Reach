@@ -1,30 +1,21 @@
-# Dependency Locking Guide
+# Dependency Notes
 
-Agent Reach uses `constraints.txt` as a reproducible dependency baseline.
+The Windows/Codex fork keeps runtime dependencies intentionally small:
 
-## Why
+- Python packages for CLI behavior, RSS parsing, YAML config, and browser cookie import
+- Windows-installed CLIs for `gh`, `yt-dlp`, `mcporter`, and optional `twitter-cli`
 
-- Keep local/CI dependency graph stable
-- Reduce "works on my machine" drift
-- Make regression results easier to compare
+When `pyproject.toml` changes, refresh the lock file locally:
 
-## Install with constraints
-
-```bash
-pip install -c constraints.txt -e .[dev]
+```powershell
+uv lock
 ```
 
-## Update workflow
+Then validate the repo:
 
-1. Update `pyproject.toml` dependency ranges as needed.
-2. Validate against latest compatible versions locally.
-3. Update pinned versions in `constraints.txt`.
-4. Run validation:
-
-```bash
-pytest -q
-ruff check agent_reach tests
-mypy agent_reach
+```powershell
+python -m pytest
+uvx ruff check .
+uvx mypy agent_reach
+uvx --from build pyproject-build --wheel --sdist
 ```
-
-5. Open PR with dependency and validation notes.

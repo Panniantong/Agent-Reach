@@ -1,38 +1,48 @@
 # -*- coding: utf-8 -*-
-"""Exa Search — check if mcporter + Exa MCP is available."""
+"""Exa search channel checks."""
 
-import shutil
+from __future__ import annotations
+
 import subprocess
+
+from agent_reach.utils.commands import find_command
+from agent_reach.utils.paths import get_mcporter_config_path, render_mcporter_command
+
 from .base import Channel
+
+EXA_SERVER_URL = "https://mcp.exa.ai/mcp"
 
 
 class ExaSearchChannel(Channel):
     name = "exa_search"
-    description = "全网语义搜索"
-    backends = ["Exa via mcporter"]
+    description = "Cross-web search via Exa"
+    backends = ["mcporter", "Exa MCP"]
     tier = 0
 
     def can_handle(self, url: str) -> bool:
-        return False  # Search-only channel
+        return False
 
     def check(self, config=None):
-        mcporter = shutil.which("mcporter")
+        mcporter = find_command("mcporter")
         if not mcporter:
             return "off", (
-                "需要 mcporter + Exa MCP。安装：\n"
-                "  npm install -g mcporter\n"
-                "  mcporter config add exa https://mcp.exa.ai/mcp"
+                "mcporter is missing. Install it with npm install -g mcporter"
             )
         try:
-            r = subprocess.run(
-                [mcporter, "config", "list"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=5
-            )
-            if "exa" in r.stdout.lower():
-                return "ok", "全网语义搜索可用（免费，无需 API Key）"
-            return "off", (
-                "mcporter 已装但 Exa 未配置。运行：\n"
-                "  mcporter config add exa https://mcp.exa.ai/mcp"
+            config_path = get_mcporter_config_path()
+            result = subprocess.run(
+                [mcporter, "--config", str(config_path), "config", "list"],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
             )
         except Exception:
-            return "off", "mcporter 连接异常"
+            return "off", "mcporter is installed but its config could not be read"
+
+        if "exa" in (result.stdout or "").lower():
+            return "ok", "Ready for Exa web search without an API key"
+        return "off", (
+            "Exa is not configured. Run "
+            + render_mcporter_command(f"config add exa {EXA_SERVER_URL}")
+        )

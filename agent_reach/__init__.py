@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Agent Reach — Give your AI Agent eyes to see the entire internet."""
+"""Agent Reach Windows/Codex fork."""
 
 __version__ = "1.4.0"
 __author__ = "Neo Reid"

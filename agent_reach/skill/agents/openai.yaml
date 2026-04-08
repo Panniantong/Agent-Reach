@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Reach"
+  short_description: "Windows research routing for web, GitHub, YouTube, RSS, and Twitter/X"
+  default_prompt: "Use Agent Reach to route research requests across web search, Jina Reader, GitHub CLI, yt-dlp, RSS feeds, and optional Twitter/X tooling. Prefer Exa plus web reading for note, Qiita, Zenn, docs sites, and general blogs."
