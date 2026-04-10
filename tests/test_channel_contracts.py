@@ -173,6 +173,7 @@ def test_channel_can_handle_contract():
         "xiaohongshu": "https://www.xiaohongshu.com/explore/123",
         "linkedin": "https://www.linkedin.com/in/test",
         "rss": "https://example.com/feed.xml",
+        "xquik": "https://x.com/user/status/123",
         "xueqiu": "https://xueqiu.com/S/SH600519",
         "exa_search": "https://example.com",
         "web": "https://example.com",

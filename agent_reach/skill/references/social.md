@@ -113,6 +113,71 @@ twitter likes
 >
 > **输出格式**: 建议用 `--yaml` 或 `--json` 获得结构化输出，对 AI agent 更友好。
 
+## Twitter/X: Xquik API
+
+API Key 认证，无需浏览器 Cookie。适合需要 API Key 工作流、搜索、用户资料、单条推文或趋势数据的任务。
+
+### curl 命令
+
+```bash
+# 搜索推文
+curl -s "https://xquik.com/api/v1/x/tweets/search?q=query&limit=10" \
+  -H "X-API-Key: $XQUIK_API_KEY"
+
+# 获取单条推文
+curl -s "https://xquik.com/api/v1/x/tweets/TWEET_ID" \
+  -H "X-API-Key: $XQUIK_API_KEY"
+
+# 搜索用户
+curl -s "https://xquik.com/api/v1/x/users/search?q=query" \
+  -H "X-API-Key: $XQUIK_API_KEY"
+
+# 获取用户资料
+curl -s "https://xquik.com/api/v1/x/users/USERNAME" \
+  -H "X-API-Key: $XQUIK_API_KEY"
+
+# 获取趋势（woeid=1 全球，23424977=美国）
+curl -s "https://xquik.com/api/v1/trends?woeid=1&count=20" \
+  -H "X-API-Key: $XQUIK_API_KEY"
+```
+
+### Python 调用示例
+
+```python
+from agent_reach.channels.xquik import XquikChannel
+
+ch = XquikChannel()
+
+# 搜索推文
+result = ch.search_tweets("AI agents", limit=10)
+for t in result["tweets"]:
+    print(f"@{t['author']['username']}: {t['text'][:80]}")
+    print(f"  likes={t['likeCount']} rt={t['retweetCount']} views={t['viewCount']}")
+
+# 获取单条推文
+tweet = ch.get_tweet("1234567890")
+
+# 获取用户资料
+user = ch.get_user("elonmusk")
+print(f"{user['name']} — {user['followers']} followers")
+
+# 搜索用户
+result = ch.search_users("OpenAI")
+
+# 获取全球趋势
+trends = ch.get_trends(woeid=1, count=10)
+for t in trends:
+    print(f"#{t['rank']} {t['name']}")
+```
+
+### 重要注意事项
+
+> **安装**: 无需安装 CLI 工具。设置环境变量 `XQUIK_API_KEY` 即可。
+>
+> **获取 API Key**: 注册 https://xquik.com ，在 Dashboard API Keys 中创建。
+>
+> **搜索语法**: 支持常见 X 搜索语法，包括 `from:user`、`#hashtag`、`"exact phrase"`、`since:2025-01-01`、`until:2025-12-31`、`min_faves:100`。
+>
 ## B站 / Bilibili
 
 > ⚠️ **不要用 yt-dlp 读 B站**（风控已全面 412 拦截，实测无解）。用 bili-cli / OpenCLI。

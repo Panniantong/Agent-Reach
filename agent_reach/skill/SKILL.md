@@ -24,7 +24,7 @@ triggers:
   - search: 搜/查/找/search/搜索/查一下/帮我搜/看看大家怎么说
   - social:
     - 小红书: xiaohongshu/xhs/小红书/红书
-    - Twitter: twitter/推特/x.com/推文
+    - Twitter: twitter/推特/x.com/推文/xquik
     - B站: bilibili/b站/哔哩哔哩
     - V2EX: v2ex
     - Reddit: reddit
@@ -77,6 +77,9 @@ curl -s "https://r.jina.ai/URL"
 
 # GitHub 搜索
 gh search repos "query" --sort stars --limit 10
+
+# Twitter 搜索（Xquik API，需 API Key）
+curl -s "https://xquik.com/api/v1/x/tweets/search?q=query&limit=10" -H "X-API-Key: $XQUIK_API_KEY"
 
 # YouTube 字幕（注意：B站不要用 yt-dlp，见 video.md）
 yt-dlp --write-sub --skip-download -o "/tmp/%(id)s" "URL"

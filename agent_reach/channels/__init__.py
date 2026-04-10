@@ -20,11 +20,13 @@ from .linkedin import LinkedInChannel
 from .xiaoyuzhou import XiaoyuzhouChannel
 from .v2ex import V2EXChannel
 from .xueqiu import XueqiuChannel
+from .xquik import XquikChannel
 
 
 ALL_CHANNELS: List[Channel] = [
     GitHubChannel(),
     TwitterChannel(),
+    XquikChannel(),
     YouTubeChannel(),
     RedditChannel(),
     BilibiliChannel(),
