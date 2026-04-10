@@ -20,7 +20,7 @@ uv tool install --force .
 agent-reach version
 ```
 
-For the Codex runtime policy release, `agent-reach version` should report `Agent Reach v1.5.3` or newer.
+For the evidence ledger and candidate planner release, `agent-reach version` should report `Agent Reach v1.6.0` or newer.
 
 ## Preview mode
 

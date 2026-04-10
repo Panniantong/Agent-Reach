@@ -4,10 +4,16 @@ All notable changes to this fork are documented here.
 
 ## Unreleased
 
+## [1.6.0] - 2026-04-10
+
 ### Added
 
 - field research improvement handoff for future Agent Reach work
 - Agent Reach Nexus concept note for capability graph, scout, ledger, planner, and guard ideas
+- evidence ledger persistence for raw `CollectionResult` JSONL records
+- `agent-reach plan candidates` for no-model URL or ID dedupe over evidence ledgers
+- conservative source hints and web extraction diagnostics
+- downstream examples and a manual GitHub Actions smoke workflow for raw collection artifacts
 
 ## [1.5.3] - 2026-04-10
 

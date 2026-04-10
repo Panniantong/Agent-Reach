@@ -1,6 +1,6 @@
 [project]
 name = "agent-reach"
-version = "1.5.3"
+version = "1.6.0"
 description = "Windows-first research integration tooling with a Python SDK and JSON CLI for web, GitHub, Hatena Bookmark, Bluesky, Qiita, YouTube, RSS, Exa, and optional Twitter/X."
 readme = "README.md"
 license = {text = "MIT"}
