@@ -27,6 +27,7 @@ class TestChannelRegistry:
         assert "web" in names
         assert "github" in names
         assert "twitter" in names
+        assert "xquik" in names
         assert "v2ex" in names
 
 
