@@ -2,6 +2,7 @@
 """Facebook — check if yt-dlp is available for public posts and videos."""
 
 import shutil
+
 from .base import Channel
 
 
