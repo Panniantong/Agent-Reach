@@ -84,3 +84,21 @@ def page_source_hints(published_at: str | None) -> SourceHints:
         published_at=published_at,
         volatility_hint="unknown",
     )
+
+
+def registry_entry_source_hints(published_at: str | None) -> SourceHints:
+    return build_source_hints(
+        source_kind="registry_entry",
+        authority_hint="registry",
+        published_at=published_at,
+        volatility_hint="medium",
+    )
+
+
+def forum_post_source_hints(published_at: str | None) -> SourceHints:
+    return build_source_hints(
+        source_kind="forum_post",
+        authority_hint="community",
+        published_at=published_at,
+        volatility_hint="high",
+    )

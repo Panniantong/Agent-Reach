@@ -10,8 +10,11 @@ from .bluesky import BlueskyChannel
 from .crawl4ai import Crawl4AIChannel
 from .exa_search import ExaSearchChannel
 from .github import GitHubChannel
+from .hacker_news import HackerNewsChannel
 from .hatena_bookmark import HatenaBookmarkChannel
+from .mcp_registry import MCPRegistryChannel
 from .qiita import QiitaChannel
+from .reddit import RedditChannel
 from .rss import RSSChannel
 from .searxng import SearXNGChannel
 from .twitter import TwitterChannel
@@ -29,6 +32,9 @@ ALL_CHANNELS: List[Channel] = [
     RSSChannel(),
     SearXNGChannel(),
     Crawl4AIChannel(),
+    HackerNewsChannel(),
+    MCPRegistryChannel(),
+    RedditChannel(),
     TwitterChannel(),
 ]
 

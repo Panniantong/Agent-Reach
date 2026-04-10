@@ -55,6 +55,21 @@ class _Namespace:
 
         return self._client.collect(self._channel, "crawl", value, limit=limit, crawl_query=query)
 
+    def top(self, value: str = "top", limit: int | None = None) -> CollectionResult:
+        """Run a top-list operation when supported by this channel."""
+
+        return self._client.collect(self._channel, "top", value, limit=limit)
+
+    def new(self, value: str = "new", limit: int | None = None) -> CollectionResult:
+        """Run a new-list operation when supported by this channel."""
+
+        return self._client.collect(self._channel, "new", value, limit=limit)
+
+    def best(self, value: str = "best", limit: int | None = None) -> CollectionResult:
+        """Run a best-list operation when supported by this channel."""
+
+        return self._client.collect(self._channel, "best", value, limit=limit)
+
 
 class AgentReachClient:
     """Public SDK for diagnostics, registry lookups, and read-only collection."""
@@ -73,6 +88,10 @@ class AgentReachClient:
         self.rss = _Namespace(self, "rss")
         self.searxng = _Namespace(self, "searxng")
         self.crawl4ai = _Namespace(self, "crawl4ai")
+        self.hacker_news = _Namespace(self, "hacker_news")
+        self.hn = self.hacker_news
+        self.mcp_registry = _Namespace(self, "mcp_registry")
+        self.reddit = _Namespace(self, "reddit")
         self.twitter = _Namespace(self, "twitter")
 
     def doctor(self) -> Dict[str, dict]:

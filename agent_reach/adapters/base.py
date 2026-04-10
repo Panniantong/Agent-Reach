@@ -114,6 +114,24 @@ class BaseAdapter:
         if searxng_base_url:
             env["SEARXNG_BASE_URL"] = str(searxng_base_url)
 
+        reddit_access_token = (
+            env.get("REDDIT_ACCESS_TOKEN")
+            or env.get("REDDIT_BEARER_TOKEN")
+            or self.config.get("reddit_access_token")
+        )
+        reddit_client_id = env.get("REDDIT_CLIENT_ID") or self.config.get("reddit_client_id")
+        reddit_client_secret = env.get("REDDIT_CLIENT_SECRET") or self.config.get("reddit_client_secret")
+        reddit_user_agent = env.get("REDDIT_USER_AGENT") or self.config.get("reddit_user_agent")
+        if reddit_access_token:
+            env["REDDIT_ACCESS_TOKEN"] = str(reddit_access_token)
+            env["REDDIT_BEARER_TOKEN"] = str(reddit_access_token)
+        if reddit_client_id:
+            env["REDDIT_CLIENT_ID"] = str(reddit_client_id)
+        if reddit_client_secret:
+            env["REDDIT_CLIENT_SECRET"] = str(reddit_client_secret)
+        if reddit_user_agent:
+            env["REDDIT_USER_AGENT"] = str(reddit_user_agent)
+
         twitter_auth = env.get("TWITTER_AUTH_TOKEN") or env.get("AUTH_TOKEN") or self.config.get("twitter_auth_token")
         twitter_ct0 = env.get("TWITTER_CT0") or env.get("CT0") or self.config.get("twitter_ct0")
         if twitter_auth and twitter_ct0:

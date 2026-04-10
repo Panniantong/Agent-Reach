@@ -8,8 +8,11 @@ from agent_reach.channels.bluesky import BlueskyChannel
 from agent_reach.channels.crawl4ai import Crawl4AIChannel
 from agent_reach.channels.exa_search import ExaSearchChannel
 from agent_reach.channels.github import GitHubChannel
+from agent_reach.channels.hacker_news import HackerNewsChannel
 from agent_reach.channels.hatena_bookmark import HatenaBookmarkChannel
+from agent_reach.channels.mcp_registry import MCPRegistryChannel
 from agent_reach.channels.qiita import QiitaChannel
+from agent_reach.channels.reddit import RedditChannel
 from agent_reach.channels.searxng import SearXNGChannel
 from agent_reach.channels.web import WebChannel
 
@@ -27,6 +30,9 @@ def test_registry_contains_only_supported_channels():
         "rss",
         "searxng",
         "crawl4ai",
+        "hacker_news",
+        "mcp_registry",
+        "reddit",
         "twitter",
     ]
 
@@ -146,6 +152,35 @@ def test_crawl4ai_can_handle_http_urls():
     channel = Crawl4AIChannel()
     assert channel.can_handle("https://example.com")
     assert not channel.can_handle("notaurl")
+
+
+def test_hacker_news_can_handle_hn_urls():
+    channel = HackerNewsChannel()
+    assert channel.can_handle("https://news.ycombinator.com/item?id=8863")
+    assert channel.can_handle("https://hn.algolia.com/?q=python")
+
+
+def test_mcp_registry_can_handle_registry_urls():
+    channel = MCPRegistryChannel()
+    assert channel.can_handle("https://registry.modelcontextprotocol.io/v0.1/servers")
+    assert not channel.can_handle("https://example.com")
+
+
+def test_reddit_requires_oauth_config(tmp_path):
+    from agent_reach.config import Config
+
+    config = Config(config_path=tmp_path / "config.yaml")
+    channel = RedditChannel()
+    status, message = channel.check(config)
+    assert status == "off"
+    assert "User-Agent" in message
+
+    config.set("reddit_user_agent", "windows:agent-reach:v1.6.0 (by /u/example)")
+    config.set("reddit_client_id", "client-id")
+    config.set("reddit_client_secret", "client-secret")
+    status, message = channel.check(config)
+    assert status == "ok"
+    assert "OAuth" in message
 
 
 def test_channel_contract_exposes_operation_option_schema():

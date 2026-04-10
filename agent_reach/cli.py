@@ -131,7 +131,15 @@ def _build_parser() -> argparse.ArgumentParser:
     p_configure.add_argument(
         "key",
         nargs="?",
-        choices=["github-token", "searxng-base-url", "twitter-cookies"],
+        choices=[
+            "github-token",
+            "searxng-base-url",
+            "reddit-access-token",
+            "reddit-client-id",
+            "reddit-client-secret",
+            "reddit-user-agent",
+            "twitter-cookies",
+        ],
         help="Configuration key to set",
     )
     p_configure.add_argument("value", nargs="*", help="Value to store")
@@ -879,6 +887,23 @@ def _cmd_configure(args) -> int:
         normalized = normalize_searxng_base_url(value)
         config.set("searxng_base_url", normalized)
         print(f"Saved searxng_base_url to config: {normalized}")
+        return 0
+
+    reddit_keys = {
+        "reddit-access-token": "reddit_access_token",
+        "reddit-client-id": "reddit_client_id",
+        "reddit-client-secret": "reddit_client_secret",
+        "reddit-user-agent": "reddit_user_agent",
+    }
+    if args.key in reddit_keys:
+        if not value:
+            raise SystemExit(f"{args.key} requires a value")
+        config.set(reddit_keys[args.key], value)
+        label = reddit_keys[args.key]
+        if "secret" in label or "token" in label:
+            print(f"Saved {label} to config.")
+        else:
+            print(f"Saved {label} to config: {value}")
         return 0
 
     if args.key == "twitter-cookies":

@@ -51,6 +51,10 @@ def test_agent_reach_alias_and_namespace_access(tmp_path, monkeypatch):
     assert isinstance(legacy, AgentReachClient)
     assert client.searxng._channel == "searxng"
     assert client.crawl4ai._channel == "crawl4ai"
+    assert client.hn is client.hacker_news
+    assert client.hacker_news._channel == "hacker_news"
+    assert client.mcp_registry._channel == "mcp_registry"
+    assert client.reddit._channel == "reddit"
     assert client.github.read("openai/openai-python")["ok"] is True
 
 

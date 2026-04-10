@@ -13,8 +13,11 @@ from agent_reach.adapters.bluesky import BlueskyAdapter
 from agent_reach.adapters.crawl4ai import Crawl4AIAdapter
 from agent_reach.adapters.exa_search import ExaSearchAdapter
 from agent_reach.adapters.github import GitHubAdapter
+from agent_reach.adapters.hacker_news import HackerNewsAdapter
 from agent_reach.adapters.hatena_bookmark import HatenaBookmarkAdapter
+from agent_reach.adapters.mcp_registry import MCPRegistryAdapter
 from agent_reach.adapters.qiita import QiitaAdapter
+from agent_reach.adapters.reddit import RedditAdapter
 from agent_reach.adapters.rss import RSSAdapter
 from agent_reach.adapters.searxng import SearXNGAdapter
 from agent_reach.adapters.twitter import TwitterAdapter
@@ -1048,11 +1051,336 @@ def test_crawl4ai_adapter_crawl_success_same_origin_only(config, monkeypatch):
     assert payload["items"][0]["extras"]["crawl_query"] == "pricing faq"
 
 
+def test_hacker_news_search_success(config, monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        text = "{}"
+
+        @staticmethod
+        def json():
+            return {
+                "hits": [
+                    {
+                        "objectID": "123",
+                        "title": "Agent frameworks",
+                        "url": "https://example.com/agent-frameworks",
+                        "author": "alice",
+                        "created_at": "2026-04-10T00:00:00Z",
+                        "points": 42,
+                        "num_comments": 3,
+                        "_tags": ["story"],
+                    }
+                ],
+                "hitsPerPage": 1,
+                "nbHits": 10,
+                "nbPages": 10,
+            }
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(_url, params=None, headers=None, timeout=None):
+            return FakeResponse()
+
+    monkeypatch.setattr("agent_reach.adapters.hacker_news._import_requests", lambda: FakeRequests)
+
+    payload = HackerNewsAdapter(config=config).search("agent frameworks", limit=1)
+
+    assert payload["ok"] is True
+    assert payload["items"][0]["id"] == "123"
+    assert payload["items"][0]["extras"]["hn_url"] == "https://news.ycombinator.com/item?id=123"
+    assert payload["items"][0]["extras"]["source_hints"]["source_kind"] == "search_result"
+    assert payload["meta"]["backend"] == "hn_algolia"
+    assert payload["meta"]["total_available"] == 10
+
+
+def test_hacker_news_top_reads_story_items(config, monkeypatch):
+    class FakeResponse:
+        def __init__(self, payload):
+            self.status_code = 200
+            self.text = json.dumps(payload)
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(url, params=None, headers=None, timeout=None):
+            if url.endswith("/topstories.json"):
+                return FakeResponse([123, 456])
+            return FakeResponse(
+                {
+                    "id": 123,
+                    "type": "story",
+                    "title": "HN Story",
+                    "url": "https://example.com/story",
+                    "by": "alice",
+                    "time": 1775788800,
+                    "score": 10,
+                    "descendants": 2,
+                }
+            )
+
+    monkeypatch.setattr("agent_reach.adapters.hacker_news._import_requests", lambda: FakeRequests)
+
+    payload = HackerNewsAdapter(config=config).top("top", limit=1)
+
+    assert payload["ok"] is True
+    assert payload["items"][0]["kind"] == "hacker_news_story"
+    assert payload["items"][0]["author"] == "alice"
+    assert payload["meta"]["backend"] == "hacker_news_firebase"
+
+
+def test_mcp_registry_search_success(config, monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        text = "{}"
+
+        @staticmethod
+        def json():
+            return {
+                "servers": [
+                    {
+                        "server": {
+                            "name": "ac.tandem/docs-mcp",
+                            "description": "Remote MCP server for docs",
+                            "repository": {"url": "https://github.com/frumu-ai/tandem", "source": "github"},
+                            "websiteUrl": "https://tandem.ac",
+                            "version": "0.3.0",
+                            "remotes": [{"type": "streamable-http", "url": "https://tandem.ac/mcp"}],
+                            "unknownPreviewField": True,
+                        },
+                        "_meta": {
+                            "io.modelcontextprotocol.registry/official": {
+                                "status": "active",
+                                "publishedAt": "2026-04-02T11:22:40Z",
+                                "updatedAt": "2026-04-03T00:00:00Z",
+                                "isLatest": True,
+                            }
+                        },
+                    }
+                ],
+                "metadata": {"count": 1, "nextCursor": None},
+            }
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(_url, params=None, headers=None, timeout=None):
+            return FakeResponse()
+
+    monkeypatch.setattr("agent_reach.adapters.mcp_registry._import_requests", lambda: FakeRequests)
+
+    payload = MCPRegistryAdapter(config=config).search("docs mcp", limit=1)
+
+    assert payload["ok"] is True
+    assert payload["items"][0]["kind"] == "mcp_server"
+    assert payload["items"][0]["id"] == "ac.tandem/docs-mcp"
+    assert payload["items"][0]["extras"]["repository_url"] == "https://github.com/frumu-ai/tandem"
+    assert payload["items"][0]["extras"]["source_hints"]["source_kind"] == "registry_entry"
+    assert payload["meta"]["pages_fetched"] == 1
+
+
+def test_mcp_registry_read_latest_and_not_found(config, monkeypatch):
+    class FakeResponse:
+        def __init__(self, status_code, payload):
+            self.status_code = status_code
+            self.text = json.dumps(payload)
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    captured = {}
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(url, params=None, headers=None, timeout=None):
+            captured["url"] = url
+            if "missing" in url:
+                return FakeResponse(404, {"error": "not found"})
+            return FakeResponse(
+                200,
+                {
+                    "server": {
+                        "name": "ac.tandem/docs-mcp",
+                        "description": "Remote MCP server",
+                        "version": "0.3.0",
+                    },
+                    "_meta": {},
+                },
+            )
+
+    monkeypatch.setattr("agent_reach.adapters.mcp_registry._import_requests", lambda: FakeRequests)
+
+    payload = MCPRegistryAdapter(config=config).read("ac.tandem/docs-mcp")
+    missing = MCPRegistryAdapter(config=config).read("missing/server")
+
+    assert payload["ok"] is True
+    assert "versions/latest" in captured["url"]
+    assert missing["ok"] is False
+    assert missing["error"]["code"] == "not_found"
+
+
+def test_reddit_search_success_with_bearer_token(config, monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        text = "{}"
+
+        @staticmethod
+        def json():
+            return {
+                "kind": "Listing",
+                "data": {
+                    "after": "t3_next",
+                    "children": [
+                        {
+                            "kind": "t3",
+                            "data": {
+                                "name": "t3_abc",
+                                "id": "abc",
+                                "title": "Agent discussion",
+                                "permalink": "/r/LocalLLaMA/comments/abc/agent_discussion/",
+                                "selftext": "Thread body",
+                                "author": "alice",
+                                "created_utc": 1775788800,
+                                "subreddit": "LocalLLaMA",
+                                "score": 10,
+                                "num_comments": 2,
+                                "url": "https://www.reddit.com/r/LocalLLaMA/comments/abc/agent_discussion/",
+                            },
+                        }
+                    ],
+                },
+            }
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(url, params=None, headers=None, timeout=None):
+            assert url.endswith("/r/LocalLLaMA/search")
+            assert params["restrict_sr"] == 1
+            assert headers["Authorization"] == "Bearer token"
+            return FakeResponse()
+
+    config.set("reddit_user_agent", "windows:agent-reach:v1.6.0 (by /u/example)")
+    config.set("reddit_access_token", "token")
+    monkeypatch.setattr("agent_reach.adapters.reddit._import_requests", lambda: FakeRequests)
+
+    payload = RedditAdapter(config=config).search("r/LocalLLaMA agent frameworks", limit=1)
+
+    assert payload["ok"] is True
+    assert payload["items"][0]["kind"] == "reddit_post"
+    assert payload["items"][0]["extras"]["subreddit"] == "LocalLLaMA"
+    assert payload["items"][0]["extras"]["source_hints"]["source_kind"] == "forum_post"
+    assert payload["meta"]["next_cursor"] == "t3_next"
+
+
+def test_reddit_read_success_with_client_credentials(config, monkeypatch):
+    class FakeResponse:
+        def __init__(self, payload, status_code=200):
+            self.status_code = status_code
+            self.text = json.dumps(payload)
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    calls = []
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def post(url, data=None, auth=None, headers=None, timeout=None):
+            calls.append(("post", url, data, auth))
+            return FakeResponse({"access_token": "oauth-token"})
+
+        @staticmethod
+        def get(url, params=None, headers=None, timeout=None):
+            calls.append(("get", url, params, headers["Authorization"]))
+            return FakeResponse(
+                [
+                    {
+                        "kind": "Listing",
+                        "data": {
+                            "children": [
+                                {
+                                    "kind": "t3",
+                                    "data": {
+                                        "name": "t3_abc",
+                                        "id": "abc",
+                                        "title": "Thread title",
+                                        "permalink": "/r/redditdev/comments/abc/thread/",
+                                        "selftext": "Thread body",
+                                        "author": "alice",
+                                    },
+                                }
+                            ]
+                        },
+                    },
+                    {
+                        "kind": "Listing",
+                        "data": {
+                            "children": [
+                                {
+                                    "kind": "t1",
+                                    "data": {
+                                        "name": "t1_def",
+                                        "id": "def",
+                                        "body": "Comment body",
+                                        "author": "bob",
+                                        "permalink": "/r/redditdev/comments/abc/thread/def/",
+                                    },
+                                }
+                            ]
+                        },
+                    },
+                ]
+            )
+
+    config.set("reddit_user_agent", "windows:agent-reach:v1.6.0 (by /u/example)")
+    config.set("reddit_client_id", "client-id")
+    config.set("reddit_client_secret", "client-secret")
+    monkeypatch.setattr("agent_reach.adapters.reddit._import_requests", lambda: FakeRequests)
+
+    payload = RedditAdapter(config=config).read("https://www.reddit.com/r/redditdev/comments/abc/thread/", limit=2)
+
+    assert payload["ok"] is True
+    assert calls[0][3] == ("client-id", "client-secret")
+    assert calls[1][3] == "Bearer oauth-token"
+    assert [item["kind"] for item in payload["items"]] == ["reddit_post", "reddit_comment"]
+    assert payload["meta"]["comment_count"] == 1
+
+
+def test_reddit_requires_oauth_configuration(config):
+    missing_agent = RedditAdapter(config=config).search("agent frameworks", limit=1)
+    config.set("reddit_user_agent", "windows:agent-reach:v1.6.0 (by /u/example)")
+    missing_oauth = RedditAdapter(config=config).search("agent frameworks", limit=1)
+
+    assert missing_agent["ok"] is False
+    assert missing_agent["error"]["code"] == "missing_configuration"
+    assert "User-Agent" in missing_agent["error"]["message"]
+    assert missing_oauth["ok"] is False
+    assert missing_oauth["error"]["code"] == "missing_configuration"
+    assert "OAuth" in missing_oauth["error"]["message"]
+
+
 def test_base_adapter_runtime_env_is_noninteractive_and_utf8(config, monkeypatch):
     monkeypatch.delenv("PYTHONIOENCODING", raising=False)
     monkeypatch.delenv("PYTHONUTF8", raising=False)
     config.set("qiita_token", "qiita-token")
     config.set("searxng_base_url", "https://search.example.com")
+    config.set("reddit_access_token", "reddit-token")
+    config.set("reddit_user_agent", "windows:agent-reach:v1.6.0 (by /u/example)")
 
     env = BaseAdapter(config=config).runtime_env()
 
@@ -1060,3 +1388,5 @@ def test_base_adapter_runtime_env_is_noninteractive_and_utf8(config, monkeypatch
     assert env["PYTHONUTF8"] == "1"
     assert env["QIITA_TOKEN"] == "qiita-token"
     assert env["SEARXNG_BASE_URL"] == "https://search.example.com"
+    assert env["REDDIT_ACCESS_TOKEN"] == "reddit-token"
+    assert env["REDDIT_USER_AGENT"] == "windows:agent-reach:v1.6.0 (by /u/example)"

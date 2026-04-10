@@ -118,6 +118,9 @@ def test_channel_can_handle_contract():
         "rss": "https://example.com/feed.xml",
         "searxng": "https://example.com",
         "crawl4ai": "https://example.com",
+        "hacker_news": "https://news.ycombinator.com/item?id=8863",
+        "mcp_registry": "https://registry.modelcontextprotocol.io/v0.1/servers",
+        "reddit": "https://www.reddit.com/r/redditdev/comments/example/post/",
         "twitter": "https://x.com/openai/status/1",
     }
 
@@ -138,3 +141,7 @@ def test_specific_operation_contracts_cover_channel_specific_options():
     assert crawl_contract["options"][0]["name"] == "query"
     assert crawl_contract["options"][0]["required"] is True
     assert crawl_contract["options"][0]["sdk_kwarg"] == "crawl_query"
+
+    assert contracts["hacker_news"]["operation_contracts"]["top"]["input_kind"] == "list"
+    assert contracts["mcp_registry"]["operation_contracts"]["read"]["input_kind"] == "registry_server"
+    assert contracts["reddit"]["operation_contracts"]["read"]["input_kind"] == "post"

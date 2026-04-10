@@ -23,13 +23,13 @@ PRESETS = (
 )
 
 _PRESET_CHANNELS = {
-    "broad-web": ("exa_search", "searxng", "web", "crawl4ai"),
-    "oss-watch": ("github", "exa_search", "searxng", "web", "crawl4ai"),
+    "broad-web": ("exa_search", "searxng", "hacker_news", "reddit", "web", "crawl4ai"),
+    "oss-watch": ("github", "mcp_registry", "hacker_news", "exa_search", "searxng", "web", "crawl4ai"),
     "japan-tech": ("qiita", "hatena_bookmark", "searxng", "web"),
-    "social-pulse": ("bluesky", "twitter"),
-    "feed-watch": ("rss", "searxng", "web", "crawl4ai"),
+    "social-pulse": ("bluesky", "reddit", "twitter"),
+    "feed-watch": ("rss", "hacker_news", "searxng", "web", "crawl4ai"),
     "research-papers": ("exa_search", "searxng", "web", "crawl4ai"),
-    "security": ("github", "exa_search", "searxng", "rss", "web", "crawl4ai"),
+    "security": ("github", "mcp_registry", "hacker_news", "exa_search", "searxng", "rss", "web", "crawl4ai"),
 }
 
 

@@ -12,8 +12,11 @@ from .bluesky import BlueskyAdapter
 from .crawl4ai import Crawl4AIAdapter
 from .exa_search import ExaSearchAdapter
 from .github import GitHubAdapter
+from .hacker_news import HackerNewsAdapter
 from .hatena_bookmark import HatenaBookmarkAdapter
+from .mcp_registry import MCPRegistryAdapter
 from .qiita import QiitaAdapter
+from .reddit import RedditAdapter
 from .rss import RSSAdapter
 from .searxng import SearXNGAdapter
 from .twitter import TwitterAdapter
@@ -27,7 +30,10 @@ ADAPTERS: dict[str, Type[BaseAdapter]] = {
     "exa_search": ExaSearchAdapter,
     "github": GitHubAdapter,
     "hatena_bookmark": HatenaBookmarkAdapter,
+    "hacker_news": HackerNewsAdapter,
+    "mcp_registry": MCPRegistryAdapter,
     "qiita": QiitaAdapter,
+    "reddit": RedditAdapter,
     "youtube": YouTubeAdapter,
     "rss": RSSAdapter,
     "searxng": SearXNGAdapter,
@@ -52,7 +58,10 @@ __all__ = [
     "ExaSearchAdapter",
     "GitHubAdapter",
     "HatenaBookmarkAdapter",
+    "HackerNewsAdapter",
+    "MCPRegistryAdapter",
     "QiitaAdapter",
+    "RedditAdapter",
     "RSSAdapter",
     "SearXNGAdapter",
     "TwitterAdapter",

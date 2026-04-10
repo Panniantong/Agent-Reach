@@ -872,6 +872,8 @@ class TestCLI:
             "agent_reach.scout.check_all",
             lambda _config, probe=False: {
                 "github": {"status": "ok", "message": "ready"},
+                "mcp_registry": {"status": "ok", "message": "ready"},
+                "hacker_news": {"status": "ok", "message": "ready"},
                 "exa_search": {"status": "ok", "message": "ready"},
                 "web": {"status": "ok", "message": "ready"},
                 "searxng": {"status": "off", "message": "configure it"},
@@ -883,6 +885,8 @@ class TestCLI:
             "agent_reach.scout.get_all_channel_contracts",
             lambda: [
                 {"name": "github", "description": "GitHub", "tier": 0, "operations": ["search", "read"], "supports_probe": True},
+                {"name": "mcp_registry", "description": "MCP Registry", "tier": 2, "operations": ["search", "read"], "supports_probe": True},
+                {"name": "hacker_news", "description": "Hacker News", "tier": 2, "operations": ["search", "read", "top"], "supports_probe": True},
                 {"name": "exa_search", "description": "Exa", "tier": 0, "operations": ["search"], "supports_probe": True},
                 {"name": "web", "description": "Any web page", "tier": 0, "operations": ["read"], "supports_probe": True},
                 {"name": "searxng", "description": "SearXNG", "tier": 2, "operations": ["search"], "supports_probe": True},
@@ -913,9 +917,17 @@ class TestCLI:
         assert payload["command"] == "scout"
         assert payload["plan_only"] is True
         assert payload["quality_profile"] == "precision"
-        assert payload["ready_channels"] == ["github", "exa_search", "web"]
-        assert payload["seed_channels"] == ["github", "exa_search", "searxng", "web", "crawl4ai"]
-        assert payload["available_channels"][3]["channel"] == "searxng"
+        assert payload["ready_channels"] == ["github", "mcp_registry", "hacker_news", "exa_search", "web"]
+        assert payload["seed_channels"] == [
+            "github",
+            "mcp_registry",
+            "hacker_news",
+            "exa_search",
+            "searxng",
+            "web",
+            "crawl4ai",
+        ]
+        assert payload["available_channels"][5]["channel"] == "searxng"
         assert payload["not_ready_channels"][0]["channel"] == "searxng"
 
     def test_scout_requires_plan_only(self, capsys):
@@ -974,6 +986,25 @@ class TestCLI:
         output = capsys.readouterr().out
         assert saved["searxng_base_url"] == "https://search.example.com"
         assert "https://search.example.com" in output
+
+    def test_configure_reddit_keys(self, capsys, monkeypatch):
+        saved = {}
+
+        class _FakeConfig:
+            def set(self, key, value):
+                saved[key] = value
+
+        monkeypatch.setattr("agent_reach.config.Config", lambda: _FakeConfig())
+
+        assert main(["configure", "reddit-user-agent", "windows:agent-reach:v1.6.0", "(by", "/u/example)"]) == 0
+        assert main(["configure", "reddit-client-id", "client-id"]) == 0
+        assert main(["configure", "reddit-client-secret", "client-secret"]) == 0
+        output = capsys.readouterr().out
+
+        assert saved["reddit_user_agent"] == "windows:agent-reach:v1.6.0 (by /u/example)"
+        assert saved["reddit_client_id"] == "client-id"
+        assert saved["reddit_client_secret"] == "client-secret"
+        assert "client-secret" not in output
 
     def test_batch_resume_skips_existing_query(self, capsys, monkeypatch, tmp_path):
         plan_path = tmp_path / "plan.json"

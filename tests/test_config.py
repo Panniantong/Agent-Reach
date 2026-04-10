@@ -35,17 +35,30 @@ class TestConfig:
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
         monkeypatch.delenv("QIITA_TOKEN", raising=False)
         monkeypatch.delenv("SEARXNG_BASE_URL", raising=False)
+        monkeypatch.delenv("REDDIT_ACCESS_TOKEN", raising=False)
+        monkeypatch.delenv("REDDIT_BEARER_TOKEN", raising=False)
+        monkeypatch.delenv("REDDIT_CLIENT_ID", raising=False)
+        monkeypatch.delenv("REDDIT_CLIENT_SECRET", raising=False)
+        monkeypatch.delenv("REDDIT_USER_AGENT", raising=False)
         monkeypatch.delenv("TWITTER_AUTH_TOKEN", raising=False)
         monkeypatch.delenv("TWITTER_CT0", raising=False)
         monkeypatch.setenv("GH_TOKEN", "gh-token")
         monkeypatch.setenv("QIITA_TOKEN", "qiita-token")
         monkeypatch.setenv("SEARXNG_BASE_URL", "https://search.example.com/search")
+        monkeypatch.setenv("REDDIT_BEARER_TOKEN", "reddit-token")
+        monkeypatch.setenv("REDDIT_CLIENT_ID", "reddit-client-id")
+        monkeypatch.setenv("REDDIT_CLIENT_SECRET", "reddit-client-secret")
+        monkeypatch.setenv("REDDIT_USER_AGENT", "windows:agent-reach:v1.6.0 (by /u/example)")
         monkeypatch.setenv("AUTH_TOKEN", "auth-token")
         monkeypatch.setenv("CT0", "ct0-token")
 
         assert tmp_config.get("github_token") == "gh-token"
         assert tmp_config.get("qiita_token") == "qiita-token"
         assert tmp_config.get("searxng_base_url") == "https://search.example.com"
+        assert tmp_config.get("reddit_access_token") == "reddit-token"
+        assert tmp_config.get("reddit_client_id") == "reddit-client-id"
+        assert tmp_config.get("reddit_client_secret") == "reddit-client-secret"
+        assert tmp_config.get("reddit_user_agent") == "windows:agent-reach:v1.6.0 (by /u/example)"
         assert tmp_config.get("twitter_auth_token") == "auth-token"
         assert tmp_config.get("twitter_ct0") == "ct0-token"
 
@@ -74,6 +87,12 @@ class TestConfig:
         tmp_config.set("github_token", "test-key")
         assert tmp_config.is_configured("github_token")
 
+        assert not tmp_config.is_configured("reddit")
+        tmp_config.set("reddit_user_agent", "windows:agent-reach:v1.6.0 (by /u/example)")
+        tmp_config.set("reddit_client_id", "client-id")
+        tmp_config.set("reddit_client_secret", "client-secret")
+        assert tmp_config.is_configured("reddit")
+
     def test_set_normalizes_searxng_base_url(self, tmp_config):
         tmp_config.set("searxng_base_url", "search.example.com/search")
         assert tmp_config.get("searxng_base_url") == "https://search.example.com"
@@ -82,6 +101,11 @@ class TestConfig:
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
         monkeypatch.delenv("GH_TOKEN", raising=False)
         monkeypatch.delenv("SEARXNG_BASE_URL", raising=False)
+        monkeypatch.delenv("REDDIT_ACCESS_TOKEN", raising=False)
+        monkeypatch.delenv("REDDIT_BEARER_TOKEN", raising=False)
+        monkeypatch.delenv("REDDIT_CLIENT_ID", raising=False)
+        monkeypatch.delenv("REDDIT_CLIENT_SECRET", raising=False)
+        monkeypatch.delenv("REDDIT_USER_AGENT", raising=False)
         monkeypatch.delenv("TWITTER_AUTH_TOKEN", raising=False)
         monkeypatch.delenv("TWITTER_CT0", raising=False)
         monkeypatch.delenv("AUTH_TOKEN", raising=False)
@@ -90,14 +114,17 @@ class TestConfig:
         assert isinstance(features, dict)
         assert "github_token" in features
         assert "searxng" in features
+        assert "reddit" in features
         assert "twitter" in features
         assert all(v is False for v in features.values())
 
     def test_to_dict_masks_sensitive(self, tmp_config):
         tmp_config.set("exa_api_key", "super-secret-key-12345")
+        tmp_config.set("reddit_client_secret", "client-secret-12345")
         tmp_config.set("normal_setting", "visible")
         masked = tmp_config.to_dict()
         assert masked["exa_api_key"] == "super-se..."
+        assert masked["reddit_client_secret"] == "client-s..."
         assert masked["normal_setting"] == "visible"
 
     def test_save_creates_file_with_restricted_permissions(self, tmp_path):
