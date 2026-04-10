@@ -7,6 +7,8 @@ import subprocess
 from urllib.error import URLError
 
 from agent_reach.channels import get_all_channels, get_channel
+from agent_reach.channels.instagram import InstagramChannel
+from agent_reach.channels.tiktok import TikTokChannel
 from agent_reach.channels.v2ex import V2EXChannel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
 from agent_reach.channels.xueqiu import XueqiuChannel
@@ -742,3 +744,55 @@ class TestXiaoHongShuChannel:
         status, msg = XiaoHongShuChannel().check()
         assert status == "off"
         assert "xiaohongshu-cli" in msg
+
+
+class TestInstagramChannel:
+    def test_can_handle_instagram_urls(self):
+        ch = InstagramChannel()
+        assert ch.can_handle("https://www.instagram.com/p/abc123/")
+        assert ch.can_handle("https://instagram.com/reel/xyz789/")
+        assert ch.can_handle("https://instagr.am/p/abc123/")
+        assert not ch.can_handle("https://twitter.com/user")
+        assert not ch.can_handle("https://tiktok.com/@user/video/1")
+
+    def test_check_ok_when_ytdlp_installed(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/local/bin/yt-dlp" if cmd == "yt-dlp" else None)
+        status, msg = InstagramChannel().check()
+        assert status == "ok"
+        assert "Reels" in msg
+
+    def test_check_off_when_ytdlp_missing(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: None)
+        status, msg = InstagramChannel().check()
+        assert status == "off"
+        assert "yt-dlp" in msg
+
+    def test_registered_in_all_channels(self):
+        names = [ch.name for ch in get_all_channels()]
+        assert "instagram" in names
+
+
+class TestTikTokChannel:
+    def test_can_handle_tiktok_urls(self):
+        ch = TikTokChannel()
+        assert ch.can_handle("https://www.tiktok.com/@user/video/123456789")
+        assert ch.can_handle("https://tiktok.com/@user/video/1")
+        assert ch.can_handle("https://vm.tiktok.com/abc123/")
+        assert not ch.can_handle("https://instagram.com/p/abc/")
+        assert not ch.can_handle("https://youtube.com/watch?v=abc")
+
+    def test_check_ok_when_ytdlp_installed(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/local/bin/yt-dlp" if cmd == "yt-dlp" else None)
+        status, msg = TikTokChannel().check()
+        assert status == "ok"
+        assert "字幕" in msg or "metadata" in msg.lower() or "元数据" in msg
+
+    def test_check_off_when_ytdlp_missing(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: None)
+        status, msg = TikTokChannel().check()
+        assert status == "off"
+        assert "yt-dlp" in msg
+
+    def test_registered_in_all_channels(self):
+        names = [ch.name for ch in get_all_channels()]
+        assert "tiktok" in names
