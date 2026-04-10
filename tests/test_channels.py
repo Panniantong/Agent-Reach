@@ -7,6 +7,7 @@ import subprocess
 from urllib.error import URLError
 
 from agent_reach.channels import get_all_channels, get_channel
+from agent_reach.channels.facebook import FacebookChannel
 from agent_reach.channels.v2ex import V2EXChannel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
 from agent_reach.channels.xueqiu import XueqiuChannel
@@ -742,3 +743,30 @@ class TestXiaoHongShuChannel:
         status, msg = XiaoHongShuChannel().check()
         assert status == "off"
         assert "xiaohongshu-cli" in msg
+
+
+class TestFacebookChannel:
+    def test_can_handle_facebook_urls(self):
+        ch = FacebookChannel()
+        assert ch.can_handle("https://www.facebook.com/video/12345")
+        assert ch.can_handle("https://facebook.com/groups/python/posts/1")
+        assert ch.can_handle("https://fb.com/video/12345")
+        assert ch.can_handle("https://fb.watch/abc123/")
+        assert not ch.can_handle("https://instagram.com/p/abc/")
+        assert not ch.can_handle("https://twitter.com/user")
+
+    def test_check_ok_when_ytdlp_installed(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/local/bin/yt-dlp" if cmd == "yt-dlp" else None)
+        status, msg = FacebookChannel().check()
+        assert status == "ok"
+        assert "yt-dlp" in msg or "视频" in msg or "Jina" in msg
+
+    def test_check_off_when_ytdlp_missing(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: None)
+        status, msg = FacebookChannel().check()
+        assert status == "off"
+        assert "yt-dlp" in msg
+
+    def test_registered_in_all_channels(self):
+        names = [ch.name for ch in get_all_channels()]
+        assert "facebook" in names
