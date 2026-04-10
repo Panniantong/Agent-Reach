@@ -129,15 +129,27 @@ class TestV2EXChannel:
         import urllib.request
 
         fake_data = [
-            {"id": i, "title": f"Topic {i}", "url": f"https://v2ex.com/t/{i}", "replies": i,
-             "content": "", "created": 1700000000 + i, "node": {"name": "tech", "title": "Tech"}}
+            {
+                "id": i,
+                "title": f"Topic {i}",
+                "url": f"https://v2ex.com/t/{i}",
+                "replies": i,
+                "content": "",
+                "created": 1700000000 + i,
+                "node": {"name": "tech", "title": "Tech"},
+            }
             for i in range(10)
         ]
 
         class FakeResponse:
-            def __enter__(self): return self
-            def __exit__(self, *_): pass
-            def read(self): return json.dumps(fake_data).encode()
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(fake_data).encode()
 
         monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: FakeResponse())
         topics = V2EXChannel().get_hot_topics(limit=3)
@@ -148,14 +160,26 @@ class TestV2EXChannel:
 
         long_content = "A" * 300
         fake_data = [
-            {"id": 1, "title": "Long post", "url": "https://v2ex.com/t/1", "replies": 0,
-             "content": long_content, "created": 1700000000, "node": {"name": "tech", "title": "Tech"}}
+            {
+                "id": 1,
+                "title": "Long post",
+                "url": "https://v2ex.com/t/1",
+                "replies": 0,
+                "content": long_content,
+                "created": 1700000000,
+                "node": {"name": "tech", "title": "Tech"},
+            }
         ]
 
         class FakeResponse:
-            def __enter__(self): return self
-            def __exit__(self, *_): pass
-            def read(self): return json.dumps(fake_data).encode()
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(fake_data).encode()
 
         monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: FakeResponse())
         topics = V2EXChannel().get_hot_topics(limit=1)
@@ -181,9 +205,14 @@ class TestV2EXChannel:
         ]
 
         class FakeResponse:
-            def __enter__(self): return self
-            def __exit__(self, *_): pass
-            def read(self): return json.dumps(fake_data).encode()
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(fake_data).encode()
 
         monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: FakeResponse())
         topics = V2EXChannel().get_node_topics("python")
@@ -229,9 +258,14 @@ class TestV2EXChannel:
             def __init__(self, payload):
                 self._payload = payload
 
-            def __enter__(self): return self
-            def __exit__(self, *_): pass
-            def read(self): return json.dumps(self._payload).encode()
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(self._payload).encode()
 
         def fake_urlopen(req, timeout=None):
             url = req.full_url
@@ -267,10 +301,17 @@ class TestV2EXChannel:
         ]
 
         class FakeResponse:
-            def __init__(self, payload): self._payload = payload
-            def __enter__(self): return self
-            def __exit__(self, *_): pass
-            def read(self): return json.dumps(self._payload).encode()
+            def __init__(self, payload):
+                self._payload = payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(self._payload).encode()
 
         def fake_urlopen(req, timeout=None):
             if "replies" in req.full_url:
@@ -304,9 +345,14 @@ class TestV2EXChannel:
         }
 
         class FakeResponse:
-            def __enter__(self): return self
-            def __exit__(self, *_): pass
-            def read(self): return json.dumps(fake_user).encode()
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(fake_user).encode()
 
         monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: FakeResponse())
         user = V2EXChannel().get_user("alice")
@@ -344,9 +390,7 @@ class TestXueqiuChannel:
 
         fake_response_data = {
             "data": {
-                "items": [
-                    {"quote": {"symbol": "SH000001", "name": "上证指数", "current": 3200.0}}
-                ]
+                "items": [{"quote": {"symbol": "SH000001", "name": "上证指数", "current": 3200.0}}]
             }
         }
 
@@ -487,7 +531,14 @@ class TestXueqiuChannel:
 
         fake_data = {
             "list": [
-                make_item(111, "市场分析", "<p>今天大盘走势&amp;分析</p>", "投资者A", 42, "/1234567890/111"),
+                make_item(
+                    111,
+                    "市场分析",
+                    "<p>今天大盘走势&amp;分析</p>",
+                    "投资者A",
+                    42,
+                    "/1234567890/111",
+                ),
                 make_item(222, "", "短评", "投资者B", 10, "/9876543210/222"),
             ]
         }
@@ -520,14 +571,16 @@ class TestXueqiuChannel:
         fake_data = {
             "list": [
                 {
-                    "data": json.dumps({
-                        "id": i,
-                        "title": f"Post {i}",
-                        "text": f"Content {i}",
-                        "user": {"screen_name": f"User {i}"},
-                        "like_count": i,
-                        "target": f"/user/{i}",
-                    }),
+                    "data": json.dumps(
+                        {
+                            "id": i,
+                            "title": f"Post {i}",
+                            "text": f"Content {i}",
+                            "user": {"screen_name": f"User {i}"},
+                            "like_count": i,
+                            "target": f"/user/{i}",
+                        }
+                    ),
                     "original_status": None,
                 }
                 for i in range(10)
@@ -603,18 +656,24 @@ class TestXueqiuChannel:
                 return default
 
         import agent_reach.channels.xueqiu as xq_mod
+
         monkeypatch.setattr(
             xq_mod,
             "_load_cookies_from_config",
-            lambda: (xq_mod._inject_cookie_string("xq_a_token=TESTTOKEN; xq_is_login=1") or True),
+            lambda: xq_mod._inject_cookie_string("xq_a_token=TESTTOKEN; xq_is_login=1") or True,
         )
         monkeypatch.setattr(xq_mod, "_load_cookies_from_browser", lambda: False)
 
         # Patch opener so no real HTTP call is made
         class FakeResp:
-            def __enter__(self): return self
-            def __exit__(self, *_): pass
-            def read(self): return b'{"data":{"items":[]}}'
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return b'{"data":{"items":[]}}'
 
         monkeypatch.setattr(xq_mod._opener, "open", lambda req, timeout=None: FakeResp())
 
@@ -631,9 +690,14 @@ class TestXueqiuChannel:
         captured = {}
 
         class FakeResp:
-            def __enter__(self): return self
-            def __exit__(self, *_): pass
-            def read(self): return b'{"data":{"items":[]}}'
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return b'{"data":{"items":[]}}'
 
         def fake_open(req, timeout=None):
             captured["ua"] = req.get_header("User-agent")
@@ -731,7 +795,9 @@ class TestXiaoHongShuChannel:
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/xhs")
 
         def fake_run(cmd, **kwargs):
-            return subprocess.CompletedProcess(cmd, 1, "", "ok: false\nerror:\n  code: not_authenticated\n")
+            return subprocess.CompletedProcess(
+                cmd, 1, "", "ok: false\nerror:\n  code: not_authenticated\n"
+            )
 
         monkeypatch.setattr(subprocess, "run", fake_run)
 
@@ -756,7 +822,9 @@ class TestInstagramChannel:
         assert not ch.can_handle("https://tiktok.com/@user/video/1")
 
     def test_check_ok_when_ytdlp_installed(self, monkeypatch):
-        monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/local/bin/yt-dlp" if cmd == "yt-dlp" else None)
+        monkeypatch.setattr(
+            shutil, "which", lambda cmd: "/usr/local/bin/yt-dlp" if cmd == "yt-dlp" else None
+        )
         status, msg = InstagramChannel().check()
         assert status == "ok"
         assert "Reels" in msg
@@ -782,7 +850,9 @@ class TestTikTokChannel:
         assert not ch.can_handle("https://youtube.com/watch?v=abc")
 
     def test_check_ok_when_ytdlp_installed(self, monkeypatch):
-        monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/local/bin/yt-dlp" if cmd == "yt-dlp" else None)
+        monkeypatch.setattr(
+            shutil, "which", lambda cmd: "/usr/local/bin/yt-dlp" if cmd == "yt-dlp" else None
+        )
         status, msg = TikTokChannel().check()
         assert status == "ok"
         assert "字幕" in msg or "metadata" in msg.lower() or "元数据" in msg

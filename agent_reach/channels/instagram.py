@@ -2,6 +2,7 @@
 """Instagram — check if yt-dlp is available for public posts and reels."""
 
 import shutil
+
 from .base import Channel
 
 
@@ -13,6 +14,7 @@ class InstagramChannel(Channel):
 
     def can_handle(self, url: str) -> bool:
         from urllib.parse import urlparse
+
         d = urlparse(url).netloc.lower()
         return "instagram.com" in d or "instagr.am" in d
 
