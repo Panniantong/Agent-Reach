@@ -49,11 +49,11 @@ Registry and readiness checks:
 4. Parse `channels.json` and verify that all of these channel names are present:
    `web`, `exa_search`, `github`, `hatena_bookmark`, `bluesky`, `qiita`, `youtube`, `rss`, `searxng`, `crawl4ai`, `hacker_news`, `mcp_registry`, `reddit`, `twitter`.
 5. For these contracts, report the exact fields:
-   - `twitter`: `auth_kind`, `entrypoint_kind`, `required_commands`, `operations`, `supports_probe`, first two `install_hints`
-   - `youtube`: `auth_kind`, `entrypoint_kind`, `required_commands`, `operations`, `supports_probe`, first two `install_hints`
+   - `twitter`: `auth_kind`, `entrypoint_kind`, `required_commands`, `operations`, `supports_probe`, `probe_operations`, `probe_coverage`, first two `install_hints`
+   - `youtube`: `auth_kind`, `entrypoint_kind`, `required_commands`, `operations`, `supports_probe`, `probe_operations`, `probe_coverage`, first two `install_hints`
    - `reddit`: `auth_kind`, `entrypoint_kind`, `required_commands`, `operations`, first two `install_hints`
-   - `hacker_news`: `auth_kind`, `operations`, `supports_probe`
-   - `mcp_registry`: `auth_kind`, `operations`, `supports_probe`
+   - `hacker_news`: `auth_kind`, `operations`, `supports_probe`, `probe_operations`, `probe_coverage`
+   - `mcp_registry`: `auth_kind`, `operations`, `supports_probe`, `probe_operations`, `probe_coverage`
    - `qiita`: the `body_mode` option for search
 6. Parse `doctor.json` and report:
    - top-level summary
@@ -62,7 +62,7 @@ Registry and readiness checks:
    - `summary.blocking_not_ready`
    - `summary.advisory_not_ready`
    - exact status and message for `twitter`, `youtube`, `reddit`, `searxng`, `crawl4ai`, `github`, and `exa_search`
-   - if present, `operation_statuses` for `twitter`
+   - if present, `operation_statuses`, `probed_operations`, `unprobed_operations`, and `probe_run_coverage` for `twitter`
 7. Parse `export-integration.json` and verify:
    - `external_project_usage.copy_files_required` is `false`
    - `external_project_usage.preferred_interface` is `agent-reach collect --json`

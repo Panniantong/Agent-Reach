@@ -38,10 +38,10 @@ Registry and readiness checks:
    `web`, `exa_search`, `github`, `hatena_bookmark`, `bluesky`, `qiita`, `youtube`, `rss`, `searxng`, `crawl4ai`, `hacker_news`, `mcp_registry`, `reddit`, `twitter`.
 3. For each of these contracts, report the exact fields:
    - `reddit`: `auth_kind`, `entrypoint_kind`, `required_commands`, `operations`, first two `install_hints`.
-   - `hacker_news`: `auth_kind`, `operations`, `supports_probe`.
-   - `mcp_registry`: `auth_kind`, `operations`, `supports_probe`.
+   - `hacker_news`: `auth_kind`, `operations`, `supports_probe`, `probe_operations`, `probe_coverage`.
+   - `mcp_registry`: `auth_kind`, `operations`, `supports_probe`, `probe_operations`, `probe_coverage`.
    - `searxng`: `auth_kind`, `operations`, first two `install_hints`.
-   - `crawl4ai`: `operations`, `supports_probe`, and the `crawl` option named `query`.
+   - `crawl4ai`: `operations`, `supports_probe`, `probe_operations`, `probe_coverage`, and the `crawl` option named `query`.
    - `qiita`: the `body_mode` option for search.
 4. Run `agent-reach doctor --json > doctor.json`.
    Record the exit code and verify `doctor.json.summary.exit_policy`, `doctor.json.summary.exit_code`, `doctor.json.summary.blocking_not_ready`, and `doctor.json.summary.advisory_not_ready`.

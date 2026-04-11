@@ -1006,6 +1006,8 @@ class TestCLI:
             "crawl4ai",
         ]
         assert payload["available_channels"][5]["channel"] == "searxng"
+        assert payload["available_channels"][5]["probe_coverage"] == "none"
+        assert payload["available_channels"][5]["probe_run_coverage"] == "not_run"
         assert payload["not_ready_channels"][0]["channel"] == "searxng"
 
     def test_scout_requires_plan_only(self, capsys):

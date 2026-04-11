@@ -17,6 +17,7 @@ class _StubChannel:
     host_patterns = []
     example_invocations = []
     supports_probe = True
+    probe_operations = ["read"]
     install_hints = []
     operation_contracts = {
         "read": {
@@ -54,6 +55,8 @@ class _StubChannel:
             "host_patterns": self.host_patterns,
             "example_invocations": self.example_invocations,
             "supports_probe": self.supports_probe,
+            "probe_operations": self.probe_operations,
+            "probe_coverage": "full" if self.supports_probe else "none",
             "install_hints": self.install_hints,
             "operation_contracts": self.operation_contracts,
         }
@@ -81,6 +84,9 @@ def test_check_all_collects_channel_results(tmp_config, monkeypatch):
     assert results["web"]["status"] == "ok"
     assert results["web"]["operation_statuses"]["read"]["status"] == "ok"
     assert results["web"]["operation_contracts"]["read"]["input_kind"] == "url"
+    assert results["web"]["probe_operations"] == ["read"]
+    assert results["web"]["probe_run_coverage"] == "not_run"
+    assert results["web"]["unprobed_operations"] == ["read"]
     assert results["github"]["backends"] == ["gh"]
     assert results["twitter"]["tier"] == 1
     assert results["twitter"]["supports_probe"] is True
@@ -92,6 +98,9 @@ def test_check_all_uses_probe_when_requested(tmp_config, monkeypatch):
     results = doctor.check_all(tmp_config, probe=True)
     assert results["web"]["status"] == "ok"
     assert results["web"]["message"] == "probe:web"
+    assert results["web"]["probed_operations"] == ["read"]
+    assert results["web"]["unprobed_operations"] == []
+    assert results["web"]["probe_run_coverage"] == "full"
 
 
 def test_check_all_skips_probe_for_channels_without_probe_support(tmp_config, monkeypatch):
@@ -110,6 +119,8 @@ def test_check_all_skips_probe_for_channels_without_probe_support(tmp_config, mo
     results = doctor.check_all(tmp_config, probe=True)
     assert results["crawl4ai"]["status"] == "ok"
     assert results["crawl4ai"]["message"] == "ready"
+    assert results["crawl4ai"]["probe_run_coverage"] == "unsupported"
+    assert results["crawl4ai"]["probed_operations"] == []
 
 
 def test_check_all_includes_extra_machine_readable_fields(tmp_config, monkeypatch):
@@ -125,6 +136,7 @@ def test_check_all_includes_extra_machine_readable_fields(tmp_config, monkeypatc
 
     results = doctor.check_all(tmp_config)
     assert results["twitter"]["operation_statuses"]["search"]["status"] == "warn"
+    assert results["twitter"]["probe_run_coverage"] == "not_run"
 
 
 def test_format_report_groups_core_and_optional():

@@ -5,7 +5,7 @@ Agent Reach is a Windows-first integration layer for research tooling. It now ex
 ## What it provides
 
 - a stable channel registry through `agent-reach channels --json`
-- readiness diagnostics through `agent-reach doctor --json`, including `operation_statuses` for downstream routing
+- readiness diagnostics through `agent-reach doctor --json`, including `operation_statuses`, `probed_operations`, and `probe_run_coverage` for downstream routing
 - a thin read-only collector through `agent-reach collect --json`
 - ledger validation and append helpers through `agent-reach ledger validate --json` and `agent-reach ledger append --json`
 - a non-mutating Codex export through `agent-reach export-integration --client codex`

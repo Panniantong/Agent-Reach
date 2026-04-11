@@ -92,6 +92,9 @@ def test_export_points_at_existing_checkout_artifacts():
     channel_contracts = {channel["name"]: channel for channel in payload["channels"]}
     assert channel_contracts["qiita"]["operation_contracts"]["search"]["options"][0]["name"] == "body_mode"
     assert channel_contracts["crawl4ai"]["operation_contracts"]["crawl"]["options"][0]["sdk_kwarg"] == "crawl_query"
+    assert channel_contracts["twitter"]["probe_operations"] == ["user", "search"]
+    assert channel_contracts["twitter"]["probe_coverage"] == "partial"
+    assert channel_contracts["youtube"]["probe_coverage"] == "full"
     assert channel_contracts["reddit"]["auth_kind"] == "none"
     assert channel_contracts["reddit"]["required_commands"] == ["rdt"]
     assert channel_contracts["hacker_news"]["operations"][0] == "search"

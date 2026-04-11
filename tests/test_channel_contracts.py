@@ -25,6 +25,8 @@ def test_channel_registry_contract():
         assert isinstance(contract["host_patterns"], list)
         assert isinstance(contract["example_invocations"], list)
         assert isinstance(contract["supports_probe"], bool)
+        assert isinstance(contract["probe_operations"], list)
+        assert contract["probe_coverage"] in {"none", "full", "partial"}
         assert isinstance(contract["install_hints"], list)
         assert isinstance(contract["operation_contracts"], dict)
         assert set(contract["operation_contracts"]) == set(contract["operations"])
@@ -145,3 +147,7 @@ def test_specific_operation_contracts_cover_channel_specific_options():
     assert contracts["hacker_news"]["operation_contracts"]["top"]["input_kind"] == "list"
     assert contracts["mcp_registry"]["operation_contracts"]["read"]["input_kind"] == "registry_server"
     assert contracts["reddit"]["operation_contracts"]["read"]["input_kind"] == "post"
+    assert contracts["twitter"]["probe_operations"] == ["user", "search"]
+    assert contracts["twitter"]["probe_coverage"] == "partial"
+    assert contracts["youtube"]["probe_operations"] == ["read"]
+    assert contracts["youtube"]["probe_coverage"] == "full"

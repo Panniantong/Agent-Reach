@@ -42,6 +42,7 @@ class TwitterChannel(Channel):
         'twitter status',
     ]
     supports_probe = True
+    probe_operations = ["user", "search"]
     install_hints = [
         "Install twitter-cli with uv tool install twitter-cli.",
         'Configure cookies with agent-reach configure twitter-cookies "auth_token=...; ct0=...".',
@@ -64,6 +65,15 @@ class TwitterChannel(Channel):
                 "recommended_probe_command": "agent-reach doctor --json --probe",
             }
             for operation in self.operations
+        }
+
+    def _probe_state(self, *, probe_run_coverage: str) -> dict[str, Any]:
+        probed_operations = list(self.probe_operations)
+        unprobed_operations = [operation for operation in self.operations if operation not in probed_operations]
+        return {
+            "probed_operations": probed_operations if probe_run_coverage != "not_run" else [],
+            "unprobed_operations": list(self.operations) if probe_run_coverage == "not_run" else unprobed_operations,
+            "probe_run_coverage": probe_run_coverage,
         }
 
     def _operation_status_from_result(
@@ -114,6 +124,7 @@ class TwitterChannel(Channel):
         if not twitter:
             return "warn", "twitter-cli is missing. Install it with uv tool install twitter-cli", {
                 "diagnostic_basis": "command_lookup",
+                **self._probe_state(probe_run_coverage="not_run"),
                 "operation_statuses": self._all_operation_statuses(
                     "off",
                     "twitter-cli is missing. Install it with uv tool install twitter-cli",
@@ -132,6 +143,7 @@ class TwitterChannel(Channel):
         except Exception:
             return "warn", "twitter-cli is installed but status could not be checked", {
                 "diagnostic_basis": "twitter status",
+                **self._probe_state(probe_run_coverage="not_run"),
                 "operation_statuses": self._all_operation_statuses(
                     "unknown",
                     "twitter-cli status could not be checked. Run agent-reach doctor --json --probe.",
@@ -147,6 +159,7 @@ class TwitterChannel(Channel):
                     "diagnostic_basis": "twitter_status_authenticated",
                     "usability_hint": "authenticated_but_unprobed",
                     "recommended_probe_command": "agent-reach doctor --json --probe",
+                    **self._probe_state(probe_run_coverage="not_run"),
                     "operation_statuses": self._authenticated_unprobed_statuses(),
                 },
             )
@@ -157,6 +170,7 @@ class TwitterChannel(Channel):
                 "Run agent-reach configure twitter-cookies \"auth_token=...; ct0=...\"",
                 {
                     "diagnostic_basis": "twitter status",
+                    **self._probe_state(probe_run_coverage="not_run"),
                     "operation_statuses": self._all_operation_statuses(
                         "off",
                         "Authentication is required. Run agent-reach configure twitter-cookies \"auth_token=...; ct0=...\"",
@@ -165,6 +179,7 @@ class TwitterChannel(Channel):
             )
         return "warn", "twitter-cli is installed but did not report a healthy session", {
             "diagnostic_basis": "twitter status",
+            **self._probe_state(probe_run_coverage="not_run"),
             "operation_statuses": self._all_operation_statuses(
                 "unknown",
                 "twitter-cli did not report a healthy session. Run agent-reach doctor --json --probe.",
@@ -179,7 +194,7 @@ class TwitterChannel(Channel):
         twitter = find_command("twitter") or shutil.which("twitter")
         if not twitter:
             return "warn", "twitter-cli is missing. Install it with uv tool install twitter-cli", {
-                "probed_operations": [],
+                **self._probe_state(probe_run_coverage="not_run"),
                 "probe_inputs": {},
                 "operation_statuses": self._all_operation_statuses(
                     "off",
@@ -193,7 +208,7 @@ class TwitterChannel(Channel):
             search_payload = adapter.search(PROBE_SEARCH_QUERY, limit=1)
         except Exception as exc:
             return "warn", f"twitter-cli is installed but the live Twitter probes crashed: {exc}", {
-                "probed_operations": ["user", "search"],
+                **self._probe_state(probe_run_coverage="not_run"),
                 "probe_inputs": {
                     "user": PROBE_USER,
                     "search": PROBE_SEARCH_QUERY,
@@ -216,7 +231,7 @@ class TwitterChannel(Channel):
 
         if user_payload["ok"] and search_payload["ok"] and search_payload.get("items"):
             return "ok", "Live user lookup and search both succeeded via twitter-cli", {
-                "probed_operations": ["user", "search"],
+                **self._probe_state(probe_run_coverage="partial"),
                 "probe_inputs": {
                     "user": PROBE_USER,
                     "search": PROBE_SEARCH_QUERY,
@@ -241,7 +256,7 @@ class TwitterChannel(Channel):
                 "twitter-cli is installed but live Twitter probes are not authenticated. "
                 "Run agent-reach configure twitter-cookies \"auth_token=...; ct0=...\""
             ), {
-                "probed_operations": ["user", "search"],
+                **self._probe_state(probe_run_coverage="partial"),
                 "probe_inputs": {
                     "user": PROBE_USER,
                     "search": PROBE_SEARCH_QUERY,
@@ -254,7 +269,7 @@ class TwitterChannel(Channel):
                 "Live user lookup succeeded, but live search failed "
                 f"({search_code or 'command_failed'}): {search_error.get('message') or 'search failed'}"
             ), {
-                "probed_operations": ["user", "search"],
+                **self._probe_state(probe_run_coverage="partial"),
                 "probe_inputs": {
                     "user": PROBE_USER,
                     "search": PROBE_SEARCH_QUERY,
@@ -267,7 +282,7 @@ class TwitterChannel(Channel):
                 "Live search succeeded, but live user lookup failed "
                 f"({user_code or 'command_failed'}): {user_error.get('message') or 'user lookup failed'}"
             ), {
-                "probed_operations": ["user", "search"],
+                **self._probe_state(probe_run_coverage="partial"),
                 "probe_inputs": {
                     "user": PROBE_USER,
                     "search": PROBE_SEARCH_QUERY,
@@ -279,7 +294,7 @@ class TwitterChannel(Channel):
             "twitter-cli is installed but live user lookup and search both failed. "
             f"user={user_code or 'command_failed'}, search={search_code or 'command_failed'}"
         ), {
-            "probed_operations": ["user", "search"],
+            **self._probe_state(probe_run_coverage="partial"),
             "probe_inputs": {
                 "user": PROBE_USER,
                 "search": PROBE_SEARCH_QUERY,

@@ -1367,7 +1367,14 @@ def _render_channels_text(contracts: Sequence[dict]) -> str:
                 f"| limit={'yes' if details.get('accepts_limit', False) else 'no'}"
                 f"{option_suffix}"
             )
-        lines.append(f"  probe: {'yes' if contract['supports_probe'] else 'no'}")
+        probe_line = f"  probe: {'yes' if contract['supports_probe'] else 'no'}"
+        if contract.get("supports_probe"):
+            coverage = contract.get("probe_coverage") or "full"
+            probe_operations = contract.get("probe_operations") or []
+            probe_line += f" | coverage: {coverage}"
+            if probe_operations:
+                probe_line += f" | probe ops: {', '.join(probe_operations)}"
+        lines.append(probe_line)
         if contract["required_commands"]:
             lines.append(f"  commands: {', '.join(contract['required_commands'])}")
         if contract["host_patterns"]:

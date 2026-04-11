@@ -21,6 +21,9 @@ def test_check_reports_warn_when_not_installed():
         status, message, extra = TwitterChannel().check_detailed()
     assert status == "warn"
     assert "uv tool install twitter-cli" in message
+    assert extra["probe_run_coverage"] == "not_run"
+    assert extra["probed_operations"] == []
+    assert extra["unprobed_operations"] == ["search", "user", "user_posts", "tweet"]
     assert extra["operation_statuses"]["search"]["status"] == "off"
 
 
@@ -48,6 +51,8 @@ def test_check_reports_warn_when_live_operations_are_unverified():
     assert extra["diagnostic_basis"] == "twitter_status_authenticated"
     assert extra["usability_hint"] == "authenticated_but_unprobed"
     assert extra["recommended_probe_command"] == "agent-reach doctor --json --probe"
+    assert extra["probe_run_coverage"] == "not_run"
+    assert extra["unprobed_operations"] == ["search", "user", "user_posts", "tweet"]
     assert extra["operation_statuses"]["search"]["status"] == "unknown"
     assert extra["operation_statuses"]["search"]["usability_hint"] == "authenticated_but_unprobed"
 
@@ -130,6 +135,9 @@ def test_probe_uses_live_user_lookup():
 
     assert status == "ok"
     assert "user lookup and search both succeeded" in message
+    assert extra["probe_run_coverage"] == "partial"
+    assert extra["probed_operations"] == ["user", "search"]
+    assert extra["unprobed_operations"] == ["user_posts", "tweet"]
     assert extra["operation_statuses"]["user"]["status"] == "ok"
     assert extra["operation_statuses"]["search"]["status"] == "ok"
     mocked_user.assert_called_once_with("openai")
@@ -175,5 +183,8 @@ def test_probe_reports_search_failure_separately_from_live_user_lookup():
 
     assert status == "warn"
     assert "Live user lookup succeeded, but live search failed" in message
+    assert extra["probe_run_coverage"] == "partial"
+    assert extra["probed_operations"] == ["user", "search"]
+    assert extra["unprobed_operations"] == ["user_posts", "tweet"]
     assert extra["operation_statuses"]["user"]["status"] == "ok"
     assert extra["operation_statuses"]["search"]["error_code"] == "not_found"

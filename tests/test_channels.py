@@ -183,6 +183,8 @@ def test_reddit_uses_rdt_cli(monkeypatch):
 def test_channel_contract_exposes_operation_option_schema():
     qiita_contract = QiitaChannel().to_contract()
     assert qiita_contract["operation_contracts"]["search"]["options"][0]["cli_flag"] == "--body-mode"
+    assert qiita_contract["probe_coverage"] == "full"
 
     crawl_contract = Crawl4AIChannel().to_contract()
     assert crawl_contract["operation_contracts"]["crawl"]["options"][0]["name"] == "query"
+    assert crawl_contract["probe_coverage"] == "none"

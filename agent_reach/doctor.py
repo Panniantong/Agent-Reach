@@ -37,6 +37,31 @@ def _default_operation_statuses(contract: dict, status: str, message: str) -> di
     }
 
 
+def _default_probe_state(contract: dict, *, probe: bool) -> dict[str, object]:
+    """Provide probe-run diagnostics even when a channel returns only a basic health tuple."""
+
+    supports_probe = bool(contract.get("supports_probe"))
+    operations = list(contract.get("operations", []))
+    probe_operations = list(contract.get("probe_operations") or (operations if supports_probe else []))
+    if not supports_probe:
+        return {
+            "probed_operations": [],
+            "unprobed_operations": [],
+            "probe_run_coverage": "unsupported",
+        }
+    if not probe:
+        return {
+            "probed_operations": [],
+            "unprobed_operations": operations,
+            "probe_run_coverage": "not_run",
+        }
+    return {
+        "probed_operations": probe_operations,
+        "unprobed_operations": [operation for operation in operations if operation not in probe_operations],
+        "probe_run_coverage": "full" if set(probe_operations) == set(operations) else "partial",
+    }
+
+
 def check_all(config: Config, probe: bool = False) -> Dict[str, dict]:
     """Collect health information from every registered channel."""
 
@@ -80,6 +105,10 @@ def check_all(config: Config, probe: bool = False) -> Dict[str, dict]:
         }
         if contract.get("operations") and "operation_statuses" not in extra:
             payload["operation_statuses"] = _default_operation_statuses(contract, status, message)
+        probe_state = _default_probe_state(contract, probe=probe)
+        for key, value in probe_state.items():
+            if key not in extra:
+                payload[key] = value
         reserved = set(payload)
         payload.update({key: value for key, value in extra.items() if key not in reserved})
         results[channel.name] = payload

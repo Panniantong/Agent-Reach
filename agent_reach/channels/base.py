@@ -30,6 +30,7 @@ class Channel(ABC):
     host_patterns: List[str] = []
     example_invocations: List[str] = []
     supports_probe: bool = False
+    probe_operations: List[str] = []
     install_hints: List[str] = []
     operation_inputs: dict[str, str] = {}
     operation_limit_support: dict[str, bool] = {}
@@ -78,6 +79,24 @@ class Channel(ABC):
             }
         return contracts
 
+    def get_probe_operations(self) -> list[str]:
+        """Return the operations covered by this channel's live probe contract."""
+
+        if not self.supports_probe:
+            return []
+        if self.probe_operations:
+            return list(self.probe_operations)
+        return list(self.operations)
+
+    def get_probe_coverage(self) -> str:
+        """Return whether probe support covers all operations or only a subset."""
+
+        if not self.supports_probe:
+            return "none"
+        if set(self.get_probe_operations()) == set(self.operations):
+            return "full"
+        return "partial"
+
     def to_contract(self) -> dict:
         """Return the machine-readable channel contract."""
 
@@ -93,6 +112,8 @@ class Channel(ABC):
             "host_patterns": list(self.host_patterns),
             "example_invocations": list(self.example_invocations),
             "supports_probe": self.supports_probe,
+            "probe_operations": self.get_probe_operations(),
+            "probe_coverage": self.get_probe_coverage(),
             "install_hints": list(self.install_hints),
             "operation_contracts": self.get_operation_contracts(),
         }

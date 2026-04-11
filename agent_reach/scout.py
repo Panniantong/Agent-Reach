@@ -74,8 +74,13 @@ def build_scout_plan(
                 "operations": contract.get("operations", []),
                 "operation_contracts": contract.get("operation_contracts", {}),
                 "supports_probe": contract.get("supports_probe", False),
+                "probe_operations": contract.get("probe_operations", []),
+                "probe_coverage": contract.get("probe_coverage", "none"),
                 "status": channel_payload.get("status", "unknown"),
                 "message": channel_payload.get("message", ""),
+                "probed_operations": channel_payload.get("probed_operations", []),
+                "unprobed_operations": channel_payload.get("unprobed_operations", []),
+                "probe_run_coverage": channel_payload.get("probe_run_coverage", "not_run"),
             }
         )
         if channel_payload.get("status") == "ok":
