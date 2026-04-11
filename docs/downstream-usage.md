@@ -26,6 +26,7 @@ agent-reach collect --channel exa_search --operation search --input "latest AI a
 agent-reach collect --channel web --operation read --input "https://example.com" --json
 agent-reach collect --channel bluesky --operation search --input "OpenAI" --limit 5 --json
 agent-reach collect --channel qiita --operation search --input "python user:Qiita" --limit 5 --json
+agent-reach collect --channel qiita --operation search --input "python user:Qiita" --limit 6 --page-size 3 --max-pages 2 --body-mode snippet --json
 agent-reach collect --channel hacker_news --operation search --input "agent frameworks" --limit 5 --json
 agent-reach collect --channel mcp_registry --operation search --input "docs mcp" --limit 5 --json
 ```
@@ -40,7 +41,7 @@ agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit
 
 This does not require `.codex-plugin`, `.mcp.json`, or `agent_reach/skill` files inside the downstream project.
 
-Treat `extras.source_hints`, `extras.media_references`, and web `meta` hygiene fields as diagnostics only. They can help downstream code explain provenance or flag suspicious extraction shape, but they are not ranking, trust scoring, summarization, or publishing instructions. `collect --max-text-chars N` is only for human text-mode snippets and does not truncate `--json` output or saved ledgers.
+Treat `extras.source_hints`, `extras.media_references`, and web `meta` hygiene fields as diagnostics only. They can help downstream code explain provenance or flag suspicious extraction shape, but they are not ranking, trust scoring, summarization, or publishing instructions. Inspect `agent-reach channels --json` `operation_contracts` before choosing per-channel controls such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`; Agent Reach does not choose those inputs for the caller. `collect --max-text-chars N` is only for human text-mode snippets and does not truncate `--json` output or saved ledgers.
 
 If a conditional command was captured without `--save`, append it later with:
 
@@ -55,6 +56,7 @@ When Codex is working inside an arbitrary project:
 - Use the globally installed `agent-reach` CLI by default.
 - Do not copy Agent Reach repo files into the project unless the user explicitly asks for repo-local plugin artifacts.
 - Use `agent-reach collect --json` as the stable handoff to project code.
+- Inspect `agent-reach channels --json` `operation_contracts` before choosing per-channel pagination or time-window options.
 - Add `--save .agent-reach/evidence.jsonl` when the run needs an auditable evidence trail.
 - Validate ledgers with `agent-reach ledger validate --json` before treating them as CI artifacts.
 - Use `agent-reach plan candidates` for lightweight URL or ID dedupe before follow-up reads.
@@ -64,11 +66,12 @@ When Codex is working inside an arbitrary project:
 Large-scale research should use bounded fan-out:
 
 1. Start with 2-4 broad discovery queries at `--limit 5` to `--limit 10`.
-2. Save raw `CollectionResult` JSONL with `--save .agent-reach/evidence.jsonl`.
-3. Run `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit 20 --json`.
-4. Use specialist channels when the source is known.
-5. Deep-read only selected URLs with `web`.
-6. Persist raw ledgers and candidate plans as artifacts in CI when traceability matters.
+2. Choose page, cursor, and time-window inputs from the live channel contract when a task needs bounded multi-page collection.
+3. Save raw `CollectionResult` JSONL with `--save .agent-reach/evidence.jsonl`.
+4. Run `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit 20 --json`.
+5. Use specialist channels when the source is known.
+6. Deep-read only selected URLs with `web`.
+7. Persist raw ledgers and candidate plans as artifacts in CI when traceability matters.
 
 ## GitHub Actions
 
@@ -184,5 +187,7 @@ Map `payload["items"]` to the bot's normalized item type:
 - `extras.metrics` / channel-specific extras -> engagement, linked media references, labels, source hints, or diagnostics
 
 Use `agent-reach doctor --json --probe` in CI or scheduled workflows when readiness matters. By default, `doctor --json` uses the `core` exit policy: optional gaps appear in `summary.advisory_not_ready` rather than failing the command. Use `--exit-policy all` for strict all-channel readiness. Treat Twitter/X as optional: authenticated-but-unprobed status is a `warn` with `usability_hint=authenticated_but_unprobed`, while `doctor --json --probe` separates live `user` and `search` readiness under `operation_statuses`. Use `channels --json` fields such as `probe_operations` and `probe_coverage`, plus doctor fields such as `probed_operations`, `unprobed_operations`, and `probe_run_coverage`, when downstream automation needs to know whether a probe covered every operation or only a subset.
+
+When a channel exposes bounded pagination or time-window controls, `channels --json` `operation_contracts` now lists those options directly. Downstream code should decide whether to use `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`; Agent Reach only forwards them and records the resulting pagination metadata under both flat `meta` keys and `meta.pagination`.
 
 The repository examples `examples/research-ledger.ps1` and `examples/discord_news_collect.ps1` show collect-only ledger and candidate planning flows. They intentionally stop at raw artifacts so the downstream project keeps ownership of ranking, summarization, posting, and state.

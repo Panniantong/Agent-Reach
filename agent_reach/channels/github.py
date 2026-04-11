@@ -24,6 +24,37 @@ class GitHubChannel(Channel):
         "search": "query",
         "read": "repository",
     }
+    operation_options = {
+        "search": [
+            {
+                "name": "page_size",
+                "type": "integer",
+                "required": False,
+                "minimum": 1,
+                "cli_flag": "--page-size",
+                "sdk_kwarg": "page_size",
+                "description": "Maximum repositories requested from GitHub per API page.",
+            },
+            {
+                "name": "max_pages",
+                "type": "integer",
+                "required": False,
+                "minimum": 1,
+                "cli_flag": "--max-pages",
+                "sdk_kwarg": "max_pages",
+                "description": "Maximum GitHub API pages to request before stopping with pagination metadata.",
+            },
+            {
+                "name": "page",
+                "type": "integer",
+                "required": False,
+                "minimum": 1,
+                "cli_flag": "--page",
+                "sdk_kwarg": "page",
+                "description": "Starting GitHub search page number.",
+            },
+        ]
+    }
     required_commands = ["gh"]
     host_patterns = ["https://github.com/*", "https://api.github.com/*"]
     example_invocations = [

@@ -32,6 +32,26 @@ class TwitterChannel(Channel):
         "user_posts": "profile",
         "tweet": "post",
     }
+    operation_options = {
+        "search": [
+            {
+                "name": "since",
+                "type": "string",
+                "required": False,
+                "cli_flag": "--since",
+                "sdk_kwarg": "since",
+                "description": "Lower date bound forwarded to twitter-cli search.",
+            },
+            {
+                "name": "until",
+                "type": "string",
+                "required": False,
+                "cli_flag": "--until",
+                "sdk_kwarg": "until",
+                "description": "Upper date bound forwarded to twitter-cli search.",
+            },
+        ]
+    }
     required_commands = ["twitter"]
     host_patterns = ["https://x.com/*", "https://twitter.com/*"]
     example_invocations = [

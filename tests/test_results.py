@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for the external collection result schema helpers."""
 
-from agent_reach.results import build_error, build_item, build_result
+from agent_reach.results import build_error, build_item, build_pagination_meta, build_result
 
 
 def test_build_item_and_result_shape():
@@ -49,4 +49,41 @@ def test_build_error_shape():
         "code": "invalid_input",
         "message": "bad input",
         "details": {"field": "input"},
+    }
+
+
+def test_build_result_keeps_flat_and_nested_pagination_meta():
+    payload = build_result(
+        ok=True,
+        channel="github",
+        operation="search",
+        items=[],
+        raw=[],
+        meta=build_pagination_meta(
+            limit=5,
+            requested_page_size=2,
+            requested_max_pages=3,
+            requested_page=4,
+            page_size=2,
+            pages_fetched=1,
+            next_page=5,
+            has_more=True,
+            total_available=12,
+        ),
+        error=None,
+    )
+
+    assert payload["meta"]["requested_limit"] == 5
+    assert payload["meta"]["page_size"] == 2
+    assert payload["meta"]["next_page"] == 5
+    assert payload["meta"]["pagination"] == {
+        "requested_limit": 5,
+        "requested_page_size": 2,
+        "page_size": 2,
+        "requested_max_pages": 3,
+        "requested_page": 4,
+        "pages_fetched": 1,
+        "next_page": 5,
+        "has_more": True,
+        "total_available": 12,
     }

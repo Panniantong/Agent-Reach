@@ -675,6 +675,93 @@ class TestCLI:
         payload = json.loads(capsys.readouterr().out)
         assert payload["meta"]["crawl_query"] == "pricing faq"
 
+    def test_collect_pagination_options_pass_to_client(self, capsys, monkeypatch):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None, page_size=None, max_pages=None, page=None):
+                return {
+                    "ok": True,
+                    "channel": channel,
+                    "operation": operation,
+                    "items": [],
+                    "raw": {"page_size": page_size, "max_pages": max_pages, "page": page},
+                    "meta": {
+                        "input": value,
+                        "limit": limit,
+                        "page_size": page_size,
+                        "max_pages": max_pages,
+                        "page": page,
+                    },
+                    "error": None,
+                }
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "github",
+                    "--operation",
+                    "search",
+                    "--input",
+                    "agent reach",
+                    "--limit",
+                    "5",
+                    "--page-size",
+                    "2",
+                    "--max-pages",
+                    "3",
+                    "--page",
+                    "4",
+                    "--json",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["meta"]["page_size"] == 2
+        assert payload["meta"]["max_pages"] == 3
+        assert payload["meta"]["page"] == 4
+
+    def test_collect_time_window_options_pass_to_client(self, capsys, monkeypatch):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None, since=None, until=None):
+                return {
+                    "ok": True,
+                    "channel": channel,
+                    "operation": operation,
+                    "items": [],
+                    "raw": {"since": since, "until": until},
+                    "meta": {"input": value, "since": since, "until": until},
+                    "error": None,
+                }
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "twitter",
+                    "--operation",
+                    "search",
+                    "--input",
+                    "OpenAI",
+                    "--since",
+                    "2026-01-01",
+                    "--until",
+                    "2026-12-31",
+                    "--json",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["meta"]["since"] == "2026-01-01"
+        assert payload["meta"]["until"] == "2026-12-31"
+
     def test_plan_candidates_json(self, capsys, tmp_path):
         ledger_path = tmp_path / "evidence.jsonl"
         result = {
@@ -1289,6 +1376,87 @@ class TestCLI:
         assert captured.out == ""
         assert "query 1 is invalid" in captured.err
         assert "body_mode" in captured.err
+
+    def test_batch_passes_pagination_query_options_to_client(self, capsys, monkeypatch, tmp_path):
+        plan_path = tmp_path / "plan.json"
+        ledger_path = tmp_path / "evidence.jsonl"
+        plan_path.write_text(
+            json.dumps(
+                {
+                    "queries": [
+                        {
+                            "channel": "github",
+                            "operation": "search",
+                            "input": "agent reach",
+                            "limit": 5,
+                            "page_size": 2,
+                            "max_pages": 3,
+                            "page": 4,
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        captured_kwargs = {}
+
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None, page_size=None, max_pages=None, page=None):
+                captured_kwargs.update(
+                    {
+                        "channel": channel,
+                        "operation": operation,
+                        "value": value,
+                        "limit": limit,
+                        "page_size": page_size,
+                        "max_pages": max_pages,
+                        "page": page,
+                    }
+                )
+                return {
+                    "ok": True,
+                    "channel": channel,
+                    "operation": operation,
+                    "items": [],
+                    "raw": None,
+                    "meta": {
+                        "input": value,
+                        "limit": limit,
+                        "requested_page_size": page_size,
+                        "requested_max_pages": max_pages,
+                        "requested_page": page,
+                    },
+                    "error": None,
+                }
+
+        monkeypatch.setattr("agent_reach.batch.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "batch",
+                    "--plan",
+                    str(plan_path),
+                    "--save",
+                    str(ledger_path),
+                    "--json",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert captured_kwargs == {
+            "channel": "github",
+            "operation": "search",
+            "value": "agent reach",
+            "limit": 5,
+            "page_size": 2,
+            "max_pages": 3,
+            "page": 4,
+        }
+        assert payload["queries"][0]["page_size"] == 2
+        assert payload["queries"][0]["max_pages"] == 3
+        assert payload["queries"][0]["page"] == 4
 
     def test_batch_requires_crawl4ai_query_from_operation_contract(self, capsys, tmp_path):
         plan_path = tmp_path / "plan.json"

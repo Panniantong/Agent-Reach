@@ -49,12 +49,14 @@ Registry and readiness checks:
 4. Parse `channels.json` and verify that all of these channel names are present:
    `web`, `exa_search`, `github`, `hatena_bookmark`, `bluesky`, `qiita`, `youtube`, `rss`, `searxng`, `crawl4ai`, `hacker_news`, `mcp_registry`, `reddit`, `twitter`.
 5. For these contracts, report the exact fields:
-   - `twitter`: `auth_kind`, `entrypoint_kind`, `required_commands`, `operations`, `supports_probe`, `probe_operations`, `probe_coverage`, first two `install_hints`
+   - `github`: `operations`, and the `search` options named `page_size`, `max_pages`, and `page`
+   - `bluesky`: `operations`, and the `search` options named `page_size`, `max_pages`, and `cursor`
+   - `twitter`: `auth_kind`, `entrypoint_kind`, `required_commands`, `operations`, `supports_probe`, `probe_operations`, `probe_coverage`, first two `install_hints`, and the `search` options named `since` and `until`
    - `youtube`: `auth_kind`, `entrypoint_kind`, `required_commands`, `operations`, `supports_probe`, `probe_operations`, `probe_coverage`, first two `install_hints`
    - `reddit`: `auth_kind`, `entrypoint_kind`, `required_commands`, `operations`, first two `install_hints`
    - `hacker_news`: `auth_kind`, `operations`, `supports_probe`, `probe_operations`, `probe_coverage`
    - `mcp_registry`: `auth_kind`, `operations`, `supports_probe`, `probe_operations`, `probe_coverage`
-   - `qiita`: the `body_mode` option for search
+   - `qiita`: the `search` options named `body_mode`, `page_size`, `max_pages`, and `page`
 6. Parse `doctor.json` and report:
    - top-level summary
    - `summary.exit_policy`
@@ -120,6 +122,15 @@ Run these only when the readiness state or current machine setup makes sense. If
    - If not ready, run one command each and report the error envelope:
      `agent-reach collect --channel searxng --operation search --input "agent tools" --limit 3 --json > live-results/searxng-agent-tools.json`
      `agent-reach collect --channel crawl4ai --operation read --input "https://example.com" --limit 1 --json > live-results/crawl4ai-example.json`
+
+Pagination/window contract checks:
+1. If `channels.json` advertises the relevant options, run:
+   - `agent-reach collect --channel github --operation search --input "agent reach" --limit 5 --page-size 2 --max-pages 2 --page 1 --json > live-results/github-search-paged.json`
+   - `agent-reach collect --channel qiita --operation search --input "Python" --limit 5 --page-size 2 --max-pages 2 --page 1 --body-mode snippet --json > live-results/qiita-python-paged.json`
+   - `agent-reach collect --channel bluesky --operation search --input "OpenAI" --limit 5 --page-size 2 --max-pages 2 --json > live-results/bluesky-openai-paged.json`
+2. If Twitter/X is usable and the contract advertises `since` / `until`, run:
+   - `agent-reach collect --channel twitter --operation search --input "OpenAI" --limit 3 --since 2026-01-01 --until 2026-12-31 --json > live-results/twitter-openai-windowed.json`
+3. For each successful pagination/window command, report the exact `meta.pagination` object as proof that the option contract survived the CLI boundary.
 
 Cross-source follow-up:
 1. From one successful discovery result in Hacker News, Reddit, RSS, Bluesky, Exa, or SearXNG, choose one non-platform URL that looks like a normal web page.

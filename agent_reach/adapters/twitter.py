@@ -105,7 +105,7 @@ def _tweet_item(tweet: dict, idx: int, source: str) -> NormalizedItem:
     )
 
 
-def _build_search_args(query: str, limit: int) -> list[str]:
+def _build_search_args(query: str, limit: int, *, since: str | None = None, until: str | None = None) -> list[str]:
     """Translate common X-style search tokens into twitter-cli flags."""
 
     args = ["search"]
@@ -136,6 +136,10 @@ def _build_search_args(query: str, limit: int) -> list[str]:
         if not value:
             remaining.append(token)
             continue
+        if lowered_key == "since" and since is not None:
+            continue
+        if lowered_key == "until" and until is not None:
+            continue
         if lowered_key in option_values:
             args.extend([option_values[lowered_key], value])
             continue
@@ -147,6 +151,10 @@ def _build_search_args(query: str, limit: int) -> list[str]:
     text_query = " ".join(remaining).strip()
     if text_query:
         args.append(text_query)
+    if since is not None:
+        args.extend(["--since", since])
+    if until is not None:
+        args.extend(["--until", until])
     args.extend(["-n", str(limit), "--json"])
     return args
 
@@ -177,14 +185,21 @@ class TwitterAdapter(BaseAdapter):
     channel = "twitter"
     operations = ("search", "user", "user_posts", "tweet")
 
-    def search(self, query: str, limit: int = 10) -> CollectionResult:
+    def search(
+        self,
+        query: str,
+        limit: int = 10,
+        since: str | None = None,
+        until: str | None = None,
+    ) -> CollectionResult:
         started_at = time.perf_counter()
         result = self._run_twitter(
-            _build_search_args(query, limit),
+            _build_search_args(query, limit, since=since, until=until),
             operation="search",
             value=query,
             limit=limit,
             started_at=started_at,
+            extra_meta={"since": since, "until": until},
         )
         if isinstance(result, dict):
             return result
@@ -196,7 +211,7 @@ class TwitterAdapter(BaseAdapter):
             "search",
             items=items,
             raw=raw,
-            meta=self.make_meta(value=query, limit=limit, started_at=started_at),
+            meta=self.make_meta(value=query, limit=limit, started_at=started_at, since=since, until=until),
         )
 
     def user(self, screen_name: str, limit: int | None = None) -> CollectionResult:
@@ -329,6 +344,7 @@ class TwitterAdapter(BaseAdapter):
         value: str,
         limit: int | None,
         started_at: float,
+        extra_meta: dict[str, object] | None = None,
     ) -> tuple[dict, str] | CollectionResult:
         twitter = self.command_path("twitter")
         if not twitter:
@@ -336,7 +352,7 @@ class TwitterAdapter(BaseAdapter):
                 operation,
                 code="missing_dependency",
                 message="twitter-cli is missing. Install it with uv tool install twitter-cli",
-                meta=self.make_meta(value=value, limit=limit, started_at=started_at),
+                meta=self.make_meta(value=value, limit=limit, started_at=started_at, **(extra_meta or {})),
             )
 
         try:
@@ -346,7 +362,7 @@ class TwitterAdapter(BaseAdapter):
                 operation,
                 code="command_failed",
                 message=f"Twitter {operation} failed: {exc}",
-                meta=self.make_meta(value=value, limit=limit, started_at=started_at),
+                meta=self.make_meta(value=value, limit=limit, started_at=started_at, **(extra_meta or {})),
             )
 
         raw_output = f"{result.stdout}\n{result.stderr}".strip()
@@ -368,7 +384,7 @@ class TwitterAdapter(BaseAdapter):
                 code=code,
                 message=message,
                 raw=raw,
-                meta=self.make_meta(value=value, limit=limit, started_at=started_at),
+                meta=self.make_meta(value=value, limit=limit, started_at=started_at, **(extra_meta or {})),
                 details={"returncode": result.returncode},
             )
 
@@ -380,7 +396,7 @@ class TwitterAdapter(BaseAdapter):
                 code="invalid_response",
                 message=f"Twitter {operation} returned a non-JSON payload",
                 raw=raw_output,
-                meta=self.make_meta(value=value, limit=limit, started_at=started_at),
+                meta=self.make_meta(value=value, limit=limit, started_at=started_at, **(extra_meta or {})),
             )
         if not isinstance(parsed_raw, dict):
             return self.error_result(
@@ -388,6 +404,6 @@ class TwitterAdapter(BaseAdapter):
                 code="invalid_response",
                 message=f"Twitter {operation} returned an unexpected JSON payload",
                 raw=parsed_raw,
-                meta=self.make_meta(value=value, limit=limit, started_at=started_at),
+                meta=self.make_meta(value=value, limit=limit, started_at=started_at, **(extra_meta or {})),
             )
         return parsed_raw, raw_output

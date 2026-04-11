@@ -41,9 +41,13 @@ hacker_news_results = client.hacker_news.search("agent frameworks", limit=3)
 mcp_servers = client.mcp_registry.search("docs mcp", limit=3)
 reddit_posts = client.reddit.search("agent frameworks", limit=3)
 twitter_posts = client.twitter.user_posts("openai", limit=5)
+paged_github_search = client.collect("github", "search", "agent reach", limit=6, page_size=3, max_pages=2)
+windowed_twitter_search = client.collect("twitter", "search", "OpenAI", limit=5, since="2026-01-01", until="2026-12-31")
 ```
 
 If your host project only needs a machine-readable subprocess interface, prefer `agent-reach collect --json` instead.
+
+Use the namespace helpers for simple default operations. Use `client.collect(...)` when the caller wants to choose per-channel options exposed by `channels --json` `operation_contracts`, such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`.
 
 ## Result shape
 
@@ -70,6 +74,8 @@ Each entry in `items` uses the same normalized shape:
 - `extras`
 
 Use `items` for downstream automation and `raw` when you need backend-native details.
+
+When a channel supports bounded pagination or continuation tokens, the result keeps the existing flat metadata keys and also mirrors them under `meta.pagination`. Agent Reach does not choose those controls for you; the caller decides whether to use them.
 
 Diagnostics such as `extras.source_hints`, `extras.media_references`, YouTube `extras.thumbnail_url`, subtitle/caption availability fields, and social `extras.media` are evidence metadata only. Agent Reach does not rank sources or analyze image/video binaries.
 

@@ -28,7 +28,34 @@ class QiitaChannel(Channel):
                 "cli_flag": "--body-mode",
                 "sdk_kwarg": "body_mode",
                 "description": "Control how much Qiita article body text is retained in items and raw payloads.",
-            }
+            },
+            {
+                "name": "page_size",
+                "type": "integer",
+                "required": False,
+                "minimum": 1,
+                "cli_flag": "--page-size",
+                "sdk_kwarg": "page_size",
+                "description": "Maximum Qiita API items requested per page.",
+            },
+            {
+                "name": "max_pages",
+                "type": "integer",
+                "required": False,
+                "minimum": 1,
+                "cli_flag": "--max-pages",
+                "sdk_kwarg": "max_pages",
+                "description": "Maximum Qiita API pages to request before stopping with pagination metadata.",
+            },
+            {
+                "name": "page",
+                "type": "integer",
+                "required": False,
+                "minimum": 1,
+                "cli_flag": "--page",
+                "sdk_kwarg": "page",
+                "description": "Starting Qiita API page number.",
+            },
         ]
     }
     host_patterns = ["https://qiita.com/*", "https://qiita.com/api/v2/*"]

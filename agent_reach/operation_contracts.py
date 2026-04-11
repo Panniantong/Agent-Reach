@@ -103,6 +103,34 @@ def validate_operation_options(
                 },
             )
 
+        minimum = descriptor.get("minimum")
+        if value is not None and minimum is not None:
+            normalized_value = value
+            if descriptor.get("type") == "integer":
+                try:
+                    normalized_value = int(value)
+                except (TypeError, ValueError) as exc:
+                    raise OperationContractError(
+                        code="invalid_input",
+                        message=f"{descriptor['name']} must be an integer",
+                        details={
+                            "option": descriptor["name"],
+                            "value": value,
+                            "operation": f"{channel}:{operation}",
+                        },
+                    ) from exc
+            if normalized_value < minimum:
+                raise OperationContractError(
+                    code="invalid_input",
+                    message=f"{descriptor['name']} must be greater than or equal to {minimum}",
+                    details={
+                        "option": descriptor["name"],
+                        "minimum": minimum,
+                        "value": value,
+                        "operation": f"{channel}:{operation}",
+                    },
+                )
+
 
 def batch_option_values(query: dict[str, Any]) -> dict[str, Any]:
     """Extract operation-specific option values from a normalized batch query."""
@@ -112,6 +140,9 @@ def batch_option_values(query: dict[str, Any]) -> dict[str, Any]:
         options["body_mode"] = query.get("body_mode")
     if "crawl_query" in query or "query" in query:
         options["crawl_query"] = query.get("crawl_query") if query.get("crawl_query") is not None else query.get("query")
+    for key in ("page_size", "max_pages", "cursor", "page", "since", "until"):
+        if key in query:
+            options[key] = query.get(key)
     return options
 
 

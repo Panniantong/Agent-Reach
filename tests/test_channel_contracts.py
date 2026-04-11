@@ -39,6 +39,8 @@ def test_channel_registry_contract():
                 assert isinstance(option["name"], str) and option["name"]
                 assert isinstance(option["type"], str) and option["type"]
                 assert isinstance(option["required"], bool)
+                if "minimum" in option:
+                    assert isinstance(option["minimum"], int)
 
 
 def test_channel_check_contract_with_minimal_runtime(monkeypatch, tmp_path):
@@ -137,12 +139,28 @@ def test_specific_operation_contracts_cover_channel_specific_options():
     assert qiita_search["input_kind"] == "query"
     assert qiita_search["options"][0]["name"] == "body_mode"
     assert qiita_search["options"][0]["choices"] == ["none", "snippet", "full"]
+    assert qiita_search["options"][1]["name"] == "page_size"
+    assert qiita_search["options"][1]["minimum"] == 1
+    assert qiita_search["options"][2]["name"] == "max_pages"
+    assert qiita_search["options"][2]["minimum"] == 1
+    assert qiita_search["options"][3]["name"] == "page"
+    assert qiita_search["options"][3]["minimum"] == 1
 
     crawl_contract = contracts["crawl4ai"]["operation_contracts"]["crawl"]
     assert crawl_contract["input_kind"] == "url"
     assert crawl_contract["options"][0]["name"] == "query"
     assert crawl_contract["options"][0]["required"] is True
     assert crawl_contract["options"][0]["sdk_kwarg"] == "crawl_query"
+
+    github_search = contracts["github"]["operation_contracts"]["search"]
+    assert [option["name"] for option in github_search["options"]] == ["page_size", "max_pages", "page"]
+    assert all(option["minimum"] == 1 for option in github_search["options"])
+    bluesky_search = contracts["bluesky"]["operation_contracts"]["search"]
+    assert [option["name"] for option in bluesky_search["options"]] == ["page_size", "max_pages", "cursor"]
+    assert bluesky_search["options"][0]["minimum"] == 1
+    assert bluesky_search["options"][1]["minimum"] == 1
+    twitter_search = contracts["twitter"]["operation_contracts"]["search"]
+    assert [option["name"] for option in twitter_search["options"]] == ["since", "until"]
 
     assert contracts["hacker_news"]["operation_contracts"]["top"]["input_kind"] == "list"
     assert contracts["mcp_registry"]["operation_contracts"]["read"]["input_kind"] == "registry_server"

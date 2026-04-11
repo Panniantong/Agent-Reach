@@ -122,6 +122,12 @@ class AgentReachClient:
         limit: int | None = None,
         body_mode: str | None = None,
         crawl_query: str | None = None,
+        page_size: int | None = None,
+        max_pages: int | None = None,
+        cursor: str | None = None,
+        page: int | None = None,
+        since: str | None = None,
+        until: str | None = None,
     ) -> CollectionResult:
         """Run a supported collection operation and return a stable result envelope."""
 
@@ -152,6 +158,16 @@ class AgentReachClient:
                 ),
             )
 
+        options = {
+            "body_mode": body_mode,
+            "crawl_query": crawl_query,
+            "page_size": page_size,
+            "max_pages": max_pages,
+            "cursor": cursor,
+            "page": page,
+            "since": since,
+            "until": until,
+        }
         adapter = get_adapter(channel, config=self.config)
         if adapter is None:
             return build_result(
@@ -186,10 +202,7 @@ class AgentReachClient:
             validate_operation_options(
                 channel,
                 operation,
-                {
-                    "body_mode": body_mode,
-                    "crawl_query": crawl_query,
-                },
+                options,
             )
         except OperationContractError as exc:
             return build_result(
@@ -199,21 +212,25 @@ class AgentReachClient:
                 meta={
                     "input": text_value,
                     **({"limit": limit} if limit is not None else {}),
-                    **({"body_mode": body_mode} if body_mode is not None else {}),
-                    **({"crawl_query": crawl_query} if crawl_query is not None else {}),
+                    **({key: value for key, value in options.items() if value is not None}),
                 },
                 error=build_error(code=exc.code, message=exc.message, details=exc.details),
             )
+
+        normalized_options = dict(options)
+        for option_name in ("page_size", "max_pages", "page"):
+            raw_option = normalized_options.get(option_name)
+            if raw_option is not None:
+                normalized_options[option_name] = int(raw_option)
 
         method = getattr(adapter, operation)
         try:
             call_kwargs: dict[str, object] = {}
             if limit is not None:
                 call_kwargs["limit"] = limit
-            if body_mode is not None:
-                call_kwargs["body_mode"] = body_mode
-            if crawl_query is not None:
-                call_kwargs["crawl_query"] = crawl_query
+            for option_name, option_value in normalized_options.items():
+                if option_value is not None:
+                    call_kwargs[option_name] = option_value
             return method(text_value, **call_kwargs)
         except Exception as exc:
             return build_result(

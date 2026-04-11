@@ -5,6 +5,7 @@ Agent Reach is a Windows-first integration layer for research tooling. It now ex
 ## What it provides
 
 - a stable channel registry through `agent-reach channels --json`
+- per-operation option contracts through `channels --json` `operation_contracts`, so downstream code can choose pagination and time-window inputs itself
 - readiness diagnostics through `agent-reach doctor --json`, including `operation_statuses`, `probed_operations`, and `probe_run_coverage` for downstream routing
 - a thin read-only collector through `agent-reach collect --json`
 - ledger validation and append helpers through `agent-reach ledger validate --json` and `agent-reach ledger append --json`
@@ -17,6 +18,7 @@ Agent Reach is a Windows-first integration layer for research tooling. It now ex
 agent-reach channels --json
 agent-reach doctor --json
 agent-reach doctor --json --probe
+agent-reach collect --channel qiita --operation search --input "python" --limit 4 --page-size 2 --max-pages 2 --body-mode snippet --json
 agent-reach collect --channel github --operation read --input "openai/openai-python" --json
 agent-reach export-integration --client codex --format json
 ```
@@ -73,3 +75,5 @@ When `agent-reach` is running from a tool install instead of a source checkout, 
 - `twitter` (optional)
 
 These channels are exposed as metadata, setup guidance, diagnostics, and read-only collection operations so downstream tools can wire their own workflows without scraping repo docs. YouTube returns video metadata, subtitle/caption availability, thumbnail references, and normalized linked media references; Agent Reach does not perform media binary analysis.
+
+When a channel supports bounded pagination or time windows, those controls are exposed as machine-readable option descriptors. Downstream code decides whether to use `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`; Agent Reach only forwards them and records pagination metadata in the returned `meta`.

@@ -388,6 +388,119 @@ def test_bluesky_adapter_normalizes_nested_video_embed(config, monkeypatch):
     assert payload["items"][0]["extras"]["media_references"][0]["url"] == "https://video.bsky.app/playlist.m3u8"
 
 
+def test_bluesky_adapter_paginates_with_cursor(config, monkeypatch):
+    captured_urls = []
+
+    class FakeResponse:
+        status_code = 200
+
+        def __init__(self, cursor_value):
+            self._cursor_value = cursor_value
+            self.text = '{"posts":[]}'
+
+        def json(self):
+            if self._cursor_value == "c1":
+                base = 3
+                next_cursor = "c2"
+            else:
+                base = 1
+                next_cursor = "c1"
+            return {
+                "posts": [
+                    {
+                        "uri": f"at://did:plc:abc/app.bsky.feed.post/{base}",
+                        "cid": f"cid-{base}",
+                        "author": {"handle": "openai.com"},
+                        "record": {"text": f"Post {base}", "createdAt": "2026-04-10T00:00:00Z"},
+                    },
+                    {
+                        "uri": f"at://did:plc:abc/app.bsky.feed.post/{base + 1}",
+                        "cid": f"cid-{base + 1}",
+                        "author": {"handle": "openai.com"},
+                        "record": {"text": f"Post {base + 1}", "createdAt": "2026-04-10T00:00:00Z"},
+                    },
+                ],
+                "cursor": next_cursor,
+            }
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(url, headers=None, timeout=None):
+            captured_urls.append(url)
+            cursor_value = "c1" if "cursor=c1" in url else None
+            return FakeResponse(cursor_value)
+
+    monkeypatch.setattr("agent_reach.adapters.bluesky._import_requests", lambda: FakeRequests)
+
+    payload = BlueskyAdapter(config=config).search("OpenAI", limit=5, page_size=2, max_pages=2)
+
+    assert payload["ok"] is True
+    assert "limit=2" in captured_urls[0]
+    assert "cursor=c1" in captured_urls[1]
+    assert payload["meta"]["requested_page_size"] == 2
+    assert payload["meta"]["requested_max_pages"] == 2
+    assert payload["meta"]["page_size"] == 2
+    assert payload["meta"]["pages_fetched"] == 2
+    assert payload["meta"]["next_cursor"] == "c2"
+    assert payload["meta"]["has_more"] is True
+    assert payload["meta"]["pagination"]["next_cursor"] == "c2"
+    assert len(payload["items"]) == 4
+    assert len(payload["raw"]["posts"]) == 4
+
+
+def test_bluesky_adapter_keeps_partial_results_when_later_page_fails(config, monkeypatch):
+    captured_urls = []
+
+    class FirstPageResponse:
+        status_code = 200
+        text = '{"posts":[]}'
+
+        @staticmethod
+        def json():
+            return {
+                "posts": [
+                    {
+                        "uri": "at://did:plc:abc/app.bsky.feed.post/1",
+                        "cid": "cid-1",
+                        "author": {"handle": "openai.com"},
+                        "record": {"text": "Post 1", "createdAt": "2026-04-10T00:00:00Z"},
+                    }
+                ],
+                "cursor": "c1",
+            }
+
+    class ForbiddenResponse:
+        status_code = 403
+        text = "<html><body><h1>403 Forbidden</h1></body></html>"
+
+        @staticmethod
+        def json():
+            raise ValueError("not json")
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(url, headers=None, timeout=None):
+            captured_urls.append(url)
+            if "cursor=c1" in url:
+                return ForbiddenResponse()
+            return FirstPageResponse()
+
+    monkeypatch.setattr("agent_reach.adapters.bluesky._import_requests", lambda: FakeRequests)
+
+    payload = BlueskyAdapter(config=config).search("OpenAI", limit=3, page_size=1, max_pages=2)
+
+    assert payload["ok"] is True
+    assert "cursor=c1" in captured_urls[1]
+    assert payload["items"][0]["title"] == "Post 1"
+    assert payload["meta"]["next_cursor"] == "c1"
+    assert payload["meta"]["has_more"] is True
+    assert payload["meta"]["pagination_interrupted"]["code"] == "http_error"
+
+
 def test_qiita_adapter_success(config, monkeypatch):
     class FakeResponse:
         status_code = 200
@@ -514,6 +627,71 @@ def test_qiita_adapter_body_mode_controls_text_and_raw(config, monkeypatch):
     ]
 
 
+def test_qiita_adapter_paginates_with_body_mode(config, monkeypatch):
+    captured_params = []
+
+    class FakeResponse:
+        def __init__(self, page_number):
+            self.status_code = 200
+            self.text = "[]"
+            self.headers = {"Total-Count": "10"}
+            self._page_number = page_number
+
+        def json(self):
+            base = (self._page_number - 1) * 2
+            return [
+                {
+                    "id": f"q{base + 1}",
+                    "title": f"Qiita article {base + 1}",
+                    "url": f"https://qiita.com/Qiita/items/q{base + 1}",
+                    "body": f"body {base + 1}",
+                    "created_at": "2026-04-10T00:00:00+09:00",
+                    "updated_at": "2026-04-10T01:00:00+09:00",
+                    "tags": [],
+                    "user": {"id": "Qiita"},
+                },
+                {
+                    "id": f"q{base + 2}",
+                    "title": f"Qiita article {base + 2}",
+                    "url": f"https://qiita.com/Qiita/items/q{base + 2}",
+                    "body": f"body {base + 2}",
+                    "created_at": "2026-04-10T00:00:00+09:00",
+                    "updated_at": "2026-04-10T01:00:00+09:00",
+                    "tags": [],
+                    "user": {"id": "Qiita"},
+                },
+            ]
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(_url, params=None, headers=None, timeout=None):
+            captured_params.append(params)
+            return FakeResponse(int(params["page"]))
+
+    monkeypatch.setattr("agent_reach.adapters.qiita._import_requests", lambda: FakeRequests)
+
+    payload = QiitaAdapter(config=config).search("python", limit=5, body_mode="snippet", page_size=2, max_pages=2, page=3)
+
+    assert payload["ok"] is True
+    assert captured_params == [
+        {"query": "python", "page": "3", "per_page": "2"},
+        {"query": "python", "page": "4", "per_page": "2"},
+    ]
+    assert payload["meta"]["body_mode"] == "snippet"
+    assert payload["meta"]["requested_page_size"] == 2
+    assert payload["meta"]["requested_max_pages"] == 2
+    assert payload["meta"]["requested_page"] == 3
+    assert payload["meta"]["page_size"] == 2
+    assert payload["meta"]["pages_fetched"] == 2
+    assert payload["meta"]["next_page"] == 5
+    assert payload["meta"]["has_more"] is True
+    assert payload["meta"]["pagination"]["next_page"] == 5
+    assert len(payload["items"]) == 4
+    assert payload["raw"][0]["body"] == "body 5"
+
+
 def test_github_adapter_read_success(config, monkeypatch):
     adapter = GitHubAdapter(config=config)
     monkeypatch.setattr(adapter, "command_path", lambda _name: "gh")
@@ -555,6 +733,71 @@ def test_github_adapter_read_success(config, monkeypatch):
         "freshness_hint": "timestamped",
         "volatility_hint": "medium",
     }
+
+
+def test_github_adapter_search_paginates_via_gh_api(config, monkeypatch):
+    adapter = GitHubAdapter(config=config)
+    monkeypatch.setattr(adapter, "command_path", lambda _name: "gh")
+    captured_commands = []
+
+    def fake_run(command, timeout=60, env=None):
+        captured_commands.append(command)
+        page_number = int(command[-1].split("=", 1)[1])
+        start = (page_number - 1) * 2
+        items = [
+            {
+                "name": f"repo-{start + 1}",
+                "fullName": f"openai/repo-{start + 1}",
+                "description": f"Repo {start + 1}",
+                "url": f"https://github.com/openai/repo-{start + 1}",
+                "owner": {"login": "openai"},
+                "updatedAt": "2026-04-10T00:00:00Z",
+                "stargazersCount": start + 1,
+                "language": "Python",
+            },
+            {
+                "name": f"repo-{start + 2}",
+                "fullName": f"openai/repo-{start + 2}",
+                "description": f"Repo {start + 2}",
+                "url": f"https://github.com/openai/repo-{start + 2}",
+                "owner": {"login": "openai"},
+                "updatedAt": "2026-04-10T00:00:00Z",
+                "stargazersCount": start + 2,
+                "language": "Python",
+            },
+        ]
+        return _cp(stdout=json.dumps({"total_count": 10, "items": items}))
+
+    monkeypatch.setattr(adapter, "run_command", fake_run)
+
+    payload = adapter.search("agent reach", limit=5, page_size=2, max_pages=2, page=1)
+
+    assert payload["ok"] is True
+    assert captured_commands[0] == [
+        "gh",
+        "api",
+        "-X",
+        "GET",
+        "search/repositories",
+        "-f",
+        "q=agent reach",
+        "-f",
+        "per_page=2",
+        "-f",
+        "page=1",
+    ]
+    assert captured_commands[1][-1] == "page=2"
+    assert payload["meta"]["backend"] == "gh_api"
+    assert payload["meta"]["requested_page_size"] == 2
+    assert payload["meta"]["requested_max_pages"] == 2
+    assert payload["meta"]["requested_page"] == 1
+    assert payload["meta"]["page_size"] == 2
+    assert payload["meta"]["pages_fetched"] == 2
+    assert payload["meta"]["next_page"] == 3
+    assert payload["meta"]["has_more"] is True
+    assert payload["meta"]["pagination"]["next_page"] == 3
+    assert len(payload["items"]) == 4
+    assert len(payload["raw"]) == 4
 
 
 def test_github_adapter_invalid_json(config, monkeypatch):
@@ -765,6 +1008,36 @@ def test_twitter_adapter_search_translates_common_advanced_tokens(config, monkey
         "5",
         "--json",
     ]
+
+
+def test_twitter_adapter_search_prefers_explicit_since_until(config, monkeypatch):
+    adapter = TwitterAdapter(config=config)
+    monkeypatch.setattr(adapter, "command_path", lambda _name: "twitter")
+    captured = {}
+
+    def fake_run(command, timeout=120, env=None):
+        captured["command"] = command
+        return _cp(stdout=json.dumps({"ok": True, "data": []}))
+
+    monkeypatch.setattr(adapter, "run_command", fake_run)
+
+    payload = adapter.search("OpenAI since:2025-01-01", limit=5, since="2026-01-01", until="2026-12-31")
+
+    assert payload["ok"] is True
+    assert captured["command"] == [
+        "twitter",
+        "search",
+        "OpenAI",
+        "--since",
+        "2026-01-01",
+        "--until",
+        "2026-12-31",
+        "-n",
+        "5",
+        "--json",
+    ]
+    assert payload["meta"]["since"] == "2026-01-01"
+    assert payload["meta"]["until"] == "2026-12-31"
 
 
 def test_twitter_adapter_user_success(config, monkeypatch):

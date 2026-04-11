@@ -17,6 +17,36 @@ class BlueskyChannel(Channel):
     entrypoint_kind = "python"
     operations = ["search"]
     operation_inputs = {"search": "query"}
+    operation_options = {
+        "search": [
+            {
+                "name": "page_size",
+                "type": "integer",
+                "required": False,
+                "minimum": 1,
+                "cli_flag": "--page-size",
+                "sdk_kwarg": "page_size",
+                "description": "Maximum Bluesky posts requested per API page.",
+            },
+            {
+                "name": "max_pages",
+                "type": "integer",
+                "required": False,
+                "minimum": 1,
+                "cli_flag": "--max-pages",
+                "sdk_kwarg": "max_pages",
+                "description": "Maximum Bluesky API pages to request before stopping with pagination metadata.",
+            },
+            {
+                "name": "cursor",
+                "type": "string",
+                "required": False,
+                "cli_flag": "--cursor",
+                "sdk_kwarg": "cursor",
+                "description": "Starting Bluesky continuation cursor.",
+            },
+        ]
+    }
     host_patterns = [
         "https://bsky.app/*",
         "https://public.api.bsky.app/*",

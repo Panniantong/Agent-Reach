@@ -91,7 +91,14 @@ def test_export_points_at_existing_checkout_artifacts():
     assert any(path.endswith("agent-reach-nexus-concept.md") for path in payload["recommended_docs"])
     channel_contracts = {channel["name"]: channel for channel in payload["channels"]}
     assert channel_contracts["qiita"]["operation_contracts"]["search"]["options"][0]["name"] == "body_mode"
+    assert channel_contracts["qiita"]["operation_contracts"]["search"]["options"][1]["name"] == "page_size"
+    assert channel_contracts["qiita"]["operation_contracts"]["search"]["options"][1]["minimum"] == 1
+    assert channel_contracts["github"]["operation_contracts"]["search"]["options"][0]["name"] == "page_size"
+    assert channel_contracts["github"]["operation_contracts"]["search"]["options"][2]["name"] == "page"
+    assert channel_contracts["bluesky"]["operation_contracts"]["search"]["options"][2]["name"] == "cursor"
     assert channel_contracts["crawl4ai"]["operation_contracts"]["crawl"]["options"][0]["sdk_kwarg"] == "crawl_query"
+    assert channel_contracts["twitter"]["operation_contracts"]["search"]["options"][0]["name"] == "since"
+    assert channel_contracts["twitter"]["operation_contracts"]["search"]["options"][1]["name"] == "until"
     assert channel_contracts["twitter"]["probe_operations"] == ["user", "search"]
     assert channel_contracts["twitter"]["probe_coverage"] == "partial"
     assert channel_contracts["youtube"]["probe_coverage"] == "full"

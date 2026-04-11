@@ -169,6 +169,70 @@ def test_collect_validates_channel_options_from_contract(tmp_path, monkeypatch):
     assert payload["raw"]["body_mode"] == "snippet"
 
 
+def test_collect_validates_integer_pagination_options(tmp_path, monkeypatch):
+    class _SearchStubAdapter:
+        def supported_operations(self):
+            return ("search",)
+
+        def search(self, value, limit=None, page_size=None, max_pages=None, page=None):
+            return build_result(
+                ok=True,
+                channel="github",
+                operation="search",
+                items=[],
+                raw={"page_size": page_size, "max_pages": max_pages, "page": page},
+                meta={"input": value},
+                error=None,
+            )
+
+    config = Config(config_path=tmp_path / "config.yaml")
+    monkeypatch.setattr("agent_reach.client.get_adapter", lambda channel, config=None: _SearchStubAdapter())
+    client = AgentReachClient(config=config)
+
+    invalid_page_size = client.collect("github", "search", "agent reach", page_size=0)
+    assert invalid_page_size["ok"] is False
+    assert invalid_page_size["error"]["code"] == "invalid_input"
+    assert invalid_page_size["error"]["details"]["option"] == "page_size"
+
+    invalid_max_pages = client.collect("github", "search", "agent reach", max_pages=0)
+    assert invalid_max_pages["ok"] is False
+    assert invalid_max_pages["error"]["details"]["option"] == "max_pages"
+
+    invalid_page = client.collect("github", "search", "agent reach", page=0)
+    assert invalid_page["ok"] is False
+    assert invalid_page["error"]["details"]["option"] == "page"
+
+    payload = client.collect("github", "search", "agent reach", limit=5, page_size=2, max_pages=3, page=4)
+    assert payload["ok"] is True
+    assert payload["raw"] == {"page_size": 2, "max_pages": 3, "page": 4}
+
+
+def test_collect_passes_twitter_since_until_from_contract(tmp_path, monkeypatch):
+    class _TwitterStubAdapter:
+        def supported_operations(self):
+            return ("search",)
+
+        def search(self, value, limit=None, since=None, until=None):
+            return build_result(
+                ok=True,
+                channel="twitter",
+                operation="search",
+                items=[],
+                raw={"since": since, "until": until},
+                meta={"input": value, "since": since, "until": until},
+                error=None,
+            )
+
+    config = Config(config_path=tmp_path / "config.yaml")
+    monkeypatch.setattr("agent_reach.client.get_adapter", lambda channel, config=None: _TwitterStubAdapter())
+    client = AgentReachClient(config=config)
+
+    payload = client.collect("twitter", "search", "OpenAI", since="2026-01-01", until="2026-12-31")
+
+    assert payload["ok"] is True
+    assert payload["raw"] == {"since": "2026-01-01", "until": "2026-12-31"}
+
+
 def test_collect_catches_unexpected_adapter_error(tmp_path, monkeypatch):
     class _BoomAdapter:
         def supported_operations(self):

@@ -186,6 +186,7 @@ def _mcp_config_inline(repo_root: Path) -> dict[str, Any]:
 def _documentation_summary() -> list[str]:
     return [
         "Use `agent-reach collect --json` as the primary external interface in arbitrary projects.",
+        "Inspect `agent-reach channels --json` operation contracts before choosing per-channel options such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until` downstream.",
         "Add `--save .agent-reach/evidence.jsonl` when a research run needs an auditable raw CollectionResult ledger.",
         "Use `agent-reach ledger validate --input .agent-reach/evidence.jsonl --json` before treating saved evidence as a CI artifact.",
         "Use `agent-reach ledger append --input RESULT.json --output .agent-reach/evidence.jsonl --json` to add a successful conditional collection captured without `--save`.",
@@ -259,6 +260,7 @@ def _codex_runtime_policy() -> dict[str, Any]:
             "If readiness is unknown, run `agent-reach channels --json` and `agent-reach doctor --json` first.",
             "Read `doctor.summary.blocking_not_ready` and `doctor.summary.advisory_not_ready`; use `--exit-policy all` only when every optional channel must be ready.",
             "Inspect the live channel contract and let the calling workflow choose channels for the user's task.",
+            "Inspect `operation_contracts` and let the calling workflow choose bounded pagination or time-window inputs such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until` when a channel supports them.",
             "Use specialist channels such as `github`, `qiita`, `bluesky`, `rss`, `youtube`, `hatena_bookmark`, `hacker_news`, `mcp_registry`, `reddit`, `searxng`, or `crawl4ai` only when the caller's task and readiness checks support them.",
             "Use Twitter/X only when optional credentials and `doctor --json --probe` show the required operation is ready.",
             "Treat `source_hints`, `media_references`, `text_length`, `link_count`, and `extraction_warning` as diagnostic metadata only.",
@@ -268,6 +270,7 @@ def _codex_runtime_policy() -> dict[str, Any]:
             "pattern": "bounded fan-out with normalized JSON handoff",
             "steps": [
                 "Start with 2-4 broad discovery queries at small limits such as 5-10.",
+                "Inspect `channels --json` operation contracts and choose any page, cursor, or time-window options downstream instead of relying on a fixed Agent Reach route.",
                 "Append raw collection envelopes with `--save .agent-reach/evidence.jsonl` when traceability matters.",
                 "Run `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit 20 --json` for no-model dedupe.",
                 "Apply downstream ranking, summarization, and selection before deeper reads.",
@@ -337,6 +340,7 @@ def export_codex_integration() -> dict[str, Any]:
             "agent-reach doctor --json",
             "agent-reach doctor --json --probe",
             'agent-reach collect --channel github --operation read --input "openai/openai-python" --json',
+            'agent-reach collect --channel qiita --operation search --input "python" --limit 4 --page-size 2 --max-pages 2 --body-mode snippet --json',
             'agent-reach collect --channel web --operation read --input "https://example.com" --json',
             'agent-reach collect --channel hacker_news --operation search --input "agent frameworks" --limit 3 --json',
             'agent-reach collect --channel mcp_registry --operation search --input "docs mcp" --limit 3 --json',
@@ -353,6 +357,7 @@ def export_codex_integration() -> dict[str, Any]:
                 "from agent_reach import AgentReachClient",
                 "client = AgentReachClient()",
                 'client.github.read("openai/openai-python")',
+                'client.collect("github", "search", "agent reach", limit=5, page_size=2, max_pages=2)',
             ],
             "notes": [
                 "uv tool install exposes the agent-reach CLI, not a general Python import in arbitrary projects.",

@@ -10,6 +10,20 @@ from typing import Any, TypedDict
 
 from agent_reach.schemas import SCHEMA_VERSION, utc_timestamp
 
+_PAGINATION_FIELDS = (
+    "requested_limit",
+    "requested_page_size",
+    "page_size",
+    "requested_max_pages",
+    "requested_page",
+    "requested_cursor",
+    "pages_fetched",
+    "next_page",
+    "next_cursor",
+    "has_more",
+    "total_available",
+)
+
 
 class NormalizedItem(TypedDict):
     """A normalized content item that can be consumed by external projects."""
@@ -48,8 +62,13 @@ class CollectionResult(TypedDict):
 def build_pagination_meta(
     *,
     limit: int | None = None,
+    requested_page_size: int | None = None,
     page_size: int | None = None,
+    requested_max_pages: int | None = None,
+    requested_page: int | None = None,
+    requested_cursor: Any = None,
     pages_fetched: int | None = None,
+    next_page: int | None = None,
     next_cursor: Any = None,
     has_more: bool | None = None,
     total_available: int | str | None = None,
@@ -59,10 +78,22 @@ def build_pagination_meta(
     meta: dict[str, Any] = {}
     if limit is not None:
         meta["requested_limit"] = int(limit)
+    if requested_page_size is None and page_size is not None:
+        requested_page_size = page_size
+    if requested_page_size is not None:
+        meta["requested_page_size"] = int(requested_page_size)
     if page_size is not None:
         meta["page_size"] = int(page_size)
+    if requested_max_pages is not None:
+        meta["requested_max_pages"] = int(requested_max_pages)
+    if requested_page is not None:
+        meta["requested_page"] = int(requested_page)
+    if requested_cursor is not None:
+        meta["requested_cursor"] = requested_cursor
     if pages_fetched is not None:
         meta["pages_fetched"] = int(pages_fetched)
+    if next_page is not None:
+        meta["next_page"] = int(next_page)
     if next_cursor is not None:
         meta["next_cursor"] = next_cursor
     if has_more is not None:
@@ -72,6 +103,8 @@ def build_pagination_meta(
             meta["total_available"] = int(total_available)
         except (TypeError, ValueError):
             meta["total_available"] = total_available
+    if meta:
+        meta["pagination"] = {key: meta[key] for key in _PAGINATION_FIELDS if key in meta}
     return meta
 
 
@@ -126,6 +159,7 @@ def build_result(
         payload_meta["count"] = item_count
     if payload_meta.get("returned_count") is None:
         payload_meta["returned_count"] = item_count
+    _synchronize_pagination_meta(payload_meta)
     return {
         "ok": ok,
         "channel": channel,
@@ -150,6 +184,20 @@ def build_error(
         "message": message,
         "details": details or {},
     }
+
+
+def _synchronize_pagination_meta(meta: dict[str, Any]) -> None:
+    """Keep flat pagination keys and meta.pagination in sync."""
+
+    raw_pagination = meta.get("pagination")
+    pagination: dict[str, Any] = raw_pagination if isinstance(raw_pagination, dict) else {}
+    for field in _PAGINATION_FIELDS:
+        if field in meta and meta[field] is not None:
+            pagination[field] = meta[field]
+        elif field in pagination:
+            meta[field] = pagination[field]
+    if pagination:
+        meta["pagination"] = {field: pagination[field] for field in _PAGINATION_FIELDS if field in pagination}
 
 
 def parse_timestamp(value: Any) -> str | None:

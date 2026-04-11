@@ -37,12 +37,15 @@ Registry and readiness checks:
 2. Parse `channels.json` and verify that all of these channel names are present:
    `web`, `exa_search`, `github`, `hatena_bookmark`, `bluesky`, `qiita`, `youtube`, `rss`, `searxng`, `crawl4ai`, `hacker_news`, `mcp_registry`, `reddit`, `twitter`.
 3. For each of these contracts, report the exact fields:
+   - `github`: `operations`, and the `search` options named `page_size`, `max_pages`, and `page`.
+   - `bluesky`: `operations`, and the `search` options named `page_size`, `max_pages`, and `cursor`.
    - `reddit`: `auth_kind`, `entrypoint_kind`, `required_commands`, `operations`, first two `install_hints`.
    - `hacker_news`: `auth_kind`, `operations`, `supports_probe`, `probe_operations`, `probe_coverage`.
    - `mcp_registry`: `auth_kind`, `operations`, `supports_probe`, `probe_operations`, `probe_coverage`.
    - `searxng`: `auth_kind`, `operations`, first two `install_hints`.
    - `crawl4ai`: `operations`, `supports_probe`, `probe_operations`, `probe_coverage`, and the `crawl` option named `query`.
-   - `qiita`: the `body_mode` option for search.
+   - `qiita`: the `search` options named `body_mode`, `page_size`, `max_pages`, and `page`.
+   - `twitter`: the `search` options named `since` and `until`.
 4. Run `agent-reach doctor --json > doctor.json`.
    Record the exit code and verify `doctor.json.summary.exit_policy`, `doctor.json.summary.exit_code`, `doctor.json.summary.blocking_not_ready`, and `doctor.json.summary.advisory_not_ready`.
 5. Run `agent-reach export-integration --client codex --format json > export-integration.json`.
@@ -71,6 +74,15 @@ Required live success targets:
    `agent-reach collect --channel rss --operation read --input "https://hnrss.org/frontpage" --limit 3 --json --save .agent-reach/evidence.jsonl --run-id external-smoke-2026-04-11 --intent external_smoke --query-id rss-hn-frontpage --source-role feed_discovery`
 7. Bluesky:
    `agent-reach collect --channel bluesky --operation search --input "OpenAI" --limit 3 --json --save .agent-reach/evidence.jsonl --run-id external-smoke-2026-04-11 --intent external_smoke --query-id bluesky-openai --source-role social_discovery`
+
+Pagination/window spot checks:
+1. If the channel contracts advertise the relevant options, run:
+   - `agent-reach collect --channel github --operation search --input "agent reach" --limit 5 --page-size 2 --max-pages 2 --page 1 --json`
+   - `agent-reach collect --channel qiita --operation search --input "Python" --limit 5 --page-size 2 --max-pages 2 --page 1 --body-mode snippet --json`
+   - `agent-reach collect --channel bluesky --operation search --input "OpenAI" --limit 5 --page-size 2 --max-pages 2 --json`
+2. If Twitter/X is usable and the contract advertises `since` / `until`, run:
+   - `agent-reach collect --channel twitter --operation search --input "OpenAI" --limit 3 --since 2026-01-01 --until 2026-12-31 --json`
+3. Report the exact `meta.pagination` object for any successful pagination/window command.
 
 Optional readiness/error targets:
 1. SearXNG:

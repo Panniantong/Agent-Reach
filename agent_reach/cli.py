@@ -171,6 +171,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p_collect.add_argument("--operation", required=True, help="Supported operation for the channel")
     p_collect.add_argument("--input", required=True, help="Input value such as a URL, repo, or query")
     p_collect.add_argument("--limit", type=int, help="Optional item limit for search/read operations")
+    p_collect.add_argument("--page-size", type=int, help="Optional per-request page size for operations that support pagination")
+    p_collect.add_argument("--max-pages", type=int, help="Optional request-count guardrail for operations that support pagination")
+    p_collect.add_argument("--cursor", help="Optional backend continuation token for cursor-based operations")
+    p_collect.add_argument("--page", type=int, help="Optional starting page number for page-based operations")
+    p_collect.add_argument("--since", help="Optional lower time boundary for operations that support it")
+    p_collect.add_argument("--until", help="Optional upper time boundary for operations that support it")
     p_collect.add_argument("--json", action="store_true", help="Print machine-readable collection output")
     p_collect.add_argument(
         "--max-text-chars",
@@ -1093,24 +1099,26 @@ def _cmd_collect(args) -> int:
         return 2
 
     client = AgentReachClient()
-    if args.query:
-        payload = client.collect(
-            args.channel,
-            args.operation,
-            args.input,
-            limit=args.limit,
-            crawl_query=args.query,
-        )
-    elif args.body_mode:
-        payload = client.collect(
-            args.channel,
-            args.operation,
-            args.input,
-            limit=args.limit,
-            body_mode=args.body_mode,
-        )
-    else:
-        payload = client.collect(args.channel, args.operation, args.input, limit=args.limit)
+    collect_kwargs = {}
+    if args.limit is not None:
+        collect_kwargs["limit"] = args.limit
+    if args.body_mode is not None:
+        collect_kwargs["body_mode"] = args.body_mode
+    if args.query is not None:
+        collect_kwargs["crawl_query"] = args.query
+    if args.page_size is not None:
+        collect_kwargs["page_size"] = args.page_size
+    if args.max_pages is not None:
+        collect_kwargs["max_pages"] = args.max_pages
+    if args.cursor is not None:
+        collect_kwargs["cursor"] = args.cursor
+    if args.page is not None:
+        collect_kwargs["page"] = args.page
+    if args.since is not None:
+        collect_kwargs["since"] = args.since
+    if args.until is not None:
+        collect_kwargs["until"] = args.until
+    payload = client.collect(args.channel, args.operation, args.input, **collect_kwargs)
     if args.json:
         _print_json(payload)
     else:
