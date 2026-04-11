@@ -34,8 +34,9 @@ Do not assume this fork chooses investigation scope. The caller chooses scale, r
 - Use `agent-reach ledger validate --input .agent-reach/evidence.jsonl --json` when downstream automation needs to prove the evidence ledger is parseable.
 - Add `--require-metadata` to `ledger validate` only when missing `intent`, `query_id`, or `source_role` should fail the run.
 - Use `agent-reach ledger summarize --input .agent-reach/evidence.jsonl --json` when automation needs neutral channel, operation, metadata, item, and error counts.
+- Use `agent-reach ledger query --input .agent-reach/evidence.jsonl --filter "channel == github" --json` for lightweight record filtering or field projection over saved evidence.
 - Use `agent-reach ledger append --input RESULT.json --output .agent-reach/evidence.jsonl --json` when a successful conditional collection was captured without `--save`.
-- Treat `engagement`, `media_references`, `identifiers`, `extras.source_hints`, `error.category`, social time-window warnings, and web extraction hygiene fields as diagnostics only, not ranking or trust scores.
+- Treat `engagement`, `media_references`, `identifiers`, `extras.source_hints`, `error.category`, social time-window warnings, and page extraction hygiene fields such as `text_length`, `link_count`, `image_count`, `link_density`, and `extraction_warning` as diagnostics only, not ranking or trust scores.
 - Treat `doctor --json` as flat diagnostics by default. Add `--require-channel`, `--require-channels`, or `--require-all` only when the caller wants readiness to affect the exit code.
 - Inspect `doctor.summary.probe_attention` when a channel has partial probe coverage or a probe run left operations unprobed.
 - Treat `batch` and `scout` as explicit opt-in helpers. They are not the default route for everyday collection.

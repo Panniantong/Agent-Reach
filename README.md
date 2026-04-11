@@ -75,6 +75,7 @@ agent-reach version
 - `agent-reach plan candidates --input .agent-reach/evidence.jsonl --json`
 - `agent-reach ledger validate --input .agent-reach/evidence.jsonl --json`
 - `agent-reach ledger summarize --input .agent-reach/evidence.jsonl --json`
+- `agent-reach ledger query --input .agent-reach/evidence.jsonl --filter "channel == github" --json`
 - `agent-reach ledger append --input RESULT.json --output .agent-reach/evidence.jsonl --json`
 - `agent-reach export-integration --client codex --format json`
 - Python: `from agent_reach import AgentReachClient`
@@ -101,10 +102,11 @@ agent-reach schema collection-result --json
 agent-reach collect --channel exa_search --operation search --input "AI agent tooling" --limit 10 --json --save .agent-reach/evidence.jsonl --run-id agent-tooling --intent discovery --query-id exa-agent-tooling --source-role web_search
 agent-reach ledger validate --input .agent-reach/evidence.jsonl --require-metadata --json
 agent-reach ledger summarize --input .agent-reach/evidence.jsonl --json
+agent-reach ledger query --input .agent-reach/evidence.jsonl --filter "channel == exa_search" --fields channel,query_id,source.file --json
 agent-reach plan candidates --input .agent-reach/evidence.jsonl --by normalized_url --limit 20 --json
 ```
 
-Collection output includes top-level `schema_version` and `agent_reach_version`. Normalized items expose common raw signals such as `canonical_url`, `source_item_id`, `engagement`, `media_references`, and neutral `identifiers` when the source provides them. `error.category` gives a stable cross-channel taxonomy while `error.code` preserves the source-specific or contract-specific detail. These are diagnostics only, not ranking or publishing policy.
+Collection output includes top-level `schema_version` and `agent_reach_version`. Normalized items expose common raw signals such as `canonical_url`, `source_item_id`, `engagement`, `media_references`, and neutral `identifiers` when the source provides them. Page-like reads also expose diagnostic extraction hygiene such as `text_length`, `link_count`, `image_count`, `link_density`, and `extraction_warning`. `error.category` gives a stable cross-channel taxonomy while `error.code` preserves the source-specific or contract-specific detail. These are diagnostics only, not ranking or publishing policy.
 
 Use `--raw-mode minimal`, `--raw-mode none`, or `--raw-max-bytes N` only when the caller wants smaller JSON artifacts. The default remains full raw payload retention.
 

@@ -8,6 +8,7 @@ import time
 import warnings
 from urllib.parse import urlparse
 
+from agent_reach.extraction_hygiene import build_extraction_hygiene
 from agent_reach.media_references import (
     build_media_reference,
     dedupe_media_references,
@@ -24,10 +25,6 @@ from agent_reach.source_hints import web_source_hints
 from .base import BaseAdapter
 
 _UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-_MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)\s]+)")
-_BARE_URL_RE = re.compile(r"(?<!\()https?://[^\s)]+")
-_NAV_HEAVY_LINK_THRESHOLD = 25
-_NAV_HEAVY_MAX_CHARS_PER_LINK = 120
 _READER_DNS_ERROR_RE = re.compile(r"Domain '([^']+)' could not be resolved")
 
 
@@ -69,28 +66,6 @@ def _title_from_markdown(url: str, markdown: str, fallback_title: str | None = N
             return stripped.lstrip("#").strip() or derive_title_from_text(markdown, fallback=url)
     parsed = urlparse(url)
     return derive_title_from_text(markdown, fallback=parsed.netloc or url)
-
-
-def _link_count(markdown: str) -> int:
-    return len(_MARKDOWN_LINK_RE.findall(markdown)) + len(_BARE_URL_RE.findall(markdown))
-
-
-def _extraction_warning(text_length: int, link_count: int) -> str | None:
-    if link_count < _NAV_HEAVY_LINK_THRESHOLD:
-        return None
-    if text_length <= link_count * _NAV_HEAVY_MAX_CHARS_PER_LINK:
-        return "navigation_heavy"
-    return None
-
-
-def _web_hygiene_meta(text: str) -> dict[str, int | str | None]:
-    link_count = _link_count(text)
-    text_length = len(text)
-    return {
-        "text_length": text_length,
-        "link_count": link_count,
-        "extraction_warning": _extraction_warning(text_length, link_count),
-    }
 
 
 def _web_media_references(text: str) -> list[dict]:
@@ -169,7 +144,7 @@ class WebAdapter(BaseAdapter):
             )
 
         title, published_at, body = _extract_reader_metadata(markdown)
-        hygiene_meta = _web_hygiene_meta(body)
+        hygiene_meta = build_extraction_hygiene(body)
         media_references = _web_media_references(body)
         item = build_item(
             item_id=normalized,
@@ -182,6 +157,7 @@ class WebAdapter(BaseAdapter):
             source=self.channel,
             extras={
                 "reader_url": reader_url,
+                "extraction_hygiene": dict(hygiene_meta),
                 "media_references": media_references,
                 "source_hints": web_source_hints(published_at),
             },
@@ -190,5 +166,11 @@ class WebAdapter(BaseAdapter):
             "read",
             items=[item],
             raw=markdown,
-            meta=self.make_meta(value=normalized, limit=limit, started_at=started_at, **hygiene_meta),
+            meta=self.make_meta(
+                value=normalized,
+                limit=limit,
+                started_at=started_at,
+                **hygiene_meta,
+                extraction_hygiene=dict(hygiene_meta),
+            ),
         )

@@ -11,6 +11,7 @@ from agent_reach.ledger import (
     default_run_id,
     ledger_input_paths,
     merge_ledger_inputs,
+    query_ledger_input,
     save_collection_result,
     save_collection_result_sharded,
     shard_ledger_path,
@@ -303,3 +304,38 @@ def test_summarize_ledger_input_returns_health_counts(tmp_path):
     assert payload["intent_counts"] == {"official_docs": 1}
     assert payload["query_id_counts"] == {"q01": 1}
     assert payload["source_role_counts"] == {"web_discovery": 1}
+
+
+def test_query_ledger_input_filters_and_projects(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    records = [
+        build_ledger_record(_success_result(), run_id="run-1"),
+        build_ledger_record(_error_result(), run_id="run-1"),
+    ]
+    path.write_text(
+        "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records),
+        encoding="utf-8",
+    )
+
+    payload = query_ledger_input(
+        path,
+        filters=["channel == github", "ok == false"],
+        fields=["channel", "ok", "source.file", "source.line"],
+    )
+
+    assert payload["command"] == "ledger query"
+    assert payload["records_scanned"] == 2
+    assert payload["matched_records"] == 1
+    assert payload["returned_records"] == 1
+    assert payload["matches"][0]["channel"] == "github"
+    assert payload["matches"][0]["ok"] is False
+    assert payload["matches"][0]["source.file"].endswith("evidence.jsonl")
+    assert payload["matches"][0]["source.line"] == 2
+
+
+def test_query_ledger_input_rejects_invalid_filter(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    path.write_text(json.dumps(build_ledger_record(_success_result(), run_id="run-1")) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        query_ledger_input(path, filters=["channel github"])

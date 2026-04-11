@@ -67,7 +67,10 @@ def test_web_adapter_success(config, monkeypatch):
         "# Example Domain\n\nThis is a test page.\n![Chart](https://example.com/chart.png)"
     )
     assert payload["meta"]["link_count"] == 1
+    assert payload["meta"]["image_count"] == 1
+    assert payload["meta"]["link_density"] > 0
     assert payload["meta"]["extraction_warning"] is None
+    assert payload["meta"]["extraction_hygiene"]["image_count"] == 1
     assert payload["items"][0]["media_references"] == [
         {
             "type": "image",
@@ -77,6 +80,7 @@ def test_web_adapter_success(config, monkeypatch):
         }
     ]
     assert payload["meta"]["returned_count"] == 1
+    assert payload["items"][0]["extras"]["extraction_hygiene"]["image_count"] == 1
     assert payload["items"][0]["extras"]["source_hints"] == {
         "source_kind": "unknown",
         "authority_hint": "unknown",
@@ -1416,6 +1420,8 @@ def test_crawl4ai_adapter_read_success(config, monkeypatch):
     assert payload["items"][0]["published_at"] == "2026-04-10T00:00:00Z"
     assert payload["raw"]["markdown"] == "# Example\n\nRead body"
     assert payload["items"][0]["extras"]["source_hints"]["source_kind"] == "page"
+    assert payload["meta"]["link_count"] == 0
+    assert payload["items"][0]["extras"]["extraction_hygiene"]["text_length"] == len("# Example\n\nRead body")
 
 
 def test_crawl4ai_adapter_crawl_requires_query(config):

@@ -28,6 +28,7 @@ from agent_reach.ledger import (
     append_result_json,
     default_run_id,
     merge_ledger_inputs,
+    query_ledger_input,
     save_collection_result,
     summarize_ledger_input,
     validate_ledger_input,
@@ -342,6 +343,24 @@ def _build_parser() -> argparse.ArgumentParser:
     p_ledger_summarize = ledger_sub.add_parser("summarize", help="Summarize evidence ledger health counts")
     p_ledger_summarize.add_argument("--input", required=True, help="Ledger input file or directory")
     p_ledger_summarize.add_argument("--json", action="store_true", help="Print machine-readable summary output")
+    p_ledger_query = ledger_sub.add_parser("query", help="Filter evidence ledger records")
+    p_ledger_query.add_argument("--input", required=True, help="Ledger input file or directory")
+    p_ledger_query.add_argument(
+        "--filter",
+        action="append",
+        default=[],
+        help='Repeatable filter such as "channel == github" or "ok == true"',
+    )
+    p_ledger_query.add_argument(
+        "--limit",
+        type=int,
+        help="Optional maximum number of matching records to return",
+    )
+    p_ledger_query.add_argument(
+        "--fields",
+        help="Comma-separated dotted fields to project, such as channel,operation,source.file",
+    )
+    p_ledger_query.add_argument("--json", action="store_true", help="Print machine-readable query output")
     p_ledger_append = ledger_sub.add_parser("append", help="Append a CollectionResult JSON file to a ledger")
     p_ledger_append.add_argument("--input", required=True, help="CollectionResult JSON input file")
     p_ledger_append.add_argument("--output", required=True, help="Evidence ledger JSONL output path")
@@ -1432,6 +1451,8 @@ def _cmd_ledger(args) -> int:
         return _cmd_ledger_validate(args)
     if args.ledger_command == "summarize":
         return _cmd_ledger_summarize(args)
+    if args.ledger_command == "query":
+        return _cmd_ledger_query(args)
     if args.ledger_command == "append":
         return _cmd_ledger_append(args)
     print("ledger requires a subcommand", file=sys.stderr)
@@ -1518,6 +1539,30 @@ def _cmd_ledger_summarize(args) -> int:
     return 0 if payload["valid"] else 1
 
 
+def _cmd_ledger_query(args) -> int:
+    if args.limit is not None and args.limit < 1:
+        print("limit must be greater than or equal to 1", file=sys.stderr)
+        return 2
+    fields = None
+    if args.fields is not None:
+        fields = [item.strip() for item in args.fields.split(",") if item.strip()]
+    try:
+        payload = query_ledger_input(
+            args.input,
+            filters=list(args.filter or []),
+            limit=args.limit,
+            fields=fields,
+        )
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        print(f"Could not query ledger: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        _print_json(payload)
+    else:
+        print(_render_ledger_query_text(payload))
+    return 0
+
+
 def _cmd_ledger_append(args) -> int:
     try:
         payload = append_result_json(
@@ -1552,6 +1597,34 @@ def _cmd_ledger_append(args) -> int:
             )
         )
     return 0
+
+
+def _render_ledger_query_text(payload: dict[str, object]) -> str:
+    lines = [
+        "Agent Reach Ledger Query",
+        "========================================",
+        f"Input: {payload['input']}",
+        f"Files checked: {payload['files_checked']}",
+        f"Records scanned: {payload['records_scanned']}",
+        f"Matched: {payload['matched_records']}",
+        f"Returned: {payload['returned_records']}",
+    ]
+    filters = payload.get("filters") or []
+    if filters:
+        lines.append(
+            "Filters: " + "; ".join(
+                str(filter_payload.get("expression"))
+                for filter_payload in filters
+                if isinstance(filter_payload, dict) and filter_payload.get("expression")
+            )
+        )
+    fields = payload.get("fields")
+    if fields:
+        lines.append(f"Fields: {', '.join(str(field) for field in fields)}")
+    matches = payload.get("matches") or []
+    for match in matches[:5]:
+        lines.append(json.dumps(match, ensure_ascii=False))
+    return "\n".join(lines)
 
 
 def _render_channels_text(contracts: Sequence[dict]) -> str:

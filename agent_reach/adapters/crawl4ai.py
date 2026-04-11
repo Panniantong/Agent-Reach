@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from typing import Iterable, cast
 from urllib.parse import urlparse
 
+from agent_reach.extraction_hygiene import build_extraction_hygiene
 from agent_reach.media_references import (
     build_media_reference,
     dedupe_media_references,
@@ -188,9 +189,11 @@ def _normalize_page_item(result: object, *, fallback_url: str, crawl_query: str 
     metadata = _extract_metadata(result)
     markdown = _extract_markdown(result)
     published_at = _extract_published_at(metadata)
+    extraction_hygiene = build_extraction_hygiene(markdown)
     extras = {
         "status_code": _get_value(result, "status_code"),
         "final_url": resolved_url,
+        "extraction_hygiene": extraction_hygiene,
         "media_references": _extract_media_references(metadata, markdown),
         "source_hints": page_source_hints(published_at),
     }
@@ -343,11 +346,19 @@ class Crawl4AIAdapter(BaseAdapter):
             )
 
         item = _normalize_page_item(result, fallback_url=normalized)
+        item_hygiene = item["extras"].get("extraction_hygiene")
+        hygiene_meta = item_hygiene if isinstance(item_hygiene, dict) else {}
         return self.ok_result(
             "read",
             items=[item],
             raw=_raw_page(result, fallback_url=normalized),
-            meta=self.make_meta(value=normalized, limit=limit, started_at=started_at),
+            meta=self.make_meta(
+                value=normalized,
+                limit=limit,
+                started_at=started_at,
+                **hygiene_meta,
+                extraction_hygiene=dict(hygiene_meta),
+            ),
         )
 
     def crawl(self, url: str, limit: int = 10, crawl_query: str | None = None) -> CollectionResult:

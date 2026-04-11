@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Iterable, TypedDict, cast
 
@@ -44,6 +45,10 @@ _JSONL_UNSAFE_LINE_SEPARATORS = {
     "\u2028": "\\u2028",
     "\u2029": "\\u2029",
 }
+_FILTER_EXPRESSION_RE = re.compile(
+    r"^\s*(?P<path>[A-Za-z0-9_.-]+)\s*(?P<operator>==|!=|>=|<=|>|<|contains)\s*(?P<value>.+?)\s*$"
+)
+_MISSING = object()
 
 
 def default_run_id() -> str:
@@ -489,6 +494,74 @@ def summarize_ledger_input(input_path: str | Path) -> dict[str, Any]:
     }
 
 
+def query_ledger_input(
+    input_path: str | Path,
+    *,
+    filters: list[str] | None = None,
+    limit: int | None = None,
+    fields: list[str] | None = None,
+) -> dict[str, Any]:
+    """Filter evidence ledger records with a small dotted-path query surface."""
+
+    if limit is not None and limit < 1:
+        raise ValueError("limit must be greater than or equal to 1")
+
+    source = Path(input_path)
+    inputs = ledger_input_paths(source)
+    parsed_filters = [_parse_filter_expression(expression) for expression in (filters or [])]
+    projected_fields = _normalize_query_fields(fields)
+    invalid_lines = 0
+    invalid_records = 0
+    records_scanned = 0
+    matched_records = 0
+    matches: list[dict[str, Any]] = []
+
+    for ledger_path in inputs:
+        for line_number, line in iter_jsonl_lines(ledger_path):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                invalid_lines += 1
+                continue
+            if not isinstance(record, dict):
+                invalid_records += 1
+                continue
+
+            records_scanned += 1
+            context = {
+                **record,
+                "source": {
+                    "file": str(ledger_path),
+                    "line": line_number,
+                },
+            }
+            if not all(_record_matches_filter(context, parsed_filter) for parsed_filter in parsed_filters):
+                continue
+
+            matched_records += 1
+            if limit is None or len(matches) < limit:
+                matches.append(_project_query_match(context, projected_fields))
+
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "generated_at": utc_timestamp(),
+        "command": "ledger query",
+        "input": str(source),
+        "files_checked": len(inputs),
+        "filters": parsed_filters,
+        "limit": limit,
+        "fields": projected_fields,
+        "records_scanned": records_scanned,
+        "invalid_lines": invalid_lines,
+        "invalid_records": invalid_records,
+        "matched_records": matched_records,
+        "returned_records": len(matches),
+        "matches": matches,
+    }
+
+
 def append_result_json(
     input_path: str | Path,
     output_path: str | Path,
@@ -593,3 +666,129 @@ def _resolved_path(path: str | Path | None) -> Path | None:
     if path is None:
         return None
     return Path(path).resolve()
+
+
+def _normalize_query_fields(fields: list[str] | None) -> list[str] | None:
+    if not fields:
+        return None
+    normalized = [field.strip() for field in fields if isinstance(field, str) and field.strip()]
+    return normalized or None
+
+
+def _parse_filter_expression(expression: str) -> dict[str, Any]:
+    text = expression.strip()
+    if not text:
+        raise ValueError("filter expressions must not be empty")
+    match = _FILTER_EXPRESSION_RE.match(text)
+    if not match:
+        raise ValueError(
+            "Invalid filter expression. Use forms like `channel == github`, `ok == true`, or `count >= 10`."
+        )
+    return {
+        "expression": text,
+        "path": match.group("path"),
+        "operator": match.group("operator"),
+        "value": _parse_filter_value(match.group("value")),
+    }
+
+
+def _parse_filter_value(raw_value: str) -> Any:
+    value = raw_value.strip()
+    if not value:
+        raise ValueError("filter values must not be empty")
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    if value.startswith("[") or value.startswith("{"):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"filter value is not valid JSON: {exc.msg}") from exc
+    lowered = value.lower()
+    if lowered in {"true", "false", "null"}:
+        return json.loads(lowered)
+    if re.fullmatch(r"-?\d+", value):
+        return int(value)
+    if re.fullmatch(r"-?\d+\.\d+", value):
+        return float(value)
+    return value
+
+
+def _record_matches_filter(record: dict[str, Any], parsed_filter: dict[str, Any]) -> bool:
+    actual = _query_path_value(record, parsed_filter["path"])
+    if actual is _MISSING:
+        return False
+    operator = parsed_filter["operator"]
+    expected = parsed_filter["value"]
+    if operator == "contains":
+        if isinstance(actual, str):
+            return str(expected) in actual
+        if isinstance(actual, dict):
+            return str(expected) in actual
+        if isinstance(actual, (list, tuple, set)):
+            return any(item == expected or str(item) == str(expected) for item in actual)
+        return False
+    if operator == "==":
+        return actual == expected
+    if operator == "!=":
+        return actual != expected
+
+    comparison = _compare_query_values(actual, expected)
+    if comparison is None:
+        return False
+    if operator == ">":
+        return comparison > 0
+    if operator == ">=":
+        return comparison >= 0
+    if operator == "<":
+        return comparison < 0
+    if operator == "<=":
+        return comparison <= 0
+    return False
+
+
+def _compare_query_values(actual: Any, expected: Any) -> int | None:
+    if actual is None or expected is None:
+        return None
+    if isinstance(actual, bool) or isinstance(expected, bool):
+        return None
+    if isinstance(actual, (int, float)) and isinstance(expected, (int, float)):
+        if actual < expected:
+            return -1
+        if actual > expected:
+            return 1
+        return 0
+    actual_text = actual if isinstance(actual, str) else str(actual)
+    expected_text = expected if isinstance(expected, str) else str(expected)
+    if actual_text < expected_text:
+        return -1
+    if actual_text > expected_text:
+        return 1
+    return 0
+
+
+def _query_path_value(value: Any, path: str) -> Any:
+    current = value
+    for part in path.split("."):
+        if isinstance(current, dict):
+            if part not in current:
+                return _MISSING
+            current = current[part]
+            continue
+        if isinstance(current, list) and part.isdigit():
+            index = int(part)
+            if index < 0 or index >= len(current):
+                return _MISSING
+            current = current[index]
+            continue
+        return _MISSING
+    return current
+
+
+def _project_query_match(match: dict[str, Any], fields: list[str] | None) -> dict[str, Any]:
+    if not fields:
+        return match
+    projected: dict[str, Any] = {}
+    for field in fields:
+        value = _query_path_value(match, field)
+        projected[field] = None if value is _MISSING else value
+    return projected

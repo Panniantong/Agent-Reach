@@ -55,6 +55,7 @@ When provenance matters, append each raw collection envelope to a JSONL ledger:
 agent-reach collect --channel exa_search --operation search --input "latest AI agent frameworks" --limit 5 --json --save .agent-reach/evidence.jsonl --run-id agent-frameworks --intent discovery --query-id exa-agent-frameworks --source-role web_search
 agent-reach ledger validate --input .agent-reach/evidence.jsonl --require-metadata --json
 agent-reach ledger summarize --input .agent-reach/evidence.jsonl --json
+agent-reach ledger query --input .agent-reach/evidence.jsonl --filter "channel == exa_search" --fields channel,query_id,source.file --json
 agent-reach plan candidates --input .agent-reach/evidence.jsonl --by normalized_url --limit 20 --json
 ```
 
@@ -62,7 +63,7 @@ This does not require `.codex-plugin`, `.mcp.json`, or `agent_reach/skills` file
 
 `agent-reach check-update --json` compares this fork to upstream `Panniantong/Agent-Reach` releases. Treat it as upstream awareness, not as the source of truth for the latest fork commit.
 
-Treat `extras.source_hints`, item-level `engagement`, `media_references`, neutral `identifiers`, `error.category`, and web `meta` hygiene fields as diagnostics only. They can help downstream code explain provenance or flag suspicious extraction shape, but they are not ranking, trust scoring, summarization, or publishing instructions. Inspect `agent-reach channels --json` `operation_contracts` before choosing per-channel controls such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`; Agent Reach does not choose those inputs for the caller. Social search responses may set `meta.diagnostics.unbounded_time_window` so the caller can notice missing time bounds. `collect --max-text-chars N` is only for human text-mode snippets and does not truncate `--json` output or saved ledgers. Use `--raw-mode minimal`, `--raw-mode none`, or `--raw-max-bytes N` when the caller wants smaller machine-readable artifacts.
+Treat `extras.source_hints`, item-level `engagement`, `media_references`, neutral `identifiers`, `error.category`, and page extraction hygiene fields such as `text_length`, `link_count`, `image_count`, `link_density`, and `extraction_warning` as diagnostics only. They can help downstream code explain provenance or flag suspicious extraction shape, but they are not ranking, trust scoring, summarization, or publishing instructions. Inspect `agent-reach channels --json` `operation_contracts` before choosing per-channel controls such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`; Agent Reach does not choose those inputs for the caller. Social search responses may set `meta.diagnostics.unbounded_time_window` so the caller can notice missing time bounds. `collect --max-text-chars N` is only for human text-mode snippets and does not truncate `--json` output or saved ledgers. Use `--raw-mode minimal`, `--raw-mode none`, or `--raw-max-bytes N` when the caller wants smaller machine-readable artifacts.
 
 If a conditional command was captured without `--save`, append it later with:
 
@@ -88,6 +89,7 @@ When Codex is working inside an arbitrary project:
 - Prefer `--run-id`, `--intent`, `--query-id`, and `--source-role` with saved ledgers; use `ledger validate --require-metadata --json` when metadata completeness should gate automation.
 - Validate ledgers with `agent-reach ledger validate --json` before treating them as CI artifacts.
 - Use `agent-reach ledger summarize --json` for channel, operation, intent, query, source-role, item, error, and metadata health counts.
+- Use `agent-reach ledger query --json` for lightweight record filtering and field projection without leaving Agent Reach.
 - Use `agent-reach plan candidates` for lightweight URL or ID dedupe before follow-up reads.
 - Keep `agent-reach plan candidates` at the default `--limit 20` unless the caller explicitly wants a broader candidate set.
 - Treat `batch` and `scout` as explicit opt-in helpers rather than the default route for everyday collection.

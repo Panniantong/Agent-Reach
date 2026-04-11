@@ -4,6 +4,17 @@ All notable changes to this fork are documented here.
 
 ## Unreleased
 
+## [1.9.0] - 2026-04-12
+
+### Added
+
+- `ledger query` for lightweight evidence-ledger filtering and dotted-path field projection without external tooling
+- additional page extraction hygiene diagnostics such as `image_count` and `link_density` for `web` reads and browser-backed page reads
+
+### Changed
+
+- surfaced page extraction hygiene under item extras as well as top-level read metadata so downstream code can inspect page shape without re-reading raw payloads
+
 ## [1.8.0] - 2026-04-12
 
 ### Added

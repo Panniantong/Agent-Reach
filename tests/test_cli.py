@@ -1897,6 +1897,76 @@ class TestCLI:
         assert summary_payload["records"] == 1
         assert summary_payload["missing_metadata"]["records"] == 1
 
+    def test_ledger_query_command_filters_and_projects(self, capsys, tmp_path):
+        ledger_path = tmp_path / "evidence.jsonl"
+        records = [
+            {
+                "record_type": "collection_result",
+                "run_id": "run-1",
+                "channel": "web",
+                "operation": "read",
+                "ok": True,
+                "result": {
+                    "ok": True,
+                    "channel": "web",
+                    "operation": "read",
+                    "items": [{"id": "1", "url": "https://example.com"}],
+                    "raw": None,
+                    "meta": {"input": "https://example.com", "count": 1},
+                    "error": None,
+                },
+            },
+            {
+                "record_type": "collection_result",
+                "run_id": "run-1",
+                "channel": "github",
+                "operation": "read",
+                "ok": False,
+                "result": {
+                    "ok": False,
+                    "channel": "github",
+                    "operation": "read",
+                    "items": [],
+                    "raw": None,
+                    "meta": {"input": "openai/openai-python", "count": 0},
+                    "error": {
+                        "code": "not_found",
+                        "message": "missing",
+                        "details": {},
+                        "category": "no_results",
+                        "retryable": False,
+                    },
+                },
+            },
+        ]
+        ledger_path.write_text(
+            "".join(json.dumps(record) + "\n" for record in records),
+            encoding="utf-8",
+        )
+
+        assert (
+            main(
+                [
+                    "ledger",
+                    "query",
+                    "--input",
+                    str(ledger_path),
+                    "--filter",
+                    "channel == github",
+                    "--fields",
+                    "channel,ok,source.line",
+                    "--json",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["command"] == "ledger query"
+        assert payload["matched_records"] == 1
+        assert payload["matches"][0]["channel"] == "github"
+        assert payload["matches"][0]["ok"] is False
+        assert payload["matches"][0]["source.line"] == 2
+
     def test_ledger_validate_command_returns_exit_1_for_invalid_records(self, capsys, tmp_path):
         ledger_path = tmp_path / "evidence.jsonl"
         ledger_path.write_text('{"record_type":"collection_result"}\nnot-json\n', encoding="utf-8")
@@ -1914,6 +1984,31 @@ class TestCLI:
         captured = capsys.readouterr()
         assert captured.out == ""
         assert "Could not validate ledger" in captured.err
+
+    def test_ledger_query_invalid_filter_returns_exit_2(self, capsys, tmp_path):
+        ledger_path = tmp_path / "evidence.jsonl"
+        ledger_path.write_text(
+            '{"record_type":"collection_result","channel":"web","operation":"read","ok":true,"result":{"ok":true,"channel":"web","operation":"read","items":[],"raw":null,"meta":{"input":"https://example.com"},"error":null}}\n',
+            encoding="utf-8",
+        )
+
+        assert (
+            main(
+                [
+                    "ledger",
+                    "query",
+                    "--input",
+                    str(ledger_path),
+                    "--filter",
+                    "channel github",
+                    "--json",
+                ]
+            )
+            == 2
+        )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "Could not query ledger" in captured.err
 
     def test_ledger_append_command_writes_collection_result(self, capsys, tmp_path):
         result_path = tmp_path / "result.json"
