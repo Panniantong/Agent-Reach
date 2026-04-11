@@ -9,11 +9,13 @@ Agent Reach is intentionally narrow. It helps other tools collect information sa
 - provide readiness diagnostics and integration exports
 - offer a thin read-only collection surface for external apps, bots, and CI jobs
 
-It also ships a bundled Codex skill suite for orchestration around that collection surface:
+It also ships a bundled Codex skill suite for collection, orchestration, and maintainer workflows around that surface:
 
 - `agent-reach`: diagnostics, channel discovery, and read-only collection guidance
 - `agent-reach-shape-brief`: turn rough research asks into a fixed brief
 - `agent-reach-orchestrate`: take a rough ask, optionally use one intake subagent when it is actually worth it, and start the Agent Reach investigation in-session
+- `agent-reach-maintain-proposals`: maintainer-only review skill for adopting or rejecting Agent Reach improvement proposals before editing
+- `agent-reach-maintain-release`: maintainer-only shipping skill for approved Agent Reach changes, including push and reinstall flows when requested
 
 For most rough research asks, start with `agent-reach-orchestrate`. Use `agent-reach-shape-brief` only when you explicitly want to stop at brief formation before collection.
 

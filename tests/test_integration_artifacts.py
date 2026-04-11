@@ -117,6 +117,8 @@ def test_export_points_at_existing_checkout_artifacts():
         "agent-reach",
         "agent-reach-shape-brief",
         "agent-reach-orchestrate",
+        "agent-reach-maintain-proposals",
+        "agent-reach-maintain-release",
     ]
     assert payload["skill"]["targets"]
     assert Path(payload["skill"]["source"]).exists()
@@ -162,6 +164,8 @@ def test_export_tool_install_omits_dead_paths(tmp_path):
         "agent-reach",
         "agent-reach-shape-brief",
         "agent-reach-orchestrate",
+        "agent-reach-maintain-proposals",
+        "agent-reach-maintain-release",
     ]
     plugin_destination = Path(payload["suggested_destinations"]["plugin_manifest"])
     mcp_destination = Path(payload["suggested_destinations"]["mcp_config"])

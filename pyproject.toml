@@ -1,6 +1,6 @@
 [project]
 name = "agent-reach"
-version = "1.9.0"
+version = "1.10.0"
 description = "Windows-first research capability layer with a Python SDK and JSON CLI for web, search, developer, social, forum, registry, video, RSS, and optional browser-backed channels."
 readme = "README.md"
 license = {text = "MIT"}

@@ -12,7 +12,7 @@ agent-reach skill --install
 agent-reach version
 ```
 
-`agent-reach skill --install` installs the bundled Codex skill suite: `agent-reach`, `agent-reach-shape-brief`, and `agent-reach-orchestrate`.
+`agent-reach skill --install` installs the bundled Codex skill suite: `agent-reach`, `agent-reach-shape-brief`, `agent-reach-orchestrate`, plus maintainer-only skills `agent-reach-maintain-proposals` and `agent-reach-maintain-release`.
 
 To pin a specific build, install an exact commit or ref:
 
@@ -42,7 +42,7 @@ uv tool install --force .
 agent-reach version
 ```
 
-For the current collection and ledger surface, `agent-reach version` should report `Agent Reach v1.8.0` or newer.
+For the current collection and ledger surface, `agent-reach version` should report `Agent Reach v1.10.0` or newer.
 
 ## Preview mode
 

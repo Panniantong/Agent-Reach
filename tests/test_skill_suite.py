@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Tests for the bundled brief-shaping and orchestration skill suite."""
+"""Tests for the bundled Agent Reach skill suite."""
 
 from pathlib import Path
 
@@ -88,3 +88,35 @@ def test_orchestrate_references_cover_subagent_policy_and_run_rules():
     assert "agent-reach collect --json --save .agent-reach/evidence.jsonl" in examples
     assert "agent-reach ledger summarize --input .agent-reach/evidence.jsonl --json" in examples
     assert "agent-reach plan candidates --input .agent-reach/evidence.jsonl --by normalized_url --limit 20 --json" in examples
+
+
+def test_maintainer_review_skill_has_policy_and_output_contract():
+    skill = (_skill_dir("agent-reach-maintain-proposals") / "SKILL.md").read_text(encoding="utf-8")
+    policy = (_skill_dir("agent-reach-maintain-proposals") / "references" / "policy-tests.md").read_text(
+        encoding="utf-8"
+    )
+    output = (_skill_dir("agent-reach-maintain-proposals") / "references" / "review-output.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "adopt_now" in skill
+    assert "Keep Agent Reach thin" in skill
+    assert "Fast Reject Signals" in policy
+    assert "Split-When-Possible Rule" in policy
+    assert "Implementation Handoff" in output
+
+
+def test_maintainer_release_skill_has_shipping_guardrails():
+    skill = (_skill_dir("agent-reach-maintain-release") / "SKILL.md").read_text(encoding="utf-8")
+    boundaries = (_skill_dir("agent-reach-maintain-release") / "references" / "change-boundaries.md").read_text(
+        encoding="utf-8"
+    )
+    flow = (_skill_dir("agent-reach-maintain-release") / "references" / "release-flow.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "commit, push, or reinstall" in skill
+    assert "Never push unrelated dirty-tree changes" in skill
+    assert "Must-Stay-True Rules" in boundaries
+    assert "Reinstall After Push" in flow
+    assert "skip test execution and say so" in flow

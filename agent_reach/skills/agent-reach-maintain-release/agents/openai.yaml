@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Reach Maintain Release"
+  short_description: "Ship approved agent-reach changes"
+  default_prompt: "Use $agent-reach-maintain-release to implement these approved agent-reach changes safely, keep public surfaces consistent, and carry them through commit, push, and reinstall when requested."

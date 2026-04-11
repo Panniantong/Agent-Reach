@@ -4,6 +4,17 @@ All notable changes to this fork are documented here.
 
 ## Unreleased
 
+## [1.10.0] - 2026-04-12
+
+### Added
+
+- bundled maintainer-only Codex skills for proposal review and approved-change shipping: `agent-reach-maintain-proposals` and `agent-reach-maintain-release`
+- maintainer guidance references for policy-safe adoption decisions, scoped implementation, and push plus reinstall flow
+
+### Changed
+
+- expanded bundled skill metadata and docs to surface the new maintainer workflows alongside the existing research skills
+
 ## [1.9.0] - 2026-04-12
 
 ### Added

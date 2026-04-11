@@ -19,7 +19,7 @@ agent-reach version
 agent-reach doctor --json --probe
 ```
 
-`agent-reach skill --install` installs the bundled Codex skill suite: `agent-reach`, `agent-reach-shape-brief`, and `agent-reach-orchestrate`.
+`agent-reach skill --install` installs the bundled Codex skill suite: `agent-reach`, `agent-reach-shape-brief`, `agent-reach-orchestrate`, plus maintainer-only skills `agent-reach-maintain-proposals` and `agent-reach-maintain-release`.
 
 When you need an exact build, pin a commit or ref instead of relying on upstream release tags:
 
@@ -79,6 +79,7 @@ When Codex is working inside an arbitrary project:
 - Do not copy Agent Reach repo files into the project unless the user explicitly asks for repo-local plugin artifacts.
 - Use `agent-reach-shape-brief` to normalize vague research asks when needed.
 - Use `agent-reach-orchestrate` when the user wants to go from a rough ask to actual Agent Reach collection start in the same session.
+- The bundled suite also includes maintainer-only skills for Agent Reach repo work: `agent-reach-maintain-proposals` and `agent-reach-maintain-release`.
 - If delegation is available and explicitly allowed, use at most one intake-only subagent when ambiguity would materially change the research route.
 - Agent Reach does not choose request scale, investigation routes, source mix, ranking, summarization, or posting.
 - The caller chooses scope. Do not auto-escalate a lightweight request into large-scale research.

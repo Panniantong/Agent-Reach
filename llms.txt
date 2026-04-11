@@ -14,6 +14,8 @@ Agent Reach is a Windows-first integration layer for research tooling on Codex-s
 - https://github.com/iwachacha/Agent-Reach/blob/main/agent_reach/skills/agent-reach/SKILL.md
 - https://github.com/iwachacha/Agent-Reach/blob/main/agent_reach/skills/agent-reach-shape-brief/SKILL.md
 - https://github.com/iwachacha/Agent-Reach/blob/main/agent_reach/skills/agent-reach-orchestrate/SKILL.md
+- https://github.com/iwachacha/Agent-Reach/blob/main/agent_reach/skills/agent-reach-maintain-proposals/SKILL.md
+- https://github.com/iwachacha/Agent-Reach/blob/main/agent_reach/skills/agent-reach-maintain-release/SKILL.md
 - Default rough-ask entrypoint: `agent-reach-orchestrate`
 
 ## Install the latest fork build

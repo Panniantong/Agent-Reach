@@ -17,6 +17,8 @@ PACKAGED_SKILL_NAMES = (
     "agent-reach",
     "agent-reach-shape-brief",
     "agent-reach-orchestrate",
+    "agent-reach-maintain-proposals",
+    "agent-reach-maintain-release",
 )
 
 
@@ -193,12 +195,14 @@ def _mcp_config_inline(repo_root: Path) -> dict[str, Any]:
 def _documentation_summary() -> list[str]:
     return [
         "Install the latest fork build from `git+https://github.com/iwachacha/Agent-Reach.git` or pin a commit/ref when reproducibility matters.",
-        "`agent-reach skill --install` installs the bundled Codex skill suite: `agent-reach`, `agent-reach-shape-brief`, and `agent-reach-orchestrate`.",
+        "`agent-reach skill --install` installs the bundled Codex skill suite: `agent-reach`, `agent-reach-shape-brief`, `agent-reach-orchestrate`, `agent-reach-maintain-proposals`, and `agent-reach-maintain-release`.",
         "Use `agent-reach collect --json` as the primary external interface in arbitrary projects.",
         "Let the calling workflow choose request scale, channels, pagination, ranking, summarization, and posting; Agent Reach exposes capabilities but does not choose scope for the caller.",
         "Use `agent-reach-shape-brief` to normalize vague requests into a fixed research brief before execution when the request is underspecified.",
         "Use `agent-reach-orchestrate` to move a rough or structured ask to actual Agent Reach collection start in the same session.",
         "For most rough asks, `agent-reach-orchestrate` is the default entrypoint; use `agent-reach-shape-brief` only when you want to stop before collection starts.",
+        "Use `agent-reach-maintain-proposals` only for Agent Reach maintainer work that evaluates externally sourced improvement ideas before editing.",
+        "Use `agent-reach-maintain-release` only for Agent Reach maintainer work that implements already-approved changes and carries them through shipping steps.",
         "Use at most one brief-shaping subagent per request, and only when intake ambiguity would materially change the research route.",
         "Inspect `agent-reach channels --json` operation contracts before choosing per-channel options such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until` downstream.",
         "Add `--save .agent-reach/evidence.jsonl` when a research run needs an auditable raw CollectionResult ledger.",
@@ -265,6 +269,7 @@ def _external_project_usage() -> dict[str, Any]:
             ],
             "notes": [
                 "The skill install writes the bundled skill suite to the user's Codex skill home, not to the downstream project.",
+                "Two bundled skills are maintainer-only: `agent-reach-maintain-proposals` and `agent-reach-maintain-release`.",
                 "Downstream projects do not need `.codex-plugin`, `.mcp.json`, or `agent_reach/skills` files when using the CLI.",
                 "After pushing a custom ref, refresh the global install with `uv tool install --force git+<remote-url>@<ref>` and rerun `agent-reach skill --install`.",
             ],

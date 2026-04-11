@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Reach Maintain Proposals"
+  short_description: "Review agent-reach improvement proposals"
+  default_prompt: "Use $agent-reach-maintain-proposals to review these proposed agent-reach improvements against the fork's thin-interface policy and decide adopt_now, reject, or defer before any edits."

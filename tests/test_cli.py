@@ -2101,6 +2101,8 @@ class TestCLI:
             "agent-reach",
             "agent-reach-shape-brief",
             "agent-reach-orchestrate",
+            "agent-reach-maintain-proposals",
+            "agent-reach-maintain-release",
         ]
         channel_contracts = {channel["name"]: channel for channel in payload["channels"]}
         assert channel_contracts["qiita"]["operation_contracts"]["search"]["options"][0]["name"] == "body_mode"

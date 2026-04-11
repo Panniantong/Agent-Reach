@@ -53,8 +53,12 @@ After that, Codex can call `agent-reach collect --json` from any working directo
 - `agent-reach`
 - `agent-reach-shape-brief`
 - `agent-reach-orchestrate`
+- `agent-reach-maintain-proposals` (maintainer-only)
+- `agent-reach-maintain-release` (maintainer-only)
 
 Use `agent-reach-shape-brief` when a research ask is still underspecified and you want a fixed brief before execution. Use `agent-reach-orchestrate` when you want the same Codex session to move from intake to actual Agent Reach collection start.
+
+The bundled suite also includes two maintainer-only skills for this repository itself: `agent-reach-maintain-proposals` for proposal review and `agent-reach-maintain-release` for approved change shipping.
 
 For most rough asks, `agent-reach-orchestrate` is the default entrypoint. Reach for `agent-reach-shape-brief` only when you want to stop before collection starts.
 
