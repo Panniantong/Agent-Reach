@@ -53,6 +53,7 @@ def test_docs_folder_only_contains_supported_docs():
     }
     allowed_docs = {
         *required_docs,
+        "agent-reach-external-large-scale-research-prompt-2026-04-11.md",
         "agent-reach-external-mixed-collection-prompt-2026-04-11.md",
         "agent-reach-external-test-prompt-2026-04-11.md",
         "agent-reach-scale-evolution-research-2026-04-10.md",
