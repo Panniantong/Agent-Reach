@@ -18,7 +18,7 @@ Use this order for approved Agent Reach maintenance work.
 ## 3. Validation Modes
 
 - `none`
-  Use when the user explicitly says tests are not needed. Skip test execution and say so in the final report.
+  Use when the user explicitly says tests are not needed. skip test execution and say so in the final report.
 - `targeted`
   Use for local unit tests, lint, or CLI smoke checks tied to the changed surface.
 - `broader`

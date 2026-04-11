@@ -1,6 +1,6 @@
 {
   "name": "agent-reach",
-  "version": "1.8.0",
+  "version": "1.11.0",
   "description": "Windows-first research integration and orchestration suite for Codex.",
   "author": {
     "name": "Neo Reid"
