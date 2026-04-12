@@ -34,7 +34,7 @@ from agent_reach.ledger import (
     summarize_ledger_input,
     validate_ledger_input,
 )
-from agent_reach.results import CollectionResult, apply_raw_mode
+from agent_reach.results import CollectionResult, apply_item_text_mode, apply_raw_mode
 from agent_reach.schemas import SCHEMA_VERSION, collection_result_schema, utc_timestamp
 from agent_reach.scout import (
     BUDGETS,
@@ -186,6 +186,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Show text snippets up to N characters in text mode only",
     )
     p_collect.add_argument(
+        "--item-text-mode",
+        choices=["full", "snippet", "none"],
+        help="Control normalized item text retention in CollectionResult output. Defaults to full",
+    )
+    p_collect.add_argument(
+        "--item-text-max-chars",
+        type=int,
+        help="When item-text-mode is snippet, keep at most N characters per item text. Defaults to 500",
+    )
+    p_collect.add_argument(
         "--raw-mode",
         choices=["full", "minimal", "none"],
         default="full",
@@ -330,6 +340,12 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=["text", "json", "powershell"],
         default="text",
         help="Output format for the integration export",
+    )
+    p_export.add_argument(
+        "--profile",
+        choices=["full", "runtime-minimal"],
+        default="full",
+        help="Export profile. runtime-minimal is only supported with --format json",
     )
 
     p_ledger = sub.add_parser("ledger", help="Manage evidence ledger files")
@@ -1217,6 +1233,12 @@ def _cmd_collect(args) -> int:
     if args.max_text_chars is not None and args.max_text_chars < 1:
         print("max-text-chars must be greater than or equal to 1", file=sys.stderr)
         return 2
+    if args.item_text_max_chars is not None and args.item_text_max_chars < 1:
+        print("item-text-max-chars must be greater than or equal to 1", file=sys.stderr)
+        return 2
+    if args.item_text_max_chars is not None and args.item_text_mode not in (None, "snippet"):
+        print("item-text-max-chars is only supported with item-text-mode snippet", file=sys.stderr)
+        return 2
     if args.raw_max_bytes is not None and args.raw_max_bytes < 1:
         print("raw-max-bytes must be greater than or equal to 1", file=sys.stderr)
         return 2
@@ -1235,6 +1257,7 @@ def _cmd_collect(args) -> int:
         return 2
 
     client = AgentReachClient()
+    item_text_mode = args.item_text_mode or ("snippet" if args.item_text_max_chars is not None else "full")
     collect_kwargs = {}
     if args.limit is not None:
         collect_kwargs["limit"] = args.limit
@@ -1256,6 +1279,11 @@ def _cmd_collect(args) -> int:
         collect_kwargs["until"] = args.until
     payload = client.collect(args.channel, args.operation, args.input, **collect_kwargs)
     try:
+        payload = apply_item_text_mode(
+            payload,
+            item_text_mode=item_text_mode,
+            item_text_max_chars=args.item_text_max_chars,
+        )
         payload = apply_raw_mode(payload, raw_mode=args.raw_mode, raw_max_bytes=args.raw_max_bytes)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
@@ -1779,7 +1807,11 @@ def _cmd_export_integration(args) -> int:
         render_codex_integration_text,
     )
 
-    payload = export_codex_integration()
+    if args.profile != "full" and args.format != "json":
+        print("export-integration profiles other than full are only supported with --format json", file=sys.stderr)
+        return 2
+
+    payload = export_codex_integration(profile=args.profile)
     if args.format == "json":
         _print_json(payload)
     elif args.format == "powershell":

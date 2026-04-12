@@ -20,9 +20,10 @@ Agent Reach is a Windows-first integration layer for research tooling. It expose
 agent-reach channels --json
 agent-reach doctor --json
 agent-reach doctor --json --probe
+agent-reach collect --channel web --operation read --input "https://example.com" --json --raw-mode none --item-text-mode snippet --item-text-max-chars 500
 agent-reach collect --channel qiita --operation search --input "python" --limit 4 --page-size 2 --max-pages 2 --body-mode snippet --json
 agent-reach collect --channel github --operation read --input "openai/openai-python" --json
-agent-reach export-integration --client codex --format json
+agent-reach export-integration --client codex --format json --profile runtime-minimal
 ```
 
 `doctor --json` is diagnostic-only by default. When a workflow wants readiness to affect the exit code, the caller chooses `--require-channel`, `--require-channels`, or `--require-all`, then inspects `summary.required_channels`, `summary.required_not_ready`, `summary.informational_not_ready`, and `summary.probe_attention`.
@@ -65,7 +66,9 @@ For most rough asks, `agent-reach-orchestrate` is the default entrypoint. Reach 
 
 Subagents are optional and conservative in this model. If delegation is available and authorized, use at most one intake-only subagent to shape a vague ask into an executable brief. Keep `channels --json`, `doctor --json`, channel choice, collection start, and final synthesis on the main agent.
 
-`export-integration --format json` also includes `codex_runtime_policy`, which is the machine-readable version of this rule set. Downstream setup tools should prefer `agent-reach collect --json`, should not vendor Agent Reach files by default, and should treat large-scale research as explicit opt-in rather than auto-escalating lightweight asks.
+`export-integration --format json` also includes `codex_runtime_policy`, which is the machine-readable version of this rule set. Downstream setup tools should prefer `agent-reach collect --json`, should not vendor Agent Reach files by default, and should treat large-scale research as explicit opt-in rather than auto-escalating lightweight asks. Use `--profile runtime-minimal` when a downstream prompt, skill, or setup helper only needs compact runtime guidance; use the default full profile when bootstrap tooling also needs inline payloads, suggested destinations, or the full channel contract.
+
+`collect --max-text-chars N` still only affects the human text renderer. When machine-readable output should carry less normalized item text, use `--item-text-mode snippet|none` and optionally `--item-text-max-chars N`.
 
 `agent-reach check-update --json` compares the installed build to upstream `Panniantong/Agent-Reach` releases. It is useful for upstream awareness, but the current fork build should still be chosen from the fork repo URL or a pinned commit.
 

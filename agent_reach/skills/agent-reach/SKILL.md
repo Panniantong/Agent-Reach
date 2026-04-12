@@ -25,6 +25,7 @@ Do not assume this fork chooses investigation scope. The caller chooses scale, r
 - Default to the globally installed `agent-reach` CLI in any downstream repository.
 - Do not ask the user to copy `.codex-plugin`, `.mcp.json`, `agent_reach/skills`, or Agent Reach source files into the downstream repository unless they explicitly ask for repo-local plugin artifacts.
 - Use `agent-reach collect --json` as the stable handoff. Preserve the returned `CollectionResult` JSON when another system will rank, summarize, dedupe, or publish it.
+- Use `--item-text-mode snippet` or `--item-text-mode none` plus `--item-text-max-chars` when machine-readable output should carry less normalized item text. `--max-text-chars` still affects text mode only.
 - When naming channels in prompts or commands, use the exact stable names from `agent-reach channels --json`. For example, use `hatena_bookmark`, not `hatena`.
 - Keep lightweight asks lightweight. Do not auto-escalate a narrow request into large-scale research.
 - Inspect `agent-reach channels --json` `operation_contracts` before choosing per-channel options such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`.
@@ -58,7 +59,8 @@ agent-reach doctor --json --probe
 agent-reach schema collection-result --json
 agent-reach collect --channel github --operation read --input "openai/openai-python" --json
 agent-reach collect --channel qiita --operation search --input "python" --limit 4 --page-size 2 --max-pages 2 --body-mode snippet --json
-agent-reach export-integration --client codex --format json
+agent-reach collect --channel web --operation read --input "https://example.com" --json --raw-mode none --item-text-mode snippet --item-text-max-chars 500
+agent-reach export-integration --client codex --format json --profile runtime-minimal
 ```
 
 ## Supported channels
@@ -87,20 +89,21 @@ Use those exact identifiers in commands and handoffs. Service names are fine in 
 3. Inspect `summary.required_not_ready`, `summary.informational_not_ready`, and `summary.probe_attention`; let the caller choose `--require-channel`, `--require-channels`, or `--require-all` when readiness should gate the run.
 4. Use `--probe` only when a lightweight live check is useful.
 5. Use `agent-reach collect --json` by default when external code needs normalized results, add `--save .agent-reach/evidence.jsonl` when one shared ledger is fine, and prefer `--save-dir .agent-reach/shards` when per-command shards or parallel runs are easier.
-6. Prefer `--run-id`, `--intent`, `--query-id`, and `--source-role` on saved evidence. Treat missing metadata warnings as advisory unless the caller chose `ledger validate --require-metadata`.
-7. Merge shard directories before `ledger summarize`, `ledger query`, or `plan candidates`.
-8. Use `agent-reach plan candidates` when a saved ledger needs no-model URL or ID dedupe.
-9. Use diagnostic hints only to explain provenance or extraction shape; downstream code owns ranking and selection.
-10. Use `AgentReachClient` only when the host Python environment has Agent Reach installed into it directly.
-11. Choose channels from the live `channels --json` contract for the user's task; Agent Reach does not own ranking, routing, or source policy.
-12. Choose advanced collection controls such as page, cursor, and time-window options from the live `operation_contracts`; Agent Reach does not choose collection scope for you.
-13. Treat `scout` as a planning helper and capability snapshot, not the default route for a lightweight ask.
-14. Treat large-scale research as explicit opt-in. Keep narrow asks on `collect --json` unless the caller clearly wants a broader run.
-15. Use `searxng` only after `searxng-base-url` is configured or `SEARXNG_BASE_URL` is set, and treat placeholder example hosts as misconfiguration warnings.
-16. Use `crawl4ai` only when the optional extra and browser runtime are available; `crawl` requires an explicit `--query` goal.
-17. Use `reddit` through `rdt-cli`; it does not need Reddit OAuth, client credentials, or a User-Agent config.
-18. Treat Twitter/X as opt-in and cookie-based; authenticated-but-unprobed `warn` means collect may work, but operation readiness is unverified.
-19. In arbitrary downstream repositories, use the globally installed `agent-reach` CLI. Do not require copying Agent Reach repo files into the downstream project unless the user explicitly asks for repo-local plugin artifacts.
+6. For large machine-readable handoffs, prefer `--raw-mode minimal|none` plus `--item-text-mode snippet|none`; keep full item text for shortlisted deep reads.
+7. Prefer `--run-id`, `--intent`, `--query-id`, and `--source-role` on saved evidence. Treat missing metadata warnings as advisory unless the caller chose `ledger validate --require-metadata`.
+8. Merge shard directories before `ledger summarize`, `ledger query`, or `plan candidates`.
+9. Use `agent-reach plan candidates` when a saved ledger needs no-model URL or ID dedupe.
+10. Use diagnostic hints only to explain provenance or extraction shape; downstream code owns ranking and selection.
+11. Use `AgentReachClient` only when the host Python environment has Agent Reach installed into it directly.
+12. Choose channels from the live `channels --json` contract for the user's task; Agent Reach does not own ranking, routing, or source policy.
+13. Choose advanced collection controls such as page, cursor, and time-window options from the live `operation_contracts`; Agent Reach does not choose collection scope for you.
+14. Treat `scout` as a planning helper and capability snapshot, not the default route for a lightweight ask.
+15. Treat large-scale research as explicit opt-in. Keep narrow asks on `collect --json` unless the caller clearly wants a broader run.
+16. Use `searxng` only after `searxng-base-url` is configured or `SEARXNG_BASE_URL` is set, and treat placeholder example hosts as misconfiguration warnings.
+17. Use `crawl4ai` only when the optional extra and browser runtime are available; `crawl` requires an explicit `--query` goal.
+18. Use `reddit` through `rdt-cli`; it does not need Reddit OAuth, client credentials, or a User-Agent config.
+19. Treat Twitter/X as opt-in and cookie-based; authenticated-but-unprobed `warn` means collect may work, but operation readiness is unverified.
+20. In arbitrary downstream repositories, use the globally installed `agent-reach` CLI. Do not require copying Agent Reach repo files into the downstream project unless the user explicitly asks for repo-local plugin artifacts.
 
 ## Large-Scale Research Pattern
 
@@ -115,9 +118,10 @@ Use this pattern only when the caller explicitly opts into a broader run. Do not
 7. If the run produced shards, merge them before summary or candidate planning.
 8. Run `agent-reach ledger summarize --input .agent-reach/evidence.jsonl --json` when CI or downstream automation needs health counts.
 9. Run `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by normalized_url --limit 20 --json` before deeper reads.
-10. Use `web read` for selected URLs, not every search result.
-11. Inspect source hints and web hygiene only as non-authoritative diagnostics.
-12. Return partial results with clear channel failures instead of blocking on one non-required backend.
+10. Prefer `--raw-mode minimal|none` plus `--item-text-mode snippet|none` for broad JSON handoffs; keep full item text for shortlisted deep reads.
+11. Use `web read` for selected URLs, not every search result.
+12. Inspect source hints and web hygiene only as non-authoritative diagnostics.
+13. Return partial results with clear channel failures instead of blocking on one non-required backend.
 
 ## Command Routing
 

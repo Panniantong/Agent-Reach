@@ -83,6 +83,7 @@ def test_export_points_at_existing_checkout_artifacts():
     payload = export_codex_integration()
 
     assert payload["client"] == "codex"
+    assert payload["profile"] == "full"
     assert payload["execution_context"] == "checkout"
     assert payload["plugin_manifest"] is not None
     assert payload["mcp_config"] is not None
@@ -144,6 +145,30 @@ def test_export_points_at_existing_checkout_artifacts():
     assert any("hacker_news" in command for command in payload["verification_commands"])
     assert any("mcp_registry" in command for command in payload["verification_commands"])
     assert any(command.startswith("agent-reach collect ") for command in payload["verification_commands"])
+    assert any("--profile runtime-minimal" in command for command in payload["verification_commands"])
+
+
+def test_export_runtime_minimal_omits_bootstrap_payloads():
+    payload = export_codex_integration(profile="runtime-minimal")
+
+    assert payload["client"] == "codex"
+    assert payload["profile"] == "runtime-minimal"
+    assert "channels" not in payload
+    assert "plugin_manifest_inline" not in payload
+    assert "mcp_config_inline" not in payload
+    assert payload["positioning"] == ["integration_helper", "runtime_policy"]
+    assert "github" in payload["channel_names"]
+    assert payload["skill"]["names"] == [
+        "agent-reach",
+        "agent-reach-shape-brief",
+        "agent-reach-orchestrate",
+        "agent-reach-propose-improvements",
+        "agent-reach-maintain-proposals",
+        "agent-reach-maintain-release",
+    ]
+    assert payload["codex_runtime_policy"]["default_interface"] == "agent-reach collect --json"
+    assert any("--item-text-mode snippet" in command for command in payload["verification_commands"])
+    assert any("runtime-minimal omits full channel contracts" in note for note in payload["notes"])
 
 
 def test_export_tool_install_omits_dead_paths(tmp_path):
@@ -157,6 +182,7 @@ def test_export_tool_install_omits_dead_paths(tmp_path):
         payload = export_codex_integration()
 
     assert payload["execution_context"] == "tool_install"
+    assert payload["profile"] == "full"
     assert payload["plugin_manifest"] is None
     assert payload["mcp_config"] is None
     assert payload["recommended_docs"] == []

@@ -41,7 +41,7 @@ After that, Codex can use Agent Reach from any project by calling the CLI:
 
 ```powershell
 agent-reach collect --channel exa_search --operation search --input "latest AI agent frameworks" --limit 5 --json
-agent-reach collect --channel web --operation read --input "https://example.com" --json
+agent-reach collect --channel web --operation read --input "https://example.com" --json --raw-mode none --item-text-mode snippet --item-text-max-chars 500
 agent-reach collect --channel bluesky --operation search --input "OpenAI" --limit 5 --json
 agent-reach collect --channel qiita --operation search --input "python user:Qiita" --limit 5 --json
 agent-reach collect --channel qiita --operation search --input "python user:Qiita" --limit 6 --page-size 3 --max-pages 2 --body-mode snippet --json
@@ -68,7 +68,7 @@ This does not require `.codex-plugin`, `.mcp.json`, or `agent_reach/skills` file
 
 `agent-reach check-update --json` compares this fork to upstream `Panniantong/Agent-Reach` releases. Treat it as upstream awareness, not as the source of truth for the latest fork commit.
 
-Treat `extras.source_hints`, item-level `engagement`, `media_references`, neutral `identifiers`, `extras.engagement_complete`, `extras.media_complete`, `error.category`, and page extraction hygiene fields such as `text_length`, `link_count`, `image_count`, `link_density`, and `extraction_warning` as diagnostics only. They can help downstream code explain provenance or flag suspicious extraction shape, but they are not ranking, trust scoring, summarization, or publishing instructions. Inspect `agent-reach channels --json` `operation_contracts` before choosing per-channel controls such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`; Agent Reach does not choose those inputs for the caller. Social search responses may set `meta.diagnostics.unbounded_time_window` so the caller can notice missing time bounds. `collect --max-text-chars N` is only for human text-mode snippets and does not truncate `--json` output or saved ledgers. Use `--raw-mode minimal`, `--raw-mode none`, or `--raw-max-bytes N` when the caller wants smaller machine-readable artifacts.
+Treat `extras.source_hints`, item-level `engagement`, `media_references`, neutral `identifiers`, `extras.engagement_complete`, `extras.media_complete`, `error.category`, and page extraction hygiene fields such as `text_length`, `link_count`, `image_count`, `link_density`, and `extraction_warning` as diagnostics only. They can help downstream code explain provenance or flag suspicious extraction shape, but they are not ranking, trust scoring, summarization, or publishing instructions. Inspect `agent-reach channels --json` `operation_contracts` before choosing per-channel controls such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`; Agent Reach does not choose those inputs for the caller. Social search responses may set `meta.diagnostics.unbounded_time_window` so the caller can notice missing time bounds. `collect --max-text-chars N` is only for human text-mode snippets and does not truncate `--json` output or saved ledgers. Use `--raw-mode minimal`, `--raw-mode none`, or `--raw-max-bytes N` when the caller wants smaller machine-readable artifacts, and use `--item-text-mode snippet|none` plus `--item-text-max-chars N` when normalized `items[].text` should also be smaller.
 
 If a conditional command was captured without `--save`, append it later with:
 
@@ -89,6 +89,7 @@ When Codex is working inside an arbitrary project:
 - Agent Reach does not choose request scale, investigation routes, source mix, ranking, summarization, or posting.
 - The caller chooses scope. Do not auto-escalate a lightweight request into large-scale research.
 - Use `agent-reach collect --json` as the stable handoff to project code.
+- For large JSON handoffs, prefer `--raw-mode minimal|none` plus `--item-text-mode snippet|none`; keep full item text for shortlisted deep reads.
 - Use `agent-reach schema collection-result --json` when a downstream project wants a contract-testable JSON Schema.
 - Inspect `agent-reach channels --json` `operation_contracts` before choosing per-channel pagination or time-window options.
 - Keep CLI channel names and SDK helper aliases separate. `AgentReachClient` may expose convenience aliases, but downstream CLI configs and `collect` calls should still use stable channel names such as `exa_search`, `hatena_bookmark`, and `hacker_news`.
@@ -112,9 +113,10 @@ Large-scale research is explicit opt-in. When the caller asks for it, use bounde
 4. Save raw `CollectionResult` JSONL with `--save .agent-reach/evidence.jsonl`.
 5. Run `agent-reach ledger summarize --input .agent-reach/evidence.jsonl --json`.
 6. Run `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by normalized_url --limit 20 --json`.
-7. Use specialist channels when the source is known.
-8. Deep-read only selected URLs with `web`.
-9. Persist raw ledgers and candidate plans as artifacts in CI when traceability matters.
+7. For broad machine-readable handoffs, prefer `--raw-mode minimal|none` plus `--item-text-mode snippet|none`.
+8. Use specialist channels when the source is known.
+9. Deep-read only selected URLs with `web`.
+10. Persist raw ledgers and candidate plans as artifacts in CI when traceability matters.
 
 ## GitHub Actions
 

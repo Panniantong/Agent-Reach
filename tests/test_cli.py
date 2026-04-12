@@ -364,6 +364,135 @@ class TestCLI:
         payload = json.loads(capsys.readouterr().out)
         assert payload["items"][0]["text"] == full_text
 
+    def test_collect_json_item_text_mode_none_omits_text(self, capsys, monkeypatch):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None):
+                return {
+                    "ok": True,
+                    "channel": channel,
+                    "operation": operation,
+                    "items": [{"id": "1", "title": "Example", "url": value, "text": "abcdefghijklmnopqrstuvwxyz"}],
+                    "raw": None,
+                    "meta": {"count": 1, "limit": limit},
+                    "error": None,
+                }
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "web",
+                    "--operation",
+                    "read",
+                    "--input",
+                    "https://example.com",
+                    "--json",
+                    "--item-text-mode",
+                    "none",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["items"][0]["text"] is None
+        assert payload["meta"]["item_text_mode"] == "none"
+
+    def test_collect_json_item_text_max_chars_enables_snippet_mode(self, capsys, monkeypatch):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None):
+                return {
+                    "ok": True,
+                    "channel": channel,
+                    "operation": operation,
+                    "items": [{"id": "1", "title": "Example", "url": value, "text": "abcdefghijklmnopqrstuvwxyz"}],
+                    "raw": None,
+                    "meta": {"count": 1, "limit": limit},
+                    "error": None,
+                }
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "web",
+                    "--operation",
+                    "read",
+                    "--input",
+                    "https://example.com",
+                    "--json",
+                    "--item-text-max-chars",
+                    "5",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["items"][0]["text"] == "abcde"
+        assert payload["meta"]["item_text_mode"] == "snippet"
+        assert payload["meta"]["item_text_max_chars"] == 5
+
+    def test_collect_item_text_max_chars_rejects_invalid_value(self, capsys, monkeypatch):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None):
+                raise AssertionError("collect should not run for invalid item-text-max-chars")
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "web",
+                    "--operation",
+                    "read",
+                    "--input",
+                    "https://example.com",
+                    "--item-text-max-chars",
+                    "0",
+                ]
+            )
+            == 2
+        )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "item-text-max-chars must be greater than or equal to 1" in captured.err
+
+    def test_collect_item_text_max_chars_rejects_non_snippet_mode(self, capsys, monkeypatch):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None):
+                raise AssertionError("collect should not run for item-text-max-chars without snippet mode")
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "web",
+                    "--operation",
+                    "read",
+                    "--input",
+                    "https://example.com",
+                    "--item-text-mode",
+                    "none",
+                    "--item-text-max-chars",
+                    "5",
+                ]
+            )
+            == 2
+        )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "item-text-max-chars is only supported with item-text-mode snippet" in captured.err
+
     def test_collect_json_save_writes_ledger_and_preserves_stdout(self, capsys, monkeypatch, tmp_path):
         class _FakeClient:
             def collect(self, channel, operation, value, limit=None):
@@ -2312,6 +2441,7 @@ class TestCLI:
         assert main(["export-integration", "--client", "codex", "--format", "json"]) == 0
         payload = json.loads(capsys.readouterr().out)
         assert payload["client"] == "codex"
+        assert payload["profile"] == "full"
         assert payload["execution_context"] == "checkout"
         assert payload["mcp_snippet"]["mcpServers"]["exa"]["url"] == "https://mcp.exa.ai/mcp"
         assert payload["python_sdk"]["availability"] == "project_env_only"
@@ -2325,6 +2455,29 @@ class TestCLI:
         ]
         channel_contracts = {channel["name"]: channel for channel in payload["channels"]}
         assert channel_contracts["qiita"]["operation_contracts"]["search"]["options"][0]["name"] == "body_mode"
+
+    def test_export_integration_runtime_minimal_json(self, capsys):
+        assert (
+            main(
+                [
+                    "export-integration",
+                    "--client",
+                    "codex",
+                    "--format",
+                    "json",
+                    "--profile",
+                    "runtime-minimal",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["profile"] == "runtime-minimal"
+        assert payload["client"] == "codex"
+        assert "channels" not in payload
+        assert "channel_names" in payload
+        assert "codex_runtime_policy" in payload
+        assert payload["verification_commands"][-1].endswith("--profile runtime-minimal")
 
     def test_check_update_json(self, capsys, monkeypatch):
         monkeypatch.setattr(

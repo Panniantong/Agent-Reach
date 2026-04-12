@@ -2,6 +2,7 @@
 """Tests for the external collection result schema helpers."""
 
 from agent_reach.results import (
+    apply_item_text_mode,
     apply_raw_mode,
     build_error,
     build_item,
@@ -130,6 +131,38 @@ def test_apply_raw_mode_can_minimize_or_truncate_raw_payload():
     assert truncated["meta"]["raw_payload_truncated"] is True
     assert omitted["raw"] is None
     assert omitted["meta"]["raw_payload_omitted"] is True
+
+
+def test_apply_item_text_mode_can_snippet_or_omit_item_text():
+    payload = build_result(
+        ok=True,
+        channel="web",
+        operation="read",
+        items=[
+            build_item(
+                item_id="item-1",
+                kind="page",
+                title="Example",
+                url="https://example.com",
+                text="abcdefghijklmnopqrstuvwxyz",
+                author=None,
+                published_at=None,
+                source="web",
+            )
+        ],
+        raw=None,
+        meta={},
+        error=None,
+    )
+
+    snippet = apply_item_text_mode(payload, item_text_mode="snippet", item_text_max_chars=5)
+    omitted = apply_item_text_mode(payload, item_text_mode="none")
+
+    assert snippet["items"][0]["text"] == "abcde"
+    assert snippet["meta"]["item_text_mode"] == "snippet"
+    assert snippet["meta"]["item_text_max_chars"] == 5
+    assert omitted["items"][0]["text"] is None
+    assert omitted["meta"]["item_text_mode"] == "none"
 
 
 def test_build_result_keeps_flat_and_nested_pagination_meta():

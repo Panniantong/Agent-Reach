@@ -87,6 +87,7 @@ agent-reach version
 - Python: `from agent_reach import AgentReachClient`
 
 These are the supported machine-readable entry points for external projects. Bots, GitHub Actions, and downstream repos should not need to scrape README text or `SKILL.md`.
+Use `agent-reach export-integration --client codex --format json --profile runtime-minimal` when downstream tooling only needs compact runtime guidance instead of the full bootstrap payload.
 
 ## Recommended External Flow
 
@@ -96,9 +97,10 @@ agent-reach doctor --json
 agent-reach doctor --json --probe
 agent-reach collect --channel github --operation read --input "openai/openai-python" --json
 agent-reach collect --channel qiita --operation search --input "python" --limit 4 --page-size 2 --max-pages 2 --body-mode snippet --json
+agent-reach collect --channel web --operation read --input "https://example.com" --json --raw-mode none --item-text-mode snippet --item-text-max-chars 500
 agent-reach collect --channel hacker_news --operation search --input "agent frameworks" --limit 3 --json
 agent-reach collect --channel mcp_registry --operation search --input "docs mcp" --limit 3 --json
-agent-reach export-integration --client codex --format json
+agent-reach export-integration --client codex --format json --profile runtime-minimal
 ```
 
 When provenance matters:
@@ -116,7 +118,7 @@ For parallel or per-command shard-first collection, prefer `agent-reach collect 
 
 Collection output includes top-level `schema_version` and `agent_reach_version`. Normalized items expose common raw signals such as `canonical_url`, `source_item_id`, `engagement`, `media_references`, and neutral `identifiers` when the source provides them. Twitter/X post items may also expose `extras.engagement_complete` and `extras.media_complete` as operation completeness hints. Page-like reads also expose diagnostic extraction hygiene such as `text_length`, `link_count`, `image_count`, `link_density`, and `extraction_warning`. `error.category` gives a stable cross-channel taxonomy while `error.code` preserves the source-specific or contract-specific detail. These are diagnostics only, not ranking or publishing policy.
 
-Use `--raw-mode minimal`, `--raw-mode none`, or `--raw-max-bytes N` only when the caller wants smaller JSON artifacts. The default remains full raw payload retention.
+Use `--raw-mode minimal`, `--raw-mode none`, or `--raw-max-bytes N` only when the caller wants smaller JSON artifacts. The default remains full raw payload retention. `--max-text-chars N` only affects the human text renderer; use `--item-text-mode snippet|none` plus `--item-text-max-chars N` when machine-readable output should carry less normalized item text.
 
 ## No-Copy Downstream Use
 
@@ -138,6 +140,7 @@ Downstream projects do not need `.codex-plugin`, `.mcp.json`, or `agent_reach/sk
 - Inspect `agent-reach channels --json` `operation_contracts` before choosing bounded pagination or time-window options such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`.
 - `agent-reach plan candidates` keeps its default `--limit 20`; raise it only when the caller explicitly wants a wider candidate review set. Use `--by normalized_url`, `--by source_item_id`, `--by domain`, or `--by repo` only for caller-selected candidate grouping.
 - Large-scale research is explicit opt-in. When a saved batch plan is involved, run `agent-reach batch --plan PLAN.json --validate-only --json` before the write-producing batch execution.
+- For large JSON handoffs, prefer `--raw-mode minimal|none` plus `--item-text-mode snippet|none`; keep full item text for shortlisted deep reads.
 - Keep ranking, summarization, scheduling, Discord publishing, and state in the downstream project.
 
 ## Docs

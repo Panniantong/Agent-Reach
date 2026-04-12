@@ -143,6 +143,7 @@ agent-reach doctor --json --require-channel github
 agent-reach doctor --json --require-all
 agent-reach doctor --json --probe
 agent-reach export-integration --client codex --format json
+agent-reach export-integration --client codex --format json --profile runtime-minimal
 ```
 
 By default, `doctor` is diagnostic-only: it reports flat readiness across all channels and leaves exit-code gating to the caller. Use `--require-channel`, `--require-channels`, or `--require-all` when automation wants a specific readiness policy.
@@ -150,7 +151,7 @@ By default, `doctor` is diagnostic-only: it reports flat readiness across all ch
 ## Read-only collection smoke commands
 
 ```powershell
-agent-reach collect --channel web --operation read --input "https://example.com" --json
+agent-reach collect --channel web --operation read --input "https://example.com" --json --raw-mode none --item-text-mode snippet --item-text-max-chars 500
 agent-reach collect --channel github --operation read --input "openai/openai-python" --json
 agent-reach collect --channel rss --operation read --input "https://hnrss.org/frontpage" --limit 1 --json
 agent-reach collect --channel hacker_news --operation search --input "agent frameworks" --limit 3 --json

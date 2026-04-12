@@ -73,6 +73,8 @@ _ERROR_CATEGORY_ALIASES = {
 }
 
 _RETRYABLE_ERROR_CATEGORIES = {"timeout", "rate_limited", "upstream_unavailable"}
+_ITEM_TEXT_MODES = {"full", "snippet", "none"}
+_DEFAULT_ITEM_TEXT_SNIPPET_CHARS = 500
 
 
 class NormalizedItem(TypedDict):
@@ -381,6 +383,45 @@ def apply_raw_mode(
         payload["meta"]["raw_payload_truncated"] = True
         payload["meta"]["raw_max_bytes"] = raw_max_bytes
         return payload
+
+    return payload
+
+
+def apply_item_text_mode(
+    result: CollectionResult,
+    *,
+    item_text_mode: str = "full",
+    item_text_max_chars: int | None = None,
+) -> CollectionResult:
+    """Return a copy of a CollectionResult with caller-selected item text retention."""
+
+    if item_text_mode not in _ITEM_TEXT_MODES:
+        raise ValueError("item_text_mode must be one of: full, snippet, none")
+    if item_text_max_chars is not None and item_text_max_chars < 1:
+        raise ValueError("item_text_max_chars must be greater than or equal to 1")
+
+    payload: CollectionResult = {
+        **result,
+        "items": [cast(NormalizedItem, dict(item)) for item in result.get("items") or []],
+        "meta": dict(result.get("meta") or {}),
+    }
+    payload["meta"]["item_text_mode"] = item_text_mode
+
+    if item_text_mode == "full":
+        return payload
+
+    max_chars = item_text_max_chars or _DEFAULT_ITEM_TEXT_SNIPPET_CHARS
+    if item_text_mode == "snippet":
+        payload["meta"]["item_text_max_chars"] = max_chars
+
+    for item in payload["items"]:
+        text = item.get("text")
+        if text is None:
+            continue
+        if item_text_mode == "none":
+            item["text"] = None
+            continue
+        item["text"] = str(text)[:max_chars]
 
     return payload
 

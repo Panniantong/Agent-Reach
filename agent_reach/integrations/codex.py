@@ -21,6 +21,7 @@ PACKAGED_SKILL_NAMES = (
     "agent-reach-maintain-proposals",
     "agent-reach-maintain-release",
 )
+INTEGRATION_PROFILES = ("full", "runtime-minimal")
 
 
 def _repo_root() -> Path:
@@ -198,6 +199,7 @@ def _documentation_summary() -> list[str]:
         "Install the latest fork build from `git+https://github.com/iwachacha/Agent-Reach.git` or pin a commit/ref when reproducibility matters.",
         "`agent-reach skill --install` installs the bundled Codex skill suite: `agent-reach`, `agent-reach-shape-brief`, `agent-reach-orchestrate`, `agent-reach-propose-improvements`, `agent-reach-maintain-proposals`, and `agent-reach-maintain-release`.",
         "Use `agent-reach collect --json` as the primary external interface in arbitrary projects.",
+        "Use `--item-text-mode snippet` or `--item-text-mode none` plus `--item-text-max-chars` when downstream JSON handoffs need smaller normalized item text; `--max-text-chars` remains text-mode only.",
         "Let the calling workflow choose request scale, channels, pagination, ranking, summarization, and posting; Agent Reach exposes capabilities but does not choose scope for the caller.",
         "Use `agent-reach-shape-brief` to normalize vague requests into a fixed research brief before execution when the request is underspecified.",
         "Use `agent-reach-orchestrate` to move a rough or structured ask to actual Agent Reach collection start in the same session.",
@@ -223,6 +225,7 @@ def _documentation_summary() -> list[str]:
         "Treat `engagement`, `media_references`, `identifiers`, `extras.source_hints`, `extras.engagement_complete`, `extras.media_complete`, `error.category`, social time-window warnings, and page extraction hygiene metadata such as text_length, link_count, image_count, link_density, and extraction_warning as diagnostics only, not ranking or trust scores.",
         "YouTube collection exposes video metadata, subtitle/caption availability, thumbnail references, and normalized linked media references, not video binary analysis.",
         "Use `agent-reach channels --json`, `doctor --json`, and `doctor --json --probe` for discovery and diagnostics.",
+        "Use `agent-reach export-integration --client codex --format json --profile runtime-minimal` when downstream tooling only needs compact runtime guidance instead of the full bootstrap payload.",
         "Tool installs expose the CLI. Import `AgentReachClient` only after installing Agent Reach into the caller Python environment.",
         "If `plugin_manifest` or `mcp_config` is null, write the inline payloads to the suggested destinations instead.",
         "Use `agent-reach check-update --json` as an upstream release check; the latest upstream release can lag the latest fork commit.",
@@ -345,6 +348,7 @@ def _request_scale_policy() -> dict[str, Any]:
                 "Run `agent-reach ledger summarize --input .agent-reach/evidence.jsonl --json` when downstream automation needs neutral artifact health counts.",
                 "Run `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by normalized_url --limit 20 --json` for no-model dedupe.",
                 "Apply downstream ranking, summarization, and selection before deeper reads.",
+                "For broad discovery JSON handoffs, prefer `--raw-mode minimal` or `--raw-mode none` plus `--item-text-mode snippet` or `--item-text-mode none` to keep artifacts smaller.",
                 "Fan out `web read` only for selected high-signal URLs.",
                 "Inspect web extraction warnings and source hints as non-authoritative diagnostics.",
                 "Persist raw `CollectionResult` JSONL ledgers as artifacts when running in CI.",
@@ -378,6 +382,7 @@ def _codex_runtime_policy() -> dict[str, Any]:
             "Inspect `operation_contracts` and let the calling workflow choose bounded pagination or time-window inputs such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until` when a channel supports them.",
             "Use specialist channels such as `github`, `qiita`, `bluesky`, `rss`, `youtube`, `hatena_bookmark`, `hacker_news`, `mcp_registry`, `reddit`, `searxng`, or `crawl4ai` only when the caller's task and readiness checks support them.",
             "Use Twitter/X only when configured credentials and `doctor --json --probe` show the required operation is ready.",
+            "For large JSON handoffs, prefer `--raw-mode minimal` or `--raw-mode none` plus `--item-text-mode snippet` or `--item-text-mode none`; reserve full item text for selected deep reads.",
             "Treat `source_hints`, `media_references`, `text_length`, `link_count`, `image_count`, `link_density`, and `extraction_warning` as diagnostic metadata only.",
             "Keep ranking, summarization, scheduling, Discord publishing, and state in the downstream project.",
         ],
@@ -393,8 +398,61 @@ def _codex_runtime_policy() -> dict[str, Any]:
     }
 
 
-def export_codex_integration() -> dict[str, Any]:
+def _verification_commands(profile: str) -> list[str]:
+    if profile == "runtime-minimal":
+        return [
+            "agent-reach channels --json",
+            "agent-reach doctor --json",
+            'agent-reach collect --channel web --operation read --input "https://example.com" --json --raw-mode none --item-text-mode snippet --item-text-max-chars 500',
+            "agent-reach export-integration --client codex --format json --profile runtime-minimal",
+        ]
+    return [
+        "agent-reach channels --json",
+        "agent-reach doctor --json",
+        "agent-reach doctor --json --probe",
+        'agent-reach collect --channel github --operation read --input "openai/openai-python" --json',
+        'agent-reach collect --channel qiita --operation search --input "python" --limit 4 --page-size 2 --max-pages 2 --body-mode snippet --json',
+        'agent-reach collect --channel web --operation read --input "https://example.com" --json --raw-mode none --item-text-mode snippet --item-text-max-chars 500',
+        'agent-reach collect --channel hacker_news --operation search --input "agent frameworks" --limit 3 --json',
+        'agent-reach collect --channel mcp_registry --operation search --input "docs mcp" --limit 3 --json',
+        "agent-reach export-integration --client codex --format json",
+        "agent-reach export-integration --client codex --format json --profile runtime-minimal",
+    ]
+
+
+def _runtime_minimal_export(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": payload["schema_version"],
+        "generated_at": payload["generated_at"],
+        "client": payload["client"],
+        "platform": payload["platform"],
+        "profile": "runtime-minimal",
+        "execution_context": payload["execution_context"],
+        "positioning": [
+            "integration_helper",
+            "runtime_policy",
+        ],
+        "channel_names": [channel["name"] for channel in payload["channels"]],
+        "required_commands": payload["required_commands"],
+        "skill": {
+            "source": payload["skill"]["source"],
+            "names": list(payload["skill"]["names"]),
+        },
+        "readiness_controls": payload["readiness_controls"],
+        "codex_runtime_policy": payload["codex_runtime_policy"],
+        "verification_commands": _verification_commands("runtime-minimal"),
+        "notes": [
+            "runtime-minimal omits full channel contracts, inline Codex artifact payloads, and doc path lists to keep downstream runtime guidance compact.",
+            "Use the default full profile when bootstrap tooling needs repo artifact paths, inline payloads, or the complete channel contract.",
+        ],
+    }
+
+
+def export_codex_integration(profile: str = "full") -> dict[str, Any]:
     """Return the stable integration payload for Codex on Windows."""
+
+    if profile not in INTEGRATION_PROFILES:
+        raise ValueError(f"Unsupported Codex integration profile: {profile}")
 
     repo_root = _repo_root()
     execution_context = _execution_context(repo_root)
@@ -403,11 +461,12 @@ def export_codex_integration() -> dict[str, Any]:
     skill_source = str(packaged_skill_source())
     suggested_destinations = _suggested_destinations(execution_context, repo_root)
 
-    return {
+    payload = {
         "schema_version": SCHEMA_VERSION,
         "generated_at": utc_timestamp(),
         "client": "codex",
         "platform": "windows",
+        "profile": "full",
         "execution_context": execution_context,
         "positioning": [
             "bootstrapper",
@@ -436,17 +495,7 @@ def export_codex_integration() -> dict[str, Any]:
         "readiness_controls": _readiness_controls(),
         "external_project_usage": _external_project_usage(),
         "codex_runtime_policy": _codex_runtime_policy(),
-        "verification_commands": [
-            "agent-reach channels --json",
-            "agent-reach doctor --json",
-            "agent-reach doctor --json --probe",
-            'agent-reach collect --channel github --operation read --input "openai/openai-python" --json',
-            'agent-reach collect --channel qiita --operation search --input "python" --limit 4 --page-size 2 --max-pages 2 --body-mode snippet --json',
-            'agent-reach collect --channel web --operation read --input "https://example.com" --json',
-            'agent-reach collect --channel hacker_news --operation search --input "agent frameworks" --limit 3 --json',
-            'agent-reach collect --channel mcp_registry --operation search --input "docs mcp" --limit 3 --json',
-            "agent-reach export-integration --client codex --format json",
-        ],
+        "verification_commands": _verification_commands("full"),
         "python_sdk": {
             "availability": "project_env_only",
             "import": "from agent_reach import AgentReachClient",
@@ -470,6 +519,9 @@ def export_codex_integration() -> dict[str, Any]:
         "recommended_docs": _recommended_docs(repo_root),
         "documentation_summary": _documentation_summary(),
     }
+    if profile == "runtime-minimal":
+        return _runtime_minimal_export(payload)
+    return payload
 
 
 def render_codex_integration_text(payload: dict[str, Any]) -> str:
