@@ -66,6 +66,7 @@ packages = ["agent_reach"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "agent_reach/guides" = "agent_reach/guides"
+# Keep the whole skill directory so SKILL.md, SKILL_en.md, and references/ ship together.
 "agent_reach/skill" = "agent_reach/skill"
 "agent_reach/scripts" = "agent_reach/scripts"
 

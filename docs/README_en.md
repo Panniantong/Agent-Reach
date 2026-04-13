@@ -116,6 +116,11 @@ npx skills add Panniantong/Agent-Reach@agent-reach
 After the Skill is installed, the Agent will auto-detect whether `agent-reach` CLI is available and install it if needed.
 
 > If you install via `agent-reach install`, the skill is registered automatically — no extra steps needed.
+>
+> Prefer an English-only skill file? Set an English locale or export `AGENT_REACH_LANG=en`
+> before running `agent-reach install --env=auto` or `agent-reach skill --install`.
+> The installed file is always written as `SKILL.md`, so switching languages means rerunning
+> the install command with the new locale and replacing the previously installed skill file.
 </details>
 
 ---
