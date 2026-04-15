@@ -61,6 +61,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 
 | Platform | Capabilities | Setup | Notes |
 |----------|-------------|:-----:|-------|
+| 🛍 **Shopify** | Health · Products list | Product detail, official REST API | Set `SHOPIFY_SHOP` / `SHOPIFY_TOKEN`; falls back to mock data when credentials are missing |
 | 🌐 **Web** | Read | Zero config | Any URL → clean Markdown ([Jina Reader](https://github.com/jina-ai/reader) ⭐9.8K) |
 | 🐦 **Twitter/X** | Read · Search | Cookie | Cookie unlocks search, timeline, tweet reading, articles ([twitter-cli](https://github.com/public-clis/twitter-cli)) |
 | 📕 **XiaoHongShu** | Read · Search · **Post · Comment · Like** | Cookie | `pipx install xiaohongshu-cli` + `xhs login` ([xhs-cli](https://github.com/jackwener/xiaohongshu-cli)) |

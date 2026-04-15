@@ -76,7 +76,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 📺 **YouTube** | 閲覧・**検索** | 設定不要 | 字幕 + 1800以上の動画サイトでの検索（[yt-dlp](https://github.com/yt-dlp/yt-dlp) ⭐148K） |
 | 📺 **Bilibili** | 閲覧・**検索** | 設定不要 / プロキシ | 動画情報 + 字幕 + 検索。ローカルはそのまま動作、サーバーはプロキシが必要（[yt-dlp](https://github.com/yt-dlp/yt-dlp)） |
 | 📡 **RSS** | 閲覧 | 設定不要 | 任意のRSS/Atomフィード（[feedparser](https://github.com/kurtmckee/feedparser) ⭐2.3K） |
-| 📖 **Reddit** | 検索・閲覧 | Cookie | 2024年以降認証が必要 — インストール後 `rdt login` を実行（[rdt-cli](https://github.com/public-clis/rdt-cli)） |
+| 📖 **Reddit** | 検索・閲覧 | 設定不要 | [rdt-cli](https://github.com/public-clis/rdt-cli)で検索+閲覧（無料、プロキシ不要） |
 
 > **セットアップレベル：** 設定不要 = インストールしてすぐ使える · 自動設定 = インストール時に処理 · mcporter = MCPサービスが必要 · Cookie = ブラウザからエクスポート · プロキシ = 月額$1
 
@@ -200,7 +200,7 @@ channels/
 ├── youtube.py      → yt-dlp          ← YouTube API、Whisperなどに差し替え可能…
 ├── github.py       → gh CLI          ← REST API、PyGithubなどに差し替え可能…
 ├── bilibili.py     → yt-dlp          ← bilibili-apiなどに差し替え可能…
-├── reddit.py       → rdt-cli          ← 検索+閲覧、Cookie認証が必要
+├── reddit.py       → rdt-cli          ← PRAW、Pushshiftなどに差し替え可能…
 ├── xiaohongshu.py  → xhs-cli          ← 他のXHSツールに差し替え可能…
 ├── douyin.py       → mcporter MCP    ← 他の抖音ツールに差し替え可能…
 ├── linkedin.py     → linkedin-mcp    ← LinkedIn APIに差し替え可能…
@@ -261,7 +261,7 @@ Agent Reach は [twitter-cli](https://github.com/public-clis/twitter-cli) をCoo
 <details>
 <summary><strong>サーバー/データセンターIPからRedditが403を返す？</strong></summary>
 
-Agent Reach は [rdt-cli](https://github.com/public-clis/rdt-cli) でRedditにアクセスします。2024年以降、RedditはすべてのAPIリクエストに認証を要求しています。`pipx install rdt-cli` でインストール後、`rdt login`（ブラウザからCookieを自動抽出）を実行してください。その後 `rdt search "query"` で検索、`rdt read POST_ID` で投稿+コメントの閲覧ができます。
+Agent Reach は [rdt-cli](https://github.com/public-clis/rdt-cli) でRedditにアクセスします — ログイン不要、プロキシ不要、APIキー不要。`pipx install rdt-cli` でインストール後、`rdt search "query"` で検索、`rdt read POST_ID` で投稿+コメントの閲覧ができます。
 </details>
 
 <details>

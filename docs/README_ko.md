@@ -76,7 +76,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 📺 **YouTube** | 읽기 · **검색** | 없음 | 자막 + 1800+ 비디오 사이트 검색 ([yt-dlp](https://github.com/yt-dlp/yt-dlp) ⭐148K) |
 | 📺 **Bilibili** | 읽기 · **검색** | 없음 / 프록시 | 비디오 정보 + 자막 + 검색. 로컬은 바로 작동, 서버는 프록시 필요 ([yt-dlp](https://github.com/yt-dlp/yt-dlp)) |
 | 📡 **RSS** | 읽기 | 없음 | 모든 RSS/Atom 피드 ([feedparser](https://github.com/kurtmckee/feedparser) ⭐2.3K) |
-| 📖 **Reddit** | 검색 · 읽기 | Cookie | 2024년부터 인증 필요 — 설치 후 `rdt login` 실행 ([rdt-cli](https://github.com/public-clis/rdt-cli)) |
+| 📖 **Reddit** | 검색 · 읽기 | 없음 | [rdt-cli](https://github.com/public-clis/rdt-cli)를 통한 검색 및 읽기 (무료, 프록시 없음) |
 
 > **설정 단계:** 없음 = 설치 후 바로 사용 · 자동 = 설치 시 처리 · mcporter = MCP 서비스 필요 · Cookie = 브라우저에서 내보내기 · 프록시 = 월 $1
 
@@ -200,7 +200,7 @@ channels/
 ├── youtube.py      → yt-dlp          ← YouTube API, Whisper로 교체...
 ├── github.py       → gh CLI          → REST API, PyGithub로 교체...
 ├── bilibili.py     → yt-dlp          → bilibili-api로 교체...
-├── reddit.py       → rdt-cli          → 검색 + 읽기, cookie 인증 필요
+├── reddit.py       → rdt-cli          → 검색 + 읽기, 프록시 불필요
 ├── xiaohongshu.py  → mcporter MCP    ← 다른 XHS 도구로 교체...
 ├── douyin.py       → mcporter MCP    ← 다른 Douyin 도구로 교체...
 ├── linkedin.py     → linkedin-mcp    ← LinkedIn API로 교체...
@@ -217,7 +217,7 @@ channels/
 |----------|------|-----|
 | 웹 페이지 읽기 | [Jina Reader](https://github.com/jina-ai/reader) | 9.8K stars, 무료, API key 불필요 |
 | 트윗 읽기 | [twitter-cli](https://github.com/public-clis/twitter-cli) | 2.1K stars, cookie 인증, 검색/읽기/타임라인/글 |
-| Reddit | [rdt-cli](https://github.com/public-clis/rdt-cli) | 304 stars, cookie 인증, 검색 + 전체 글 + 댓글 |
+| Reddit | [rdt-cli](https://github.com/public-clis/rdt-cli) | 304 stars, 로그인 불필요, 검색 + 전체 글 + 댓글 |
 | 비디오 자막 + 검색 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | 154K stars, YouTube + Bilibili + 1800 사이트 |
 | Bilibili 향상 | [bili-cli](https://github.com/public-clis/bilibili-cli) | 590 stars, 인기/순위/검색/피드 |
 | 웹 검색 | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | AI 시맨틱 검색, MCP 통합, API key 불필요 |
@@ -263,7 +263,7 @@ Agent Reach는 cookie 기반 인증을 사용하는 [twitter-cli](https://github
 <details>
 <summary><strong>서버/데이터센터 IP에서 Reddit 403 반환 / 차단됨?</strong></summary>
 
-Agent Reach는 Reddit을 위해 [rdt-cli](https://github.com/public-clis/rdt-cli)를 사용합니다. 2024년부터 Reddit은 모든 API 요청에 인증을 요구합니다. `pipx install rdt-cli`로 설치한 후 `rdt login`(브라우저에서 cookie 자동 추출)을 실행하세요. 이후 에이전트가 `rdt search "query"`로 검색하고 `rdt read POST_ID`로 전체 글 + 댓글을 읽을 수 있습니다.
+Agent Reach는 Reddit을 위해 [rdt-cli](https://github.com/public-clis/rdt-cli)를 사용합니다 — 로그인 불필요, 프록시 불필요, API key 불필요. `pipx install rdt-cli`로 설치하세요. 에이전트가 `rdt search "query"`로 검색하고 `rdt read POST_ID`로 전체 글 + 댓글을 읽을 수 있습니다.
 </details>
 
 <details>
