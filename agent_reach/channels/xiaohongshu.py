@@ -2,7 +2,7 @@
 """XiaoHongShu — check if xhs-cli (xiaohongshu-cli) is available."""
 
 import shutil
-import subprocess
+from pathlib import Path
 from .base import Channel
 
 
@@ -137,26 +137,41 @@ class XiaoHongShuChannel(Channel):
                 "安装后运行 `xhs login` 登录"
             )
 
-        try:
-            r = subprocess.run(
-                [xhs, "status"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=10,
-            )
-            output = (r.stdout or "") + (r.stderr or "")
-            if r.returncode == 0 and "ok: true" in output:
-                return "ok", (
-                    "完整可用（搜索、阅读、评论、发帖、热门、"
-                    "收藏、关注、用户查询）"
-                )
-            if "not_authenticated" in output or "expired" in output:
-                return "warn", (
-                    "xhs-cli 已安装但未登录。运行：\n"
-                    "  xhs login\n"
-                    "（自动从浏览器提取 Cookie，或扫码登录）"
-                )
-            return "warn", (
-                "xhs-cli 已安装但状态异常。运行：\n"
-                "  xhs -v status 查看详细信息"
-            )
-        except Exception:
-            return "warn", "xhs-cli 已安装但连接失败"
+        # Keep doctor/status fully non-interactive.
+        #
+        # xhs-cli status may scan multiple browsers for cookies, which can
+        # trigger repeated macOS Keychain prompts. A passive health check should
+        # never open browser-cookie access or login flows.
+        if config:
+            try:
+                cookie_str = (config.get("xhs_cookie") or "").strip()
+                if cookie_str:
+                    n_cookies = len([p for p in cookie_str.split(";") if "=" in p])
+                    return "ok", (
+                        f"检测到本地 Cookie 配置（{n_cookies} 项）。"
+                        "doctor 跳过在线校验，保持非交互"
+                    )
+            except Exception:
+                pass
+
+        cookie_files = [
+            Path.home() / ".xiaohongshu-cli" / "cookies.json",
+            Path.home() / ".agent-reach" / "xhs-cookies.json",
+        ]
+        for path in cookie_files:
+            try:
+                if path.exists() and path.stat().st_size > 10:
+                    return "ok", (
+                        f"检测到本地登录状态：{path}。"
+                        "doctor 跳过在线校验，保持非交互"
+                    )
+            except OSError:
+                pass
+
+        return "warn", (
+            "xhs-cli 已安装，但当前未检测到本地 Cookie。"
+            "需要时手动配置：\n"
+            "  xhs login\n"
+            "或：\n"
+            "  agent-reach configure xhs-cookies '<cookie header 或 JSON>'"
+        )

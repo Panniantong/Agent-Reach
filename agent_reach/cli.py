@@ -248,34 +248,48 @@ def _cmd_install(args):
         print()
         print(f"[dry-run] Would install optional channels: {', '.join(sorted(requested_channels))}")
 
-    # ── Auto-import cookies (only if cookie-needing channels are requested) ──
+    # ── Cookie import policy ──
+    #
+    # Keep install non-interactive by default.
+    # Automatic browser scans can trigger repeated macOS Keychain prompts
+    # across multiple browsers and platforms. Make this an explicit opt-in.
     needs_cookies = bool(requested_channels & COOKIE_CHANNELS)
+    auto_cookie_import = os.environ.get("AGENT_REACH_AUTO_IMPORT_COOKIES", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
     if env == "local" and needs_cookies and not safe_mode and not dry_run:
         print()
-        print("Importing cookies from browser...")
-        print("  (macOS may ask for your login password to access the Keychain — this is normal,")
-        print("   it only happens once during install. Enter your password or click 'Allow'.)")
-        try:
-            from agent_reach.cookie_extract import configure_from_browser
-            results = configure_from_browser("chrome", config)
-            found = False
-            for platform, success, message in results:
-                if success:
-                    print(f"  ✅ {platform}: {message}")
-                    found = True
-            if not found:
-                results = configure_from_browser("firefox", config)
+        if auto_cookie_import:
+            print("Importing cookies from browser...")
+            print("  Opt-in enabled via AGENT_REACH_AUTO_IMPORT_COOKIES=1")
+            try:
+                from agent_reach.cookie_extract import configure_from_browser
+                results = configure_from_browser("chrome", config)
+                found = False
                 for platform, success, message in results:
                     if success:
                         print(f"  ✅ {platform}: {message}")
                         found = True
-            if not found:
-                print("  -- No cookies found (normal if you haven't logged into these sites)")
-        except Exception:
-            print("  -- Could not read browser cookies (browser might be open or password was denied)")
+                if not found:
+                    results = configure_from_browser("firefox", config)
+                    for platform, success, message in results:
+                        if success:
+                            print(f"  ✅ {platform}: {message}")
+                            found = True
+                if not found:
+                    print("  -- No cookies found (normal if you haven't logged into these sites)")
+            except Exception:
+                print("  -- Could not read browser cookies (browser might be open or password was denied)")
+        else:
+            print("Skipping automatic browser cookie import to keep install non-interactive.")
+            print("  Configure auth only when you explicitly need it:")
+            print("    agent-reach configure --from-browser chrome")
+            print("    agent-reach configure twitter-cookies AUTH_TOKEN CT0")
+            print("    agent-reach configure xhs-cookies '<cookie header 或 JSON>'")
     elif env == "local" and needs_cookies and dry_run:
         print()
-        print("[dry-run] Would try to import cookies from Chrome/Firefox")
+        print("[dry-run] Would keep install non-interactive by default")
+        print("[dry-run] Set AGENT_REACH_AUTO_IMPORT_COOKIES=1 to opt into browser cookie import")
 
     # Environment-specific advice
     if env == "server":

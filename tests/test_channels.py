@@ -4,6 +4,7 @@
 import json
 import shutil
 import subprocess
+from pathlib import Path
 from urllib.error import URLError
 
 from agent_reach.channels import get_all_channels, get_channel
@@ -655,35 +656,28 @@ class TestRedditChannel:
         assert "rdt-cli" in msg
         assert "public-clis/rdt-cli" in msg
 
-    def test_reports_ok_when_authenticated(self, monkeypatch):
+    def test_reports_ok_when_saved_credential_exists(self, monkeypatch, tmp_path):
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/rdt")
-        fake_output = json.dumps({
-            "ok": True,
-            "schema_version": "1",
-            "data": {"authenticated": True, "username": "testuser", "cookie_count": 1},
-        })
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        cred = tmp_path / ".config" / "rdt-cli" / "credential.json"
+        cred.parent.mkdir(parents=True)
+        cred.write_text(
+            json.dumps({
+                "cookies": {"reddit_session": "abc"},
+                "username": "testuser",
+            }),
+            encoding="utf-8",
+        )
 
-        def fake_run(cmd, **kwargs):
-            return subprocess.CompletedProcess(cmd, 0, fake_output, "")
-
-        monkeypatch.setattr(subprocess, "run", fake_run)
         from agent_reach.channels.reddit import RedditChannel
         status, msg = RedditChannel().check()
         assert status == "ok"
         assert "testuser" in msg
+        assert "非交互" in msg
 
-    def test_reports_warn_when_not_authenticated(self, monkeypatch):
+    def test_reports_warn_when_not_authenticated(self, monkeypatch, tmp_path):
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/rdt")
-        fake_output = json.dumps({
-            "ok": True,
-            "schema_version": "1",
-            "data": {"authenticated": False, "username": None, "cookie_count": 0},
-        })
-
-        def fake_run(cmd, **kwargs):
-            return subprocess.CompletedProcess(cmd, 0, fake_output, "")
-
-        monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
         from agent_reach.channels.reddit import RedditChannel
         status, msg = RedditChannel().check()
         assert status == "warn"
@@ -692,16 +686,13 @@ class TestRedditChannel:
         assert "Cookie-Editor" in msg
         assert "chromewebstore.google.com" in msg
 
-    def test_reports_warn_when_status_check_fails(self, monkeypatch):
+    def test_reports_warn_when_status_check_fails(self, monkeypatch, tmp_path):
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/rdt")
-
-        def fake_run(cmd, **kwargs):
-            return subprocess.CompletedProcess(cmd, 1, "not valid json{{{", "")
-
-        monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
         from agent_reach.channels.reddit import RedditChannel
         status, msg = RedditChannel().check()
         assert status == "warn"
+        assert "rdt login" in msg
 
     def test_can_handle_reddit_urls(self):
         from agent_reach.channels.reddit import RedditChannel
@@ -713,27 +704,36 @@ class TestRedditChannel:
 
 
 class TestXiaoHongShuChannel:
-    def test_reports_ok_when_cli_authenticated(self, monkeypatch):
+    class _Config:
+        def __init__(self, cookie=""):
+            self.cookie = cookie
+
+        def get(self, key):
+            if key == "xhs_cookie":
+                return self.cookie
+            return None
+
+    def test_reports_ok_when_saved_cookie_in_config(self, monkeypatch):
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/xhs")
-
-        def fake_run(cmd, **kwargs):
-            return subprocess.CompletedProcess(cmd, 0, "ok: true\nusername: testuser\n", "")
-
-        monkeypatch.setattr(subprocess, "run", fake_run)
-
-        status, msg = XiaoHongShuChannel().check()
+        status, msg = XiaoHongShuChannel().check(self._Config("a1=123; web_session=456"))
         assert status == "ok"
-        assert "完整可用" in msg
+        assert "非交互" in msg
 
-    def test_reports_warn_when_not_authenticated(self, monkeypatch):
+    def test_reports_ok_when_saved_cookie_file_exists(self, monkeypatch, tmp_path):
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/xhs")
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        cookie_file = tmp_path / ".xiaohongshu-cli" / "cookies.json"
+        cookie_file.parent.mkdir(parents=True)
+        cookie_file.write_text('{"a1":"abc"}', encoding="utf-8")
 
-        def fake_run(cmd, **kwargs):
-            return subprocess.CompletedProcess(cmd, 1, "", "ok: false\nerror:\n  code: not_authenticated\n")
+        status, msg = XiaoHongShuChannel().check(self._Config())
+        assert status == "ok"
+        assert "cookies.json" in msg
 
-        monkeypatch.setattr(subprocess, "run", fake_run)
-
-        status, msg = XiaoHongShuChannel().check()
+    def test_reports_warn_when_not_authenticated(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/xhs")
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        status, msg = XiaoHongShuChannel().check(self._Config())
         assert status == "warn"
         assert "xhs login" in msg
 

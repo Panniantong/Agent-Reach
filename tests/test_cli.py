@@ -42,6 +42,17 @@ class TestCLI:
         assert auth_token == "token123"
         assert ct0 == "ct0abc"
 
+    def test_install_dry_run_keeps_cookie_import_non_interactive(self, capsys):
+        with patch("agent_reach.cli._detect_environment", return_value="local"):
+            with patch(
+                "sys.argv",
+                ["agent-reach", "install", "--dry-run", "--channels=twitter,xiaohongshu"],
+            ):
+                main()
+        captured = capsys.readouterr()
+        assert "non-interactive" in captured.out
+        assert "AGENT_REACH_AUTO_IMPORT_COOKIES=1" in captured.out
+
 
 class TestCheckUpdateRetry:
     def test_retry_timeout_classification(self):

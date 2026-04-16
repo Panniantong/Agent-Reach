@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Twitter/X — check if twitter-cli or bird CLI is available."""
 
+import json
 import shutil
-import subprocess
+from pathlib import Path
 from .base import Channel
 
 
@@ -22,10 +23,24 @@ class TwitterChannel(Channel):
         twitter = shutil.which("twitter")
         bird = shutil.which("bird") or shutil.which("birdx")
 
-        if twitter:
-            return self._check_twitter_cli(twitter)
-        elif bird:
-            return self._check_bird(bird)
+        if twitter or bird:
+            creds = self._find_local_credentials(config)
+            if creds:
+                return "ok", (
+                    f"检测到本地凭证（{creds}）。"
+                    "doctor 跳过在线校验，保持非交互"
+                )
+            if twitter:
+                return "warn", (
+                    "twitter-cli 已安装，但当前未检测到本地凭证。配置方式：\n"
+                    "  agent-reach configure twitter-cookies AUTH_TOKEN CT0\n"
+                    "或：\n"
+                    "  agent-reach configure twitter-cookies \"auth_token=xxx; ct0=yyy; ...\""
+                )
+            return "warn", (
+                "bird CLI 已安装，但当前未检测到本地凭证。"
+                "设置环境变量文件：~/.config/bird/credentials.env"
+            )
         else:
             return "warn", (
                 "Twitter CLI 未安装。安装方式：\n"
@@ -34,49 +49,32 @@ class TwitterChannel(Channel):
                 "  uv tool install twitter-cli"
             )
 
-    def _check_twitter_cli(self, binary: str):
+    def _find_local_credentials(self, config=None):
         try:
-            r = subprocess.run(
-                [binary, "status"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=10
-            )
-            output = (r.stdout or "") + (r.stderr or "")
-            if r.returncode == 0 and "ok: true" in output:
-                return "ok", (
-                    "twitter-cli 完整可用（搜索、读推文、时间线、长文/Article、"
-                    "用户查询、Thread）"
-                )
-            if "not_authenticated" in output:
-                return "warn", (
-                    "twitter-cli 已安装但未认证。设置方式：\n"
-                    "  export TWITTER_AUTH_TOKEN=\"xxx\"\n"
-                    "  export TWITTER_CT0=\"yyy\"\n"
-                    "或确保已在浏览器中登录 x.com"
-                )
-            return "warn", (
-                "twitter-cli 已安装但认证检查失败。运行：\n"
-                "  twitter -v status 查看详细信息"
-            )
+            if config:
+                auth = (config.get("twitter_auth_token") or "").strip()
+                ct0 = (config.get("twitter_ct0") or "").strip()
+                if auth and ct0:
+                    return "~/.agent-reach/config.yaml"
         except Exception:
-            return "warn", "twitter-cli 已安装但连接失败"
+            pass
 
-    def _check_bird(self, binary: str):
+        session_path = Path.home() / ".config" / "xfetch" / "session.json"
         try:
-            r = subprocess.run(
-                [binary, "check"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=10
-            )
-            output = (r.stdout or "") + (r.stderr or "")
-            if r.returncode == 0:
-                return "ok", "bird CLI 可用（读取、搜索推文，含长文/X Article）"
-            if "Missing credentials" in output or "missing" in output.lower():
-                return "warn", (
-                    "bird CLI 已安装但未配置认证。设置环境变量：\n"
-                    "  export AUTH_TOKEN=\"xxx\"\n"
-                    "  export CT0=\"yyy\""
-                )
-            return "warn", (
-                "bird CLI 已安装但认证检查失败。"
-            )
+            if session_path.exists():
+                data = json.loads(session_path.read_text(encoding="utf-8"))
+                if data.get("authToken") and data.get("ct0"):
+                    return str(session_path)
         except Exception:
-            return "warn", "bird CLI 已安装但连接失败"
+            pass
+
+        bird_env = Path.home() / ".config" / "bird" / "credentials.env"
+        try:
+            if bird_env.exists():
+                text = bird_env.read_text(encoding="utf-8")
+                if "AUTH_TOKEN=" in text and "CT0=" in text:
+                    return str(bird_env)
+        except Exception:
+            pass
+
+        return None

@@ -1,108 +1,77 @@
 # -*- coding: utf-8 -*-
 
-from unittest.mock import patch, Mock
+import json
+from pathlib import Path
+from unittest.mock import Mock, patch
 
 from agent_reach.channels.twitter import TwitterChannel
 
 
-def _cp(stdout="", stderr="", returncode=0):
-    m = Mock()
-    m.stdout = stdout
-    m.stderr = stderr
-    m.returncode = returncode
-    return m
+def _config(auth="", ct0=""):
+    cfg = Mock()
+    cfg.get.side_effect = lambda key: {
+        "twitter_auth_token": auth,
+        "twitter_ct0": ct0,
+    }.get(key)
+    return cfg
 
 
-# --- twitter-cli tests ---
-
-def test_check_twitter_cli_found_and_auth_ok():
-    """twitter-cli found + twitter status ok → ok."""
+def test_check_twitter_with_agent_reach_config():
     channel = TwitterChannel()
-    with patch("shutil.which", side_effect=lambda name: "/usr/local/bin/twitter" if name == "twitter" else None), patch(
-        "subprocess.run",
-        return_value=_cp(stdout="ok: true\nusername: testuser\n", returncode=0),
-    ):
-        status, message = channel.check()
+    with patch("shutil.which", side_effect=lambda name: "/usr/local/bin/twitter" if name == "twitter" else None):
+        status, message = channel.check(_config("token123", "ct0abc"))
     assert status == "ok"
-    assert "twitter-cli" in message
-    assert "完整可用" in message
+    assert "非交互" in message
+    assert "config.yaml" in message
 
 
-def test_check_twitter_cli_found_auth_missing():
-    """twitter-cli found + not_authenticated → warn about auth."""
+def test_check_twitter_warns_when_binary_present_but_no_credentials(tmp_path, monkeypatch):
     channel = TwitterChannel()
-    with patch("shutil.which", side_effect=lambda name: "/usr/local/bin/twitter" if name == "twitter" else None), patch(
-        "subprocess.run",
-        return_value=_cp(
-            stderr="ok: false\nerror:\n  code: not_authenticated\n",
-            returncode=1,
-        ),
-    ):
-        status, message = channel.check()
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    with patch("shutil.which", side_effect=lambda name: "/usr/local/bin/twitter" if name == "twitter" else None):
+        status, message = channel.check(_config())
     assert status == "warn"
-    assert "未认证" in message
+    assert "twitter-cookies" in message
 
 
-# --- bird CLI fallback tests ---
-
-def test_check_bird_fallback_auth_ok():
-    """No twitter-cli, but bird found + bird check ok → ok."""
+def test_check_bird_uses_saved_env_credentials(tmp_path, monkeypatch):
     channel = TwitterChannel()
+    bird_dir = tmp_path / ".config" / "bird"
+    bird_dir.mkdir(parents=True)
+    (bird_dir / "credentials.env").write_text('AUTH_TOKEN="aaa"\nCT0="bbb"\n', encoding="utf-8")
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
     def which_side_effect(name):
         if name == "bird":
             return "/usr/local/bin/bird"
         return None
-    with patch("shutil.which", side_effect=which_side_effect), patch(
-        "subprocess.run",
-        return_value=_cp(stdout="Authenticated as @user\n", returncode=0),
-    ):
-        status, message = channel.check()
+
+    with patch("shutil.which", side_effect=which_side_effect):
+        status, message = channel.check(_config())
     assert status == "ok"
-    assert "bird" in message
+    assert "非交互" in message
+    assert "credentials.env" in message
 
 
-def test_check_bird_fallback_auth_missing():
-    """No twitter-cli, bird found but Missing credentials → warn."""
+def test_check_twitter_uses_xfetch_session(tmp_path, monkeypatch):
     channel = TwitterChannel()
-    def which_side_effect(name):
-        if name == "bird":
-            return "/usr/local/bin/bird"
-        return None
-    with patch("shutil.which", side_effect=which_side_effect), patch(
-        "subprocess.run",
-        return_value=_cp(stderr="Missing credentials\n", returncode=1),
-    ):
-        status, message = channel.check()
-    assert status == "warn"
-    assert "未配置认证" in message
+    xfetch_dir = tmp_path / ".config" / "xfetch"
+    xfetch_dir.mkdir(parents=True)
+    (xfetch_dir / "session.json").write_text(
+        json.dumps({"authToken": "aaa", "ct0": "bbb"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
+    with patch("shutil.which", side_effect=lambda name: "/usr/local/bin/twitter" if name == "twitter" else None):
+        status, message = channel.check(_config())
+    assert status == "ok"
+    assert "session.json" in message
 
-# --- neither installed ---
 
 def test_check_nothing_installed():
-    """Neither twitter-cli nor bird → warn with install hint."""
     channel = TwitterChannel()
     with patch("shutil.which", return_value=None):
         status, message = channel.check()
     assert status == "warn"
-    assert "twitter-cli" in message
-
-
-# --- twitter-cli preferred over bird ---
-
-def test_twitter_cli_preferred_over_bird():
-    """When both are installed, twitter-cli is used."""
-    channel = TwitterChannel()
-    def which_side_effect(name):
-        if name == "twitter":
-            return "/usr/local/bin/twitter"
-        if name == "bird":
-            return "/usr/local/bin/bird"
-        return None
-    with patch("shutil.which", side_effect=which_side_effect), patch(
-        "subprocess.run",
-        return_value=_cp(stdout="ok: true\n", returncode=0),
-    ):
-        status, message = channel.check()
-    assert status == "ok"
     assert "twitter-cli" in message

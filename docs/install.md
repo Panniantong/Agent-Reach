@@ -130,6 +130,8 @@ Some channels need credentials only the user can provide. Based on the doctor ou
 > 4. 把导出的字符串发给 Agent
 >
 > **本地电脑用户**也可以用 `agent-reach configure --from-browser chrome` 一键自动提取（支持 Twitter + 小红书 + 雪球）。
+>
+> `agent-reach install` 默认保持非交互，不会自动扫描浏览器 Cookie。只有你明确执行 `configure --from-browser`，或显式设置 `AGENT_REACH_AUTO_IMPORT_COOKIES=1` 时，才会触发浏览器 Cookie 导入。
 
 **Twitter search & posting:**
 > "To unlock Twitter search, I need your Twitter cookies. Install the Cookie-Editor Chrome extension, go to x.com/twitter.com, click the extension → Export → Header String, and paste it to me."
