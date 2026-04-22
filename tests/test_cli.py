@@ -43,6 +43,59 @@ class TestCLI:
         assert ct0 == "ct0abc"
 
 
+class TestGroqKeyValidation:
+    def test_looks_like_groq_key_accepts_gsk_prefix(self):
+        assert cli._looks_like_groq_key("gsk_abc123")
+
+    def test_looks_like_groq_key_rejects_openai_prefix(self):
+        assert not cli._looks_like_groq_key("sk-abc123")
+
+    def test_looks_like_groq_key_rejects_empty(self):
+        assert not cli._looks_like_groq_key("")
+
+    def test_configure_groq_key_rejects_bad_prefix(self, capsys):
+        saved = {}
+
+        class _FakeConfig:
+            def set(self, key, value):
+                saved[key] = value
+
+        fake = _FakeConfig()
+        args = type(
+            "Args",
+            (),
+            {"key": "groq-key", "value": ["sk-not-a-groq-key"], "from_browser": None},
+        )()
+
+        with patch("agent_reach.config.Config", return_value=fake):
+            cli._cmd_configure(args)
+
+        out = capsys.readouterr().out
+        assert "gsk_" in out
+        assert "groq_api_key" not in saved  # key must not be persisted
+
+    def test_configure_groq_key_accepts_good_prefix(self, capsys):
+        saved = {}
+
+        class _FakeConfig:
+            def set(self, key, value):
+                saved[key] = value
+
+        fake = _FakeConfig()
+        args = type(
+            "Args",
+            (),
+            {"key": "groq-key", "value": ["gsk_looksfine"], "from_browser": None},
+        )()
+
+        with patch("agent_reach.config.Config", return_value=fake):
+            cli._cmd_configure(args)
+
+        out = capsys.readouterr().out
+        assert "✅ Groq key configured" in out
+        assert saved["groq_api_key"] == "gsk_looksfine"
+
+
 class TestCheckUpdateRetry:
     def test_retry_timeout_classification(self):
         sleeps = []

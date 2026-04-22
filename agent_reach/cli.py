@@ -1117,8 +1117,20 @@ def _cmd_configure(args):
         print(f"✅ GitHub token configured!")
 
     elif args.key == "groq-key":
-        config.set("groq_api_key", value)
+        cleaned = value.strip()
+        if not _looks_like_groq_key(cleaned):
+            print("[X] Groq API keys start with 'gsk_'. The value you provided does not.")
+            print("   Tip: Groq Console (https://console.groq.com) issues keys prefixed 'gsk_'.")
+            print("   If you pasted a key from OpenAI (sk-...) or another vendor, it won't work")
+            print("   against Groq's Whisper endpoint used for Xiaoyuzhou transcription.")
+            return
+        config.set("groq_api_key", cleaned)
         print(f"✅ Groq key configured!")
+
+
+def _looks_like_groq_key(value: str) -> bool:
+    """Best-effort check that ``value`` looks like a Groq console API key."""
+    return bool(value) and value.startswith("gsk_")
 
 
 def _parse_twitter_cookie_input(value: str):
