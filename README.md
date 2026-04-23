@@ -392,3 +392,7 @@ Yes! Agent Reach is an installer + configuration tool — any AI coding agent th
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Panniantong/Agent-Reach&type=Date&v=20260309)](https://star-history.com/#Panniantong/Agent-Reach&Date)
+
+## Download History
+
+[![Download History](https://skill-history.com/chart/panniantong/agent-reach.svg)](https://skill-history.com/panniantong/agent-reach)
