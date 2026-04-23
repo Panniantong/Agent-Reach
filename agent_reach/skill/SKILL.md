@@ -15,7 +15,7 @@ triggers:
   - social:
     - 小红书: xiaohongshu/xhs/小红书/红书
     - 抖音: douyin/抖音
-    - Twitter: twitter/推特/x.com/推文
+    - Twitter: twitter/推特/x.com/推文/xquik
     - 微博: weibo/微博
     - B站: bilibili/b站/哔哩哔哩
     - V2EX: v2ex
@@ -57,8 +57,11 @@ curl -s "https://r.jina.ai/URL"
 # GitHub 搜索
 gh search repos "query" --sort stars --limit 10
 
-# Twitter 搜索
+# Twitter 搜索（twitter-cli，需 Cookie）
 twitter search "query" --limit 10
+
+# Twitter 搜索（Xquik API，需 API Key，更稳定）
+curl -s "https://xquik.com/api/v1/x/tweets/search?q=query&limit=10" -H "X-API-Key: $XQUIK_API_KEY"
 
 # YouTube/B站字幕
 yt-dlp --write-sub --skip-download -o "/tmp/%(id)s" "URL"
