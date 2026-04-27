@@ -392,3 +392,11 @@ Yes! Agent Reach is an installer + configuration tool — any AI coding agent th
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Panniantong/Agent-Reach&type=Date&v=20260309)](https://star-history.com/#Panniantong/Agent-Reach&Date)
+
+## 💰 Bounty Contribution
+
+- **Task:** [Reminder] 1 day left to claim ~$500 reward – Your project ranked #3 on OpenAren
+- **Reward:** $500
+- **Source:** GitHub-Paid
+- **Date:** 2026-04-27
+
