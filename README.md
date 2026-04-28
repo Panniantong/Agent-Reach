@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/panniantong-agent-reach-badge.png)](https://mseep.ai/app/panniantong-agent-reach)
+
 <h1 align="center">👁️ Agent Reach</h1>
 
 <p align="center">
