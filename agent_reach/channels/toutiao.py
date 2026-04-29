@@ -9,7 +9,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 from .base import Channel
 
