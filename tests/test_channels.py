@@ -28,6 +28,7 @@ class TestChannelRegistry:
         assert "github" in names
         assert "twitter" in names
         assert "v2ex" in names
+        assert "toutiao" in names
 
 
 class TestV2EXChannel:
