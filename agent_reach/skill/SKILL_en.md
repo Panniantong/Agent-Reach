@@ -41,13 +41,13 @@ mcporter call 'exa.web_search_exa(query: "query", numResults: 5)'
 mcporter call 'exa.get_code_context_exa(query: "code question", tokensNum: 3000)'
 ```
 
-## Twitter/X (bird)
+## Twitter/X (twitter-cli)
 
 ```bash
-bird search "query" -n 10                  # search
-bird read URL_OR_ID                        # read tweet (supports /status/ and /article/ URLs)
-bird user-tweets @username -n 20           # user timeline
-bird thread URL_OR_ID                      # full thread
+twitter search "query" --limit 10         # search
+twitter tweet URL_OR_ID                   # read tweet
+twitter article URL_OR_ID                 # read X Article / long-form
+twitter user-posts @username -n 20        # user timeline
 ```
 
 ## YouTube (yt-dlp)
