@@ -41,14 +41,17 @@ mcporter call 'exa.web_search_exa(query: "query", numResults: 5)'
 mcporter call 'exa.get_code_context_exa(query: "code question", tokensNum: 3000)'
 ```
 
-## Twitter/X (bird)
+## Twitter/X (twitter-cli)
 
 ```bash
-bird search "query" -n 10                  # search
-bird read URL_OR_ID                        # read tweet (supports /status/ and /article/ URLs)
-bird user-tweets @username -n 20           # user timeline
-bird thread URL_OR_ID                      # full thread
+twitter -c search "query" -n 10            # search (-c = compact JSON, LLM-friendly)
+twitter -c tweet URL_OR_ID                 # read tweet + replies (supports /status/ URLs)
+twitter -c article URL_OR_ID               # read a Twitter Article
+twitter -c user-posts @username -n 20      # user timeline
+twitter -c feed -n 20                      # home timeline
 ```
+
+> Binary is `twitter` (`pipx install twitter-cli`, ≥ 0.8.5). The `bird` name in older docs has been retired. If `search` returns 404, run `pipx upgrade twitter-cli`.
 
 ## YouTube (yt-dlp)
 
