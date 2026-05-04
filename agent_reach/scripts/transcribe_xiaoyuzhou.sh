@@ -35,8 +35,8 @@ echo "===================="
 # Step 1: 提取音频 URL 和标题
 echo "🔍 正在解析页面..."
 PAGE=$(curl -s "$URL")
-AUDIO_URL=$(echo "$PAGE" | grep -oP 'https://media\.xyzcdn\.net/[^"]*\.(m4a|mp3)' | head -1)
-TITLE=$(echo "$PAGE" | grep -oP '"title":"[^"]*"' | head -1 | sed 's/"title":"//;s/"//')
+AUDIO_URL=$(echo "$PAGE" | perl -ne 'while (/(https:\/\/media\.xyzcdn\.net\/[^"]*\.(?:m4a|mp3))/g) { print "$1\n" }' | head -1)
+TITLE=$(echo "$PAGE" | perl -ne 'if (/"title":"([^"]*)"/) { print "$1\n"; last }' | head -1)
 
 if [ -z "$AUDIO_URL" ]; then
     echo "❌ 无法从页面提取音频链接"
@@ -111,7 +111,7 @@ for i in $(seq 0 $((NUM_CHUNKS - 1))); do
         # 如果是速率限制，等待后重试
         if [ "$HTTP_CODE" = "429" ]; then
             # 从错误信息中提取等待时间，默认 120 秒
-            WAIT_SEC=$(echo "$BODY" | grep -oP 'in \K[0-9]+m' | sed 's/m//' | head -1)
+            WAIT_SEC=$(echo "$BODY" | perl -ne 'if (/in (\d+)m/) { print "$1\n"; exit }')
             WAIT_SEC=${WAIT_SEC:-2}
             WAIT_SEC=$((WAIT_SEC * 60 + 30))
             echo "   ⏳ 速率限制，等待 ${WAIT_SEC} 秒后重试..."
