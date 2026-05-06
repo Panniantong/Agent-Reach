@@ -351,23 +351,6 @@ pip install linkedin-scraper-mcp
 
 Run `hivereach doctor` one final time and report the results to your user.
 
-### Step 5: Set up daily monitoring (OpenClaw only)
-
-If you are running inside **OpenClaw**, ask your user:
-
-> "HiveReach 安装好了。要不要我设一个每天自动检查的任务？它会帮你盯着这些渠道是否正常、有没有新版本。有问题才会通知你，没问题不打扰。"
-
-If the user agrees, create a **cron job** (daily, `sessionTarget: "isolated"`, `delivery: "announce"`) with this task:
-
-```
-运行 hivereach watch 命令。
-如果输出包含"全部正常"，不需要通知用户，静默结束。
-如果输出包含问题（❌ ⚠️）或新版本（🆕），把完整报告发给用户，并建议修复方案。
-如果有新版本可用，问用户是否要升级（升级命令：pip install --upgrade https://github.com/xavierliang/HiveReach/archive/main.zip）。
-```
-
-If the user wants a different agent to handle it, let them choose.
-
 ---
 
 ## Quick Reference
@@ -380,8 +363,6 @@ If the user wants a different agent to handle it, let them choose.
 | `hivereach install --env=auto --safe` | Safe setup (no auto system changes) |
 | `hivereach install --env=auto --dry-run` | Preview what would be done |
 | `hivereach doctor` | Show channel status |
-| `hivereach watch` | Quick health + update check (for scheduled tasks) |
-| `hivereach check-update` | Check for new versions |
 | `hivereach configure twitter-cookies "..."` | Unlock Twitter search + posting |
 | `hivereach configure proxy URL` | Unlock Reddit + Bilibili on servers |
 | `hivereach configure groq-key gsk_xxx` | Unlock Xiaoyuzhou podcast transcription |

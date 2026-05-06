@@ -26,21 +26,15 @@ Update HiveReach: https://raw.githubusercontent.com/xavierliang/HiveReach/main/d
 
 Update HiveReach to the latest version, install any new upstream tools, migrate from deprecated tools, and verify everything works. The user should not need to do anything manually.
 
-### Step 1: Check current version
-
-```bash
-hivereach check-update
-```
-
-If it says "已是最新版本", skip to Step 5 (verify). Otherwise continue.
-
-### Step 2: Update HiveReach package
+### Step 1: Update HiveReach package
 
 ```bash
 pip install --upgrade https://github.com/xavierliang/HiveReach/archive/main.zip
 ```
 
-### Step 3: Install / migrate upstream tools
+> Note: this fork does not provide an automatic version-check command. Always pull the latest `main`.
+
+### Step 2: Install / migrate upstream tools
 
 Run these commands to ensure all upstream CLI tools are installed. Skip any that are already installed.
 
@@ -71,11 +65,11 @@ which yt-dlp >/dev/null 2>&1 || pip install yt-dlp 2>/dev/null
 which gh >/dev/null 2>&1 || echo "GitHub CLI not installed — see https://cli.github.com"
 ```
 
-### Step 4: Coexistence (DO NOT uninstall old tools)
+### Step 3: Coexistence (DO NOT uninstall old tools)
 
 **IMPORTANT: Never uninstall any existing tools the user already has installed.** Old tools (bird, browser_cookie3, miku_ai, etc.) may still be working on the user's machine even if their upstream repos are archived or deleted. HiveReach supports both old and new tools as fallback. Only install new tools alongside existing ones.
 
-### Step 5: Verify
+### Step 4: Verify
 
 ```bash
 hivereach version
@@ -86,11 +80,11 @@ Check the doctor output:
 - All channels should show ✅ or ⚠️ (with clear instructions)
 - If any channel that was working before now shows ❌, investigate:
   - Twitter: needs `twitter-cli` + browser cookies (run `xhs login` pattern)
-  - Reddit: needs `rdt-cli` (should be installed in Step 3)
+  - Reddit: needs `rdt-cli` (should be installed in Step 2)
   - XiaoHongShu: needs `xhs-cli` + login (run `xhs login`)
   - WeChat: should work via Exa (zero config)
 
-### Step 6: Update SKILL.md (if installed)
+### Step 5: Update SKILL.md (if installed)
 
 ```bash
 hivereach install --skill-only 2>/dev/null || python3 -c "
@@ -121,7 +115,7 @@ for base in [os.path.expanduser('~/.openclaw/skills/hivereach'),
 "
 ```
 
-### Step 7: Report to user
+### Step 6: Report to user
 
 Tell the user:
 1. What version they're now on (`hivereach version`)

@@ -1,6 +1,6 @@
 [project]
 name = "hivereach"
-version = "1.4.0"
+version = "0.1.0"
 description = "Give your AI Agent eyes to see the entire internet. Search + Read 10+ platforms."
 readme = "README.md"
 license = {text = "MIT"}
