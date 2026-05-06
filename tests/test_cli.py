@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Tests for Agent Reach CLI."""
+"""Tests for HiveReach CLI."""
 
 import pytest
 import requests
@@ -15,7 +15,7 @@ class TestCLI:
                 main()
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
-        assert "Agent Reach v" in captured.out
+        assert "HiveReach v" in captured.out
 
     def test_no_command_shows_help(self, capsys):
         with pytest.raises(SystemExit) as exc_info:
@@ -27,7 +27,7 @@ class TestCLI:
         with patch("sys.argv", ["hivereach", "doctor"]):
             main()
         captured = capsys.readouterr()
-        assert "Agent Reach" in captured.out
+        assert "HiveReach" in captured.out
         assert "✅" in captured.out
 
     def test_parse_twitter_cookie_input_separate_values(self):

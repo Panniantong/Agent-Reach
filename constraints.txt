@@ -1,4 +1,4 @@
-# Agent Reach tested dependency set
+# HiveReach tested dependency set
 # Usage:
 #   pip install -c constraints.txt -e .[dev]
 

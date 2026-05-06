@@ -38,4 +38,4 @@ mcporter call 'exa.web_search_exa(query: "test", numResults: 1)'
 A: MCP 端点由 Exa 官方提供（mcp.exa.ai），当前免费无限制。如果未来有变化，会在 hivereach 更新中适配。
 
 **Q: mcporter 是什么？**
-A: MCP 协议的命令行桥接工具，用来调用 MCP Server。Agent Reach 用它来连接 Exa 和小红书。
+A: MCP 协议的命令行桥接工具，用来调用 MCP Server。HiveReach 用它来连接 Exa 和小红书。

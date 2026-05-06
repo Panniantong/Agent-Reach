@@ -1,6 +1,6 @@
-# Contributing to Agent Reach
+# Contributing to HiveReach
 
-Thank you for your interest in contributing to Agent Reach! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to HiveReach! This document provides guidelines and instructions for contributing.
 
 ## Getting Started
 
@@ -49,7 +49,7 @@ pytest
 
 ## Adding New Channels
 
-Agent Reach uses a unified channel interface. To add a new platform:
+HiveReach uses a unified channel interface. To add a new platform:
 
 1. Create a new file in `hivereach/channels/`
 2. Implement the channel contract (see existing channels for examples)
@@ -81,7 +81,7 @@ Feel free to open an issue for questions or join discussions.
 
 ---
 
-感谢您对 Agent Reach 的贡献！本文档提供了贡献指南。
+感谢您对 HiveReach 的贡献！本文档提供了贡献指南。
 
 ## 快速开始
 

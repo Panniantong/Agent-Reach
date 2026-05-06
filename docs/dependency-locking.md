@@ -1,6 +1,6 @@
 # Dependency Locking Guide
 
-Agent Reach uses `constraints.txt` as a reproducible dependency baseline.
+HiveReach uses `constraints.txt` as a reproducible dependency baseline.
 
 ## Why
 

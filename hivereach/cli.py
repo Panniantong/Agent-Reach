@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Agent Reach CLI — installer, doctor, and configuration tool.
+HiveReach CLI — installer, doctor, and configuration tool.
 
 Usage:
     hivereach install --env=auto
@@ -52,7 +52,7 @@ def main():
         description="Give your AI Agent eyes to see the entire internet",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Show debug logs")
-    parser.add_argument("--version", action="version", version=f"Agent Reach v{__version__}")
+    parser.add_argument("--version", action="version", version=f"HiveReach v{__version__}")
     sub = parser.add_subparsers(dest="command", help="Available commands")
 
     # ── setup ──
@@ -89,7 +89,7 @@ def main():
     sub.add_parser("doctor", help="Check platform availability")
 
     # ── uninstall ──
-    p_uninstall = sub.add_parser("uninstall", help="Remove all Agent Reach config, tokens, and skill files")
+    p_uninstall = sub.add_parser("uninstall", help="Remove all HiveReach config, tokens, and skill files")
     p_uninstall.add_argument("--dry-run", action="store_true",
                              help="Show what would be removed without making any changes")
     p_uninstall.add_argument("--keep-config", action="store_true",
@@ -126,7 +126,7 @@ def main():
         sys.exit(0)
 
     if args.command == "version":
-        print(f"Agent Reach v{__version__}")
+        print(f"HiveReach v{__version__}")
         sys.exit(0)
 
     if args.command == "doctor":
@@ -163,7 +163,7 @@ def _cmd_install(args):
 
     config = Config()
     print()
-    print("Agent Reach Installer")
+    print("HiveReach Installer")
     print("=" * 40)
 
     # Ensure tools directory exists (for upstream tool repos)
@@ -312,7 +312,7 @@ def _cmd_install(args):
 
         # Star reminder
         print()
-        print("如果 Agent Reach 帮到了你，给个 Star 让更多人发现它吧：")
+        print("如果 HiveReach 帮到了你，给个 Star 让更多人发现它吧：")
         print("   https://github.com/Panniantong/Agent-Reach")
         print("   只需一秒，对独立开发者意义很大。谢谢！")
     else:
@@ -321,7 +321,7 @@ def _cmd_install(args):
 
 
 def _install_skill():
-    """Install Agent Reach as an agent skill (OpenClaw / Claude Code / .agents)."""
+    """Install HiveReach as an agent skill (OpenClaw / Claude Code / .agents)."""
     import os
     import shutil
     import importlib.resources
@@ -1297,7 +1297,7 @@ def _configure_xhs_cookies(value):
 
 
 def _cmd_uninstall(args):
-    """Remove all Agent Reach config, tokens, and skill files."""
+    """Remove all HiveReach config, tokens, and skill files."""
     import shutil
     import subprocess
 
@@ -1305,7 +1305,7 @@ def _cmd_uninstall(args):
     keep_config = args.keep_config
 
     print()
-    print("Agent Reach Uninstaller")
+    print("HiveReach Uninstaller")
     print("=" * 40)
 
     if dry_run:
@@ -1380,15 +1380,15 @@ def _cmd_uninstall(args):
         print("Run without --dry-run to actually remove the above.")
     else:
         if removed_any:
-            print("Agent Reach data removed.")
+            print("HiveReach data removed.")
         else:
             print("Nothing to remove — already clean.")
 
     print()
-    print("Optional: remove the Agent Reach Python package itself:")
+    print("Optional: remove the HiveReach Python package itself:")
     print("  pip uninstall hivereach")
     print()
-    print("Optional: remove tools installed by Agent Reach:")
+    print("Optional: remove tools installed by HiveReach:")
     print("  npm uninstall -g mcporter")
     print("  pipx uninstall twitter-cli")
     print("  npm uninstall -g undici")
@@ -1414,7 +1414,7 @@ def _cmd_setup():
 
     config = Config()
     print()
-    print("Agent Reach Setup")
+    print("HiveReach Setup")
     print("=" * 40)
     print()
 
@@ -1696,10 +1696,10 @@ def _cmd_watch():
 
     # Output
     if not issues and not update_available:
-        print(f"Agent Reach: 全部正常 ({ok}/{total} 渠道可用，v{__version__} 已是最新)")
+        print(f"HiveReach: 全部正常 ({ok}/{total} 渠道可用，v{__version__} 已是最新)")
         return
 
-    print(f"Agent Reach 监控报告")
+    print(f"HiveReach 监控报告")
     print(f"=" * 40)
     print(f"版本: v{__version__}  |  渠道: {ok}/{total}")
 

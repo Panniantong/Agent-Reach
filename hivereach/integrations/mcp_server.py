@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Agent Reach MCP Server — expose doctor/status as MCP tool.
+HiveReach MCP Server — expose doctor/status as MCP tool.
 
 Run: python -m hivereach.integrations.mcp_server
 
-Agent Reach is an installer + doctor tool. For actual reading/searching,
+HiveReach is an installer + doctor tool. For actual reading/searching,
 agents should call upstream tools directly (twitter-cli, yt-dlp, mcporter, etc.).
 """
 
@@ -13,7 +13,7 @@ import json
 import sys
 
 from hivereach.config import Config
-from hivereach.core import AgentReach
+from hivereach.core import HiveReach
 
 try:
     from mcp.server import Server
@@ -31,13 +31,13 @@ def create_server():
 
     server = Server("hivereach")
     config = Config()
-    eyes = AgentReach(config)
+    eyes = HiveReach(config)
 
     @server.list_tools()
     async def list_tools():
         return [
             Tool(name="get_status",
-                 description="Get Agent Reach status: which channels are installed and active.",
+                 description="Get HiveReach status: which channels are installed and active.",
                  inputSchema={"type": "object", "properties": {}}),
         ]
 

@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 ## Project
-Agent Reach — Python CLI + library that gives AI agents read/search access to 14+ internet platforms.
+HiveReach — Python CLI + library that gives AI agents read/search access to 14+ internet platforms.
 Positioning: installer + doctor + config tool. NOT a wrapper — after install, agents call upstream tools directly.
 Repo: github.com/Panniantong/Agent-Reach | License: MIT | Version: 1.3.0
 
@@ -36,7 +36,7 @@ Repo: github.com/Panniantong/Agent-Reach | License: MIT | Version: 1.3.0
 
 ## Rules
 - NEVER modify upstream open source projects' source code
-- Agent Reach is a "glue layer" — only route and call, don't reimagine
+- HiveReach is a "glue layer" — only route and call, don't reimagine
 - Version in THREE places must match: `pyproject.toml`, `__init__.py`, `tests/test_cli.py`
 - Always new branch for changes, PR to main, never push to main directly
 - Run `pytest tests/ -v` before committing — all tests must pass

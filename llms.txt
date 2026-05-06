@@ -1,4 +1,4 @@
-# Agent Reach
+# HiveReach
 
 > Give your AI agent eyes to see the entire internet. A unified CLI tool that lets AI agents read and search across 12+ platforms — Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu, Instagram, LinkedIn, Boss直聘, RSS, and any web page. One install, zero API fees.
 

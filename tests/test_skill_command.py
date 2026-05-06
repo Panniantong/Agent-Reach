@@ -37,7 +37,7 @@ class TestSkillCommand(unittest.TestCase):
                     # Verify content is non-empty
                     with open(os.path.join(dirpath, "SKILL.md")) as f:
                         content = f.read()
-                    self.assertIn("Agent Reach", content)
+                    self.assertIn("HiveReach", content)
             # _install_skill may or may not find dirs depending on mock; just ensure no crash
             # The important test is that the function runs without error
 
@@ -83,7 +83,7 @@ class TestSkillCommand(unittest.TestCase):
             self.assertTrue(os.path.exists(target))
             with open(target) as f:
                 content = f.read()
-            self.assertIn("Agent Reach", content)
+            self.assertIn("HiveReach", content)
 
 
 if __name__ == "__main__":

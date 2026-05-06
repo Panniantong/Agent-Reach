@@ -32,7 +32,7 @@ def format_report(results: Dict[str, dict]) -> str:
         escape = lambda x: x
 
     lines = []
-    lines.append("[bold cyan]Agent Reach 状态[/bold cyan]")
+    lines.append("[bold cyan]HiveReach 状态[/bold cyan]")
     lines.append("[cyan]" + "=" * 40 + "[/cyan]")
 
     ok_count = sum(1 for r in results.values() if r["status"] == "ok")

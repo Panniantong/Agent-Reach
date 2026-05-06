@@ -14,7 +14,7 @@ UPSTREAM_BRANCH="main"
 UPSTREAM_DIR="x_reader/fetchers"
 LOCAL_DIR="hivereach/channels"
 
-echo "👁️ Agent Reach — Upstream Sync"
+echo "👁️ HiveReach — Upstream Sync"
 echo "Checking for updates from $UPSTREAM_REPO..."
 echo ""
 

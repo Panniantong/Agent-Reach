@@ -58,4 +58,4 @@ twitter check
 
 > 如果返回 "Missing credentials"，需要设置 AUTH_TOKEN 和 CT0 环境变量。
 >
-> **Fallback：** 如果你已经安装了 bird CLI（`npm install -g @steipete/bird`），它也能正常工作。Agent Reach 会自动检测已安装的工具。
+> **Fallback：** 如果你已经安装了 bird CLI（`npm install -g @steipete/bird`），它也能正常工作。HiveReach 会自动检测已安装的工具。

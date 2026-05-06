@@ -36,7 +36,7 @@ class XiaoyuzhouChannel(Channel):
                 "  或手动复制 transcribe.sh 到 ~/.hivereach/tools/xiaoyuzhou/"
             )
 
-        # Check GROQ_API_KEY — prefer env var, fall back to Agent Reach config
+        # Check GROQ_API_KEY — prefer env var, fall back to HiveReach config
         has_key = bool(os.environ.get("GROQ_API_KEY"))
         if not has_key:
             try:

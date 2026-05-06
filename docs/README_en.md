@@ -1,4 +1,4 @@
-<h1 align="center">👁️ Agent Reach</h1>
+<h1 align="center">👁️ HiveReach</h1>
 
 <p align="center">
   <strong>Give your AI Agent one-click access to the entire internet</strong>
@@ -16,7 +16,7 @@
 
 ---
 
-## Why Agent Reach?
+## Why HiveReach?
 
 AI Agents can already access the internet — but "can go online" is barely the start.
 
@@ -31,10 +31,10 @@ The most valuable information lives across social and niche platforms: Twitter d
 
 To connect your Agent to these platforms, you'd have to find tools, install dependencies, and debug configs — one by one.
 
-**Agent Reach turns this into one command:**
+**HiveReach turns this into one command:**
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/install.md
+Install HiveReach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/install.md
 ```
 
 Copy that to your Agent. A few minutes later, it can read tweets, search Reddit, and watch Bilibili.
@@ -42,7 +42,7 @@ Copy that to your Agent. A few minutes later, it can read tweets, search Reddit,
 **Already installed? Update in one command:**
 
 ```
-Update Agent Reach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/update.md
+Update HiveReach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/update.md
 ```
 
 ### ✅ Before you start, you might want to know
@@ -87,14 +87,14 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/hivereach/main
 Copy this to your AI Agent (Claude Code, OpenClaw, Cursor, etc.):
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/install.md
+Install HiveReach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/install.md
 ```
 
 The Agent auto-installs, detects your environment, and tells you what's ready.
 
 > 🔄 **Already installed?** Update in one command:
 > ```
-> Update Agent Reach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/update.md
+> Update HiveReach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/update.md
 > ```
 
 <details>
@@ -156,7 +156,7 @@ Bilibili blocks server IPs. Get a proxy ([Webshare](https://webshare.io) recomme
 ```
 $ hivereach doctor
 
-👁️  Agent Reach Status
+👁️  HiveReach Status
 ========================================
 
 ✅ Ready to use:
@@ -181,11 +181,11 @@ Status: 6/9 channels available
 
 ## Design Philosophy
 
-**Agent Reach is a scaffolding tool, not a framework.**
+**HiveReach is a scaffolding tool, not a framework.**
 
 Every time you spin up a new Agent, you spend time finding tools, installing deps, and debugging configs — what reads Twitter? How do you bypass Reddit blocks? How do you extract YouTube subtitles? Every time, you re-do the same work.
 
-Agent Reach does one simple thing: **it makes those tool selection and configuration decisions for you.**
+HiveReach does one simple thing: **it makes those tool selection and configuration decisions for you.**
 
 After installation, your Agent calls the upstream tools directly (twitter-cli, rdt-cli, xhs-cli, yt-dlp, mcporter, gh CLI, etc.) — no wrapper layer in between.
 
@@ -251,7 +251,7 @@ This project was entirely vibe-coded 🎸 There might be rough edges here and th
 <details>
 <summary><strong>How to search Twitter/X with AI agent without paying for API?</strong></summary>
 
-Agent Reach uses [twitter-cli](https://github.com/public-clis/twitter-cli) with cookie-based authentication — completely free, no Twitter API subscription needed. Install with `pipx install twitter-cli`, make sure you're logged into x.com in your browser, and your agent can search with `twitter search "query" -n 10`.
+HiveReach uses [twitter-cli](https://github.com/public-clis/twitter-cli) with cookie-based authentication — completely free, no Twitter API subscription needed. Install with `pipx install twitter-cli`, make sure you're logged into x.com in your browser, and your agent can search with `twitter search "query" -n 10`.
 </details>
 
 <details>
@@ -263,17 +263,17 @@ Agent Reach uses [twitter-cli](https://github.com/public-clis/twitter-cli) with 
 <details>
 <summary><strong>Reddit returns 403 from server / datacenter IP blocked?</strong></summary>
 
-Agent Reach uses [rdt-cli](https://github.com/public-clis/rdt-cli) for Reddit — no login, no proxy, no API key needed. Install with `pipx install rdt-cli`. Your agent can search with `rdt search "query"` and read full posts + comments with `rdt read POST_ID`.
+HiveReach uses [rdt-cli](https://github.com/public-clis/rdt-cli) for Reddit — no login, no proxy, no API key needed. Install with `pipx install rdt-cli`. Your agent can search with `rdt search "query"` and read full posts + comments with `rdt read POST_ID`.
 </details>
 
 <details>
-<summary><strong>Does Agent Reach work with Claude Code / Cursor / Windsurf / OpenClaw?</strong></summary>
+<summary><strong>Does HiveReach work with Claude Code / Cursor / Windsurf / OpenClaw?</strong></summary>
 
-Yes! Agent Reach is an installer + configuration tool. Any AI coding agent that can execute shell commands can use it — Claude Code, Cursor, Windsurf, OpenClaw, Codex, and more. Just `pip install hivereach`, run `hivereach install`, and the agent can start using the upstream tools immediately.
+Yes! HiveReach is an installer + configuration tool. Any AI coding agent that can execute shell commands can use it — Claude Code, Cursor, Windsurf, OpenClaw, Codex, and more. Just `pip install hivereach`, run `hivereach install`, and the agent can start using the upstream tools immediately.
 </details>
 
 <details>
-<summary><strong>Is Agent Reach free? Any API costs?</strong></summary>
+<summary><strong>Is HiveReach free? Any API costs?</strong></summary>
 
 100% free and open source. All backends (twitter-cli, rdt-cli, xhs-cli, yt-dlp, Jina Reader, Exa) are free tools that don't require paid API keys. The only optional cost is a residential proxy (~$1/month) if you need Bilibili access from a server. Reddit works free via rdt-cli without any proxy.
 </details>
@@ -281,7 +281,7 @@ Yes! Agent Reach is an installer + configuration tool. Any AI coding agent that 
 <details>
 <summary><strong>Free alternative to Twitter API for web scraping?</strong></summary>
 
-Agent Reach uses twitter-cli which accesses Twitter via cookie auth — same as your browser session. No API fees, no rate limit tiers, no developer account needed. Supports search, read tweets, read profiles, and timelines.
+HiveReach uses twitter-cli which accesses Twitter via cookie auth — same as your browser session. No API fees, no rate limit tiers, no developer account needed. Supports search, read tweets, read profiles, and timelines.
 </details>
 
 <details>
@@ -352,7 +352,7 @@ For collaboration or questions, add me on WeChat — I'll invite you to the comm
 
 [OpenClaw for Enterprise](https://github.com/littleben/openclaw-for-enterprise) — Enterprise-grade multi-user OpenClaw deployment, use AI directly in Feishu/Lark, container isolation, one-command management.
 
-[OpenClaw on Tencent Cloud](https://www.tencentcloud.com/act/pro/intl-openclaw?referral_code=G76Y819A&lang=en&pg=) — One-click OpenClaw on Tencent Cloud: chat to connect Agent Reach & unlock internet power.
+[OpenClaw on Tencent Cloud](https://www.tencentcloud.com/act/pro/intl-openclaw?referral_code=G76Y819A&lang=en&pg=) — One-click OpenClaw on Tencent Cloud: chat to connect HiveReach & unlock internet power.
 
 ## Star History
 

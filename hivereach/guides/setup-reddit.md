@@ -4,7 +4,7 @@
 
 Reddit 封锁了几乎所有非浏览器的直接访问（包括数据中心和 ISP 代理 IP），JSON API 返回 403。
 
-Agent Reach 通过 **rdt-cli** 实现 Reddit 的搜索和阅读功能：
+HiveReach 通过 **rdt-cli** 实现 Reddit 的搜索和阅读功能：
 - **搜索**：`rdt search "关键词"`
 - **阅读完整帖子+评论**：`rdt read POST_ID`
 

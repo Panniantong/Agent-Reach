@@ -1,12 +1,12 @@
 #!/bin/bash
-# Agent Reach 一键完整测试
+# HiveReach 一键完整测试
 # 用法: bash test-hivereach.sh
 # 在任何有 Python 3.10+ 的机器上跑就行
 
 set -e
 
 echo "╔════════════════════════════════════════════╗"
-echo "║    👁️  Agent Reach 完整测试                ║"
+echo "║    👁️  HiveReach 完整测试                ║"
 echo "╚════════════════════════════════════════════╝"
 echo ""
 

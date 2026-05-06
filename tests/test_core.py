@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Tests for AgentReach core class."""
+"""Tests for HiveReach core class."""
 
 import pytest
 
 from hivereach.config import Config
-from hivereach.core import AgentReach
+from hivereach.core import HiveReach
 
 
 @pytest.fixture
 def eyes(tmp_path):
     config = Config(config_path=tmp_path / "config.yaml")
-    return AgentReach(config=config)
+    return HiveReach(config=config)
 
 
-class TestAgentReach:
+class TestHiveReach:
     def test_init(self, eyes):
         assert eyes.config is not None
 
@@ -26,4 +26,4 @@ class TestAgentReach:
     def test_doctor_report(self, eyes):
         report = eyes.doctor_report()
         assert isinstance(report, str)
-        assert "Agent Reach" in report
+        assert "HiveReach" in report

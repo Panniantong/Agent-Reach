@@ -1,16 +1,16 @@
-# Agent Reach — Installation Guide
+# HiveReach — Installation Guide
 
 ## For Humans
 
 Copy this to your AI Agent:
 
 ```
-帮我安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/install.md
+帮我安装 HiveReach：https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/install.md
 ```
 
 > 🛡️ **Security-conscious?** Use safe mode — it won't auto-install system packages:
 > ```
-> 帮我安装 Agent Reach（安全模式）：https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/install.md
+> 帮我安装 HiveReach（安全模式）：https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/install.md
 > 安装时使用 --safe 参数
 > ```
 
@@ -20,7 +20,7 @@ Copy this to your AI Agent:
 
 ### Goal
 
-Install Agent Reach and all upstream tools so your user's agent has full internet access. After installation, you'll use the upstream tools directly (twitter-cli, rdt-cli, xhs-cli, yt-dlp, mcporter, gh CLI, etc.) — Agent Reach is just the installer and health checker.
+Install HiveReach and all upstream tools so your user's agent has full internet access. After installation, you'll use the upstream tools directly (twitter-cli, rdt-cli, xhs-cli, yt-dlp, mcporter, gh CLI, etc.) — HiveReach is just the installer and health checker.
 
 ### ⚠️ Boundaries
 
@@ -35,7 +35,7 @@ When fixing issues, stay within these limits:
 
 ### 📁 Directory Rules
 
-All Agent Reach files go in dedicated directories — **never in the agent workspace**:
+All HiveReach files go in dedicated directories — **never in the agent workspace**:
 
 | Purpose | Directory | Example |
 |---------|-----------|---------|
@@ -66,7 +66,7 @@ This installs core infrastructure (gh CLI, Node.js, mcporter, Exa search, yt-dlp
 - Web (Jina Reader), YouTube, GitHub, RSS, Exa Search, V2EX, Bilibili (basic)
 
 > 💡 **macOS / Homebrew Python 提示 `externally-managed-environment`？**
-> 这是 PEP 668 保护，不是 Agent Reach 本身的问题。优先用 `pipx install ...`，或先创建 `venv` 再安装。
+> 这是 PEP 668 保护，不是 HiveReach 本身的问题。优先用 `pipx install ...`，或先创建 `venv` 再安装。
 
 **Safe mode / Dry run:**
 
@@ -145,7 +145,7 @@ hivereach configure twitter-cookies "PASTED_STRING"
 > **你（Agent）需要做的：**
 > 1. 确认用户配了代理：`hivereach configure proxy http://user:pass@ip:port`
 > 2. 设置环境变量：`export HTTP_PROXY="..." HTTPS_PROXY="..."`
-> 3. Agent Reach 会自动处理剩下的，不需要用户做额外操作
+> 3. HiveReach 会自动处理剩下的，不需要用户做额外操作
 >
 > 如果用户报告 "fetch failed"，参考 [troubleshooting.md](troubleshooting.md)
 
@@ -213,7 +213,7 @@ hivereach configure --from-browser chrome
 **小宇宙播客 / Xiaoyuzhou Podcast (Groq Whisper):**
 > "小宇宙播客转文字已默认安装，只需要一个免费的 Groq API Key。"
 
-脚本已随 Agent Reach 自动安装，用户只需提供 Key：
+脚本已随 HiveReach 自动安装，用户只需提供 Key：
 
 ```bash
 hivereach configure groq-key gsk_xxxxx
@@ -355,7 +355,7 @@ Run `hivereach doctor` one final time and report the results to your user.
 
 If you are running inside **OpenClaw**, ask your user:
 
-> "Agent Reach 安装好了。要不要我设一个每天自动检查的任务？它会帮你盯着这些渠道是否正常、有没有新版本。有问题才会通知你，没问题不打扰。"
+> "HiveReach 安装好了。要不要我设一个每天自动检查的任务？它会帮你盯着这些渠道是否正常、有没有新版本。有问题才会通知你，没问题不打扰。"
 
 If the user agrees, create a **cron job** (daily, `sessionTarget: "isolated"`, `delivery: "announce"`) with this task:
 

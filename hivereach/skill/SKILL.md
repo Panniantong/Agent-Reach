@@ -30,7 +30,7 @@ metadata:
     homepage: https://github.com/Panniantong/Agent-Reach
 ---
 
-# Agent Reach — 路由器
+# HiveReach — 路由器
 
 17 平台工具集合。根据用户意图选择对应分类。
 

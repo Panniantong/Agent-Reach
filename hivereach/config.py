@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Configuration management for Agent Reach.
+"""Configuration management for HiveReach.
 
 Stores settings in ~/.hivereach/config.yaml.
 Auto-creates directory on first use.
@@ -13,7 +13,7 @@ import yaml
 
 
 class Config:
-    """Manages Agent Reach configuration."""
+    """Manages HiveReach configuration."""
 
     CONFIG_DIR = Path.home() / ".hivereach"
     CONFIG_FILE = CONFIG_DIR / "config.yaml"

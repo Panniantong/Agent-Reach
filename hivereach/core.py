@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-AgentReach — installer, doctor, and configuration tool.
+HiveReach — installer, doctor, and configuration tool.
 
-Agent Reach helps AI agents install and configure upstream platform tools
+HiveReach helps AI agents install and configure upstream platform tools
 (twitter-cli, yt-dlp, mcporter, gh CLI, etc.). After installation, agents
 call the upstream tools directly — no wrapper layer needed.
 
@@ -20,7 +20,7 @@ from typing import Dict, Optional
 from hivereach.config import Config
 
 
-class AgentReach:
+class HiveReach:
     """Give your AI Agent eyes to see the entire internet.
 
     This class provides health-check functionality.

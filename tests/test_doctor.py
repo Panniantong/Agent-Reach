@@ -93,7 +93,7 @@ class TestDoctor:
         # Strip Rich markup tags for assertion (PR #170 added [bold], [yellow] etc.)
         import re
         plain = re.sub(r"\[[^\]]*\]", "", report)
-        assert "Agent Reach" in plain
+        assert "HiveReach" in plain
         assert "装好即用：" in plain
         assert "1/3 个渠道可用" in plain
         # Inactive optional channels should be summarized in one line

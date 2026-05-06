@@ -1,17 +1,17 @@
-# Agent Reach — Update Guide
+# HiveReach — Update Guide
 
 ## For Humans
 
 Copy this to your AI Agent:
 
 ```
-帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/update.md
+帮我更新 HiveReach：https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/update.md
 ```
 
 Or in English:
 
 ```
-Update Agent Reach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/update.md
+Update HiveReach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/update.md
 ```
 
 ---
@@ -24,7 +24,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/hivereach/main
 
 ### Goal
 
-Update Agent Reach to the latest version, install any new upstream tools, migrate from deprecated tools, and verify everything works. The user should not need to do anything manually.
+Update HiveReach to the latest version, install any new upstream tools, migrate from deprecated tools, and verify everything works. The user should not need to do anything manually.
 
 ### Step 1: Check current version
 
@@ -34,7 +34,7 @@ hivereach check-update
 
 If it says "已是最新版本", skip to Step 5 (verify). Otherwise continue.
 
-### Step 2: Update Agent Reach package
+### Step 2: Update HiveReach package
 
 ```bash
 pip install --upgrade https://github.com/Panniantong/hivereach/archive/main.zip
@@ -73,7 +73,7 @@ which gh >/dev/null 2>&1 || echo "GitHub CLI not installed — see https://cli.g
 
 ### Step 4: Coexistence (DO NOT uninstall old tools)
 
-**IMPORTANT: Never uninstall any existing tools the user already has installed.** Old tools (bird, browser_cookie3, miku_ai, etc.) may still be working on the user's machine even if their upstream repos are archived or deleted. Agent Reach supports both old and new tools as fallback. Only install new tools alongside existing ones.
+**IMPORTANT: Never uninstall any existing tools the user already has installed.** Old tools (bird, browser_cookie3, miku_ai, etc.) may still be working on the user's machine even if their upstream repos are archived or deleted. HiveReach supports both old and new tools as fallback. Only install new tools alongside existing ones.
 
 ### Step 5: Verify
 

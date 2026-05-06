@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Agent Reach — Give your AI Agent eyes to see the entire internet."""
+"""HiveReach — Give your AI Agent eyes to see the entire internet."""
 
 __version__ = "1.4.0"
 __author__ = "Neo Reid"
 
-from hivereach.core import AgentReach
+from hivereach.core import HiveReach
 
-__all__ = ["AgentReach"]
+__all__ = ["HiveReach"]
