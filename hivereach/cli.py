@@ -620,94 +620,43 @@ def _install_xiaoyuzhou_deps():
 
 def _install_twitter_deps():
     """Install twitter-cli for Twitter search + timeline."""
-    import shutil
-    import subprocess
-
-    print("Setting up Twitter (twitter-cli)...")
-    if shutil.which("twitter"):
-        print("  ✅ twitter-cli already installed")
-        return
-    for tool, cmd in [("pipx", ["pipx", "install", "twitter-cli"]),
-                      ("uv", ["uv", "tool", "install", "twitter-cli"])]:
-        if shutil.which(tool):
-            try:
-                subprocess.run(cmd, capture_output=True, encoding="utf-8",
-                               errors="replace", timeout=120)
-                if shutil.which("twitter"):
-                    print("  ✅ twitter-cli installed")
-                    return
-            except Exception:
-                pass
-    print("  [!]  twitter-cli install failed. Run: pipx install twitter-cli")
+    from hivereach._install_helpers import install_pipx_tool
+    install_pipx_tool(
+        label="Twitter (twitter-cli)",
+        binary="twitter",
+        package="twitter-cli",
+    )
 
 
 def _install_xhs_deps():
     """Install xhs-cli (xiaohongshu-cli) for XiaoHongShu."""
-    import shutil
-    import subprocess
-
-    print("Setting up XiaoHongShu (xhs-cli)...")
-    if shutil.which("xhs"):
-        print("  ✅ xhs-cli already installed")
-        return
-    for tool, cmd in [("pipx", ["pipx", "install", "xiaohongshu-cli"]),
-                      ("uv", ["uv", "tool", "install", "xiaohongshu-cli"])]:
-        if shutil.which(tool):
-            try:
-                subprocess.run(cmd, capture_output=True, encoding="utf-8",
-                               errors="replace", timeout=120)
-                if shutil.which("xhs"):
-                    print("  ✅ xhs-cli installed (run `xhs login` to authenticate)")
-                    return
-            except Exception:
-                pass
-    print("  [!]  xhs-cli install failed. Run: pipx install xiaohongshu-cli")
+    from hivereach._install_helpers import install_pipx_tool
+    install_pipx_tool(
+        label="XiaoHongShu (xhs-cli)",
+        binary="xhs",
+        package="xiaohongshu-cli",
+        post_install_hint="run `xhs login` to authenticate",
+    )
 
 
 def _install_reddit_deps():
     """Install rdt-cli for Reddit search + reading."""
-    import shutil
-    import subprocess
-
-    print("Setting up Reddit (rdt-cli)...")
-    if shutil.which("rdt"):
-        print("  ✅ rdt-cli already installed")
-        return
-    for tool, cmd in [("pipx", ["pipx", "install", "rdt-cli"]),
-                      ("uv", ["uv", "tool", "install", "rdt-cli"])]:
-        if shutil.which(tool):
-            try:
-                subprocess.run(cmd, capture_output=True, encoding="utf-8",
-                               errors="replace", timeout=120)
-                if shutil.which("rdt"):
-                    print("  ✅ rdt-cli installed")
-                    return
-            except Exception:
-                pass
-    print("  [!]  rdt-cli install failed. Run: pipx install rdt-cli")
+    from hivereach._install_helpers import install_pipx_tool
+    install_pipx_tool(
+        label="Reddit (rdt-cli)",
+        binary="rdt",
+        package="rdt-cli",
+    )
 
 
 def _install_bili_deps():
     """Install bili-cli for Bilibili hot/rank/search."""
-    import shutil
-    import subprocess
-
-    print("Setting up Bilibili (bili-cli)...")
-    if shutil.which("bili"):
-        print("  ✅ bili-cli already installed")
-        return
-    for tool, cmd in [("pipx", ["pipx", "install", "bilibili-cli"]),
-                      ("uv", ["uv", "tool", "install", "bilibili-cli"])]:
-        if shutil.which(tool):
-            try:
-                subprocess.run(cmd, capture_output=True, encoding="utf-8",
-                               errors="replace", timeout=120)
-                if shutil.which("bili"):
-                    print("  ✅ bili-cli installed")
-                    return
-            except Exception:
-                pass
-    print("  [!]  bili-cli install failed. Run: pipx install bilibili-cli")
+    from hivereach._install_helpers import install_pipx_tool
+    install_pipx_tool(
+        label="Bilibili (bili-cli)",
+        binary="bili",
+        package="bilibili-cli",
+    )
 
 
 def _install_weibo_deps():
