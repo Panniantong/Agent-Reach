@@ -15,14 +15,20 @@ Thank you for your interest in contributing to HiveReach! This document provides
 
 ```bash
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/Agent-Reach.git
-cd Agent-Reach
+git clone https://github.com/YOUR_USERNAME/HiveReach.git
+cd HiveReach
 
 # Install in development mode
 pip install -e ".[dev]"
 
 # Install pre-commit hooks (optional but recommended)
 pre-commit install
+```
+
+For a full integration test (creates a clean venv, installs, runs `doctor` + channel checks):
+
+```bash
+bash test.sh
 ```
 
 ## Code Style

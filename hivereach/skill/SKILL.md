@@ -2,7 +2,7 @@
 name: hivereach
 description: >
   Give your AI agent eyes to see the entire internet.
-  17 platforms via CLI, MCP, curl, and Python scripts.
+  16 platforms via CLI, MCP, curl, and Python scripts.
   Zero config for 8 channels.
 
   【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。
@@ -32,7 +32,7 @@ metadata:
 
 # HiveReach — 路由器
 
-17 平台工具集合。根据用户意图选择对应分类。
+16 平台工具集合。根据用户意图选择对应分类。
 
 ## 路由表
 
