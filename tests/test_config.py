@@ -68,11 +68,28 @@ class TestConfig:
         assert all(v is False for v in features.values())
 
     def test_to_dict_masks_sensitive(self, tmp_config):
-        tmp_config.set("exa_api_key", "super-secret-key-12345")
+        tmp_config.set("exa_api_key", "super-secret-key-12345")  # 21 chars
+        tmp_config.set("github_token", "ghp_short")               # 9 chars
+        tmp_config.set("xhs_cookie", "a1=value;web_session=abcd1234efgh5678")
         tmp_config.set("normal_setting", "visible")
         masked = tmp_config.to_dict()
-        assert masked["exa_api_key"] == "super-se..."
+
+        # Long secrets reveal only the last 4 chars (no prefix leak)
+        assert masked["exa_api_key"] == "***2345"
+        # Short secrets are fully redacted to avoid leaking length/format hints
+        assert masked["github_token"] == "***"
+        # Cookie-style keys are also masked (newly covered)
+        assert masked["xhs_cookie"].startswith("***")
+        assert "web_session" not in masked["xhs_cookie"]
+        # Non-sensitive keys pass through untouched
         assert masked["normal_setting"] == "visible"
+
+    def test_to_dict_masks_handles_empty_values(self, tmp_config):
+        tmp_config.set("exa_api_key", "")
+        tmp_config.set("github_token", None)
+        masked = tmp_config.to_dict()
+        assert masked["exa_api_key"] is None
+        assert masked["github_token"] is None
 
     def test_save_creates_file_with_restricted_permissions(self, tmp_path):
         import stat

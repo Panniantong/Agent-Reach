@@ -50,8 +50,12 @@ class Config:
         self._ensure_dir()
         # Create file with restricted permissions from the start to avoid
         # a race window where credentials are briefly world-readable.
+        # On Windows the POSIX mode bits only affect the read-only flag;
+        # full access control relies on NTFS ACLs inherited from the
+        # parent directory (~/.hivereach), so we still call chmod for the
+        # narrow protection it offers and accept the platform's limits.
+        import stat
         try:
-            import stat
             fd = os.open(
                 str(self.config_path),
                 os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
@@ -60,10 +64,12 @@ class Config:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 yaml.dump(self.data, f, default_flow_style=False, allow_unicode=True)
         except OSError:
-            # Fallback for Windows or other edge cases where os.open flags
-            # are not fully supported.
             with open(self.config_path, "w", encoding="utf-8") as f:
                 yaml.dump(self.data, f, default_flow_style=False, allow_unicode=True)
+            try:
+                os.chmod(self.config_path, stat.S_IRUSR | stat.S_IWUSR)
+            except OSError:
+                pass
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a config value. Also checks environment variables (uppercase)."""
@@ -99,11 +105,26 @@ class Config:
         }
 
     def to_dict(self) -> dict:
-        """Return config as dict (masks sensitive values)."""
+        """Return config as dict (masks sensitive values).
+
+        Masking avoids leaking the secret's prefix (which often identifies
+        the credential type, e.g. ``ghp_`` for GitHub tokens). For long
+        secrets we expose only the last 4 characters so users can still
+        distinguish between rotated tokens.
+        """
         masked = {}
         for k, v in self.data.items():
-            if any(s in k.lower() for s in ("key", "token", "password", "proxy")):
-                masked[k] = f"{str(v)[:8]}..." if v else None
+            if any(s in k.lower() for s in ("key", "token", "password", "proxy", "cookie", "sessdata")):
+                masked[k] = _mask_secret(v)
             else:
                 masked[k] = v
         return masked
+
+
+def _mask_secret(value: Any) -> Optional[str]:
+    if not value:
+        return None
+    s = str(value)
+    if len(s) < 16:
+        return "***"
+    return f"***{s[-4:]}"
