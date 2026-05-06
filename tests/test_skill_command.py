@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from agent_reach.cli import _install_skill, _uninstall_skill
+from hivereach.cli import _install_skill, _uninstall_skill
 
 
 class TestSkillCommand(unittest.TestCase):
@@ -19,7 +19,7 @@ class TestSkillCommand(unittest.TestCase):
             os.makedirs(skill_dir)
 
             with patch(
-                "agent_reach.cli.os.path.expanduser",
+                "hivereach.cli.os.path.expanduser",
                 side_effect=lambda p: p.replace("~", tmpdir),
             ), patch.dict(os.environ, {}, clear=False):
                 # Remove OPENCLAW_HOME to avoid interference
@@ -53,7 +53,7 @@ class TestSkillCommand(unittest.TestCase):
             self.assertTrue(os.path.exists(skill_path))
 
             with patch(
-                "agent_reach.cli.os.path.expanduser",
+                "hivereach.cli.os.path.expanduser",
                 side_effect=lambda p: p.replace("~", tmpdir),
             ), patch.dict(os.environ, {}, clear=False):
                 env = os.environ.copy()
@@ -71,7 +71,7 @@ class TestSkillCommand(unittest.TestCase):
             os.makedirs(skill_parent)
 
             with patch(
-                "agent_reach.cli.os.path.expanduser",
+                "hivereach.cli.os.path.expanduser",
                 side_effect=lambda p: p.replace("~", tmpdir),
             ), patch.dict(os.environ, {}, clear=False):
                 env = os.environ.copy()

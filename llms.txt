@@ -28,5 +28,5 @@
 
 ## Optional
 
-- [SKILL.md](https://github.com/Panniantong/Agent-Reach/blob/main/agent_reach/skill/SKILL.md): Integration guide for AI agent frameworks (OpenClaw, Claude Code, etc.)
+- [SKILL.md](https://github.com/Panniantong/Agent-Reach/blob/main/hivereach/skill/SKILL.md): Integration guide for AI agent frameworks (OpenClaw, Claude Code, etc.)
 - [PyPI Package](https://pypi.org/project/agent-reach/): `pip install agent-reach`

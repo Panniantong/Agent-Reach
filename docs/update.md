@@ -96,10 +96,10 @@ Check the doctor output:
 agent-reach install --skill-only 2>/dev/null || python3 -c "
 import importlib.resources, os
 try:
-    skill_pkg = importlib.resources.files('agent_reach').joinpath('skill')
+    skill_pkg = importlib.resources.files('hivereach').joinpath('skill')
 except Exception:
     from pathlib import Path
-    skill_pkg = Path(os.path.dirname(os.path.abspath(__file__))).parent / 'agent_reach' / 'skill'
+    skill_pkg = Path(os.path.dirname(os.path.abspath(__file__))).parent / 'hivereach' / 'skill'
 
 skill_md = skill_pkg.joinpath('SKILL.md').read_text(encoding='utf-8')
 refs_pkg = skill_pkg.joinpath('references')

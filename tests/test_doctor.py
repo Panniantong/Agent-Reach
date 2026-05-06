@@ -3,8 +3,8 @@
 
 import pytest
 
-import agent_reach.doctor as doctor
-from agent_reach.config import Config
+import hivereach.doctor as doctor
+from hivereach.config import Config
 
 
 class _StubChannel:

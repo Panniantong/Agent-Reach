@@ -7,8 +7,8 @@ Agent Reach helps AI agents install and configure upstream platform tools
 call the upstream tools directly — no wrapper layer needed.
 
 Usage:
-    from agent_reach.doctor import check_all, format_report
-    from agent_reach.config import Config
+    from hivereach.doctor import check_all, format_report
+    from hivereach.config import Config
 
     config = Config()
     results = check_all(config)
@@ -17,7 +17,7 @@ Usage:
 
 from typing import Dict, Optional
 
-from agent_reach.config import Config
+from hivereach.config import Config
 
 
 class AgentReach:
@@ -33,10 +33,10 @@ class AgentReach:
 
     def doctor(self) -> Dict[str, dict]:
         """Check all channel availability."""
-        from agent_reach.doctor import check_all
+        from hivereach.doctor import check_all
         return check_all(self.config)
 
     def doctor_report(self) -> str:
         """Get formatted health report."""
-        from agent_reach.doctor import check_all, format_report
+        from hivereach.doctor import check_all, format_report
         return format_report(check_all(self.config))

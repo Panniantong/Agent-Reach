@@ -3,7 +3,7 @@
 
 import os
 import shutil
-from agent_reach.config import Config
+from hivereach.config import Config
 from .base import Channel
 
 

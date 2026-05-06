@@ -12,7 +12,7 @@ agent-reach doctor | grep -i "groq\|whisper"
 
 2. 如果用户提供了 key，写入配置：
 ```python
-from agent_reach.config import Config
+from hivereach.config import Config
 c = Config()
 c.set("groq_api_key", "用户提供的KEY")
 ```

@@ -15,7 +15,7 @@ import json
 import os
 import time
 
-from agent_reach import __version__
+from hivereach import __version__
 
 
 def _ensure_utf8_console():
@@ -155,8 +155,8 @@ def main():
 def _cmd_install(args):
     """One-shot deterministic installer."""
     import os
-    from agent_reach.config import Config
-    from agent_reach.doctor import check_all, format_report
+    from hivereach.config import Config
+    from hivereach.doctor import check_all, format_report
 
     safe_mode = args.safe
     dry_run = args.dry_run
@@ -256,7 +256,7 @@ def _cmd_install(args):
         print("  (macOS may ask for your login password to access the Keychain — this is normal,")
         print("   it only happens once during install. Enter your password or click 'Allow'.)")
         try:
-            from agent_reach.cookie_extract import configure_from_browser
+            from hivereach.cookie_extract import configure_from_browser
             results = configure_from_browser("chrome", config)
             found = False
             for platform, success, message in results:
@@ -336,7 +336,7 @@ def _install_skill():
 
             # Get skill directory from package (with fallback for editable installs)
             try:
-                skill_pkg = importlib.resources.files("agent_reach").joinpath("skill")
+                skill_pkg = importlib.resources.files("hivereach").joinpath("skill")
                 skill_md = skill_pkg.joinpath("SKILL.md").read_text(encoding="utf-8")
             except Exception:
                 from pathlib import Path
@@ -443,7 +443,7 @@ def _cmd_format(args):
     import sys
 
     if args.platform == "xhs":
-        from agent_reach.channels.xiaohongshu import format_xhs_result
+        from hivereach.channels.xiaohongshu import format_xhs_result
 
         raw = sys.stdin.read().strip()
         if not raw:
@@ -589,7 +589,7 @@ def _install_system_deps():
 def _install_xiaoyuzhou_deps():
     """Install Xiaoyuzhou podcast transcription script."""
     import shutil
-    from agent_reach.config import Config
+    from hivereach.config import Config
 
     config = Config()
     print("Setting up Xiaoyuzhou podcast transcription...")
@@ -995,13 +995,13 @@ def _detect_environment():
 def _cmd_configure(args):
     """Set a config value and test it, or auto-extract from browser."""
     import shutil
-    from agent_reach.config import Config
+    from hivereach.config import Config
 
     config = Config()
 
     # ── Auto-extract from browser ──
     if args.from_browser:
-        from agent_reach.cookie_extract import configure_from_browser
+        from hivereach.cookie_extract import configure_from_browser
 
         browser = args.from_browser
         print(f"Extracting cookies from {browser}...")
@@ -1395,8 +1395,8 @@ def _cmd_uninstall(args):
 
 
 def _cmd_doctor():
-    from agent_reach.config import Config
-    from agent_reach.doctor import check_all, format_report
+    from hivereach.config import Config
+    from hivereach.doctor import check_all, format_report
     try:
         from rich import print as rprint
     except ImportError:
@@ -1410,7 +1410,7 @@ def _cmd_doctor():
 
 
 def _cmd_setup():
-    from agent_reach.config import Config
+    from hivereach.config import Config
 
     config = Config()
     print()
@@ -1591,7 +1591,7 @@ def _github_get_with_retry(url, timeout=10, retries=3, sleeper=time.sleep):
 
 def _cmd_check_update():
     """Check for newer versions on GitHub."""
-    from agent_reach import __version__
+    from hivereach import __version__
 
     print(f"当前版本: v{__version__}")
     release_url = "https://api.github.com/repos/Panniantong/Agent-Reach/releases/latest"
@@ -1658,9 +1658,9 @@ def _cmd_watch():
 
     Only outputs problems. If everything is fine, outputs a single line.
     """
-    from agent_reach.config import Config
-    from agent_reach.doctor import check_all
-    from agent_reach import __version__
+    from hivereach.config import Config
+    from hivereach.doctor import check_all
+    from hivereach import __version__
 
     config = Config()
     issues = []

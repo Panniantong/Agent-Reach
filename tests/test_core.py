@@ -3,8 +3,8 @@
 
 import pytest
 
-from agent_reach.config import Config
-from agent_reach.core import AgentReach
+from hivereach.config import Config
+from hivereach.core import AgentReach
 
 
 @pytest.fixture

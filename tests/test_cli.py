@@ -4,8 +4,8 @@
 import pytest
 import requests
 from unittest.mock import patch
-import agent_reach.cli as cli
-from agent_reach.cli import main
+import hivereach.cli as cli
+from hivereach.cli import main
 
 
 class TestCLI:
@@ -117,7 +117,7 @@ class TestCheckUpdateRetry:
         assert cli._classify_github_response_error(R()) == "rate_limit"
 
     def test_check_update_reports_classified_error(self, capsys):
-        with patch("agent_reach.cli._github_get_with_retry", return_value=(None, "timeout", 3)):
+        with patch("hivereach.cli._github_get_with_retry", return_value=(None, "timeout", 3)):
             result = cli._cmd_check_update()
 
         captured = capsys.readouterr()

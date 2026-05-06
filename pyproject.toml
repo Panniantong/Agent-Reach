@@ -50,7 +50,7 @@ dev = [
 ]
 
 [project.scripts]
-agent-reach = "agent_reach.cli:main"
+agent-reach = "hivereach.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/Panniantong/agent-reach"
@@ -62,12 +62,12 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["agent_reach"]
+packages = ["hivereach"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"agent_reach/guides" = "agent_reach/guides"
-"agent_reach/skill" = "agent_reach/skill"
-"agent_reach/scripts" = "agent_reach/scripts"
+"hivereach/guides" = "hivereach/guides"
+"hivereach/skill" = "hivereach/skill"
+"hivereach/scripts" = "hivereach/scripts"
 
 [tool.ruff]
 target-version = "py310"

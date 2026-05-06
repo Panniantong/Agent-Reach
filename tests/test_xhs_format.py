@@ -3,7 +3,7 @@
 
 import unittest
 
-from agent_reach.channels.xiaohongshu import format_xhs_result
+from hivereach.channels.xiaohongshu import format_xhs_result
 
 
 class TestFormatXhsResult(unittest.TestCase):

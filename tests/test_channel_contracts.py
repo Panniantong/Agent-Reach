@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """Contract tests for channel adapters."""
 
-from agent_reach.channels import get_all_channels
-from agent_reach.config import Config
+from hivereach.channels import get_all_channels
+from hivereach.config import Config
 
 
 def test_channel_registry_contract():
@@ -31,7 +31,7 @@ def test_channel_check_contract_with_minimal_runtime(monkeypatch, tmp_path):
 
 def test_youtube_warns_when_node_only_and_no_config(monkeypatch, tmp_path):
     """YouTube should warn when only Node.js is installed but no yt-dlp config exists."""
-    from agent_reach.channels.youtube import YouTubeChannel
+    from hivereach.channels.youtube import YouTubeChannel
 
     def fake_which(cmd):
         if cmd == "yt-dlp":
@@ -52,7 +52,7 @@ def test_youtube_warns_when_node_only_and_no_config(monkeypatch, tmp_path):
 
 def test_youtube_warns_with_windows_specific_fix_command(monkeypatch, tmp_path):
     """Windows guidance should use a PowerShell-style yt-dlp config command."""
-    from agent_reach.channels.youtube import YouTubeChannel
+    from hivereach.channels.youtube import YouTubeChannel
 
     def fake_which(cmd):
         if cmd == "yt-dlp":
@@ -62,7 +62,7 @@ def test_youtube_warns_with_windows_specific_fix_command(monkeypatch, tmp_path):
         return None
 
     monkeypatch.setattr("shutil.which", fake_which)
-    monkeypatch.setattr("agent_reach.utils.paths.sys.platform", "win32")
+    monkeypatch.setattr("hivereach.utils.paths.sys.platform", "win32")
     monkeypatch.setenv("APPDATA", str(tmp_path / "AppData" / "Roaming"))
 
     ch = YouTubeChannel()
@@ -74,7 +74,7 @@ def test_youtube_warns_with_windows_specific_fix_command(monkeypatch, tmp_path):
 
 def test_youtube_ok_when_deno_installed(monkeypatch):
     """YouTube should return ok when Deno is installed (no config needed)."""
-    from agent_reach.channels.youtube import YouTubeChannel
+    from hivereach.channels.youtube import YouTubeChannel
 
     def fake_which(cmd):
         if cmd == "yt-dlp":
@@ -94,7 +94,7 @@ def test_douyin_check_does_not_call_with_invalid_url(monkeypatch, tmp_path):
     """Douyin check should use 'mcporter list' instead of calling with a hardcoded URL."""
     import subprocess
 
-    from agent_reach.channels.douyin import DouyinChannel
+    from hivereach.channels.douyin import DouyinChannel
 
     calls = []
     original_run = subprocess.run

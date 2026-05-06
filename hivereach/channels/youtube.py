@@ -3,8 +3,8 @@
 
 import shutil
 
-from agent_reach.utils.paths import get_ytdlp_config_path, render_ytdlp_fix_command
-from agent_reach.utils.text import read_utf8_text
+from hivereach.utils.paths import get_ytdlp_config_path, render_ytdlp_fix_command
+from hivereach.utils.text import read_utf8_text
 
 from .base import Channel
 

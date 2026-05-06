@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from agent_reach.config import Config
+from hivereach.config import Config
 
 
 @pytest.fixture

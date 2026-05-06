@@ -37,11 +37,11 @@ Run all checks before submitting a PR:
 
 ```bash
 # Linting
-ruff check agent_reach tests
-ruff format agent_reach tests
+ruff check hivereach tests
+ruff format hivereach tests
 
 # Type checking
-mypy agent_reach
+mypy hivereach
 
 # Tests
 pytest
@@ -51,10 +51,10 @@ pytest
 
 Agent Reach uses a unified channel interface. To add a new platform:
 
-1. Create a new file in `agent_reach/channels/`
+1. Create a new file in `hivereach/channels/`
 2. Implement the channel contract (see existing channels for examples)
 3. Add tests in `tests/test_channels.py`
-4. Update `agent_reach/doctor.py` to include the new channel
+4. Update `hivereach/doctor.py` to include the new channel
 5. Update documentation
 
 ## Pull Request Guidelines
@@ -100,7 +100,7 @@ Feel free to open an issue for questions or join discussions.
 
 ## 添加新渠道
 
-1. 在 `agent_reach/channels/` 创建新文件
+1. 在 `hivereach/channels/` 创建新文件
 2. 实现渠道接口
 3. 添加测试
 4. 更新 doctor 检测

@@ -23,8 +23,8 @@ pip install -c constraints.txt -e .[dev]
 
 ```bash
 pytest -q
-ruff check agent_reach tests
-mypy agent_reach
+ruff check hivereach tests
+mypy hivereach
 ```
 
 5. Open PR with dependency and validation notes.

@@ -12,7 +12,7 @@ set -e
 UPSTREAM_REPO="runesleo/x-reader"
 UPSTREAM_BRANCH="main"
 UPSTREAM_DIR="x_reader/fetchers"
-LOCAL_DIR="agent_reach/channels"
+LOCAL_DIR="hivereach/channels"
 
 echo "👁️ Agent Reach — Upstream Sync"
 echo "Checking for updates from $UPSTREAM_REPO..."
@@ -48,9 +48,9 @@ for upstream_file in "$TMPDIR/upstream/$UPSTREAM_DIR"/*.py; do
     fi
     
     # Compare (ignoring import path differences)
-    if ! diff -q <(sed 's/x_reader\.fetchers/agent_reach.channels/g' "$upstream_file") "$local_file" > /dev/null 2>&1; then
+    if ! diff -q <(sed 's/x_reader\.fetchers/hivereach.channels/g' "$upstream_file") "$local_file" > /dev/null 2>&1; then
         echo "📝 CHANGED: $filename"
-        diff --color -u <(sed 's/x_reader\.fetchers/agent_reach.channels/g' "$upstream_file") "$local_file" | head -20
+        diff --color -u <(sed 's/x_reader\.fetchers/hivereach.channels/g' "$upstream_file") "$local_file" | head -20
         echo "   ..."
         echo ""
         CHANGES=$((CHANGES + 1))
@@ -66,7 +66,7 @@ else
     echo ""
     echo "To merge a specific file:"
     echo "  cp $TMPDIR/upstream/$UPSTREAM_DIR/FILENAME.py $LOCAL_DIR/FILENAME.py"
-    echo "  sed -i 's/x_reader\\.fetchers/agent_reach.channels/g' $LOCAL_DIR/FILENAME.py"
+    echo "  sed -i 's/x_reader\\.fetchers/hivereach.channels/g' $LOCAL_DIR/FILENAME.py"
     echo ""
     echo "Then review changes, run tests, and commit."
 fi

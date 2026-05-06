@@ -2,7 +2,7 @@
 """
 Agent Reach MCP Server — expose doctor/status as MCP tool.
 
-Run: python -m agent_reach.integrations.mcp_server
+Run: python -m hivereach.integrations.mcp_server
 
 Agent Reach is an installer + doctor tool. For actual reading/searching,
 agents should call upstream tools directly (twitter-cli, yt-dlp, mcporter, etc.).
@@ -12,8 +12,8 @@ import asyncio
 import json
 import sys
 
-from agent_reach.config import Config
-from agent_reach.core import AgentReach
+from hivereach.config import Config
+from hivereach.core import AgentReach
 
 try:
     from mcp.server import Server

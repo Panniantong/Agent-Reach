@@ -161,7 +161,7 @@ curl -s "https://www.v2ex.com/api/members/show.json?username=USERNAME" -H "User-
 ### Python 调用示例
 
 ```python
-from agent_reach.channels.v2ex import V2EXChannel
+from hivereach.channels.v2ex import V2EXChannel
 
 ch = V2EXChannel()
 

@@ -6,10 +6,10 @@ import shutil
 import subprocess
 from urllib.error import URLError
 
-from agent_reach.channels import get_all_channels, get_channel
-from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
-from agent_reach.channels.xueqiu import XueqiuChannel
-from agent_reach.channels.v2ex import V2EXChannel
+from hivereach.channels import get_all_channels, get_channel
+from hivereach.channels.xiaohongshu import XiaoHongShuChannel
+from hivereach.channels.xueqiu import XueqiuChannel
+from hivereach.channels.v2ex import V2EXChannel
 
 
 class TestChannelRegistry:
@@ -338,7 +338,7 @@ class TestXueqiuChannel:
         assert not ch.can_handle("https://v2ex.com/t/123")
 
     def test_check_ok_when_api_reachable(self, monkeypatch):
-        import agent_reach.channels.xueqiu as xueqiu_mod
+        import hivereach.channels.xueqiu as xueqiu_mod
 
         monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
 
@@ -366,7 +366,7 @@ class TestXueqiuChannel:
         assert "公开 API 可用" in msg
 
     def test_check_warn_when_api_unreachable(self, monkeypatch):
-        import agent_reach.channels.xueqiu as xueqiu_mod
+        import hivereach.channels.xueqiu as xueqiu_mod
 
         monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
 
@@ -383,7 +383,7 @@ class TestXueqiuChannel:
     # ------------------------------------------------------------------ #
 
     def test_get_stock_quote(self, monkeypatch):
-        import agent_reach.channels.xueqiu as xueqiu_mod
+        import hivereach.channels.xueqiu as xueqiu_mod
 
         monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
 
@@ -436,7 +436,7 @@ class TestXueqiuChannel:
     # ------------------------------------------------------------------ #
 
     def test_search_stock(self, monkeypatch):
-        import agent_reach.channels.xueqiu as xueqiu_mod
+        import hivereach.channels.xueqiu as xueqiu_mod
 
         monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
 
@@ -469,7 +469,7 @@ class TestXueqiuChannel:
     # ------------------------------------------------------------------ #
 
     def test_get_hot_posts_returns_list(self, monkeypatch):
-        import agent_reach.channels.xueqiu as xueqiu_mod
+        import hivereach.channels.xueqiu as xueqiu_mod
 
         monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
 
@@ -513,7 +513,7 @@ class TestXueqiuChannel:
         assert posts[0]["url"] == "https://xueqiu.com/1234567890/111"
 
     def test_get_hot_posts_respects_limit(self, monkeypatch):
-        import agent_reach.channels.xueqiu as xueqiu_mod
+        import hivereach.channels.xueqiu as xueqiu_mod
 
         monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
 
@@ -553,7 +553,7 @@ class TestXueqiuChannel:
     # ------------------------------------------------------------------ #
 
     def test_get_hot_stocks(self, monkeypatch):
-        import agent_reach.channels.xueqiu as xueqiu_mod
+        import hivereach.channels.xueqiu as xueqiu_mod
 
         monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
 
@@ -591,7 +591,7 @@ class TestXueqiuChannel:
 
     def test_ensure_cookies_loads_from_config(self, monkeypatch, tmp_path):
         """_ensure_cookies() should inject cookies from the config file."""
-        import agent_reach.channels.xueqiu as xueqiu_mod
+        import hivereach.channels.xueqiu as xueqiu_mod
 
         monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", False)
 
@@ -602,7 +602,7 @@ class TestXueqiuChannel:
                     return "xq_a_token=TESTTOKEN; xq_is_login=1"
                 return default
 
-        import agent_reach.channels.xueqiu as xq_mod
+        import hivereach.channels.xueqiu as xq_mod
         monkeypatch.setattr(
             xq_mod,
             "_load_cookies_from_config",
@@ -625,7 +625,7 @@ class TestXueqiuChannel:
 
     def test_get_json_sends_referer_and_browser_ua(self, monkeypatch):
         """_get_json() must send Referer and a browser-like User-Agent."""
-        import agent_reach.channels.xueqiu as xueqiu_mod
+        import hivereach.channels.xueqiu as xueqiu_mod
 
         monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
         captured = {}
