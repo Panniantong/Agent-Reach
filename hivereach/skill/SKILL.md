@@ -27,7 +27,7 @@ triggers:
   - finance: 雪球/股票/stock/xueqiu/行情/基金
 metadata:
   openclaw:
-    homepage: https://github.com/Panniantong/Agent-Reach
+    homepage: https://github.com/xavierliang/HiveReach
 ---
 
 # HiveReach — 路由器
@@ -101,6 +101,6 @@ mcporter_list_servers()
 ## 配置渠道
 
 如果某个 channel 需要配置，获取安装指南：
-https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/install.md
+https://raw.githubusercontent.com/xavierliang/HiveReach/main/docs/install.md
 
 用户只需提供 cookies，其他配置由 agent 完成。

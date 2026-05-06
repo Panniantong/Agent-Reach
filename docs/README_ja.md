@@ -7,11 +7,15 @@
 <p align="center">
   <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-green.svg?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://github.com/Panniantong/hivereach/stargazers"><img src="https://img.shields.io/github/stars/Panniantong/hivereach?style=for-the-badge" alt="GitHub Stars"></a>
+  <a href="https://github.com/xavierliang/HiveReach/stargazers"><img src="https://img.shields.io/github/stars/xavierliang/HiveReach?style=for-the-badge" alt="GitHub Stars"></a>
 </p>
 
 <p align="center">
   <a href="#クイックスタート">クイックスタート</a> · <a href="../README.md">中文</a> · <a href="README_en.md">English</a> · <a href="#対応プラットフォーム">プラットフォーム</a> · <a href="#設計思想">設計思想</a>
+</p>
+
+<p align="center">
+  <em>HiveReach は <a href="https://github.com/Panniantong/Agent-Reach">Panniantong/Agent-Reach</a> (MIT) から独立してメンテナンスされる fork で、2026-05-05 から独自に進化しています。</em>
 </p>
 
 ---
@@ -34,7 +38,7 @@ AIエージェントはすでにインターネットにアクセスできます
 **HiveReach はこれを1つのコマンドにまとめます：**
 
 ```
-Install HiveReach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/install.md
+Install HiveReach: https://raw.githubusercontent.com/xavierliang/HiveReach/main/docs/install.md
 ```
 
 これをエージェントにコピーするだけ。数分後には、ツイートの閲覧、Redditの検索、Bilibiliの視聴が可能になります。
@@ -42,7 +46,7 @@ Install HiveReach: https://raw.githubusercontent.com/Panniantong/hivereach/main/
 **すでにインストール済み？1コマンドでアップデート：**
 
 ```
-Update HiveReach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/update.md
+Update HiveReach: https://raw.githubusercontent.com/xavierliang/HiveReach/main/docs/update.md
 ```
 
 ### ✅ 始める前に知っておきたいこと
@@ -87,21 +91,21 @@ Update HiveReach: https://raw.githubusercontent.com/Panniantong/hivereach/main/d
 以下をAIエージェント（Claude Code、OpenClaw、Cursor等）にコピーしてください：
 
 ```
-Install HiveReach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/install.md
+Install HiveReach: https://raw.githubusercontent.com/xavierliang/HiveReach/main/docs/install.md
 ```
 
 エージェントが自動でインストールし、環境を検出し、何が使えるかを教えてくれます。
 
 > 🔄 **すでにインストール済み？** 1コマンドでアップデート：
 > ```
-> Update HiveReach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/update.md
+> Update HiveReach: https://raw.githubusercontent.com/xavierliang/HiveReach/main/docs/update.md
 > ```
 
 <details>
 <summary>手動インストール</summary>
 
 ```bash
-pip install https://github.com/Panniantong/hivereach/archive/main.zip
+pip install https://github.com/xavierliang/HiveReach/archive/main.zip
 hivereach install --env=auto
 ```
 </details>
@@ -110,7 +114,7 @@ hivereach install --env=auto
 <summary>Skillとしてインストール（Claude Code / OpenClaw / Skills対応の任意のエージェント）</summary>
 
 ```bash
-npx skills add Panniantong/Agent-Reach@hivereach
+npx skills add xavierliang/HiveReach@hivereach
 ```
 
 Skillインストール後、エージェントは`hivereach` CLIが利用可能かを自動検出し、必要に応じてインストールします。
@@ -234,13 +238,13 @@ channels/
 
 ## コントリビューション
 
-このプロジェクトは完全にバイブコーディング 🎸 で作られました。あちこちに粗い部分があるかもしれません — すみません！バグを見つけたら、遠慮なく[Issue](https://github.com/Panniantong/hivereach/issues)を開いてください。できるだけ早く修正します。
+このプロジェクトは完全にバイブコーディング 🎸 で作られました。あちこちに粗い部分があるかもしれません — すみません！バグを見つけたら、遠慮なく[Issue](https://github.com/xavierliang/HiveReach/issues)を開いてください。できるだけ早く修正します。
 
 **新しいチャンネルが欲しい？** Issueでリクエストするか、自分でPRを提出してください。
 
 **ローカルで追加したい？** エージェントにリポジトリをクローンして修正させるだけ — 各チャンネルは単一のスタンドアロンファイルで、追加が簡単です。
 
-[PR](https://github.com/Panniantong/hivereach/pulls)はいつでも歓迎です！
+[PR](https://github.com/xavierliang/HiveReach/pulls)はいつでも歓迎です！
 
 ---
 
@@ -311,7 +315,7 @@ douyin-mcp-serverをインストールすれば、`mcporter call 'douyin.parse_d
   <img src="wechat-group-qr.jpg" width="280" alt="WeChat QR">
 </p>
 
-> バグ報告や機能リクエストは [GitHub Issues](https://github.com/Panniantong/Agent-Reach/issues) をご利用ください — 追跡が容易です。
+> バグ報告や機能リクエストは [GitHub Issues](https://github.com/xavierliang/HiveReach/issues) をご利用ください — 追跡が容易です。
 
 ## ライセンス
 
@@ -319,4 +323,4 @@ douyin-mcp-serverをインストールすれば、`mcporter call 'douyin.parse_d
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Panniantong/Agent-Reach&type=Date&v=20260309)](https://star-history.com/#Panniantong/Agent-Reach&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=xavierliang/HiveReach&type=Date&v=20260309)](https://star-history.com/#xavierliang/HiveReach&Date)

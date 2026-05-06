@@ -313,7 +313,7 @@ def _cmd_install(args):
         # Star reminder
         print()
         print("如果 HiveReach 帮到了你，给个 Star 让更多人发现它吧：")
-        print("   https://github.com/Panniantong/Agent-Reach")
+        print("   https://github.com/xavierliang/HiveReach")
         print("   只需一秒，对独立开发者意义很大。谢谢！")
     else:
         print()
@@ -1594,8 +1594,8 @@ def _cmd_check_update():
     from hivereach import __version__
 
     print(f"当前版本: v{__version__}")
-    release_url = "https://api.github.com/repos/Panniantong/Agent-Reach/releases/latest"
-    commit_url = "https://api.github.com/repos/Panniantong/Agent-Reach/commits/main"
+    release_url = "https://api.github.com/repos/xavierliang/HiveReach/releases/latest"
+    commit_url = "https://api.github.com/repos/xavierliang/HiveReach/commits/main"
 
     # Fetch latest release with retry/backoff.
     resp, err, attempts = _github_get_with_retry(release_url, timeout=10, retries=3)
@@ -1618,7 +1618,7 @@ def _cmd_check_update():
                     print(f"  {line}")
             print()
             print("更新命令:")
-            print("  pip install --upgrade https://github.com/Panniantong/hivereach/archive/main.zip")
+            print("  pip install --upgrade https://github.com/xavierliang/HiveReach/archive/main.zip")
             return "update_available"
         print(f"✅ 已是最新版本")
         return "up_to_date"
@@ -1641,7 +1641,7 @@ def _cmd_check_update():
         print(f"最新提交: {sha} ({date}) {msg}")
         print()
         print("更新命令:")
-        print("  pip install --upgrade https://github.com/Panniantong/hivereach/archive/main.zip")
+        print("  pip install --upgrade https://github.com/xavierliang/HiveReach/archive/main.zip")
         return "unknown"
 
     commit_err = _classify_github_response_error(resp2)
@@ -1682,7 +1682,7 @@ def _cmd_watch():
     new_version = ""
     release_body = ""
     resp, err, _attempts = _github_get_with_retry(
-        "https://api.github.com/repos/Panniantong/Agent-Reach/releases/latest",
+        "https://api.github.com/repos/xavierliang/HiveReach/releases/latest",
         timeout=10,
         retries=2,
     )
@@ -1714,7 +1714,7 @@ def _cmd_watch():
         if release_body:
             for line in release_body.strip().split("\n")[:10]:
                 print(f"    {line}")
-        print(f"  更新: pip install --upgrade https://github.com/Panniantong/hivereach/archive/main.zip")
+        print(f"  更新: pip install --upgrade https://github.com/xavierliang/HiveReach/archive/main.zip")
 
 
 if __name__ == "__main__":

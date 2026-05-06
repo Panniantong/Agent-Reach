@@ -3,7 +3,7 @@
 ## Project
 HiveReach — Python CLI + library that gives AI agents read/search access to 14+ internet platforms.
 Positioning: installer + doctor + config tool. NOT a wrapper — after install, agents call upstream tools directly.
-Repo: github.com/Panniantong/Agent-Reach | License: MIT | Version: 1.3.0
+Repo: github.com/xavierliang/HiveReach | License: MIT | Version: 1.3.0
 
 ## Commands
 - `pip install -e .` — Dev install

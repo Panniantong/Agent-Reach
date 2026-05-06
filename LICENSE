@@ -1,6 +1,9 @@
 MIT License
 
-Copyright (c) 2025 Agent Eyes
+Copyright (c) 2025 Agent Eyes (original Agent-Reach project)
+Copyright (c) 2026 xavierliang (HiveReach fork)
+
+HiveReach is a fork of Agent-Reach: https://github.com/Panniantong/Agent-Reach
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

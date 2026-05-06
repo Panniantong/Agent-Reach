@@ -53,9 +53,9 @@ dev = [
 hivereach = "hivereach.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Panniantong/hivereach"
-Repository = "https://github.com/Panniantong/hivereach"
-Issues = "https://github.com/Panniantong/hivereach/issues"
+Homepage = "https://github.com/xavierliang/HiveReach"
+Repository = "https://github.com/xavierliang/HiveReach"
+Issues = "https://github.com/xavierliang/HiveReach/issues"
 
 [build-system]
 requires = ["hatchling"]

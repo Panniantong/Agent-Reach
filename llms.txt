@@ -4,13 +4,13 @@
 
 ## Quick Start
 
-- [Installation Guide](https://github.com/Panniantong/Agent-Reach/blob/main/docs/install.md): Step-by-step setup instructions for AI agents
-- [README (中文)](https://github.com/Panniantong/Agent-Reach/blob/main/README.md): Full documentation in Chinese
-- [README (English)](https://github.com/Panniantong/Agent-Reach/blob/main/docs/README_en.md): Full documentation in English
+- [Installation Guide](https://github.com/xavierliang/HiveReach/blob/main/docs/install.md): Step-by-step setup instructions for AI agents
+- [README (中文)](https://github.com/xavierliang/HiveReach/blob/main/README.md): Full documentation in Chinese
+- [README (English)](https://github.com/xavierliang/HiveReach/blob/main/docs/README_en.md): Full documentation in English
 
 ## Core Commands
 
-- [CLI Usage](https://github.com/Panniantong/Agent-Reach/blob/main/docs/install.md): `hivereach read <url>` reads any URL, `hivereach search-twitter "query"` searches Twitter, etc.
+- [CLI Usage](https://github.com/xavierliang/HiveReach/blob/main/docs/install.md): `hivereach read <url>` reads any URL, `hivereach search-twitter "query"` searches Twitter, etc.
 
 ## Key Features
 
@@ -24,9 +24,9 @@
 
 ## Troubleshooting
 
-- [Troubleshooting Guide](https://github.com/Panniantong/Agent-Reach/blob/main/docs/troubleshooting.md): Common issues and solutions
+- [Troubleshooting Guide](https://github.com/xavierliang/HiveReach/blob/main/docs/troubleshooting.md): Common issues and solutions
 
 ## Optional
 
-- [SKILL.md](https://github.com/Panniantong/Agent-Reach/blob/main/hivereach/skill/SKILL.md): Integration guide for AI agent frameworks (OpenClaw, Claude Code, etc.)
+- [SKILL.md](https://github.com/xavierliang/HiveReach/blob/main/hivereach/skill/SKILL.md): Integration guide for AI agent frameworks (OpenClaw, Claude Code, etc.)
 - [PyPI Package](https://pypi.org/project/hivereach/): `pip install hivereach`

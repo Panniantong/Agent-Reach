@@ -5,13 +5,13 @@
 Copy this to your AI Agent:
 
 ```
-帮我更新 HiveReach：https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/update.md
+帮我更新 HiveReach：https://raw.githubusercontent.com/xavierliang/HiveReach/main/docs/update.md
 ```
 
 Or in English:
 
 ```
-Update HiveReach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/update.md
+Update HiveReach: https://raw.githubusercontent.com/xavierliang/HiveReach/main/docs/update.md
 ```
 
 ---
@@ -37,7 +37,7 @@ If it says "已是最新版本", skip to Step 5 (verify). Otherwise continue.
 ### Step 2: Update HiveReach package
 
 ```bash
-pip install --upgrade https://github.com/Panniantong/hivereach/archive/main.zip
+pip install --upgrade https://github.com/xavierliang/HiveReach/archive/main.zip
 ```
 
 ### Step 3: Install / migrate upstream tools

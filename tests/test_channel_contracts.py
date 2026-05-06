@@ -135,7 +135,7 @@ def test_douyin_check_does_not_call_with_invalid_url(monkeypatch, tmp_path):
 
 def test_channel_can_handle_contract():
     url_samples = {
-        "github": "https://github.com/panniantong/hivereach",
+        "github": "https://github.com/xavierliang/HiveReach",
         "twitter": "https://x.com/user/status/1",
         "youtube": "https://youtube.com/watch?v=abc",
         "reddit": "https://reddit.com/r/python",

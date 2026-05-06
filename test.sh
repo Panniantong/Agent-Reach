@@ -18,7 +18,7 @@ source "$TEST_DIR/venv/bin/activate"
 
 # ── 2. 安装 ──
 echo "📥 从 GitHub 安装..."
-pip install -q https://github.com/Panniantong/hivereach/archive/main.zip 2>&1 | tail -1
+pip install -q https://github.com/xavierliang/HiveReach/archive/main.zip 2>&1 | tail -1
 echo ""
 
 # ── 3. 自动配置 ──
@@ -56,7 +56,7 @@ test_it() {
 
 echo "📖 阅读测试"
 test_it "网页" "hivereach read 'https://example.com'"
-test_it "GitHub" "hivereach read 'https://github.com/Panniantong/hivereach'"
+test_it "GitHub" "hivereach read 'https://github.com/xavierliang/HiveReach'"
 test_it "YouTube" "hivereach read 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'"
 test_it "B站" "hivereach read 'https://www.bilibili.com/video/BV1d4411N7zD'"
 test_it "RSS" "hivereach read 'https://hnrss.org/frontpage'"
