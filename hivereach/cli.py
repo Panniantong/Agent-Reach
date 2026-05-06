@@ -3,10 +3,10 @@
 Agent Reach CLI — installer, doctor, and configuration tool.
 
 Usage:
-    agent-reach install --env=auto
-    agent-reach doctor
-    agent-reach configure twitter-cookies "auth_token=xxx; ct0=yyy"
-    agent-reach setup
+    hivereach install --env=auto
+    hivereach doctor
+    hivereach configure twitter-cookies "auth_token=xxx; ct0=yyy"
+    hivereach setup
 """
 
 import sys
@@ -48,7 +48,7 @@ def main():
     _ensure_utf8_console()
 
     parser = argparse.ArgumentParser(
-        prog="agent-reach",
+        prog="hivereach",
         description="Give your AI Agent eyes to see the entire internet",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Show debug logs")
@@ -93,7 +93,7 @@ def main():
     p_uninstall.add_argument("--dry-run", action="store_true",
                              help="Show what would be removed without making any changes")
     p_uninstall.add_argument("--keep-config", action="store_true",
-                             help="Remove skill files only, keep ~/.agent-reach/ config and tokens")
+                             help="Remove skill files only, keep ~/.hivereach/ config and tokens")
 
     # ── skill ──
     p_skill = sub.add_parser("skill", help="Manage agent skill registration")
@@ -167,7 +167,7 @@ def _cmd_install(args):
     print("=" * 40)
 
     # Ensure tools directory exists (for upstream tool repos)
-    tools_dir = os.path.expanduser("~/.agent-reach/tools")
+    tools_dir = os.path.expanduser("~/.hivereach/tools")
     os.makedirs(tools_dir, exist_ok=True)
 
     if dry_run:
@@ -282,7 +282,7 @@ def _cmd_install(args):
         print()
         print("Tip: Bilibili may block server IPs.")
         print("   Reddit: rdt-cli works without proxy (pipx install rdt-cli).")
-        print("   For Bilibili full access: agent-reach configure proxy http://user:pass@ip:port")
+        print("   For Bilibili full access: hivereach configure proxy http://user:pass@ip:port")
         print("   Cheap option: https://www.webshare.io ($1/month)")
 
     # Test channels
@@ -307,8 +307,8 @@ def _cmd_install(args):
             # First install — hint about optional channels
             print()
             print("More channels available! Use --channels to install:")
-            print("   agent-reach install --channels=twitter,weibo,xiaohongshu,...")
-            print("   agent-reach install --channels=all  (install everything)")
+            print("   hivereach install --channels=twitter,weibo,xiaohongshu,...")
+            print("   hivereach install --channels=all  (install everything)")
 
         # Star reminder
         print()
@@ -379,7 +379,7 @@ def _install_skill():
     installed = False
     for skill_dir in skill_dirs:
         if os.path.isdir(skill_dir):
-            target = os.path.join(skill_dir, "agent-reach")
+            target = os.path.join(skill_dir, "hivereach")
             if _copy_skill_dir(target):
                 platform_name = "Agent" if ".agents" in skill_dir else "OpenClaw" if "openclaw" in skill_dir else "Claude Code"
                 print(f"Skill installed for {platform_name}: {target}")
@@ -387,7 +387,7 @@ def _install_skill():
 
     if not installed:
         # No known skill directory found — create for .agents by default
-        target = os.path.expanduser("~/.agents/skills/agent-reach")
+        target = os.path.expanduser("~/.agents/skills/hivereach")
         os.makedirs(os.path.dirname(target), exist_ok=True)
         if _copy_skill_dir(target):
             print(f"Skill installed: {target}")
@@ -401,9 +401,9 @@ def _uninstall_skill():
     import shutil
 
     skill_dirs = [
-        ("~/.openclaw/skills/agent-reach", "OpenClaw"),
-        ("~/.claude/skills/agent-reach", "Claude Code"),
-        ("~/.agents/skills/agent-reach", "Agent"),
+        ("~/.openclaw/skills/hivereach", "OpenClaw"),
+        ("~/.claude/skills/hivereach", "Claude Code"),
+        ("~/.agents/skills/hivereach", "Agent"),
     ]
 
     # Also check OPENCLAW_HOME
@@ -411,7 +411,7 @@ def _uninstall_skill():
     if openclaw_home:
         skill_dirs.insert(
             0,
-            (os.path.join(openclaw_home, ".openclaw", "skills", "agent-reach"), "OpenClaw"),
+            (os.path.join(openclaw_home, ".openclaw", "skills", "hivereach"), "OpenClaw"),
         )
 
     removed = False
@@ -594,7 +594,7 @@ def _install_xiaoyuzhou_deps():
     config = Config()
     print("Setting up Xiaoyuzhou podcast transcription...")
 
-    tools_dir = os.path.expanduser("~/.agent-reach/tools/xiaoyuzhou")
+    tools_dir = os.path.expanduser("~/.hivereach/tools/xiaoyuzhou")
     script_dst = os.path.join(tools_dir, "transcribe.sh")
 
     if os.path.isfile(script_dst):
@@ -626,7 +626,7 @@ def _install_xiaoyuzhou_deps():
         print("  ✅ Groq API key configured")
     else:
         print("  -- Groq API key not set. Get free key at https://console.groq.com")
-        print("     Then run: agent-reach configure groq-key gsk_xxxxx")
+        print("     Then run: hivereach configure groq-key gsk_xxxxx")
 
 
 def _install_twitter_deps():
@@ -818,7 +818,7 @@ def _install_wechat_deps():
             print(f"  [!]  WeChat packages install failed. Try: pip install {' '.join(pkgs)}")
 
     # Clone wechat-article-for-ai tool
-    tools_dir = os.path.expanduser("~/.agent-reach/tools")
+    tools_dir = os.path.expanduser("~/.hivereach/tools")
     wechat_dir = os.path.join(tools_dir, "wechat-article-for-ai")
     if os.path.isfile(os.path.join(wechat_dir, "main.py")):
         print("  ✅ wechat-article-for-ai tool already installed")
@@ -1019,15 +1019,15 @@ def _cmd_configure(args):
 
         print()
         if found_any:
-            print("✅ Cookies configured! Run `agent-reach doctor` to see updated status.")
+            print("✅ Cookies configured! Run `hivereach doctor` to see updated status.")
         else:
             print(f"No cookies found. Make sure you're logged into the platforms in {browser}.")
         return
 
     # ── Manual configure ──
     if not args.key:
-        print("Usage: agent-reach configure <key> <value>")
-        print("   or: agent-reach configure --from-browser chrome")
+        print("Usage: hivereach configure <key> <value>")
+        print("   or: hivereach configure --from-browser chrome")
         return
 
     value = " ".join(args.value) if args.value else ""
@@ -1079,8 +1079,8 @@ def _cmd_configure(args):
         else:
             print("[X] Could not find auth_token and ct0 in your input.")
             print("   Accepted formats:")
-            print("   1. agent-reach configure twitter-cookies AUTH_TOKEN CT0")
-            print('   2. agent-reach configure twitter-cookies "auth_token=xxx; ct0=yyy; ..."')
+            print("   1. hivereach configure twitter-cookies AUTH_TOKEN CT0")
+            print('   2. hivereach configure twitter-cookies "auth_token=xxx; ct0=yyy; ..."')
 
     elif args.key == "youtube-cookies":
         config.set("youtube_cookies_from", value)
@@ -1138,7 +1138,7 @@ def _configure_xhs_cookies(value):
     value = value.strip()
     if not value:
         print("[X] Missing cookie value.")
-        print("   Usage: agent-reach configure xhs-cookies '<cookie JSON or header string>'")
+        print("   Usage: hivereach configure xhs-cookies '<cookie JSON or header string>'")
         return
 
     # Detect format and parse
@@ -1204,7 +1204,7 @@ def _configure_xhs_cookies(value):
     docker = shutil.which("docker")
     if not docker:
         # No Docker - write to a local file for manual import
-        cookie_path = os.path.expanduser("~/.agent-reach/xhs-cookies.json")
+        cookie_path = os.path.expanduser("~/.hivereach/xhs-cookies.json")
         with open(cookie_path, "w") as f:
             f.write(cookies_json)
         os.chmod(cookie_path, 0o600)
@@ -1314,8 +1314,8 @@ def _cmd_uninstall(args):
 
     removed_any = False
 
-    # ── 1. Config directory (~/.agent-reach/) ──
-    config_dir = os.path.expanduser("~/.agent-reach")
+    # ── 1. Config directory (~/.hivereach/) ──
+    config_dir = os.path.expanduser("~/.hivereach")
     if not keep_config:
         if os.path.isdir(config_dir):
             if dry_run:
@@ -1335,9 +1335,9 @@ def _cmd_uninstall(args):
 
     # ── 2. Skill files ──
     skill_dirs = [
-        ("~/.openclaw/skills/agent-reach", "OpenClaw"),
-        ("~/.claude/skills/agent-reach", "Claude Code"),
-        ("~/.agents/skills/agent-reach", "Agent"),
+        ("~/.openclaw/skills/hivereach", "OpenClaw"),
+        ("~/.claude/skills/hivereach", "Claude Code"),
+        ("~/.agents/skills/hivereach", "Agent"),
     ]
 
     for skill_path_template, platform_name in skill_dirs:
@@ -1386,7 +1386,7 @@ def _cmd_uninstall(args):
 
     print()
     print("Optional: remove the Agent Reach Python package itself:")
-    print("  pip uninstall agent-reach")
+    print("  pip uninstall hivereach")
     print()
     print("Optional: remove tools installed by Agent Reach:")
     print("  npm uninstall -g mcporter")
@@ -1494,7 +1494,7 @@ def _cmd_setup():
     # Summary
     print("=" * 40)
     print(f"✅ 配置已保存到 {config.config_path}")
-    print("运行 agent-reach doctor 查看完整状态")
+    print("运行 hivereach doctor 查看完整状态")
     print()
 
 
@@ -1618,7 +1618,7 @@ def _cmd_check_update():
                     print(f"  {line}")
             print()
             print("更新命令:")
-            print("  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
+            print("  pip install --upgrade https://github.com/Panniantong/hivereach/archive/main.zip")
             return "update_available"
         print(f"✅ 已是最新版本")
         return "up_to_date"
@@ -1641,7 +1641,7 @@ def _cmd_check_update():
         print(f"最新提交: {sha} ({date}) {msg}")
         print()
         print("更新命令:")
-        print("  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
+        print("  pip install --upgrade https://github.com/Panniantong/hivereach/archive/main.zip")
         return "unknown"
 
     commit_err = _classify_github_response_error(resp2)
@@ -1714,7 +1714,7 @@ def _cmd_watch():
         if release_body:
             for line in release_body.strip().split("\n")[:10]:
                 print(f"    {line}")
-        print(f"  更新: pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
+        print(f"  更新: pip install --upgrade https://github.com/Panniantong/hivereach/archive/main.zip")
 
 
 if __name__ == "__main__":

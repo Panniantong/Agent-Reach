@@ -1,5 +1,5 @@
 [project]
-name = "agent-reach"
+name = "hivereach"
 version = "1.4.0"
 description = "Give your AI Agent eyes to see the entire internet. Search + Read 10+ platforms."
 readme = "README.md"
@@ -50,12 +50,12 @@ dev = [
 ]
 
 [project.scripts]
-agent-reach = "hivereach.cli:main"
+hivereach = "hivereach.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Panniantong/agent-reach"
-Repository = "https://github.com/Panniantong/agent-reach"
-Issues = "https://github.com/Panniantong/agent-reach/issues"
+Homepage = "https://github.com/Panniantong/hivereach"
+Repository = "https://github.com/Panniantong/hivereach"
+Issues = "https://github.com/Panniantong/hivereach/issues"
 
 [build-system]
 requires = ["hatchling"]

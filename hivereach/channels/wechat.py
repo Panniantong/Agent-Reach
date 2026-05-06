@@ -54,10 +54,10 @@ class WeChatChannel(Channel):
         elif has_camoufox:
             return "warn", (
                 "Camoufox 可阅读公众号文章，但搜索功能需要 Exa。"
-                "运行 `agent-reach install --env=auto` 安装 Exa。"
+                "运行 `hivereach install --env=auto` 安装 Exa。"
             )
         else:
             return "off", (
                 "需要 mcporter + Exa MCP 来搜索和阅读微信公众号文章。\n"
-                "运行 `agent-reach install --env=auto` 安装。"
+                "运行 `hivereach install --env=auto` 安装。"
             )

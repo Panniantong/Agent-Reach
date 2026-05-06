@@ -6,5 +6,5 @@ __pycache__/
 dist/
 build/
 .env
-.agent-reach/
+.hivereach/
 *.log

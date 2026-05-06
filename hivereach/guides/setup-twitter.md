@@ -39,7 +39,7 @@ twitter search "test" -n 1
 4. 运行配置命令：
 
 ```bash
-agent-reach configure twitter-cookies "粘贴的 cookie JSON"
+hivereach configure twitter-cookies "粘贴的 cookie JSON"
 ```
 
 这会自动提取 `auth_token` 和 `ct0`，并写入环境变量。

@@ -645,7 +645,7 @@ class TestXueqiuChannel:
 
         assert captured["referer"] == "https://xueqiu.com/"
         assert "Mozilla" in captured["ua"]
-        assert "agent-reach" not in captured["ua"]
+        assert "hivereach" not in captured["ua"]
 
 
 class TestXiaoHongShuChannel:

@@ -28,12 +28,12 @@ class XiaoyuzhouChannel(Channel):
             )
 
         # Check script exists
-        script = os.path.expanduser("~/.agent-reach/tools/xiaoyuzhou/transcribe.sh")
+        script = os.path.expanduser("~/.hivereach/tools/xiaoyuzhou/transcribe.sh")
         if not os.path.isfile(script):
             return "off", (
                 "转录脚本未安装。运行：\n"
-                "  agent-reach install --env=auto\n"
-                "  或手动复制 transcribe.sh 到 ~/.agent-reach/tools/xiaoyuzhou/"
+                "  hivereach install --env=auto\n"
+                "  或手动复制 transcribe.sh 到 ~/.hivereach/tools/xiaoyuzhou/"
             )
 
         # Check GROQ_API_KEY — prefer env var, fall back to Agent Reach config
@@ -48,7 +48,7 @@ class XiaoyuzhouChannel(Channel):
             return "warn", (
                 "需要配置 Groq API Key（免费）。步骤：\n"
                 "  1. 注册 https://console.groq.com\n"
-                "  2. 运行: agent-reach configure groq-key gsk_xxxxx"
+                "  2. 运行: hivereach configure groq-key gsk_xxxxx"
             )
 
         return "ok", "完整可用（播客下载 + Whisper 转录）"

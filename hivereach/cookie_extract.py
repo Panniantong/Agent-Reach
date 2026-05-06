@@ -5,7 +5,7 @@ Supports: Chrome, Firefox, Edge, Brave, Opera
 Extracts: Twitter, XiaoHongShu, Bilibili cookies in one shot.
 
 Usage:
-    agent-reach configure --from-browser chrome
+    hivereach configure --from-browser chrome
 """
 
 import sys
@@ -170,7 +170,7 @@ def _sync_xfetch_session(auth_token: str, ct0: str) -> None:
             json.dump(session_data, sf, indent=2)
         os.chmod(session_path, 0o600)
     except Exception:
-        # Non-fatal: agent-reach config is the source of truth, xfetch sync is best-effort
+        # Non-fatal: hivereach config is the source of truth, xfetch sync is best-effort
         pass
 
 
@@ -191,7 +191,7 @@ def _sync_bird_env(auth_token: str, ct0: str) -> None:
             f.write(f'CT0="{ct0}"\n')
         os.chmod(env_path, 0o600)
     except Exception:
-        # Non-fatal: agent-reach config is the source of truth, bird env sync is best-effort
+        # Non-fatal: hivereach config is the source of truth, bird env sync is best-effort
         pass
 
 

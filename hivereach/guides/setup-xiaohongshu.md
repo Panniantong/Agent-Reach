@@ -23,7 +23,7 @@ xhs login
 
 ### 3. 验证
 ```bash
-agent-reach doctor
+hivereach doctor
 ```
 
 应该看到小红书显示为 ✅。
@@ -37,7 +37,7 @@ agent-reach doctor
 > 1. 在 Chrome 中安装 [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) 扩展
 > 2. 浏览器登录 xiaohongshu.com
 > 3. 点击 Cookie-Editor 图标 → Export → Header String
-> 4. 把导出的字符串发给 Agent，运行：`agent-reach configure xhs-cookies "导出的cookie字符串"`
+> 4. 把导出的字符串发给 Agent，运行：`hivereach configure xhs-cookies "导出的cookie字符串"`
 >
 > **注意**：不要依赖 QR 扫码登录，Cookie-Editor 导出方式最简单可靠。
 

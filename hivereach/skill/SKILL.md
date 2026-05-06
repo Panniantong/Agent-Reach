@@ -1,5 +1,5 @@
 ---
-name: agent-reach
+name: hivereach
 description: >
   Give your AI agent eyes to see the entire internet.
   17 platforms via CLI, MCP, curl, and Python scripts.
@@ -70,14 +70,14 @@ rdt search "query" --limit 10
 rdt read POST_ID
 
 # V2EX 热门
-curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1.0"
+curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: hivereach/1.0"
 ```
 
 ## 环境检查
 
 ```bash
 # 检查可用 channel
-agent-reach doctor
+hivereach doctor
 
 # 查看所有 MCP 服务
 mcporter_list_servers()
@@ -85,7 +85,7 @@ mcporter_list_servers()
 
 ## 工作区规则
 
-**不要在 agent workspace 创建文件。** 使用 `/tmp/` 存放临时输出，`~/.agent-reach/` 存放持久数据。
+**不要在 agent workspace 创建文件。** 使用 `/tmp/` 存放临时输出，`~/.hivereach/` 存放持久数据。
 
 ## 详细文档
 
@@ -101,6 +101,6 @@ mcporter_list_servers()
 ## 配置渠道
 
 如果某个 channel 需要配置，获取安装指南：
-https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/install.md
 
 用户只需提供 cookies，其他配置由 agent 完成。

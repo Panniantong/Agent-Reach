@@ -57,7 +57,7 @@ def _inject_cookie_string(cookie_str: str) -> None:
 
 
 def _load_cookies_from_config() -> bool:
-    """Try to load Xueqiu cookies from agent-reach config file (xueqiu_cookie key)."""
+    """Try to load Xueqiu cookies from hivereach config file (xueqiu_cookie key)."""
     try:
         from ..config import Config
 
@@ -103,7 +103,7 @@ def _ensure_cookies() -> None:
     """Populate session cookies using the best available source.
 
     Priority order:
-    1. Saved cookie string in ~/.agent-reach/config.yaml  (set by configure --from-browser)
+    1. Saved cookie string in ~/.hivereach/config.yaml  (set by configure --from-browser)
     2. Live Chrome browser cookies via rookiepy/browser_cookie3 (if installed + logged in)
     3. Homepage visit fallback                             (only yields anti-DDoS acw_tc,
                                                            not enough for stock APIs)
@@ -173,7 +173,7 @@ class XueqiuChannel(Channel):
         except Exception as e:
             return "warn", (
                 f"Xueqiu API 连接失败：{e}。"
-                "请先登录雪球后运行：agent-reach configure --from-browser chrome"
+                "请先登录雪球后运行：hivereach configure --from-browser chrome"
             )
 
     # ------------------------------------------------------------------ #

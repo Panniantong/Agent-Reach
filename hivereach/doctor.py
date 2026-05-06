@@ -101,7 +101,7 @@ def format_report(results: Dict[str, dict]) -> str:
                 lines.append(
                     "[bold red][!]  安全提示：config.yaml 权限过宽（其他用户可读）[/bold red]"
                 )
-                lines.append("   修复：chmod 600 ~/.agent-reach/config.yaml")
+                lines.append("   修复：chmod 600 ~/.hivereach/config.yaml")
         except OSError:
             pass
 

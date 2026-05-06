@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Configuration management for Agent Reach.
 
-Stores settings in ~/.agent-reach/config.yaml.
+Stores settings in ~/.hivereach/config.yaml.
 Auto-creates directory on first use.
 """
 
@@ -15,7 +15,7 @@ import yaml
 class Config:
     """Manages Agent Reach configuration."""
 
-    CONFIG_DIR = Path.home() / ".agent-reach"
+    CONFIG_DIR = Path.home() / ".hivereach"
     CONFIG_FILE = CONFIG_DIR / "config.yaml"
 
     # Feature → required config keys

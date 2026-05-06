@@ -7,7 +7,7 @@
 
 1. 检查是否已配置：
 ```bash
-agent-reach doctor | grep -i "groq\|whisper"
+hivereach doctor | grep -i "groq\|whisper"
 ```
 
 2. 如果用户提供了 key，写入配置：

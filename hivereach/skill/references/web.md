@@ -48,7 +48,7 @@ mcporter call 'exa.crawling_exa(urls: ["https://mp.weixin.qq.com/s/ARTICLE_ID"],
 ### 可选：Camoufox 阅读（反爬更强）
 
 ```bash
-cd ~/.agent-reach/tools/wechat-article-for-ai && python3 main.py "https://mp.weixin.qq.com/s/ARTICLE_ID"
+cd ~/.hivereach/tools/wechat-article-for-ai && python3 main.py "https://mp.weixin.qq.com/s/ARTICLE_ID"
 ```
 
 > **注意**: Jina Reader 无法读取微信文章（被 CAPTCHA 拦截），推荐用 Exa。

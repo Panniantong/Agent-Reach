@@ -2,17 +2,17 @@
 
 ## 雪球 / Xueqiu: API 返回 400
 
-**症状：** `agent-reach doctor` 显示雪球 ⚠️，报 `HTTP Error 400`
+**症状：** `hivereach doctor` 显示雪球 ⚠️，报 `HTTP Error 400`
 
 **原因：** 雪球 API 需要登录 Cookie，无法通过匿名访问获取。
 
 **解决方案：** 在 Chrome 里登录 xueqiu.com，然后运行：
 
 ```bash
-agent-reach configure --from-browser chrome
+hivereach configure --from-browser chrome
 ```
 
-再次运行 `agent-reach doctor` 确认恢复 ✅。Cookie 过期后重新运行即可。
+再次运行 `hivereach doctor` 确认恢复 ✅。Cookie 过期后重新运行即可。
 
 ---
 

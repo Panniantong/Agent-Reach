@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 #### 📈 Xueqiu (雪球) — 全面修复
 
 - **修复 400 错误根本原因：** `_ensure_cookies()` 仅访问首页只能获取 `acw_tc`（防 DDoS token），`xq_a_token` 由雪球前端 JS 动态生成，无法通过纯 HTTP 请求获取。新增三级 cookie 加载策略：① 读取 config 文件（`--from-browser` 保存的）→ ② 自动从本地 Chrome 浏览器提取（需安装 browser-cookie3）→ ③ homepage fallback
-- **修复 User-Agent：** `"agent-reach/1.0"` 被雪球反爬系统识别拒绝，改为真实 Chrome UA
+- **修复 User-Agent：** `"hivereach/1.0"` 被雪球反爬系统识别拒绝，改为真实 Chrome UA
 - **修复缺失 `Referer` 头：** 所有 API 请求加上 `Referer: https://xueqiu.com/`
 - **修复 `get_hot_posts()` 端点：** 原端点 `/statuses/hot/listV3.json` 已废弃（返回空 body），改为 `/v4/statuses/public_timeline_by_category.json`，正确解析 `item.data` JSON 字符串获取 author/likes/text
 - **修复 `urllib.request.quote` → `urllib.parse.quote`：** 明确使用正确模块
@@ -69,11 +69,11 @@ All notable changes to this project will be documented in this file.
 ### 📈 Improvements / 改进
 
 - Channel count: 9 → 12
-- `agent-reach doctor` now detects all 12 channels
+- `hivereach doctor` now detects all 12 channels
 - CLI: added `search-linkedin`, `search-bosszhipin` subcommands
 - Updated install guide with setup instructions for new channels
 - 渠道数量：9 → 11
-- `agent-reach doctor` 现在检测全部 11 个渠道
+- `hivereach doctor` 现在检测全部 11 个渠道
 - CLI：新增 `search-linkedin`、`search-bosszhipin` 子命令
 - 安装指南新增渠道配置说明
 
@@ -87,11 +87,11 @@ All notable changes to this project will be documented in this file.
 - CLI with `read`, `search`, `doctor`, `install` commands
 - Unified channel interface — each platform is a single pluggable Python file
 - Auto-detection of local vs server environments
-- Built-in diagnostics via `agent-reach doctor`
+- Built-in diagnostics via `hivereach doctor`
 - Skill registration for Claude Code / OpenClaw / Cursor
 - 9 个渠道：网页、Twitter/X、YouTube、B站、GitHub、Reddit、小红书、RSS、Exa 搜索
 - CLI 支持 `read`、`search`、`doctor`、`install` 命令
 - 统一渠道接口 — 每个平台一个独立可插拔的 Python 文件
 - 自动检测本地/服务器环境
-- 内置诊断 `agent-reach doctor`
+- 内置诊断 `hivereach doctor`
 - Skill 注册支持 Claude Code / OpenClaw / Cursor

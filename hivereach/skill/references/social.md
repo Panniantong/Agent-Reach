@@ -129,33 +129,33 @@ yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --convert-subs vt
 ### 热门主题
 
 ```bash
-curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1.0"
+curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: hivereach/1.0"
 ```
 
 ### 节点主题
 
 ```bash
 # node_name 如: python, tech, jobs, qna, programmers
-curl -s "https://www.v2ex.com/api/topics/show.json?node_name=python&page=1" -H "User-Agent: agent-reach/1.0"
+curl -s "https://www.v2ex.com/api/topics/show.json?node_name=python&page=1" -H "User-Agent: hivereach/1.0"
 ```
 
 ### 主题详情
 
 ```bash
 # topic_id 从 URL 获取，如 https://www.v2ex.com/t/1234567
-curl -s "https://www.v2ex.com/api/topics/show.json?id=TOPIC_ID" -H "User-Agent: agent-reach/1.0"
+curl -s "https://www.v2ex.com/api/topics/show.json?id=TOPIC_ID" -H "User-Agent: hivereach/1.0"
 ```
 
 ### 主题回复
 
 ```bash
-curl -s "https://www.v2ex.com/api/replies/show.json?topic_id=TOPIC_ID&page=1" -H "User-Agent: agent-reach/1.0"
+curl -s "https://www.v2ex.com/api/replies/show.json?topic_id=TOPIC_ID&page=1" -H "User-Agent: hivereach/1.0"
 ```
 
 ### 用户信息
 
 ```bash
-curl -s "https://www.v2ex.com/api/members/show.json?username=USERNAME" -H "User-Agent: agent-reach/1.0"
+curl -s "https://www.v2ex.com/api/members/show.json?username=USERNAME" -H "User-Agent: hivereach/1.0"
 ```
 
 ### Python 调用示例

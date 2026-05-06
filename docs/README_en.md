@@ -7,7 +7,7 @@
 <p align="center">
   <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-green.svg?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://github.com/Panniantong/agent-reach/stargazers"><img src="https://img.shields.io/github/stars/Panniantong/agent-reach?style=for-the-badge" alt="GitHub Stars"></a>
+  <a href="https://github.com/Panniantong/hivereach/stargazers"><img src="https://img.shields.io/github/stars/Panniantong/hivereach?style=for-the-badge" alt="GitHub Stars"></a>
 </p>
 
 <p align="center">
@@ -34,7 +34,7 @@ To connect your Agent to these platforms, you'd have to find tools, install depe
 **Agent Reach turns this into one command:**
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Install Agent Reach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/install.md
 ```
 
 Copy that to your Agent. A few minutes later, it can read tweets, search Reddit, and watch Bilibili.
@@ -42,7 +42,7 @@ Copy that to your Agent. A few minutes later, it can read tweets, search Reddit,
 **Already installed? Update in one command:**
 
 ```
-Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+Update Agent Reach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/update.md
 ```
 
 ### ✅ Before you start, you might want to know
@@ -53,7 +53,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 🔒 **Privacy safe** | Cookies stay local. Never uploaded. Fully open source — audit anytime |
 | 🔄 **Kept up to date** | Upstream tools (yt-dlp, twitter-cli, rdt-cli, Jina Reader, etc.) are tracked and updated regularly |
 | 🤖 **Works with any Agent** | Claude Code, OpenClaw, Cursor, Windsurf… any Agent that can run commands |
-| 🩺 **Built-in diagnostics** | `agent-reach doctor` — one command shows what works, what doesn't, and how to fix it |
+| 🩺 **Built-in diagnostics** | `hivereach doctor` — one command shows what works, what doesn't, and how to fix it |
 
 ---
 
@@ -87,22 +87,22 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 Copy this to your AI Agent (Claude Code, OpenClaw, Cursor, etc.):
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Install Agent Reach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/install.md
 ```
 
 The Agent auto-installs, detects your environment, and tells you what's ready.
 
 > 🔄 **Already installed?** Update in one command:
 > ```
-> Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+> Update Agent Reach: https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/update.md
 > ```
 
 <details>
 <summary>Manual install</summary>
 
 ```bash
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
-agent-reach install --env=auto
+pip install https://github.com/Panniantong/hivereach/archive/main.zip
+hivereach install --env=auto
 ```
 </details>
 
@@ -110,12 +110,12 @@ agent-reach install --env=auto
 <summary>Install as a Skill (Claude Code / OpenClaw / any agent with Skills support)</summary>
 
 ```bash
-npx skills add Panniantong/Agent-Reach@agent-reach
+npx skills add Panniantong/Agent-Reach@hivereach
 ```
 
-After the Skill is installed, the Agent will auto-detect whether `agent-reach` CLI is available and install it if needed.
+After the Skill is installed, the Agent will auto-detect whether `hivereach` CLI is available and install it if needed.
 
-> If you install via `agent-reach install`, the skill is registered automatically — no extra steps needed.
+> If you install via `hivereach install`, the skill is registered automatically — no extra steps needed.
 </details>
 
 ---
@@ -154,7 +154,7 @@ Bilibili blocks server IPs. Get a proxy ([Webshare](https://webshare.io) recomme
 ## Status at a Glance
 
 ```
-$ agent-reach doctor
+$ hivereach doctor
 
 👁️  Agent Reach Status
 ========================================
@@ -209,7 +209,7 @@ channels/
 └── __init__.py     → Channel registry (for doctor checks)
 ```
 
-Each channel file only checks whether its upstream tool is installed and working (`check()` method for `agent-reach doctor`). The actual reading and searching is done by calling the upstream tools directly.
+Each channel file only checks whether its upstream tool is installed and working (`check()` method for `hivereach doctor`). The actual reading and searching is done by calling the upstream tools directly.
 
 ### Current Tool Choices
 
@@ -228,7 +228,7 @@ Each channel file only checks whether its upstream tool is installed and working
 | LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | 1.2K stars, MCP server, browser automation |
 | WeChat Articles | [Exa](https://exa.ai) (search + read) + [Camoufox](https://github.com/daijro/camoufox) (optional) | Zero-config search + full article reading |
 | Weibo | `mcporter` | `mcporter call 'weibo.get_trendings(limit: 10)'` |
-| Xiaoyuzhou Podcast | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
+| Xiaoyuzhou Podcast | `transcribe.sh` | `bash ~/.hivereach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 
 > 📌 These are the *current* choices. Don't like one? Swap out the file. That's the whole point of scaffolding.
 
@@ -236,13 +236,13 @@ Each channel file only checks whether its upstream tool is installed and working
 
 ## Contributing
 
-This project was entirely vibe-coded 🎸 There might be rough edges here and there — sorry about that! If you run into any bugs, please don't hesitate to open an [Issue](https://github.com/Panniantong/agent-reach/issues) and I'll fix it ASAP.
+This project was entirely vibe-coded 🎸 There might be rough edges here and there — sorry about that! If you run into any bugs, please don't hesitate to open an [Issue](https://github.com/Panniantong/hivereach/issues) and I'll fix it ASAP.
 
 **Want a new channel?** Open an Issue to request it, or submit a PR yourself.
 
 **Want to add one locally?** Just have your Agent clone the repo and modify it — each channel is a single standalone file, easy to add.
 
-[PRs](https://github.com/Panniantong/agent-reach/pulls) always welcome!
+[PRs](https://github.com/Panniantong/hivereach/pulls) always welcome!
 
 ---
 
@@ -269,7 +269,7 @@ Agent Reach uses [rdt-cli](https://github.com/public-clis/rdt-cli) for Reddit �
 <details>
 <summary><strong>Does Agent Reach work with Claude Code / Cursor / Windsurf / OpenClaw?</strong></summary>
 
-Yes! Agent Reach is an installer + configuration tool. Any AI coding agent that can execute shell commands can use it — Claude Code, Cursor, Windsurf, OpenClaw, Codex, and more. Just `pip install agent-reach`, run `agent-reach install`, and the agent can start using the upstream tools immediately.
+Yes! Agent Reach is an installer + configuration tool. Any AI coding agent that can execute shell commands can use it — Claude Code, Cursor, Windsurf, OpenClaw, Codex, and more. Just `pip install hivereach`, run `hivereach install`, and the agent can start using the upstream tools immediately.
 </details>
 
 <details>

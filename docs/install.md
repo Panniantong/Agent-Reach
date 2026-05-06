@@ -5,12 +5,12 @@
 Copy this to your AI Agent:
 
 ```
-帮我安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+帮我安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/install.md
 ```
 
 > 🛡️ **Security-conscious?** Use safe mode — it won't auto-install system packages:
 > ```
-> 帮我安装 Agent Reach（安全模式）：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+> 帮我安装 Agent Reach（安全模式）：https://raw.githubusercontent.com/Panniantong/hivereach/main/docs/install.md
 > 安装时使用 --safe 参数
 > ```
 
@@ -27,7 +27,7 @@ Install Agent Reach and all upstream tools so your user's agent has full interne
 When fixing issues, stay within these limits:
 
 - **DO NOT** run commands with `sudo` unless the user explicitly approved
-- **DO NOT** modify system files outside `~/.agent-reach/`
+- **DO NOT** modify system files outside `~/.hivereach/`
 - **DO NOT** install packages not listed in this guide
 - **DO NOT** disable firewalls, security settings, or system protections
 - **DO NOT** clone repos, create files, or run commands inside the agent workspace / working directory
@@ -39,10 +39,10 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 
 | Purpose | Directory | Example |
 |---------|-----------|---------|
-| Config & tokens | `~/.agent-reach/` | `~/.agent-reach/config.json` |
-| Upstream tool repos | `~/.agent-reach/tools/` | `~/.agent-reach/tools/douyin-mcp-server/` |
+| Config & tokens | `~/.hivereach/` | `~/.hivereach/config.json` |
+| Upstream tool repos | `~/.hivereach/tools/` | `~/.hivereach/tools/douyin-mcp-server/` |
 | Temporary files | `/tmp/` | `/tmp/yt-dlp-output/` |
-| Skills | `~/.openclaw/skills/agent-reach/` | SKILL.md |
+| Skills | `~/.openclaw/skills/hivereach/` | SKILL.md |
 
 **Why?** If you clone repos or create files in the workspace, it pollutes the user's project directory and can break their agent over time. Keep the workspace clean.
 
@@ -50,15 +50,15 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 
 ```bash
 # 推荐：pipx（最省心）
-pipx install https://github.com/Panniantong/agent-reach/archive/main.zip
-agent-reach install --env=auto
+pipx install https://github.com/Panniantong/hivereach/archive/main.zip
+hivereach install --env=auto
 
 # 如果你的 Python 来自 Homebrew / 遇到 PEP 668（externally-managed-environment）
 # 用虚拟环境安装：
-python3 -m venv ~/.agent-reach-venv
-source ~/.agent-reach-venv/bin/activate
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
-agent-reach install --env=auto
+python3 -m venv ~/.hivereach-venv
+source ~/.hivereach-venv/bin/activate
+pip install https://github.com/Panniantong/hivereach/archive/main.zip
+hivereach install --env=auto
 ```
 
 This installs core infrastructure (gh CLI, Node.js, mcporter, Exa search, yt-dlp config) and activates these zero-config channels:
@@ -71,8 +71,8 @@ This installs core infrastructure (gh CLI, Node.js, mcporter, Exa search, yt-dlp
 **Safe mode / Dry run:**
 
 ```bash
-agent-reach install --env=auto --safe      # Check only, no auto-install
-agent-reach install --env=auto --dry-run   # Preview what would be done
+hivereach install --env=auto --safe      # Check only, no auto-install
+hivereach install --env=auto --dry-run   # Preview what would be done
 ```
 
 ### Step 2: Ask the user which optional channels they want
@@ -99,15 +99,15 @@ After installing the basics, **ask the user** which additional channels they nee
 Based on the user's choice, run:
 
 ```bash
-agent-reach install --env=auto --channels=twitter,weibo   # Example: user chose Twitter + Weibo
-agent-reach install --env=auto --channels=all              # User wants everything
+hivereach install --env=auto --channels=twitter,weibo   # Example: user chose Twitter + Weibo
+hivereach install --env=auto --channels=all              # User wants everything
 ```
 
 Supported channel names: `twitter`, `weibo`, `wechat`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `bilibili`, `douyin`, `linkedin`, `all`
 
 ### Step 3: Fix what's broken
 
-Run `agent-reach doctor` and check the output.
+Run `hivereach doctor` and check the output.
 
 Try to get as many channels to ✅ as possible. If something failed during install or shows as ❌/⚠️ in doctor, diagnose the problem and try to fix it — but stay within the boundaries above. If a fix requires elevated permissions or system changes, ask the user first.
 
@@ -129,13 +129,13 @@ Some channels need credentials only the user can provide. Based on the doctor ou
 > 3. 点击插件 → Export → Header String
 > 4. 把导出的字符串发给 Agent
 >
-> **本地电脑用户**也可以用 `agent-reach configure --from-browser chrome` 一键自动提取（支持 Twitter + 小红书 + 雪球）。
+> **本地电脑用户**也可以用 `hivereach configure --from-browser chrome` 一键自动提取（支持 Twitter + 小红书 + 雪球）。
 
 **Twitter search & posting:**
 > "To unlock Twitter search, I need your Twitter cookies. Install the Cookie-Editor Chrome extension, go to x.com/twitter.com, click the extension → Export → Header String, and paste it to me."
 
 ```bash
-agent-reach configure twitter-cookies "PASTED_STRING"
+hivereach configure twitter-cookies "PASTED_STRING"
 ```
 
 > **代理说明（中国大陆等需要翻墙的网络环境）：**
@@ -143,7 +143,7 @@ agent-reach configure twitter-cookies "PASTED_STRING"
 > twitter-cli 和 rdt-cli 使用 Python，在需要代理的网络环境下可通过环境变量配置代理。
 >
 > **你（Agent）需要做的：**
-> 1. 确认用户配了代理：`agent-reach configure proxy http://user:pass@ip:port`
+> 1. 确认用户配了代理：`hivereach configure proxy http://user:pass@ip:port`
 > 2. 设置环境变量：`export HTTP_PROXY="..." HTTPS_PROXY="..."`
 > 3. Agent Reach 会自动处理剩下的，不需要用户做额外操作
 >
@@ -153,7 +153,7 @@ agent-reach configure twitter-cookies "PASTED_STRING"
 > "Reddit and Bilibili block server IPs. To unlock full access, I need a residential proxy. You can get one at https://webshare.io ($1/month). Send me the proxy address."
 
 ```bash
-agent-reach configure proxy http://user:pass@ip:port
+hivereach configure proxy http://user:pass@ip:port
 ```
 
 **XiaoHongShu / 小红书 (xhs-cli):**
@@ -174,10 +174,10 @@ xhs login
 >
 > ```bash
 > # JSON 格式（Cookie-Editor → Export → JSON）
-> agent-reach configure xhs-cookies '[{"name":"web_session","value":"xxx","domain":".xiaohongshu.com",...}]'
+> hivereach configure xhs-cookies '[{"name":"web_session","value":"xxx","domain":".xiaohongshu.com",...}]'
 >
 > # 或 Header String 格式（Cookie-Editor → Export → Header String）
-> agent-reach configure xhs-cookies "key1=val1; key2=val2; ..."
+> hivereach configure xhs-cookies "key1=val1; key2=val2; ..."
 > ```
 >
 > **注意：** 推荐使用 Cookie-Editor 导出方式，不要依赖 QR 扫码登录。
@@ -205,7 +205,7 @@ mcporter config add weibo --command 'mcp-server-weibo'
 > "雪球需要登录后的 Cookie。请先在 Chrome 里登录 xueqiu.com，然后运行："
 
 ```bash
-agent-reach configure --from-browser chrome
+hivereach configure --from-browser chrome
 ```
 
 > Cookie 会随其他平台一起自动提取。
@@ -216,7 +216,7 @@ agent-reach configure --from-browser chrome
 脚本已随 Agent Reach 自动安装，用户只需提供 Key：
 
 ```bash
-agent-reach configure groq-key gsk_xxxxx
+hivereach configure groq-key gsk_xxxxx
 ```
 
 > **获取 Groq API Key（免费、无需信用卡、30 秒搞定）：**
@@ -228,7 +228,7 @@ agent-reach configure groq-key gsk_xxxxx
 > **使用方式：**
 > 用户发一个小宇宙链接给 Agent，Agent 自动调用：
 > ```bash
-> bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh https://www.xiaoyuzhoufm.com/episode/xxxxx
+> bash ~/.hivereach/tools/xiaoyuzhou/transcribe.sh https://www.xiaoyuzhoufm.com/episode/xxxxx
 > ```
 >
 > 自动下载音频 → 转码切片 → Groq Whisper 转录 → 输出完整中文文字稿。
@@ -248,7 +248,7 @@ pip install douyin-mcp-server
 
 # 2. 启动 HTTP 服务（端口 18070）
 # 方式一：用 uv（推荐）
-mkdir -p ~/.agent-reach/tools && cd ~/.agent-reach/tools
+mkdir -p ~/.hivereach/tools && cd ~/.hivereach/tools
 git clone https://github.com/yzfly/douyin-mcp-server.git && cd douyin-mcp-server
 uv sync && uv run python run_http.py
 
@@ -349,7 +349,7 @@ pip install linkedin-scraper-mcp
 
 ### Step 4: Final check
 
-Run `agent-reach doctor` one final time and report the results to your user.
+Run `hivereach doctor` one final time and report the results to your user.
 
 ### Step 5: Set up daily monitoring (OpenClaw only)
 
@@ -360,10 +360,10 @@ If you are running inside **OpenClaw**, ask your user:
 If the user agrees, create a **cron job** (daily, `sessionTarget: "isolated"`, `delivery: "announce"`) with this task:
 
 ```
-运行 agent-reach watch 命令。
+运行 hivereach watch 命令。
 如果输出包含"全部正常"，不需要通知用户，静默结束。
 如果输出包含问题（❌ ⚠️）或新版本（🆕），把完整报告发给用户，并建议修复方案。
-如果有新版本可用，问用户是否要升级（升级命令：pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip）。
+如果有新版本可用，问用户是否要升级（升级命令：pip install --upgrade https://github.com/Panniantong/hivereach/archive/main.zip）。
 ```
 
 If the user wants a different agent to handle it, let them choose.
@@ -374,17 +374,17 @@ If the user wants a different agent to handle it, let them choose.
 
 | Command | What it does |
 |---------|-------------|
-| `agent-reach install --env=auto` | Install core channels (lightweight, zero-config) |
-| `agent-reach install --env=auto --channels=twitter,weibo` | Install core + optional channels |
-| `agent-reach install --env=auto --channels=all` | Install everything |
-| `agent-reach install --env=auto --safe` | Safe setup (no auto system changes) |
-| `agent-reach install --env=auto --dry-run` | Preview what would be done |
-| `agent-reach doctor` | Show channel status |
-| `agent-reach watch` | Quick health + update check (for scheduled tasks) |
-| `agent-reach check-update` | Check for new versions |
-| `agent-reach configure twitter-cookies "..."` | Unlock Twitter search + posting |
-| `agent-reach configure proxy URL` | Unlock Reddit + Bilibili on servers |
-| `agent-reach configure groq-key gsk_xxx` | Unlock Xiaoyuzhou podcast transcription |
+| `hivereach install --env=auto` | Install core channels (lightweight, zero-config) |
+| `hivereach install --env=auto --channels=twitter,weibo` | Install core + optional channels |
+| `hivereach install --env=auto --channels=all` | Install everything |
+| `hivereach install --env=auto --safe` | Safe setup (no auto system changes) |
+| `hivereach install --env=auto --dry-run` | Preview what would be done |
+| `hivereach doctor` | Show channel status |
+| `hivereach watch` | Quick health + update check (for scheduled tasks) |
+| `hivereach check-update` | Check for new versions |
+| `hivereach configure twitter-cookies "..."` | Unlock Twitter search + posting |
+| `hivereach configure proxy URL` | Unlock Reddit + Bilibili on servers |
+| `hivereach configure groq-key gsk_xxx` | Unlock Xiaoyuzhou podcast transcription |
 
 After installation, use upstream tools directly. See SKILL.md for the full command reference:
 
@@ -399,7 +399,7 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 | Exa Search | `mcporter` | `mcporter call 'exa.web_search_exa(...)'` |
 | 小红书 | `mcporter` | `mcporter call 'xiaohongshu.search_feeds(...)'` |
 | 微博 | `mcporter` | `mcporter call 'weibo.get_trendings(limit: 10)'` |
-| 小宇宙播客 | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
+| 小宇宙播客 | `transcribe.sh` | `bash ~/.hivereach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 | 抖音 | `mcporter` | `mcporter call 'douyin.parse_douyin_video_info(...)'` |
 | LinkedIn | `mcporter` | `mcporter call 'linkedin.get_person_profile(...)'` |
 | RSS | `feedparser` | `python3 -c "import feedparser; ..."` |

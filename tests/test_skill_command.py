@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Tests for 'agent-reach skill' command and _install_skill / _uninstall_skill."""
+"""Tests for 'hivereach skill' command and _install_skill / _uninstall_skill."""
 
 import os
 import tempfile
@@ -28,7 +28,7 @@ class TestSkillCommand(unittest.TestCase):
                 with patch.dict(os.environ, env, clear=True):
                     _install_skill()
 
-            target = os.path.join(skill_dir, "agent-reach", "SKILL.md")
+            target = os.path.join(skill_dir, "hivereach", "SKILL.md")
             # Check at least one known skill dir pattern
             found = False
             for dirpath, _, filenames in os.walk(tmpdir):
@@ -45,7 +45,7 @@ class TestSkillCommand(unittest.TestCase):
         """_uninstall_skill should remove skill directories."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create a fake skill installation
-            skill_path = os.path.join(tmpdir, ".openclaw", "skills", "agent-reach")
+            skill_path = os.path.join(tmpdir, ".openclaw", "skills", "hivereach")
             os.makedirs(skill_path)
             with open(os.path.join(skill_path, "SKILL.md"), "w") as f:
                 f.write("test")
@@ -64,9 +64,9 @@ class TestSkillCommand(unittest.TestCase):
             self.assertFalse(os.path.exists(skill_path))
 
     def test_install_creates_dir_if_parent_exists(self):
-        """_install_skill should create agent-reach dir inside existing skill dir."""
+        """_install_skill should create hivereach dir inside existing skill dir."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create the .openclaw/skills parent but not agent-reach subdir
+            # Create the .openclaw/skills parent but not hivereach subdir
             skill_parent = os.path.join(tmpdir, ".openclaw", "skills")
             os.makedirs(skill_parent)
 
@@ -79,7 +79,7 @@ class TestSkillCommand(unittest.TestCase):
                 with patch.dict(os.environ, env, clear=True):
                     _install_skill()
 
-            target = os.path.join(skill_parent, "agent-reach", "SKILL.md")
+            target = os.path.join(skill_parent, "hivereach", "SKILL.md")
             self.assertTrue(os.path.exists(target))
             with open(target) as f:
                 content = f.read()

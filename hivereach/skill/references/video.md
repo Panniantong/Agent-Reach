@@ -75,20 +75,20 @@ bili rank -n 10
 
 ```bash
 # 输出 Markdown 文件到 /tmp/
-~/.agent-reach/tools/xiaoyuzhou/transcribe.sh "https://www.xiaoyuzhoufm.com/episode/EPISODE_ID"
+~/.hivereach/tools/xiaoyuzhou/transcribe.sh "https://www.xiaoyuzhoufm.com/episode/EPISODE_ID"
 ```
 
 ### 前置要求
 
 1. **ffmpeg**: `brew install ffmpeg`
 2. **Groq API Key** (免费): https://console.groq.com/keys
-3. **配置 Key**: `agent-reach configure groq-key YOUR_KEY`
-4. **首次运行**: `agent-reach install --env=auto` 安装工具
+3. **配置 Key**: `hivereach configure groq-key YOUR_KEY`
+4. **首次运行**: `hivereach install --env=auto` 安装工具
 
 ### 检查状态
 
 ```bash
-agent-reach doctor
+hivereach doctor
 ```
 
 > 输出 Markdown 文件默认保存到 `/tmp/`。

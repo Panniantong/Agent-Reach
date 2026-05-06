@@ -1,6 +1,6 @@
 #!/bin/bash
 # Agent Reach 一键完整测试
-# 用法: bash test-agent-reach.sh
+# 用法: bash test-hivereach.sh
 # 在任何有 Python 3.10+ 的机器上跑就行
 
 set -e
@@ -18,17 +18,17 @@ source "$TEST_DIR/venv/bin/activate"
 
 # ── 2. 安装 ──
 echo "📥 从 GitHub 安装..."
-pip install -q https://github.com/Panniantong/agent-reach/archive/main.zip 2>&1 | tail -1
+pip install -q https://github.com/Panniantong/hivereach/archive/main.zip 2>&1 | tail -1
 echo ""
 
 # ── 3. 自动配置 ──
 echo "⚙️  运行 install..."
-agent-reach install --env=auto 2>&1
+hivereach install --env=auto 2>&1
 echo ""
 
 # ── 4. 诊断 ──
 echo "🩺 运行 doctor..."
-agent-reach doctor 2>&1
+hivereach doctor 2>&1
 echo ""
 
 # ── 5. 逐个测试 ──
@@ -55,23 +55,23 @@ test_it() {
 }
 
 echo "📖 阅读测试"
-test_it "网页" "agent-reach read 'https://example.com'"
-test_it "GitHub" "agent-reach read 'https://github.com/Panniantong/agent-reach'"
-test_it "YouTube" "agent-reach read 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'"
-test_it "B站" "agent-reach read 'https://www.bilibili.com/video/BV1d4411N7zD'"
-test_it "RSS" "agent-reach read 'https://hnrss.org/frontpage'"
-test_it "Twitter" "agent-reach read 'https://x.com/elonmusk/status/1893797839927353448'"
-test_it "Reddit" "agent-reach read 'https://www.reddit.com/r/LocalLLaMA/hot'"
+test_it "网页" "hivereach read 'https://example.com'"
+test_it "GitHub" "hivereach read 'https://github.com/Panniantong/hivereach'"
+test_it "YouTube" "hivereach read 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'"
+test_it "B站" "hivereach read 'https://www.bilibili.com/video/BV1d4411N7zD'"
+test_it "RSS" "hivereach read 'https://hnrss.org/frontpage'"
+test_it "Twitter" "hivereach read 'https://x.com/elonmusk/status/1893797839927353448'"
+test_it "Reddit" "hivereach read 'https://www.reddit.com/r/LocalLLaMA/hot'"
 
 echo ""
 echo "🔍 搜索测试"
-test_it "全网搜索" "agent-reach search 'best AI agent framework' -n 2"
-test_it "GitHub搜索" "agent-reach search-github 'yt-dlp' -n 2"
-test_it "Twitter搜索" "agent-reach search-twitter 'AI agent' -n 2"
-test_it "Reddit搜索" "agent-reach search-reddit 'machine learning' -n 2"
-test_it "YouTube搜索" "agent-reach search-youtube 'AI tutorial' -n 2"
-test_it "B站搜索" "agent-reach search-bilibili 'AI' -n 2"
-test_it "小红书搜索" "agent-reach search-xhs 'AI' -n 2"
+test_it "全网搜索" "hivereach search 'best AI agent framework' -n 2"
+test_it "GitHub搜索" "hivereach search-github 'yt-dlp' -n 2"
+test_it "Twitter搜索" "hivereach search-twitter 'AI agent' -n 2"
+test_it "Reddit搜索" "hivereach search-reddit 'machine learning' -n 2"
+test_it "YouTube搜索" "hivereach search-youtube 'AI tutorial' -n 2"
+test_it "B站搜索" "hivereach search-bilibili 'AI' -n 2"
+test_it "小红书搜索" "hivereach search-xhs 'AI' -n 2"
 
 echo ""
 echo "════════════════════════════════════════════"
