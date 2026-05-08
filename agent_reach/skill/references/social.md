@@ -169,6 +169,18 @@ for t in trends:
 >
 > **与 twitter-cli 的区别**: Xquik 通过 API Key 认证（无需浏览器 Cookie），搜索不受 GraphQL 端点变化影响。返回更多互动数据（浏览量、收藏数）。两者可以共存，按需选择。
 
+### OpenClaw 插件模式
+
+如果用户在 OpenClaw 里想要插件工具，而不是 Agent Reach 的 shell/curl 调用，可以安装 TweetClaw：
+
+```bash
+openclaw plugins install @xquik/tweetclaw
+```
+
+TweetClaw 使用同一组 Xquik API 能力，提供 `explore` 和 `tweetclaw` 两个 OpenClaw 工具，适合搜索推文、搜索回复、发推、回复、粉丝导出、媒体上传/下载、监控、webhooks 和抽奖。写入、付费、监控、webhook 等操作仍需用户确认。
+
+文档: https://github.com/Xquik-dev/tweetclaw 和 https://context7.com/xquik-dev/tweetclaw。
+
 ## 微博 / Weibo
 
 ```bash
