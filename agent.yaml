@@ -1,0 +1,36 @@
+spec_version: "0.1.0"
+name: agent-reach
+version: 1.4.0
+description: >
+  Agent Reach gives any AI agent eyes to see the entire internet — a unified
+  CLI installer and routing layer for 17 platforms (Twitter/X, Reddit, YouTube,
+  GitHub, Bilibili, XiaoHongShu, Instagram, LinkedIn, Weibo, V2EX, Douyin,
+  Xueqiu, RSS, general web, and more). One install, zero API fees. Agents
+  call upstream open-source tools (twitter-cli, rdt-cli, yt-dlp, Jina Reader,
+  Exa, etc.) directly after setup. Supports MCP, Claude Code, OpenClaw,
+  Cursor, Windsurf, and any shell-capable agent.
+author: Panniantong
+license: MIT
+
+model:
+  preferred: anthropic:claude-sonnet-4-6
+  constraints:
+    temperature: 0.2
+    max_tokens: 8192
+
+skills:
+  - agent-reach
+
+runtime:
+  max_turns: 50
+  timeout: 300
+
+compliance:
+  risk_tier: standard
+  supervision:
+    human_in_the_loop: destructive
+    kill_switch: true
+  recordkeeping:
+    audit_logging: false
+  data_governance:
+    pii_handling: redact
