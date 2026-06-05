@@ -193,6 +193,11 @@ class TestNormalizePost:
         post = normalize_post(_tweet(created="2026-06-05T10:00:00+00:00"), "x")
         assert post.created_at == "2026-06-05T10:00:00+00:00"
 
+    def test_url_encodes_handle_in_permalink(self):
+        # An unusual follow-list entry must not produce a malformed link.
+        post = normalize_post(_tweet(tid="9"), "weird name/with#chars")
+        assert post.permalink == "https://x.com/weird%20name%2Fwith%23chars/status/9"
+
 
 class TestExtractDisplayName:
     def test_from_author(self):
@@ -254,6 +259,16 @@ class TestFetchHandle:
         monkeypatch.setattr(x_board.subprocess, "run", lambda *a, **k: proc)
         res = fetch_handle("x", 5, {}, twitter_exe="twitter")
         assert "rate limited" in res.error
+
+    def test_nonzero_exit_with_parseable_json_sets_error(self, monkeypatch):
+        # CLI exits non-zero but stdout is parseable, non-success JSON (a bare
+        # list, no ok:true envelope). Must be treated as a failure, not success.
+        proc = _FakeProc(stdout=__import__("json").dumps([_tweet()]), stderr="warn", returncode=1)
+        monkeypatch.setattr(x_board.subprocess, "run", lambda *a, **k: proc)
+        res = fetch_handle("x", 5, {}, twitter_exe="twitter")
+        assert res.error is not None
+        assert res.posts == []
+        assert res.fetched_count == 0
 
     def test_timeout_sets_error(self, monkeypatch):
         def boom(*a, **k):

@@ -41,6 +41,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
+from urllib.parse import quote as _urlquote
 
 # Defaults live under ~/.agent-reach/ so the git clone stays clean (KTD6).
 DEFAULT_FOLLOW_FILE = Path.home() / ".agent-reach" / "follow.txt"
@@ -277,7 +278,10 @@ def normalize_post(item: dict, handle: str) -> Post:
     retweets = _to_int(metrics.get("retweets", item.get("retweet_count", item.get("retweetCount"))))
     created_at = item.get("createdAtISO") or item.get("createdAt") or item.get("created_at") or ""
     tweet_id = str(item.get("id") or item.get("id_str") or "")
-    permalink = f"https://x.com/{handle}/status/{tweet_id}" if tweet_id else f"https://x.com/{handle}"
+    # URL-encode the handle for the path segment so an unusual follow-list entry
+    # can't produce a malformed link (handles are normally [A-Za-z0-9_] only).
+    handle_path = _urlquote(handle, safe="")
+    permalink = f"https://x.com/{handle_path}/status/{tweet_id}" if tweet_id else f"https://x.com/{handle_path}"
     return Post(
         text=_post_text(item),
         created_at=created_at,
@@ -341,6 +345,13 @@ def fetch_handle(
         err = data.get("error") or {}
         message = err.get("message") or err.get("code") or "Unknown API error."
         return AccountResult(handle, fallback_name, [], _short(message), 0)
+    # A non-zero exit is a failure unless twitter-cli explicitly reported success
+    # (ok: true). This catches the case where the CLI exits non-zero but still
+    # emitted parseable-but-non-success JSON on stdout (R6/R10).
+    succeeded = isinstance(data, dict) and data.get("ok") is True
+    if proc.returncode != 0 and not succeeded:
+        message = _short(proc.stderr or proc.stdout) or f"twitter CLI exited with code {proc.returncode}."
+        return AccountResult(handle, fallback_name, [], message, 0)
     if data is None:
         message = _short(proc.stderr or proc.stdout) or f"twitter CLI exited with code {proc.returncode}."
         return AccountResult(handle, fallback_name, [], message, 0)
@@ -468,6 +479,8 @@ def _render_post(post: Post, now: datetime) -> str:
 def _render_account(result: AccountResult, now: datetime) -> str:
     name = html.escape(result.display_name or ("@" + result.handle))
     handle = html.escape(result.handle)
+    # URL-encode for the href path; html.escape (quote=True) the display text.
+    handle_url = html.escape(_urlquote(result.handle, safe=""))
     if result.error:
         badge = '<span class="badge err">fetch failed</span>'
         inner = (
@@ -487,7 +500,7 @@ def _render_account(result: AccountResult, now: datetime) -> str:
         '  <section class="account">\n'
         '    <div class="acct-head">\n'
         f'      <span class="name">{name}</span>\n'
-        f'      <a class="handle" href="https://x.com/{handle}" target="_blank" rel="noopener">@{handle}</a>\n'
+        f'      <a class="handle" href="https://x.com/{handle_url}" target="_blank" rel="noopener">@{handle}</a>\n'
         f'      {badge}\n'
         '    </div>\n'
         f'{inner}\n'
