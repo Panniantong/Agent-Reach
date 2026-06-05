@@ -1,0 +1,16 @@
+# X Board follow-list — one X/Twitter @handle per line.
+#
+# How to use:
+#   1. Copy this file to ~/.agent-reach/follow.txt
+#        (or pass --file <path> to scripts/x_board.py)
+#   2. Replace the examples below with the people you want to follow.
+#   3. Run:  python scripts/x_board.py
+#
+# Rules:
+#   - The leading @ is optional ("OpenAI" and "@OpenAI" are the same).
+#   - Blank lines and lines starting with # are ignored.
+#   - Duplicates are removed automatically.
+
+@OpenAI
+@AnthropicAI
+sama
