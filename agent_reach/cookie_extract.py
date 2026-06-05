@@ -258,10 +258,20 @@ def configure_from_browser(browser: str, config) -> List[Tuple[str, bool, str]]:
         if cookie_str and "xq_a_token" in cookie_str:
             config.set("xueqiu_cookie", cookie_str)
             n_cookies = len(cookie_str.split(";"))
-            results_list.append(("Xueqiu", True, f"{n_cookies} cookies (含 xq_a_token)"))
+            from agent_reach.lang import use_english
+            if use_english():
+                results_list.append(("Xueqiu", True, f"{n_cookies} cookies (with xq_a_token)"))
+            else:
+                results_list.append(("Xueqiu", True, f"{n_cookies} cookies (含 xq_a_token)"))
         elif cookie_str:
-            results_list.append(("Xueqiu", False,
-                                 f"找到 {len(cookie_str.split(';'))} 个 Cookie 但缺少 xq_a_token，"
-                                 f"请先在 {browser} 中登录 xueqiu.com"))
+            from agent_reach.lang import use_english
+            if use_english():
+                results_list.append(("Xueqiu", False,
+                                     f"Found {len(cookie_str.split(';'))} cookies but missing xq_a_token. "
+                                     f"Please login to xueqiu.com in {browser} first"))
+            else:
+                results_list.append(("Xueqiu", False,
+                                     f"找到 {len(cookie_str.split(';'))} 个 Cookie 但缺少 xq_a_token，"
+                                     f"请先在 {browser} 中登录 xueqiu.com"))
 
     return results_list

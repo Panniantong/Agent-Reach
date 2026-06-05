@@ -27,7 +27,8 @@ def _search_api_ok() -> bool:
 class BilibiliChannel(Channel):
     name = "bilibili"
     description = "B站视频、字幕和搜索"
-    backends = ["yt-dlp", "bili-cli (可选)", "B站搜索 API"]
+    description_en = "Bilibili videos, subtitles and search"
+    backends = ["yt-dlp", "bili-cli (optional)", "Bilibili search API"]
     tier = 1
 
     def can_handle(self, url: str) -> bool:
@@ -36,31 +37,44 @@ class BilibiliChannel(Channel):
         return "bilibili.com" in d or "b23.tv" in d
 
     def check(self, config=None):
+        from agent_reach.lang import use_english
+
         if not shutil.which("yt-dlp"):
+            if use_english():
+                return "off", "yt-dlp not installed. Install: pip install yt-dlp"
             return "off", "yt-dlp 未安装。安装：pip install yt-dlp"
 
         proxy = (config.get("bilibili_proxy") if config else None) or os.environ.get("BILIBILI_PROXY")
         has_bili_cli = bool(shutil.which("bili"))
+        api_ok = _search_api_ok()
+
+        if use_english():
+            parts = []
+            if proxy:
+                parts.append("Video: yt-dlp (proxy configured)")
+            else:
+                parts.append("Video: yt-dlp")
+            if has_bili_cli:
+                parts.append("Search/hot/rankings: bili-cli available")
+            elif api_ok:
+                parts.append("Search: Bilibili API available")
+            else:
+                parts.append("Search: Bilibili API unreachable")
+                parts.append("Install bili-cli for hot/rankings/feed: pipx install bilibili-cli")
+            status = "ok" if has_bili_cli or api_ok else "warn"
+            return status, ". ".join(parts)
 
         parts = []
-
-        # 视频读取状态
         if proxy:
             parts.append("视频读取：yt-dlp（代理已配置）")
         else:
             parts.append("视频读取：yt-dlp")
-
-        # bili-cli 增强
         if has_bili_cli:
             parts.append("搜索/热门/排行：bili-cli 可用")
+        elif api_ok:
+            parts.append("搜索：B站 API 可用")
         else:
-            # 检测搜索 API 连通性
-            api_ok = _search_api_ok()
-            if api_ok:
-                parts.append("搜索：B站 API 可用")
-            else:
-                parts.append("搜索：B站 API 不可达")
+            parts.append("搜索：B站 API 不可达")
             parts.append("提示：安装 bili-cli 可解锁热门/排行/动态：pipx install bilibili-cli")
-
-        status = "ok" if has_bili_cli or _search_api_ok() else "warn"
+        status = "ok" if has_bili_cli or api_ok else "warn"
         return status, "。".join(parts)

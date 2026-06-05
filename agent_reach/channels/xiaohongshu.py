@@ -118,6 +118,7 @@ def _clean_comment(comment):
 class XiaoHongShuChannel(Channel):
     name = "xiaohongshu"
     description = "小红书笔记"
+    description_en = "XiaoHongShu notes"
     backends = ["xhs-cli (xiaohongshu-cli)"]
     tier = 1
 
@@ -127,8 +128,18 @@ class XiaoHongShuChannel(Channel):
         return "xiaohongshu.com" in d or "xhslink.com" in d
 
     def check(self, config=None):
+        from agent_reach.lang import use_english
+
         xhs = shutil.which("xhs")
         if not xhs:
+            if use_english():
+                return "off", (
+                    "xhs-cli needs to be installed:\n"
+                    "  pipx install xiaohongshu-cli\n"
+                    "or:\n"
+                    "  uv tool install xiaohongshu-cli\n"
+                    "After install, run `xhs login` to log in"
+                )
             return "off", (
                 "需要安装 xhs-cli：\n"
                 "  pipx install xiaohongshu-cli\n"
@@ -144,19 +155,37 @@ class XiaoHongShuChannel(Channel):
             )
             output = (r.stdout or "") + (r.stderr or "")
             if r.returncode == 0 and "ok: true" in output:
+                if use_english():
+                    return "ok", (
+                        "Fully available (search, read, comment, post, trending, "
+                        "favorites, follows, user queries)"
+                    )
                 return "ok", (
                     "完整可用（搜索、阅读、评论、发帖、热门、"
                     "收藏、关注、用户查询）"
                 )
             if "not_authenticated" in output or "expired" in output:
+                if use_english():
+                    return "warn", (
+                        "xhs-cli installed but not logged in. Run:\n"
+                        "  xhs login\n"
+                        "(auto-extracts cookies from browser, or scan QR code)"
+                    )
                 return "warn", (
                     "xhs-cli 已安装但未登录。运行：\n"
                     "  xhs login\n"
                     "（自动从浏览器提取 Cookie，或扫码登录）"
+                )
+            if use_english():
+                return "warn", (
+                    "xhs-cli installed but status is abnormal. Run:\n"
+                    "  xhs -v status for details"
                 )
             return "warn", (
                 "xhs-cli 已安装但状态异常。运行：\n"
                 "  xhs -v status 查看详细信息"
             )
         except Exception:
+            if use_english():
+                return "warn", "xhs-cli installed but connection failed"
             return "warn", "xhs-cli 已安装但连接失败"
