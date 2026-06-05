@@ -118,6 +118,8 @@ class TestSkillCommand(unittest.TestCase):
                 content = f.read()
             self.assertTrue(content.strip())
             self.assertIn("Give your AI agent eyes to see the entire internet.", content)
+            # Guard: ensure the installed file is the English skill, not a stale
+            # Chinese one (the Chinese phrase "搜推特" must be absent).
             self.assertNotIn("搜推特", content)
             self.assertTrue(
                 os.path.exists(os.path.join(skill_parent, "agent-reach", "references"))

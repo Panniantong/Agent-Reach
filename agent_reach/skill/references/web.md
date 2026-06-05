@@ -1,57 +1,57 @@
-# 网页阅读
+# Web Reading
 
-通用网页、微信公众号、RSS。
+Generic web pages, WeChat Official Account articles, RSS.
 
-## 通用网页 (Jina Reader)
+## Generic Web Pages (Jina Reader)
 
 ```bash
-# 读取任意网页内容
+# Read any web page content
 curl -s "https://r.jina.ai/URL"
 
-# 示例
+# Example
 curl -s "https://r.jina.ai/https://example.com/article"
 ```
 
-**适用场景**: 大多数网页可以直接用 Jina Reader 读取。
+**Use case**: Most web pages can be read directly with Jina Reader.
 
 ## Web Reader (MCP)
 
 ```bash
-# 读取网页内容 (Markdown 格式)
+# Read web page content (Markdown format)
 mcporter call 'web-reader.webReader(url: "https://example.com")'
 
-# 保留图片
+# Keep images
 mcporter call 'web-reader.webReader(url: "https://example.com", retain_images: true)'
 
-# 纯文本格式
+# Plain text format
 mcporter call 'web-reader.webReader(url: "https://example.com", return_format: "text")'
 ```
 
-**适用场景**: 需要更精确控制输出格式时使用。
+**Use case**: Use when you need more precise control over the output format.
 
-## 微信公众号 / WeChat Articles
+## WeChat Official Account / WeChat Articles
 
-### 搜索公众号文章（通过 Exa）
+### Search Official Account articles (via Exa)
 
 ```bash
-# 搜索微信公众号文章
-mcporter call 'exa.web_search_exa(query: "搜索关键词", numResults: 5, includeDomains: ["mp.weixin.qq.com"])'
+# Search WeChat Official Account articles
+mcporter call 'exa.web_search_exa(query: "search keywords", numResults: 5, includeDomains: ["mp.weixin.qq.com"])'
 ```
 
-### 阅读公众号文章全文（通过 Exa）
+### Read the full text of an Official Account article (via Exa)
 
 ```bash
-# 抓取文章全文
+# Crawl the full article text
 mcporter call 'exa.crawling_exa(urls: ["https://mp.weixin.qq.com/s/ARTICLE_ID"], maxCharacters: 10000)'
 ```
 
-### 可选：Camoufox 阅读（反爬更强）
+### Optional: Camoufox reading (stronger anti-scraping)
 
 ```bash
 cd ~/.agent-reach/tools/wechat-article-for-ai && python3 main.py "https://mp.weixin.qq.com/s/ARTICLE_ID"
 ```
 
-> **注意**: Jina Reader 无法读取微信文章（被 CAPTCHA 拦截），推荐用 Exa。
+> **Note**: Jina Reader cannot read WeChat articles (blocked by CAPTCHA); Exa is recommended.
 
 ## RSS (feedparser)
 
@@ -63,14 +63,14 @@ for e in feedparser.parse('FEED_URL').entries[:5]:
 "
 ```
 
-**适用场景**: 订阅博客、新闻源、播客等 RSS feed。
+**Use case**: Subscribing to blogs, news sources, podcasts, and other RSS feeds.
 
-## 选择指南
+## Selection Guide
 
-| 场景 | 推荐工具 |
+| Scenario | Recommended Tool |
 |-----|---------|
-| 通用网页 | Jina Reader (`curl r.jina.ai`) |
-| 需要图片/格式控制 | web-reader MCP |
-| 微信公众号 | Exa (搜索+阅读) / Camoufox (可选阅读) |
-| RSS 订阅 | feedparser |
-| 微博/知乎等 | Jina Reader |
+| Generic web pages | Jina Reader (`curl r.jina.ai`) |
+| Need images/format control | web-reader MCP |
+| WeChat Official Account | Exa (search + read) / Camoufox (optional reading) |
+| RSS subscriptions | feedparser |
+| Weibo/Zhihu, etc. | Jina Reader |

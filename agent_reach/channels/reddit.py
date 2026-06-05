@@ -17,7 +17,7 @@ _CREDENTIAL_FILE = "~/.config/rdt-cli/credential.json"
 
 class RedditChannel(Channel):
     name = "reddit"
-    description = "Reddit 帖子和评论"
+    description = "Reddit posts and comments"
     backends = ["rdt-cli"]
     tier = 0
 
@@ -31,12 +31,12 @@ class RedditChannel(Channel):
         rdt = shutil.which("rdt")
         if not rdt:
             return "off", (
-                "需要安装 rdt-cli（推荐使用最新版 v0.4.2+）：\n"
+                "rdt-cli must be installed (latest v0.4.2+ recommended):\n"
                 "  pip install 'rdt-cli>=0.4.2'\n"
-                "或：\n"
+                "or:\n"
                 "  uv tool install rdt-cli\n"
-                "最新源码：https://github.com/public-clis/rdt-cli\n"
-                "安装后运行 `rdt login` 登录（需先在浏览器登录 reddit.com）"
+                "Latest source: https://github.com/public-clis/rdt-cli\n"
+                "After installing, run `rdt login` to log in (log in to reddit.com in your browser first)"
             )
 
         try:
@@ -52,25 +52,25 @@ class RedditChannel(Channel):
             username = data.get("data", {}).get("username") or ""
 
             if authenticated:
-                suffix = f"（已登录：{username}）" if username else ""
-                return "ok", (f"rdt-cli 可用{suffix}（搜索帖子、阅读全文、查看评论）")
+                suffix = f" (logged in: {username})" if username else ""
+                return "ok", (f"rdt-cli available{suffix} (search posts, read full text, view comments)")
 
             return "warn", (
-                "rdt-cli 已安装但未登录。Reddit 自 2024 年起要求认证，"
-                "未登录时所有请求均返回 403。\n\n"
-                "方法一（自动）：运行 `rdt login`\n"
-                "  先在浏览器登录 reddit.com，再运行此命令自动提取 Cookie。\n\n"
-                "方法二（手动，适用于 Chrome/Edge 127+ 无法自动提取时）：\n"
-                "  1. Chrome 应用商店安装 Cookie-Editor 扩展：\n"
+                "rdt-cli installed but not logged in. Reddit has required authentication since 2024; "
+                "all requests return 403 when not logged in.\n\n"
+                "Method 1 (automatic): run `rdt login`\n"
+                "  Log in to reddit.com in your browser first, then run this command to automatically extract the Cookie.\n\n"
+                "Method 2 (manual, for when automatic extraction fails on Chrome/Edge 127+):\n"
+                "  1. Install the Cookie-Editor extension from the Chrome Web Store:\n"
                 "     https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm\n"
-                "  2. 在浏览器打开 reddit.com（确保已登录）\n"
-                "  3. 点击 Cookie-Editor 图标，找到 `reddit_session`，复制其 Value\n"
-                f"  4. 将以下内容写入 {_CREDENTIAL_FILE}：\n"
-                '     {"cookies": {"reddit_session": "<粘贴 Value>"}, '
-                '"source": "manual", "username": "<你的用户名>", '
+                "  2. Open reddit.com in your browser (make sure you are logged in)\n"
+                "  3. Click the Cookie-Editor icon, find `reddit_session`, and copy its Value\n"
+                f"  4. Write the following into {_CREDENTIAL_FILE}:\n"
+                '     {"cookies": {"reddit_session": "<paste Value>"}, '
+                '"source": "manual", "username": "<your username>", '
                 '"modhash": null, "saved_at": 0, "last_verified_at": null}\n\n'
-                "验证：`rdt status --json` 确认 authenticated: true"
+                "Verify: `rdt status --json` to confirm authenticated: true"
             )
 
         except (json.JSONDecodeError, FileNotFoundError, subprocess.TimeoutExpired):
-            return "warn", "rdt-cli 已安装但状态检查失败，运行 `rdt status` 查看详情"
+            return "warn", "rdt-cli installed but status check failed; run `rdt status` to view details"

@@ -122,5 +122,5 @@ class TestCheckUpdateRetry:
 
         captured = capsys.readouterr()
         assert result == "error"
-        assert "网络超时" in captured.out
-        assert "已重试 3 次" in captured.out
+        assert "Network timeout" in captured.out
+        assert "retried 3 times" in captured.out

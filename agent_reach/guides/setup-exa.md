@@ -1,41 +1,41 @@
-# Exa Search 配置指南
+# Exa Search Setup Guide
 
-## 功能说明
-Exa 是一个 AI 语义搜索引擎。通过 MCP 接入，**免费、无需 API Key**。配置后解锁：
-- 全网语义搜索
-- Reddit 搜索（通过 site:reddit.com）
-- Twitter 搜索（通过 site:x.com）
+## Overview
+Exa is an AI semantic search engine. It connects via MCP, **free and with no API key required**. Once configured, it unlocks:
+- Web-wide semantic search
+- Reddit search (via site:reddit.com)
+- Twitter search (via site:x.com)
 
-## Agent 可自动完成的步骤
+## Steps the Agent Can Complete Automatically
 
-`agent-reach install --env=auto` 会自动完成以下步骤，通常不需要手动操作。
+`agent-reach install --env=auto` performs the following steps automatically, so manual action is usually not needed.
 
-### 1. 安装 mcporter
+### 1. Install mcporter
 ```bash
 npm install -g mcporter
 ```
 
-### 2. 注册 Exa MCP
+### 2. Register the Exa MCP
 ```bash
 mcporter config add exa https://mcp.exa.ai/mcp
 ```
 
-### 3. 验证
+### 3. Verify
 ```bash
 agent-reach doctor | grep "Search"
 mcporter call 'exa.web_search_exa(query: "test", numResults: 1)'
 ```
 
-## 需要用户手动做的步骤
+## Steps the User Must Do Manually
 
-**无。** Exa 通过 MCP 接入，免费、无需注册、无需 API Key。
+**None.** Exa connects via MCP, is free, and requires no registration and no API key.
 
-如果 `agent-reach install` 因为网络问题没有自动配置 Exa，手动运行上面两条命令即可。
+If `agent-reach install` did not configure Exa automatically due to a network issue, just run the two commands above manually.
 
-## 常见问题
+## FAQ
 
-**Q: 有搜索次数限制吗？**
-A: MCP 端点由 Exa 官方提供（mcp.exa.ai），当前免费无限制。如果未来有变化，会在 agent-reach 更新中适配。
+**Q: Is there a search request limit?**
+A: The MCP endpoint is provided officially by Exa (mcp.exa.ai) and is currently free and unlimited. If this changes in the future, agent-reach will adapt in an update.
 
-**Q: mcporter 是什么？**
-A: MCP 协议的命令行桥接工具，用来调用 MCP Server。Agent Reach 用它来连接 Exa 和小红书。
+**Q: What is mcporter?**
+A: A command-line bridge tool for the MCP protocol, used to call MCP servers. Agent Reach uses it to connect to Exa and XiaoHongShu.

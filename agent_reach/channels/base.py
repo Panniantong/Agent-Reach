@@ -19,7 +19,7 @@ class Channel(ABC):
     """Base class for all channels."""
 
     name: str = ""                    # e.g. "youtube"
-    description: str = ""             # e.g. "YouTube 视频和字幕"
+    description: str = ""             # e.g. "YouTube videos and subtitles"
     backends: List[str] = []          # e.g. ["yt-dlp"] — what upstream tool is used
     tier: int = 0                     # 0=zero-config, 1=needs free key, 2=needs setup
 
@@ -33,4 +33,4 @@ class Channel(ABC):
         Check if this channel's upstream tool is available.
         Returns (status, message) where status is 'ok'/'warn'/'off'/'error'.
         """
-        return "ok", f"{'、'.join(self.backends) if self.backends else '内置'}"
+        return "ok", f"{', '.join(self.backends) if self.backends else 'built-in'}"

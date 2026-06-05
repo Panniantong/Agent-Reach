@@ -13,37 +13,37 @@
   
   <rect width="512" height="512" fill="#0A0A1A"/>
   
-  <!-- 光晕背景 -->
+  <!-- Glow background -->
   <circle cx="230" cy="256" r="200" fill="url(#glow2)"/>
   
-  <!-- 连接线 — 6 条，不同长度、粗细、透明度 -->
+  <!-- Connection lines — 6 lines, with varying lengths, thicknesses, and opacities -->
   <line x1="230" y1="256" x2="130" y2="140" stroke="#0066FF" stroke-width="2" opacity="0.4"/>
   <line x1="230" y1="256" x2="100" y2="256" stroke="#0066FF" stroke-width="2" opacity="0.35"/>
   <line x1="230" y1="256" x2="130" y2="372" stroke="#0066FF" stroke-width="2" opacity="0.3"/>
   <line x1="230" y1="256" x2="310" y2="140" stroke="#0066FF" stroke-width="2" opacity="0.45"/>
   <line x1="230" y1="256" x2="310" y2="372" stroke="#0066FF" stroke-width="2" opacity="0.35"/>
   
-  <!-- "Reach" 线 — 更长、更粗、有渐变 -->
+  <!-- "Reach" line — longer, thicker, with a gradient -->
   <line x1="230" y1="256" x2="440" y2="220" stroke="url(#line-grad)" stroke-width="4" opacity="0.9"/>
   
-  <!-- 中心：Agent 核心 -->
+  <!-- Center: Agent core -->
   <polygon points="230,232 246,248 246,264 230,280 214,264 214,248" 
            fill="#0066FF" opacity="0.9"/>
   <circle cx="230" cy="256" r="10" fill="#00CCFF"/>
   
-  <!-- 普通节点 -->
+  <!-- Regular nodes -->
   <circle cx="130" cy="140" r="6" fill="#0066FF" opacity="0.4"/>
   <circle cx="100" cy="256" r="6" fill="#0066FF" opacity="0.35"/>
   <circle cx="130" cy="372" r="6" fill="#0066FF" opacity="0.3"/>
   <circle cx="310" cy="140" r="6" fill="#0066FF" opacity="0.45"/>
   <circle cx="310" cy="372" r="6" fill="#0066FF" opacity="0.35"/>
   
-  <!-- "Reach" 节点 — 更大，带光环 -->
+  <!-- "Reach" node — larger, with a halo -->
   <circle cx="440" cy="220" r="20" fill="#0066FF" opacity="0.15"/>
   <circle cx="440" cy="220" r="12" fill="#00AAFF" opacity="0.6"/>
   <circle cx="440" cy="220" r="6" fill="#00CCFF" opacity="0.9"/>
   
-  <!-- Reach 节点的信号弧 -->
+  <!-- Signal arcs of the Reach node -->
   <path d="M 454 200 A 20 20 0 0 1 454 240" 
         fill="none" stroke="#00CCFF" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
   <path d="M 464 192 A 30 30 0 0 1 464 248" 

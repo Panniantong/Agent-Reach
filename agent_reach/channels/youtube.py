@@ -11,7 +11,7 @@ from .base import Channel
 
 class YouTubeChannel(Channel):
     name = "youtube"
-    description = "YouTube 视频和字幕"
+    description = "YouTube videos and subtitles"
     backends = ["yt-dlp"]
     tier = 0
 
@@ -22,13 +22,13 @@ class YouTubeChannel(Channel):
 
     def check(self, config=None):
         if not shutil.which("yt-dlp"):
-            return "off", "yt-dlp 未安装。安装：pip install yt-dlp"
+            return "off", "yt-dlp not installed. Install: pip install yt-dlp"
         # Check JS runtime
         has_js = shutil.which("deno") or shutil.which("node")
         if not has_js:
             return "warn", (
-                "yt-dlp 已安装但缺少 JS runtime（YouTube 必须）。\n"
-                "  安装 Node.js 或 deno，然后运行：agent-reach install"
+                "yt-dlp installed but missing JS runtime (required by YouTube).\n"
+                "  Install Node.js or deno, then run: agent-reach install"
             )
         # Check yt-dlp config for --js-runtimes
         # Deno works out of the box; Node.js requires explicit config
@@ -40,7 +40,7 @@ class YouTubeChannel(Channel):
                 has_js_config = "--js-runtimes" in read_utf8_text(ytdlp_config)
             if not has_js_config:
                 return "warn", (
-                    "yt-dlp 已安装但未配置 JS runtime。运行：\n"
+                    "yt-dlp installed but JS runtime not configured. Run:\n"
                     f"  {render_ytdlp_fix_command()}"
                 )
-        return "ok", "可提取视频信息和字幕"
+        return "ok", "Can extract video info and subtitles"

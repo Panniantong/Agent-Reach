@@ -26,8 +26,8 @@ def _search_api_ok() -> bool:
 
 class BilibiliChannel(Channel):
     name = "bilibili"
-    description = "B站视频、字幕和搜索"
-    backends = ["yt-dlp", "bili-cli (可选)", "B站搜索 API"]
+    description = "Bilibili videos, subtitles and search"
+    backends = ["yt-dlp", "bili-cli (optional)", "Bilibili search API"]
     tier = 1
 
     def can_handle(self, url: str) -> bool:
@@ -37,30 +37,30 @@ class BilibiliChannel(Channel):
 
     def check(self, config=None):
         if not shutil.which("yt-dlp"):
-            return "off", "yt-dlp 未安装。安装：pip install yt-dlp"
+            return "off", "yt-dlp not installed. Install: pip install yt-dlp"
 
         proxy = (config.get("bilibili_proxy") if config else None) or os.environ.get("BILIBILI_PROXY")
         has_bili_cli = bool(shutil.which("bili"))
 
         parts = []
 
-        # 视频读取状态
+        # Video reading status
         if proxy:
-            parts.append("视频读取：yt-dlp（代理已配置）")
+            parts.append("Video reading: yt-dlp (proxy configured)")
         else:
-            parts.append("视频读取：yt-dlp")
+            parts.append("Video reading: yt-dlp")
 
-        # bili-cli 增强
+        # bili-cli enhancement
         if has_bili_cli:
-            parts.append("搜索/热门/排行：bili-cli 可用")
+            parts.append("Search/trending/rankings: bili-cli available")
         else:
-            # 检测搜索 API 连通性
+            # Check search API connectivity
             api_ok = _search_api_ok()
             if api_ok:
-                parts.append("搜索：B站 API 可用")
+                parts.append("Search: Bilibili API available")
             else:
-                parts.append("搜索：B站 API 不可达")
-            parts.append("提示：安装 bili-cli 可解锁热门/排行/动态：pipx install bilibili-cli")
+                parts.append("Search: Bilibili API unreachable")
+            parts.append("Tip: install bili-cli to unlock trending/rankings/feed: pipx install bilibili-cli")
 
         status = "ok" if has_bili_cli or _search_api_ok() else "warn"
-        return status, "。".join(parts)
+        return status, ". ".join(parts)

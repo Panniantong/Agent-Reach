@@ -5,102 +5,102 @@ description: >
   17 platforms via CLI, MCP, curl, and Python scripts.
   Zero config for 8 channels.
 
-  【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。
-  分类：search / social (小红书/抖音/微博/推特/B站/V2EX/Reddit) / career(LinkedIn) / dev(github) / web(网页/文章/公众号/RSS) / video(YouTube/B站/播客).
+  [Routing] SKILL.md contains the routing table and common commands; for complex scenarios, read the matching category file under references/*.md as needed.
+  Categories: search / social (XiaoHongShu/Douyin/Weibo/Twitter/Bilibili/V2EX/Reddit) / career(LinkedIn) / dev(github) / web(Web/articles/WeChat Official Account/RSS) / video(YouTube/Bilibili/podcasts).
 
   Use when user asks to search, read, or interact on any supported platform,
   shares a URL, or asks to search the web.
 triggers:
-  - search: 搜/查/找/search/搜索/查一下/帮我搜
+  - search: search/find/look up/search/search for/look this up/search for me
   - social:
-    - 小红书: xiaohongshu/xhs/小红书/红书
-    - 抖音: douyin/抖音
-    - Twitter: twitter/推特/x.com/推文
-    - 微博: weibo/微博
-    - B站: bilibili/b站/哔哩哔哩
+    - XiaoHongShu: xiaohongshu/xhs/XiaoHongShu/RED
+    - Douyin: douyin/Douyin
+    - Twitter: twitter/Twitter/x.com/tweet
+    - Weibo: weibo/Weibo
+    - Bilibili: bilibili/bilibili/Bilibili
     - V2EX: v2ex
     - Reddit: reddit
-  - career: 招聘/职位/求职/linkedin/领英/找工作
-  - dev: github/代码/仓库/gh/issue/pr/分支/commit
-  - web: 网页/链接/文章/公众号/微信文章/rss/读一下/打开这个
-  - video: youtube/视频/播客/字幕/小宇宙/转录/yt
-  - finance: 雪球/股票/stock/xueqiu/行情/基金
+  - career: hiring/job posting/job search/linkedin/LinkedIn/find a job
+  - dev: github/code/repo/gh/issue/pr/branch/commit
+  - web: web page/link/article/WeChat Official Account/WeChat article/rss/read this/open this
+  - video: youtube/video/podcast/subtitles/Xiaoyuzhou/transcribe/yt
+  - finance: Xueqiu/stock/stock/xueqiu/quotes/funds
 metadata:
   openclaw:
     homepage: https://github.com/Panniantong/Agent-Reach
 ---
 
-# Agent Reach — 路由器
+# Agent Reach — Router
 
-17 平台工具集合。根据用户意图选择对应分类。
+A collection of tools for 17 platforms. Pick the matching category based on user intent.
 
-## 路由表
+## Routing Table
 
-| 用户意图 | 分类 | 详细文档 |
+| User Intent | Category | Detailed Docs |
 |---------|------|---------|
-| 网页搜索/代码搜索 | search | [references/search.md](references/search.md) |
-| 小红书/抖音/微博/推特/B站/V2EX/Reddit | social | [references/social.md](references/social.md) |
-| 招聘/职位/LinkedIn | career | [references/career.md](references/career.md) |
-| GitHub/代码 | dev | [references/dev.md](references/dev.md) |
-| 网页/文章/公众号/RSS | web | [references/web.md](references/web.md) |
-| YouTube/B站/播客字幕 | video | [references/video.md](references/video.md) |
+| Web search/code search | search | [references/search.md](references/search.md) |
+| XiaoHongShu/Douyin/Weibo/Twitter/Bilibili/V2EX/Reddit | social | [references/social.md](references/social.md) |
+| Hiring/job postings/LinkedIn | career | [references/career.md](references/career.md) |
+| GitHub/code | dev | [references/dev.md](references/dev.md) |
+| Web/articles/WeChat Official Account/RSS | web | [references/web.md](references/web.md) |
+| YouTube/Bilibili/podcast subtitles | video | [references/video.md](references/video.md) |
 
-## 零配置快速命令
+## Zero-Config Quick Commands
 
 ```bash
-# Exa 网页搜索
+# Exa web search
 mcporter call 'exa.web_search_exa(query: "query", numResults: 5)'
 
-# 通用网页阅读
+# Generic web reading
 curl -s "https://r.jina.ai/URL"
 
-# GitHub 搜索
+# GitHub search
 gh search repos "query" --sort stars --limit 10
 
-# Twitter 搜索
+# Twitter search
 twitter search "query" --limit 10
 
-# YouTube/B站字幕
+# YouTube/Bilibili subtitles
 yt-dlp --write-sub --skip-download -o "/tmp/%(id)s" "URL"
 
-# Reddit 搜索
+# Reddit search
 rdt search "query" --limit 10
 
-# Reddit 读帖 + 评论
+# Reddit read post + comments
 rdt read POST_ID
 
-# V2EX 热门
+# V2EX hot topics
 curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1.0"
 ```
 
-## 环境检查
+## Environment Check
 
 ```bash
-# 检查可用 channel
+# Check available channels
 agent-reach doctor
 
-# 查看所有 MCP 服务
+# View all MCP services
 mcporter_list_servers()
 ```
 
-## 工作区规则
+## Workspace Rules
 
-**不要在 agent workspace 创建文件。** 使用 `/tmp/` 存放临时输出，`~/.agent-reach/` 存放持久数据。
+**Do not create files in the agent workspace.** Use `/tmp/` for temporary output and `~/.agent-reach/` for persistent data.
 
-## 详细文档
+## Detailed Docs
 
-根据用户需求，阅读对应的详细文档：
+Read the matching detailed doc based on the user's needs:
 
-- [搜索工具](references/search.md) — Exa AI 搜索
-- [社交媒体](references/social.md) — 小红书, 抖音, Twitter, B站, V2EX, Reddit
-- [职场招聘](references/career.md) — LinkedIn
-- [开发工具](references/dev.md) — GitHub CLI
-- [网页阅读](references/web.md) — Jina Reader, 微信公众号, RSS
-- [视频播客](references/video.md) — YouTube, B站, 小宇宙
+- [Search tools](references/search.md) — Exa AI search
+- [Social media](references/social.md) — XiaoHongShu, Douyin, Twitter, Bilibili, V2EX, Reddit
+- [Career & hiring](references/career.md) — LinkedIn
+- [Dev tools](references/dev.md) — GitHub CLI
+- [Web reading](references/web.md) — Jina Reader, WeChat Official Account, RSS
+- [Video & podcasts](references/video.md) — YouTube, Bilibili, Xiaoyuzhou
 
-## 配置渠道
+## Configuring Channels
 
-如果某个 channel 需要配置，获取安装指南：
+If a channel needs configuration, get the install guide:
 https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
 
-用户只需提供 cookies，其他配置由 agent 完成。
+The user only needs to provide cookies; the agent handles the rest of the configuration.

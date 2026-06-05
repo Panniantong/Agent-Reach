@@ -8,7 +8,7 @@ from .base import Channel
 
 class ExaSearchChannel(Channel):
     name = "exa_search"
-    description = "全网语义搜索"
+    description = "Web-wide semantic search"
     backends = ["Exa via mcporter"]
     tier = 0
 
@@ -19,7 +19,7 @@ class ExaSearchChannel(Channel):
         mcporter = shutil.which("mcporter")
         if not mcporter:
             return "off", (
-                "需要 mcporter + Exa MCP。安装：\n"
+                "mcporter + Exa MCP required. Install:\n"
                 "  npm install -g mcporter\n"
                 "  mcporter config add exa https://mcp.exa.ai/mcp"
             )
@@ -29,10 +29,10 @@ class ExaSearchChannel(Channel):
                 encoding="utf-8", errors="replace", timeout=5
             )
             if "exa" in r.stdout.lower():
-                return "ok", "全网语义搜索可用（免费，无需 API Key）"
+                return "ok", "Web-wide semantic search available (free, no API Key required)"
             return "off", (
-                "mcporter 已装但 Exa 未配置。运行：\n"
+                "mcporter installed but Exa not configured. Run:\n"
                 "  mcporter config add exa https://mcp.exa.ai/mcp"
             )
         except Exception:
-            return "off", "mcporter 连接异常"
+            return "off", "mcporter connection error"

@@ -117,7 +117,7 @@ def _clean_comment(comment):
 
 class XiaoHongShuChannel(Channel):
     name = "xiaohongshu"
-    description = "小红书笔记"
+    description = "XiaoHongShu notes"
     backends = ["xhs-cli (xiaohongshu-cli)"]
     tier = 1
 
@@ -130,11 +130,11 @@ class XiaoHongShuChannel(Channel):
         xhs = shutil.which("xhs")
         if not xhs:
             return "off", (
-                "需要安装 xhs-cli：\n"
+                "xhs-cli must be installed:\n"
                 "  pipx install xiaohongshu-cli\n"
-                "或：\n"
+                "or:\n"
                 "  uv tool install xiaohongshu-cli\n"
-                "安装后运行 `xhs login` 登录"
+                "After installing, run `xhs login` to log in"
             )
 
         try:
@@ -145,18 +145,18 @@ class XiaoHongShuChannel(Channel):
             output = (r.stdout or "") + (r.stderr or "")
             if r.returncode == 0 and "ok: true" in output:
                 return "ok", (
-                    "完整可用（搜索、阅读、评论、发帖、热门、"
-                    "收藏、关注、用户查询）"
+                    "Fully available (search, read, comment, post, trending, "
+                    "favorites, follow, user lookup)"
                 )
             if "not_authenticated" in output or "expired" in output:
                 return "warn", (
-                    "xhs-cli 已安装但未登录。运行：\n"
+                    "xhs-cli installed but not logged in. Run:\n"
                     "  xhs login\n"
-                    "（自动从浏览器提取 Cookie，或扫码登录）"
+                    "(automatically extracts Cookie from browser, or scan QR to log in)"
                 )
             return "warn", (
-                "xhs-cli 已安装但状态异常。运行：\n"
-                "  xhs -v status 查看详细信息"
+                "xhs-cli installed but status abnormal. Run:\n"
+                "  xhs -v status to view detailed information"
             )
         except Exception:
-            return "warn", "xhs-cli 已安装但连接失败"
+            return "warn", "xhs-cli installed but connection failed"

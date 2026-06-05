@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Weibo (微博) — check if mcporter + mcp-server-weibo is available."""
+"""Weibo — check if mcporter + mcp-server-weibo is available."""
 
 import shutil
 import subprocess
@@ -8,7 +8,7 @@ from .base import Channel
 
 class WeiboChannel(Channel):
     name = "weibo"
-    description = "微博动态与热搜"
+    description = "Weibo posts and trending searches"
     backends = ["mcp-server-weibo"]
     tier = 1
 
@@ -21,11 +21,11 @@ class WeiboChannel(Channel):
         mcporter = shutil.which("mcporter")
         if not mcporter:
             return "off", (
-                "需要 mcporter + mcp-server-weibo。安装步骤：\n"
+                "mcporter + mcp-server-weibo required. Installation steps:\n"
                 "  1. npm install -g mcporter\n"
                 "  2. pip install git+https://github.com/Panniantong/mcp-server-weibo.git\n"
                 "  3. mcporter config add weibo --command 'mcp-server-weibo'\n"
-                "  详见 https://github.com/Panniantong/mcp-server-weibo"
+                "  See https://github.com/Panniantong/mcp-server-weibo"
             )
         try:
             r = subprocess.run(
@@ -34,19 +34,19 @@ class WeiboChannel(Channel):
             )
             if "weibo" not in r.stdout:
                 return "off", (
-                    "mcporter 已装但微博 MCP 未配置。运行：\n"
+                    "mcporter installed but Weibo MCP not configured. Run:\n"
                     "  pip install git+https://github.com/Panniantong/mcp-server-weibo.git\n"
                     "  mcporter config add weibo --command 'mcp-server-weibo'"
                 )
         except Exception:
-            return "off", "mcporter 连接异常"
+            return "off", "mcporter connection error"
         try:
             r = subprocess.run(
                 [mcporter, "list", "weibo"], capture_output=True,
                 encoding="utf-8", errors="replace", timeout=15
             )
             if r.returncode == 0 and "search_users" in r.stdout:
-                return "ok", "完整可用（热搜、搜索、用户动态、评论）"
-            return "warn", "MCP 已配置但工具加载失败，检查 mcp-server-weibo 版本"
+                return "ok", "Fully available (trending searches, search, user posts, comments)"
+            return "warn", "MCP configured but tools failed to load; check the mcp-server-weibo version"
         except Exception:
-            return "warn", "MCP 连接异常，检查 mcp-server-weibo 是否可用"
+            return "warn", "MCP connection error; check whether mcp-server-weibo is available"

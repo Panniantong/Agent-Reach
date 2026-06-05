@@ -9,25 +9,25 @@
   
   <rect width="512" height="512" fill="#0A0A1A"/>
   
-  <!-- 容器圆环 -->
+  <!-- Container ring -->
   <circle cx="240" cy="256" r="155" fill="none" stroke="url(#grad3)" stroke-width="4" opacity="0.5"/>
   
-  <!-- 字母 A — 极简三角 -->
+  <!-- Letter A — minimal triangle -->
   <path d="M 160 360 L 220 150 L 280 360" 
         fill="none" stroke="#0066FF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- A 的横线 -->
+  <!-- The crossbar of A -->
   <line x1="178" y1="290" x2="262" y2="290" stroke="#0066FF" stroke-width="10" stroke-linecap="round"/>
   
-  <!-- 字母 R — 共用 A 的右竖线 -->
-  <!-- R 的弧顶 -->
+  <!-- Letter R — shares the right vertical line of A -->
+  <!-- The arc top of R -->
   <path d="M 280 360 L 280 150 Q 340 150, 340 210 Q 340 270, 280 270" 
         fill="none" stroke="#00AAFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
   
-  <!-- R 的腿 — "Reach" 线，穿出圆环 -->
+  <!-- The leg of R — "Reach" line, breaking out of the ring -->
   <line x1="300" y1="270" x2="420" y2="390" 
         stroke="url(#grad3)" stroke-width="10" stroke-linecap="round"/>
   
-  <!-- Reach 末端信号 -->
+  <!-- Reach endpoint signal -->
   <circle cx="420" cy="390" r="8" fill="#00CCFF" opacity="0.8"/>
   <circle cx="420" cy="390" r="16" fill="none" stroke="#00CCFF" stroke-width="2" opacity="0.4"/>
   <circle cx="420" cy="390" r="26" fill="none" stroke="#00CCFF" stroke-width="1.5" opacity="0.2"/>

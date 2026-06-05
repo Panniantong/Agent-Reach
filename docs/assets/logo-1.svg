@@ -12,14 +12,14 @@
   
   <rect width="512" height="512" fill="#0A0A1A"/>
   
-  <!-- 外圆环 - "边界" -->
+  <!-- Outer ring - "boundary" -->
   <circle cx="256" cy="256" r="160" fill="none" stroke="url(#grad1)" stroke-width="8" opacity="0.3"/>
   <circle cx="256" cy="256" r="140" fill="none" stroke="url(#grad1)" stroke-width="3" opacity="0.6"/>
   
-  <!-- 内部：Agent 核心点 -->
+  <!-- Interior: Agent core point -->
   <circle cx="220" cy="256" r="24" fill="url(#grad1)"/>
   
-  <!-- "穿越"弧线 — 从核心出发，穿过圆环边界，延伸到外面 -->
+  <!-- "Crossing" arcs — starting from the core, passing through the ring boundary, extending outward -->
   <path d="M 230 256 Q 320 180, 420 200" 
         fill="none" stroke="url(#grad1)" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
   <path d="M 230 256 Q 320 256, 420 256" 
@@ -27,7 +27,7 @@
   <path d="M 230 256 Q 320 330, 420 312" 
         fill="none" stroke="url(#grad1)" stroke-width="6" stroke-linecap="round" opacity="0.5"/>
   
-  <!-- 目标点：穿越后的落脚 -->
+  <!-- Target points: the landing spots after crossing -->
   <circle cx="420" cy="200" r="8" fill="#00AAFF" opacity="0.9"/>
   <circle cx="420" cy="256" r="8" fill="#00AAFF" opacity="0.7"/>
   <circle cx="420" cy="312" r="8" fill="#00AAFF" opacity="0.5"/>

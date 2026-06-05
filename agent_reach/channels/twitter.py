@@ -8,7 +8,7 @@ from .base import Channel
 
 class TwitterChannel(Channel):
     name = "twitter"
-    description = "Twitter/X 推文"
+    description = "Twitter/X posts"
     backends = ["twitter-cli", "bird CLI (legacy)"]
     tier = 1
 
@@ -28,9 +28,9 @@ class TwitterChannel(Channel):
             return self._check_bird(bird)
         else:
             return "warn", (
-                "Twitter CLI 未安装。安装方式：\n"
+                "Twitter CLI not installed. Install with:\n"
                 "  pipx install twitter-cli\n"
-                "或：\n"
+                "or:\n"
                 "  uv tool install twitter-cli"
             )
 
@@ -43,22 +43,22 @@ class TwitterChannel(Channel):
             output = (r.stdout or "") + (r.stderr or "")
             if r.returncode == 0 and "ok: true" in output:
                 return "ok", (
-                    "twitter-cli 完整可用（搜索、读推文、时间线、长文/Article、"
-                    "用户查询、Thread）"
+                    "twitter-cli fully available (search, read posts, timeline, long-form/Article, "
+                    "user lookup, Thread)"
                 )
             if "not_authenticated" in output:
                 return "warn", (
-                    "twitter-cli 已安装但未认证。设置方式：\n"
+                    "twitter-cli installed but not authenticated. Set up with:\n"
                     "  export TWITTER_AUTH_TOKEN=\"xxx\"\n"
                     "  export TWITTER_CT0=\"yyy\"\n"
-                    "或确保已在浏览器中登录 x.com"
+                    "or make sure you are logged into x.com in your browser"
                 )
             return "warn", (
-                "twitter-cli 已安装但认证检查失败。运行：\n"
-                "  twitter -v status 查看详细信息"
+                "twitter-cli installed but authentication check failed. Run:\n"
+                "  twitter -v status for details"
             )
         except Exception:
-            return "warn", "twitter-cli 已安装但连接失败"
+            return "warn", "twitter-cli installed but connection failed"
 
     def _check_bird(self, binary: str):
         try:
@@ -68,15 +68,15 @@ class TwitterChannel(Channel):
             )
             output = (r.stdout or "") + (r.stderr or "")
             if r.returncode == 0:
-                return "ok", "bird CLI 可用（读取、搜索推文，含长文/X Article）"
+                return "ok", "bird CLI available (read, search posts, including long-form/X Article)"
             if "Missing credentials" in output or "missing" in output.lower():
                 return "warn", (
-                    "bird CLI 已安装但未配置认证。设置环境变量：\n"
+                    "bird CLI installed but authentication not configured. Set environment variables:\n"
                     "  export AUTH_TOKEN=\"xxx\"\n"
                     "  export CT0=\"yyy\""
                 )
             return "warn", (
-                "bird CLI 已安装但认证检查失败。"
+                "bird CLI installed but authentication check failed."
             )
         except Exception:
-            return "warn", "bird CLI 已安装但连接失败"
+            return "warn", "bird CLI installed but connection failed"

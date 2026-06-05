@@ -25,7 +25,7 @@ def test_check_twitter_cli_found_and_auth_ok():
         status, message = channel.check()
     assert status == "ok"
     assert "twitter-cli" in message
-    assert "完整可用" in message
+    assert "fully available" in message
 
 
 def test_check_twitter_cli_found_auth_missing():
@@ -40,7 +40,7 @@ def test_check_twitter_cli_found_auth_missing():
     ):
         status, message = channel.check()
     assert status == "warn"
-    assert "未认证" in message
+    assert "not authenticated" in message
 
 
 # --- bird CLI fallback tests ---
@@ -74,7 +74,7 @@ def test_check_bird_fallback_auth_missing():
     ):
         status, message = channel.check()
     assert status == "warn"
-    assert "未配置认证" in message
+    assert "authentication not configured" in message
 
 
 # --- neither installed ---

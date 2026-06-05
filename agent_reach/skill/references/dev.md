@@ -1,21 +1,21 @@
-# 开发工具
+# Dev Tools
 
-GitHub CLI 
+GitHub CLI
 
 ## GitHub (gh CLI)
 
-GitHub 官方命令行工具，用于仓库、Issue、PR、Actions、Release 以及 API 访问。
+GitHub's official command-line tool, for repos, issues, PRs, Actions, releases, and API access.
 
 ```bash
-# 认证
+# Authentication
 gh auth login
 gh auth status
 
-# 搜索
+# Search
 gh search repos "query" --sort stars --limit 10
 gh search code "query" --language python
 
-# 仓库
+# Repositories
 gh repo view owner/repo
 gh repo clone owner/repo
 gh repo create my-repo --private
@@ -48,15 +48,15 @@ gh release create v1.0.0
 gh api /user
 gh api repos/owner/repo
 
-# JSON 输出
+# JSON output
 gh issue list --repo owner/repo --json number,title --jq '.[] | "\(.number): \(.title)"'
 ```
 
 
-## 选择指南
+## Selection Guide
 
-| 工具 | 来源 | 用途 |
+| Tool | Source | Purpose |
 |-----|------|------|
-| gh CLI | agent-reach | Git 操作 |
-| zread | my-mcp-tools | 读仓库内容 |
-| context7 | my-mcp-tools | 查技术文档 |
+| gh CLI | agent-reach | Git operations |
+| zread | my-mcp-tools | Read repo content |
+| context7 | my-mcp-tools | Look up technical docs |

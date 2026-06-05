@@ -1,228 +1,228 @@
-# 社交媒体 & 社区
+# Social Media & Communities
 
-小红书、抖音、Twitter/X、微博、B站、V2EX、Reddit。
+XiaoHongShu, Douyin, Twitter/X, Weibo, Bilibili, V2EX, Reddit.
 
-## 小红书 / XiaoHongShu (xhs-cli)
+## XiaoHongShu (xhs-cli)
 
-### 稳定可用的命令
+### Reliably working commands
 
 ```bash
-# 搜索笔记（推荐入口）
+# Search notes (recommended entry point)
 xhs search "query"
 
-# 阅读笔记详情（必须用搜索结果中的 URL 或 ID，不能裸 note_id）
+# Read note details (must use a URL or ID from search results, not a bare note_id)
 xhs read NOTE_ID_OR_URL
 
-# 查看评论
+# View comments
 xhs comments NOTE_ID_OR_URL
 
-# 浏览热门
+# Browse hot notes
 xhs hot
 
-# 推荐 feed
+# Recommended feed
 xhs feed
 ```
 
-### 已知不稳定的命令（v0.6.4）
+### Known unstable commands (v0.6.4)
 
 ```bash
-# 以下命令当前可能返回 API error，谨慎使用：
-xhs user USER_ID          # 可能返回 {code: -1}
-xhs user-posts USER_ID    # 可能返回 {code: -1}
-xhs favorites              # 可能返回 API error
+# The following commands may currently return an API error; use with caution:
+xhs user USER_ID          # may return {code: -1}
+xhs user-posts USER_ID    # may return {code: -1}
+xhs favorites              # may return an API error
 ```
 
-### 重要注意事项
+### Important notes
 
-> **安装**: `pipx install xiaohongshu-cli`，然后 `xhs login`（自动从浏览器提取 Cookie）。
+> **Install**: `pipx install xiaohongshu-cli`, then `xhs login` (automatically extracts the Cookie from the browser).
 >
-> **xsec_token 限制**: 小红书强制 xsec_token 机制，**不能直接用裸 note_id 去读**。正确流程是：先 `xhs search` 或 `xhs feed` 获取结果，再用结果中的 URL/ID 去 `xhs read`。直接构造 note_id 会被拦截。
+> **xsec_token restriction**: XiaoHongShu enforces an xsec_token mechanism, so **you cannot read with a bare note_id directly**. The correct flow is: first run `xhs search` or `xhs feed` to get results, then use the URL/ID from those results with `xhs read`. Manually constructing a note_id will be blocked.
 >
-> **频率控制**: 高频请求（批量搜索、深翻评论）会触发验证码，这是平台限制无法绕过。建议每次操作间隔 2-3 秒。
+> **Rate limiting**: High-frequency requests (bulk searches, deep comment paging) will trigger CAPTCHA. This is a platform limit that cannot be bypassed. It is recommended to wait 2-3 seconds between operations.
 >
-> **POST 操作风险**: 发帖(post)、评论(comment)、点赞(like) 等写操作在 v0.6.x 可能因签名问题返回 406。如需使用，建议降级到 v0.3.5 (`pipx install xiaohongshu-cli==0.3.5`)。
+> **POST operation risk**: Write operations such as posting, commenting, and liking may return 406 on v0.6.x due to signature issues. If you need them, consider downgrading to v0.3.5 (`pipx install xiaohongshu-cli==0.3.5`).
 
-## 抖音 / Douyin
+## Douyin / Douyin
 
-### 安装与配置
+### Installation and configuration
 
-`douyin-mcp-server` 是 **stdio 模式**的 MCP server，需先安装再注册到 mcporter：
+`douyin-mcp-server` is an MCP server in **stdio mode**; it must be installed first and then registered with mcporter:
 
 ```bash
-# 1. 安装
+# 1. Install
 pipx install douyin-mcp-server
 
-# 2. 查找安装路径
+# 2. Find the install path
 pipx runpip douyin-mcp-server show -f 2>/dev/null | grep "Location" \
   || find ~/.local -name "douyin-mcp-server" 2>/dev/null | head -1
 
-# 3. 注册到 mcporter（使用 stdio 模式，将路径替换为上一步的输出）
+# 3. Register with mcporter (use stdio mode; replace the path with the output from the previous step)
 mcporter config add douyin --command "/path/to/douyin-mcp-server" --scope home
 ```
 
-> **注意**：`agent-reach install --channels douyin` 暂不支持抖音渠道（抖音在"可选渠道待解锁"列表）。
-> HTTP 模式（`mcporter config add douyin http://localhost:18070/mcp`）**无法正常工作**，请使用上方 stdio 方式。
+> **Note**: `agent-reach install --channels douyin` does not yet support the Douyin channel (Douyin is in the "optional channels to be unlocked" list).
+> HTTP mode (`mcporter config add douyin http://localhost:18070/mcp`) **does not work properly**; please use the stdio method above.
 
-### 用法
+### Usage
 
 ```bash
-# 解析视频信息
+# Parse video info
 mcporter call 'douyin.parse_douyin_video_info(share_link: "https://v.douyin.com/xxx/")'
 
-# 获取无水印下载链接
+# Get a watermark-free download link
 mcporter call 'douyin.get_douyin_download_link(share_link: "https://v.douyin.com/xxx/")'
 
-# 提取视频文案
+# Extract the video transcript
 mcporter call 'douyin.extract_douyin_text(share_link: "https://v.douyin.com/xxx/")'
 ```
 
-> **无需登录**
+> **No login required**
 
 ## Twitter/X (twitter-cli)
 
-### 稳定命令
+### Stable commands
 
 ```bash
-# 首页时间线（最稳定）
+# Home timeline (most stable)
 twitter feed -n 20
 
-# 读取单条推文（含回复）
+# Read a single tweet (with replies)
 twitter tweet URL_OR_ID
 
-# 读取长文 / X Article
+# Read a long post / X Article
 twitter article URL_OR_ID
 
-# 用户时间线
+# User timeline
 twitter user-posts @username -n 20
 
-# 用户资料
+# User profile
 twitter user @username
 ```
 
-### 可能不稳定的命令
+### Potentially unstable commands
 
 ```bash
-# 搜索推文（Twitter 频繁改 GraphQL 端点，可能 404）
+# Search tweets (Twitter frequently changes GraphQL endpoints, may return 404)
 twitter search "query" -n 10
-# 如果 search 返回 404，升级 twitter-cli：pipx upgrade twitter-cli
+# If search returns 404, upgrade twitter-cli: pipx upgrade twitter-cli
 
-# likes（2024 年后只能看自己的，平台限制）
+# likes (after 2024 you can only view your own, a platform limitation)
 twitter likes
 ```
 
-### 重要注意事项
+### Important notes
 
-> **安装**: `pipx install twitter-cli`（确保 v0.8.5+）
+> **Install**: `pipx install twitter-cli` (make sure it is v0.8.5+)
 >
-> **认证**: 推荐用 Cookie-Editor 导出后设置环境变量 `TWITTER_AUTH_TOKEN` + `TWITTER_CT0`。自动提取在 SSH/Docker/无头环境不可用。
+> **Authentication**: It is recommended to export with Cookie-Editor and set the environment variables `TWITTER_AUTH_TOKEN` + `TWITTER_CT0`. Automatic extraction does not work in SSH/Docker/headless environments.
 >
-> **IP 风控**: 不要在 VPS/数据中心 IP 上频繁调用，尤其是 followers/following，有封号风险。使用住宅代理或本地环境。
+> **IP anti-abuse**: Do not call frequently from VPS/data-center IPs, especially followers/following, as there is a risk of account suspension. Use a residential proxy or a local environment.
 >
-> **search 可能失效**: Twitter 频繁修改 GraphQL API，search 命令可能随时返回 404。如遇到，先 `pipx upgrade twitter-cli`。如果最新版仍不行，说明上游还没跟上 Twitter 的改动，用 `twitter feed` 替代。
+> **search may fail**: Twitter frequently changes its GraphQL API, so the search command may return 404 at any time. If this happens, first run `pipx upgrade twitter-cli`. If the latest version still does not work, it means upstream has not yet caught up with Twitter's changes; use `twitter feed` instead.
 >
-> **输出格式**: 建议用 `--yaml` 或 `--json` 获得结构化输出，对 AI agent 更友好。
+> **Output format**: It is recommended to use `--yaml` or `--json` for structured output, which is friendlier for AI agents.
 
-## 微博 / Weibo
+## Weibo
 
 ```bash
-# 使用 Jina Reader 读取
+# Read with Jina Reader
 curl -s "https://r.jina.ai/https://weibo.com/USER_ID/POST_ID"
 ```
 
-> 微博主要通过网页抓取，推荐使用通用网页读取方式。
+> Weibo is mainly accessed through web scraping; the generic web reading approach is recommended.
 
-## B站 / Bilibili
+## Bilibili
 
 ```bash
-# 获取视频元数据
+# Get video metadata
 yt-dlp --dump-json "https://www.bilibili.com/video/BVxxx"
 
-# 下载字幕
+# Download subtitles
 yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --convert-subs vtt --skip-download -o "/tmp/%(id)s" "URL"
 ```
 
-> **注意**: 服务器 IP 可能遇到 412 错误。使用 `--cookies-from-browser chrome` 或配置代理。
+> **Note**: Server IPs may hit a 412 error. Use `--cookies-from-browser chrome` or configure a proxy.
 
-## V2EX (公开 API)
+## V2EX (public API)
 
-无需认证，直接调用公开 API。
+No authentication required; call the public API directly.
 
-### 热门主题
+### Hot topics
 
 ```bash
 curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1.0"
 ```
 
-### 节点主题
+### Node topics
 
 ```bash
-# node_name 如: python, tech, jobs, qna, programmers
+# node_name examples: python, tech, jobs, qna, programmers
 curl -s "https://www.v2ex.com/api/topics/show.json?node_name=python&page=1" -H "User-Agent: agent-reach/1.0"
 ```
 
-### 主题详情
+### Topic details
 
 ```bash
-# topic_id 从 URL 获取，如 https://www.v2ex.com/t/1234567
+# topic_id is from the URL, e.g. https://www.v2ex.com/t/1234567
 curl -s "https://www.v2ex.com/api/topics/show.json?id=TOPIC_ID" -H "User-Agent: agent-reach/1.0"
 ```
 
-### 主题回复
+### Topic replies
 
 ```bash
 curl -s "https://www.v2ex.com/api/replies/show.json?topic_id=TOPIC_ID&page=1" -H "User-Agent: agent-reach/1.0"
 ```
 
-### 用户信息
+### User info
 
 ```bash
 curl -s "https://www.v2ex.com/api/members/show.json?username=USERNAME" -H "User-Agent: agent-reach/1.0"
 ```
 
-### Python 调用示例
+### Python usage example
 
 ```python
 from agent_reach.channels.v2ex import V2EXChannel
 
 ch = V2EXChannel()
 
-# 获取热门帖子
+# Get hot topics
 topics = ch.get_hot_topics(limit=10)
 for t in topics:
-    print(f"[{t['node_title']}] {t['title']} ({t['replies']} 回复)")
+    print(f"[{t['node_title']}] {t['title']} ({t['replies']} replies)")
 
-# 获取节点帖子
+# Get node topics
 node_topics = ch.get_node_topics("python", limit=5)
 
-# 获取帖子详情 + 回复
+# Get topic details + replies
 topic = ch.get_topic(1234567)
 print(topic["title"], "—", topic["author"])
 
-# 获取用户信息
+# Get user info
 user = ch.get_user("Livid")
 ```
 
-> **节点列表**: https://www.v2ex.com/planes
+> **Node list**: https://www.v2ex.com/planes
 
 ## Reddit (rdt-cli)
 
 ```bash
-# 搜索帖子
+# Search posts
 rdt search "query" --limit 10
 
-# 读帖子全文 + 评论
+# Read full post + comments
 rdt read POST_ID
 
-# 浏览 subreddit
+# Browse a subreddit
 rdt sub python --limit 20
 
-# 浏览热门
+# Browse popular
 rdt popular --limit 10
 
-# 浏览 /r/all
+# Browse /r/all
 rdt all --limit 10
 ```
 
-> **安装**: `pipx install rdt-cli`（确保 v0.4.2+）。无需登录即可搜索和阅读。
-> 需要登录的功能：`rdt feed --subs-only`（订阅列表）、`rdt saved`（收藏）。
-> 建议使用 `--yaml` 输出，对 AI agent 更友好。
+> **Install**: `pipx install rdt-cli` (make sure it is v0.4.2+). No login required to search and read.
+> Features that require login: `rdt feed --subs-only` (subscription list), `rdt saved` (saved items).
+> Using `--yaml` output is recommended, as it is friendlier for AI agents.

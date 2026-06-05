@@ -32,7 +32,7 @@ def format_report(results: Dict[str, dict]) -> str:
         escape = lambda x: x
 
     lines = []
-    lines.append("[bold cyan]Agent Reach 状态[/bold cyan]")
+    lines.append("[bold cyan]Agent Reach status[/bold cyan]")
     lines.append("[cyan]" + "=" * 40 + "[/cyan]")
 
     ok_count = sum(1 for r in results.values() if r["status"] == "ok")
@@ -40,7 +40,7 @@ def format_report(results: Dict[str, dict]) -> str:
 
     # Tier 0 — zero config
     lines.append("")
-    lines.append("[bold]✅ 装好即用：[/bold]")
+    lines.append("[bold]✅ Ready to use:[/bold]")
     for key, r in results.items():
         if r["tier"] == 0:
             name_msg = f"[bold]{escape(r['name'])}[/bold] — {escape(r['message'])}"
@@ -57,7 +57,7 @@ def format_report(results: Dict[str, dict]) -> str:
     tier1_inactive = {k: r for k, r in tier1.items() if r["status"] != "ok"}
     if tier1_active:
         lines.append("")
-        lines.append("[bold]可选渠道（已安装）：[/bold]")
+        lines.append("[bold]Optional channels (installed):[/bold]")
         for key, r in tier1_active.items():
             name_msg = f"[bold]{escape(r['name'])}[/bold] — {escape(r['message'])}"
             lines.append(f"  [green]✅[/green] {name_msg}")
@@ -69,22 +69,22 @@ def format_report(results: Dict[str, dict]) -> str:
     if tier2_active:
         if not tier1_active:
             lines.append("")
-            lines.append("[bold]可选渠道（已安装）：[/bold]")
+            lines.append("[bold]Optional channels (installed):[/bold]")
         for key, r in tier2_active.items():
             name_msg = f"[bold]{escape(r['name'])}[/bold] — {escape(r['message'])}"
             lines.append(f"  [green]✅[/green] {name_msg}")
 
     lines.append("")
     status_color = "green" if ok_count == total else ("yellow" if ok_count > 0 else "red")
-    lines.append(f"状态：[{status_color}]{ok_count}/{total}[/{status_color}] 个渠道可用")
+    lines.append(f"Status: [{status_color}]{ok_count}/{total}[/{status_color}] channels available")
 
     # Summarize inactive optional channels in one line instead of listing each
     all_inactive = list(tier1_inactive.values()) + list(tier2_inactive.values())
     if all_inactive:
         names = [r["name"] for r in all_inactive]
         lines.append(
-            f"还有 {len(names)} 个可选渠道可以解锁（{'、'.join(names)}），"
-            "告诉你的 Agent「帮我装 XXX」即可"
+            f"There are {len(names)} more optional channels you can unlock "
+            f"({', '.join(names)}); just tell your Agent \"install XXX for me\""
         )
 
     # Security check: config file permissions (Unix only)
@@ -99,9 +99,9 @@ def format_report(results: Dict[str, dict]) -> str:
             if mode & (stat.S_IRGRP | stat.S_IROTH):
                 lines.append("")
                 lines.append(
-                    "[bold red][!]  安全提示：config.yaml 权限过宽（其他用户可读）[/bold red]"
+                    "[bold red][!]  Security warning: config.yaml permissions are too open (readable by other users)[/bold red]"
                 )
-                lines.append("   修复：chmod 600 ~/.agent-reach/config.yaml")
+                lines.append("   Fix: chmod 600 ~/.agent-reach/config.yaml")
         except OSError:
             pass
 

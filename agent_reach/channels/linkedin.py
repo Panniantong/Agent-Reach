@@ -8,7 +8,7 @@ from .base import Channel
 
 class LinkedInChannel(Channel):
     name = "linkedin"
-    description = "LinkedIn 职业社交"
+    description = "LinkedIn professional network"
     backends = ["linkedin-scraper-mcp", "Jina Reader"]
     tier = 2
 
@@ -20,10 +20,10 @@ class LinkedInChannel(Channel):
         mcporter = shutil.which("mcporter")
         if not mcporter:
             return "off", (
-                "基本内容可通过 Jina Reader 读取。完整功能需要：\n"
+                "Basic content can be read via Jina Reader. Full functionality requires:\n"
                 "  pip install linkedin-scraper-mcp\n"
                 "  mcporter config add linkedin http://localhost:3000/mcp\n"
-                "  详见 https://github.com/stickerdaniel/linkedin-mcp-server"
+                "  See https://github.com/stickerdaniel/linkedin-mcp-server"
             )
         try:
             r = subprocess.run(
@@ -31,11 +31,11 @@ class LinkedInChannel(Channel):
                 encoding="utf-8", errors="replace", timeout=5
             )
             if "linkedin" in r.stdout.lower():
-                return "ok", "完整可用（Profile、公司、职位搜索）"
+                return "ok", "Fully available (profile, company, job search)"
         except Exception:
             pass
         return "off", (
-            "mcporter 已装但 LinkedIn MCP 未配置。运行：\n"
+            "mcporter installed but LinkedIn MCP not configured. Run:\n"
             "  pip install linkedin-scraper-mcp\n"
             "  mcporter config add linkedin http://localhost:3000/mcp"
         )

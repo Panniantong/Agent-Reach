@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Xiaoyuzhou Podcast (小宇宙播客) — transcribe podcasts via Groq Whisper API."""
+"""Xiaoyuzhou Podcast — transcribe podcasts via Groq Whisper API."""
 
 import os
 import shutil
@@ -9,7 +9,7 @@ from .base import Channel
 
 class XiaoyuzhouChannel(Channel):
     name = "xiaoyuzhou"
-    description = "小宇宙播客转文字"
+    description = "Xiaoyuzhou podcast transcription"
     backends = ["groq-whisper", "ffmpeg"]
     tier = 1
 
@@ -22,7 +22,7 @@ class XiaoyuzhouChannel(Channel):
         # Check ffmpeg
         if not shutil.which("ffmpeg"):
             return "off", (
-                "需要 ffmpeg（音频转码和切片）。安装：\n"
+                "ffmpeg required (audio transcoding and segmentation). Install:\n"
                 "  Ubuntu/Debian: apt install -y ffmpeg\n"
                 "  macOS: brew install ffmpeg"
             )
@@ -31,9 +31,9 @@ class XiaoyuzhouChannel(Channel):
         script = os.path.expanduser("~/.agent-reach/tools/xiaoyuzhou/transcribe.sh")
         if not os.path.isfile(script):
             return "off", (
-                "转录脚本未安装。运行：\n"
+                "Transcription script not installed. Run:\n"
                 "  agent-reach install --env=auto\n"
-                "  或手动复制 transcribe.sh 到 ~/.agent-reach/tools/xiaoyuzhou/"
+                "  or manually copy transcribe.sh to ~/.agent-reach/tools/xiaoyuzhou/"
             )
 
         # Check GROQ_API_KEY — prefer env var, fall back to Agent Reach config
@@ -46,9 +46,9 @@ class XiaoyuzhouChannel(Channel):
                 has_key = False
         if not has_key:
             return "warn", (
-                "需要配置 Groq API Key（免费）。步骤：\n"
-                "  1. 注册 https://console.groq.com\n"
-                "  2. 运行: agent-reach configure groq-key gsk_xxxxx"
+                "Groq API Key required (free). Steps:\n"
+                "  1. Sign up at https://console.groq.com\n"
+                "  2. Run: agent-reach configure groq-key gsk_xxxxx"
             )
 
-        return "ok", "完整可用（播客下载 + Whisper 转录）"
+        return "ok", "Fully available (podcast download + Whisper transcription)"

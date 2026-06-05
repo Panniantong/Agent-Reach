@@ -26,8 +26,8 @@ def _exa_available() -> bool:
 
 class WeChatChannel(Channel):
     name = "wechat"
-    description = "微信公众号文章"
-    backends = ["Exa via mcporter (搜索+阅读)", "Camoufox (可选阅读)"]
+    description = "WeChat Official Account articles"
+    backends = ["Exa via mcporter (search + read)", "Camoufox (optional read)"]
     tier = 0
 
     def can_handle(self, url: str) -> bool:
@@ -45,19 +45,19 @@ class WeChatChannel(Channel):
             pass
 
         if has_exa and has_camoufox:
-            return "ok", "完整可用（Exa 搜索 + Exa/Camoufox 阅读公众号文章）"
+            return "ok", "Fully available (Exa search + Exa/Camoufox reading of Official Account articles)"
         elif has_exa:
             return "ok", (
-                "通过 Exa 搜索和阅读微信公众号文章（免费，无需额外配置）。"
-                "可选安装 Camoufox 获得更好的全文阅读效果。"
+                "Search and read WeChat Official Account articles via Exa (free, no extra configuration). "
+                "Optionally install Camoufox for better full-text reading."
             )
         elif has_camoufox:
             return "warn", (
-                "Camoufox 可阅读公众号文章，但搜索功能需要 Exa。"
-                "运行 `agent-reach install --env=auto` 安装 Exa。"
+                "Camoufox can read Official Account articles, but search requires Exa. "
+                "Run `agent-reach install --env=auto` to install Exa."
             )
         else:
             return "off", (
-                "需要 mcporter + Exa MCP 来搜索和阅读微信公众号文章。\n"
-                "运行 `agent-reach install --env=auto` 安装。"
+                "mcporter + Exa MCP required to search and read WeChat Official Account articles.\n"
+                "Run `agent-reach install --env=auto` to install."
             )

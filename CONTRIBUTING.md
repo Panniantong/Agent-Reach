@@ -78,30 +78,3 @@ When reporting bugs, please include:
 ## Questions?
 
 Feel free to open an issue for questions or join discussions.
-
----
-
-感谢您对 Agent Reach 的贡献！本文档提供了贡献指南。
-
-## 快速开始
-
-1. 在 GitHub 上 fork 仓库
-2. 本地 clone 您的 fork
-3. 创建新分支
-4. 提交更改
-5. 运行测试和 lint
-6. 提交 pull request
-
-## 代码规范
-
-- 使用 **ruff** 进行代码检查
-- 使用 **mypy** 进行类型检查
-- 使用 **pytest** 运行测试
-
-## 添加新渠道
-
-1. 在 `agent_reach/channels/` 创建新文件
-2. 实现渠道接口
-3. 添加测试
-4. 更新 doctor 检测
-5. 更新文档

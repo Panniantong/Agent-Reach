@@ -5,7 +5,7 @@
 Copy this to your AI Agent:
 
 ```
-帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+Help me update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
 ```
 
 Or in English:
@@ -32,7 +32,7 @@ Update Agent Reach to the latest version, install any new upstream tools, migrat
 agent-reach check-update
 ```
 
-If it says "已是最新版本", skip to Step 5 (verify). Otherwise continue.
+If it says "Already on the latest version", skip to Step 5 (verify). Otherwise continue.
 
 ### Step 2: Update Agent Reach package
 
