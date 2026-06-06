@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """Tests for Agent Reach CLI."""
 
+from unittest.mock import patch
+
 import pytest
 import requests
-from unittest.mock import patch
+
 import agent_reach.cli as cli
 from agent_reach.cli import main
 
