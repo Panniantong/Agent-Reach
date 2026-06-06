@@ -122,5 +122,7 @@ class TestCheckUpdateRetry:
 
         captured = capsys.readouterr()
         assert result == "error"
-        assert "Network timeout" in captured.out or "网络超时" in captured.out
-        assert "retried" in captured.out
+        # Default locale is Chinese — verify no mixed-language output
+        assert "无法检查更新" in captured.out
+        assert "网络超时" in captured.out
+        assert "已重试" in captured.out

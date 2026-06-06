@@ -69,6 +69,10 @@ packages = ["agent_reach"]
 # Keep the whole skill directory so SKILL.md, SKILL_en.md, and references/ ship together.
 "agent_reach/skill" = "agent_reach/skill"
 "agent_reach/scripts" = "agent_reach/scripts"
+# English docs (root docs stay in git but aren't needed at runtime from the package)
+"docs/install_en.md" = "docs/install_en.md"
+"docs/troubleshooting_en.md" = "docs/troubleshooting_en.md"
+"docs/update_en.md" = "docs/update_en.md"
 
 [tool.ruff]
 target-version = "py310"

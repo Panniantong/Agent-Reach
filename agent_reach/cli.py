@@ -53,6 +53,9 @@ def main():
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Show debug logs")
     parser.add_argument("--version", action="version", version=f"Agent Reach v{__version__}")
+    parser.add_argument("--lang", default="",
+                        choices=["en", "zh"],
+                        help="Language for output (en or zh, default: zh)")
     sub = parser.add_subparsers(dest="command", help="Available commands")
 
     # ── setup ──
@@ -120,6 +123,13 @@ def main():
 
     # Suppress loguru noise unless --verbose
     _configure_logging(getattr(args, "verbose", False))
+
+    # Apply --lang flag globally (overrides env vars)
+    from agent_reach.lang import set_english as _set_lang
+    if getattr(args, "lang", "") == "en":
+        _set_lang(True)
+    elif getattr(args, "lang", "") == "zh":
+        _set_lang(False)
 
     if not args.command:
         parser.print_help()
@@ -374,20 +384,24 @@ def _install_skill():
             from agent_reach.lang import use_english as _use_en
             use_en = _use_en()
 
+            # When English: only copy *_en.md (as *.md). Skip plain *.md to
+            # avoid races between filesystem iteration order and overwrites.
+            # When Chinese: only copy *.md. Skip *_en.md entirely.
             for ref_file in refs_pkg.iterdir():
                 name = ref_file.name if hasattr(ref_file, 'name') else str(ref_file).split('/')[-1]
                 if not name.endswith(".md"):
                     continue
-                # When English: copy *_en.md as *.md (drop _en suffix)
-                if use_en and name.endswith("_en.md"):
+                if use_en:
+                    if not name.endswith("_en.md"):
+                        continue
                     target_name = name.replace("_en.md", ".md")
-                    content = ref_file.read_text(encoding="utf-8") if hasattr(ref_file, 'read_text') else open(str(ref_file), encoding="utf-8").read()
-                    with open(os.path.join(refs_target, target_name), "w", encoding="utf-8") as f:
-                        f.write(content)
-                elif not use_en and not name.endswith("_en.md"):
-                    content = ref_file.read_text(encoding="utf-8") if hasattr(ref_file, 'read_text') else open(str(ref_file), encoding="utf-8").read()
-                    with open(os.path.join(refs_target, name), "w", encoding="utf-8") as f:
-                        f.write(content)
+                else:
+                    if name.endswith("_en.md"):
+                        continue
+                    target_name = name
+                content = ref_file.read_text(encoding="utf-8") if hasattr(ref_file, 'read_text') else open(str(ref_file), encoding="utf-8").read()
+                with open(os.path.join(refs_target, target_name), "w", encoding="utf-8") as f:
+                    f.write(content)
 
             return True
         except Exception as e:
@@ -1719,7 +1733,10 @@ def _cmd_check_update():
     # Fetch latest release with retry/backoff.
     resp, err, attempts = _github_get_with_retry(release_url, timeout=10, retries=3)
     if err:
-        print(f"[!] {_update_error_text(err)} (retried {attempts} times)")
+        if use_english():
+            print(f"[!] {_update_error_text(err)} (retried {attempts} times)")
+        else:
+            print(f"[!] 无法检查更新（{_update_error_text(err)}，已重试 {attempts} 次）")
         return "error"
 
     if resp.status_code == 200:
@@ -1765,7 +1782,10 @@ def _cmd_check_update():
     # No releases yet, fall back to latest main commit.
     resp2, err2, attempts2 = _github_get_with_retry(commit_url, timeout=10, retries=2)
     if err2:
-        print(f"[!] {_update_error_text(err2)} (retried {attempts + attempts2} times)")
+        if use_english():
+            print(f"[!] {_update_error_text(err2)} (retried {attempts + attempts2} times)")
+        else:
+            print(f"[!] 无法检查更新（{_update_error_text(err2)}，已重试 {attempts + attempts2} 次）")
         return "error"
     if resp2.status_code == 200:
         commit = resp2.json()

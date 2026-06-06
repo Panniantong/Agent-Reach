@@ -1,11 +1,16 @@
 # Agent Reach — Installation Guide (English)
 
+> 🌐 **English is active when `AGENT_REACH_LANG=en` is set.**
+> The install commands below use `AGENT_REACH_LANG=en` so you get English
+> output, doctor reports, and skill files automatically. Omit it if you
+> prefer Chinese.
+
 ## For Humans
 
 Copy this to your AI Agent:
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install_en.md
 ```
 
 > 🛡️ **Security-conscious?** Use safe mode:

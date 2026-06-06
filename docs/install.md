@@ -1,5 +1,12 @@
 # Agent Reach — Installation Guide
 
+> 🌐 **English users:** Set `AGENT_REACH_LANG=en` before installing to get
+> English CLI output, doctor reports, and skill files:
+> ```bash
+> AGENT_REACH_LANG=en agent-reach install --env=auto
+> ```
+> See [`docs/install_en.md`](install_en.md) for the full English install guide.
+
 ## For Humans
 
 Copy this to your AI Agent:

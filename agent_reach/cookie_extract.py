@@ -7,6 +7,7 @@ Extracts: Twitter, XiaoHongShu, Bilibili cookies in one shot.
 Usage:
     agent-reach configure --from-browser chrome
 """
+from agent_reach.lang import use_english
 
 import sys
 from typing import Dict, List, Optional, Tuple
@@ -258,13 +259,11 @@ def configure_from_browser(browser: str, config) -> List[Tuple[str, bool, str]]:
         if cookie_str and "xq_a_token" in cookie_str:
             config.set("xueqiu_cookie", cookie_str)
             n_cookies = len(cookie_str.split(";"))
-            from agent_reach.lang import use_english
             if use_english():
                 results_list.append(("Xueqiu", True, f"{n_cookies} cookies (with xq_a_token)"))
             else:
                 results_list.append(("Xueqiu", True, f"{n_cookies} cookies (含 xq_a_token)"))
         elif cookie_str:
-            from agent_reach.lang import use_english
             if use_english():
                 results_list.append(("Xueqiu", False,
                                      f"Found {len(cookie_str.split(';'))} cookies but missing xq_a_token. "
