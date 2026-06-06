@@ -146,7 +146,8 @@ def _strip_html(text: str) -> str:
 class XueqiuChannel(Channel):
     name = "xueqiu"
     description = "雪球股票行情与社区动态"
-    backends = ["Xueqiu API (需要登录 Cookie)"]
+    description_en = "Xueqiu stock quotes and community"
+    backends = ["Xueqiu API (login cookie required)"]
     tier = 1
 
     # ------------------------------------------------------------------ #
@@ -162,15 +163,26 @@ class XueqiuChannel(Channel):
     # ------------------------------------------------------------------ #
 
     def check(self, config=None):
+        from agent_reach.lang import use_english
+
         try:
             data = _get_json(
                 "https://stock.xueqiu.com/v5/stock/batch/quote.json?symbol=SH000001"
             )
             items = (data.get("data") or {}).get("items") or []
             if items:
+                if use_english():
+                    return "ok", "Public API available (quotes, search, hot posts, hot stocks)"
                 return "ok", "公开 API 可用（行情、搜索、热帖、热股）"
+            if use_english():
+                return "warn", "API response abnormal (empty data returned)"
             return "warn", "API 响应异常（返回数据为空）"
         except Exception as e:
+            if use_english():
+                return "warn", (
+                    f"Xueqiu API connection failed: {e}. "
+                    "Login to Xueqiu first then run: agent-reach configure --from-browser chrome"
+                )
             return "warn", (
                 f"Xueqiu API 连接失败：{e}。"
                 "请先登录雪球后运行：agent-reach configure --from-browser chrome"

@@ -11,10 +11,15 @@ class _StubChannel:
     def __init__(self, name, description, tier, status, message, backends=None):
         self.name = name
         self.description = description
+        self.description_en = description
         self.tier = tier
         self._status = status
         self._message = message
         self.backends = backends or []
+
+    @property
+    def display_name(self):
+        return self.description
 
     def check(self, config=None):
         return self._status, self._message

@@ -41,8 +41,10 @@ def test_youtube_warns_when_node_only_and_no_config(monkeypatch, tmp_path):
         return None  # deno not installed
 
     monkeypatch.setattr("shutil.which", fake_which)
-    # Point to a non-existent config file
-    monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path / ".config/yt-dlp/config"))
+    # Point to a non-existent config directory
+    # Must patch at the importing module (youtube) since it uses from-import
+    monkeypatch.setattr("agent_reach.channels.youtube.get_ytdlp_config_path",
+                        lambda: tmp_path / ".config" / "yt-dlp" / "config")
 
     ch = YouTubeChannel()
     status, message = ch.check()

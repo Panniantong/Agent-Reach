@@ -9,6 +9,7 @@ from .base import Channel
 class WeiboChannel(Channel):
     name = "weibo"
     description = "微博动态与热搜"
+    description_en = "Weibo trends and feeds"
     backends = ["mcp-server-weibo"]
     tier = 1
 
@@ -18,8 +19,18 @@ class WeiboChannel(Channel):
         return "weibo.com" in d or "weibo.cn" in d
 
     def check(self, config=None):
+        from agent_reach.lang import use_english
+
         mcporter = shutil.which("mcporter")
         if not mcporter:
+            if use_english():
+                return "off", (
+                    "mcporter + mcp-server-weibo required. Steps:\n"
+                    "  1. npm install -g mcporter\n"
+                    "  2. pip install git+https://github.com/Panniantong/mcp-server-weibo.git\n"
+                    "  3. mcporter config add weibo --command 'mcp-server-weibo'\n"
+                    "  See https://github.com/Panniantong/mcp-server-weibo"
+                )
             return "off", (
                 "需要 mcporter + mcp-server-weibo。安装步骤：\n"
                 "  1. npm install -g mcporter\n"
@@ -33,12 +44,20 @@ class WeiboChannel(Channel):
                 encoding="utf-8", errors="replace", timeout=5
             )
             if "weibo" not in r.stdout:
+                if use_english():
+                    return "off", (
+                        "mcporter installed but Weibo MCP not configured. Run:\n"
+                        "  pip install git+https://github.com/Panniantong/mcp-server-weibo.git\n"
+                        "  mcporter config add weibo --command 'mcp-server-weibo'"
+                    )
                 return "off", (
                     "mcporter 已装但微博 MCP 未配置。运行：\n"
                     "  pip install git+https://github.com/Panniantong/mcp-server-weibo.git\n"
                     "  mcporter config add weibo --command 'mcp-server-weibo'"
                 )
         except Exception:
+            if use_english():
+                return "off", "mcporter connection error"
             return "off", "mcporter 连接异常"
         try:
             r = subprocess.run(
@@ -46,7 +65,13 @@ class WeiboChannel(Channel):
                 encoding="utf-8", errors="replace", timeout=15
             )
             if r.returncode == 0 and "search_users" in r.stdout:
+                if use_english():
+                    return "ok", "Fully available (trending, search, user feeds, comments)"
                 return "ok", "完整可用（热搜、搜索、用户动态、评论）"
+            if use_english():
+                return "warn", "MCP configured but tools failed to load, check mcp-server-weibo version"
             return "warn", "MCP 已配置但工具加载失败，检查 mcp-server-weibo 版本"
         except Exception:
+            if use_english():
+                return "warn", "MCP connection error, check mcp-server-weibo availability"
             return "warn", "MCP 连接异常，检查 mcp-server-weibo 是否可用"

@@ -10,6 +10,7 @@ from .base import Channel
 class XiaoyuzhouChannel(Channel):
     name = "xiaoyuzhou"
     description = "小宇宙播客转文字"
+    description_en = "Xiaoyuzhou podcast transcription"
     backends = ["groq-whisper", "ffmpeg"]
     tier = 1
 
@@ -19,8 +20,16 @@ class XiaoyuzhouChannel(Channel):
         return "xiaoyuzhoufm.com" in d
 
     def check(self, config=None):
+        from agent_reach.lang import use_english
+
         # Check ffmpeg
         if not shutil.which("ffmpeg"):
+            if use_english():
+                return "off", (
+                    "ffmpeg required (audio transcoding and slicing). Install:\n"
+                    "  Ubuntu/Debian: apt install -y ffmpeg\n"
+                    "  macOS: brew install ffmpeg"
+                )
             return "off", (
                 "需要 ffmpeg（音频转码和切片）。安装：\n"
                 "  Ubuntu/Debian: apt install -y ffmpeg\n"
@@ -30,6 +39,12 @@ class XiaoyuzhouChannel(Channel):
         # Check script exists
         script = os.path.expanduser("~/.agent-reach/tools/xiaoyuzhou/transcribe.sh")
         if not os.path.isfile(script):
+            if use_english():
+                return "off", (
+                    "Transcript script not installed. Run:\n"
+                    "  agent-reach install --env=auto\n"
+                    "  or manually copy transcribe.sh to ~/.agent-reach/tools/xiaoyuzhou/"
+                )
             return "off", (
                 "转录脚本未安装。运行：\n"
                 "  agent-reach install --env=auto\n"
@@ -45,10 +60,18 @@ class XiaoyuzhouChannel(Channel):
             except Exception:
                 has_key = False
         if not has_key:
+            if use_english():
+                return "warn", (
+                    "Groq API Key needed (free). Steps:\n"
+                    "  1. Sign up at https://console.groq.com\n"
+                    "  2. Run: agent-reach configure groq-key gsk_xxxxx"
+                )
             return "warn", (
                 "需要配置 Groq API Key（免费）。步骤：\n"
                 "  1. 注册 https://console.groq.com\n"
                 "  2. 运行: agent-reach configure groq-key gsk_xxxxx"
             )
 
+        if use_english():
+            return "ok", "Fully available (podcast download + Whisper transcription)"
         return "ok", "完整可用（播客下载 + Whisper 转录）"

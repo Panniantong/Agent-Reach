@@ -9,10 +9,10 @@ Usage:
     agent-reach setup
 """
 
-import sys
 import argparse
 import json
 import os
+import sys
 import time
 
 from agent_reach import __version__
@@ -53,6 +53,9 @@ def main():
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Show debug logs")
     parser.add_argument("--version", action="version", version=f"Agent Reach v{__version__}")
+    parser.add_argument("--lang", default="",
+                        choices=["en", "zh"],
+                        help="Language for output (en or zh, default: zh)")
     sub = parser.add_subparsers(dest="command", help="Available commands")
 
     # ── setup ──
@@ -121,6 +124,13 @@ def main():
     # Suppress loguru noise unless --verbose
     _configure_logging(getattr(args, "verbose", False))
 
+    # Apply --lang flag globally (overrides env vars)
+    from agent_reach.lang import set_english as _set_lang
+    if getattr(args, "lang", "") == "en":
+        _set_lang(True)
+    elif getattr(args, "lang", "") == "zh":
+        _set_lang(False)
+
     if not args.command:
         parser.print_help()
         sys.exit(0)
@@ -155,6 +165,7 @@ def main():
 def _cmd_install(args):
     """One-shot deterministic installer."""
     import os
+
     from agent_reach.config import Config
     from agent_reach.doctor import check_all, format_report
 
@@ -205,17 +216,17 @@ def _cmd_install(args):
         env = _detect_environment()
 
     if env == "server":
-        print(f"Environment: Server/VPS (auto-detected)")
+        print("Environment: Server/VPS (auto-detected)")
     else:
-        print(f"Environment: Local computer (auto-detected)")
+        print("Environment: Local computer (auto-detected)")
 
     # Apply explicit flags
     if args.proxy:
         if dry_run:
-            print(f"[dry-run] Would configure proxy for Bilibili")
+            print("[dry-run] Would configure proxy for Bilibili")
         else:
             config.set("bilibili_proxy", args.proxy)
-            print(f"✅ Proxy configured for Bilibili")
+            print("✅ Proxy configured for Bilibili")
 
     # ── Install core system dependencies (lightweight, always) ──
     print()
@@ -312,9 +323,15 @@ def _cmd_install(args):
 
         # Star reminder
         print()
-        print("如果 Agent Reach 帮到了你，给个 Star 让更多人发现它吧：")
-        print("   https://github.com/Panniantong/Agent-Reach")
-        print("   只需一秒，对独立开发者意义很大。谢谢！")
+        from agent_reach.lang import use_english
+        if use_english():
+            print("If Agent Reach helped you, give it a star so others can find it:")
+            print("   https://github.com/Panniantong/Agent-Reach")
+            print("   One second, means a lot to indie developers. Thank you!")
+        else:
+            print("如果 Agent Reach 帮到了你，给个 Star 让更多人发现它吧：")
+            print("   https://github.com/Panniantong/Agent-Reach")
+            print("   只需一秒，对独立开发者意义很大。谢谢！")
     else:
         print()
         print("Dry run complete. No changes were made.")
@@ -322,22 +339,13 @@ def _cmd_install(args):
 
 def _install_skill():
     """Install Agent Reach as an agent skill (OpenClaw / Claude Code / .agents)."""
+    import importlib.resources
     import os
     import shutil
-    import importlib.resources
-
-    def _is_english_locale(value: str) -> bool:
-        normalized = value.strip().lower()
-        return normalized.startswith("en") or normalized.startswith("english")
 
     def _skill_resource_name() -> str:
-        locale_candidates = (
-            os.environ.get("AGENT_REACH_LANG", ""),
-            os.environ.get("LC_ALL", ""),
-            os.environ.get("LC_MESSAGES", ""),
-            os.environ.get("LANG", ""),
-        )
-        if any(_is_english_locale(candidate) for candidate in locale_candidates):
+        from agent_reach.lang import use_english
+        if use_english():
             return "SKILL_en.md"
         return "SKILL.md"
 
@@ -374,12 +382,27 @@ def _install_skill():
             refs_target = os.path.join(target, "references")
             os.makedirs(refs_target, exist_ok=True)
 
+            from agent_reach.lang import use_english as _use_en
+            use_en = _use_en()
+
+            # When English: only copy *_en.md (as *.md). Skip plain *.md to
+            # avoid races between filesystem iteration order and overwrites.
+            # When Chinese: only copy *.md. Skip *_en.md entirely.
             for ref_file in refs_pkg.iterdir():
                 name = ref_file.name if hasattr(ref_file, 'name') else str(ref_file).split('/')[-1]
-                if name.endswith(".md"):
-                    content = ref_file.read_text(encoding="utf-8") if hasattr(ref_file, 'read_text') else ref_file.read_text()
-                    with open(os.path.join(refs_target, name), "w", encoding="utf-8") as f:
-                        f.write(content)
+                if not name.endswith(".md"):
+                    continue
+                if use_en:
+                    if not name.endswith("_en.md"):
+                        continue
+                    target_name = name.replace("_en.md", ".md")
+                else:
+                    if name.endswith("_en.md"):
+                        continue
+                    target_name = name
+                content = ref_file.read_text(encoding="utf-8") if hasattr(ref_file, 'read_text') else open(str(ref_file), encoding="utf-8").read()
+                with open(os.path.join(refs_target, target_name), "w", encoding="utf-8") as f:
+                    f.write(content)
 
             return True
         except Exception as e:
@@ -461,7 +484,6 @@ def _cmd_skill(args):
 
 def _cmd_format(args):
     """Clean and format platform API output from stdin."""
-    import json
     import sys
 
     if args.platform == "xhs":
@@ -483,9 +505,9 @@ def _cmd_format(args):
 
 def _install_system_deps():
     """Install system-level dependencies: gh CLI, Node.js (for mcporter)."""
+    import platform
     import shutil
     import subprocess
-    import platform
     import tempfile
 
     print("Checking system dependencies...")
@@ -611,6 +633,7 @@ def _install_system_deps():
 def _install_xiaoyuzhou_deps():
     """Install Xiaoyuzhou podcast transcription script."""
     import shutil
+
     from agent_reach.config import Config
 
     config = Config()
@@ -1017,6 +1040,7 @@ def _detect_environment():
 def _cmd_configure(args):
     """Set a config value and test it, or auto-extract from browser."""
     import shutil
+
     from agent_reach.config import Config
 
     config = Config()
@@ -1059,8 +1083,12 @@ def _cmd_configure(args):
 
     if args.key == "proxy":
         config.set("bilibili_proxy", value)
-        print(f"✅ Proxy configured for Bilibili!")
-        print("  Note: Reddit 已改为通过 rdt-cli 访问，无需代理。")
+        print("✅ Proxy configured for Bilibili!")
+        from agent_reach.lang import use_english
+        if use_english():
+            print("  Note: Reddit access is now handled via rdt-cli, no proxy needed.")
+        else:
+            print("  Note: Reddit 已改为通过 rdt-cli 访问，无需代理。")
 
     elif args.key == "twitter-cookies":
         # Accept two formats:
@@ -1114,11 +1142,11 @@ def _cmd_configure(args):
 
     elif args.key == "github-token":
         config.set("github_token", value)
-        print(f"✅ GitHub token configured!")
+        print("✅ GitHub token configured!")
 
     elif args.key == "groq-key":
         config.set("groq_api_key", value)
-        print(f"✅ Groq key configured!")
+        print("✅ Groq key configured!")
 
 
 def _parse_twitter_cookie_input(value: str):
@@ -1153,7 +1181,6 @@ def _configure_xhs_cookies(value):
     (default: /app/data/cookies.json or cookies.json in workdir).
     Format: JSON array of {name, value, domain, path, expires, httpOnly, secure, sameSite}.
     """
-    import json
     import shutil
     import subprocess
 
@@ -1437,6 +1464,8 @@ def _cmd_setup():
     config = Config()
     print()
     print("Agent Reach Setup")
+    from agent_reach.lang import use_english
+
     print("=" * 40)
     print()
 
@@ -1444,13 +1473,22 @@ def _cmd_setup():
     import shutil
     import subprocess
 
-    print("【推荐】全网搜索 — Exa（通过 mcporter）")
-    print("  免费，无需 API Key")
+    if use_english():
+        print("【Recommended】Web Search — Exa (via mcporter)")
+        print("  Free, no API key required")
+    else:
+        print("【推荐】全网搜索 — Exa（通过 mcporter）")
+        print("  免费，无需 API Key")
 
     if not shutil.which("mcporter"):
-        print("  当前状态: -- mcporter 未安装")
-        print("  安装：npm install -g mcporter")
-        print("  然后：mcporter config add exa https://mcp.exa.ai/mcp")
+        if use_english():
+            print("  Status: -- mcporter not installed")
+            print("  Install: npm install -g mcporter")
+            print("  Then: mcporter config add exa https://mcp.exa.ai/mcp")
+        else:
+            print("  当前状态: -- mcporter 未安装")
+            print("  安装：npm install -g mcporter")
+            print("  然后：mcporter config add exa https://mcp.exa.ai/mcp")
         print()
     else:
         try:
@@ -1458,65 +1496,122 @@ def _cmd_setup():
                 ["mcporter", "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=10
             )
             if "exa" in r.stdout.lower():
-                print("  当前状态: ✅ 已配置")
+                if use_english():
+                    print("  Status: ✅ Configured")
+                else:
+                    print("  当前状态: ✅ 已配置")
             else:
-                print("  当前状态: -- 未配置")
-                setup_now = input("  现在自动配置 Exa 吗？[Y/n]: ").strip().lower()
+                if use_english():
+                    print("  Status: -- Not configured")
+                    setup_now = input("  Auto-configure Exa now? [Y/n]: ").strip().lower()
+                else:
+                    print("  当前状态: -- 未配置")
+                    setup_now = input("  现在自动配置 Exa 吗？[Y/n]: ").strip().lower()
                 if setup_now in ("", "y", "yes"):
                     add_r = subprocess.run(
                         ["mcporter", "config", "add", "exa", "https://mcp.exa.ai/mcp"],
                         capture_output=True, encoding="utf-8", errors="replace", timeout=10,
                     )
                     if add_r.returncode == 0:
-                        print("  ✅ Exa 已配置")
+                        if use_english():
+                            print("  ✅ Exa configured")
+                        else:
+                            print("  ✅ Exa 已配置")
                     else:
-                        print("  [!] 自动配置失败，请手动执行：")
+                        if use_english():
+                            print("  [!] Auto-config failed, please do it manually:")
+                        else:
+                            print("  [!] 自动配置失败，请手动执行：")
                         print("     mcporter config add exa https://mcp.exa.ai/mcp")
         except Exception:
-            print("  [!] 无法检查 Exa 配置，请手动执行：")
+            if use_english():
+                print("  [!] Could not check Exa config, please do it manually:")
+            else:
+                print("  [!] 无法检查 Exa 配置，请手动执行：")
             print("     mcporter config add exa https://mcp.exa.ai/mcp")
         print()
 
     # Step 2: GitHub token
-    print("【可选】GitHub Token — 提高 API 限额")
-    print("  无 token: 60 次/小时 | 有 token: 5000 次/小时")
-    print("  获取: https://github.com/settings/tokens (无需任何权限)")
+    if use_english():
+        print("【Optional】GitHub Token — Increase API rate limit")
+        print("  No token: 60 req/hr | With token: 5000 req/hr")
+        print("  Get one: https://github.com/settings/tokens (no permissions needed)")
+    else:
+        print("【可选】GitHub Token — 提高 API 限额")
+        print("  无 token: 60 次/小时 | 有 token: 5000 次/小时")
+        print("  获取: https://github.com/settings/tokens (无需任何权限)")
     current = config.get("github_token")
     if current:
-        print(f"  当前状态: ✅ 已配置")
+        if use_english():
+            print("  Status: ✅ Configured")
+        else:
+            print("  当前状态: ✅ 已配置")
     else:
-        key = input("  GITHUB_TOKEN (回车跳过): ").strip()
+        if use_english():
+            key = input("  GITHUB_TOKEN (press Enter to skip): ").strip()
+        else:
+            key = input("  GITHUB_TOKEN (回车跳过): ").strip()
         if key:
             config.set("github_token", key)
-            print("  ✅ GitHub API 已提升至 5000 次/小时！")
+            if use_english():
+                print("  ✅ GitHub API boosted to 5000 req/hr!")
+            else:
+                print("  ✅ GitHub API 已提升至 5000 次/小时！")
         else:
-            print("  跳过。公开 API 也能用")
+            if use_english():
+                print("  Skipped. Public API works too.")
+            else:
+                print("  跳过。公开 API 也能用")
     print()
 
     # Step 3: Reddit — rdt-cli
-    print("【信息】Reddit — 通过 rdt-cli 搜索和阅读，无需配置")
-    print("  安装：pipx install rdt-cli")
+    if use_english():
+        print("【Info】Reddit — search and read via rdt-cli, no config needed")
+        print("  Install: pipx install rdt-cli")
+    else:
+        print("【信息】Reddit — 通过 rdt-cli 搜索和阅读，无需配置")
+        print("  安装：pipx install rdt-cli")
     print()
 
     # Step 4: Groq (Whisper)
-    print("【可选】Groq API — 视频无字幕时的语音转文字")
-    print("  免费额度，注册: https://console.groq.com")
+    if use_english():
+        print("【Optional】Groq API — speech-to-text for videos without subtitles")
+        print("  Free tier, sign up: https://console.groq.com")
+    else:
+        print("【可选】Groq API — 视频无字幕时的语音转文字")
+        print("  免费额度，注册: https://console.groq.com")
     current = config.get("groq_api_key")
     if current:
-        print(f"  当前状态: ✅ 已配置")
+        if use_english():
+            print("  Status: ✅ Configured")
+        else:
+            print("  当前状态: ✅ 已配置")
     else:
-        key = input("  GROQ_API_KEY (回车跳过): ").strip()
+        if use_english():
+            key = input("  GROQ_API_KEY (press Enter to skip): ").strip()
+        else:
+            key = input("  GROQ_API_KEY (回车跳过): ").strip()
         if key:
             config.set("groq_api_key", key)
-            print("  ✅ 语音转文字已开启！")
+            if use_english():
+                print("  ✅ Speech-to-text enabled!")
+            else:
+                print("  ✅ 语音转文字已开启！")
         else:
-            print("  跳过")
+            if use_english():
+                print("  Skipped")
+            else:
+                print("  跳过")
     print()
 
     # Summary
     print("=" * 40)
-    print(f"✅ 配置已保存到 {config.config_path}")
-    print("运行 agent-reach doctor 查看完整状态")
+    if use_english():
+        print(f"✅ Configuration saved to {config.config_path}")
+        print("Run agent-reach doctor to see full status")
+    else:
+        print(f"✅ 配置已保存到 {config.config_path}")
+        print("运行 agent-reach doctor 查看完整状态")
     print()
 
 
@@ -1546,6 +1641,19 @@ def _classify_update_error(exc):
 
 def _update_error_text(kind):
     """Map internal error kinds to user-facing text."""
+    from agent_reach.lang import use_english
+
+    if use_english():
+        mapping = {
+            "timeout": "Network timeout",
+            "dns": "DNS resolution failed",
+            "rate_limit": "GitHub API rate limit exceeded",
+            "connection": "Network connection failed",
+            "server_error": "GitHub service temporarily unavailable",
+            "http": "HTTP request failed",
+            "unknown": "Unknown network error",
+        }
+        return mapping.get(kind, "Request failed")
     mapping = {
         "timeout": "网络超时",
         "dns": "DNS 解析失败",
@@ -1614,15 +1722,22 @@ def _github_get_with_retry(url, timeout=10, retries=3, sleeper=time.sleep):
 def _cmd_check_update():
     """Check for newer versions on GitHub."""
     from agent_reach import __version__
+    from agent_reach.lang import use_english
 
-    print(f"当前版本: v{__version__}")
+    if use_english():
+        print(f"Current version: v{__version__}")
+    else:
+        print(f"当前版本: v{__version__}")
     release_url = "https://api.github.com/repos/Panniantong/Agent-Reach/releases/latest"
     commit_url = "https://api.github.com/repos/Panniantong/Agent-Reach/commits/main"
 
     # Fetch latest release with retry/backoff.
     resp, err, attempts = _github_get_with_retry(release_url, timeout=10, retries=3)
     if err:
-        print(f"[!] 无法检查更新（{_update_error_text(err)}，已重试 {attempts} 次）")
+        if use_english():
+            print(f"[!] {_update_error_text(err)} (retried {attempts} times)")
+        else:
+            print(f"[!] 无法检查更新（{_update_error_text(err)}，已重试 {attempts} 次）")
         return "error"
 
     if resp.status_code == 200:
@@ -1631,47 +1746,76 @@ def _cmd_check_update():
         body = data.get("body", "")
 
         if latest and latest != __version__:
-            print(f"最新版本: v{latest} ← 有更新！")
-            if body:
+            if use_english():
+                print(f"Latest version: v{latest} ← Update available!")
+                if body:
+                    print()
+                    print("Release notes:")
+                    for line in body.strip().split("\n")[:20]:
+                        print(f"  {line}")
                 print()
-                print("更新内容：")
-                # Show first 20 lines of release notes
-                for line in body.strip().split("\n")[:20]:
-                    print(f"  {line}")
-            print()
-            print("更新命令:")
+                print("Update command:")
+            else:
+                print(f"最新版本: v{latest} ← 有更新！")
+                if body:
+                    print()
+                    print("更新内容：")
+                    for line in body.strip().split("\n")[:20]:
+                        print(f"  {line}")
+                print()
+                print("更新命令:")
             print("  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
             return "update_available"
-        print(f"✅ 已是最新版本")
+        if use_english():
+            print("✅ Already up to date")
+        else:
+            print("✅ 已是最新版本")
         return "up_to_date"
 
     release_err = _classify_github_response_error(resp)
     if release_err == "rate_limit":
-        print("[!] 无法检查更新（GitHub API 速率限制，请稍后重试）")
+        if use_english():
+            print("[!] Could not check for updates (GitHub API rate limit, try again later)")
+        else:
+            print("[!] 无法检查更新（GitHub API 速率限制，请稍后重试）")
         return "error"
 
     # No releases yet, fall back to latest main commit.
     resp2, err2, attempts2 = _github_get_with_retry(commit_url, timeout=10, retries=2)
     if err2:
-        print(f"[!] 无法检查更新（{_update_error_text(err2)}，已重试 {attempts + attempts2} 次）")
+        if use_english():
+            print(f"[!] {_update_error_text(err2)} (retried {attempts + attempts2} times)")
+        else:
+            print(f"[!] 无法检查更新（{_update_error_text(err2)}，已重试 {attempts + attempts2} 次）")
         return "error"
     if resp2.status_code == 200:
         commit = resp2.json()
         sha = commit.get("sha", "")[:7]
         msg = commit.get("commit", {}).get("message", "").split("\n")[0]
         date = commit.get("commit", {}).get("committer", {}).get("date", "")[:10]
-        print(f"最新提交: {sha} ({date}) {msg}")
-        print()
-        print("更新命令:")
+        if use_english():
+            print(f"Latest commit: {sha} ({date}) {msg}")
+            print()
+            print("Update command:")
+        else:
+            print(f"最新提交: {sha} ({date}) {msg}")
+            print()
+            print("更新命令:")
         print("  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
         return "unknown"
 
     commit_err = _classify_github_response_error(resp2)
     if commit_err == "rate_limit":
-        print("[!] 无法检查更新（GitHub API 速率限制，请稍后重试）")
+        if use_english():
+            print("[!] Could not check for updates (GitHub API rate limit, try again later)")
+        else:
+            print("[!] 无法检查更新（GitHub API 速率限制，请稍后重试）")
         return "error"
 
-    print(f"[!] 无法检查更新（GitHub 返回 {resp2.status_code}）")
+    if use_english():
+        print(f"[!] Could not check for updates (GitHub returned {resp2.status_code})")
+    else:
+        print(f"[!] 无法检查更新（GitHub 返回 {resp2.status_code}）")
     return "error"
 
 
@@ -1680,9 +1824,9 @@ def _cmd_watch():
 
     Only outputs problems. If everything is fine, outputs a single line.
     """
+    from agent_reach import __version__
     from agent_reach.config import Config
     from agent_reach.doctor import check_all
-    from agent_reach import __version__
 
     config = Config()
     issues = []
@@ -1717,13 +1861,23 @@ def _cmd_watch():
             release_body = data.get("body", "")
 
     # Output
-    if not issues and not update_available:
-        print(f"Agent Reach: 全部正常 ({ok}/{total} 渠道可用，v{__version__} 已是最新)")
-        return
+    from agent_reach.lang import use_english
+    if use_english():
+        if not issues and not update_available:
+            print(f"Agent Reach: All good ({ok}/{total} channels available, v{__version__} up to date)")
+            return
 
-    print(f"Agent Reach 监控报告")
-    print(f"=" * 40)
-    print(f"版本: v{__version__}  |  渠道: {ok}/{total}")
+        print("Agent Reach Watch Report")
+        print("=" * 40)
+        print(f"Version: v{__version__}  |  Channels: {ok}/{total}")
+    else:
+        if not issues and not update_available:
+            print(f"Agent Reach: 全部正常 ({ok}/{total} 渠道可用，v{__version__} 已是最新)")
+            return
+
+        print("Agent Reach 监控报告")
+        print("=" * 40)
+        print(f"版本: v{__version__}  |  渠道: {ok}/{total}")
 
     if issues:
         print()
@@ -1732,11 +1886,15 @@ def _cmd_watch():
 
     if update_available:
         print()
-        print(f"新版本可用: v{new_version}")
+        if use_english():
+            print(f"New version available: v{new_version}")
+            print("  Update: pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
+        else:
+            print(f"新版本可用: v{new_version}")
+            print("  更新: pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
         if release_body:
             for line in release_body.strip().split("\n")[:10]:
                 print(f"    {line}")
-        print(f"  更新: pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
 
 
 if __name__ == "__main__":

@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """Tests for Agent Reach CLI."""
 
+from unittest.mock import patch
+
 import pytest
 import requests
-from unittest.mock import patch
+
 import agent_reach.cli as cli
 from agent_reach.cli import main
 
@@ -122,5 +124,7 @@ class TestCheckUpdateRetry:
 
         captured = capsys.readouterr()
         assert result == "error"
+        # Default locale is Chinese — verify no mixed-language output
+        assert "无法检查更新" in captured.out
         assert "网络超时" in captured.out
-        assert "已重试 3 次" in captured.out
+        assert "已重试" in captured.out
