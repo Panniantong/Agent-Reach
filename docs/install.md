@@ -196,7 +196,8 @@ xhs login
 
 ```bash
 pip install git+https://github.com/Panniantong/mcp-server-weibo.git
-mcporter config add weibo --command 'mcp-server-weibo'
+mcporter config add weibo --command 'mcp-server-weibo' \
+  --env PYTHONUTF8=1 --env PYTHONIOENCODING=utf-8
 ```
 
 > 无需登录、无需 Cookie、无需代理。海外服务器也可以直接访问。

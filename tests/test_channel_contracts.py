@@ -41,8 +41,8 @@ def test_youtube_warns_when_node_only_and_no_config(monkeypatch, tmp_path):
         return None  # deno not installed
 
     monkeypatch.setattr("shutil.which", fake_which)
-    # Point to a non-existent config file
-    monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path / ".config/yt-dlp/config"))
+    # Point APPDATA to a non-existent directory so config file won't be found
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData" / "Roaming"))
 
     ch = YouTubeChannel()
     status, message = ch.check()

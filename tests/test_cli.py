@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """Tests for Agent Reach CLI."""
 
+from unittest.mock import patch
+
 import pytest
 import requests
-from unittest.mock import patch
+
 import agent_reach.cli as cli
 from agent_reach.cli import main
 
@@ -124,3 +126,39 @@ class TestCheckUpdateRetry:
         assert result == "error"
         assert "网络超时" in captured.out
         assert "已重试 3 次" in captured.out
+
+
+def test_install_weibo_registers_utf8_env(monkeypatch):
+    calls = []
+
+    def fake_which(cmd):
+        return "mcporter" if cmd == "mcporter" else None
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return Result()
+
+    monkeypatch.setattr("shutil.which", fake_which)
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    cli._install_weibo_deps()
+
+    config_add_calls = [
+        (cmd, kwargs)
+        for cmd, kwargs in calls
+        if cmd[:4] == ["mcporter", "config", "add", "weibo"]
+    ]
+    assert config_add_calls
+
+    cmd, kwargs = config_add_calls[0]
+    assert "--env" in cmd
+    assert "PYTHONUTF8=1" in cmd
+    assert "PYTHONIOENCODING=utf-8" in cmd
+    assert kwargs["env"]["PYTHONUTF8"] == "1"
+    assert kwargs["env"]["PYTHONIOENCODING"] == "utf-8"

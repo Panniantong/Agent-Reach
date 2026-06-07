@@ -748,6 +748,8 @@ def _install_weibo_deps():
     import shutil
     import subprocess
 
+    from agent_reach.utils.process import mcporter_utf8_env_args, utf8_subprocess_env
+
     print("Setting up Weibo MCP server...")
 
     # Check if already installed and working
@@ -756,7 +758,8 @@ def _install_weibo_deps():
         try:
             r = subprocess.run(
                 [mcporter, "config", "list"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=5
+                encoding="utf-8", errors="replace", timeout=5,
+                env=utf8_subprocess_env(),
             )
             if "weibo" in r.stdout:
                 print("  ✅ Weibo MCP already configured")
@@ -769,7 +772,7 @@ def _install_weibo_deps():
         subprocess.run(
             [sys.executable, "-m", "pip", "install", "-q",
              "git+https://github.com/Panniantong/mcp-server-weibo.git"],
-            check=True, timeout=120
+            check=True, timeout=120, env=utf8_subprocess_env()
         )
         print("  ✅ mcp-server-weibo installed (Panniantong fork)")
     except Exception as e:
@@ -780,14 +783,33 @@ def _install_weibo_deps():
     if mcporter:
         try:
             subprocess.run(
-                [mcporter, "config", "add", "weibo", "--command", "mcp-server-weibo"],
-                check=True, capture_output=True, timeout=10
+                [
+                    mcporter,
+                    "config",
+                    "add",
+                    "weibo",
+                    "--command",
+                    "mcp-server-weibo",
+                    *mcporter_utf8_env_args(),
+                ],
+                check=True,
+                capture_output=True,
+                timeout=10,
+                env=utf8_subprocess_env(),
             )
             print("  ✅ Weibo MCP registered with mcporter")
         except Exception:
-            print("  [!]  mcporter config add failed. Run manually: mcporter config add weibo --command 'mcp-server-weibo'")
+            print(
+                "  [!]  mcporter config add failed. Run manually: "
+                "mcporter config add weibo --command 'mcp-server-weibo' "
+                "--env PYTHONUTF8=1 --env PYTHONIOENCODING=utf-8"
+            )
     else:
-        print("  -- mcporter not found, skipping MCP registration. Install mcporter first, then run: mcporter config add weibo --command 'mcp-server-weibo'")
+        print(
+            "  -- mcporter not found, skipping MCP registration. Install mcporter first, then run: "
+            "mcporter config add weibo --command 'mcp-server-weibo' "
+            "--env PYTHONUTF8=1 --env PYTHONIOENCODING=utf-8"
+        )
 
 
 def _install_wechat_deps():

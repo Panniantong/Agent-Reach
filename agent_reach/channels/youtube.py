@@ -9,6 +9,16 @@ from agent_reach.utils.text import read_utf8_text
 from .base import Channel
 
 
+def _has_js_runtime_config(config_path) -> bool:
+    """Return whether yt-dlp config explicitly enables a JS runtime."""
+    try:
+        if not config_path.exists():
+            return False
+        return "--js-runtimes" in read_utf8_text(config_path)
+    except OSError:
+        return False
+
+
 class YouTubeChannel(Channel):
     name = "youtube"
     description = "YouTube 视频和字幕"
@@ -35,10 +45,7 @@ class YouTubeChannel(Channel):
         has_deno = shutil.which("deno")
         if not has_deno:
             ytdlp_config = get_ytdlp_config_path()
-            has_js_config = False
-            if ytdlp_config.exists():
-                has_js_config = "--js-runtimes" in read_utf8_text(ytdlp_config)
-            if not has_js_config:
+            if not _has_js_runtime_config(ytdlp_config):
                 return "warn", (
                     "yt-dlp 已安装但未配置 JS runtime。运行：\n"
                     f"  {render_ytdlp_fix_command()}"

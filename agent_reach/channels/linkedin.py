@@ -3,6 +3,9 @@
 
 import shutil
 import subprocess
+
+from agent_reach.utils.process import utf8_subprocess_env
+
 from .base import Channel
 
 
@@ -28,7 +31,8 @@ class LinkedInChannel(Channel):
         try:
             r = subprocess.run(
                 [mcporter, "config", "list"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=5
+                encoding="utf-8", errors="replace", timeout=5,
+                env=utf8_subprocess_env(),
             )
             if "linkedin" in r.stdout.lower():
                 return "ok", "完整可用（Profile、公司、职位搜索）"
