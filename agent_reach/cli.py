@@ -76,7 +76,7 @@ def main():
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
     p_conf.add_argument("key", nargs="?", default=None,
-                        choices=["proxy", "github-token", "groq-key",
+                        choices=["proxy", "github-token", "groq-key", "dashscope-key",
                                  "twitter-cookies", "youtube-cookies",
                                  "xhs-cookies"],
                         help="What to configure (omit if using --from-browser)")
@@ -84,6 +84,20 @@ def main():
     p_conf.add_argument("--from-browser", metavar="BROWSER",
                         choices=["chrome", "firefox", "edge", "brave", "opera"],
                         help="Auto-extract ALL platform cookies from browser (chrome/firefox/edge/brave/opera)")
+
+    p_env = sub.add_parser("env", help="Manage Agent Reach local .env and tool wrappers")
+    p_env_sub = p_env.add_subparsers(dest="env_command")
+    p_env_sub.add_parser("init", help="Create ~/.agent-reach/.env if missing")
+    p_env_sub.add_parser("sync", help="Mirror config.yaml credentials into ~/.agent-reach/.env")
+    p_env_wrap = p_env_sub.add_parser(
+        "install-wrappers",
+        help="Install command wrappers that load ~/.agent-reach/.env before running tools",
+    )
+    p_env_wrap.add_argument(
+        "--tools",
+        default="twitter,xhs,rdt,yt-dlp,bili,douyin-mcp-server",
+        help="Comma-separated tools to wrap",
+    )
 
     # ── doctor ──
     sub.add_parser("doctor", help="Check platform availability")
@@ -120,6 +134,12 @@ def main():
 
     # Suppress loguru noise unless --verbose
     _configure_logging(getattr(args, "verbose", False))
+    if not os.environ.get("PYTEST_CURRENT_TEST"):
+        try:
+            from agent_reach.envfile import load_agent_env
+            load_agent_env(override=False)
+        except Exception:
+            pass
 
     if not args.command:
         parser.print_help()
@@ -141,6 +161,8 @@ def main():
         _cmd_install(args)
     elif args.command == "configure":
         _cmd_configure(args)
+    elif args.command == "env":
+        _cmd_env(args)
     elif args.command == "uninstall":
         _cmd_uninstall(args)
     elif args.command == "skill":
@@ -1041,6 +1063,8 @@ def _cmd_configure(args):
 
         print()
         if found_any:
+            from agent_reach.envfile import sync_config_to_env
+            sync_config_to_env(config)
             print("✅ Cookies configured! Run `agent-reach doctor` to see updated status.")
         else:
             print(f"No cookies found. Make sure you're logged into the platforms in {browser}.")
@@ -1059,6 +1083,7 @@ def _cmd_configure(args):
 
     if args.key == "proxy":
         config.set("bilibili_proxy", value)
+        _sync_local_env(config)
         print(f"✅ Proxy configured for Bilibili!")
         print("  Note: Reddit 已改为通过 rdt-cli 访问，无需代理。")
 
@@ -1071,6 +1096,7 @@ def _cmd_configure(args):
         if auth_token and ct0:
             config.set("twitter_auth_token", auth_token)
             config.set("twitter_ct0", ct0)
+            _sync_local_env(config)
 
             # Sync credentials to twitter-cli env
             print("✅ Twitter cookies configured!")
@@ -1106,6 +1132,7 @@ def _cmd_configure(args):
 
     elif args.key == "youtube-cookies":
         config.set("youtube_cookies_from", value)
+        _sync_local_env(config)
         print(f"✅ YouTube cookie source configured: {value}")
         print("   yt-dlp will use cookies from this browser for age-restricted/member videos.")
 
@@ -1114,11 +1141,72 @@ def _cmd_configure(args):
 
     elif args.key == "github-token":
         config.set("github_token", value)
+        _sync_local_env(config)
         print(f"✅ GitHub token configured!")
 
     elif args.key == "groq-key":
         config.set("groq_api_key", value)
+        _sync_local_env(config)
         print(f"✅ Groq key configured!")
+
+    elif args.key == "dashscope-key":
+        config.set("dashscope_api_key", value)
+        _sync_local_env(config)
+        print(f"✅ DashScope key configured!")
+
+
+def _sync_local_env(config):
+    """Best-effort sync of config.yaml credentials to ~/.agent-reach/.env."""
+    try:
+        from agent_reach.envfile import sync_config_to_env
+        sync_config_to_env(config)
+    except Exception:
+        pass
+
+
+def _cmd_env(args):
+    """Manage the local Agent Reach .env file and wrappers."""
+    from agent_reach.config import Config
+    from agent_reach.envfile import (
+        DEFAULT_ENV_FILE,
+        install_tool_wrappers,
+        read_env_file,
+        sync_config_to_env,
+        write_env_file,
+    )
+
+    if not args.env_command:
+        print("Usage: agent-reach env <init|sync|install-wrappers>")
+        return
+
+    if args.env_command == "init":
+        if DEFAULT_ENV_FILE.exists():
+            print(f"✅ Local env already exists: {DEFAULT_ENV_FILE}")
+        else:
+            write_env_file({})
+            print(f"✅ Created local env: {DEFAULT_ENV_FILE}")
+        print("   This file is loaded only by Agent Reach wrappers.")
+        return
+
+    if args.env_command == "sync":
+        path = sync_config_to_env(Config())
+        keys = sorted(read_env_file(path))
+        print(f"✅ Synced config credentials to: {path}")
+        print("   Keys: " + (", ".join(keys) if keys else "(none)"))
+        return
+
+    if args.env_command == "install-wrappers":
+        tools = [tool.strip() for tool in args.tools.split(",") if tool.strip()]
+        path = sync_config_to_env(Config())
+        results = install_tool_wrappers(tools)
+        print(f"✅ Local env ready: {path}")
+        for tool, result in results.items():
+            if result == "missing":
+                print(f"  -- {tool}: upstream command not found, skipped")
+            else:
+                print(f"  ✅ {tool}: {result}")
+        print("   Put ~/.local/bin before other tool paths so wrappers are picked first.")
+        return
 
 
 def _parse_twitter_cookie_input(value: str):
@@ -1221,6 +1309,12 @@ def _configure_xhs_cookies(value):
         print('   1. JSON array: \'[{"name":"x","value":"y","domain":".xiaohongshu.com",...}]\'')
         print('   2. Header String: "key1=val1; key2=val2; ..."')
         return
+
+    try:
+        from agent_reach.envfile import update_env_file
+        update_env_file({"XHS_COOKIES": value})
+    except Exception:
+        pass
 
     # Find the container
     docker = shutil.which("docker")
