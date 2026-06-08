@@ -103,7 +103,7 @@ twitter likes
 
 ## Twitter/X — Xquik API（替代方案）
 
-API Key 认证，无需浏览器 Cookie，搜索结果稳定（不受 GraphQL 端点变化影响）。
+API Key 认证，适合无浏览器 Cookie 的环境。
 含完整互动数据：点赞、转发、回复、引用、浏览量、收藏。
 
 ### curl 命令
@@ -167,7 +167,7 @@ for t in trends:
 >
 > **搜索语法**: 支持 X 标准搜索语法，包括 `from:user`、`#hashtag`、`"exact phrase"`、`since:2025-01-01`、`until:2025-12-31`、`min_faves:100`。
 >
-> **与 twitter-cli 的区别**: Xquik 通过 API Key 认证（无需浏览器 Cookie），搜索不受 GraphQL 端点变化影响。返回更多互动数据（浏览量、收藏数）。两者可以共存，按需选择。
+> **与 twitter-cli 的区别**: Xquik 通过 API Key 认证，适合无浏览器 Cookie 的环境，并返回浏览量、收藏数等互动数据。两者可以共存，按需选择。
 
 ### OpenClaw 插件模式
 

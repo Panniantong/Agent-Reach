@@ -7,9 +7,9 @@ import subprocess
 from urllib.error import URLError
 
 from agent_reach.channels import get_all_channels, get_channel
+from agent_reach.channels.v2ex import V2EXChannel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
 from agent_reach.channels.xueqiu import XueqiuChannel
-from agent_reach.channels.v2ex import V2EXChannel
 
 
 class TestChannelRegistry:
@@ -223,8 +223,6 @@ class TestV2EXChannel:
                 "created": 1700000200,
             },
         ]
-
-        call_count = {"n": 0}
 
         class FakeResponse:
             def __init__(self, payload):

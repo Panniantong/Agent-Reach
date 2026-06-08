@@ -60,7 +60,7 @@ gh search repos "query" --sort stars --limit 10
 # Twitter 搜索（twitter-cli，需 Cookie）
 twitter search "query" --limit 10
 
-# Twitter 搜索（Xquik API，需 API Key，更稳定）
+# Twitter 搜索（Xquik API，需 API Key）
 curl -s "https://xquik.com/api/v1/x/tweets/search?q=query&limit=10" -H "X-API-Key: $XQUIK_API_KEY"
 
 # YouTube/B站字幕
