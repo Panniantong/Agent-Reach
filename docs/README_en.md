@@ -52,7 +52,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 💰 **Completely free** | All tools are open source, all APIs are free. The only possible cost is a server proxy ($1/month) — local computers don't need one |
 | 🔒 **Privacy safe** | Cookies stay local. Never uploaded. Fully open source — audit anytime |
 | 🔄 **Kept up to date** | Upstream tools (yt-dlp, twitter-cli, rdt-cli, Jina Reader, etc.) are tracked and updated regularly |
-| 🤖 **Works with any Agent** | Claude Code, OpenClaw, Cursor, Windsurf… any Agent that can run commands |
+| 🤖 **Works with any Agent** | Claude Code, OpenClaw, Cursor, Windsurf, Hermes Agent… any Agent that can run commands |
 | 🩺 **Built-in diagnostics** | `agent-reach doctor` — one command shows what works, what doesn't, and how to fix it |
 
 ---
@@ -84,7 +84,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 
 ## Quick Start
 
-Copy this to your AI Agent (Claude Code, OpenClaw, Cursor, etc.):
+Copy this to your AI Agent (Claude Code, OpenClaw, Cursor, Hermes Agent, etc.):
 
 ```
 Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
@@ -275,6 +275,81 @@ Agent Reach uses [rdt-cli](https://github.com/public-clis/rdt-cli) for Reddit. S
 <summary><strong>Does Agent Reach work with Claude Code / Cursor / Windsurf / OpenClaw?</strong></summary>
 
 Yes! Agent Reach is an installer + configuration tool. Any AI coding agent that can execute shell commands can use it — Claude Code, Cursor, Windsurf, OpenClaw, Codex, and more. Just `pip install agent-reach`, run `agent-reach install`, and the agent can start using the upstream tools immediately.
+</details>
+
+<details>
+<summary><strong>How to set up Agent Reach with Hermes Agent?</strong></summary>
+
+[Hermes Agent](https://hermes-agent.nousresearch.com) (by Nous Research) works with Agent Reach out of the box — both are designed for local-first, CLI-driven agent workflows.
+
+**One-line install** (recommended):
+
+```
+Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+```
+
+Send that to Hermes in Telegram, Discord, or the CLI. Hermes will:
+1. Install `agent-reach` via `pipx` (creates an isolated venv, no system pollution).
+2. Run `agent-reach install --env=auto` — auto-detects local vs server.
+3. Install all Tier-0 channels (YouTube, GitHub, WeChat, Weibo, V2EX, RSS, web search, Jina Reader) and whichever Tier-1 channels you opted into.
+4. Register the Agent Reach `SKILL.md` into Hermes's skill library automatically (Hermes recognizes the OpenClaw-format frontmatter and exposes it as a discoverable skill).
+5. Run `agent-reach doctor` and report the result back to you.
+
+**Manual install** (if you want to drive it yourself):
+
+```bash
+pipx install agent-reach
+agent-reach install --env=auto
+agent-reach doctor
+```
+
+The Skill is auto-registered at `~/.hermes/skills/tools/agent-reach/` when doctor finishes (Hermes's skill scanner picks it up on the next session start).
+
+**Use from Hermes:**
+
+Once installed, just ask Hermes naturally. The skill's frontmatter is tuned for semantic activation, so phrases like these trigger Agent Reach automatically:
+
+- "Search Twitter for reactions to the new GPT-5 release"
+- "Read the latest 5 posts from @karpathy on X"
+- "Get the transcript of this YouTube video: \<URL\>"
+- "Search Reddit for the best Python ORM in 2026"
+- "Find tweets from the last week mentioning Cactus Wealth"
+- "Subscribe to Hacker News RSS and summarize today's top 10"
+
+For Cookie-based platforms (Twitter, XiaoHongShu), tell Hermes: "Help me configure Twitter cookies" — it will walk you through the Cookie-Editor browser export. Hermes can auto-extract cookies on macOS using the local keychain (works with Chrome, Firefox, Edge, Brave, Opera).
+
+**Expose as MCP server (optional):**
+
+Agent Reach ships a minimal MCP server that only exposes one tool — `get_status` — returning the doctor report. To enable it in Hermes, add to `~/.hermes/config.yaml` under `mcp_servers`:
+
+```yaml
+mcp_servers:
+  agent-reach:
+    command: python
+    args: ["-m", "agent_reach.integrations.mcp_server"]
+    enabled: true
+```
+
+Then Hermes will have a `mcp__agent-reach__get_status` tool available in any session. Use it for health checks; for actual read/search work, Hermes still calls the upstream CLIs directly (twitter-cli, yt-dlp, etc.) — that's by design.
+
+**Per-profile configuration:**
+
+Hermes supports multiple profiles. Agent Reach config lives at `~/.agent-reach/config.yaml` (shared across profiles) but you can override per-profile tokens by setting env vars in that profile's `.env`:
+
+```bash
+# ~/.hermes/profiles/work/.env
+TWITTER_AUTH_TOKEN=***
+TWITTER_CT0=***
+EXA_API_KEY=***
+```
+
+**Limitations on Hermes (as of 2026-06):**
+
+- Voice mode: `agent-reach` doctor output goes to chat, not to voice. Read the on-screen report.
+- Telegram long messages: doctor output can exceed Telegram's 4096-char limit. Ask "give me the summary" and Hermes will fold the report.
+- Scheduled tasks: `agent-reach check-update` is a perfect fit for nightly cron jobs (adds 0 tokens, watchdog pattern).
+
+See https://hermes-agent.nousresearch.com/docs for the full Hermes documentation.
 </details>
 
 <details>
