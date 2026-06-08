@@ -10,6 +10,7 @@ from agent_reach.channels import get_all_channels, get_channel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
 from agent_reach.channels.xueqiu import XueqiuChannel
 from agent_reach.channels.v2ex import V2EXChannel
+from agent_reach.channels.wechat import WeChatChannel
 
 
 class TestChannelRegistry:
@@ -612,3 +613,58 @@ class TestXiaoHongShuChannel:
             "ok",
             "MCP 已连接（阅读、搜索、发帖、评论、点赞）",
         )
+
+
+class TestWeChatChannel:
+    def test_can_handle_wechat_urls(self):
+        ch = WeChatChannel()
+        assert ch.can_handle("https://mp.weixin.qq.com/s/AbCdEf123456")
+        assert ch.can_handle("https://weixin.qq.com/r/whatever")
+        assert not ch.can_handle("https://github.com/user/repo")
+        assert not ch.can_handle("https://v2ex.com/t/123")
+
+    # ------------------------------------------------------------------ #
+    # check() — backend detection via optional imports
+    #
+    # A None entry in sys.modules forces ImportError on `import`; a dummy
+    # ModuleType makes the import succeed. monkeypatch restores both.
+    # ------------------------------------------------------------------ #
+
+    def test_check_off_when_no_backends(self, monkeypatch):
+        import sys
+
+        monkeypatch.setitem(sys.modules, "camoufox", None)
+        monkeypatch.setitem(sys.modules, "miku_ai", None)
+        status, msg = WeChatChannel().check()
+        assert status == "off"
+        assert "pip install miku_ai" in msg
+
+    def test_check_ok_when_both_backends_present(self, monkeypatch):
+        import sys
+        import types
+
+        monkeypatch.setitem(sys.modules, "camoufox", types.ModuleType("camoufox"))
+        monkeypatch.setitem(sys.modules, "miku_ai", types.ModuleType("miku_ai"))
+        status, msg = WeChatChannel().check()
+        assert status == "ok"
+        assert "完整可用" in msg
+
+    def test_check_ok_read_only(self, monkeypatch):
+        import sys
+        import types
+
+        monkeypatch.setitem(sys.modules, "camoufox", types.ModuleType("camoufox"))
+        monkeypatch.setitem(sys.modules, "miku_ai", None)
+        status, msg = WeChatChannel().check()
+        assert status == "ok"
+        assert "可解锁搜索" in msg
+
+    def test_check_warn_search_only(self, monkeypatch):
+        import sys
+        import types
+
+        monkeypatch.setitem(sys.modules, "camoufox", None)
+        monkeypatch.setitem(sys.modules, "miku_ai", types.ModuleType("miku_ai"))
+        status, msg = WeChatChannel().check()
+        assert status == "warn"
+        assert "无法阅读" in msg
