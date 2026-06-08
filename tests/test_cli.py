@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 """Tests for Agent Reach CLI."""
 
+import shutil
+import subprocess
+from unittest.mock import patch
+
 import pytest
 import requests
-from unittest.mock import patch
 import agent_reach.cli as cli
 from agent_reach.cli import main
 
@@ -41,6 +44,31 @@ class TestCLI:
         )
         assert auth_token == "token123"
         assert ct0 == "ct0abc"
+
+    def test_install_reddit_deps_prefers_github_source(self, monkeypatch, capsys):
+        state = {"rdt_installed": False}
+        commands = []
+
+        def fake_which(name):
+            if name == "rdt":
+                return "/usr/local/bin/rdt" if state["rdt_installed"] else None
+            if name == "pipx":
+                return "/usr/local/bin/pipx"
+            return None
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            state["rdt_installed"] = True
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr(shutil, "which", fake_which)
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        cli._install_reddit_deps()
+
+        out = capsys.readouterr().out
+        assert commands == [["pipx", "install", "git+https://github.com/public-clis/rdt-cli.git"]]
+        assert "✅ rdt-cli installed" in out
 
 
 class TestCheckUpdateRetry:

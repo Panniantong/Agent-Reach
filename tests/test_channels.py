@@ -654,6 +654,8 @@ class TestRedditChannel:
         assert status == "off"
         assert "rdt-cli" in msg
         assert "public-clis/rdt-cli" in msg
+        assert "git+https://github.com/public-clis/rdt-cli.git" in msg
+        assert "rdt-cli>=0.4.2" not in msg
 
     def test_reports_ok_when_authenticated(self, monkeypatch):
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/rdt")
