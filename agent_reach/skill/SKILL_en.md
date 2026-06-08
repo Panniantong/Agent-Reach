@@ -1,18 +1,19 @@
 ---
 name: agent-reach
 description: >
-  Give your AI agent eyes to see the entire internet.
-  Search and read 17 platforms: Twitter/X, Reddit, YouTube, GitHub, Bilibili,
-  XiaoHongShu, Douyin, Weibo, WeChat Articles, Xiaoyuzhou Podcast, LinkedIn,
-  V2EX, Xueqiu, RSS, Exa web search, and any web page.
-  Zero config for 8 channels. Use when the user asks to search, read, or interact
-  on any supported platform, shares a URL, or asks to search the web.
+  MUST USE when user asks to search, browse, read, or interact with content from any supported platform:
+  Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu, Douyin, Weibo,
+  WeChat Articles, Xiaoyuzhou Podcast, LinkedIn, V2EX, Xueqiu (stocks), RSS, or any web URL.
+
+  Also MUST USE for: web search, look up, research, find, share a URL/link, jobs/recruiting.
+  Routes to CLI tools: xhs-cli, twitter-cli, rdt-cli, gh, yt-dlp, curl+Jina, mcporter.
+  17 platforms, zero config for 8 channels. Load with skill_view, then follow the routing table.
+
   Triggers: "search twitter", "search xiaohongshu", "watch this video",
   "search the web", "look this up", "research", "youtube transcript",
   "search reddit", "read this link", "bilibili", "douyin video",
   "wechat article", "wechat official account", "weibo", "V2EX",
-  "xiaoyuzhou", "podcast", "xueqiu", "stock quote",
-  "install agent reach".
+  "xiaoyuzhou", "podcast", "xueqiu", "stock quote", "雪球", "股票".
 metadata:
   openclaw:
     homepage: https://github.com/Panniantong/Agent-Reach
