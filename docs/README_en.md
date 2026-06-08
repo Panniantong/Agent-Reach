@@ -84,6 +84,15 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 
 ## Quick Start
 
+> ⚠️ **OpenClaw users: enable `exec` permission first**
+>
+> Agent Reach relies on the Agent running shell commands (`pip install`, `mcporter`, `bird`, etc.). If your OpenClaw uses the default `messaging` tool profile, the Agent won't be able to run them. **Enable `exec` before installing:**
+>
+> ```bash
+> openclaw config set tools.profile "coding"
+> ```
+> Or set `"tools": { "profile": "coding" }` in `~/.openclaw/openclaw.json`. After changing it, restart the Gateway (`openclaw gateway restart`) and start a new conversation. Other platforms (Claude Code, Cursor, Windsurf, etc.) are not affected.
+
 Copy this to your AI Agent (Claude Code, OpenClaw, Cursor, etc.):
 
 ```
@@ -95,6 +104,12 @@ The Agent auto-installs, detects your environment, and tells you what's ready.
 > 🔄 **Already installed?** Update in one command:
 > ```
 > Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+> ```
+
+> 🛡️ **Worried about security?** Use safe mode — it won't auto-install system packages, it only tells you what you need:
+> ```
+> Install Agent Reach (safe mode): https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+> Use the --safe flag during install
 > ```
 
 <details>
