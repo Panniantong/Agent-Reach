@@ -89,7 +89,9 @@ def main():
                         help="Auto-extract ALL platform cookies from browser (chrome/firefox/edge/brave/opera)")
 
     # ── doctor ──
-    sub.add_parser("doctor", help="Check platform availability")
+    p_doctor = sub.add_parser("doctor", help="Check platform availability")
+    p_doctor.add_argument("--json", action="store_true",
+                          help="Output machine-readable JSON instead of the text report")
 
     # ── uninstall ──
     p_uninstall = sub.add_parser("uninstall", help="Remove all Agent Reach config, tokens, and skill files")
@@ -141,7 +143,7 @@ def main():
         sys.exit(0)
 
     if args.command == "doctor":
-        _cmd_doctor()
+        _cmd_doctor(args)
     elif args.command == "check-update":
         _cmd_check_update()
     elif args.command == "watch":
@@ -1335,7 +1337,7 @@ def _cmd_uninstall(args):
     print("  npm uninstall -g undici")
 
 
-def _cmd_doctor():
+def _cmd_doctor(args=None):
     from agent_reach.config import Config
     from agent_reach.doctor import check_all, format_report
     try:
@@ -1344,6 +1346,11 @@ def _cmd_doctor():
         rprint = print
     config = Config()
     results = check_all(config)
+
+    if args is not None and getattr(args, "json", False):
+        print(json.dumps(results, ensure_ascii=False, indent=2))
+        return
+
     rprint(format_report(results))
 
     # Auto-install skill if not already present (fixes #154)
