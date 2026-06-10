@@ -71,14 +71,14 @@ bili rank -n 10
 
 ## 小宇宙播客 / Xiaoyuzhou Podcast
 
-### 转录单集播客（推荐带 --polish 自动加标点）
+### 转录单集播客（可选 --polish 增强标点）
 
 ```bash
 # 输出 Markdown 文件到 /tmp/。--polish 让 Llama 3.3 70B 给文稿补中文标点+合理分段
 ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh --polish "https://www.xiaoyuzhoufm.com/episode/EPISODE_ID"
 ```
 
-> Whisper 对中文标点支持较弱，**推荐默认使用 `--polish`**。润色调用 Groq 上免费的 Llama 3.3 70B，9 分钟播客只增加 ~7 秒处理时间。如果只想要原始（无标点）转录，去掉 `--polish` 即可。
+> 转写 prompt 已要求 Whisper 输出中文标点；若标点效果仍不理想，可加 `--polish` 用 Groq 上免费的 Llama 3.3 70B 补标点+合理分段（9 分钟播客约多 ~7 秒）。每次转写多一轮 LLM 调用，按需使用。
 
 ### 前置要求
 
