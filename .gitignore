@@ -9,5 +9,9 @@ build/
 .agent-reach/
 *.log
 
+# No workflow consumes a uv lockfile (build=hatchling, CI=pip); keep it out
+# until the project actually adopts `uv sync --locked`
+uv.lock
+
 # Claude Code personal permission settings — local only, never commit
 .claude/settings.local.json
