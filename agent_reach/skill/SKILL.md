@@ -1,15 +1,17 @@
 ---
 name: agent-reach
 description: >
-  Give your AI agent eyes to see the entire internet.
-  17 platforms via CLI, MCP, curl, and Python scripts.
-  Zero config for 8 channels.
+  MUST USE when user asks to search, browse, read, or interact with content from any of these platforms:
+  小红书/xiaohongshu/xhs, 抖音/douyin, Twitter/推特/X, 微博/weibo, B站/bilibili,
+  V2EX, Reddit, LinkedIn/领英, YouTube, GitHub code search, 微信公众号/WeChat articles,
+  小宇宙播客, 雪球/股票行情, RSS feeds, or any web URL.
+
+  Also MUST USE for: web搜索/搜/查/找/look up/research, 招聘/求职/jobs, 分享的链接/URL.
+  Routes to CLI tools: xhs-cli, twitter-cli, rdt-cli, gh, yt-dlp, curl+Jina, mcporter.
+  17 platforms. Zero config for 8 channels.
 
   【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。
-  分类：search / social (小红书/抖音/微博/推特/B站/V2EX/Reddit) / career(LinkedIn) / dev(github) / web(网页/文章/公众号/RSS) / video(YouTube/B站/播客).
-
-  Use when user asks to search, read, or interact on any supported platform,
-  shares a URL, or asks to search the web.
+  分类：search / social (小红书/抖音/微博/推特/B站/V2EX/Reddit) / career(LinkedIn) / dev(github) / web(网页/文章/公众号/RSS) / video(YouTube/B站/播客)。
 triggers:
   - search: 搜/查/找/search/搜索/查一下/帮我搜
   - social:
@@ -58,7 +60,7 @@ curl -s "https://r.jina.ai/URL"
 gh search repos "query" --sort stars --limit 10
 
 # Twitter 搜索
-twitter search "query" --limit 10
+twitter search "query" -n 10
 
 # YouTube/B站字幕
 yt-dlp --write-sub --skip-download -o "/tmp/%(id)s" "URL"

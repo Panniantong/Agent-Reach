@@ -8,7 +8,7 @@ Agent Reach 通过 **rdt-cli** 实现 Reddit 的搜索和阅读功能：
 - **搜索**：`rdt search "关键词"`
 - **阅读完整帖子+评论**：`rdt read POST_ID`
 
-免费，无需代理，无需 API Key，无需登录。
+免费，无需代理，无需 API Key。需要登录认证（`rdt login`，自动从浏览器提取 Cookie）。
 
 ## Agent 可自动完成的步骤
 
@@ -17,9 +17,9 @@ Agent Reach 通过 **rdt-cli** 实现 Reddit 的搜索和阅读功能：
 which rdt && echo "installed" || echo "not installed"
 ```
 
-2. 如果未安装，自动安装：
+2. 如果未安装，自动安装（PyPI 版本暂时落后，从 GitHub 安装最新版）：
 ```bash
-pipx install rdt-cli
+pipx install 'git+https://github.com/public-clis/rdt-cli.git'
 ```
 
 或一键安装：

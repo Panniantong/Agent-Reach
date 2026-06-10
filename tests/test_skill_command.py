@@ -117,7 +117,7 @@ class TestSkillCommand(unittest.TestCase):
             with open(target) as f:
                 content = f.read()
             self.assertTrue(content.strip())
-            self.assertIn("Give your AI agent eyes to see the entire internet.", content)
+            self.assertIn("WeChat Articles, Xiaoyuzhou Podcast", content)
             self.assertNotIn("搜推特", content)
             self.assertTrue(
                 os.path.exists(os.path.join(skill_parent, "agent-reach", "references"))

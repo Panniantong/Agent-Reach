@@ -17,6 +17,9 @@ import time
 
 from agent_reach import __version__
 
+# Pinned to the 0.4.2 state — PyPI still only has 0.4.1 (upstream issue #10).
+_RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66"
+
 
 def _ensure_utf8_console():
     """Best-effort Windows console UTF-8 setup for CLI runtime only."""
@@ -706,8 +709,10 @@ def _install_reddit_deps():
     if shutil.which("rdt"):
         print("  ✅ rdt-cli already installed")
         return
-    for tool, cmd in [("pipx", ["pipx", "install", "rdt-cli"]),
-                      ("uv", ["uv", "tool", "install", "rdt-cli"])]:
+    for tool, cmd in [
+        ("pipx", ["pipx", "install", _RDT_GIT_SOURCE]),
+        ("uv", ["uv", "tool", "install", "--from", _RDT_GIT_SOURCE, "rdt-cli"]),
+    ]:
         if shutil.which(tool):
             try:
                 subprocess.run(cmd, capture_output=True, encoding="utf-8",
@@ -717,7 +722,7 @@ def _install_reddit_deps():
                     return
             except Exception:
                 pass
-    print("  [!]  rdt-cli install failed. Run: pipx install rdt-cli")
+    print(f"  [!]  rdt-cli install failed. Run: pipx install '{_RDT_GIT_SOURCE}'")
 
 
 def _install_bili_deps():
@@ -1495,7 +1500,8 @@ def _cmd_setup():
 
     # Step 3: Reddit — rdt-cli
     print("【信息】Reddit — 通过 rdt-cli 搜索和阅读，无需配置")
-    print("  安装：pipx install rdt-cli")
+    print(f"  安装：pipx install '{_RDT_GIT_SOURCE}'")
+    print("  然后运行：rdt login")
     print()
 
     # Step 4: Groq (Whisper)

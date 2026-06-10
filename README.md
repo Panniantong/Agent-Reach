@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-green.svg?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.8+"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-green.svg?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+"></a>
   <a href="https://github.com/Panniantong/agent-reach/stargazers"><img src="https://img.shields.io/github/stars/Panniantong/agent-reach?style=for-the-badge" alt="GitHub Stars"></a>
 </p>
 
@@ -323,7 +323,7 @@ Agent Reach uses twitter-cli with cookie auth — zero API fees. Install with `p
 <details>
 <summary><strong>Reddit 返回 403 怎么办？</strong></summary>
 
-Agent Reach 使用 [rdt-cli](https://github.com/public-clis/rdt-cli) 访问 Reddit。Reddit 自 2024 年起要求认证，安装后需运行 `rdt login` 登录。安装：`pipx install rdt-cli`，然后 `rdt login`（自动从浏览器提取 Cookie）。之后 Agent 可以用 `rdt search "关键词"` 搜索、`rdt read POST_ID` 读帖子全文和评论。
+Agent Reach 使用 [rdt-cli](https://github.com/public-clis/rdt-cli) 访问 Reddit。Reddit 自 2024 年起要求认证，安装后需运行 `rdt login` 登录。安装：`pipx install 'git+https://github.com/public-clis/rdt-cli.git'`（PyPI 版本暂时落后，从 GitHub 装），然后 `rdt login`（自动从浏览器提取 Cookie）。之后 Agent 可以用 `rdt search "关键词"` 搜索、`rdt read POST_ID` 读帖子全文和评论。
 </details>
 
 <details>

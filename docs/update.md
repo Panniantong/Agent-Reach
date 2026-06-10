@@ -50,8 +50,8 @@ Run these commands to ensure all upstream CLI tools are installed. Skip any that
 # Twitter/X — twitter-cli (replaces deprecated bird CLI)
 which twitter >/dev/null 2>&1 || pipx install twitter-cli 2>/dev/null || uv tool install twitter-cli 2>/dev/null
 
-# Reddit — rdt-cli (replaces Exa-based approach)
-which rdt >/dev/null 2>&1 || pipx install rdt-cli 2>/dev/null || uv tool install rdt-cli 2>/dev/null
+# Reddit — rdt-cli (replaces Exa-based approach; PyPI lags, install from GitHub)
+which rdt >/dev/null 2>&1 || pipx install 'git+https://github.com/public-clis/rdt-cli.git' 2>/dev/null || uv tool install --from 'git+https://github.com/public-clis/rdt-cli.git' rdt-cli 2>/dev/null
 
 # XiaoHongShu — xhs-cli (replaces Docker MCP)
 which xhs >/dev/null 2>&1 || pipx install xiaohongshu-cli 2>/dev/null || uv tool install xiaohongshu-cli 2>/dev/null
