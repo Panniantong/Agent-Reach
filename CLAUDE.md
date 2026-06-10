@@ -3,7 +3,7 @@
 ## Project
 Agent Reach — Python CLI + library that gives AI agents read/search access to 13 internet platforms.
 Positioning: installer + doctor + config tool. NOT a wrapper — after install, agents call upstream tools directly.
-Repo: github.com/Panniantong/Agent-Reach | License: MIT | Version: 1.4.1
+Repo: github.com/Panniantong/Agent-Reach | License: MIT | Version: 1.4.2
 
 ## Commands
 - `pip install -e .` — Dev install

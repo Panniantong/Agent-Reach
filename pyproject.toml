@@ -1,6 +1,6 @@
 [project]
 name = "agent-reach"
-version = "1.4.1"
+version = "1.4.2"
 description = "Give your AI Agent eyes to see the entire internet. Search + Read 10+ platforms."
 readme = "README.md"
 license = {text = "MIT"}
