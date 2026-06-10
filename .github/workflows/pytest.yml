@@ -28,3 +28,43 @@ jobs:
       - name: Run tests
         run: |
           pytest -q
+
+  # Editable installs (-e) never exercise wheel packaging, so a broken wheel
+  # can pass tests and still fail every real `pip install` from source.
+  # This job builds the actual wheel and installs it into a clean venv.
+  wheel-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      - name: Verify wheel has no duplicate entries and ships data files
+        run: |
+          python - <<'PY'
+          import glob, zipfile, collections
+          whl = glob.glob("dist/*.whl")[0]
+          names = zipfile.ZipFile(whl).namelist()
+          dupes = [n for n, c in collections.Counter(names).items() if c > 1]
+          assert not dupes, f"duplicate entries in wheel: {dupes}"
+          assert "agent_reach/skill/SKILL.md" in names, "SKILL.md missing from wheel"
+          for prefix in ("agent_reach/guides/", "agent_reach/scripts/", "agent_reach/skill/references/"):
+              assert any(n.startswith(prefix) for n in names), f"{prefix} missing from wheel"
+          print(f"wheel OK: {len(names)} entries, no duplicates, data files present")
+          PY
+
+      - name: Smoke-install wheel into clean venv
+        run: |
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/pip install --quiet dist/*.whl
+          /tmp/smoke/bin/agent-reach version
+          cd /tmp && /tmp/smoke/bin/python -c "import agent_reach; from importlib.resources import files; assert (files('agent_reach')/'skill'/'SKILL.md').is_file(); print('SKILL.md ships in site-packages OK')"
