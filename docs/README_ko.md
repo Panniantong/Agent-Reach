@@ -348,10 +348,6 @@ douyin-mcp-server를 설치한 다음, 에이전트가 `mcporter call 'douyin.pa
 
 ## 관련 프로젝트
 
-[FluxNode](https://fluxnode.org) — 저비용 AI API 게이트웨이, 공식 가격의 90% 할인, 종량제 또는 구독. OpenClaw, Claude Code 및 모든 에이전트와 호환.
-
-[OpenClaw for Enterprise](https://github.com/littleben/openclaw-for-enterprise) — 엔터프라이즈급 다중 사용자 OpenClaw 배포, Feishu/Lark에서 AI 직접 사용, 컨테이너 격리, 원 명령어 관리.
-
 [OpenClaw on Tencent Cloud](https://www.tencentcloud.com/act/pro/intl-openclaw?referral_code=G76Y819A&lang=en&pg=) — Tencent Cloud에서 원클릭 OpenClaw: 채팅으로 Agent Reach를 연결하고 인터넷 기능을 활성화하세요.
 
 ## Star History
