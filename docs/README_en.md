@@ -86,7 +86,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 
 > ⚠️ **OpenClaw users: enable `exec` permission first**
 >
-> Agent Reach relies on the Agent running shell commands (`pip install`, `mcporter`, `bird`, etc.). If your OpenClaw uses the default `messaging` tool profile, the Agent won't be able to run them. **Enable `exec` before installing:**
+> Agent Reach relies on the Agent running shell commands (`pip install`, `mcporter`, `twitter`, etc.). If your OpenClaw uses the default `messaging` tool profile, the Agent won't be able to run them. **Enable `exec` before installing:**
 >
 > ```bash
 > openclaw config set tools.profile "coding"

@@ -35,7 +35,7 @@ echo "===================="
 # Step 1: 提取音频 URL 和标题
 echo "🔍 正在解析页面..."
 PAGE=$(curl -s "$URL")
-AUDIO_URL=$(echo "$PAGE" | perl -ne 'while (/(https:\/\/media\.xyzcdn\.net\/[^"]*\.(?:m4a|mp3))/g) { print "$1\n" }' | head -1)
+AUDIO_URL=$(echo "$PAGE" | perl -ne 'while (/(https:\/\/media\.xyzcdn\.net\/[^"]*\.(?:m4a|mp3))/gi) { print "$1\n" }' | head -1)
 TITLE=$(echo "$PAGE" | perl -ne 'if (/"title":"([^"]*)"/) { print "$1\n"; last }' | head -1)
 
 if [ -z "$AUDIO_URL" ]; then
