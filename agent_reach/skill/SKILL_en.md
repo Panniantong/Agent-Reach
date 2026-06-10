@@ -1,18 +1,19 @@
 ---
 name: agent-reach
 description: >
-  Give your AI agent eyes to see the entire internet.
-  Search and read 17 platforms: Twitter/X, Reddit, YouTube, GitHub, Bilibili,
-  XiaoHongShu, Douyin, Weibo, WeChat Articles, Xiaoyuzhou Podcast, LinkedIn,
-  V2EX, Xueqiu, RSS, Exa web search, and any web page.
-  Zero config for 8 channels. Use when the user asks to search, read, or interact
-  on any supported platform, shares a URL, or asks to search the web.
+  MUST USE when user asks to search, browse, read, or interact with content from any supported platform:
+  Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu, Douyin, Weibo,
+  WeChat Articles, Xiaoyuzhou Podcast, LinkedIn, V2EX, Xueqiu (stocks), RSS, or any web URL.
+
+  Also MUST USE for: web search, look up, research, find, share a URL/link, jobs/recruiting.
+  Routes to CLI tools: xhs-cli, twitter-cli, rdt-cli, gh, yt-dlp, curl+Jina, mcporter.
+  17 platforms, zero config for 8 channels.
+
   Triggers: "search twitter", "search xiaohongshu", "watch this video",
   "search the web", "look this up", "research", "youtube transcript",
   "search reddit", "read this link", "bilibili", "douyin video",
   "wechat article", "wechat official account", "weibo", "V2EX",
-  "xiaoyuzhou", "podcast", "xueqiu", "stock quote",
-  "install agent reach".
+  "xiaoyuzhou", "podcast", "xueqiu", "stock quote", "雪球", "股票".
 metadata:
   openclaw:
     homepage: https://github.com/Panniantong/Agent-Reach
@@ -41,14 +42,17 @@ mcporter call 'exa.web_search_exa(query: "query", numResults: 5)'
 mcporter call 'exa.get_code_context_exa(query: "code question", tokensNum: 3000)'
 ```
 
-## Twitter/X (bird)
+## Twitter/X (twitter-cli)
 
 ```bash
-bird search "query" -n 10                  # search
-bird read URL_OR_ID                        # read tweet (supports /status/ and /article/ URLs)
-bird user-tweets @username -n 20           # user timeline
-bird thread URL_OR_ID                      # full thread
+twitter -c search "query" -n 10            # search (-c = compact JSON, LLM-friendly)
+twitter -c tweet URL_OR_ID                 # read tweet + replies (supports /status/ URLs)
+twitter -c article URL_OR_ID               # read a Twitter Article
+twitter -c user-posts @username -n 20      # user timeline
+twitter -c feed -n 20                      # home timeline
 ```
+
+> Binary is `twitter` (`pipx install twitter-cli`, ≥ 0.8.5). The `bird` name in older docs has been retired. If `search` returns 404, run `pipx upgrade twitter-cli`.
 
 ## YouTube (yt-dlp)
 
