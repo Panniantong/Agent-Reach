@@ -148,6 +148,28 @@ def extract_all(browser: str = "chrome") -> Dict[str, dict]:
     return results
 
 
+def _open_owner_only(path: str):
+    """Open *path* for writing, atomically creating it with mode 0o600.
+
+    Mirrors the pattern used by Config.save() in config.py: O_WRONLY|O_CREAT|
+    O_TRUNC + an explicit mode argument so the file is never briefly
+    world-readable between open() and a later os.chmod(). On Windows (or any
+    OS that rejects the open flags) we fall back to a plain open().
+    """
+    import os
+    import stat
+
+    try:
+        fd = os.open(
+            path,
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+            stat.S_IRUSR | stat.S_IWUSR,  # 0o600
+        )
+        return os.fdopen(fd, "w", encoding="utf-8")
+    except OSError:
+        return open(path, "w", encoding="utf-8")
+
+
 def _sync_xfetch_session(auth_token: str, ct0: str) -> None:
     """Sync Twitter credentials to ~/.config/xfetch/session.json (legacy xreach compat)."""
     import json
@@ -166,9 +188,8 @@ def _sync_xfetch_session(auth_token: str, ct0: str) -> None:
                 session_data = {}
         session_data["authToken"] = auth_token
         session_data["ct0"] = ct0
-        with open(session_path, "w", encoding="utf-8") as sf:
+        with _open_owner_only(session_path) as sf:
             json.dump(session_data, sf, indent=2)
-        os.chmod(session_path, 0o600)
     except Exception:
         # Non-fatal: agent-reach config is the source of truth, xfetch sync is best-effort
         pass
@@ -179,17 +200,19 @@ def _sync_bird_env(auth_token: str, ct0: str) -> None:
 
     bird reads AUTH_TOKEN and CT0 from environment variables. This writes a
     shell-sourceable file so users can `source ~/.config/bird/credentials.env`.
+    Values are passed through shlex.quote so a token containing a quote, $, or
+    backtick cannot break out into shell syntax when the file is sourced.
     """
     import os
+    import shlex
 
     try:
         bird_dir = os.path.join(os.path.expanduser("~"), ".config", "bird")
         os.makedirs(bird_dir, exist_ok=True)
         env_path = os.path.join(bird_dir, "credentials.env")
-        with open(env_path, "w", encoding="utf-8") as f:
-            f.write(f'AUTH_TOKEN="{auth_token}"\n')
-            f.write(f'CT0="{ct0}"\n')
-        os.chmod(env_path, 0o600)
+        with _open_owner_only(env_path) as f:
+            f.write(f"AUTH_TOKEN={shlex.quote(auth_token)}\n")
+            f.write(f"CT0={shlex.quote(ct0)}\n")
     except Exception:
         # Non-fatal: agent-reach config is the source of truth, bird env sync is best-effort
         pass

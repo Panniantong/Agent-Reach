@@ -1146,11 +1146,28 @@ def _configure_xhs_cookies(value):
     # Find the container
     docker = shutil.which("docker")
     if not docker:
-        # No Docker - write to a local file for manual import
+        # No Docker - write to a local file for manual import.
+        # Create with 0o600 atomically so the file is never world-readable
+        # between open() and a follow-up chmod() (same pattern Config.save()
+        # uses in config.py).
+        import stat
         cookie_path = os.path.expanduser("~/.agent-reach/xhs-cookies.json")
-        with open(cookie_path, "w") as f:
-            f.write(cookies_json)
-        os.chmod(cookie_path, 0o600)
+        try:
+            fd = os.open(
+                cookie_path,
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                stat.S_IRUSR | stat.S_IWUSR,  # 0o600
+            )
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(cookies_json)
+        except OSError:
+            # Windows / unsupported flags — fall back to plain open + chmod.
+            with open(cookie_path, "w", encoding="utf-8") as f:
+                f.write(cookies_json)
+            try:
+                os.chmod(cookie_path, 0o600)
+            except OSError:
+                pass
         print(f"  Cookies saved to {cookie_path}")
         print("  Docker not found. Copy manually:")
         print(f"  docker cp {cookie_path} xiaohongshu-mcp:/app/data/cookies.json")
