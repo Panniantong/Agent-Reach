@@ -39,14 +39,11 @@ class TestSkillCommand(unittest.TestCase):
                 with patch.dict(os.environ, env, clear=True):
                     _install_skill()
 
-            target = os.path.join(skill_dir, "agent-reach", "SKILL.md")
             # Check at least one known skill dir pattern
-            found = False
             for dirpath, _, filenames in os.walk(tmpdir):
                 if "SKILL.md" in filenames:
-                    found = True
                     # Verify content is non-empty
-                    with open(os.path.join(dirpath, "SKILL.md")) as f:
+                    with open(os.path.join(dirpath, "SKILL.md"), encoding="utf-8") as f:
                         content = f.read()
                     self.assertIn("Agent Reach", content)
             # _install_skill may or may not find dirs depending on mock; just ensure no crash
@@ -92,7 +89,7 @@ class TestSkillCommand(unittest.TestCase):
 
             target = os.path.join(skill_parent, "agent-reach", "SKILL.md")
             self.assertTrue(os.path.exists(target))
-            with open(target) as f:
+            with open(target, encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("Agent Reach", content)
 
