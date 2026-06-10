@@ -2,17 +2,16 @@
 name: agent-reach
 description: >
   MUST USE when user asks to search, browse, read, or interact with content from any supported platform:
-  Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu, Douyin, Weibo,
-  WeChat Articles, Xiaoyuzhou Podcast, LinkedIn, V2EX, Xueqiu (stocks), RSS, or any web URL.
+  Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu,
+  Xiaoyuzhou Podcast, LinkedIn, V2EX, Xueqiu (stocks), RSS, or any web URL.
 
   Also MUST USE for: web search, look up, research, find, share a URL/link, jobs/recruiting.
   Routes to CLI tools: xhs-cli, twitter-cli, rdt-cli, gh, yt-dlp, curl+Jina, mcporter.
-  17 platforms, zero config for 8 channels.
+  13 platforms, zero config for 6 channels.
 
   Triggers: "search twitter", "search xiaohongshu", "watch this video",
   "search the web", "look this up", "research", "youtube transcript",
-  "search reddit", "read this link", "bilibili", "douyin video",
-  "wechat article", "wechat official account", "weibo", "V2EX",
+  "search reddit", "read this link", "bilibili", "V2EX",
   "xiaoyuzhou", "podcast", "xueqiu", "stock quote", "雪球", "股票".
 metadata:
   openclaw:
@@ -21,7 +20,7 @@ metadata:
 
 # Agent Reach — Usage Guide
 
-Upstream tools for 17 platforms. Call them directly.
+Upstream tools for 13 platforms. Call them directly.
 
 Run `agent-reach doctor` to check which channels are available.
 
@@ -108,75 +107,6 @@ mcporter call 'xiaohongshu.publish_content(title: "Title", content: "Body text",
 > mcporter call 'xiaohongshu.search_feeds(keyword: "query")' | agent-reach format xhs
 > ```
 > This keeps only: title, content, author, engagement counts, image URLs, and tags.
-
-## Douyin (mcporter)
-
-```bash
-mcporter call 'douyin.parse_douyin_video_info(share_link: "https://v.douyin.com/xxx/")'
-mcporter call 'douyin.get_douyin_download_link(share_link: "https://v.douyin.com/xxx/")'
-```
-
-> No login needed.
-
-## WeChat Articles
-
-**Search** (`miku_ai`):
-```bash
-# miku_ai is installed inside the agent-reach Python environment.
-# Use the same interpreter that runs agent-reach (handles pipx / venv installs):
-AGENT_REACH_PYTHON=$(python3 -c "import agent_reach, sys; print(sys.executable)" 2>/dev/null || echo python3)
-$AGENT_REACH_PYTHON -c "
-import asyncio
-from miku_ai import get_wexin_article
-async def s():
-    for a in await get_wexin_article('query', 5):
-        print(f'{a[\"title\"]} | {a[\"url\"]}')
-asyncio.run(s())
-"
-```
-
-**Read** (Camoufox — bypasses WeChat anti-bot):
-```bash
-cd ~/.agent-reach/tools/wechat-article-for-ai && python3 main.py "https://mp.weixin.qq.com/s/ARTICLE_ID"
-```
-
-> WeChat articles cannot be read with Jina Reader or curl. Use Camoufox.
-
-## Weibo (mcporter)
-
-```bash
-# Trending topics
-mcporter call 'weibo.get_trendings(limit: 20)'
-
-# Search users
-mcporter call 'weibo.search_users(keyword: "Lei Jun", limit: 10)'
-
-# Get a user profile
-mcporter call 'weibo.get_profile(uid: "1195230310")'
-
-# Get a user's feed
-mcporter call 'weibo.get_feeds(uid: "1195230310", limit: 20)'
-
-# Get a user's hot posts
-mcporter call 'weibo.get_hot_feeds(uid: "1195230310", limit: 10)'
-
-# Search post content
-mcporter call 'weibo.search_content(keyword: "artificial intelligence", limit: 20)'
-
-# Search topics
-mcporter call 'weibo.search_topics(keyword: "AI", limit: 10)'
-
-# Get post comments
-mcporter call 'weibo.get_comments(mid: "5099916367123456", limit: 50)'
-
-# Get fans
-mcporter call 'weibo.get_fans(uid: "1195230310", limit: 20)'
-
-# Get followings
-mcporter call 'weibo.get_followers(uid: "1195230310", limit: 20)'
-```
-
-> Zero config. No login needed. Uses the mobile API with auto-generated visitor cookies.
 
 ## Xiaoyuzhou Podcast (groq-whisper + ffmpeg)
 

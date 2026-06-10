@@ -73,8 +73,8 @@ def main():
                            help="Show what would be done without making any changes")
     p_install.add_argument("--channels", default="",
                            help="Comma-separated optional channels to install "
-                                "(twitter,weibo,wechat,xiaoyuzhou,xueqiu,xiaohongshu,"
-                                "reddit,bilibili,douyin,linkedin,all)")
+                                "(twitter,xiaoyuzhou,xueqiu,xiaohongshu,"
+                                "reddit,bilibili,linkedin,all)")
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
@@ -193,14 +193,12 @@ def _cmd_install(args):
     # ── Parse --channels ──
     CHANNEL_INSTALLERS = {
         "twitter":     _install_twitter_deps,
-        "weibo":       _install_weibo_deps,
-        "wechat":      _install_wechat_deps,
         "xiaoyuzhou":  _install_xiaoyuzhou_deps,
         "xiaohongshu": _install_xhs_deps,
         "reddit":      _install_reddit_deps,
         "bilibili":    _install_bili_deps,
         # xueqiu: cookie-only, no install step
-        # douyin/linkedin: manual setup, no auto-install
+        # linkedin: manual setup, no auto-install
     }
     COOKIE_CHANNELS = {"twitter", "xueqiu", "bilibili"}
 
@@ -208,7 +206,7 @@ def _cmd_install(args):
     if args.channels:
         raw = [c.strip().lower() for c in args.channels.split(",") if c.strip()]
         if "all" in raw:
-            requested_channels = set(CHANNEL_INSTALLERS.keys()) | {"xueqiu", "douyin", "linkedin"}
+            requested_channels = set(CHANNEL_INSTALLERS.keys()) | {"xueqiu", "linkedin"}
         else:
             requested_channels = set(raw)
 
@@ -320,7 +318,7 @@ def _cmd_install(args):
             # First install — hint about optional channels
             print()
             print("More channels available! Use --channels to install:")
-            print("   agent-reach install --channels=twitter,weibo,xiaohongshu,...")
+            print("   agent-reach install --channels=twitter,xiaohongshu,reddit,...")
             print("   agent-reach install --channels=all  (install everything)")
 
         # Star reminder
@@ -616,7 +614,7 @@ def _install_system_deps():
             except Exception:
                 print("  -- Could not configure yt-dlp JS runtime (YouTube may not work)")
 
-    # NOTE: twitter-cli, weibo, xiaoyuzhou, wechat, xhs-cli etc. are optional.
+    # NOTE: twitter-cli, xiaoyuzhou, xhs-cli etc. are optional.
     # They are installed via --channels flag, not here.
     # See CHANNEL_INSTALLERS in _cmd_install().
 
@@ -756,128 +754,6 @@ def _install_bili_deps():
             except Exception:
                 pass
     print("  [!]  bili-cli install failed. Run: pipx install bilibili-cli")
-
-
-def _install_weibo_deps():
-    """Install Weibo MCP server (Panniantong fork with visitor passport auth)."""
-    import shutil
-    import subprocess
-
-    from agent_reach.utils.process import mcporter_utf8_env_args, utf8_subprocess_env
-
-    print("Setting up Weibo MCP server...")
-
-    # Check if already installed and working
-    mcporter = shutil.which("mcporter")
-    if mcporter:
-        try:
-            r = subprocess.run(
-                [mcporter, "config", "list"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=5,
-                env=utf8_subprocess_env(),
-            )
-            if "weibo" in r.stdout:
-                print("  ✅ Weibo MCP already configured")
-                return
-        except Exception:
-            pass
-
-    # Install from our fork (has visitor passport auth fix)
-    try:
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-q",
-             "git+https://github.com/Panniantong/mcp-server-weibo.git"],
-            check=True, timeout=120, env=utf8_subprocess_env()
-        )
-        print("  ✅ mcp-server-weibo installed (Panniantong fork)")
-    except Exception as e:
-        print(f"  [!]  mcp-server-weibo install failed: {e}")
-        return
-
-    # Register with mcporter (force UTF-8 in the server's env — Windows GBK
-    # consoles otherwise corrupt the MCP server's Chinese output)
-    if mcporter:
-        try:
-            subprocess.run(
-                [mcporter, "config", "add", "weibo", "--command", "mcp-server-weibo",
-                 *mcporter_utf8_env_args()],
-                check=True, capture_output=True, timeout=10
-            )
-            print("  ✅ Weibo MCP registered with mcporter")
-        except Exception:
-            print("  [!]  mcporter config add failed. Run manually: mcporter config add weibo --command 'mcp-server-weibo' --env PYTHONUTF8=1 --env PYTHONIOENCODING=utf-8")
-    else:
-        print("  -- mcporter not found, skipping MCP registration. Install mcporter first, then run: mcporter config add weibo --command 'mcp-server-weibo' --env PYTHONUTF8=1 --env PYTHONIOENCODING=utf-8")
-
-
-def _install_wechat_deps():
-    """Install WeChat article reading and search dependencies."""
-    import subprocess
-
-    print("Setting up WeChat article tools...")
-
-    # Check if already installed
-    has_camoufox = False
-    has_miku = False
-    try:
-        import camoufox  # noqa: F401
-        has_camoufox = True
-    except ImportError:
-        pass
-    try:
-        import miku_ai  # noqa: F401
-        has_miku = True
-    except ImportError:
-        pass
-
-    # Install Python packages
-    if has_camoufox and has_miku:
-        print("  ✅ WeChat Python packages already installed")
-    else:
-        pkgs = []
-        if not has_camoufox:
-            pkgs.extend(["camoufox[geoip]", "markdownify", "beautifulsoup4", "httpx"])
-        if not has_miku:
-            pkgs.append("miku_ai")
-        try:
-            cmd = [sys.executable, "-m", "pip", "install", "--break-system-packages", "-q"] + pkgs
-            subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=120)
-            # Verify
-            ok = True
-            try:
-                import importlib
-                if not has_camoufox:
-                    importlib.import_module("camoufox")
-                if not has_miku:
-                    importlib.import_module("miku_ai")
-            except ImportError:
-                ok = False
-            if ok:
-                print(f"  ✅ WeChat Python packages installed ({', '.join(pkgs)})")
-            else:
-                print(f"  [!]  Some WeChat packages failed to install. Try: pip install {' '.join(pkgs)}")
-        except Exception:
-            print(f"  [!]  WeChat packages install failed. Try: pip install {' '.join(pkgs)}")
-
-    # Clone wechat-article-for-ai tool
-    tools_dir = os.path.expanduser("~/.agent-reach/tools")
-    wechat_dir = os.path.join(tools_dir, "wechat-article-for-ai")
-    if os.path.isfile(os.path.join(wechat_dir, "main.py")):
-        print("  ✅ wechat-article-for-ai tool already installed")
-    else:
-        try:
-            os.makedirs(tools_dir, exist_ok=True)
-            subprocess.run(
-                ["git", "clone", "--depth", "1",
-                 "https://github.com/Panniantong/wechat-article-for-ai.git", wechat_dir],
-                capture_output=True, encoding="utf-8", errors="replace", timeout=60,
-            )
-            if os.path.isfile(os.path.join(wechat_dir, "main.py")):
-                print("  ✅ wechat-article-for-ai tool installed")
-            else:
-                print("  [!]  wechat-article-for-ai clone failed. Try: git clone https://github.com/Panniantong/wechat-article-for-ai.git " + wechat_dir)
-        except Exception:
-            print("  [!]  wechat-article-for-ai clone failed. Try: git clone https://github.com/Panniantong/wechat-article-for-ai.git " + wechat_dir)
 
 
 def _install_system_deps_safe():

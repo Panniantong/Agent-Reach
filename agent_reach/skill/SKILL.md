@@ -2,29 +2,27 @@
 name: agent-reach
 description: >
   MUST USE when user asks to search, browse, read, or interact with content from any of these platforms:
-  小红书/xiaohongshu/xhs, 抖音/douyin, Twitter/推特/X, 微博/weibo, B站/bilibili,
-  V2EX, Reddit, LinkedIn/领英, YouTube, GitHub code search, 微信公众号/WeChat articles,
+  小红书/xiaohongshu/xhs, Twitter/推特/X, B站/bilibili,
+  V2EX, Reddit, LinkedIn/领英, YouTube, GitHub code search,
   小宇宙播客, 雪球/股票行情, RSS feeds, or any web URL.
 
   Also MUST USE for: web搜索/搜/查/找/look up/research, 招聘/求职/jobs, 分享的链接/URL.
   Routes to CLI tools: xhs-cli, twitter-cli, rdt-cli, gh, yt-dlp, curl+Jina, mcporter.
-  17 platforms. Zero config for 8 channels.
+  13 platforms. Zero config for 6 channels.
 
   【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。
-  分类：search / social (小红书/抖音/微博/推特/B站/V2EX/Reddit) / career(LinkedIn) / dev(github) / web(网页/文章/公众号/RSS) / video(YouTube/B站/播客)。
+  分类：search / social (小红书/推特/B站/V2EX/Reddit) / career(LinkedIn) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客)。
 triggers:
   - search: 搜/查/找/search/搜索/查一下/帮我搜
   - social:
     - 小红书: xiaohongshu/xhs/小红书/红书
-    - 抖音: douyin/抖音
     - Twitter: twitter/推特/x.com/推文
-    - 微博: weibo/微博
     - B站: bilibili/b站/哔哩哔哩
     - V2EX: v2ex
     - Reddit: reddit
   - career: 招聘/职位/求职/linkedin/领英/找工作
   - dev: github/代码/仓库/gh/issue/pr/分支/commit
-  - web: 网页/链接/文章/公众号/微信文章/rss/读一下/打开这个
+  - web: 网页/链接/文章/rss/读一下/打开这个
   - video: youtube/视频/播客/字幕/小宇宙/转录/yt
   - finance: 雪球/股票/stock/xueqiu/行情/基金
 metadata:
@@ -34,17 +32,17 @@ metadata:
 
 # Agent Reach — 路由器
 
-17 平台工具集合。根据用户意图选择对应分类。
+13 平台工具集合。根据用户意图选择对应分类。
 
 ## 路由表
 
 | 用户意图 | 分类 | 详细文档 |
 |---------|------|---------|
 | 网页搜索/代码搜索 | search | [references/search.md](references/search.md) |
-| 小红书/抖音/微博/推特/B站/V2EX/Reddit | social | [references/social.md](references/social.md) |
+| 小红书/推特/B站/V2EX/Reddit | social | [references/social.md](references/social.md) |
 | 招聘/职位/LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub/代码 | dev | [references/dev.md](references/dev.md) |
-| 网页/文章/公众号/RSS | web | [references/web.md](references/web.md) |
+| 网页/文章/RSS | web | [references/web.md](references/web.md) |
 | YouTube/B站/播客字幕 | video | [references/video.md](references/video.md) |
 
 ## 零配置快速命令
@@ -94,10 +92,10 @@ mcporter_list_servers()
 根据用户需求，阅读对应的详细文档：
 
 - [搜索工具](references/search.md) — Exa AI 搜索
-- [社交媒体](references/social.md) — 小红书, 抖音, Twitter, B站, V2EX, Reddit
+- [社交媒体](references/social.md) — 小红书, Twitter, B站, V2EX, Reddit
 - [职场招聘](references/career.md) — LinkedIn
 - [开发工具](references/dev.md) — GitHub CLI
-- [网页阅读](references/web.md) — Jina Reader, 微信公众号, RSS
+- [网页阅读](references/web.md) — Jina Reader, RSS
 - [视频播客](references/video.md) — YouTube, B站, 小宇宙
 
 ## 配置渠道
