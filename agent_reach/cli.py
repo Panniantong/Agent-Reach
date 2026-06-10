@@ -1143,19 +1143,19 @@ def _parse_twitter_cookie_input(value: str):
 
 
 def _configure_xhs_cookies(value):
-    """Import cookies into xiaohongshu-mcp Docker container.
+    """Import cookies for xhs-cli, with legacy xiaohongshu-mcp support.
 
     Accepts two formats:
     1. Cookie-Editor JSON export (array of cookie objects)
     2. Header String: "name1=value1; name2=value2; ..."
 
-    The xiaohongshu-mcp container stores cookies at $COOKIES_PATH
-    (default: /app/data/cookies.json or cookies.json in workdir).
-    Format: JSON array of {name, value, domain, path, expires, httpOnly, secure, sameSite}.
+    xhs-cli stores cookies as a name/value dict at ~/.xiaohongshu-cli/cookies.json.
+    The legacy Docker MCP stores Cookie-Editor style arrays at $COOKIES_PATH.
     """
     import json
     import shutil
     import subprocess
+    import time
 
     value = value.strip()
     if not value:
@@ -1165,6 +1165,7 @@ def _configure_xhs_cookies(value):
 
     # Detect format and parse
     cookies_json = None
+    cookies = []
 
     # Try JSON format first (Cookie-Editor JSON export)
     if value.startswith("["):
@@ -1174,6 +1175,7 @@ def _configure_xhs_cookies(value):
                 # Validate it looks like cookie objects
                 first = parsed[0]
                 if isinstance(first, dict) and "name" in first and "value" in first:
+                    cookies = parsed
                     cookies_json = json.dumps(parsed)
                     print(f"  Parsed {len(parsed)} cookies from JSON format")
                 else:
@@ -1188,7 +1190,6 @@ def _configure_xhs_cookies(value):
 
     # Header String format: "key1=val1; key2=val2; ..."
     if cookies_json is None and "=" in value:
-        cookies = []
         for part in value.split(";"):
             part = part.strip()
             if "=" not in part:
@@ -1222,17 +1223,37 @@ def _configure_xhs_cookies(value):
         print('   2. Header String: "key1=val1; key2=val2; ..."')
         return
 
+    # Primary path: configure xhs-cli directly.
+    xhs_cookie_map = {
+        str(c.get("name", "")).strip(): str(c.get("value", ""))
+        for c in cookies
+        if isinstance(c, dict) and str(c.get("name", "")).strip()
+    }
+    if xhs_cookie_map.get("a1"):
+        xhs_config_dir = os.path.expanduser("~/.xiaohongshu-cli")
+        os.makedirs(xhs_config_dir, exist_ok=True)
+        xhs_cookie_path = os.path.join(xhs_config_dir, "cookies.json")
+        with open(xhs_cookie_path, "w", encoding="utf-8") as f:
+            json.dump({**xhs_cookie_map, "saved_at": time.time()}, f, indent=2)
+        os.chmod(xhs_cookie_path, 0o600)
+        print(f"✅ xhs-cli cookies saved to {xhs_cookie_path}")
+        print("   Run `xhs status` or `agent-reach doctor` to verify.")
+    else:
+        print("[!] Cookie input does not include the required `a1` cookie.")
+        print("    xhs-cli will not treat this as a logged-in session. Export all xiaohongshu.com cookies from Cookie-Editor.")
+
+    # Keep a legacy Cookie-Editor array for users still running xiaohongshu-mcp.
+    legacy_cookie_path = os.path.expanduser("~/.agent-reach/xhs-cookies.json")
+    os.makedirs(os.path.dirname(legacy_cookie_path), exist_ok=True)
+    with open(legacy_cookie_path, "w") as f:
+        f.write(cookies_json)
+    os.chmod(legacy_cookie_path, 0o600)
+    print(f"  Legacy MCP cookie array saved to {legacy_cookie_path}")
+
     # Find the container
     docker = shutil.which("docker")
     if not docker:
-        # No Docker - write to a local file for manual import
-        cookie_path = os.path.expanduser("~/.agent-reach/xhs-cookies.json")
-        with open(cookie_path, "w") as f:
-            f.write(cookies_json)
-        os.chmod(cookie_path, 0o600)
-        print(f"  Cookies saved to {cookie_path}")
-        print("  Docker not found. Copy manually:")
-        print(f"  docker cp {cookie_path} xiaohongshu-mcp:/app/data/cookies.json")
+        print("  Docker not found; skipping xiaohongshu-mcp import.")
         return
 
     # Check if xiaohongshu-mcp container is running
@@ -1243,9 +1264,7 @@ def _configure_xhs_cookies(value):
         )
         container_name = result.stdout.strip()
         if not container_name:
-            print("[X] xiaohongshu-mcp container is not running.")
-            print("   Start it first:")
-            print("   docker run -d --name xiaohongshu-mcp -p 18060:18060 xpzouying/xiaohongshu-mcp")
+            print("  xiaohongshu-mcp container is not running; skipping legacy Docker import.")
             return
     except Exception as e:
         print(f"[X] Could not check Docker: {e}")

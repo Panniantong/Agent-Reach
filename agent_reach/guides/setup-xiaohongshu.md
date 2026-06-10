@@ -39,7 +39,9 @@ agent-reach doctor
 > 3. 点击 Cookie-Editor 图标 → Export → Header String
 > 4. 把导出的字符串发给 Agent，运行：`agent-reach configure xhs-cookies "导出的cookie字符串"`
 >
-> **注意**：不要依赖 QR 扫码登录，Cookie-Editor 导出方式最简单可靠。
+> **注意**：不要依赖 QR 扫码登录，Cookie-Editor 导出方式最简单可靠。这个方式也适合 WSL、SSH、容器等无法直接读取桌面浏览器 Cookie 的环境。
+
+`agent-reach configure xhs-cookies` 会把 Cookie 同步到 `~/.xiaohongshu-cli/cookies.json`，供 `xhs status/search/read` 直接使用；如果你还在用旧的 `xiaohongshu-mcp` Docker 方案，也会保留兼容导入文件。
 
 ## 使用示例
 
@@ -68,6 +70,9 @@ A: 推荐使用住宅代理：`export HTTP_PROXY="http://user:pass@ip:port"`。
 
 **Q: xhs-cli 不支持我的系统？**
 A: 确保 Python 3.10+ 和 pipx 已安装。运行 `pipx install xiaohongshu-cli` 即可。
+
+**Q: WSL 里 `xhs login` 读不到 Windows 浏览器怎么办？**
+A: 这是常见限制。WSL 里没有直接可读的 Linux 浏览器 Cookie 时，`xhs login` 自动提取会失败。推荐在 Windows 浏览器用 Cookie-Editor 导出 `xiaohongshu.com` 的 Header String，然后在 WSL 里运行 `agent-reach configure xhs-cookies "..."`，再用 `xhs status` 验证。
 
 ## 备选方案：Docker MCP
 

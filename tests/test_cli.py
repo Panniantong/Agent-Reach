@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """Tests for Agent Reach CLI."""
 
+import json
+import os
+
 import pytest
 import requests
 from unittest.mock import patch
@@ -41,6 +44,24 @@ class TestCLI:
         )
         assert auth_token == "token123"
         assert ct0 == "ct0abc"
+
+    def test_configure_xhs_cookies_writes_xhs_cli_cookie_file(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setattr("shutil.which", lambda _name: None)
+
+        cli._configure_xhs_cookies("a1=token123; web_session=session456; other=value")
+
+        cookie_path = tmp_path / ".xiaohongshu-cli" / "cookies.json"
+        data = json.loads(cookie_path.read_text())
+        assert data["a1"] == "token123"
+        assert data["web_session"] == "session456"
+        assert "saved_at" in data
+        assert oct(os.stat(cookie_path).st_mode & 0o777) == "0o600"
+
+        legacy_path = tmp_path / ".agent-reach" / "xhs-cookies.json"
+        assert legacy_path.exists()
+        captured = capsys.readouterr()
+        assert "xhs-cli cookies saved" in captured.out
 
 
 class TestCheckUpdateRetry:
