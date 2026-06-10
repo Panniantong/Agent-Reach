@@ -249,18 +249,6 @@ class TestYouTubeChannelTranscribe:
         assert captured["provider"] == "groq"
         assert captured["config"] is fake_config
 
-    def test_transcription_providers_in_order(self, fake_config):
-        from agent_reach.channels.youtube import YouTubeChannel
-
-        assert YouTubeChannel.transcription_providers(fake_config) == []
-        fake_config.set("openai_api_key", "sk-test")
-        assert YouTubeChannel.transcription_providers(fake_config) == ["openai"]
-        fake_config.set("groq_api_key", "gsk_test")
-        assert YouTubeChannel.transcription_providers(fake_config) == [
-            "groq",
-            "openai",
-        ]
-
 
 # --- Config feature requirement --------------------------------------- #
 

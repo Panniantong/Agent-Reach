@@ -79,7 +79,7 @@ def main():
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
     p_conf.add_argument("key", nargs="?", default=None,
-                        choices=["proxy", "github-token", "groq-key",
+                        choices=["proxy", "github-token", "groq-key", "openai-key",
                                  "twitter-cookies", "youtube-cookies",
                                  "xhs-cookies"],
                         help="What to configure (omit if using --from-browser)")
@@ -111,6 +111,14 @@ def main():
     p_format.add_argument("platform", choices=["xhs"], help="Platform to format (xhs)")
 
     # ── check-update ──
+    # ── transcribe ──
+    p_tr = sub.add_parser("transcribe", help="Transcribe a URL or local audio file (Whisper via Groq/OpenAI)")
+    p_tr.add_argument("source", help="Audio/video URL or local file path")
+    p_tr.add_argument("--provider", choices=["auto", "groq", "openai"], default="auto",
+                      help="Transcription provider (default: auto = groq → openai fallback)")
+    p_tr.add_argument("-o", "--output", default=None,
+                      help="Write transcript to a file instead of stdout")
+
     sub.add_parser("check-update", help="Check for new versions and changes")
 
     # ── watch ──
@@ -150,6 +158,8 @@ def main():
         _cmd_skill(args)
     elif args.command == "format":
         _cmd_format(args)
+    elif args.command == "transcribe":
+        _cmd_transcribe(args)
 
 
 # ── Command handlers ────────────────────────────────
@@ -1124,6 +1134,29 @@ def _cmd_configure(args):
     elif args.key == "groq-key":
         config.set("groq_api_key", value)
         print(f"✅ Groq key configured!")
+
+    elif args.key == "openai-key":
+        config.set("openai_api_key", value)
+        print(f"✅ OpenAI key configured!")
+
+
+def _cmd_transcribe(args):
+    """Transcribe a URL or local audio file via Whisper (Groq → OpenAI fallback)."""
+    from pathlib import Path
+
+    from agent_reach.transcribe import TranscribeError, transcribe
+
+    try:
+        text = transcribe(args.source, provider=args.provider)
+    except TranscribeError as e:
+        print(f"❌ {e}")
+        sys.exit(1)
+
+    if args.output:
+        Path(args.output).write_text(text + "\n", encoding="utf-8")
+        print(f"✅ Transcript written to {args.output}")
+    else:
+        print(text)
 
 
 def _parse_twitter_cookie_input(value: str):

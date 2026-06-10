@@ -2,7 +2,6 @@
 """YouTube — check if yt-dlp is available with JS runtime."""
 
 import shutil
-from typing import Optional
 
 from agent_reach.utils.paths import get_ytdlp_config_path, render_ytdlp_fix_command
 from agent_reach.utils.text import read_utf8_text
@@ -70,20 +69,3 @@ class YouTubeChannel(Channel):
 
         return _transcribe(url, provider=provider, config=config)
 
-    @staticmethod
-    def transcription_providers(config) -> list:
-        """Return the list of configured transcription providers (in fallback order)."""
-        order = []
-        if config and config.is_configured("groq_whisper"):
-            order.append("groq")
-        if config and config.is_configured("openai_whisper"):
-            order.append("openai")
-        return order
-
-    # Re-export the helper for type hints in callers without re-importing.
-    @staticmethod
-    def transcription_supported() -> Optional[str]:
-        """Return None if ffmpeg is available; otherwise an install hint."""
-        if shutil.which("ffmpeg"):
-            return None
-        return "ffmpeg 未安装，无法转写音频。brew install ffmpeg / apt install ffmpeg"

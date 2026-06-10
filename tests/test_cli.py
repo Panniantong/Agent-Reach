@@ -33,6 +33,21 @@ class TestCLI:
         assert "Agent Reach" in captured.out
         assert "✅" in captured.out
 
+    def test_transcribe_command_prints_text(self, capsys):
+        with patch("agent_reach.transcribe.transcribe", return_value="hello transcript"):
+            with patch("sys.argv", ["agent-reach", "transcribe", "audio.mp3"]):
+                main()
+        captured = capsys.readouterr()
+        assert "hello transcript" in captured.out
+
+    def test_transcribe_command_writes_output_file(self, capsys, tmp_path):
+        out_file = tmp_path / "t.txt"
+        with patch("agent_reach.transcribe.transcribe", return_value="saved text"):
+            with patch("sys.argv", ["agent-reach", "transcribe", "audio.mp3", "-o", str(out_file)]):
+                main()
+        assert out_file.read_text(encoding="utf-8").strip() == "saved text"
+        assert "Transcript written" in capsys.readouterr().out
+
     def test_parse_twitter_cookie_input_separate_values(self):
         auth_token, ct0 = cli._parse_twitter_cookie_input("token123 ct0abc")
         assert auth_token == "token123"

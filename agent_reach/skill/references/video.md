@@ -39,6 +39,17 @@ yt-dlp --dump-json "ytsearch5:query"
 > **字幕注意**: 手动上传的字幕提取可靠；自动生成字幕可能存在行间重复，需后处理。
 > **评论注意**: `--write-comments` 基于网页抓取（非 YouTube Data API），部分评论可能丢失。
 
+### 无字幕兜底：Whisper 音频转写
+
+```bash
+# 视频没有字幕时的兜底：下载音频并用 Whisper 转写（Groq 免费 key 即可）
+agent-reach transcribe "https://www.youtube.com/watch?v=VIDEO_ID"
+agent-reach transcribe ./local_audio.mp3 -o /tmp/transcript.txt
+```
+
+> 需要先配置 key：`agent-reach configure groq-key gsk_xxx`（免费，console.groq.com）
+> 或 `agent-reach configure openai-key sk-xxx`。默认 auto 模式：groq 失败自动降级 openai。
+
 ## B站 / Bilibili (yt-dlp + bili-cli)
 
 ### 视频元数据 (yt-dlp)
