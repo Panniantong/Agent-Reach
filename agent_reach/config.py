@@ -22,6 +22,7 @@ class Config:
     FEATURE_REQUIREMENTS = {
         "exa_search": ["exa_api_key"],
         "twitter_xreach": ["twitter_auth_token", "twitter_ct0"],  # legacy key name; used by bird CLI
+        "xquik": ["xquik_api_key"],
         "groq_whisper": ["groq_api_key"],
         "github_token": ["github_token"],
     }
