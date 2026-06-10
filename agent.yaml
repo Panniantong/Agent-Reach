@@ -1,0 +1,41 @@
+spec_version: "0.1.0"
+name: agent-reach
+version: 1.3.0
+description: >
+  Agent Reach gives any AI agent one-click access to 17+ internet platforms —
+  Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu, LinkedIn, Instagram,
+  RSS, V2EX, Weibo, Douyin, Xueqiu, WeChat Official Accounts, and arbitrary web pages.
+  It acts as a unified read/search routing layer: a single CLI + Python library +
+  MCP server that auto-installs platform-specific open-source backends (yt-dlp,
+  bird CLI, rdt-cli, Jina Reader, etc.) and exposes a consistent interface with
+  zero API fees. Includes a built-in diagnostic command (agent-reach doctor) that
+  tells the agent exactly what works, what needs configuration, and how to fix it.
+author: Panniantong
+license: MIT
+
+model:
+  preferred: anthropic:claude-sonnet-4-6
+  constraints:
+    temperature: 0.3
+
+skills:
+  - read-web
+  - search-social
+  - read-social
+  - read-video
+  - read-github
+  - read-rss
+  - diagnostics
+  - mcp-server
+
+runtime:
+  max_turns: 50
+  timeout: 300
+
+compliance:
+  risk_tier: standard
+  supervision:
+    human_in_the_loop: none
+    kill_switch: false
+  data_governance:
+    pii_handling: redact
