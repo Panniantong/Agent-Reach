@@ -13,58 +13,96 @@ def _cp(stdout="", stderr="", returncode=0):
     return m
 
 
-def test_check_bird_found_and_auth_ok():
-    """bird found + bird check returns 0 → ok."""
+# --- twitter-cli tests ---
+
+def test_check_twitter_cli_found_and_auth_ok():
+    """twitter-cli found + twitter status ok → ok."""
     channel = TwitterChannel()
-    with patch("shutil.which", side_effect=lambda name: "/usr/local/bin/bird" if name == "bird" else None), patch(
+    with patch("shutil.which", side_effect=lambda name: "/usr/local/bin/twitter" if name == "twitter" else None), patch(
+        "subprocess.run",
+        return_value=_cp(stdout="ok: true\nusername: testuser\n", returncode=0),
+    ):
+        status, message = channel.check()
+    assert status == "ok"
+    assert "twitter-cli" in message
+    assert "完整可用" in message
+
+
+def test_check_twitter_cli_found_auth_missing():
+    """twitter-cli found + not_authenticated → warn about auth."""
+    channel = TwitterChannel()
+    with patch("shutil.which", side_effect=lambda name: "/usr/local/bin/twitter" if name == "twitter" else None), patch(
+        "subprocess.run",
+        return_value=_cp(
+            stderr="ok: false\nerror:\n  code: not_authenticated\n",
+            returncode=1,
+        ),
+    ):
+        status, message = channel.check()
+    assert status == "warn"
+    assert "未认证" in message
+
+
+# --- bird CLI fallback tests ---
+
+def test_check_bird_fallback_auth_ok():
+    """No twitter-cli, but bird found + bird check ok → ok."""
+    channel = TwitterChannel()
+    def which_side_effect(name):
+        if name == "bird":
+            return "/usr/local/bin/bird"
+        return None
+    with patch("shutil.which", side_effect=which_side_effect), patch(
         "subprocess.run",
         return_value=_cp(stdout="Authenticated as @user\n", returncode=0),
     ):
         status, message = channel.check()
     assert status == "ok"
-    assert "完整可用" in message
+    assert "bird" in message
 
 
-def test_check_bird_found_auth_missing():
-    """bird found + bird check returns 1 with 'Missing credentials' → warn about auth."""
+def test_check_bird_fallback_auth_missing():
+    """No twitter-cli, bird found but Missing credentials → warn."""
     channel = TwitterChannel()
-    with patch("shutil.which", side_effect=lambda name: "/usr/local/bin/bird" if name == "bird" else None), patch(
+    def which_side_effect(name):
+        if name == "bird":
+            return "/usr/local/bin/bird"
+        return None
+    with patch("shutil.which", side_effect=which_side_effect), patch(
         "subprocess.run",
-        return_value=_cp(stderr="Missing credentials: AUTH_TOKEN and CT0 required\n", returncode=1),
+        return_value=_cp(stderr="Missing credentials\n", returncode=1),
     ):
         status, message = channel.check()
     assert status == "warn"
     assert "未配置认证" in message
 
 
-def test_check_bird_not_found():
-    """bird not found → warn with install hint for @steipete/bird."""
+# --- neither installed ---
+
+def test_check_nothing_installed():
+    """Neither twitter-cli nor bird → warn with install hint."""
     channel = TwitterChannel()
     with patch("shutil.which", return_value=None):
         status, message = channel.check()
     assert status == "warn"
-    assert "@steipete/bird" in message
+    assert "twitter-cli" in message
 
 
-def test_check_birdx_binary_accepted():
-    """birdx symlink is accepted as an alternative binary name."""
+# --- twitter-cli preferred over bird ---
+
+def test_twitter_cli_preferred_over_bird():
+    """When both are installed, twitter-cli is used."""
     channel = TwitterChannel()
-    with patch("shutil.which", side_effect=lambda name: "/usr/local/bin/birdx" if name == "birdx" else None), patch(
+    def which_side_effect(name):
+        if name == "twitter":
+            return "/usr/local/bin/twitter"
+        if name == "bird":
+            return "/usr/local/bin/bird"
+        return None
+    with patch("shutil.which", side_effect=which_side_effect), patch(
         "subprocess.run",
-        return_value=_cp(stdout="Authenticated as @user\n", returncode=0),
+        return_value=_cp(stdout="ok: true\n", returncode=0),
     ):
         status, message = channel.check()
     assert status == "ok"
-    assert "完整可用" in message
-
-
-def test_check_bird_auth_failure_generic():
-    """bird check returns 1 without 'Missing credentials' → generic auth failure warn."""
-    channel = TwitterChannel()
-    with patch("shutil.which", side_effect=lambda name: "/usr/local/bin/bird" if name == "bird" else None), patch(
-        "subprocess.run",
-        return_value=_cp(stderr="Error: token expired\n", returncode=1),
-    ):
-        status, message = channel.check()
-    assert status == "warn"
-    assert "认证检查失败" in message
+    assert "twitter-cli" in message

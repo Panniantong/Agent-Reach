@@ -61,11 +61,6 @@ class TestConfig:
         tmp_config.set("exa_api_key", "test-key")
         assert tmp_config.is_configured("exa_search")
 
-    def test_is_configured_reddit(self, tmp_config):
-        assert not tmp_config.is_configured("reddit_proxy")
-        tmp_config.set("reddit_proxy", "http://user:pass@ip:port")
-        assert tmp_config.is_configured("reddit_proxy")
-
     def test_get_configured_features(self, tmp_config):
         features = tmp_config.get_configured_features()
         assert isinstance(features, dict)

@@ -5,7 +5,7 @@ Agent Reach MCP Server — expose doctor/status as MCP tool.
 Run: python -m agent_reach.integrations.mcp_server
 
 Agent Reach is an installer + doctor tool. For actual reading/searching,
-agents should call upstream tools directly (bird, yt-dlp, mcporter, etc.).
+agents should call upstream tools directly (twitter-cli, yt-dlp, mcporter, etc.).
 """
 
 import asyncio

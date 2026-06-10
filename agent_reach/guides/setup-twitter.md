@@ -1,35 +1,34 @@
-# Twitter 高级功能配置指南（bird CLI）
+# Twitter 高级功能配置指南（twitter-cli）
 
 Twitter 基础阅读通过 Jina Reader 免费可用，无需配置。
 
-高级功能需要 bird CLI（@steipete/bird）：
+高级功能需要 twitter-cli（@public-clis/twitter-cli）：
 
-- 搜索推文（`bird search`）
-- 读取完整推文和对话链（`bird read`、`bird thread`）
-- 用户时间线（`bird user-tweets`）
+- 搜索推文（`twitter search`）
+- 读取完整推文和对话链（`twitter tweet`、`twitter thread`）
+- 用户时间线（`twitter timeline`）
+- 长文阅读（`twitter article`）
 
-bird 是免费开源工具（npm 包 @steipete/bird），但需要你的 Twitter 账号 cookie。
+twitter-cli 是免费开源工具（pipx 安装），但需要你的 Twitter 账号 cookie。
 
 ## 快速配置
 
-1. 检查 bird 是否安装：
+1. 检查 twitter-cli 是否安装：
 
 ```bash
-which bird && echo "installed" || echo "not installed"
+which twitter && echo "installed" || echo "not installed"
 ```
 
-2. 安装 bird：
+2. 安装 twitter-cli：
 
 ```bash
-npm install -g @steipete/bird
+pipx install twitter-cli
 ```
-
-> 备选包：`npm install -g @connormartin/bird`
 
 3. 测试是否配置好：
 
 ```bash
-AUTH_TOKEN="xxx" CT0="yyy" bird search "test" -n 1
+twitter search "test" -n 1
 ```
 
 ## 获取 Cookie（Cookie-Editor 方式，推荐）
@@ -49,7 +48,7 @@ agent-reach configure twitter-cookies "粘贴的 cookie JSON"
 
 如果你已经知道 `auth_token` 和 `ct0`：
 
-1. 安装 bird（如果没装）：`npm install -g @steipete/bird`
+1. 安装 twitter-cli（如果没装）：`pipx install twitter-cli`
 
 2. 设置环境变量：
 
@@ -61,21 +60,25 @@ export CT0="你的ct0"
 3. 测试：
 
 ```bash
-bird search "test" -n 1
+twitter search "test" -n 1
 ```
 
 ## 代理配置
 
-> bird CLI 支持通过环境变量设置代理：
+> twitter-cli 支持通过环境变量设置代理：
 
 ```bash
 export HTTP_PROXY="http://user:pass@host:port"
 export HTTPS_PROXY="http://user:pass@host:port"
-bird search "test" -n 1
+twitter search "test" -n 1
 ```
 
 也可以使用全局代理工具：
 
 ```bash
-proxychains bird search "test" -n 1
+proxychains twitter search "test" -n 1
 ```
+
+## Fallback：bird CLI
+
+如果你已经安装了 [bird CLI](https://www.npmjs.com/package/@steipete/bird)（`npm install -g @steipete/bird`），它也能正常工作。Agent Reach 会自动检测并使用已安装的 bird。两者功能类似，twitter-cli 是当前推荐方案。

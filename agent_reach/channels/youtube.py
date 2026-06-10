@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 """YouTube — check if yt-dlp is available with JS runtime."""
 
-import os
 import shutil
+
+from agent_reach.utils.paths import get_ytdlp_config_path, render_ytdlp_fix_command
+from agent_reach.utils.text import read_utf8_text
+
 from .base import Channel
 
 
@@ -31,14 +34,13 @@ class YouTubeChannel(Channel):
         # Deno works out of the box; Node.js requires explicit config
         has_deno = shutil.which("deno")
         if not has_deno:
-            ytdlp_config = os.path.expanduser("~/.config/yt-dlp/config")
+            ytdlp_config = get_ytdlp_config_path()
             has_js_config = False
-            if os.path.exists(ytdlp_config):
-                with open(ytdlp_config, "r") as f:
-                    has_js_config = "--js-runtimes" in f.read()
+            if ytdlp_config.exists():
+                has_js_config = "--js-runtimes" in read_utf8_text(ytdlp_config)
             if not has_js_config:
                 return "warn", (
                     "yt-dlp 已安装但未配置 JS runtime。运行：\n"
-                    "  mkdir -p ~/.config/yt-dlp && echo '--js-runtimes node' >> ~/.config/yt-dlp/config"
+                    f"  {render_ytdlp_fix_command()}"
                 )
         return "ok", "可提取视频信息和字幕"

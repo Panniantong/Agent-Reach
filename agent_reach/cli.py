@@ -68,6 +68,10 @@ def main():
                            help="Safe mode: skip automatic system changes, show what's needed instead")
     p_install.add_argument("--dry-run", action="store_true",
                            help="Show what would be done without making any changes")
+    p_install.add_argument("--channels", default="",
+                           help="Comma-separated optional channels to install "
+                                "(twitter,weibo,wechat,xiaoyuzhou,xueqiu,xiaohongshu,"
+                                "reddit,bilibili,douyin,linkedin,all)")
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
@@ -173,11 +177,33 @@ def _cmd_install(args):
         print("SAFE MODE — skipping automatic system changes")
         print()
 
+    # ── Parse --channels ──
+    CHANNEL_INSTALLERS = {
+        "twitter":     _install_twitter_deps,
+        "weibo":       _install_weibo_deps,
+        "wechat":      _install_wechat_deps,
+        "xiaoyuzhou":  _install_xiaoyuzhou_deps,
+        "xiaohongshu": _install_xhs_deps,
+        "reddit":      _install_reddit_deps,
+        "bilibili":    _install_bili_deps,
+        # xueqiu: cookie-only, no install step
+        # douyin/linkedin: manual setup, no auto-install
+    }
+    COOKIE_CHANNELS = {"twitter", "xueqiu", "bilibili"}
+
+    requested_channels = set()
+    if args.channels:
+        raw = [c.strip().lower() for c in args.channels.split(",") if c.strip()]
+        if "all" in raw:
+            requested_channels = set(CHANNEL_INSTALLERS.keys()) | {"xueqiu", "douyin", "linkedin"}
+        else:
+            requested_channels = set(raw)
+
     # Auto-detect environment
     env = args.env
     if env == "auto":
         env = _detect_environment()
-    
+
     if env == "server":
         print(f"Environment: Server/VPS (auto-detected)")
     else:
@@ -186,13 +212,12 @@ def _cmd_install(args):
     # Apply explicit flags
     if args.proxy:
         if dry_run:
-            print(f"[dry-run] Would configure proxy for Reddit + Bilibili")
+            print(f"[dry-run] Would configure proxy for Bilibili")
         else:
-            config.set("reddit_proxy", args.proxy)
             config.set("bilibili_proxy", args.proxy)
-            print(f"✅ Proxy configured for Reddit + Bilibili")
+            print(f"✅ Proxy configured for Bilibili")
 
-    # ── Install system dependencies ──
+    # ── Install core system dependencies (lightweight, always) ──
     print()
     if dry_run:
         _install_system_deps_dryrun()
@@ -201,7 +226,7 @@ def _cmd_install(args):
     else:
         _install_system_deps()
 
-    # ── mcporter (for Exa search + XiaoHongShu) ──
+    # ── mcporter (for Exa search) ──
     print()
     if dry_run:
         print("[dry-run] Would install mcporter and configure Exa search")
@@ -210,10 +235,26 @@ def _cmd_install(args):
     else:
         _install_mcporter()
 
-    # Auto-import cookies on local computers
-    if env == "local" and not safe_mode and not dry_run:
+    # ── Install optional channels (only if --channels specified) ──
+    if requested_channels and not dry_run and not safe_mode:
         print()
-        print("Trying to import cookies from browser...")
+        print("Installing optional channels...")
+        for ch_name in sorted(requested_channels):
+            installer = CHANNEL_INSTALLERS.get(ch_name)
+            if installer:
+                installer()
+
+    if requested_channels and dry_run:
+        print()
+        print(f"[dry-run] Would install optional channels: {', '.join(sorted(requested_channels))}")
+
+    # ── Auto-import cookies (only if cookie-needing channels are requested) ──
+    needs_cookies = bool(requested_channels & COOKIE_CHANNELS)
+    if env == "local" and needs_cookies and not safe_mode and not dry_run:
+        print()
+        print("Importing cookies from browser...")
+        print("  (macOS may ask for your login password to access the Keychain — this is normal,")
+        print("   it only happens once during install. Enter your password or click 'Allow'.)")
         try:
             from agent_reach.cookie_extract import configure_from_browser
             results = configure_from_browser("chrome", config)
@@ -223,7 +264,6 @@ def _cmd_install(args):
                     print(f"  ✅ {platform}: {message}")
                     found = True
             if not found:
-                # Try firefox
                 results = configure_from_browser("firefox", config)
                 for platform, success, message in results:
                     if success:
@@ -232,21 +272,17 @@ def _cmd_install(args):
             if not found:
                 print("  -- No cookies found (normal if you haven't logged into these sites)")
         except Exception:
-            print("  -- Could not read browser cookies (browser might be open)")
-    elif env == "local" and safe_mode:
-        print()
-        print("Skipped auto cookie import (safe mode).")
-        print("   To import manually: agent-reach configure --from-browser chrome")
-    elif env == "local" and dry_run:
+            print("  -- Could not read browser cookies (browser might be open or password was denied)")
+    elif env == "local" and needs_cookies and dry_run:
         print()
         print("[dry-run] Would try to import cookies from Chrome/Firefox")
 
     # Environment-specific advice
     if env == "server":
         print()
-        print("Tip: Reddit and Bilibili block server IPs.")
-        print("   Reddit search still works via Exa (free).")
-        print("   For full access: agent-reach configure proxy http://user:pass@ip:port")
+        print("Tip: Bilibili may block server IPs.")
+        print("   Reddit: rdt-cli works without proxy (pipx install rdt-cli).")
+        print("   For Bilibili full access: agent-reach configure proxy http://user:pass@ip:port")
         print("   Cheap option: https://www.webshare.io ($1/month)")
 
     # Test channels
@@ -267,9 +303,12 @@ def _cmd_install(args):
 
         print(f"✅ Installation complete! {ok}/{total} channels active.")
 
-        if ok < total:
+        if not requested_channels:
+            # First install — hint about optional channels
             print()
-            print("Some channels are not active yet. If you're an AI Agent, try to fix them yourself — then run `agent-reach doctor` again.")
+            print("More channels available! Use --channels to install:")
+            print("   agent-reach install --channels=twitter,weibo,xiaohongshu,...")
+            print("   agent-reach install --channels=all  (install everything)")
 
         # Star reminder
         print()
@@ -282,19 +321,76 @@ def _cmd_install(args):
 
 
 def _install_skill():
-    """Install Agent Reach as an agent skill (OpenClaw / Claude Code)."""
+    """Install Agent Reach as an agent skill (OpenClaw / Claude Code / .agents)."""
     import os
+    import shutil
     import importlib.resources
 
-    # Determine skill install path
-    # Priority 1: OPENCLAW_HOME environment variable (if set)
-    # Priority 2: ~/.openclaw/skills (default)
-    # Priority 3: ~/.claude/skills (Claude Code)
-    # Priority 4: ~/.agents/skills (Generic agents)
+    def _is_english_locale(value: str) -> bool:
+        normalized = value.strip().lower()
+        return normalized.startswith("en") or normalized.startswith("english")
+
+    def _skill_resource_name() -> str:
+        locale_candidates = (
+            os.environ.get("AGENT_REACH_LANG", ""),
+            os.environ.get("LC_ALL", ""),
+            os.environ.get("LC_MESSAGES", ""),
+            os.environ.get("LANG", ""),
+        )
+        if any(_is_english_locale(candidate) for candidate in locale_candidates):
+            return "SKILL_en.md"
+        return "SKILL.md"
+
+    def _read_skill_markdown(skill_pkg):
+        resource_name = _skill_resource_name()
+        try:
+            return skill_pkg.joinpath(resource_name).read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return skill_pkg.joinpath("SKILL.md").read_text(encoding="utf-8")
+
+    def _copy_skill_dir(target: str) -> bool:
+        """Copy entire skill directory (locale-specific SKILL.md + references/)."""
+        try:
+            # Clear existing installation
+            if os.path.exists(target):
+                shutil.rmtree(target)
+            os.makedirs(target, exist_ok=True)
+
+            # Get skill directory from package (with fallback for editable installs)
+            try:
+                skill_pkg = importlib.resources.files("agent_reach").joinpath("skill")
+                skill_md = _read_skill_markdown(skill_pkg)
+            except Exception:
+                from pathlib import Path
+                skill_pkg = Path(__file__).resolve().parent / "skill"
+                skill_md = _read_skill_markdown(skill_pkg)
+
+            # Copy SKILL.md using the selected locale file
+            with open(os.path.join(target, "SKILL.md"), "w", encoding="utf-8") as f:
+                f.write(skill_md)
+
+            # Copy references/ directory
+            refs_pkg = skill_pkg.joinpath("references")
+            refs_target = os.path.join(target, "references")
+            os.makedirs(refs_target, exist_ok=True)
+
+            for ref_file in refs_pkg.iterdir():
+                name = ref_file.name if hasattr(ref_file, 'name') else str(ref_file).split('/')[-1]
+                if name.endswith(".md"):
+                    content = ref_file.read_text(encoding="utf-8") if hasattr(ref_file, 'read_text') else ref_file.read_text()
+                    with open(os.path.join(refs_target, name), "w", encoding="utf-8") as f:
+                        f.write(content)
+
+            return True
+        except Exception as e:
+            print(f"  Warning: Could not install skill: {e}")
+            return False
+
+    # Determine skill install path (priority: .agents > openclaw > claude)
     skill_dirs = [
-        os.path.expanduser("~/.openclaw/skills"),   # OpenClaw
+        os.path.expanduser("~/.agents/skills"),      # Generic agents (priority)
+        os.path.expanduser("~/.openclaw/skills"),    # OpenClaw
         os.path.expanduser("~/.claude/skills"),      # Claude Code (if exists)
-        os.path.expanduser("~/.agents/skills"),      # Generic agents
     ]
 
     # Insert OPENCLAW_HOME path at the beginning if environment variable is set
@@ -306,29 +402,20 @@ def _install_skill():
     for skill_dir in skill_dirs:
         if os.path.isdir(skill_dir):
             target = os.path.join(skill_dir, "agent-reach")
-            try:
-                os.makedirs(target, exist_ok=True)
-                # Read SKILL.md from package data
-                skill_md = importlib.resources.files("agent_reach").joinpath("skill", "SKILL.md").read_text()
-                with open(os.path.join(target, "SKILL.md"), "w") as f:
-                    f.write(skill_md)
-                platform_name = "OpenClaw" if "openclaw" in skill_dir else "Claude Code" if "claude" in skill_dir else "Agent"
+            if _copy_skill_dir(target):
+                platform_name = "Agent" if ".agents" in skill_dir else "OpenClaw" if "openclaw" in skill_dir else "Claude Code"
                 print(f"Skill installed for {platform_name}: {target}")
                 installed = True
-            except Exception:
-                pass
 
     if not installed:
-        # No known skill directory found — create for OpenClaw by default
-        target = os.path.expanduser("~/.openclaw/skills/agent-reach")
-        try:
-            os.makedirs(target, exist_ok=True)
-            skill_md = importlib.resources.files("agent_reach").joinpath("skill", "SKILL.md").read_text()
-            with open(os.path.join(target, "SKILL.md"), "w") as f:
-                f.write(skill_md)
+        # No known skill directory found — create for .agents by default
+        target = os.path.expanduser("~/.agents/skills/agent-reach")
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        if _copy_skill_dir(target):
             print(f"Skill installed: {target}")
-        except Exception:
+        else:
             print("  -- Could not install agent skill (optional)")
+            print("  -- Tip: install OpenClaw, Claude Code, or create ~/.agents/skills/ manually")
 
 
 def _uninstall_skill():
@@ -483,25 +570,6 @@ def _install_system_deps():
         except Exception:
             print("  [!]  Node.js install failed. Try: apt install nodejs npm, or nvm install 22, or download from https://nodejs.org")
 
-    # ── bird CLI (for Twitter search) ──
-    if shutil.which("bird") or shutil.which("birdx"):
-        print("  ✅ bird CLI already installed")
-    else:
-        if shutil.which("npm"):
-            try:
-                subprocess.run(
-                    ["npm", "install", "-g", "@steipete/bird"],
-                    capture_output=True, encoding="utf-8", errors="replace", timeout=120,
-                )
-                if shutil.which("bird") or shutil.which("birdx"):
-                    print("  ✅ bird CLI installed (Twitter search + timeline)")
-                else:
-                    print("  -- bird CLI install failed (optional — Twitter reading still works via Jina)")
-            except Exception:
-                print("  -- bird CLI install failed (optional — Twitter reading still works via Jina)")
-        else:
-            print("  -- bird CLI requires Node.js (optional — Twitter reading still works via Jina)")
-
     # ── undici (proxy support for Node.js fetch) ──
     npm_cmd = shutil.which("npm")
     if npm_cmd:
@@ -514,7 +582,7 @@ def _install_system_deps():
                 subprocess.run([npm_cmd, "install", "-g", "undici"], capture_output=True, encoding="utf-8", errors="replace", timeout=60)
                 print("  ✅ undici installed (Node.js proxy support)")
             except Exception:
-                print("  -- undici install failed (optional — bird may not work behind proxies)")
+                print("  -- undici install failed (optional — may not work behind proxies)")
 
     # ── yt-dlp JS runtime config (YouTube requires external JS runtime) ──
     if shutil.which("node"):
@@ -535,14 +603,9 @@ def _install_system_deps():
             except Exception:
                 print("  -- Could not configure yt-dlp JS runtime (YouTube may not work)")
 
-    # ── Weibo (mcp-server-weibo fork with visitor passport fix) ──
-    _install_weibo_deps()
-
-    # ── Xiaoyuzhou Podcast (transcribe.sh + ffmpeg) ──
-    _install_xiaoyuzhou_deps()
-
-    # ── WeChat Articles (miku_ai + camoufox + wechat-article-for-ai) ──
-    _install_wechat_deps()
+    # NOTE: twitter-cli, weibo, xiaoyuzhou, wechat, xhs-cli etc. are optional.
+    # They are installed via --channels flag, not here.
+    # See CHANNEL_INSTALLERS in _cmd_install().
 
 
 def _install_xiaoyuzhou_deps():
@@ -586,6 +649,98 @@ def _install_xiaoyuzhou_deps():
     else:
         print("  -- Groq API key not set. Get free key at https://console.groq.com")
         print("     Then run: agent-reach configure groq-key gsk_xxxxx")
+
+
+def _install_twitter_deps():
+    """Install twitter-cli for Twitter search + timeline."""
+    import shutil
+    import subprocess
+
+    print("Setting up Twitter (twitter-cli)...")
+    if shutil.which("twitter"):
+        print("  ✅ twitter-cli already installed")
+        return
+    for tool, cmd in [("pipx", ["pipx", "install", "twitter-cli"]),
+                      ("uv", ["uv", "tool", "install", "twitter-cli"])]:
+        if shutil.which(tool):
+            try:
+                subprocess.run(cmd, capture_output=True, encoding="utf-8",
+                               errors="replace", timeout=120)
+                if shutil.which("twitter"):
+                    print("  ✅ twitter-cli installed")
+                    return
+            except Exception:
+                pass
+    print("  [!]  twitter-cli install failed. Run: pipx install twitter-cli")
+
+
+def _install_xhs_deps():
+    """Install xhs-cli (xiaohongshu-cli) for XiaoHongShu."""
+    import shutil
+    import subprocess
+
+    print("Setting up XiaoHongShu (xhs-cli)...")
+    if shutil.which("xhs"):
+        print("  ✅ xhs-cli already installed")
+        return
+    for tool, cmd in [("pipx", ["pipx", "install", "xiaohongshu-cli"]),
+                      ("uv", ["uv", "tool", "install", "xiaohongshu-cli"])]:
+        if shutil.which(tool):
+            try:
+                subprocess.run(cmd, capture_output=True, encoding="utf-8",
+                               errors="replace", timeout=120)
+                if shutil.which("xhs"):
+                    print("  ✅ xhs-cli installed (run `xhs login` to authenticate)")
+                    return
+            except Exception:
+                pass
+    print("  [!]  xhs-cli install failed. Run: pipx install xiaohongshu-cli")
+
+
+def _install_reddit_deps():
+    """Install rdt-cli for Reddit search + reading."""
+    import shutil
+    import subprocess
+
+    print("Setting up Reddit (rdt-cli)...")
+    if shutil.which("rdt"):
+        print("  ✅ rdt-cli already installed")
+        return
+    for tool, cmd in [("pipx", ["pipx", "install", "rdt-cli"]),
+                      ("uv", ["uv", "tool", "install", "rdt-cli"])]:
+        if shutil.which(tool):
+            try:
+                subprocess.run(cmd, capture_output=True, encoding="utf-8",
+                               errors="replace", timeout=120)
+                if shutil.which("rdt"):
+                    print("  ✅ rdt-cli installed")
+                    return
+            except Exception:
+                pass
+    print("  [!]  rdt-cli install failed. Run: pipx install rdt-cli")
+
+
+def _install_bili_deps():
+    """Install bili-cli for Bilibili hot/rank/search."""
+    import shutil
+    import subprocess
+
+    print("Setting up Bilibili (bili-cli)...")
+    if shutil.which("bili"):
+        print("  ✅ bili-cli already installed")
+        return
+    for tool, cmd in [("pipx", ["pipx", "install", "bilibili-cli"]),
+                      ("uv", ["uv", "tool", "install", "bilibili-cli"])]:
+        if shutil.which(tool):
+            try:
+                subprocess.run(cmd, capture_output=True, encoding="utf-8",
+                               errors="replace", timeout=120)
+                if shutil.which("bili"):
+                    print("  ✅ bili-cli installed")
+                    return
+            except Exception:
+                pass
+    print("  [!]  bili-cli install failed. Run: pipx install bilibili-cli")
 
 
 def _install_weibo_deps():
@@ -714,7 +869,6 @@ def _install_system_deps_safe():
     deps = [
         ("gh", ["gh"], "GitHub CLI", "https://cli.github.com — or: apt install gh / brew install gh"),
         ("node", ["node", "npm"], "Node.js", "https://nodejs.org — or: apt install nodejs npm"),
-        ("bird", ["bird", "birdx"], "bird CLI (Twitter)", "npm install -g @steipete/bird"),
     ]
 
     missing = []
@@ -734,29 +888,6 @@ def _install_system_deps_safe():
     else:
         print("  All system dependencies are installed!")
 
-    # WeChat check (Python packages, not binaries)
-    has_camoufox = has_miku = False
-    try:
-        import camoufox  # noqa: F401
-        has_camoufox = True
-    except ImportError:
-        pass
-    try:
-        import miku_ai  # noqa: F401
-        has_miku = True
-    except ImportError:
-        pass
-    if has_camoufox and has_miku:
-        print("  ✅ WeChat article tools already installed")
-    else:
-        pkgs = []
-        if not has_camoufox:
-            pkgs.extend(["camoufox[geoip]", "markdownify", "beautifulsoup4", "httpx"])
-        if not has_miku:
-            pkgs.append("miku_ai")
-        print(f"  -- WeChat article tools not found")
-        print(f"    Install: pip install {' '.join(pkgs)}")
-
 
 def _install_system_deps_dryrun():
     """Dry-run: just show what would be checked/installed."""
@@ -767,7 +898,6 @@ def _install_system_deps_dryrun():
     checks = [
         ("gh CLI", ["gh"], "apt install gh / brew install gh"),
         ("Node.js", ["node"], "curl NodeSource setup | bash + apt install nodejs"),
-        ("bird CLI", ["bird", "birdx"], "npm install -g @steipete/bird"),
     ]
 
     for label, binaries, method in checks:
@@ -777,30 +907,14 @@ def _install_system_deps_dryrun():
         else:
             print(f"  {label}: would install via: {method}")
 
-    # WeChat
-    has_camoufox = has_miku = False
-    try:
-        import camoufox  # noqa: F401
-        has_camoufox = True
-    except ImportError:
-        pass
-    try:
-        import miku_ai  # noqa: F401
-        has_miku = True
-    except ImportError:
-        pass
-    if has_camoufox and has_miku:
-        print("  ✅ WeChat article tools: already installed, skip")
-    else:
-        print("  WeChat article tools: would install via: pip install camoufox[geoip] markdownify beautifulsoup4 httpx miku_ai")
 
 
 def _install_mcporter():
-    """Install mcporter and configure Exa + XiaoHongShu MCP servers."""
+    """Install mcporter and configure Exa search."""
     import shutil
     import subprocess
 
-    print("Setting up mcporter (search + XiaoHongShu backend)...")
+    print("Setting up mcporter (search backend)...")
 
     if shutil.which("mcporter"):
         print("  ✅ mcporter already installed")
@@ -840,30 +954,7 @@ def _install_mcporter():
     except Exception:
         print("  [!]  Could not configure Exa. Run manually: mcporter config add exa https://mcp.exa.ai/mcp")
 
-    # Check XiaoHongShu MCP (only if server is running)
-    try:
-        r = subprocess.run(
-            ["mcporter", "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=5
-        )
-        if "xiaohongshu" in r.stdout:
-            print("  ✅ XiaoHongShu MCP already configured")
-        else:
-            # Check if XHS MCP server is running on localhost:18060
-            import requests
-            try:
-                requests.get("http://localhost:18060/", timeout=3)
-                subprocess.run(
-                    ["mcporter", "config", "add", "xiaohongshu", "http://localhost:18060/mcp"],
-                    capture_output=True, encoding="utf-8", errors="replace", timeout=10,
-                )
-                print("  ✅ XiaoHongShu MCP auto-detected and configured")
-            except Exception:
-                print("  -- XiaoHongShu MCP not detected (optional)")
-                print("     Install: docker run -d --name xiaohongshu-mcp -p 18060:18060 xpzouying/xiaohongshu-mcp")
-                print("     Then:    mcporter config add xiaohongshu http://localhost:18060/mcp")
-                print("     Repo:    https://github.com/xpzouying/xiaohongshu-mcp")
-    except Exception:
-        pass
+    # NOTE: xhs-cli is now optional, installed via --channels=xiaohongshu
 
 
 def _install_mcporter_safe():
@@ -967,26 +1058,9 @@ def _cmd_configure(args):
         return
 
     if args.key == "proxy":
-        config.set("reddit_proxy", value)
         config.set("bilibili_proxy", value)
-        print(f"✅ Proxy configured for Reddit + Bilibili!")
-
-        # Auto-test
-        print("Testing Reddit access...", end=" ")
-        try:
-            import requests
-            resp = requests.get(
-                "https://www.reddit.com/r/test.json?limit=1",
-                headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"},
-                proxies={"http": value, "https": value},
-                timeout=10,
-            )
-            if resp.status_code == 200:
-                print("✅ Reddit works!")
-            else:
-                print(f"[!] Reddit returned {resp.status_code}")
-        except Exception as e:
-            print(f"[X] Failed: {e}")
+        print(f"✅ Proxy configured for Bilibili!")
+        print("  Note: Reddit 已改为通过 rdt-cli 访问，无需代理。")
 
     elif args.key == "twitter-cookies":
         # Accept two formats:
@@ -998,57 +1072,30 @@ def _cmd_configure(args):
             config.set("twitter_auth_token", auth_token)
             config.set("twitter_ct0", ct0)
 
-            # Sync credentials to bird CLI env
-            try:
-                import json
-                # Legacy: sync to xfetch session.json for backward compat
-                xfetch_dir = os.path.join(os.path.expanduser("~"), ".config", "xfetch")
-                os.makedirs(xfetch_dir, exist_ok=True)
-                session_path = os.path.join(xfetch_dir, "session.json")
-                session_data = {}
-                if os.path.exists(session_path):
-                    with open(session_path, "r", encoding="utf-8") as sf:
-                        session_data = json.load(sf)
-                session_data["authToken"] = auth_token
-                session_data["ct0"] = ct0
-                with open(session_path, "w", encoding="utf-8") as sf:
-                    json.dump(session_data, sf, indent=2)
-                os.chmod(session_path, 0o600)
-
-                # bird CLI: write shell-sourceable credentials.env
-                bird_dir = os.path.join(os.path.expanduser("~"), ".config", "bird")
-                os.makedirs(bird_dir, exist_ok=True)
-                env_path = os.path.join(bird_dir, "credentials.env")
-                with open(env_path, "w", encoding="utf-8") as f:
-                    f.write(f'AUTH_TOKEN="{auth_token}"\n')
-                    f.write(f'CT0="{ct0}"\n')
-                os.chmod(env_path, 0o600)
-
-                print("✅ Twitter cookies configured (synced to bird)!")
-            except Exception as e:
-                print("✅ Twitter cookies configured!")
-                print(f"[!] Could not sync to bird credentials: {e}")
+            # Sync credentials to twitter-cli env
+            print("✅ Twitter cookies configured!")
 
             print("Testing Twitter access...", end=" ")
             try:
                 import subprocess
-                bird = shutil.which("bird") or shutil.which("birdx")
-                if not bird:
-                    print("[!] bird CLI not installed. Run: npm install -g @steipete/bird")
+                twitter_bin = shutil.which("twitter")
+                if not twitter_bin:
+                    print("[!] twitter-cli not installed. Run: pipx install twitter-cli")
                 else:
                     import os
                     env = os.environ.copy()
-                    env["AUTH_TOKEN"] = auth_token
-                    env["CT0"] = ct0
+                    env["TWITTER_AUTH_TOKEN"] = auth_token
+                    env["TWITTER_CT0"] = ct0
                     result = subprocess.run(
-                        [bird, "search", "test", "-n", "1"],
+                        [twitter_bin, "status"],
                         capture_output=True, encoding="utf-8", errors="replace", timeout=15,
                         env=env,
                     )
-                    if result.returncode == 0 and result.stdout.strip():
-                        print("✅ Twitter Advanced works!")
+                    output = (result.stdout or "") + (result.stderr or "")
+                    if "ok: true" in output:
+                        print("✅ Twitter access works!")
                     else:
-                        print(f"[!] Test returned no results (cookies might be wrong)")
+                        print("[!] Auth check failed (cookies might be wrong)")
             except Exception as e:
                 print(f"[X] Failed: {e}")
         else:
@@ -1365,7 +1412,7 @@ def _cmd_uninstall(args):
     print()
     print("Optional: remove tools installed by Agent Reach:")
     print("  npm uninstall -g mcporter")
-    print("  npm uninstall -g @steipete/bird")
+    print("  pipx uninstall twitter-cli")
     print("  npm uninstall -g undici")
 
 
@@ -1446,20 +1493,9 @@ def _cmd_setup():
             print("  跳过。公开 API 也能用")
     print()
 
-    # Step 3: Reddit proxy
-    print("【可选】Reddit 代理 — 完整阅读 Reddit 帖子+评论")
-    print("  Reddit 封锁很多 IP，需要 ISP 代理才能直接访问")
-    print("  格式: http://用户名:密码@IP:端口")
-    current = config.get("reddit_proxy")
-    if current:
-        print(f"  当前状态: ✅ 已配置")
-    else:
-        proxy = input("  REDDIT_PROXY (回车跳过): ").strip()
-        if proxy:
-            config.set("reddit_proxy", proxy)
-            print("  ✅ Reddit 完整阅读已开启！")
-        else:
-            print("  跳过。仍可通过搜索获取 Reddit 内容")
+    # Step 3: Reddit — rdt-cli
+    print("【信息】Reddit — 通过 rdt-cli 搜索和阅读，无需配置")
+    print("  安装：pipx install rdt-cli")
     print()
 
     # Step 4: Groq (Whisper)

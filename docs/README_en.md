@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="#quick-start">Quick Start</a> · <a href="../README.md">中文</a> · <a href="#supported-platforms">Platforms</a> · <a href="#design-philosophy">Philosophy</a>
+  <a href="#quick-start">Quick Start</a> · <a href="../README.md">中文</a> · <a href="README_ja.md">日本語</a> · <a href="README_ko.md">한국어</a> · <a href="#supported-platforms">Platforms</a> · <a href="#design-philosophy">Philosophy</a>
 </p>
 
 ---
@@ -51,7 +51,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 |---|---|
 | 💰 **Completely free** | All tools are open source, all APIs are free. The only possible cost is a server proxy ($1/month) — local computers don't need one |
 | 🔒 **Privacy safe** | Cookies stay local. Never uploaded. Fully open source — audit anytime |
-| 🔄 **Kept up to date** | Upstream tools (yt-dlp, bird, Jina Reader, etc.) are tracked and updated regularly |
+| 🔄 **Kept up to date** | Upstream tools (yt-dlp, twitter-cli, rdt-cli, Jina Reader, etc.) are tracked and updated regularly |
 | 🤖 **Works with any Agent** | Claude Code, OpenClaw, Cursor, Windsurf… any Agent that can run commands |
 | 🩺 **Built-in diagnostics** | `agent-reach doctor` — one command shows what works, what doesn't, and how to fix it |
 
@@ -62,21 +62,21 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | Platform | Capabilities | Setup | Notes |
 |----------|-------------|:-----:|-------|
 | 🌐 **Web** | Read | Zero config | Any URL → clean Markdown ([Jina Reader](https://github.com/jina-ai/reader) ⭐9.8K) |
-| 🐦 **Twitter/X** | Read · Search | Zero config / Cookie | Single tweets readable out of the box. Cookie unlocks search, timeline, posting ([bird](https://www.npmjs.com/package/@steipete/bird)) |
-| 📕 **XiaoHongShu** | Read · Search · **Post · Comment · Like** | mcporter | Via [xiaohongshu-mcp](https://github.com/user/xiaohongshu-mcp) internal API, install and go |
+| 🐦 **Twitter/X** | Read · Search | Cookie | Cookie unlocks search, timeline, tweet reading, articles ([twitter-cli](https://github.com/public-clis/twitter-cli)) |
+| 📕 **XiaoHongShu** | Read · Search · **Post · Comment · Like** | Cookie | `pipx install xiaohongshu-cli` + `xhs login` ([xhs-cli](https://github.com/jackwener/xiaohongshu-cli)) |
 | 🎵 **Douyin** | Video parsing · Watermark-free download | mcporter | Via [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server), no login needed |
 | 💼 **LinkedIn** | Jina Reader (public pages) | Full profiles, companies, job search | Tell your Agent "help me set up LinkedIn" |
-| 💬 **WeChat Articles** | Search + Read | Zero config | Search + read WeChat Official Account articles (full Markdown) ([wechat-article-for-ai](https://github.com/Panniantong/wechat-article-for-ai) + [miku_ai](https://github.com/GobinFan/Miku_Spider)) |
+| 💬 **WeChat Articles** | Search + Read | Zero config | Search + read WeChat Official Account articles via Exa (zero config) + optional [Camoufox](https://github.com/daijro/camoufox) |
 | 📰 **Weibo** | Trending · Search · Feeds · Comments | Zero config | Hot search, content/user/topic search, feeds, comments ([mcp-server-weibo](https://github.com/Panniantong/mcp-server-weibo)) |
 | 💻 **V2EX** | Hot topics · Node topics · Topic detail + replies · User profile | Zero config | Public JSON API, no auth required. Great for tech community content |
-| 📈 **Xueqiu (雪球)** | Stock quotes · Search · Hot posts · Hot stocks | Zero config | Public API with auto session cookies, no login required |
+| 📈 **Xueqiu (雪球)** | Stock quotes · Search · Hot posts · Hot stocks | Browser cookie | Tell your Agent "help me set up Xueqiu" |
 | 🎙️ **Xiaoyuzhou Podcast** | Transcription | Free API key | Podcast audio → full text transcript via Groq Whisper (free) |
 | 🔍 **Web Search** | Search | Auto-configured | Auto-configured during install, free, no API key ([Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter)) |
 | 📦 **GitHub** | Read · Search | Zero config | [gh CLI](https://cli.github.com) powered. Public repos work immediately. `gh auth login` unlocks Fork, Issue, PR |
 | 📺 **YouTube** | Read · **Search** | Zero config | Subtitles + search across 1800+ video sites ([yt-dlp](https://github.com/yt-dlp/yt-dlp) ⭐148K) |
 | 📺 **Bilibili** | Read · **Search** | Zero config / Proxy | Video info + subtitles + search. Local works directly, servers need a proxy ([yt-dlp](https://github.com/yt-dlp/yt-dlp)) |
 | 📡 **RSS** | Read | Zero config | Any RSS/Atom feed ([feedparser](https://github.com/kurtmckee/feedparser) ⭐2.3K) |
-| 📖 **Reddit** | Search · Read | Free / Proxy | Search via Exa (free). Reading posts needs a proxy on servers |
+| 📖 **Reddit** | Search · Read | Cookie | Requires auth since 2024 — `rdt login` after install ([rdt-cli](https://github.com/public-clis/rdt-cli)) |
 
 > **Setup levels:** Zero config = install and go · Auto-configured = handled during install · mcporter = needs MCP service · Cookie = export from browser · Proxy = $1/month
 
@@ -116,6 +116,11 @@ npx skills add Panniantong/Agent-Reach@agent-reach
 After the Skill is installed, the Agent will auto-detect whether `agent-reach` CLI is available and install it if needed.
 
 > If you install via `agent-reach install`, the skill is registered automatically — no extra steps needed.
+>
+> Prefer an English-only skill file? Set an English locale or export `AGENT_REACH_LANG=en`
+> before running `agent-reach install --env=auto` or `agent-reach skill --install`.
+> The installed file is always written as `SKILL.md`, so switching languages means rerunning
+> the install command with the new locale and replacing the previously installed skill file.
 </details>
 
 ---
@@ -127,7 +132,7 @@ No configuration needed — just tell your Agent:
 - "Read this link" → `curl https://r.jina.ai/URL` for any web page
 - "What's this GitHub repo about?" → `gh repo view owner/repo`
 - "What does this video cover?" → `yt-dlp --dump-json URL` for subtitles
-- "Read this tweet" → `bird read URL`
+- "Read this tweet" → `twitter tweet URL`
 - "Subscribe to this RSS" → `feedparser` to parse feeds
 - "Search GitHub for LLM frameworks" → `gh search repos "LLM framework"`
 
@@ -145,9 +150,9 @@ Tell your Agent "help me configure Twitter cookies" — it'll guide you through 
 
 ### 🌐 Proxy — $1/month, servers only
 
-Reddit and Bilibili block server IPs. Get a proxy ([Webshare](https://webshare.io) recommended, $1/month) and send the address to your Agent.
+Bilibili blocks server IPs. Get a proxy ([Webshare](https://webshare.io) recommended, $1/month) and send the address to your Agent.
 
-> Local computers don't need a proxy. Reddit search works free via Exa even without one.
+> Reddit now works free via rdt-cli without any proxy. Local computers don't need a proxy for Bilibili either.
 
 ---
 
@@ -171,7 +176,7 @@ $ agent-reach doctor
   ⬜ Web semantic search — sign up at exa.ai for free key
 
 🔧 Configurable:
-  ⬜ Reddit posts and comments — search via Exa (free). Reading needs proxy
+  ✅ Reddit posts and comments — search and read via rdt-cli (free, no proxy)
   ⬜ XiaoHongShu notes — needs cookie. Export from browser
 
 Status: 6/9 channels available
@@ -187,7 +192,7 @@ Every time you spin up a new Agent, you spend time finding tools, installing dep
 
 Agent Reach does one simple thing: **it makes those tool selection and configuration decisions for you.**
 
-After installation, your Agent calls the upstream tools directly (bird CLI, yt-dlp, mcporter, gh CLI, etc.) — no wrapper layer in between.
+After installation, your Agent calls the upstream tools directly (twitter-cli, rdt-cli, xhs-cli, yt-dlp, mcporter, gh CLI, etc.) — no wrapper layer in between.
 
 ### 🔌 Every Channel is Pluggable
 
@@ -196,11 +201,11 @@ Each platform maps to an upstream tool. **Don't like one? Swap it out.**
 ```
 channels/
 ├── web.py          → Jina Reader     ← swap to Firecrawl, Crawl4AI…
-├── twitter.py      → bird CLI         ← swap to Nitter, official API…
+├── twitter.py      → twitter-cli      ← swap to official API…
 ├── youtube.py      → yt-dlp          ← swap to YouTube API, Whisper…
 ├── github.py       → gh CLI          ← swap to REST API, PyGithub…
 ├── bilibili.py     → yt-dlp          ← swap to bilibili-api…
-├── reddit.py       → JSON API + Exa  ← swap to PRAW, Pushshift…
+├── reddit.py       → rdt-cli          ← search + read, cookie auth required
 ├── xiaohongshu.py  → mcporter MCP    ← swap to other XHS tools…
 ├── douyin.py       → mcporter MCP    ← swap to other Douyin tools…
 ├── linkedin.py     → linkedin-mcp    ← swap to LinkedIn API…
@@ -216,15 +221,17 @@ Each channel file only checks whether its upstream tool is installed and working
 | Scenario | Tool | Why |
 |----------|------|-----|
 | Read web pages | [Jina Reader](https://github.com/jina-ai/reader) | 9.8K stars, free, no API key needed |
-| Read tweets | [bird](https://www.npmjs.com/package/@steipete/bird) | Cookie auth, free. Official API is pay-per-use ($0.005/post read) |
-| Video subtitles + search | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | 148K stars, YouTube + Bilibili + 1800 sites |
-| Search the web | [Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter) | AI semantic search, MCP integration, no API key |
+| Read tweets | [twitter-cli](https://github.com/public-clis/twitter-cli) | 2.1K stars, cookie auth, search/read/timeline/articles |
+| Reddit | [rdt-cli](https://github.com/public-clis/rdt-cli) | 304 stars, cookie auth, search + full posts + comments |
+| Video subtitles + search | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | 154K stars, YouTube + Bilibili + 1800 sites |
+| Bilibili enhanced | [bili-cli](https://github.com/public-clis/bilibili-cli) | 590 stars, hot/rank/search/feed |
+| Search the web | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | AI semantic search, MCP integration, no API key |
 | GitHub | [gh CLI](https://cli.github.com) | Official tool, full API after auth |
 | Read RSS | [feedparser](https://github.com/kurtmckee/feedparser) | Python ecosystem standard, 2.3K stars |
-| XiaoHongShu | [xiaohongshu-mcp](https://github.com/user/xiaohongshu-mcp) | Internal API, bypasses anti-bot |
+| XiaoHongShu | [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) | 1.5K stars, pipx install, search/read/comment/post |
 | Douyin | [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) | MCP server, no login needed, video parsing + watermark-free download |
-| LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | 900+ stars, MCP server, browser automation |
-| WeChat Articles | [wechat-article-for-ai](https://github.com/Panniantong/wechat-article-for-ai) + [miku_ai](https://github.com/GobinFan/Miku_Spider) | Stealth browser for full article reading + Sogou search |
+| LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | 1.2K stars, MCP server, browser automation |
+| WeChat Articles | [Exa](https://exa.ai) (search + read) + [Camoufox](https://github.com/daijro/camoufox) (optional) | Zero-config search + full article reading |
 | Weibo | `mcporter` | `mcporter call 'weibo.get_trendings(limit: 10)'` |
 | Xiaoyuzhou Podcast | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 
@@ -249,7 +256,7 @@ This project was entirely vibe-coded 🎸 There might be rough edges here and th
 <details>
 <summary><strong>How to search Twitter/X with AI agent without paying for API?</strong></summary>
 
-Agent Reach uses the [bird CLI](https://www.npmjs.com/package/@steipete/bird) with cookie-based authentication — completely free, no Twitter API subscription needed. After installing Agent Reach, export your Twitter cookies using the Cookie-Editor Chrome extension, run `agent-reach configure twitter-cookies "your_cookies"`, and your agent can search with `bird search "query" -n 10`.
+Agent Reach uses [twitter-cli](https://github.com/public-clis/twitter-cli) with cookie-based authentication — completely free, no Twitter API subscription needed. Install with `pipx install twitter-cli`, make sure you're logged into x.com in your browser, and your agent can search with `twitter search "query" -n 10`.
 </details>
 
 <details>
@@ -261,7 +268,7 @@ Agent Reach uses the [bird CLI](https://www.npmjs.com/package/@steipete/bird) wi
 <details>
 <summary><strong>Reddit returns 403 from server / datacenter IP blocked?</strong></summary>
 
-Reddit blocks datacenter IPs. Configure a residential proxy: `agent-reach configure proxy http://user:pass@ip:port`. Recommended: Webshare (~$1/month). Local machines typically don't have this issue.
+Agent Reach uses [rdt-cli](https://github.com/public-clis/rdt-cli) for Reddit. Since 2024, Reddit requires authentication for all API requests. Install with `pipx install rdt-cli`, then run `rdt login` (auto-extracts cookies from your browser). Your agent can then search with `rdt search "query"` and read full posts + comments with `rdt read POST_ID`.
 </details>
 
 <details>
@@ -273,19 +280,19 @@ Yes! Agent Reach is an installer + configuration tool. Any AI coding agent that 
 <details>
 <summary><strong>Is Agent Reach free? Any API costs?</strong></summary>
 
-100% free and open source. All backends (bird CLI, yt-dlp, Jina Reader, Exa) are free tools that don't require paid API keys. The only optional cost is a residential proxy (~$1/month) if you need Reddit/Bilibili access from a server.
+100% free and open source. All backends (twitter-cli, rdt-cli, xhs-cli, yt-dlp, Jina Reader, Exa) are free tools that don't require paid API keys. The only optional cost is a residential proxy (~$1/month) if you need Bilibili access from a server. Reddit works free via rdt-cli without any proxy.
 </details>
 
 <details>
 <summary><strong>Free alternative to Twitter API for web scraping?</strong></summary>
 
-Agent Reach uses bird CLI which accesses Twitter via cookie auth — same as your browser session. No API fees, no rate limit tiers, no developer account needed. Supports search, read tweets, read profiles, and timelines.
+Agent Reach uses twitter-cli which accesses Twitter via cookie auth — same as your browser session. No API fees, no rate limit tiers, no developer account needed. Supports search, read tweets, read profiles, and timelines.
 </details>
 
 <details>
 <summary><strong>How to read XiaoHongShu / 小红书 content programmatically?</strong></summary>
 
-Agent Reach integrates with xiaohongshu-mcp (runs in Docker). After setup, use `mcporter call 'xiaohongshu.get_feed_detail(...)'` to read notes or `mcporter call 'xiaohongshu.search_feeds(keyword: "query")'` to search.
+Install `pipx install xiaohongshu-cli`, then `xhs login` (auto-extracts cookies from browser). Your agent can then use `xhs search "query"` to search notes, `xhs read NOTE_ID` to read details, `xhs comments NOTE_ID` to view comments. No Docker needed.
 </details>
 
 <details>
@@ -294,11 +301,38 @@ Agent Reach integrates with xiaohongshu-mcp (runs in Docker). After setup, use `
 Install douyin-mcp-server, then your agent can use `mcporter call 'douyin.parse_douyin_video_info(share_link: "share_url")'` to parse video info and get watermark-free download links. No login required — just share the Douyin link. See https://github.com/yzfly/douyin-mcp-server
 </details>
 
+<details>
+<summary><strong>How to extract scripts from both Douyin and XiaoHongShu with one MCP?</strong></summary>
+
+If you want one MCP server that can handle:
+
+- Douyin videos
+- XiaoHongShu video notes
+- XiaoHongShu image notes
+
+and directly write `script.md` + `info.json`, you can point the existing `douyin` mcporter alias at:
+
+- https://github.com/JNHFlow21/social-post-extractor-mcp
+
+It keeps backward compatibility with:
+
+- `parse_douyin_video_info`
+- `get_douyin_download_link`
+- `extract_douyin_text`
+
+and adds unified tools:
+
+- `parse_social_post_info`
+- `extract_social_post_script`
+
+This is useful when your agent workflow is “paste a link, get a script file”.
+</details>
+
 ---
 
 ## Credits
 
-[Jina Reader](https://github.com/jina-ai/reader) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [bird](https://www.npmjs.com/package/@steipete/bird) · [Exa](https://exa.ai) · [feedparser](https://github.com/kurtmckee/feedparser) · [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) · [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server)
+[twitter-cli](https://github.com/public-clis/twitter-cli) · [rdt-cli](https://github.com/public-clis/rdt-cli) · [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) · [bili-cli](https://github.com/public-clis/bilibili-cli) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [Jina Reader](https://github.com/jina-ai/reader) · [Exa](https://exa.ai) · [mcporter](https://github.com/nicobailon/mcporter) · [feedparser](https://github.com/kurtmckee/feedparser) · [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) · [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server)
 
 ## Contact
 

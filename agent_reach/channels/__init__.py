@@ -25,7 +25,6 @@ from .v2ex import V2EXChannel
 from .xueqiu import XueqiuChannel
 
 
-
 ALL_CHANNELS: List[Channel] = [
     GitHubChannel(),
     TwitterChannel(),

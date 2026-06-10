@@ -51,37 +51,41 @@ def format_report(results: Dict[str, dict]) -> str:
             elif r["status"] in ("off", "error"):
                 lines.append(f"  [red][X][/red]  {name_msg}")
 
-    # Tier 1 — needs free key
+    # Tier 1 — needs free key / login
     tier1 = {k: r for k, r in results.items() if r["tier"] == 1}
-    if tier1:
+    tier1_active = {k: r for k, r in tier1.items() if r["status"] == "ok"}
+    tier1_inactive = {k: r for k, r in tier1.items() if r["status"] != "ok"}
+    if tier1_active:
         lines.append("")
-        lines.append("[bold]搜索（mcporter 即可解锁）：[/bold]")
-        for key, r in tier1.items():
+        lines.append("[bold]可选渠道（已安装）：[/bold]")
+        for key, r in tier1_active.items():
             name_msg = f"[bold]{escape(r['name'])}[/bold] — {escape(r['message'])}"
-            if r["status"] == "ok":
-                lines.append(f"  [green]✅[/green] {name_msg}")
-            else:
-                lines.append(f"  [dim]--[/dim]  {name_msg}")
+            lines.append(f"  [green]✅[/green] {name_msg}")
 
-    # Tier 2 — optional setup
+    # Tier 2 — optional complex setup
     tier2 = {k: r for k, r in results.items() if r["tier"] == 2}
-    if tier2:
-        lines.append("")
-        lines.append("[bold]配置后可用：[/bold]")
-        for key, r in tier2.items():
+    tier2_active = {k: r for k, r in tier2.items() if r["status"] == "ok"}
+    tier2_inactive = {k: r for k, r in tier2.items() if r["status"] != "ok"}
+    if tier2_active:
+        if not tier1_active:
+            lines.append("")
+            lines.append("[bold]可选渠道（已安装）：[/bold]")
+        for key, r in tier2_active.items():
             name_msg = f"[bold]{escape(r['name'])}[/bold] — {escape(r['message'])}"
-            if r["status"] == "ok":
-                lines.append(f"  [green]✅[/green] {name_msg}")
-            elif r["status"] == "warn":
-                lines.append(f"  [yellow][!][/yellow]  {name_msg}")
-            else:
-                lines.append(f"  [dim]--[/dim]  {name_msg}")
+            lines.append(f"  [green]✅[/green] {name_msg}")
 
     lines.append("")
     status_color = "green" if ok_count == total else ("yellow" if ok_count > 0 else "red")
     lines.append(f"状态：[{status_color}]{ok_count}/{total}[/{status_color}] 个渠道可用")
-    if ok_count < total:
-        lines.append("运行 [cyan]`agent-reach setup`[/cyan] 解锁更多渠道")
+
+    # Summarize inactive optional channels in one line instead of listing each
+    all_inactive = list(tier1_inactive.values()) + list(tier2_inactive.values())
+    if all_inactive:
+        names = [r["name"] for r in all_inactive]
+        lines.append(
+            f"还有 {len(names)} 个可选渠道可以解锁（{'、'.join(names)}），"
+            "告诉你的 Agent「帮我装 XXX」即可"
+        )
 
     # Security check: config file permissions (Unix only)
     import os

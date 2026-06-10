@@ -4,12 +4,18 @@
 import http.cookiejar
 import json
 import re
+import urllib.parse
 import urllib.request
 from typing import Any
 
 from .base import Channel
 
-_UA = "agent-reach/1.0"
+_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/120.0.0.0 Safari/537.36"
+)
+_REFERER = "https://xueqiu.com/"
 _TIMEOUT = 10
 _XUEQIU_HOME = "https://xueqiu.com"
 
@@ -22,11 +28,98 @@ _opener = urllib.request.build_opener(
 _cookies_initialized = False
 
 
+def _inject_cookie_string(cookie_str: str) -> None:
+    """Parse a 'name=value; name2=value2' string and inject into the cookie jar."""
+    for pair in cookie_str.split(";"):
+        pair = pair.strip()
+        if "=" not in pair:
+            continue
+        name, _, value = pair.partition("=")
+        cookie = http.cookiejar.Cookie(
+            version=0,
+            name=name.strip(),
+            value=value.strip(),
+            port=None,
+            port_specified=False,
+            domain=".xueqiu.com",
+            domain_specified=True,
+            domain_initial_dot=True,
+            path="/",
+            path_specified=True,
+            secure=True,
+            expires=None,
+            discard=True,
+            comment=None,
+            comment_url=None,
+            rest={},
+        )
+        _cookie_jar.set_cookie(cookie)
+
+
+def _load_cookies_from_config() -> bool:
+    """Try to load Xueqiu cookies from agent-reach config file (xueqiu_cookie key)."""
+    try:
+        from ..config import Config
+
+        cfg = Config()
+        cookie_str = cfg.get("xueqiu_cookie")
+        if not cookie_str:
+            return False
+        _inject_cookie_string(cookie_str)
+        return True
+    except Exception:
+        return False
+
+
+def _load_cookies_from_browser() -> bool:
+    """Try to silently load Xueqiu cookies from the local Chrome browser.
+
+    Only succeeds when browser_cookie3 is installed AND the user is logged in
+    (xq_a_token present).  Failures are silently ignored so that agents without
+    a local browser keep working.
+    """
+    try:
+        try:
+            import rookiepy
+            cookies = rookiepy.chrome([".xueqiu.com"])
+            if not any(c.get("name") == "xq_a_token" for c in cookies):
+                return False
+            for c in cookies:
+                _cookie_jar.set(c["name"], c["value"], domain=c.get("domain", ".xueqiu.com"))
+            return True
+        except ImportError:
+            import browser_cookie3
+            cookies = list(browser_cookie3.chrome(domain_name=".xueqiu.com"))
+            if not any(c.name == "xq_a_token" for c in cookies):
+                return False
+            for c in cookies:
+                _cookie_jar.set_cookie(c)
+            return True
+    except Exception:
+        return False
+
+
 def _ensure_cookies() -> None:
-    """Visit xueqiu.com homepage once to obtain session cookies."""
+    """Populate session cookies using the best available source.
+
+    Priority order:
+    1. Saved cookie string in ~/.agent-reach/config.yaml  (set by configure --from-browser)
+    2. Live Chrome browser cookies via rookiepy/browser_cookie3 (if installed + logged in)
+    3. Homepage visit fallback                             (only yields anti-DDoS acw_tc,
+                                                           not enough for stock APIs)
+    """
     global _cookies_initialized
     if _cookies_initialized:
         return
+    if _load_cookies_from_config():
+        _cookies_initialized = True
+        return
+    if _load_cookies_from_browser():
+        _cookies_initialized = True
+        return
+    # Fallback: visit homepage to pick up acw_tc anti-DDoS cookie.
+    # This is not sufficient for authenticated APIs but avoids hard failures
+    # on public endpoints that only need the session cookie.
     req = urllib.request.Request(_XUEQIU_HOME, headers={"User-Agent": _UA})
     _opener.open(req, timeout=_TIMEOUT)
     _cookies_initialized = True
@@ -35,7 +128,9 @@ def _ensure_cookies() -> None:
 def _get_json(url: str) -> Any:
     """Fetch *url* with Xueqiu session cookies and return parsed JSON."""
     _ensure_cookies()
-    req = urllib.request.Request(url, headers={"User-Agent": _UA})
+    req = urllib.request.Request(
+        url, headers={"User-Agent": _UA, "Referer": _REFERER}
+    )
     with _opener.open(req, timeout=_TIMEOUT) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
@@ -51,17 +146,15 @@ def _strip_html(text: str) -> str:
 class XueqiuChannel(Channel):
     name = "xueqiu"
     description = "雪球股票行情与社区动态"
-    backends = ["Xueqiu API (public)"]
-    tier = 0
+    backends = ["Xueqiu API (需要登录 Cookie)"]
+    tier = 1
 
     # ------------------------------------------------------------------ #
     # URL routing
     # ------------------------------------------------------------------ #
 
     def can_handle(self, url: str) -> bool:
-        from urllib.parse import urlparse
-
-        d = urlparse(url).netloc.lower()
+        d = urllib.parse.urlparse(url).netloc.lower()
         return "xueqiu.com" in d
 
     # ------------------------------------------------------------------ #
@@ -70,13 +163,18 @@ class XueqiuChannel(Channel):
 
     def check(self, config=None):
         try:
-            data = _get_json("https://stock.xueqiu.com/v5/stock/batch/quote.json?symbol=SH000001")
+            data = _get_json(
+                "https://stock.xueqiu.com/v5/stock/batch/quote.json?symbol=SH000001"
+            )
             items = (data.get("data") or {}).get("items") or []
             if items:
                 return "ok", "公开 API 可用（行情、搜索、热帖、热股）"
             return "warn", "API 响应异常（返回数据为空）"
         except Exception as e:
-            return "warn", f"Xueqiu API 连接失败（可能需要代理）：{e}"
+            return "warn", (
+                f"Xueqiu API 连接失败：{e}。"
+                "请先登录雪球后运行：agent-reach configure --from-browser chrome"
+            )
 
     # ------------------------------------------------------------------ #
     # Data-fetching methods
@@ -92,7 +190,9 @@ class XueqiuChannel(Channel):
           symbol, name, current, percent, chg, high, low, open, last_close,
           volume, amount, market_capital, turnover_rate, pe_ttm, timestamp
         """
-        data = _get_json(f"https://stock.xueqiu.com/v5/stock/batch/quote.json?symbol={symbol}")
+        data = _get_json(
+            f"https://stock.xueqiu.com/v5/stock/batch/quote.json?symbol={symbol}"
+        )
         items = (data.get("data") or {}).get("items") or []
         q = (items[0].get("quote") or {}) if items else {}
         return {
@@ -124,7 +224,8 @@ class XueqiuChannel(Channel):
           symbol, name, exchange
         """
         data = _get_json(
-            f"https://xueqiu.com/stock/search.json?code={urllib.request.quote(query)}&size={limit}"
+            f"https://xueqiu.com/stock/search.json"
+            f"?code={urllib.parse.quote(query)}&size={limit}"
         )
         stocks = data.get("stocks") or []
         results = []
@@ -141,29 +242,45 @@ class XueqiuChannel(Channel):
     def get_hot_posts(self, limit: int = 20) -> list:
         """获取雪球热门帖子。
 
+        Uses the v4 public timeline endpoint which returns posts in a `list`
+        array.  Each item carries a JSON-encoded `data` field containing the
+        actual post payload (title, description, user, like_count, target).
+
         Args:
             limit: 最多返回条数（上限 50）
 
         Returns a list of dicts with keys:
           id, title, text, author, likes, url
         """
-        data = _get_json("https://xueqiu.com/statuses/hot/listV3.json?source=hot&page=1")
-        items = (data.get("data") or {}).get("items") or []
+        data = _get_json(
+            "https://xueqiu.com/v4/statuses/public_timeline_by_category.json"
+            "?since_id=-1&max_id=-1&count=20&category=-1"
+        )
+        items = data.get("list") or []
         results = []
         for item in items[:limit]:
-            original = item.get("original_status") or item
-            text = _strip_html(original.get("text") or original.get("description") or "")
-            user = original.get("user") or {}
+            # Each item.data is a JSON string containing the real post payload
+            try:
+                post = (
+                    json.loads(item["data"])
+                    if isinstance(item.get("data"), str)
+                    else {}
+                )
+            except (json.JSONDecodeError, KeyError):
+                post = {}
+            user = post.get("user") or {}
+            text = _strip_html(
+                post.get("text") or post.get("description") or ""
+            )
+            target = post.get("target", "")
             results.append(
                 {
-                    "id": original.get("id", 0),
-                    "title": original.get("title") or "",
+                    "id": post.get("id", 0),
+                    "title": post.get("title") or "",
                     "text": text[:200],
                     "author": user.get("screen_name", ""),
-                    "likes": original.get("like_count", 0),
-                    "url": f"https://xueqiu.com{original['target']}"
-                    if original.get("target")
-                    else "",
+                    "likes": post.get("like_count", 0),
+                    "url": f"https://xueqiu.com{target}" if target else "",
                 }
             )
         return results
@@ -179,7 +296,8 @@ class XueqiuChannel(Channel):
           symbol, name, current, percent, rank
         """
         data = _get_json(
-            f"https://stock.xueqiu.com/v5/stock/hot_stock/list.json?size={limit}&type={stock_type}"
+            f"https://stock.xueqiu.com/v5/stock/hot_stock/list.json"
+            f"?size={limit}&type={stock_type}"
         )
         items = (data.get("data") or {}).get("items") or []
         results = []

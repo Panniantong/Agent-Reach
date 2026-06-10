@@ -32,6 +32,12 @@ PLATFORM_SPECS = [
         "cookies": ["SESSDATA", "bili_jct"],
         "config_key": "bilibili",
     },
+    {
+        "name": "Xueqiu",
+        "domains": [".xueqiu.com", "xueqiu.com"],
+        "cookies": None,  # grab all — xq_a_token + session cookies required
+        "config_key": "xueqiu",
+    },
 ]
 
 
@@ -46,36 +52,66 @@ def extract_all(browser: str = "chrome") -> Dict[str, dict]:
             "bilibili": {"SESSDATA": "xxx", "bili_jct": "yyy"},
         }
     """
+    # Try rookiepy first (Rust-based, more stable), fallback to browser_cookie3
+    use_rookiepy = False
     try:
-        import browser_cookie3
+        import rookiepy
+        use_rookiepy = True
     except ImportError:
-        raise RuntimeError(
-            "browser_cookie3 not installed. Run: pip install browser-cookie3"
-        )
-
-    # Get browser cookie jar
-    browser_funcs = {
-        "chrome": browser_cookie3.chrome,
-        "firefox": browser_cookie3.firefox,
-        "edge": browser_cookie3.edge,
-        "brave": browser_cookie3.brave,
-        "opera": browser_cookie3.opera,
-    }
+        try:
+            import browser_cookie3
+        except ImportError:
+            raise RuntimeError(
+                "Cookie extraction requires rookiepy or browser_cookie3.\n"
+                "Install: pip install rookiepy  (recommended)\n"
+                "     or: pip install browser-cookie3"
+            )
 
     browser = browser.lower()
-    if browser not in browser_funcs:
+    supported = ["chrome", "firefox", "edge", "brave", "opera"]
+    if browser not in supported:
         raise ValueError(
-            f"Unsupported browser: {browser}. "
-            f"Supported: {', '.join(browser_funcs.keys())}"
+            f"Unsupported browser: {browser}. Supported: {', '.join(supported)}"
         )
 
-    try:
-        cookie_jar = browser_funcs[browser]()
-    except Exception as e:
-        raise RuntimeError(
-            f"Could not read {browser} cookies: {e}\n"
-            f"Make sure {browser} is closed and you have permission to read its data."
-        )
+    if use_rookiepy:
+        # rookiepy returns list of dicts with name/value/domain/path keys
+        try:
+            browser_funcs = {
+                "chrome": rookiepy.chrome,
+                "firefox": rookiepy.firefox,
+                "edge": rookiepy.edge,
+                "brave": rookiepy.brave,
+                "opera": rookiepy.opera,
+            }
+            raw_cookies = browser_funcs[browser]()
+            # Wrap into objects with .name, .value, .domain for compatibility
+            class _Cookie:
+                def __init__(self, d):
+                    self.name = d.get("name", "")
+                    self.value = d.get("value", "")
+                    self.domain = d.get("domain", "")
+            cookie_jar = [_Cookie(c) for c in raw_cookies]
+        except Exception as e:
+            raise RuntimeError(
+                f"Could not read {browser} cookies via rookiepy: {e}\n"
+                f"Make sure {browser} is closed and you have permission."
+            )
+    else:
+        browser_funcs = {
+            "chrome": browser_cookie3.chrome,
+            "firefox": browser_cookie3.firefox,
+            "edge": browser_cookie3.edge,
+            "brave": browser_cookie3.brave,
+            "opera": browser_cookie3.opera,
+        }
+        try:
+            cookie_jar = browser_funcs[browser]()
+        except Exception as e:
+            raise RuntimeError(
+                f"Could not read {browser} cookies: {e}\n"
+                f"Make sure {browser} is closed and you have permission."
+            )
 
     results = {}
 
@@ -187,8 +223,7 @@ def configure_from_browser(browser: str, config) -> List[Tuple[str, bool, str]]:
         if "auth_token" in tc and "ct0" in tc:
             config.set("twitter_auth_token", tc["auth_token"])
             config.set("twitter_ct0", tc["ct0"])
-            # Sync credentials to bird CLI env and legacy xfetch session.json
-            _sync_bird_env(tc["auth_token"], tc["ct0"])
+            # Legacy sync (best-effort)
             _sync_xfetch_session(tc["auth_token"], tc["ct0"])
             results_list.append(("Twitter/X", True, "auth_token + ct0"))
         else:
@@ -216,5 +251,17 @@ def configure_from_browser(browser: str, config) -> List[Tuple[str, bool, str]]:
         else:
             results_list.append(("Bilibili", False,
                                  f"No SESSDATA found. Make sure you're logged into bilibili.com in {browser}."))
+
+    if "xueqiu" in extracted:
+        cookie_str = extracted["xueqiu"].get("cookie_string", "")
+        # Only save if xq_a_token is present — anonymous cookies are useless
+        if cookie_str and "xq_a_token" in cookie_str:
+            config.set("xueqiu_cookie", cookie_str)
+            n_cookies = len(cookie_str.split(";"))
+            results_list.append(("Xueqiu", True, f"{n_cookies} cookies (含 xq_a_token)"))
+        elif cookie_str:
+            results_list.append(("Xueqiu", False,
+                                 f"找到 {len(cookie_str.split(';'))} 个 Cookie 但缺少 xq_a_token，"
+                                 f"请先在 {browser} 中登录 xueqiu.com"))
 
     return results_list

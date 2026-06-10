@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-"""XiaoHongShu -- check if mcporter + xiaohongshu MCP is available."""
+"""XiaoHongShu — check if xhs-cli (xiaohongshu-cli) is available."""
 
-import json
-import platform
 import shutil
 import subprocess
 from .base import Channel
@@ -117,54 +115,11 @@ def _clean_comment(comment):
     return result
 
 
-def _is_arm64() -> bool:
-    """Detect ARM64 architecture (e.g. Apple Silicon)."""
-    machine = platform.machine().lower()
-    return machine in ("arm64", "aarch64")
-
-
-def _mcporter_status_ok(stdout: str) -> bool:
-    """Return True if mcporter JSON output indicates status == 'ok'.
-
-    Uses proper JSON parsing to handle Windows BOM, CRLF line endings, and
-    whitespace variations.  Falls back to normalised string matching so the
-    check still works if mcporter ever returns non-JSON text.
-    """
-    text = stdout.strip()
-    # Strip UTF-8 BOM that Windows PowerShell sometimes prepends.
-    if text.startswith("\ufeff"):
-        text = text[1:]
-    try:
-        data = json.loads(text)
-        if isinstance(data, dict):
-            return str(data.get("status", "")).lower() == "ok"
-    except (json.JSONDecodeError, ValueError):
-        pass
-    # Fallback: normalise whitespace and CRLF, then do string search.
-    normalised = text.lower().replace("\r\n", "\n").replace("\r", "\n").replace(" ", "")
-    return '"status":"ok"' in normalised
-
-
-def _docker_run_hint() -> str:
-    """Return the docker run command, with --platform flag for ARM64."""
-    if _is_arm64():
-        return (
-            "  docker run -d --name xiaohongshu-mcp -p 18060:18060 "
-            "--platform linux/amd64 xpzouying/xiaohongshu-mcp\n"
-            "  # ARM64 also: build from source: "
-            "https://github.com/xpzouying/xiaohongshu-mcp"
-        )
-    return (
-        "  docker run -d --name xiaohongshu-mcp -p 18060:18060 "
-        "xpzouying/xiaohongshu-mcp"
-    )
-
-
 class XiaoHongShuChannel(Channel):
     name = "xiaohongshu"
     description = "小红书笔记"
-    backends = ["xiaohongshu-mcp"]
-    tier = 2
+    backends = ["xhs-cli (xiaohongshu-cli)"]
+    tier = 1
 
     def can_handle(self, url: str) -> bool:
         from urllib.parse import urlparse
@@ -172,48 +127,36 @@ class XiaoHongShuChannel(Channel):
         return "xiaohongshu.com" in d or "xhslink.com" in d
 
     def check(self, config=None):
-        mcporter = shutil.which("mcporter")
-        if not mcporter:
+        xhs = shutil.which("xhs")
+        if not xhs:
             return "off", (
-                "需要 mcporter + xiaohongshu-mcp。安装步骤：\n"
-                "  1. npm install -g mcporter\n"
-                "  2. " + _docker_run_hint().strip() + "\n"
-                "  3. mcporter config add xiaohongshu http://localhost:18060/mcp\n"
-                "  详见 https://github.com/xpzouying/xiaohongshu-mcp"
+                "需要安装 xhs-cli：\n"
+                "  pipx install xiaohongshu-cli\n"
+                "或：\n"
+                "  uv tool install xiaohongshu-cli\n"
+                "安装后运行 `xhs login` 登录"
             )
-        is_windows = platform.system() == "Windows"
-        config_timeout = 15 if is_windows else 5
-        try:
-            r = subprocess.run(
-                [mcporter, "config", "get", "xiaohongshu", "--json"],
-                capture_output=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=config_timeout,
-            )
-            if r.returncode != 0 or "xiaohongshu" not in r.stdout.lower():
-                return "off", (
-                    "mcporter 已装但小红书 MCP 未配置。运行：\n"
-                    + _docker_run_hint() + "\n"
-                    "  mcporter config add xiaohongshu http://localhost:18060/mcp"
-                )
-        except Exception:
-            return "off", "mcporter 连接异常"
 
-        # Use longer timeouts on Windows where mcporter may be slower to respond.
-        list_timeout = 30 if is_windows else 10
         try:
             r = subprocess.run(
-                [mcporter, "list", "xiaohongshu", "--json"],
-                capture_output=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=list_timeout,
+                [xhs, "status"], capture_output=True,
+                encoding="utf-8", errors="replace", timeout=10,
             )
-            if r.returncode == 0 and _mcporter_status_ok(r.stdout):
-                return "ok", "MCP 已连接（阅读、搜索、发帖、评论、点赞）"
-            return "warn", "MCP 已配置，但连接异常；请检查 xiaohongshu-mcp 服务状态"
-        except subprocess.TimeoutExpired:
-            return "warn", "MCP 已配置，但健康检查超时；请检查 xiaohongshu-mcp 服务状态"
+            output = (r.stdout or "") + (r.stderr or "")
+            if r.returncode == 0 and "ok: true" in output:
+                return "ok", (
+                    "完整可用（搜索、阅读、评论、发帖、热门、"
+                    "收藏、关注、用户查询）"
+                )
+            if "not_authenticated" in output or "expired" in output:
+                return "warn", (
+                    "xhs-cli 已安装但未登录。运行：\n"
+                    "  xhs login\n"
+                    "（自动从浏览器提取 Cookie，或扫码登录）"
+                )
+            return "warn", (
+                "xhs-cli 已安装但状态异常。运行：\n"
+                "  xhs -v status 查看详细信息"
+            )
         except Exception:
-            return "warn", "MCP 已配置，但连接异常；请检查 xiaohongshu-mcp 服务状态"
+            return "warn", "xhs-cli 已安装但连接失败"

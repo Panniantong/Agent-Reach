@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for 'agent-reach skill' command and _install_skill / _uninstall_skill."""
 
+import importlib.resources
 import os
 import tempfile
 import unittest
@@ -11,6 +12,16 @@ from agent_reach.cli import _install_skill, _uninstall_skill
 
 class TestSkillCommand(unittest.TestCase):
     """Test skill install and uninstall via CLI helpers."""
+
+    def test_skill_resources_include_both_locales(self):
+        """Package resources should expose both default and English skill markdown files."""
+        skill_dir = importlib.resources.files("agent_reach").joinpath("skill")
+
+        default_skill = skill_dir.joinpath("SKILL.md").read_text(encoding="utf-8")
+        english_skill = skill_dir.joinpath("SKILL_en.md").read_text(encoding="utf-8")
+
+        self.assertTrue(default_skill.strip())
+        self.assertTrue(english_skill.strip())
 
     def test_install_skill_creates_skill_md(self):
         """_install_skill should create SKILL.md in the first available skill dir."""
@@ -84,6 +95,33 @@ class TestSkillCommand(unittest.TestCase):
             with open(target) as f:
                 content = f.read()
             self.assertIn("Agent Reach", content)
+
+    def test_install_uses_english_skill_for_english_locale(self):
+        """_install_skill should install the English skill file for English locales."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            skill_parent = os.path.join(tmpdir, ".openclaw", "skills")
+            os.makedirs(skill_parent)
+
+            with patch(
+                "agent_reach.cli.os.path.expanduser",
+                side_effect=lambda p: p.replace("~", tmpdir),
+            ):
+                env = os.environ.copy()
+                env.pop("OPENCLAW_HOME", None)
+                env["LANG"] = "en_US.UTF-8"
+                with patch.dict(os.environ, env, clear=True):
+                    _install_skill()
+
+            target = os.path.join(skill_parent, "agent-reach", "SKILL.md")
+            self.assertTrue(os.path.exists(target))
+            with open(target) as f:
+                content = f.read()
+            self.assertTrue(content.strip())
+            self.assertIn("Give your AI agent eyes to see the entire internet.", content)
+            self.assertNotIn("搜推特", content)
+            self.assertTrue(
+                os.path.exists(os.path.join(skill_parent, "agent-reach", "references"))
+            )
 
 
 if __name__ == "__main__":
