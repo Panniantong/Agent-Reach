@@ -56,9 +56,13 @@ def test_sync_bird_env_quotes_shell_metachars(tmp_path, monkeypatch):
     later `source ~/.config/bird/credentials.env` into arbitrary shell.
     """
     monkeypatch.setenv("HOME", str(tmp_path))
-    hostile_auth = 'inj"; touch /tmp/agent-reach-pwn; #'
-    hostile_ct0 = "ct0_$(touch /tmp/agent-reach-pwn-ct0)"
-    pwn_marker = tmp_path / "should-not-exist"
+    # Side-effect markers live under tmp_path (auto-cleaned by pytest) rather
+    # than a shared absolute /tmp path — otherwise one vulnerable run leaves a
+    # marker behind that fails every later run on the same machine/CI runner.
+    pwn_auth = tmp_path / "pwn-auth"
+    pwn_ct0 = tmp_path / "pwn-ct0"
+    hostile_auth = f'inj"; touch {pwn_auth}; #'
+    hostile_ct0 = f"ct0_$(touch {pwn_ct0})"
     _sync_bird_env(hostile_auth, hostile_ct0)
     env_path = tmp_path / ".config" / "bird" / "credentials.env"
 
@@ -81,6 +85,5 @@ def test_sync_bird_env_quotes_shell_metachars(tmp_path, monkeypatch):
     assert lines["AUTH"] == hostile_auth, "auth_token round-trip broke — injection possible"
     assert lines["CT0"] == hostile_ct0, "ct0 round-trip broke — injection possible"
     # And no side-effect files materialised.
-    assert not os.path.exists("/tmp/agent-reach-pwn")
-    assert not os.path.exists("/tmp/agent-reach-pwn-ct0")
-    assert not pwn_marker.exists()
+    assert not pwn_auth.exists()
+    assert not pwn_ct0.exists()
