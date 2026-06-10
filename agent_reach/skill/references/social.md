@@ -223,6 +223,6 @@ rdt popular --limit 10
 rdt all --limit 10
 ```
 
-> **安装**: `pipx install rdt-cli`（确保 v0.4.2+）。需要先登录（`rdt login`）才能搜索和阅读。
+> **安装**: `pipx install 'git+https://github.com/public-clis/rdt-cli.git'`（PyPI 版本暂时落后，需从 GitHub 装 v0.4.2+）。需要先登录（`rdt login`）才能搜索和阅读。
 > 需要登录的功能：`rdt feed --subs-only`（订阅列表）、`rdt saved`（收藏）。
 > 建议使用 `--yaml` 输出，对 AI agent 更友好。

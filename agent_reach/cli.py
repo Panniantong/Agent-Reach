@@ -17,7 +17,8 @@ import time
 
 from agent_reach import __version__
 
-_RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git"
+# Pinned to the 0.4.2 state — PyPI still only has 0.4.1 (upstream issue #10).
+_RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66"
 
 
 def _ensure_utf8_console():

@@ -67,7 +67,7 @@ class TestCLI:
         cli._install_reddit_deps()
 
         out = capsys.readouterr().out
-        assert commands == [["pipx", "install", "git+https://github.com/public-clis/rdt-cli.git"]]
+        assert commands == [["pipx", "install", cli._RDT_GIT_SOURCE]]
         assert "✅ rdt-cli installed" in out
 
 
