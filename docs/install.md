@@ -61,6 +61,19 @@ pip install https://github.com/Panniantong/agent-reach/archive/main.zip
 agent-reach install --env=auto
 ```
 
+> 💡 **Windows / Microsoft Store Python alias?**
+> 如果 `python3 --version` 打开 Microsoft Store，或 `where python3` 指向
+> `...\AppData\Local\Microsoft\WindowsApps\python3.exe`，说明 `python3` 是 Windows
+> 的 Store alias，不是可用的 Python 安装。请改用 Python Launcher `py -3`，或实际安装目录里的 `python.exe`。
+>
+> PowerShell 示例：
+> ```powershell
+> py -3 -m venv $env:USERPROFILE\.agent-reach-venv
+> $env:USERPROFILE\.agent-reach-venv\Scripts\Activate.ps1
+> python -m pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+> agent-reach install --env=auto
+> ```
+
 This installs core infrastructure (gh CLI, Node.js, mcporter, Exa search, yt-dlp config) and activates these zero-config channels:
 
 - Web (Jina Reader), YouTube, GitHub, RSS, Exa Search, V2EX, Bilibili (basic)
