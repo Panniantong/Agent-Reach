@@ -3,6 +3,9 @@
 
 import shutil
 import subprocess
+
+from agent_reach.utils.process import utf8_subprocess_env
+
 from .base import Channel
 
 
@@ -24,26 +27,30 @@ class WeiboChannel(Channel):
                 "需要 mcporter + mcp-server-weibo。安装步骤：\n"
                 "  1. npm install -g mcporter\n"
                 "  2. pip install git+https://github.com/Panniantong/mcp-server-weibo.git\n"
-                "  3. mcporter config add weibo --command 'mcp-server-weibo'\n"
+                "  3. mcporter config add weibo --command 'mcp-server-weibo' "
+                "--env PYTHONUTF8=1 --env PYTHONIOENCODING=utf-8\n"
                 "  详见 https://github.com/Panniantong/mcp-server-weibo"
             )
         try:
             r = subprocess.run(
                 [mcporter, "config", "list"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=5
+                encoding="utf-8", errors="replace", timeout=5,
+                env=utf8_subprocess_env(),
             )
             if "weibo" not in r.stdout:
                 return "off", (
                     "mcporter 已装但微博 MCP 未配置。运行：\n"
                     "  pip install git+https://github.com/Panniantong/mcp-server-weibo.git\n"
-                    "  mcporter config add weibo --command 'mcp-server-weibo'"
+                    "  mcporter config add weibo --command 'mcp-server-weibo' "
+                    "--env PYTHONUTF8=1 --env PYTHONIOENCODING=utf-8"
                 )
         except Exception:
             return "off", "mcporter 连接异常"
         try:
             r = subprocess.run(
                 [mcporter, "list", "weibo"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=15
+                encoding="utf-8", errors="replace", timeout=15,
+                env=utf8_subprocess_env(),
             )
             if r.returncode == 0 and "search_users" in r.stdout:
                 return "ok", "完整可用（热搜、搜索、用户动态、评论）"

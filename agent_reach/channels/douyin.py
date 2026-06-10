@@ -3,6 +3,9 @@
 
 import shutil
 import subprocess
+
+from agent_reach.utils.process import utf8_subprocess_env
+
 from .base import Channel
 
 
@@ -31,7 +34,8 @@ class DouyinChannel(Channel):
         try:
             r = subprocess.run(
                 [mcporter, "config", "list"], capture_output=True,
-                encoding="utf-8", errors="replace", timeout=5
+                encoding="utf-8", errors="replace", timeout=5,
+                env=utf8_subprocess_env(),
             )
             if "douyin" not in r.stdout:
                 return "off", (
@@ -47,7 +51,8 @@ class DouyinChannel(Channel):
         try:
             r = subprocess.run(
                 [mcporter, "list", "douyin"],
-                capture_output=True, encoding="utf-8", errors="replace", timeout=15
+                capture_output=True, encoding="utf-8", errors="replace", timeout=15,
+                env=utf8_subprocess_env(),
             )
             if r.returncode == 0 and r.stdout.strip():
                 return "ok", "完整可用（视频解析、下载链接获取）"
