@@ -106,18 +106,6 @@ agent-reach doctor
 
 > 输出 Markdown 文件默认保存到 `/tmp/`。
 
-## 抖音视频解析
-
-```bash
-# 解析视频信息
-mcporter call 'douyin.parse_douyin_video_info(share_link: "https://v.douyin.com/xxx/")'
-
-# 获取无水印下载链接
-mcporter call 'douyin.get_douyin_download_link(share_link: "https://v.douyin.com/xxx/")'
-```
-
-> 详见 [social.md](social.md#抖音--douyin)
-
 ## 选择指南
 
 | 场景 | 推荐工具 |
@@ -125,4 +113,4 @@ mcporter call 'douyin.get_douyin_download_link(share_link: "https://v.douyin.com
 | YouTube 字幕 | yt-dlp |
 | B站字幕 | yt-dlp |
 | 播客转录 | 小宇宙 transcribe.sh |
-| 抖音视频解析 | douyin MCP |
+| 无字幕音视频 | agent-reach transcribe |

@@ -90,49 +90,6 @@ def test_youtube_ok_when_deno_installed(monkeypatch):
     assert status == "ok"
 
 
-def test_douyin_check_does_not_call_with_invalid_url(monkeypatch, tmp_path):
-    """Douyin check should use 'mcporter list' instead of calling with a hardcoded URL."""
-    import subprocess
-
-    from agent_reach.channels.douyin import DouyinChannel
-
-    calls = []
-    original_run = subprocess.run
-
-    def tracking_run(cmd, **kwargs):
-        calls.append(cmd)
-        # Simulate mcporter config list returning douyin
-        if "config" in cmd and "list" in cmd:
-
-            class R:
-                stdout = "douyin  http://localhost:18070/mcp"
-                returncode = 0
-
-            return R()
-        # Simulate mcporter list douyin returning tools
-        if "list" in cmd and "douyin" in cmd:
-
-            class R:
-                stdout = "parse_douyin_video_info"
-                returncode = 0
-
-            return R()
-        return original_run(cmd, **kwargs)
-
-    monkeypatch.setattr(
-        "shutil.which", lambda cmd: "/usr/bin/mcporter" if cmd == "mcporter" else None
-    )
-    monkeypatch.setattr("subprocess.run", tracking_run)
-
-    ch = DouyinChannel()
-    status, _msg = ch.check()
-
-    # Should NOT contain any hardcoded douyin.com URL in subprocess calls
-    for call in calls:
-        call_str = " ".join(call) if isinstance(call, list) else str(call)
-        assert "https://www.douyin.com" not in call_str
-
-
 def test_channel_can_handle_contract():
     url_samples = {
         "github": "https://github.com/panniantong/agent-reach",
@@ -141,9 +98,7 @@ def test_channel_can_handle_contract():
         "reddit": "https://reddit.com/r/python",
         "bilibili": "https://www.bilibili.com/video/BV1xx411",
         "xiaohongshu": "https://www.xiaohongshu.com/explore/123",
-        "douyin": "https://www.douyin.com/video/123",
         "linkedin": "https://www.linkedin.com/in/test",
-        "weibo": "https://weibo.com/u/1749127163",
         "rss": "https://example.com/feed.xml",
         "xueqiu": "https://xueqiu.com/S/SH600519",
         "exa_search": "https://example.com",

@@ -40,7 +40,7 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 | Purpose | Directory | Example |
 |---------|-----------|---------|
 | Config & tokens | `~/.agent-reach/` | `~/.agent-reach/config.json` |
-| Upstream tool repos | `~/.agent-reach/tools/` | `~/.agent-reach/tools/douyin-mcp-server/` |
+| Upstream tool repos | `~/.agent-reach/tools/` | `~/.agent-reach/tools/xiaoyuzhou/` |
 | Temporary files | `/tmp/` | `/tmp/yt-dlp-output/` |
 | Skills | `~/.openclaw/skills/agent-reach/` | SKILL.md |
 
@@ -97,26 +97,23 @@ After installing the basics, **ask the user** which additional channels they nee
 > 还有这些可选渠道，你需要哪些？
 >
 > - 🐦 **Twitter/X** — 搜推文、看时间线（需要登录 Cookie）
-> - 📰 **微博** — 热搜、搜索、用户动态
-> - 💬 **微信公众号** — 搜索和阅读公众号文章
 > - 📈 **雪球** — 股票行情、热门帖子（需要登录 Cookie）
 > - 🎙️ **小宇宙播客** — 音频转文字（需要免费 Groq Key）
 > - 📕 **小红书** — 阅读、搜索、发帖（需要登录）
 > - 📖 **Reddit** — 搜索和阅读帖子
 > - 📺 **B站完整版** — 热门、排行、搜索
-> - 🎵 **抖音** — 视频解析
 > - 💼 **LinkedIn** — Profile、职位搜索
 >
-> 告诉我你要哪些，比如"帮我装微博和 Twitter"。或者说"全部装"。
+> 告诉我你要哪些，比如"帮我装小红书和 Twitter"。或者说"全部装"。
 
 Based on the user's choice, run:
 
 ```bash
-agent-reach install --env=auto --channels=twitter,weibo   # Example: user chose Twitter + Weibo
+agent-reach install --env=auto --channels=twitter,xiaohongshu   # Example: user chose Twitter + XHS
 agent-reach install --env=auto --channels=all              # User wants everything
 ```
 
-Supported channel names: `twitter`, `weibo`, `wechat`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `bilibili`, `douyin`, `linkedin`, `all`
+Supported channel names: `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `bilibili`, `linkedin`, `all`
 
 ### Step 3: Fix what's broken
 
@@ -202,18 +199,6 @@ xhs login
 > mcporter config add xiaohongshu http://localhost:18060/mcp
 > ```
 
-**微博 / Weibo (mcp-server-weibo):**
-> "微博已默认安装，装好即用。可搜索微博内容、查看热搜、获取用户动态和评论。"
-
-如果自动安装失败，手动安装：
-
-```bash
-pip install git+https://github.com/Panniantong/mcp-server-weibo.git
-mcporter config add weibo --command 'mcp-server-weibo'
-```
-
-> 无需登录、无需 Cookie、无需代理。海外服务器也可以直接访问。
-
 **雪球 / Xueqiu (股票行情 + 热门帖子):**
 > "雪球需要登录后的 Cookie。请先在 Chrome 里登录 xueqiu.com，然后运行："
 
@@ -251,75 +236,6 @@ agent-reach configure groq-key gsk_xxxxx
 > - 日常听几期播客完全够用
 > - 转录质量高（Whisper large-v3），但不区分说话人
 > - 2 小时以上的播客建议分批处理
-
-**抖音 / Douyin (douyin-mcp-server):**
-> "抖音视频解析需要一个 MCP 服务。安装 douyin-mcp-server 后即可解析视频、获取无水印下载链接。"
-
-```bash
-# 1. 安装
-pip install douyin-mcp-server
-
-# 2. 启动 HTTP 服务（端口 18070）
-# 方式一：用 uv（推荐）
-mkdir -p ~/.agent-reach/tools && cd ~/.agent-reach/tools
-git clone https://github.com/yzfly/douyin-mcp-server.git && cd douyin-mcp-server
-uv sync && uv run python run_http.py
-
-# 方式二：直接用 Python 启动
-python -c "
-from douyin_mcp_server.server import mcp
-mcp.settings.host = '127.0.0.1'
-mcp.settings.port = 18070
-mcp.run(transport='streamable-http')
-"
-
-# 3. 注册到 mcporter
-mcporter config add douyin http://localhost:18070/mcp
-```
-
-> 无需认证即可解析视频信息和获取下载链接。
-> 如需 AI 语音识别提取文案功能，需要配置硅基流动 API Key（`export API_KEY="sk-xxx"`）。
->
-> 详见 https://github.com/yzfly/douyin-mcp-server
-
-**可选实现：Douyin + XiaoHongShu unified extractor**
-> "如果你想把抖音和小红书统一成一个 MCP，并直接输出 `script.md` 和 `info.json`，可以改用 social-post-extractor-mcp。"
-
-适用场景：
-
-- 抖音视频转文字稿
-- 小红书视频笔记转文字稿
-- 小红书图文笔记正文 + 图片文字提取
-
-兼容性：
-
-- 仍然可以注册成 `douyin` 这个 mcporter server 名称
-- 兼容旧工具名 `parse_douyin_video_info` / `get_douyin_download_link` / `extract_douyin_text`
-- 同时新增 `parse_social_post_info` / `extract_social_post_script`
-
-示例配置：
-
-```bash
-git clone https://github.com/JNHFlow21/social-post-extractor-mcp.git
-cd social-post-extractor-mcp
-uv sync
-
-mcporter config add douyin \
-  --command /bin/zsh \
-  --arg -lc \
-  --arg "cd '$PWD' && exec '.venv/bin/python' -m social_post_extractor_mcp" \
-  --env ASR_PROVIDER=bailian \
-  --env ASR_MODEL=paraformer-v2 \
-  --env VISION_PROVIDER=bailian \
-  --env VISION_MODEL=qwen3-vl-flash \
-  --env CLEAN_PROVIDER=bailian \
-  --env CLEAN_MODEL=qwen-flash \
-  --env BAILIAN_API_KEY=YOUR_BAILIAN_API_KEY
-```
-
-> 这个实现更适合“把链接直接交给 Agent，然后拿到脚本文件”的工作流。
->
-> 详见 https://github.com/JNHFlow21/social-post-extractor-mcp
 
 **LinkedIn (可选 — linkedin-scraper-mcp):**
 > "LinkedIn 基本内容可通过 Jina Reader 读取。完整功能（Profile 详情、职位搜索）需要 linkedin-scraper-mcp。"
@@ -388,7 +304,7 @@ If the user wants a different agent to handle it, let them choose.
 | Command | What it does |
 |---------|-------------|
 | `agent-reach install --env=auto` | Install core channels (lightweight, zero-config) |
-| `agent-reach install --env=auto --channels=twitter,weibo` | Install core + optional channels |
+| `agent-reach install --env=auto --channels=twitter,xiaohongshu` | Install core + optional channels |
 | `agent-reach install --env=auto --channels=all` | Install everything |
 | `agent-reach install --env=auto --safe` | Safe setup (no auto system changes) |
 | `agent-reach install --env=auto --dry-run` | Preview what would be done |
@@ -411,8 +327,6 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 | Web | `curl` + Jina | `curl -s "https://r.jina.ai/URL"` |
 | Exa Search | `mcporter` | `mcporter call 'exa.web_search_exa(...)'` |
 | 小红书 | `mcporter` | `mcporter call 'xiaohongshu.search_feeds(...)'` |
-| 微博 | `mcporter` | `mcporter call 'weibo.get_trendings(limit: 10)'` |
 | 小宇宙播客 | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
-| 抖音 | `mcporter` | `mcporter call 'douyin.parse_douyin_video_info(...)'` |
 | LinkedIn | `mcporter` | `mcporter call 'linkedin.get_person_profile(...)'` |
 | RSS | `feedparser` | `python3 -c "import feedparser; ..."` |

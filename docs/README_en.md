@@ -64,10 +64,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 🌐 **Web** | Read | Zero config | Any URL → clean Markdown ([Jina Reader](https://github.com/jina-ai/reader) ⭐9.8K) |
 | 🐦 **Twitter/X** | Read · Search | Cookie | Cookie unlocks search, timeline, tweet reading, articles ([twitter-cli](https://github.com/public-clis/twitter-cli)) |
 | 📕 **XiaoHongShu** | Read · Search · **Post · Comment · Like** | Cookie | `pipx install xiaohongshu-cli` + `xhs login` ([xhs-cli](https://github.com/jackwener/xiaohongshu-cli)) |
-| 🎵 **Douyin** | Video parsing · Watermark-free download | mcporter | Via [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server), no login needed |
 | 💼 **LinkedIn** | Jina Reader (public pages) | Full profiles, companies, job search | Tell your Agent "help me set up LinkedIn" |
-| 💬 **WeChat Articles** | Search + Read | Zero config | Search + read WeChat Official Account articles via Exa (zero config) + optional [Camoufox](https://github.com/daijro/camoufox) |
-| 📰 **Weibo** | Trending · Search · Feeds · Comments | Zero config | Hot search, content/user/topic search, feeds, comments ([mcp-server-weibo](https://github.com/Panniantong/mcp-server-weibo)) |
 | 💻 **V2EX** | Hot topics · Node topics · Topic detail + replies · User profile | Zero config | Public JSON API, no auth required. Great for tech community content |
 | 📈 **Xueqiu (雪球)** | Stock quotes · Search · Hot posts · Hot stocks | Browser cookie | Tell your Agent "help me set up Xueqiu" |
 | 🎙️ **Xiaoyuzhou Podcast** | Transcription | Free API key | Podcast audio → full text transcript via Groq Whisper (free) |
@@ -222,7 +219,6 @@ channels/
 ├── bilibili.py     → yt-dlp          ← swap to bilibili-api…
 ├── reddit.py       → rdt-cli          ← search + read, cookie auth required
 ├── xiaohongshu.py  → mcporter MCP    ← swap to other XHS tools…
-├── douyin.py       → mcporter MCP    ← swap to other Douyin tools…
 ├── linkedin.py     → linkedin-mcp    ← swap to LinkedIn API…
 ├── rss.py          → feedparser      ← swap to atoma…
 ├── exa_search.py   → mcporter MCP    ← swap to Tavily, SerpAPI…
@@ -244,10 +240,7 @@ Each channel file only checks whether its upstream tool is installed and working
 | GitHub | [gh CLI](https://cli.github.com) | Official tool, full API after auth |
 | Read RSS | [feedparser](https://github.com/kurtmckee/feedparser) | Python ecosystem standard, 2.3K stars |
 | XiaoHongShu | [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) | 1.5K stars, pipx install, search/read/comment/post |
-| Douyin | [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) | MCP server, no login needed, video parsing + watermark-free download |
 | LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | 1.2K stars, MCP server, browser automation |
-| WeChat Articles | [Exa](https://exa.ai) (search + read) + [Camoufox](https://github.com/daijro/camoufox) (optional) | Zero-config search + full article reading |
-| Weibo | `mcporter` | `mcporter call 'weibo.get_trendings(limit: 10)'` |
 | Xiaoyuzhou Podcast | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 
 > 📌 These are the *current* choices. Don't like one? Swap out the file. That's the whole point of scaffolding.
@@ -310,44 +303,11 @@ Agent Reach uses twitter-cli which accesses Twitter via cookie auth — same as 
 Install `pipx install xiaohongshu-cli`, then `xhs login` (auto-extracts cookies from browser). Your agent can then use `xhs search "query"` to search notes, `xhs read NOTE_ID` to read details, `xhs comments NOTE_ID` to view comments. No Docker needed.
 </details>
 
-<details>
-<summary><strong>How to parse Douyin / 抖音 videos with AI agent?</strong></summary>
-
-Install douyin-mcp-server, then your agent can use `mcporter call 'douyin.parse_douyin_video_info(share_link: "share_url")'` to parse video info and get watermark-free download links. No login required — just share the Douyin link. See https://github.com/yzfly/douyin-mcp-server
-</details>
-
-<details>
-<summary><strong>How to extract scripts from both Douyin and XiaoHongShu with one MCP?</strong></summary>
-
-If you want one MCP server that can handle:
-
-- Douyin videos
-- XiaoHongShu video notes
-- XiaoHongShu image notes
-
-and directly write `script.md` + `info.json`, you can point the existing `douyin` mcporter alias at:
-
-- https://github.com/JNHFlow21/social-post-extractor-mcp
-
-It keeps backward compatibility with:
-
-- `parse_douyin_video_info`
-- `get_douyin_download_link`
-- `extract_douyin_text`
-
-and adds unified tools:
-
-- `parse_social_post_info`
-- `extract_social_post_script`
-
-This is useful when your agent workflow is “paste a link, get a script file”.
-</details>
-
 ---
 
 ## Credits
 
-[twitter-cli](https://github.com/public-clis/twitter-cli) · [rdt-cli](https://github.com/public-clis/rdt-cli) · [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) · [bili-cli](https://github.com/public-clis/bilibili-cli) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [Jina Reader](https://github.com/jina-ai/reader) · [Exa](https://exa.ai) · [mcporter](https://github.com/nicobailon/mcporter) · [feedparser](https://github.com/kurtmckee/feedparser) · [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) · [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server)
+[twitter-cli](https://github.com/public-clis/twitter-cli) · [rdt-cli](https://github.com/public-clis/rdt-cli) · [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) · [bili-cli](https://github.com/public-clis/bilibili-cli) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [Jina Reader](https://github.com/jina-ai/reader) · [Exa](https://exa.ai) · [mcporter](https://github.com/nicobailon/mcporter) · [feedparser](https://github.com/kurtmckee/feedparser) · [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server)
 
 ## Contact
 
