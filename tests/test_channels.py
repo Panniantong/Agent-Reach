@@ -756,7 +756,25 @@ class TestRedditChannel:
 
 
 class TestXiaoHongShuChannel:
+    """多后端选择逻辑：OpenCLI > xiaohongshu-mcp > xhs-cli，第一个完整可用者获胜。"""
+
+    @staticmethod
+    def _isolate(monkeypatch, opencli=None, mcp_reachable=False):
+        """隔离 OpenCLI / mcp 候选，让测试聚焦目标后端。
+
+        opencli: None 表示未安装；否则传入 (status, message) 二元组。
+        """
+        import agent_reach.channels.xiaohongshu as xhs_mod
+
+        monkeypatch.setattr(
+            XiaoHongShuChannel, "_check_opencli", lambda self: opencli
+        )
+        monkeypatch.setattr(
+            xhs_mod, "_mcp_service_reachable", lambda timeout=3: mcp_reachable
+        )
+
     def test_reports_ok_when_cli_authenticated(self, monkeypatch):
+        self._isolate(monkeypatch)
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/xhs")
 
         def fake_run(cmd, **kwargs):
@@ -767,10 +785,11 @@ class TestXiaoHongShuChannel:
         ch = XiaoHongShuChannel()
         status, msg = ch.check()
         assert status == "ok"
-        assert "完整可用" in msg
+        assert "xhs-cli 可用" in msg
         assert ch.active_backend == "xhs-cli (xiaohongshu-cli)"
 
     def test_reports_warn_when_not_authenticated(self, monkeypatch):
+        self._isolate(monkeypatch)
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/xhs")
 
         def fake_run(cmd, **kwargs):
@@ -785,16 +804,20 @@ class TestXiaoHongShuChannel:
         # 未登录是业务态：工具进程活着，后端仍可用
         assert ch.active_backend == "xhs-cli (xiaohongshu-cli)"
 
-    def test_reports_off_when_not_installed(self, monkeypatch):
+    def test_reports_off_when_nothing_installed(self, monkeypatch):
+        self._isolate(monkeypatch)
         monkeypatch.setattr(shutil, "which", lambda _: None)
         ch = XiaoHongShuChannel()
         status, msg = ch.check()
         assert status == "off"
-        assert "xiaohongshu-cli" in msg
+        # off 指引推荐当代后端，而非停更的 xhs-cli
+        assert "opencli" in msg
+        assert "xiaohongshu-mcp" in msg
         assert ch.active_backend is None
 
     def test_reports_error_with_reinstall_hint_when_broken(self, monkeypatch):
         """which 命中但 exec 抛 FileNotFoundError（venv 断链）→ error + 重装处方。"""
+        self._isolate(monkeypatch)
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/xhs")
 
         def fake_run(cmd, **kwargs):
@@ -809,6 +832,94 @@ class TestXiaoHongShuChannel:
         assert "uv tool install --force xiaohongshu-cli" in msg
         assert "pipx reinstall xiaohongshu-cli" in msg
         assert ch.active_backend is None
+
+    def test_opencli_ready_wins_over_cli(self, monkeypatch):
+        """OpenCLI 完整可用时按序获胜，即使 xhs-cli 也完整可用。"""
+        self._isolate(monkeypatch, opencli=("ok", "OpenCLI 可用（复用浏览器登录态）"))
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/xhs")
+
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 0, "ok: true\n", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        ch = XiaoHongShuChannel()
+        status, msg = ch.check()
+        assert status == "ok"
+        assert ch.active_backend == "OpenCLI"
+
+    def test_opencli_warn_loses_to_usable_cli(self, monkeypatch):
+        """OpenCLI 装了但扩展未连（warn）时，完整可用的 xhs-cli 获胜。"""
+        self._isolate(monkeypatch, opencli=("warn", "扩展未连接"))
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/xhs")
+
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 0, "ok: true\n", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        ch = XiaoHongShuChannel()
+        status, msg = ch.check()
+        assert status == "ok"
+        assert ch.active_backend == "xhs-cli (xiaohongshu-cli)"
+
+    def test_mcp_service_wins_when_opencli_absent(self, monkeypatch):
+        """服务器场景：OpenCLI 未装、mcp 服务可达且 mcporter 已接入 → mcp 获胜。"""
+        self._isolate(monkeypatch, mcp_reachable=True)
+
+        def fake_which(name):
+            return "/usr/local/bin/mcporter" if name == "mcporter" else None
+
+        monkeypatch.setattr(shutil, "which", fake_which)
+
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 0, "exa\nxiaohongshu\n", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        ch = XiaoHongShuChannel()
+        status, msg = ch.check()
+        assert status == "ok"
+        assert ch.active_backend == "xiaohongshu-mcp"
+        assert "search_feeds" in msg
+
+    def test_mcp_reachable_but_mcporter_unconfigured_warns(self, monkeypatch):
+        self._isolate(monkeypatch, mcp_reachable=True)
+
+        def fake_which(name):
+            return "/usr/local/bin/mcporter" if name == "mcporter" else None
+
+        monkeypatch.setattr(shutil, "which", fake_which)
+
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 0, "exa\n", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        ch = XiaoHongShuChannel()
+        status, msg = ch.check()
+        assert status == "warn"
+        assert "mcporter config add xiaohongshu" in msg
+        assert ch.active_backend == "xiaohongshu-mcp"
+
+    def test_backend_override_prefers_cli(self, monkeypatch):
+        """config xiaohongshu_backend=xhs-cli 时，即使 OpenCLI ready 也用 xhs-cli。"""
+        self._isolate(monkeypatch, opencli=("ok", "OpenCLI 可用"))
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/xhs")
+
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 0, "ok: true\n", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        class _Cfg:
+            def get(self, key, default=None):
+                return "xhs-cli" if key == "xiaohongshu_backend" else default
+
+        ch = XiaoHongShuChannel()
+        status, _ = ch.check(_Cfg())
+        assert status == "ok"
+        assert ch.active_backend == "xhs-cli (xiaohongshu-cli)"
 
 
 class TestBilibiliChannel:

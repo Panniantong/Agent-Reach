@@ -699,26 +699,29 @@ def _install_twitter_deps():
 
 
 def _install_xhs_deps():
-    """Install xhs-cli (xiaohongshu-cli) for XiaoHongShu."""
-    import shutil
-    import subprocess
+    """Set up XiaoHongShu — backend depends on environment.
 
-    print("Setting up XiaoHongShu (xhs-cli)...")
-    if shutil.which("xhs"):
-        print("  ✅ xhs-cli already installed")
+    Desktop: OpenCLI (reuses the browser session, zero config).
+    Server: xiaohongshu-mcp guide (self-contained headless browser + QR
+    login; we don't manage long-running services, so guide only).
+    xhs-cli is no longer installed by default — upstream unmaintained
+    since 2026-03; existing installs keep working as a fallback backend.
+    """
+    import shutil
+
+    print("Setting up XiaoHongShu...")
+    if _detect_environment() == "server":
+        print("  服务器环境推荐 xiaohongshu-mcp（自带无头浏览器，扫码登录）：")
+        print("    1. 下载 binary：https://github.com/xpzouying/xiaohongshu-mcp/releases")
+        print("       （建议放到 ~/.agent-reach/tools/ 下）")
+        print("    2. 启动服务（首次运行会下载约 150MB 浏览器，请等待完成）")
+        print("    3. 扫码登录后接入：mcporter config add xiaohongshu http://localhost:18060/mcp")
+        print("    4. 验证：agent-reach doctor")
         return
-    for tool, cmd in [("pipx", ["pipx", "install", "xiaohongshu-cli"]),
-                      ("uv", ["uv", "tool", "install", "xiaohongshu-cli"])]:
-        if shutil.which(tool):
-            try:
-                subprocess.run(cmd, capture_output=True, encoding="utf-8",
-                               errors="replace", timeout=120)
-                if shutil.which("xhs"):
-                    print("  ✅ xhs-cli installed (run `xhs login` to authenticate)")
-                    return
-            except Exception:
-                pass
-    print("  [!]  xhs-cli install failed. Run: pipx install xiaohongshu-cli")
+
+    _install_opencli_deps()
+    if shutil.which("xhs"):
+        print("  ✅ 检测到存量 xhs-cli，将作为备选后端继续可用")
 
 
 def _install_opencli_deps():

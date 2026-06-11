@@ -1,9 +1,40 @@
 # -*- coding: utf-8 -*-
-"""XiaoHongShu — check if xhs-cli (xiaohongshu-cli) is available."""
+"""XiaoHongShu — multi-backend: OpenCLI / xiaohongshu-mcp / xhs-cli.
+
+Backend order encodes the recommendation, and probing order makes the
+environment split automatic: OpenCLI needs a desktop Chrome so it simply
+never probes alive on a server, where xiaohongshu-mcp (self-contained
+headless browser) takes over. xhs-cli (upstream unmaintained since
+2026-03) keeps working for existing installs as the last candidate.
+"""
+
+import urllib.error
+import urllib.request
 
 from agent_reach.probe import probe_command
 
 from .base import Channel
+
+_MCP_ENDPOINT = "http://localhost:18060/mcp"
+_MCP_INSTALL_URL = "https://github.com/xpzouying/xiaohongshu-mcp"
+
+
+def _mcp_service_reachable(timeout: int = 3) -> bool:
+    """True if the xiaohongshu-mcp HTTP service answers on localhost.
+
+    Any HTTP response counts (the MCP endpoint replies 405 to GET) —
+    we only care that the service is up. Proxies are bypassed explicitly:
+    localhost must never be routed through HTTP_PROXY.
+    """
+    req = urllib.request.Request(_MCP_ENDPOINT, method="GET")
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        opener.open(req, timeout=timeout)
+        return True
+    except urllib.error.HTTPError:
+        return True  # 405/404 etc. — service is alive
+    except Exception:
+        return False
 
 
 def format_xhs_result(data):
@@ -118,7 +149,7 @@ def _clean_comment(comment):
 class XiaoHongShuChannel(Channel):
     name = "xiaohongshu"
     description = "小红书笔记"
-    backends = ["xhs-cli (xiaohongshu-cli)"]
+    backends = ["OpenCLI", "xiaohongshu-mcp", "xhs-cli (xiaohongshu-cli)"]
     tier = 1
 
     def can_handle(self, url: str) -> bool:
@@ -127,19 +158,83 @@ class XiaoHongShuChannel(Channel):
         return "xiaohongshu.com" in d or "xhslink.com" in d
 
     def check(self, config=None):
+        """Probe candidates in order; first fully-usable backend wins.
+
+        If none is fully usable, the first fixable candidate (warn) is
+        reported, so the user gets one actionable prescription instead
+        of three half-relevant ones.
+        """
         self.active_backend = None
+        findings = []  # (backend, status, message)
+
+        for backend in self.ordered_backends(config):
+            if backend == "OpenCLI":
+                result = self._check_opencli()
+            elif backend == "xiaohongshu-mcp":
+                result = self._check_mcp()
+            else:
+                result = self._check_xhs_cli()
+            if result is None:
+                continue  # not installed — not a candidate right now
+            findings.append((backend, *result))
+
+        for wanted in ("ok", "warn"):
+            for backend, status, message in findings:
+                if status == wanted:
+                    self.active_backend = backend
+                    return status, message
+
+        if findings:  # only broken candidates left
+            return "error", "\n".join(m for _, _, m in findings)
+
+        return "off", (
+            "未安装任何小红书后端。推荐：\n"
+            "  桌面：agent-reach install --channels opencli\n"
+            "       （复用 Chrome 登录态，刷过小红书即零配置可用）\n"
+            f"  服务器：xiaohongshu-mcp（自带无头浏览器+扫码登录）：{_MCP_INSTALL_URL}"
+        )
+
+    def _check_opencli(self):
+        """OpenCLI candidate. None = not installed."""
+        from agent_reach.backends import opencli_status
+
+        st = opencli_status()
+        if not st.installed:
+            return None
+        if st.broken:
+            return "error", st.hint
+        if st.ready:
+            return "ok", (
+                "OpenCLI 可用（复用浏览器登录态）。用法："
+                "opencli xiaohongshu search/note/comments/feed -f yaml"
+            )
+        return "warn", st.hint
+
+    def _check_mcp(self):
+        """xiaohongshu-mcp candidate. None = service not running."""
+        if not _mcp_service_reachable():
+            return None
+        mcporter = probe_command(
+            "mcporter", ["config", "list"], timeout=10, package="mcporter"
+        )
+        if mcporter.ok and "xiaohongshu" in mcporter.output:
+            return "ok", (
+                "xiaohongshu-mcp 服务运行中"
+                "（mcporter call 'xiaohongshu.search_feeds(keyword: \"...\")'）。"
+                "若未登录，让 agent 调 get_login_qrcode 扫码"
+            )
+        return "warn", (
+            "xiaohongshu-mcp 服务在跑但 mcporter 未接入。运行：\n"
+            f"  mcporter config add xiaohongshu {_MCP_ENDPOINT}"
+        )
+
+    def _check_xhs_cli(self):
+        """Legacy xhs-cli candidate. None = not installed."""
         probe = probe_command(
             "xhs", ["status"], timeout=10, package="xiaohongshu-cli"
         )
-
         if probe.status == "missing":
-            return "off", (
-                "需要安装 xhs-cli：\n"
-                "  pipx install xiaohongshu-cli\n"
-                "或：\n"
-                "  uv tool install xiaohongshu-cli\n"
-                "安装后运行 `xhs login` 登录"
-            )
+            return None
         if probe.status == "broken":
             return "error", "xhs 命令存在但无法执行\n" + probe.hint
         if probe.status == "timeout":
@@ -147,19 +242,16 @@ class XiaoHongShuChannel(Channel):
 
         # 进程是活的（执行成功或运行后非零退出）——按输出内容分类
         if probe.ok and "ok: true" in probe.output:
-            self.active_backend = self.backends[0]
             return "ok", (
-                "完整可用（搜索、阅读、评论、发帖、热门、"
-                "收藏、关注、用户查询）"
+                "xhs-cli 可用（搜索、阅读、评论、热门；上游 2026-03 起停更，"
+                "桌面用户建议迁移到 OpenCLI）"
             )
         if "not_authenticated" in probe.output or "expired" in probe.output:
-            self.active_backend = self.backends[0]
             return "warn", (
                 "xhs-cli 已安装但未登录。运行：\n"
                 "  xhs login\n"
                 "（自动从浏览器提取 Cookie，或扫码登录）"
             )
-        self.active_backend = self.backends[0]
         return "warn", (
             "xhs-cli 已安装但状态异常。运行：\n"
             "  xhs -v status 查看详细信息"
