@@ -173,8 +173,9 @@ class XueqiuChannel(Channel):
                 return "ok", "公开 API 可用（行情、搜索、热帖、热股）"
             return "warn", "API 响应异常（返回数据为空）"
         except Exception as e:
+            from ..utils.text import scrub_url_credentials
             return "warn", (
-                f"Xueqiu API 连接失败：{e}。"
+                f"Xueqiu API 连接失败：{scrub_url_credentials(e)}。"
                 "请先登录雪球后运行：agent-reach configure --from-browser chrome"
             )
 
