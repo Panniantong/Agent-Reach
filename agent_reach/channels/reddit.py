@@ -39,10 +39,9 @@ class RedditChannel(Channel):
     tier = 1  # no zero-config path exists — see module docstring
 
     def can_handle(self, url: str) -> bool:
-        from urllib.parse import urlparse
+        from ..utils.urlmatch import host_matches
 
-        d = urlparse(url).netloc.lower()
-        return "reddit.com" in d or "redd.it" in d
+        return host_matches(url, "reddit.com", "redd.it")
 
     def check(self, config=None):
         """Probe candidates in order; first fully-usable backend wins."""
