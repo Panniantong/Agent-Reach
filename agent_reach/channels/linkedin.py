@@ -16,8 +16,8 @@ class LinkedInChannel(Channel):
     tier = 2
 
     def can_handle(self, url: str) -> bool:
-        from urllib.parse import urlparse
-        return "linkedin.com" in urlparse(url).netloc.lower()
+        from ..utils.urlmatch import host_matches
+        return host_matches(url, "linkedin.com")
 
     def check(self, config=None):
         self.active_backend = None
