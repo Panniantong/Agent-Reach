@@ -7,6 +7,23 @@ import sys
 from pathlib import Path
 
 
+def make_private_dir(path: str | Path) -> Path:
+    """Create a directory (and parents) restricted to the owner (0o700).
+
+    The leaf directory may hold secrets (cookies, tokens). On POSIX the mode is
+    enforced with an explicit chmod because ``mkdir``'s mode argument is masked
+    by the umask (commonly yielding world-traversable 0o755). On Windows chmod
+    cannot express this and is a no-op; the user-profile ACL already applies.
+    """
+    p = Path(path)
+    p.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(p, 0o700)
+    except (OSError, NotImplementedError):
+        pass
+    return p
+
+
 def get_ytdlp_config_dir() -> Path:
     """Return the recommended yt-dlp user config directory for this OS."""
 

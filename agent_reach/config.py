@@ -35,8 +35,9 @@ class Config:
         self.load()
 
     def _ensure_dir(self):
-        """Create config directory if it doesn't exist."""
-        self.config_dir.mkdir(parents=True, exist_ok=True)
+        """Create config directory (owner-only; it holds tokens and cookies)."""
+        from agent_reach.utils.paths import make_private_dir
+        make_private_dir(self.config_dir)
 
     def load(self):
         """Load config from YAML file."""
