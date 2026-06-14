@@ -216,6 +216,33 @@ class TestOrchestrator:
         )
         assert text == "part one\npart two"
 
+    def test_chunk_count_is_capped(self, monkeypatch, fake_config, tmp_path, chunk_file):
+        fake_config.set("groq_api_key", "gsk_test")
+        big = tmp_path / "compressed.m4a"
+        big.write_bytes(b"x" * (tr.SIZE_LIMIT_BYTES + 1))
+        monkeypatch.setattr(tr, "compress_audio", lambda src, out_dir: big)
+
+        # Produce more chunks than the cap allows.
+        many = []
+        for i in range(tr.MAX_CHUNKS + 5):
+            c = tmp_path / f"chunk_{i:03d}.m4a"
+            c.write_bytes(b"a")
+            many.append(c)
+        monkeypatch.setattr(tr, "chunk_audio", lambda src, out_dir: many)
+
+        calls = {"n": 0}
+
+        def fake_post(*a, **k):
+            calls["n"] += 1
+            return FakeResponse(200, "seg")
+
+        monkeypatch.setattr(tr.requests, "post", fake_post)
+
+        text = tr.transcribe(str(chunk_file), out_dir=tmp_path / "work", config=fake_config)
+        # Only MAX_CHUNKS Whisper calls were made — cost is bounded.
+        assert calls["n"] == tr.MAX_CHUNKS
+        assert "truncated" in text
+
     def test_no_provider_configured_fails_fast(self, fake_config, chunk_file):
         with pytest.raises(tr.NoProviderConfigured):
             tr.transcribe(str(chunk_file), config=fake_config)
