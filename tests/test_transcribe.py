@@ -225,6 +225,43 @@ class TestOrchestrator:
             tr.transcribe(str(chunk_file), provider="azure", config=fake_config)
 
 
+# --- download_audio: argument-injection / SSRF guard ------------------- #
+
+
+class TestDownloadAudioSafety:
+    def test_passes_dash_dash_terminator_for_valid_url(self, monkeypatch, tmp_path):
+        captured = {}
+
+        monkeypatch.setattr(tr, "_require", lambda binary: None)
+        monkeypatch.setattr(tr, "_run", lambda cmd, timeout=600: captured.update(cmd=cmd))
+        # Avoid the empty-output check by dropping a matching file.
+        (tmp_path / "source.m4a").write_bytes(b"x")
+
+        tr.download_audio("https://1.1.1.1/video", tmp_path)
+
+        cmd = captured["cmd"]
+        # The URL must be the final arg and immediately preceded by "--" so it
+        # can never be parsed by yt-dlp as an option.
+        assert cmd[-1] == "https://1.1.1.1/video"
+        assert cmd[-2] == "--"
+
+    @pytest.mark.parametrize(
+        "bad_source",
+        ["--exec=touch pwned", "file:///etc/passwd", "http://169.254.169.254/"],
+    )
+    def test_rejects_unsafe_source(self, monkeypatch, tmp_path, bad_source):
+        ran = {"called": False}
+        monkeypatch.setattr(tr, "_require", lambda binary: None)
+
+        def boom(*a, **k):
+            ran["called"] = True
+
+        monkeypatch.setattr(tr, "_run", boom)
+        with pytest.raises(tr.TranscribeError, match="unsafe source"):
+            tr.download_audio(bad_source, tmp_path)
+        assert ran["called"] is False  # never reached yt-dlp
+
+
 # --- YouTubeChannel integration --------------------------------------- #
 
 

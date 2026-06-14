@@ -22,6 +22,7 @@ from typing import List, Optional
 import requests
 
 from agent_reach.config import Config
+from agent_reach.utils.urlsafe import UnsafeURLError, assert_safe_public_url
 
 # Whisper API limit is 25MB; leave headroom for multipart overhead.
 SIZE_LIMIT_BYTES = 24 * 1024 * 1024
@@ -77,6 +78,14 @@ def _run(cmd: List[str], timeout: int = 600) -> None:
 def download_audio(url: str, out_dir: Path) -> Path:
     """Download audio with yt-dlp into out_dir; return the resulting file path."""
     _require("yt-dlp")
+    # `url` may come from an LLM or scraped content. Validate it is a public
+    # http(s) target so it cannot (a) be parsed by yt-dlp as an option such as
+    # `--exec`/`--config-locations` (argument-injection → RCE / local-file read)
+    # or (b) point at an internal/metadata host (SSRF).
+    try:
+        assert_safe_public_url(url)
+    except UnsafeURLError as e:
+        raise TranscribeError(f"refusing to download unsafe source: {e}") from e
     template = out_dir / "source.%(ext)s"
     _run(
         [
@@ -88,6 +97,7 @@ def download_audio(url: str, out_dir: Path) -> Path:
             "0",
             "-o",
             str(template),
+            "--",  # end of options: `url` can never be parsed as a flag
             url,
         ],
         timeout=1800,  # long podcasts over slow networks — generous but bounded
