@@ -567,10 +567,23 @@ def _install_system_deps():
     # ── Node.js (needed for mcporter) ──
     if shutil.which("node") and shutil.which("npm"):
         print("  ✅ Node.js already installed")
+    elif os.environ.get("AGENT_REACH_ALLOW_REMOTE_SCRIPTS") != "1":
+        # Downloading a remote setup script and running it through `bash` is a
+        # code-execution-on-install vector (a MITM or NodeSource compromise =
+        # arbitrary code on this host). Disabled by default; opt in explicitly.
+        print("  [!]  Node.js not found — skipping automatic NodeSource setup script.")
+        print("       (Running a remote script through bash is disabled by default.)")
+        print("       Install Node.js with a trusted method instead:")
+        print("         • nvm install 22            (recommended)")
+        print("         • https://nodejs.org        (official installer)")
+        print("         • apt install nodejs npm    (distro packages)")
+        print("       …or opt in to the NodeSource script for this run:")
+        print("         AGENT_REACH_ALLOW_REMOTE_SCRIPTS=1 agent-reach install ...")
     else:
-        print("  Installing Node.js...")
+        print("  Installing Node.js via NodeSource (AGENT_REACH_ALLOW_REMOTE_SCRIPTS=1)...")
         try:
-            # Use NodeSource setup script without invoking a shell pipeline.
+            # Opt-in only. Fetch over TLS (curl -fsSL fails closed on TLS error)
+            # to a temp file, then run via bash — no shell pipeline.
             with tempfile.NamedTemporaryFile(delete=False, suffix=".sh") as tf:
                 script_path = tf.name
             subprocess.run(

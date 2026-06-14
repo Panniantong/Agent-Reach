@@ -101,9 +101,17 @@ class Config:
 
     def to_dict(self) -> dict:
         """Return config as dict (masks sensitive values)."""
+        # Mask anything credential-bearing. Session cookies (xhs_cookie,
+        # xueqiu_cookie), Bilibili SESSDATA/csrf, and saved auth/secrets do not
+        # contain "token"/"key", so they must be matched explicitly or they leak
+        # in plaintext through any diagnostic that prints to_dict().
+        sensitive = (
+            "key", "token", "password", "proxy",
+            "cookie", "secret", "session", "sessdata", "csrf", "auth", "cred",
+        )
         masked = {}
         for k, v in self.data.items():
-            if any(s in k.lower() for s in ("key", "token", "password", "proxy")):
+            if any(s in k.lower() for s in sensitive):
                 masked[k] = f"{str(v)[:8]}..." if v else None
             else:
                 masked[k] = v
