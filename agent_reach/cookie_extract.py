@@ -176,8 +176,9 @@ def _sync_xfetch_session(auth_token: str, ct0: str) -> None:
     import os
 
     try:
+        from agent_reach.utils.paths import make_private_dir
         xfetch_dir = os.path.join(os.path.expanduser("~"), ".config", "xfetch")
-        os.makedirs(xfetch_dir, exist_ok=True)
+        make_private_dir(xfetch_dir)
         session_path = os.path.join(xfetch_dir, "session.json")
         session_data: dict = {}
         if os.path.exists(session_path):
@@ -207,8 +208,9 @@ def _sync_bird_env(auth_token: str, ct0: str) -> None:
     import shlex
 
     try:
+        from agent_reach.utils.paths import make_private_dir
         bird_dir = os.path.join(os.path.expanduser("~"), ".config", "bird")
-        os.makedirs(bird_dir, exist_ok=True)
+        make_private_dir(bird_dir)
         env_path = os.path.join(bird_dir, "credentials.env")
         with _open_owner_only(env_path) as f:
             f.write(f"AUTH_TOKEN={shlex.quote(auth_token)}\n")
