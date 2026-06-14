@@ -26,6 +26,9 @@ from agent_reach.config import Config
 # Whisper API limit is 25MB; leave headroom for multipart overhead.
 SIZE_LIMIT_BYTES = 24 * 1024 * 1024
 CHUNK_SECONDS = 600  # 10 min — small enough that boundary cuts rarely lose meaning
+# Bound the number of chunks transcribed per call so a multi-hour or hostile
+# source cannot run up unbounded Whisper API cost / output. ~4 hours of audio.
+MAX_CHUNKS = 24
 
 PROVIDERS = {
     "groq": {
@@ -239,11 +242,22 @@ def transcribe(
     else:
         chunks = chunk_audio(compressed, work_dir)
 
+    truncated = len(chunks) > MAX_CHUNKS
+    if truncated:
+        chunks = chunks[:MAX_CHUNKS]
+
     pieces: List[str] = []
     for chunk in chunks:
         text = _transcribe_with_fallback(chunk, order, cfg)
         pieces.append(text.strip())
-    return "\n".join(p for p in pieces if p)
+    result = "\n".join(p for p in pieces if p)
+    if truncated:
+        minutes = MAX_CHUNKS * CHUNK_SECONDS // 60
+        result += (
+            f"\n\n[transcript truncated: source exceeded the {MAX_CHUNKS}-chunk "
+            f"(~{minutes} min) limit]"
+        )
+    return result
 
 
 def _transcribe_with_fallback(chunk: Path, order: List[str], config: Config) -> str:
