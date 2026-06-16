@@ -12,11 +12,6 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-green.svg?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+"></a>
   <a href="https://github.com/Panniantong/agent-reach/stargazers"><img src="https://img.shields.io/github/stars/Panniantong/agent-reach?style=for-the-badge" alt="GitHub Stars"></a>
-  <a href="https://atomgit.com/qq_51337814/Agent-Reach"><img src="https://atomgit.com/qq_51337814/Agent-Reach/star/badge.svg" alt="AtomGit Stars"></a>
-</p>
-
-<p align="center">
-  🇨🇳 国内访问：本项目托管于 <a href="https://atomgit.com/qq_51337814/Agent-Reach">AtomGit 镜像</a>（与 GitHub 自动同步，克隆更快）
 </p>
 
 <p align="center">
