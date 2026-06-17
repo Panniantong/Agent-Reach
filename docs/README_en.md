@@ -84,6 +84,8 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 
 > **Setup levels:** Zero config = install and go · Auto-configured = handled during install · mcporter = needs MCP service · Cookie = export from browser · Proxy = $1/month
 
+> **Windows note:** On Chrome/Edge 127+ for Windows, browser cookie extraction can fail because of app-bound cookie encryption. If that happens, use manual `AUTH_TOKEN` + `CT0` config instead of the auto-cookie flow.
+
 ---
 
 ## Quick Start

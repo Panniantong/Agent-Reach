@@ -59,3 +59,12 @@ twitter check
 > 如果返回 "Missing credentials"，需要设置 AUTH_TOKEN 和 CT0 环境变量。
 >
 > **Fallback：** 如果你已经安装了 bird CLI（`npm install -g @steipete/bird`），它也能正常工作。Agent Reach 会自动检测已安装的工具。
+
+### 方案 5：Windows 上浏览器 Cookie 自动导入失败
+
+如果 `twitter check` / `twitter search` 报 `Unable to get key for cookie decryption`，这是 Windows 上 Chrome/Edge 的 app-bound cookie encryption 限制，不是账号没登录。
+
+```bash
+# 手动从 x.com cookie 里提取 auth_token 和 ct0 后再配置
+agent-reach configure twitter-cookies "auth_token=...; ct0=..."
+```
