@@ -1178,6 +1178,68 @@ class TestExaSearchChannel:
         assert ch.active_backend == "Exa via mcporter"
 
 
+class TestDiffbotSearchChannel:
+    def test_off_when_db_missing(self, monkeypatch):
+        """没装 db CLI → off + 安装/配置提示。"""
+        monkeypatch.setattr(shutil, "which", lambda _: None)
+        from agent_reach.channels.diffbot_search import DiffbotSearchChannel
+        ch = DiffbotSearchChannel()
+        status, msg = ch.check()
+        assert status == "off"
+        assert "diffbot-python" in msg
+        assert ch.active_backend is None
+
+    def test_reports_error_with_reinstall_hint_when_broken(self, monkeypatch):
+        """db which 命中但 exec 失败（venv 断链）→ error + 重装处方。"""
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/db")
+
+        def fake_run(cmd, **kwargs):
+            raise FileNotFoundError(cmd[0])
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        from agent_reach.channels.diffbot_search import DiffbotSearchChannel
+        ch = DiffbotSearchChannel()
+        status, msg = ch.check()
+        assert status == "error"
+        assert "diffbot-python" in msg
+        assert ch.active_backend is None
+
+    def test_warn_when_installed_but_no_token(self, monkeypatch):
+        """db 已装但找不到 Token → warn，且不激活后端。"""
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/db")
+
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 0, "db, version 0.2.3", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.delenv("DIFFBOT_API_TOKEN", raising=False)
+        import agent_reach.channels.diffbot_search as ds
+        # Isolate from any real ~/.diffbot/credentials on the test machine.
+        monkeypatch.setattr(ds, "_credentials_file_has_token", lambda: False)
+        ch = ds.DiffbotSearchChannel()
+        status, msg = ch.check()  # no config passed → no token from any source
+        assert status == "warn"
+        assert "diffbot-key" in msg
+        assert ch.active_backend is None
+
+    def test_ok_when_db_and_token_present(self, monkeypatch, tmp_path):
+        """db 已装 + config 里有 Token → ok + 激活后端。"""
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/db")
+
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 0, "db, version 0.2.3", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        from agent_reach.config import Config
+        from agent_reach.channels.diffbot_search import DiffbotSearchChannel
+        config = Config(config_path=tmp_path / "config.yaml")
+        config.set("diffbot_api_token", "dbtok_xxx")
+        ch = DiffbotSearchChannel()
+        status, msg = ch.check(config)
+        assert status == "ok"
+        assert ch.active_backend == "Diffbot CLI (db)"
+
+
 class TestXiaoyuzhouChannel:
     def test_reports_error_with_reinstall_hint_when_ffmpeg_broken(self, monkeypatch):
         """ffmpeg which 命中但 exec 失败（pip 假 ffmpeg 断链）→ error + 重装处方。"""

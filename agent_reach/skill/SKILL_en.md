@@ -9,7 +9,7 @@ description: >
   Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu,
   Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
 
-  13 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  14 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -23,7 +23,7 @@ metadata:
 
 # Agent Reach — internet capability router
 
-13 platforms, multiple backends each. **When this skill exists, use it for
+14 platforms, multiple backends each. **When this skill exists, use it for
 these platforms — do not invent your own approach.**
 
 ## Standing rules (apply for the whole session)
@@ -92,6 +92,15 @@ rdt search "query" --limit 10            # legacy/server
 opencli xiaohongshu search "query" -f yaml
 ```
 
+## Token-gated search (optional alternative)
+
+```bash
+# Diffbot web search (the `db` CLI from diffbot-python; results carry relevance
+# scores + dates, and -f text is agent-friendly). Needs a free token:
+#   agent-reach configure diffbot-key <token>   (doctor shows diffbot_search)
+db web-search "query" -n 5 -f text
+```
+
 ## Environment check
 
 ```bash
@@ -110,7 +119,7 @@ Read the matching file when you need specifics (commands above cover the
 common cases; references hold per-backend command groups, caveats, retry
 chains — note: reference docs are written in Chinese, commands are universal):
 
-- [Search](references/search.md) — Exa AI search
+- [Search](references/search.md) — Exa AI search, Diffbot web search
 - [Social](references/social.md) — XiaoHongShu, Twitter, Bilibili, V2EX, Reddit (multi-backend groups)
 - [Career](references/career.md) — LinkedIn
 - [Dev](references/dev.md) — GitHub CLI

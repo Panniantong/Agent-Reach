@@ -21,6 +21,7 @@ class Config:
     # Feature → required config keys
     FEATURE_REQUIREMENTS = {
         "exa_search": ["exa_api_key"],
+        "diffbot_search": ["diffbot_api_token"],
         "twitter_xreach": ["twitter_auth_token", "twitter_ct0"],  # legacy key name; used by twitter-cli
         "groq_whisper": ["groq_api_key"],
         "openai_whisper": ["openai_api_key"],

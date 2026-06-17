@@ -75,13 +75,13 @@ def main():
     p_install.add_argument("--channels", default="",
                            help="Comma-separated optional channels to install "
                                 "(twitter,xiaoyuzhou,xueqiu,xiaohongshu,"
-                                "reddit,bilibili,linkedin,all)")
+                                "reddit,bilibili,diffbot,linkedin,all)")
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
     p_conf.add_argument("key", nargs="?", default=None,
                         choices=["proxy", "github-token", "groq-key", "openai-key",
-                                 "twitter-cookies", "youtube-cookies",
+                                 "diffbot-key", "twitter-cookies", "youtube-cookies",
                                  "xhs-cookies"],
                         help="What to configure (omit if using --from-browser)")
     p_conf.add_argument("value", nargs="*", help="The value(s) to set")
@@ -200,6 +200,7 @@ def _cmd_install(args):
         "xiaohongshu": _install_xhs_deps,
         "reddit":      _install_reddit_deps,
         "bilibili":    _install_bili_deps,
+        "diffbot":     _install_diffbot_deps,  # Diffbot Web Search (needs free token)
         "opencli":     _install_opencli_deps,  # cross-channel backend, desktop only
         # xueqiu: cookie-only, no install step
         # linkedin: manual setup, no auto-install
@@ -840,6 +841,42 @@ def _install_bili_deps():
     print("  [!]  bili-cli install failed. Run: pipx install bilibili-cli")
 
 
+def _install_diffbot_deps():
+    """Install Diffbot CLI (diffbot-python) for Diffbot Web Search."""
+    import shutil
+    import subprocess
+    from agent_reach.config import Config
+    from agent_reach.channels.diffbot_search import has_token
+
+    print("Setting up Diffbot search (diffbot-python)...")
+    if shutil.which("db"):
+        print("  ✅ Diffbot CLI (db) already installed")
+    else:
+        installed = False
+        for tool, cmd in [("pipx", ["pipx", "install", "diffbot-python"]),
+                          ("uv", ["uv", "tool", "install", "diffbot-python"])]:
+            if shutil.which(tool):
+                try:
+                    subprocess.run(cmd, capture_output=True, encoding="utf-8",
+                                   errors="replace", timeout=180)
+                    if shutil.which("db"):
+                        print("  ✅ Diffbot CLI installed")
+                        installed = True
+                        break
+                except Exception:
+                    pass
+        if not installed:
+            print("  [!]  Diffbot CLI install failed. Run: pipx install diffbot-python")
+            return
+
+    if has_token(Config()):
+        print("  ✅ Diffbot API token configured")
+    else:
+        print("  -- Diffbot API token not set (free tier available).")
+        print("     Get a token: https://app.diffbot.com/get-started/")
+        print("     Then run: agent-reach configure diffbot-key <token>")
+
+
 def _install_system_deps_safe():
     """Safe mode: check what's installed, print instructions for what's missing."""
     import shutil
@@ -1108,6 +1145,54 @@ def _cmd_configure(args):
     elif args.key == "openai-key":
         config.set("openai_api_key", value)
         print(f"✅ OpenAI key configured!")
+
+    elif args.key == "diffbot-key":
+        _configure_diffbot_token(config, value)
+
+
+def _configure_diffbot_token(config, value):
+    """Save the Diffbot API token for both agent-reach and the `db` CLI.
+
+    The `db` CLI (diffbot-python) resolves its token from DIFFBOT_API_TOKEN or
+    ~/.diffbot/credentials, so we write both: agent-reach config (so doctor /
+    is_configured see it) and the credentials file (so `db web-search` works
+    immediately — no extra export step for the agent). Other lines in the
+    credentials file are preserved.
+    """
+    import stat
+
+    config.set("diffbot_api_token", value)
+
+    cred_dir = os.path.expanduser("~/.diffbot")
+    cred_path = os.path.join(cred_dir, "credentials")
+    try:
+        os.makedirs(cred_dir, exist_ok=True)
+        lines = []
+        if os.path.exists(cred_path):
+            with open(cred_path, "r", encoding="utf-8") as f:
+                lines = [ln.rstrip("\n") for ln in f
+                         if not ln.strip().startswith("DIFFBOT_API_TOKEN=")]
+        lines.append(f"DIFFBOT_API_TOKEN={value}")
+        # 0600 from the start — the token is a credential.
+        try:
+            fd = os.open(cred_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                         stat.S_IRUSR | stat.S_IWUSR)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+        except OSError:
+            with open(cred_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+            try:
+                os.chmod(cred_path, 0o600)
+            except OSError:
+                pass
+        print("✅ Diffbot API token configured!")
+        print('   Saved to ~/.diffbot/credentials — `db web-search "query"` will use it.')
+    except OSError as e:
+        # config.yaml still holds it; agents can fall back to exporting the env var.
+        print("✅ Diffbot API token saved to agent-reach config.")
+        print(f"   (Could not write ~/.diffbot/credentials: {e})")
+        print("   Agents should export DIFFBOT_API_TOKEN=<token> before running `db`.")
 
 
 def _cmd_transcribe(args):
@@ -1441,6 +1526,7 @@ def _cmd_uninstall(args):
     print("Optional: remove tools installed by Agent Reach:")
     print("  npm uninstall -g mcporter")
     print("  pipx uninstall twitter-cli")
+    print("  pipx uninstall diffbot-python")
     print("  npm uninstall -g undici")
 
 

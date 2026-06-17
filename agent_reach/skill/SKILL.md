@@ -10,7 +10,7 @@ description: >
   LinkedIn/领英/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客,
   雪球/股票行情, RSS feeds, or any web URL.
 
-  13 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  14 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -40,7 +40,7 @@ metadata:
 
 # Agent Reach — 互联网能力路由器
 
-13 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
+14 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
 
 ## 常驻规则（全程适用）
 
@@ -102,6 +102,14 @@ rdt search "query" --limit 10            # 存量/服务器
 opencli xiaohongshu search "query" -f yaml
 ```
 
+## 需 Token 的搜索（可选备用）
+
+```bash
+# Diffbot 全网搜索（diffbot-python 的 db CLI；结果带相关性评分/时效，-f text 适合 agent）
+# 需免费 Token：agent-reach configure diffbot-key <token>（doctor 显示 diffbot_search 即可用）
+db web-search "query" -n 5 -f text
+```
+
 ## 环境检查
 
 ```bash
@@ -117,7 +125,7 @@ agent-reach doctor --json
 
 根据用户需求，阅读对应的详细文档：
 
-- [搜索工具](references/search.md) — Exa AI 搜索
+- [搜索工具](references/search.md) — Exa AI 搜索、Diffbot 全网搜索
 - [社交媒体](references/social.md) — 小红书, Twitter, B站, V2EX, Reddit（多后端命令组）
 - [职场招聘](references/career.md) — LinkedIn
 - [开发工具](references/dev.md) — GitHub CLI
