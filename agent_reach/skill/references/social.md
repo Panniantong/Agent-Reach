@@ -23,9 +23,29 @@ opencli xiaohongshu feed -f yaml
 
 # 用户主页公开笔记
 opencli xiaohongshu user USER_ID -f yaml
+
+# 下载笔记中的图片/视频（保存到指定目录）
+opencli xiaohongshu download "NOTE_URL" --output /tmp/xhs-media
 ```
 
 > 要求 Chrome 打开且装了 OpenCLI 扩展。报 AUTH_REQUIRED 说明浏览器里没登录小红书，让用户在 Chrome 里登录一次即可。
+
+#### 获取笔记图片/媒体
+
+用户要求「下载图片」「保存图片」「拿到原图」时，按以下优先级处理：
+
+1. **首选：`opencli xiaohongshu download`**（直接下载全部媒体到本地）
+   ```bash
+   opencli xiaohongshu download "NOTE_URL" --output /tmp/xhs-media
+   ```
+   该命令会自动下载笔记中的所有图片和视频到指定目录。
+
+2. **备选：从 note 输出中提取图片 URL**（用户只需要链接或需要选择性下载时）
+   ```bash
+   # 读取笔记，输出中包含 imageList / images 字段
+   opencli xiaohongshu note "NOTE_URL" -f json
+   ```
+   从 JSON 输出的 `imageList` 或 `images` 字段提取图片 URL，再用 `curl -o` 逐个下载。
 
 ### 后端 B：xiaohongshu-mcp（服务器场景）
 

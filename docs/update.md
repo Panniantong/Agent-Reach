@@ -41,8 +41,9 @@ pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zi
 ```
 
 > If pip complains about `externally-managed-environment` (PEP 668), the user
-> originally installed via pipx or a venv — use the matching command:
+> originally installed via pipx or uv or a venv — use the matching command:
 > `pipx install --force https://github.com/Panniantong/agent-reach/archive/main.zip`
+> or `uv tool install --force https://github.com/Panniantong/agent-reach/archive/main.zip`
 > or activate `~/.agent-reach-venv` first.
 
 ### Step 3: Refresh upstream tools

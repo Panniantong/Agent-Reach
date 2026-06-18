@@ -90,6 +90,8 @@ rdt search "query" --limit 10            # legacy/server
 
 # XiaoHongShu (desktop prefers OpenCLI)
 opencli xiaohongshu search "query" -f yaml
+# Download note images/videos
+opencli xiaohongshu download "NOTE_URL" --output /tmp/xhs-media
 ```
 
 ## Environment check

@@ -101,7 +101,16 @@ Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/m
 <summary>手動インストール</summary>
 
 ```bash
+# 方法A：pipx（推奨）
+pipx install https://github.com/Panniantong/agent-reach/archive/main.zip
+
+# 方法B：uv tool（pipxより高速な代替手段）
+uv tool install https://github.com/Panniantong/agent-reach/archive/main.zip
+
+# 方法C：pip（PEP 668の場合はvenvを先に作成）
 pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+
+# インストール後：
 agent-reach install --env=auto
 ```
 </details>
