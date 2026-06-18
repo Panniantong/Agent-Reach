@@ -8,24 +8,92 @@
 
 ### 后端 A：OpenCLI（桌面首选，复用浏览器登录态）
 
+#### 读取命令
+
 ```bash
-# 搜索笔记
+# 搜索笔记（--limit 控制结果数量，默认 20）
 opencli xiaohongshu search "query" -f yaml
 
-# 读笔记正文+互动数据（用搜索结果里的完整 URL，含 xsec_token）
+# 读笔记正文+互动数据（必须用搜索结果里的完整 URL，含 xsec_token）
 opencli xiaohongshu note "NOTE_URL" -f yaml
 
-# 评论（支持楼中楼）
-opencli xiaohongshu comments NOTE_ID -f yaml
+# 评论（支持楼中楼，--with-replies true 获取嵌套回复；必须传完整 URL）
+opencli xiaohongshu comments "NOTE_URL" -f yaml
 
 # 首页推荐 feed
 opencli xiaohongshu feed -f yaml
 
 # 用户主页公开笔记
 opencli xiaohongshu user USER_ID -f yaml
+
+# 下载笔记中的图片和视频（必须传完整 URL）
+opencli xiaohongshu download "NOTE_URL"
+
+# 通知（mentions/likes/connections）
+opencli xiaohongshu notifications -f yaml
+
+# AI 问答：向小红书「点点」提问，返回带引用来源的回答
+opencli xiaohongshu ask "query" -f yaml
+
+# 本地草稿箱列表
+opencli xiaohongshu drafts -f yaml
+
+# 读取一条本地草稿详情
+opencli xiaohongshu draft-open DRAFT_ID -f yaml
 ```
 
-> 要求 Chrome 打开且装了 OpenCLI 扩展。报 AUTH_REQUIRED 说明浏览器里没登录小红书，让用户在 Chrome 里登录一次即可。
+#### 创作者命令（需要 creator.xiaohongshu.com 登录态）
+
+> 以下命令要求用户在 Chrome 中额外登录 **创作者中心**（https://creator.xiaohongshu.com），普通 xiaohongshu.com 登录态不够。
+
+```bash
+# 创作者账号信息（粉丝/关注/获赞/成长等级）
+opencli xiaohongshu creator-profile -f yaml
+
+# 创作者数据总览（观看/点赞/收藏/评论/分享/涨粉，含每日趋势）
+opencli xiaohongshu creator-stats -f yaml
+
+# 创作者笔记列表 + 每篇数据（标题/日期/观看/点赞/收藏/评论）
+opencli xiaohongshu creator-notes -f yaml
+
+# 最近笔记批量摘要（列表 + 单篇关键数据汇总）
+opencli xiaohongshu creator-notes-summary -f yaml
+
+# 单篇笔记详情数据（笔记信息 + 互动数据 + 观看来源 + 观众画像 + 趋势）
+opencli xiaohongshu creator-note-detail "NOTE_URL" -f yaml
+```
+
+#### 写操作命令（需要 creator.xiaohongshu.com 登录态）
+
+> ⚠️ 写操作涉及用户账号安全，使用前确认用户已知晓风险。
+
+```bash
+# 发布图文笔记（creator center UI automation）
+opencli xiaohongshu publish "内容" [options]
+
+# 删除已发布笔记
+opencli xiaohongshu delete-note NOTE_ID
+
+# 关注 / 取关用户（profile UI automation）
+opencli xiaohongshu follow USER_ID
+opencli xiaohongshu unfollow USER_ID
+
+# 草稿管理
+opencli xiaohongshu draft-clear          # 清空本地草稿
+opencli xiaohongshu draft-delete DRAFT_ID # 删除一条草稿
+```
+
+#### 账号管理
+
+```bash
+# 显示当前登录的小红书账号
+opencli xiaohongshu whoami -f yaml
+
+# 打开小红书登录页面并等待浏览器会话认证
+opencli xiaohongshu login
+```
+
+> 要求 Chrome 打开且装了 OpenCLI 扩展。报 AUTH_REQUIRED 说明浏览器里没登录小红书，让用户在 Chrome 里登录一次即可。报 `BROWSER_CONNECT` 说明扩展未连接，运行 `opencli doctor` 排查。
 
 ### 后端 B：xiaohongshu-mcp（服务器场景）
 
