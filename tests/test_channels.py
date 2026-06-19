@@ -429,6 +429,56 @@ class TestXueqiuChannel:
         assert quote["percent"] == 1.5
         assert quote["volume"] == 12345678
 
+    def test_get_stock_quote_detail_valuation(self, monkeypatch):
+        """The detail endpoint shape (data.quote) must expose valuation fields.
+
+        Regression for the batch endpoint omitting pe_ttm/pb/eps, which made
+        them always None.
+        """
+        import agent_reach.channels.xueqiu as xueqiu_mod
+
+        monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
+
+        # extend=detail returns a single `quote` object under `data`,
+        # not an `items` array.
+        fake_data = {
+            "data": {
+                "quote": {
+                    "symbol": "SH601138",
+                    "name": "工业富联",
+                    "current": 78.08,
+                    "percent": 7.49,
+                    "volume": 424968166,
+                    "market_capital": 1549426725535.0,
+                    "turnover_rate": 2.14,
+                    "pe_ttm": 38.117,
+                    "pe_forecast": 36.561,
+                    "pb": 8.793,
+                    "eps": 2.05,
+                    "timestamp": 1781766000000,
+                }
+            }
+        }
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(fake_data).encode()
+
+        monkeypatch.setattr(xueqiu_mod._opener, "open", lambda req, timeout=None: FakeResponse())
+        quote = XueqiuChannel().get_stock_quote("SH601138")
+        assert quote["name"] == "工业富联"
+        assert quote["pe_ttm"] == 38.117
+        assert quote["pe_forecast"] == 36.561
+        assert quote["pb"] == 8.793
+        assert quote["eps"] == 2.05
+        assert quote["market_capital"] == 1549426725535.0
+
     # ------------------------------------------------------------------ #
     # search_stock
     # ------------------------------------------------------------------ #
