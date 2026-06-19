@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+## Shared agent instructions
+- This repo also has `AGENTS.md`; treat it as the shared baseline for Hermes, Codex, OpenCode, Claude Code, and similar agents.
+- Keep the repo in "glue layer" mode: route and call upstream tools directly instead of re-architecting them.
+
 ## Project
 Agent Reach — Python CLI + library that gives AI agents read/search access to 13 internet platforms.
 Positioning: installer + doctor + config tool. NOT a wrapper — after install, agents call upstream tools directly.
