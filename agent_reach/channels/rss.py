@@ -6,7 +6,7 @@ from .base import Channel
 
 class RSSChannel(Channel):
     name = "rss"
-    description = "RSS/Atom 订阅源"
+    description = "RSS/Atom feeds"
     backends = ["feedparser"]
     tier = 0
 
@@ -18,10 +18,10 @@ class RSSChannel(Channel):
             import feedparser  # noqa: F401
         except ImportError:
             self.active_backend = None
-            return "off", "feedparser 未安装。安装：pip install feedparser"
+            return "off", "feedparser not installed. Install: pip install feedparser"
         except Exception as e:
-            # 已安装但导入期崩溃（半残安装/版本冲突）→ 重装处方
+            # Installed but crashes on import (broken install/version conflict) → reinstall hint
             self.active_backend = None
-            return "error", f"feedparser 导入失败：{e}\n修复：pip install --force-reinstall feedparser"
+            return "error", f"feedparser import failed: {e}\nFix: pip install --force-reinstall feedparser"
         self.active_backend = self.backends[0]
-        return "ok", "可读取 RSS/Atom 源"
+        return "ok", "Can read RSS/Atom feeds"

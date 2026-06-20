@@ -89,7 +89,7 @@ def opencli_status(timeout: int = 10) -> OpenCLIStatus:
             installed=True,
             broken=True,
             hint=(
-                "opencli 命令存在但无法执行（node 环境损坏），重装：\n"
+                "opencli command exists but can't execute (node environment broken), reinstall:\n"
                 f"  npm install -g {OPENCLI_PACKAGE}"
             ),
         )
@@ -114,9 +114,9 @@ def opencli_status(timeout: int = 10) -> OpenCLIStatus:
         st.extension_installed = _extension_installed_on_disk()
         if not st.extension_installed:
             st.hint = (
-                "OpenCLI 已安装，但 Chrome 扩展未安装。\n"
-                f"  1. 安装扩展（需手动点一次）：{OPENCLI_EXTENSION_URL}\n"
-                "  2. 保持 Chrome 打开，运行 `opencli doctor` 验证"
+                "OpenCLI installed but Chrome extension not installed.\n"
+                f"  1. Install extension (manual click required): {OPENCLI_EXTENSION_URL}\n"
+                "  2. Keep Chrome open, run `opencli doctor` to verify"
             )
     return st
 
@@ -124,13 +124,13 @@ def opencli_status(timeout: int = 10) -> OpenCLIStatus:
 def opencli_summary(st: OpenCLIStatus) -> str:
     """One-line state description for channel messages / install output."""
     if not st.installed:
-        return "OpenCLI 未安装"
+        return "OpenCLI not installed"
     if st.broken:
-        return "OpenCLI 无法执行（node 环境损坏）"
+        return "OpenCLI can't execute (node environment broken)"
     if st.extension_connected:
-        return f"OpenCLI 可用（浏览器登录态，v{st.version}）"
+        return f"OpenCLI available (browser login session, v{st.version})"
     if st.ready:
-        return "OpenCLI 可用（扩展睡眠中，调用时自动唤醒）"
+        return "OpenCLI available (extension sleeping, wakes on calls)"
     if st.daemon_running:
-        return "OpenCLI 已安装，等待 Chrome 扩展安装"
-    return "OpenCLI 已安装（daemon 未运行，使用时自动启动；需 Chrome 扩展）"
+        return "OpenCLI installed, waiting for Chrome extension"
+    return "OpenCLI installed (daemon not running, starts on use; requires Chrome extension)"

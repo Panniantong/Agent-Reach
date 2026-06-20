@@ -23,7 +23,7 @@ def check_all(config: Config) -> Dict[str, dict]:
         except Exception as e:  # noqa: BLE001 — doctor must survive any channel
             # Channels are registry singletons: a stale active_backend from a
             # previous check must not leak into an errored result.
-            status, message, active = "error", f"体检异常：{e}", None
+            status, message, active = "error", f"Health check failed: {e}", None
         results[ch.name] = {
             "status": status,
             "name": ch.description,
@@ -40,7 +40,7 @@ def _name_msg(r: dict, escape) -> str:
     text = f"[bold]{escape(r['name'])}[/bold] — {escape(r['message'])}"
     active = r.get("active_backend")
     if active and len(r.get("backends", [])) > 1:
-        text += f" [dim]（当前后端：{escape(active)}）[/dim]"
+        text += f" [dim](current backend: {escape(active)})[/dim]"
     return text
 
 
@@ -52,16 +52,16 @@ def format_report(results: Dict[str, dict]) -> str:
         escape = lambda x: x
 
     lines = []
-    lines.append("[bold cyan]Agent Reach 状态[/bold cyan]")
+    lines.append("[bold cyan]Agent Reach Status[/bold cyan]")
     lines.append("[cyan]" + "=" * 40 + "[/cyan]")
-    lines.append("图例：[green]✅[/green] 可用  [yellow][!][/yellow] 已装但需配置/登录  [red][X][/red] 未安装")
+    lines.append("Legend: [green]✅[/green] Available  [yellow][!][/yellow] Installed but needs config/login  [red][X][/red] Not installed")
 
     ok_count = sum(1 for r in results.values() if r["status"] == "ok")
     total = len(results)
 
     # Tier 0 — zero config
     lines.append("")
-    lines.append("[bold]✅ 装好即用：[/bold]")
+    lines.append("[bold]✅ Ready to use:[/bold]")
     for key, r in results.items():
         if r["tier"] == 0:
             name_msg = _name_msg(r, escape)
@@ -78,7 +78,7 @@ def format_report(results: Dict[str, dict]) -> str:
     tier1_inactive = {k: r for k, r in tier1.items() if r["status"] != "ok"}
     if tier1_active:
         lines.append("")
-        lines.append("[bold]可选渠道（已安装）：[/bold]")
+        lines.append("[bold]Optional channels (installed):[/bold]")
         for key, r in tier1_active.items():
             lines.append(f"  [green]✅[/green] {_name_msg(r, escape)}")
 
@@ -89,21 +89,21 @@ def format_report(results: Dict[str, dict]) -> str:
     if tier2_active:
         if not tier1_active:
             lines.append("")
-            lines.append("[bold]可选渠道（已安装）：[/bold]")
+            lines.append("[bold]Optional channels (installed):[/bold]")
         for key, r in tier2_active.items():
             lines.append(f"  [green]✅[/green] {_name_msg(r, escape)}")
 
     lines.append("")
     status_color = "green" if ok_count == total else ("yellow" if ok_count > 0 else "red")
-    lines.append(f"状态：[{status_color}]{ok_count}/{total}[/{status_color}] 个渠道可用")
+    lines.append(f"Status: [{status_color}]{ok_count}/{total}[/{status_color}] channels available")
 
     # Summarize inactive optional channels in one line instead of listing each
     all_inactive = list(tier1_inactive.values()) + list(tier2_inactive.values())
     if all_inactive:
         names = [r["name"] for r in all_inactive]
         lines.append(
-            f"还有 {len(names)} 个可选渠道可以解锁（{'、'.join(names)}），"
-            "告诉你的 Agent「帮我装 XXX」即可"
+            f"{len(names)} more optional channels to unlock ({', '.join(names)}). "
+            "Tell your Agent \"help me install XXX\""
         )
 
     # Security check: config file permissions (Unix only)
@@ -118,9 +118,9 @@ def format_report(results: Dict[str, dict]) -> str:
             if mode & (stat.S_IRGRP | stat.S_IROTH):
                 lines.append("")
                 lines.append(
-                    "[bold red][!]  安全提示：config.yaml 权限过宽（其他用户可读）[/bold red]"
+                    "[bold red][!]  Security warning: config.yaml permissions too open (readable by others)[/bold red]"
                 )
-                lines.append("   修复：chmod 600 ~/.agent-reach/config.yaml")
+                lines.append("   Fix: chmod 600 ~/.agent-reach/config.yaml")
         except OSError:
             pass
 

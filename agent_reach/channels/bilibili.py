@@ -34,8 +34,8 @@ def _search_api_ok() -> bool:
 
 class BilibiliChannel(Channel):
     name = "bilibili"
-    description = "B站视频、字幕和搜索"
-    backends = ["bili-cli", "OpenCLI", "B站搜索 API"]
+    description = "Bilibili videos, subtitles, and search"
+    backends = ["bili-cli", "OpenCLI", "Bilibili search API"]
     tier = 1
 
     def can_handle(self, url: str) -> bool:
@@ -59,7 +59,7 @@ class BilibiliChannel(Channel):
                 continue
             findings.append((backend, *result))
 
-        # 有后端断链时，即使别的候选兜底成功也要把处方带出来
+        # When a backend is broken, even if another candidate succeeds, show the prescription
         broken_notes = [m for _, s, m in findings if s == "error"]
 
         for wanted in ("ok", "warn"):
@@ -67,16 +67,16 @@ class BilibiliChannel(Channel):
                 if status == wanted:
                     self.active_backend = backend
                     if broken_notes:
-                        message += "\n[备选后端异常] " + "；".join(broken_notes)
+                        message += "\n[Alternative backend errors] " + "; ".join(broken_notes)
                     return status, message
 
         if findings:
             return "error", "\n".join(m for _, _, m in findings)
 
         return "off", (
-            "没有可用的 B站后端（搜索 API 也不可达，可能是网络问题）。推荐：\n"
-            "  pipx install bilibili-cli（搜索/热门/视频详情，无需登录）\n"
-            "  或桌面装 OpenCLI（额外解锁字幕）：agent-reach install --channels opencli"
+            "No Bilibili backend available (search API also unreachable, possibly network issue). Recommend:\n"
+            "  pipx install bilibili-cli (search/hot/video details, no login required)\n"
+            "  Or desktop install OpenCLI (unlocks subtitles): agent-reach install --channels opencli"
         )
 
     def _check_bili_cli(self):
@@ -85,12 +85,12 @@ class BilibiliChannel(Channel):
         if probe.status == "missing":
             return None
         if probe.status == "broken":
-            return "error", "bili 命令存在但无法执行\n" + probe.hint
+            return "error", "bili command exists but can't execute\n" + probe.hint
         if not probe.ok:
-            return "warn", f"bili-cli 探测失败（{probe.status}），运行 `bili status` 查看详情"
+            return "warn", f"bili-cli probe failed ({probe.status}), run `bili status` for details"
         return "ok", (
-            "bili-cli 可用（搜索/热门/排行/视频详情/音频，无需登录；"
-            "字幕需 OpenCLI。上游 2026-03 起停更）"
+            "bili-cli available (search/hot/ranking/video details/audio, no login required; "
+            "subtitles need OpenCLI. Upstream stopped updating 2026-03)"
         )
 
     def _check_opencli(self):
@@ -104,7 +104,7 @@ class BilibiliChannel(Channel):
             return "error", st.hint
         if st.ready:
             return "ok", (
-                "OpenCLI 可用（复用浏览器登录态）。用法："
+                "OpenCLI available (reuses browser login session). Usage: "
                 "opencli bilibili search/video/subtitle/ranking -f yaml"
             )
         return "warn", st.hint
@@ -114,6 +114,6 @@ class BilibiliChannel(Channel):
         if not _search_api_ok():
             return None
         return "ok", (
-            "B站搜索 API 可达（仅搜索，curl 直连）。"
-            "完整功能建议安装 bili-cli：pipx install bilibili-cli"
+            "Bilibili search API reachable (search only, direct curl). "
+            "For full functionality, install bili-cli: pipx install bilibili-cli"
         )
