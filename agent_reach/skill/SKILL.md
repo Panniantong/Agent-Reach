@@ -17,8 +17,8 @@ description: >
   NOT for: 写报告/数据分析/翻译等内容加工（本 skill 只负责从互联网获取内容）；
   发帖/评论/点赞等写操作；已有专门 skill 的平台（先用专门 skill）。
 
-  【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。
-  分类：search / social (小红书/推特/B站/V2EX/Reddit) / career(LinkedIn) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客)。
+  【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应平台的 references/*.md。
+  分类：search / xiaohongshu / twitter / bilibili / reddit / v2ex / youtube / xiaoyuzhou / career(LinkedIn) / dev(github) / web(网页/文章/RSS)。
 triggers:
   - research: 调研/全网调研/帮我调研/研究一下/research/深入了解
   - search: 搜/查/找/search/搜索/查一下/帮我搜/看看大家怎么说
@@ -60,11 +60,16 @@ metadata:
 | 用户意图 | 分类 | 详细文档 |
 |---------|------|---------|
 | 网页搜索/代码搜索 | search | [references/search.md](references/search.md) |
-| 小红书/推特/B站/V2EX/Reddit | social | [references/social.md](references/social.md) |
+| 小红书 | xiaohongshu | [references/xiaohongshu.md](references/xiaohongshu.md) |
+| Twitter/X | twitter | [references/twitter.md](references/twitter.md) |
+| B站/哔哩哔哩 | bilibili | [references/bilibili.md](references/bilibili.md) |
+| Reddit | reddit | [references/reddit.md](references/reddit.md) |
+| V2EX | v2ex | [references/v2ex.md](references/v2ex.md) |
+| YouTube | youtube | [references/youtube.md](references/youtube.md) |
+| 小宇宙播客 | xiaoyuzhou | [references/xiaoyuzhou.md](references/xiaoyuzhou.md) |
 | 招聘/职位/LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub/代码 | dev | [references/dev.md](references/dev.md) |
 | 网页/文章/RSS | web | [references/web.md](references/web.md) |
-| YouTube/B站/播客字幕 | video | [references/video.md](references/video.md) |
 
 ## 零配置快速命令
 
@@ -118,11 +123,16 @@ agent-reach doctor --json
 根据用户需求，阅读对应的详细文档：
 
 - [搜索工具](references/search.md) — Exa AI 搜索
-- [社交媒体](references/social.md) — 小红书, Twitter, B站, V2EX, Reddit（多后端命令组）
+- [小红书](references/xiaohongshu.md) — 多后端命令组
+- [Twitter/X](references/twitter.md) — twitter-cli + OpenCLI
+- [B站](references/bilibili.md) — bili-cli + OpenCLI
+- [Reddit](references/reddit.md) — OpenCLI + rdt-cli
+- [V2EX](references/v2ex.md) — 公开 API
+- [YouTube](references/youtube.md) — yt-dlp
+- [小宇宙播客](references/xiaoyuzhou.md) — Whisper 转录
 - [职场招聘](references/career.md) — LinkedIn
 - [开发工具](references/dev.md) — GitHub CLI
 - [网页阅读](references/web.md) — Jina Reader, RSS
-- [视频播客](references/video.md) — YouTube, B站, 小宇宙
 
 ## 配置渠道
 
