@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """Tests for doctor module."""
 
 import pytest
@@ -124,3 +124,61 @@ def test_stale_active_backend_does_not_leak_into_errored_result(monkeypatch):
     results = doctor.check_all(config=None)
     assert results["boom"]["status"] == "error"
     assert results["boom"]["active_backend"] is None
+
+
+
+class TestDoctorHealthRegistryIntegration:
+    """Verify that check_all() populates the shared HealthRegistry."""
+
+    def test_registry_updated_after_check_all(self, tmp_config, monkeypatch):
+        s1 = _StubChannel(
+            "h_ok", "OK Channel", 0, "ok", "全部正常", ["tool"], active_backend="tool"
+        )
+        s2 = _StubChannel(
+            "h_warn_auth", "Miss Auth", 1, "warn", "未登录",
+        )
+        s3 = _StubChannel(
+            "h_warn_missing", "Not Installed", 1, "warn", "未安装 tool",
+        )
+        s4 = _StubChannel(
+            "h_off", "Unavailable", 2, "off", "tool 不可用",
+        )
+        s5 = _StubChannel(
+            "h_error", "Broken", 2, "error", "启动异常",
+        )
+        s6 = _StubChannel(
+            "h_rate", "Rate Limited", 1, "warn", "rate limit exceeded",
+        )
+
+        monkeypatch.setattr(
+            doctor,
+            "get_all_channels",
+            lambda: [s1, s2, s3, s4, s5, s6],
+        )
+
+        from agent_reach.health import ChannelStatus, get_registry
+
+        doctor.check_all(tmp_config)
+        registry = get_registry()
+
+        assert registry.get_health("h_ok").status == ChannelStatus.HEALTHY
+        assert registry.get_health("h_warn_auth").status == ChannelStatus.DEGRADED
+        assert registry.get_health("h_warn_missing").status == ChannelStatus.DEGRADED
+        assert registry.get_health("h_off").status == ChannelStatus.UNAVAILABLE
+        assert registry.get_health("h_error").status == ChannelStatus.DEGRADED
+        assert registry.get_health("h_rate").status == ChannelStatus.DEGRADED
+
+    def test_health_record_contains_details(self, tmp_config, monkeypatch):
+        s = _StubChannel("h_detail", "Detail Test", 0, "warn", "gh 未安装")
+        monkeypatch.setattr(doctor, "get_all_channels", lambda: [s])
+
+        from agent_reach.health import get_registry
+
+        doctor.check_all(tmp_config)
+        health = get_registry().get_health("h_detail")
+
+        assert health is not None
+        assert health.channel_name == "h_detail"
+        assert health.failure_reason == "gh 未安装"
+        assert health.last_checked is not None
+
