@@ -128,6 +128,10 @@ def main():
     # ── watch ──
     sub.add_parser("watch", help="Quick health check + update check (for scheduled tasks)")
 
+    # ── paths ──
+    p_paths = sub.add_parser("paths", help="Show managed, registration, and upstream paths")
+    p_paths.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
     # ── version ──
     sub.add_parser("version", help="Show version")
 
@@ -146,6 +150,8 @@ def main():
 
     if args.command == "doctor":
         _cmd_doctor(args)
+    elif args.command == "paths":
+        _cmd_paths(args)
     elif args.command == "check-update":
         _cmd_check_update()
     elif args.command == "watch":
@@ -1453,6 +1459,27 @@ def _cmd_doctor(args=None):
 
     # Auto-install skill if not already present (fixes #154)
     _install_skill()
+
+
+def _cmd_paths(args):
+    from agent_reach.paths import path_report
+
+    report = path_report()
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return
+
+    headings = (
+        ("managed", "Agent Reach managed"),
+        ("registration", "Agent platform registration"),
+        ("external", "Upstream managed"),
+    )
+    for key, heading in headings:
+        print(f"\n{heading}:")
+        for item in report[key]:
+            path = item["path"] or "(not installed)"
+            print(f"  {item['key']}: {path}")
+    print("\nUpstream-managed paths are not moved or removed by Agent Reach.")
 
 
 def _cmd_setup():

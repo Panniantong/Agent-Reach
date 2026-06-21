@@ -62,3 +62,66 @@ def test_explicit_config_path_beats_custom_home(monkeypatch, tmp_path):
     config = Config(config_path=explicit)
 
     assert config.config_path == explicit
+
+
+# ── Path report tests ────────────────────────────
+
+
+def test_path_report_separates_ownership(monkeypatch, tmp_path):
+    from agent_reach.paths import path_report
+
+    monkeypatch.setenv("AGENT_REACH_HOME", str(tmp_path / "managed"))
+    monkeypatch.setattr("agent_reach.paths.shutil.which", lambda name: f"/bin/{name}")
+
+    report = path_report()
+
+    assert [item["key"] for item in report["managed"]] == [
+        "home", "config", "tools", "xhs_cookies",
+    ]
+    assert all(item["owner"] == "agent-reach" for item in report["managed"])
+    assert all(item["owner"] == "agent-platform" for item in report["registration"])
+    assert all(item["owner"] == "upstream" for item in report["external"])
+    assert next(item for item in report["external"] if item["key"] == "gh")["path"] == "/bin/gh"
+
+
+def test_path_report_external_not_found_is_null(monkeypatch, tmp_path):
+    from agent_reach.paths import path_report
+
+    monkeypatch.setenv("AGENT_REACH_HOME", str(tmp_path / "managed"))
+    monkeypatch.setattr("agent_reach.paths.shutil.which", lambda name: None)
+
+    report = path_report()
+    assert next(item for item in report["external"] if item["key"] == "gh")["path"] is None
+
+
+def test_skill_registration_dirs_includes_known_platforms(monkeypatch, tmp_path):
+    from agent_reach.paths import skill_registration_dirs
+
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.delenv("OPENCLAW_HOME", raising=False)
+
+    dirs = skill_registration_dirs()
+    dir_names = [str(d) for d in dirs]
+
+    assert str(tmp_path / ".agents" / "skills" / "agent-reach") not in dir_names
+    assert str(tmp_path / ".openclaw" / "skills" / "agent-reach") not in dir_names
+
+    # skill_registration_dirs returns parent directories (without /agent-reach)
+    expected_parents = [
+        tmp_path / ".agents" / "skills",
+        tmp_path / ".openclaw" / "skills",
+        tmp_path / ".claude" / "skills",
+    ]
+    for parent in expected_parents:
+        assert parent in dirs
+
+
+def test_skill_registration_dirs_respects_openclaw_home(monkeypatch, tmp_path):
+    from agent_reach.paths import skill_registration_dirs
+
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    custom_openclaw = tmp_path / "custom-openclaw"
+    monkeypatch.setenv("OPENCLAW_HOME", str(custom_openclaw))
+
+    dirs = skill_registration_dirs()
+    assert dirs[0] == custom_openclaw / ".openclaw" / "skills"

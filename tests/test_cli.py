@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for Agent Reach CLI."""
 
+import json
 import shutil
 import subprocess
 from unittest.mock import patch
@@ -260,3 +261,26 @@ class TestManagedPathsIntegration:
         cli._cmd_uninstall(args)
 
         assert not custom.exists()
+
+
+class TestPathsCommand:
+    """Tests for 'agent-reach paths' and 'agent-reach paths --json'."""
+
+    def test_paths_json_reports_categories(self, monkeypatch, capsys, tmp_path):
+        monkeypatch.setenv("AGENT_REACH_HOME", str(tmp_path / "managed"))
+        with patch("sys.argv", ["agent-reach", "paths", "--json"]):
+            main()
+
+        payload = json.loads(capsys.readouterr().out)
+        assert set(payload) == {"managed", "registration", "external"}
+
+    def test_paths_text_explains_external_ownership(self, monkeypatch, capsys, tmp_path):
+        monkeypatch.setenv("AGENT_REACH_HOME", str(tmp_path / "managed"))
+        with patch("sys.argv", ["agent-reach", "paths"]):
+            main()
+
+        output = capsys.readouterr().out
+        assert "Agent Reach managed" in output
+        assert "Agent platform registration" in output
+        assert "Upstream managed" in output
+        assert "not moved or removed by Agent Reach" in output
