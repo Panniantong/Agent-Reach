@@ -27,7 +27,7 @@ Install Agent Reach and all upstream tools so your user's agent has full interne
 When fixing issues, stay within these limits:
 
 - **DO NOT** run commands with `sudo` unless the user explicitly approved
-- **DO NOT** modify system files outside `~/.agent-reach/`
+- **DO NOT** modify system files or install global packages without explicit user authorization
 - **DO NOT** install packages not listed in this guide
 - **DO NOT** disable firewalls, security settings, or system protections
 - **DO NOT** clone repos, create files, or run commands inside the agent workspace / working directory
@@ -51,7 +51,11 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 ```bash
 # 推荐：pipx（最省心）
 pipx install https://github.com/Panniantong/agent-reach/archive/main.zip
+# 检查依赖并配置 Agent Reach（不自动安装系统包或全局 npm 包）
 agent-reach install --env=auto
+
+# 明确允许 apt/Homebrew/NodeSource/全局 npm 变更
+agent-reach install --env=auto --system
 
 # 如果你的 Python 来自 Homebrew / 遇到 PEP 668（externally-managed-environment）
 # 用虚拟环境安装：
@@ -74,8 +78,15 @@ agent-reach install --env=auto
 > agent-reach install --env=auto
 > ```
 
-This installs core infrastructure (gh CLI, Node.js, mcporter, Exa search, yt-dlp config) and activates these zero-config channels:
+By default, `install` checks core dependencies and writes managed data plus
+agent-platform skill registrations. `--system` explicitly permits system
+package-manager and core global npm changes. `--channels` explicitly permits
+installation of the named optional upstream tools.
 
+`gh` uses the official apt repository or Homebrew when `--system` is selected;
+it is not installed inside the Agent Reach project or managed-data directory.
+
+Core channels activated (zero-config):
 - Web (Jina Reader), YouTube, GitHub, RSS, Exa Search, V2EX, Bilibili (basic)
 
 > 💡 **macOS / Homebrew Python 提示 `externally-managed-environment`？**
@@ -304,12 +315,14 @@ If the user wants a different agent to handle it, let them choose.
 
 | Command | What it does |
 |---------|-------------|
-| `agent-reach install --env=auto` | Install core channels (lightweight, zero-config) |
+| `agent-reach install --env=auto` | Check deps, write managed data (non-mutating) |
+| `agent-reach install --env=auto --system` | Full install with system/global package changes |
 | `agent-reach install --env=auto --channels=twitter,xiaohongshu` | Install core + optional channels |
 | `agent-reach install --env=auto --channels=all` | Install everything |
-| `agent-reach install --env=auto --safe` | Safe setup (no auto system changes) |
+| `agent-reach install --env=auto --safe` | Check only — skip ALL automatic installation |
 | `agent-reach install --env=auto --dry-run` | Preview what would be done |
 | `agent-reach doctor` | Show channel status |
+| `agent-reach paths` | Show managed, registration, and upstream paths |
 | `agent-reach watch` | Quick health + update check (for scheduled tasks) |
 | `agent-reach check-update` | Check for new versions |
 | `agent-reach configure twitter-cookies "..."` | Unlock Twitter search + posting |

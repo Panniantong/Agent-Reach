@@ -20,7 +20,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 
 ### ⚠️ Workspace Rules
 
-**Never create files, clone repos, or run commands in the agent workspace.** Use `/tmp/` for temporary work and `~/.agent-reach/` for persistent data.
+**Never create files, clone repos, or run commands in the agent workspace.** Use `/tmp/` for temporary work and `${AGENT_REACH_HOME:-$HOME/.agent-reach}` for persistent data. Run `agent-reach paths` to see current managed root and all tool locations.
 
 ### Goal
 
