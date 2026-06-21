@@ -111,7 +111,8 @@ def format_report(results: Dict[str, dict]) -> str:
     import stat
     import sys
 
-    config_path = Config.CONFIG_DIR / "config.yaml"
+    from agent_reach.paths import config_file
+    config_path = config_file()
     if config_path.exists() and sys.platform != "win32":
         try:
             mode = config_path.stat().st_mode

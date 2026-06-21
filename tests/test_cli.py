@@ -222,3 +222,41 @@ class TestWatchVersionCompare:
         out = capsys.readouterr().out
         assert "新版本可用" not in out
         assert "全部正常" in out
+
+
+class TestManagedPathsIntegration:
+    """Integration tests verifying CLI call sites use managed paths."""
+
+    def test_install_creates_tools_under_custom_home(self, monkeypatch, tmp_path):
+        custom = tmp_path / "custom"
+        monkeypatch.setenv("AGENT_REACH_HOME", str(custom))
+        monkeypatch.setattr(cli, "_detect_environment", lambda: "local")
+        monkeypatch.setattr(cli, "_install_system_deps_safe", lambda: None)
+        monkeypatch.setattr(cli, "_install_mcporter_safe", lambda: None)
+        monkeypatch.setattr(cli, "_install_skill", lambda: None)
+        monkeypatch.setattr("agent_reach.doctor.check_all", lambda config: {})
+        monkeypatch.setattr("agent_reach.doctor.format_report", lambda results: "")
+
+        args = type("Args", (), {
+            "safe": True,
+            "system": False,
+            "dry_run": False,
+            "channels": "",
+            "env": "local",
+            "proxy": "",
+        })()
+        cli._cmd_install(args)
+
+        assert (custom / "tools").is_dir()
+
+    def test_uninstall_targets_custom_home(self, monkeypatch, tmp_path):
+        custom = tmp_path / "custom"
+        custom.mkdir()
+        (custom / "config.yaml").write_text("key: value", encoding="utf-8")
+        monkeypatch.setenv("AGENT_REACH_HOME", str(custom))
+        monkeypatch.setattr(cli, "_uninstall_skill", lambda: None)
+
+        args = type("Args", (), {"dry_run": False, "keep_config": False})()
+        cli._cmd_uninstall(args)
+
+        assert not custom.exists()

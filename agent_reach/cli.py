@@ -16,6 +16,7 @@ import os
 import time
 
 from agent_reach import __version__
+from agent_reach.paths import agent_reach_home, tools_dir, xhs_cookie_file, xiaoyuzhou_tools_dir
 
 # Pinned to the 0.4.2 state — PyPI still only has 0.4.1 (upstream issue #10).
 _RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66"
@@ -183,8 +184,7 @@ def _cmd_install(args):
     print("=" * 40)
 
     # Ensure tools directory exists (for upstream tool repos)
-    tools_dir = os.path.expanduser("~/.agent-reach/tools")
-    os.makedirs(tools_dir, exist_ok=True)
+    tools_dir().mkdir(parents=True, exist_ok=True)
 
     if dry_run:
         print("DRY RUN — showing what would be done (no changes)")
@@ -441,27 +441,29 @@ def _install_skill():
             print("  -- Tip: install OpenClaw, Claude Code, or create ~/.agents/skills/ manually")
 
 
-def _uninstall_skill():
-    """Remove SKILL.md from all known agent skill directories."""
-    import shutil
-
+def _skill_install_targets() -> list:
+    """Return list of (path, platform_name) tuples for all skill directories."""
     skill_dirs = [
-        ("~/.openclaw/skills/agent-reach", "OpenClaw"),
-        ("~/.claude/skills/agent-reach", "Claude Code"),
-        ("~/.agents/skills/agent-reach", "Agent"),
+        (os.path.expanduser("~/.openclaw/skills/agent-reach"), "OpenClaw"),
+        (os.path.expanduser("~/.claude/skills/agent-reach"), "Claude Code"),
+        (os.path.expanduser("~/.agents/skills/agent-reach"), "Agent"),
     ]
 
-    # Also check OPENCLAW_HOME
     openclaw_home = os.environ.get("OPENCLAW_HOME")
     if openclaw_home:
         skill_dirs.insert(
             0,
             (os.path.join(openclaw_home, ".openclaw", "skills", "agent-reach"), "OpenClaw"),
         )
+    return skill_dirs
+
+
+def _uninstall_skill():
+    """Remove SKILL.md from all known agent skill directories."""
+    import shutil
 
     removed = False
-    for skill_path_template, platform_name in skill_dirs:
-        skill_path = os.path.expanduser(skill_path_template)
+    for skill_path, platform_name in _skill_install_targets():
         if os.path.isdir(skill_path):
             try:
                 if os.path.islink(skill_path):
@@ -642,20 +644,20 @@ def _install_xiaoyuzhou_deps():
     config = Config()
     print("Setting up Xiaoyuzhou podcast transcription...")
 
-    tools_dir = os.path.expanduser("~/.agent-reach/tools/xiaoyuzhou")
-    script_dst = os.path.join(tools_dir, "transcribe.sh")
+    tools_path = xiaoyuzhou_tools_dir()
+    script_dst = tools_path / "transcribe.sh"
 
-    if os.path.isfile(script_dst):
+    if script_dst.is_file():
         print("  ✅ Xiaoyuzhou transcription script already installed")
     else:
         # Copy script from package
         script_src = os.path.join(os.path.dirname(__file__), "scripts", "transcribe_xiaoyuzhou.sh")
         if os.path.isfile(script_src):
             try:
-                os.makedirs(tools_dir, exist_ok=True)
+                tools_path.mkdir(parents=True, exist_ok=True)
                 import shutil as _shutil
-                _shutil.copy2(script_src, script_dst)
-                os.chmod(script_dst, 0o755)
+                _shutil.copy2(script_src, str(script_dst))
+                os.chmod(str(script_dst), 0o755)
                 print("  ✅ Xiaoyuzhou transcription script installed")
             except Exception as e:
                 print(f"  [!]  Failed to install script: {e}")
@@ -1238,7 +1240,7 @@ def _configure_xhs_cookies(value):
         # between open() and a follow-up chmod() (same pattern Config.save()
         # uses in config.py).
         import stat
-        cookie_path = os.path.expanduser("~/.agent-reach/xhs-cookies.json")
+        cookie_path = str(xhs_cookie_file())
         try:
             fd = os.open(
                 cookie_path,
@@ -1362,7 +1364,7 @@ def _cmd_uninstall(args):
     removed_any = False
 
     # ── 1. Config directory (~/.agent-reach/) ──
-    config_dir = os.path.expanduser("~/.agent-reach")
+    config_dir = str(agent_reach_home())
     if not keep_config:
         if os.path.isdir(config_dir):
             if dry_run:
@@ -1381,27 +1383,16 @@ def _cmd_uninstall(args):
         print(f"  Skipping config directory (--keep-config): {config_dir}")
 
     # ── 2. Skill files ──
-    skill_dirs = [
-        ("~/.openclaw/skills/agent-reach", "OpenClaw"),
-        ("~/.claude/skills/agent-reach", "Claude Code"),
-        ("~/.agents/skills/agent-reach", "Agent"),
-    ]
-
-    for skill_path_template, platform_name in skill_dirs:
-        skill_path = os.path.expanduser(skill_path_template)
-        if os.path.isdir(skill_path):
-            if dry_run:
+    if dry_run:
+        for skill_path, platform_name in _skill_install_targets():
+            if os.path.isdir(skill_path):
                 print(f"[dry-run] Would remove {platform_name} skill: {skill_path}")
-            else:
-                try:
-                    if os.path.islink(skill_path):
-                        os.unlink(skill_path)
-                    else:
-                        shutil.rmtree(skill_path)
-                    print(f"  Removed {platform_name} skill: {skill_path}")
-                    removed_any = True
-                except Exception as e:
-                    print(f"  Could not remove {skill_path}: {e}")
+    else:
+        _uninstall_skill()
+        # Track removal for summary — _uninstall_skill prints its own messages
+        if any(os.path.isdir(p) for p, _ in _skill_install_targets()):
+            pass  # _uninstall_skill already handled printing
+        removed_any = True
 
     # ── 3. mcporter MCP entries ──
     if shutil.which("mcporter"):

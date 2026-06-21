@@ -37,3 +37,28 @@ def test_relative_custom_home_is_rejected(monkeypatch):
 
     with pytest.raises(ValueError, match="AGENT_REACH_HOME must be an absolute path"):
         agent_reach_home()
+
+
+# ── Config precedence tests ─────────────────────────
+
+
+def test_config_uses_custom_home(monkeypatch, tmp_path):
+    from agent_reach.config import Config
+
+    custom = tmp_path / "custom"
+    monkeypatch.setenv("AGENT_REACH_HOME", str(custom))
+
+    config = Config()
+
+    assert config.config_path == custom / "config.yaml"
+
+
+def test_explicit_config_path_beats_custom_home(monkeypatch, tmp_path):
+    from agent_reach.config import Config
+
+    monkeypatch.setenv("AGENT_REACH_HOME", str(tmp_path / "custom"))
+    explicit = tmp_path / "explicit.yaml"
+
+    config = Config(config_path=explicit)
+
+    assert config.config_path == explicit

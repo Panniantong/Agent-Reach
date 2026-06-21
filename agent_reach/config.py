@@ -11,6 +11,8 @@ from typing import Any, Optional
 
 import yaml
 
+from agent_reach.paths import AGENT_REACH_HOME_ENV, config_file
+
 
 class Config:
     """Manages Agent Reach configuration."""
@@ -28,7 +30,13 @@ class Config:
     }
 
     def __init__(self, config_path: Optional[Path] = None):
-        self.config_path = Path(config_path) if config_path else self.CONFIG_FILE
+        if config_path is not None:
+            selected_path = Path(config_path)
+        elif os.environ.get(AGENT_REACH_HOME_ENV, "").strip():
+            selected_path = config_file()
+        else:
+            selected_path = self.CONFIG_FILE
+        self.config_path = selected_path
         self.config_dir = self.config_path.parent
         self.data: dict = {}
         self._ensure_dir()
