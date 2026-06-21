@@ -69,8 +69,17 @@ def main():
     p_install.add_argument("--proxy", default="",
                            help="Network proxy saved for agents to export as HTTP(S)_PROXY "
                                 "in restricted networks (http://user:pass@ip:port)")
-    p_install.add_argument("--safe", action="store_true",
-                           help="Safe mode: skip automatic system changes, show what's needed instead")
+    system_mode = p_install.add_mutually_exclusive_group()
+    system_mode.add_argument(
+        "--system",
+        action="store_true",
+        help="Allow system package-manager and core global npm changes",
+    )
+    system_mode.add_argument(
+        "--safe",
+        action="store_true",
+        help="Skip automatic system, core, and optional channel tool installation",
+    )
     p_install.add_argument("--dry-run", action="store_true",
                            help="Show what would be done without making any changes")
     p_install.add_argument("--channels", default="",
@@ -182,6 +191,7 @@ def _cmd_install(args):
     from agent_reach.doctor import check_all, format_report
 
     safe_mode = args.safe
+    system_mode = bool(getattr(args, "system", False))
     dry_run = args.dry_run
 
     config = Config()
@@ -196,7 +206,11 @@ def _cmd_install(args):
         print("DRY RUN — showing what would be done (no changes)")
         print()
     if safe_mode:
-        print("SAFE MODE — skipping automatic system changes")
+        print("SAFE MODE — skipping automatic system, core, and optional channel tool installation")
+        print()
+    elif not system_mode:
+        print("Non-mutating mode — checking core dependencies without system/global installs")
+        print("  Use --system to enable apt/npm global installs, --safe to skip everything")
         print()
 
     # ── Parse --channels ──
@@ -239,26 +253,31 @@ def _cmd_install(args):
             config.set("bilibili_proxy", args.proxy)  # legacy key
             print(f"✅ 代理已保存（Agent 访问受限网络时使用）")
 
-    # ── Install core system dependencies (lightweight, always) ──
+    # ── Install core system dependencies ──
     print()
     if dry_run:
-        _install_system_deps_dryrun()
-    elif safe_mode:
-        _install_system_deps_safe()
-    else:
+        if system_mode:
+            _install_system_deps_dryrun()
+            print()
+            print("[dry-run] Would install mcporter globally and configure Exa search")
+        else:
+            _install_system_deps_dryrun()
+            print()
+            print("[dry-run] Would check mcporter and suggest Exa configuration")
+    elif system_mode:
         _install_system_deps()
-
-    # ── mcporter (for Exa search) ──
-    print()
-    if dry_run:
-        print("[dry-run] Would install mcporter and configure Exa search")
-    elif safe_mode:
-        _install_mcporter_safe()
-    else:
+        print()
         _install_mcporter()
+    else:
+        _install_system_deps_safe()
+        print()
+        _install_mcporter_safe()
 
     # ── Install optional channels (only if --channels specified) ──
-    if requested_channels and not dry_run and not safe_mode:
+    # --safe skips all tool installation, including explicitly listed channels.
+    if args.safe:
+        requested_channels.clear()
+    if requested_channels and not dry_run:
         print()
         print("Installing optional channels...")
         if env == "server" and "opencli" in requested_channels:

@@ -284,3 +284,86 @@ class TestPathsCommand:
         assert "Agent platform registration" in output
         assert "Upstream managed" in output
         assert "not moved or removed by Agent Reach" in output
+
+
+class TestInstallSystemFlag:
+    """Tests for --system and --safe mutual exclusivity and install routing."""
+
+    def test_install_rejects_safe_and_system_together(self):
+        with patch("sys.argv", ["agent-reach", "install", "--safe", "--system"]):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+        assert exc_info.value.code == 2
+
+
+def _install_args(*, system=False, safe=False, dry_run=False):
+    return type("Args", (), {
+        "safe": safe,
+        "system": system,
+        "dry_run": dry_run,
+        "channels": "",
+        "env": "local",
+        "proxy": "",
+    })()
+
+
+class TestInstallRouting:
+    """Tests that default install is non-mutating and --system enables mutation."""
+
+    def test_install_default_only_checks_core_dependencies(self, monkeypatch, tmp_path):
+        calls = []
+        monkeypatch.setenv("AGENT_REACH_HOME", str(tmp_path / "managed"))
+        monkeypatch.setattr(cli, "_install_system_deps_safe", lambda: calls.append("system-check"))
+        monkeypatch.setattr(cli, "_install_system_deps", lambda: calls.append("system-install"))
+        monkeypatch.setattr(cli, "_install_mcporter_safe", lambda: calls.append("mcporter-check"))
+        monkeypatch.setattr(cli, "_install_mcporter", lambda: calls.append("mcporter-install"))
+        monkeypatch.setattr(cli, "_install_skill", lambda: None)
+        monkeypatch.setattr("agent_reach.doctor.check_all", lambda config: {})
+        monkeypatch.setattr("agent_reach.doctor.format_report", lambda results: "")
+
+        cli._cmd_install(_install_args())
+
+        assert calls == ["system-check", "mcporter-check"]
+
+    def test_install_system_performs_core_installation(self, monkeypatch, tmp_path):
+        calls = []
+        monkeypatch.setenv("AGENT_REACH_HOME", str(tmp_path / "managed"))
+        monkeypatch.setattr(cli, "_install_system_deps_safe", lambda: calls.append("system-check"))
+        monkeypatch.setattr(cli, "_install_system_deps", lambda: calls.append("system-install"))
+        monkeypatch.setattr(cli, "_install_mcporter_safe", lambda: calls.append("mcporter-check"))
+        monkeypatch.setattr(cli, "_install_mcporter", lambda: calls.append("mcporter-install"))
+        monkeypatch.setattr(cli, "_install_skill", lambda: None)
+        monkeypatch.setattr("agent_reach.doctor.check_all", lambda config: {})
+        monkeypatch.setattr("agent_reach.doctor.format_report", lambda results: "")
+
+        cli._cmd_install(_install_args(system=True))
+
+        assert calls == ["system-install", "mcporter-install"]
+
+    def test_install_safe_skips_explicit_channel_installers(self, monkeypatch, tmp_path):
+        calls = []
+        monkeypatch.setenv("AGENT_REACH_HOME", str(tmp_path / "managed"))
+        monkeypatch.setattr(cli, "_install_system_deps_safe", lambda: None)
+        monkeypatch.setattr(cli, "_install_mcporter_safe", lambda: None)
+        monkeypatch.setattr(cli, "_install_twitter_deps", lambda: calls.append("twitter"))
+        monkeypatch.setattr(cli, "_install_skill", lambda: None)
+        monkeypatch.setattr("agent_reach.doctor.check_all", lambda config: {})
+        monkeypatch.setattr("agent_reach.doctor.format_report", lambda results: "")
+        args = _install_args(safe=True)
+        args.channels = "twitter"
+
+        cli._cmd_install(args)
+
+        assert calls == []
+
+    def test_default_dry_run_does_not_claim_system_install(self, capsys, monkeypatch, tmp_path):
+        monkeypatch.setenv("AGENT_REACH_HOME", str(tmp_path / "managed"))
+        cli._cmd_install(_install_args(dry_run=True))
+        output = capsys.readouterr().out
+        assert "Would install mcporter globally" not in output
+
+    def test_system_dry_run_lists_global_install(self, capsys, monkeypatch, tmp_path):
+        monkeypatch.setenv("AGENT_REACH_HOME", str(tmp_path / "managed"))
+        cli._cmd_install(_install_args(system=True, dry_run=True))
+        output = capsys.readouterr().out
+        assert "Would install mcporter globally" in output
