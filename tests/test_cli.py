@@ -410,6 +410,33 @@ class TestInstallRouting:
         assert "would install via" in output.lower()
 
 
+class TestPlatformHints:
+    """Platform-aware install hints (Windows winget, macOS brew, Linux apt)."""
+
+    def test_safe_mode_uses_windows_gh_hint(self, capsys, monkeypatch):
+        monkeypatch.setattr(cli.sys, "platform", "win32")
+        monkeypatch.setattr(shutil, "which", lambda name: "node.exe" if name in {"node", "npm"} else None)
+
+        cli._install_system_deps_safe()
+
+        output = capsys.readouterr().out
+        assert "GitHub CLI" in output
+        assert "https://cli.github.com" in output
+        assert "winget install --id GitHub.cli" in output
+        assert "apt install gh / brew install gh" not in output
+
+    def test_system_dry_run_uses_windows_gh_hint(self, capsys, monkeypatch):
+        monkeypatch.setattr(cli.sys, "platform", "win32")
+        monkeypatch.setattr(shutil, "which", lambda name: "node.exe" if name == "node" else None)
+
+        cli._install_system_deps_dryrun()
+
+        output = capsys.readouterr().out
+        assert "gh CLI" in output
+        assert "winget install --id GitHub.cli" in output
+        assert "apt install gh / brew install gh" not in output
+
+
 class TestUninstallSkillResult:
     """Tests for _uninstall_skill return value and _cmd_uninstall reporting."""
 

@@ -879,6 +879,24 @@ def _install_bili_deps():
     print("  [!]  bili-cli install failed. Run: pipx install bilibili-cli")
 
 
+def _gh_install_hint() -> str:
+    """Return a platform-appropriate manual install hint for GitHub CLI."""
+    if sys.platform == "win32":
+        return "https://cli.github.com — or: winget install --id GitHub.cli"
+    if sys.platform == "darwin":
+        return "https://cli.github.com — or: brew install gh"
+    return "https://cli.github.com — or: apt install gh"
+
+
+def _node_install_hint() -> str:
+    """Return a platform-appropriate manual install hint for Node.js."""
+    if sys.platform == "win32":
+        return "https://nodejs.org — or: winget install OpenJS.NodeJS.LTS"
+    if sys.platform == "darwin":
+        return "https://nodejs.org — or: brew install node"
+    return "https://nodejs.org — or: apt install nodejs npm"
+
+
 def _install_system_deps_safe():
     """Safe mode: check what's installed, print instructions for what's missing."""
     import shutil
@@ -886,8 +904,8 @@ def _install_system_deps_safe():
     print("Checking system dependencies (safe mode — no auto-install)...")
 
     deps = [
-        ("gh", ["gh"], "GitHub CLI", "https://cli.github.com — or: apt install gh / brew install gh"),
-        ("node", ["node", "npm"], "Node.js", "https://nodejs.org — or: apt install nodejs npm"),
+        ("gh", ["gh"], "GitHub CLI", _gh_install_hint()),
+        ("node", ["node", "npm"], "Node.js", _node_install_hint()),
     ]
 
     missing = []
@@ -915,8 +933,8 @@ def _install_system_deps_dryrun():
     print("[dry-run] System dependency check:")
 
     checks = [
-        ("gh CLI", ["gh"], "apt install gh / brew install gh"),
-        ("Node.js", ["node"], "curl NodeSource setup | bash + apt install nodejs"),
+        ("gh CLI", ["gh"], _gh_install_hint()),
+        ("Node.js", ["node"], _node_install_hint()),
     ]
 
     for label, binaries, method in checks:
