@@ -491,6 +491,27 @@ def _skill_install_targets() -> list:
     return skill_dirs
 
 
+def _prune_empty_skill_parents(skill_path: str) -> list[str]:
+    """Remove empty skill registration parent dirs after deleting agent-reach.
+
+    Only removes the immediate ``skills`` directory and its platform root when
+    they are empty.  Never removes HOME or any non-empty directory.
+    """
+    removed: list[str] = []
+    skills_dir = os.path.dirname(skill_path)
+    platform_dir = os.path.dirname(skills_dir)
+
+    for path in (skills_dir, platform_dir):
+        try:
+            if os.path.isdir(path) and not os.listdir(path):
+                os.rmdir(path)
+                removed.append(path)
+        except OSError:
+            pass
+
+    return removed
+
+
 def _uninstall_skill():
     """Remove SKILL.md from all known agent skill directories.
 
@@ -508,6 +529,8 @@ def _uninstall_skill():
                     shutil.rmtree(skill_path)
                 print(f"  Removed {platform_name} skill: {skill_path}")
                 removed = True
+                for parent in _prune_empty_skill_parents(skill_path):
+                    print(f"  Removed empty skill parent directory: {parent}")
             except Exception as e:
                 print(f"  Could not remove {skill_path}: {e}")
 

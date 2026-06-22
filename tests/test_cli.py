@@ -469,3 +469,31 @@ class TestUninstallSkillResult:
         output = capsys.readouterr().out
         assert "Agent Reach data removed" not in output
         assert "Nothing to remove" in output
+
+    def test_uninstall_skill_prunes_empty_registration_parents(self, tmp_path):
+        skill_path = tmp_path / ".agents" / "skills" / "agent-reach"
+        skill_path.mkdir(parents=True)
+
+        with patch("agent_reach.cli._skill_install_targets", return_value=[(str(skill_path), "Agent")]):
+            result = cli._uninstall_skill()
+
+        assert result is True
+        assert not skill_path.exists()
+        assert not (tmp_path / ".agents" / "skills").exists()
+        assert not (tmp_path / ".agents").exists()
+        assert tmp_path.exists()
+
+    def test_uninstall_skill_keeps_non_empty_registration_parents(self, tmp_path):
+        skill_path = tmp_path / ".agents" / "skills" / "agent-reach"
+        skill_path.mkdir(parents=True)
+        sibling = tmp_path / ".agents" / "skills" / "other-skill"
+        sibling.mkdir()
+
+        with patch("agent_reach.cli._skill_install_targets", return_value=[(str(skill_path), "Agent")]):
+            result = cli._uninstall_skill()
+
+        assert result is True
+        assert not skill_path.exists()
+        assert sibling.exists()
+        assert (tmp_path / ".agents" / "skills").exists()
+        assert (tmp_path / ".agents").exists()
