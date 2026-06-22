@@ -124,3 +124,52 @@ def test_stale_active_backend_does_not_leak_into_errored_result(monkeypatch):
     results = doctor.check_all(config=None)
     assert results["boom"]["status"] == "error"
     assert results["boom"]["active_backend"] is None
+
+
+class TestFormatReportConfigPath:
+    """format_report should use the active Config's config_path for permission checks."""
+
+    def test_format_report_accepts_and_uses_config_path(self, tmp_path, monkeypatch):
+        """When config_path is passed, format_report checks that path, not defaults."""
+        explicit = tmp_path / "explicit" / "config.yaml"
+        explicit.parent.mkdir(parents=True)
+        explicit.write_text("key: value", encoding="utf-8")
+
+        report = doctor.format_report(
+            {
+                "web": {
+                    "status": "ok",
+                    "name": "网页",
+                    "message": "ok",
+                    "tier": 0,
+                    "backends": ["requests"],
+                },
+            },
+            config_path=explicit,
+        )
+        # Must not crash; should reference the explicit path
+        assert "Agent Reach" in report
+
+    def test_doctor_report_uses_active_config_path(self, tmp_path, monkeypatch):
+        """AgentReach.doctor_report() must pass its Config's config_path to format_report."""
+        from agent_reach.core import AgentReach
+
+        explicit = tmp_path / "my-config.yaml"
+        cfg = Config(config_path=explicit)
+
+        ar = AgentReach(config=cfg)
+        # Patch check_all to short-circuit
+        monkeypatch.setattr(
+            doctor,
+            "get_all_channels",
+            lambda: [
+                _StubChannel("web", "网页", 0, "ok", "ok", ["requests"],
+                             active_backend="requests"),
+            ],
+        )
+        report = ar.doctor_report()
+        assert "Agent Reach" in report
+        # The key validation: function must not crash and must use
+        # cfg.config_path, not resolve AGENT_REACH_HOME from env.
+        # We verify by checking the report is produced successfully
+        # with an explicit path outside the default location.

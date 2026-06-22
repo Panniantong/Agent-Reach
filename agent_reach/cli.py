@@ -199,9 +199,6 @@ def _cmd_install(args):
     print("Agent Reach Installer")
     print("=" * 40)
 
-    # Ensure tools directory exists (for upstream tool repos)
-    tools_dir().mkdir(parents=True, exist_ok=True)
-
     if dry_run:
         print("DRY RUN — showing what would be done (no changes)")
         print()
@@ -212,6 +209,10 @@ def _cmd_install(args):
         print("Non-mutating mode — checking core dependencies without system/global installs")
         print("  Use --system to enable apt/npm global installs, --safe to skip everything")
         print()
+
+    # Ensure tools directory exists (for upstream tool repos) — only when writing
+    if not dry_run:
+        tools_dir().mkdir(parents=True, exist_ok=True)
 
     # ── Parse --channels ──
     CHANNEL_INSTALLERS = {
@@ -261,7 +262,7 @@ def _cmd_install(args):
             print()
             print("[dry-run] Would install mcporter globally and configure Exa search")
         else:
-            _install_system_deps_dryrun()
+            _install_system_deps_safe()
             print()
             print("[dry-run] Would check mcporter and suggest Exa configuration")
     elif system_mode:
@@ -340,7 +341,7 @@ def _cmd_install(args):
 
         # Final status
         print()
-        print(format_report(results))
+        print(format_report(results, config_path=config.config_path))
         print()
 
         # ── Install agent skill ──
@@ -484,7 +485,10 @@ def _skill_install_targets() -> list:
 
 
 def _uninstall_skill():
-    """Remove SKILL.md from all known agent skill directories."""
+    """Remove SKILL.md from all known agent skill directories.
+
+    Returns True if at least one skill directory was removed.
+    """
     import shutil
 
     removed = False
@@ -502,6 +506,7 @@ def _uninstall_skill():
 
     if not removed:
         print("  No skill installations found.")
+    return removed
 
 
 def _cmd_skill(args):
@@ -1413,11 +1418,9 @@ def _cmd_uninstall(args):
             if os.path.isdir(skill_path):
                 print(f"[dry-run] Would remove {platform_name} skill: {skill_path}")
     else:
-        _uninstall_skill()
-        # Track removal for summary — _uninstall_skill prints its own messages
-        if any(os.path.isdir(p) for p, _ in _skill_install_targets()):
-            pass  # _uninstall_skill already handled printing
-        removed_any = True
+        skill_removed = _uninstall_skill()
+        if skill_removed:
+            removed_any = True
 
     # ── 3. mcporter MCP entries ──
     if shutil.which("mcporter"):
@@ -1474,7 +1477,7 @@ def _cmd_doctor(args=None):
         print(json.dumps(results, ensure_ascii=False, indent=2))
         return
 
-    rprint(format_report(results))
+    rprint(format_report(results, config_path=config.config_path))
 
     # Auto-install skill if not already present (fixes #154)
     _install_skill()

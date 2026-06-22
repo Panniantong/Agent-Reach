@@ -236,7 +236,7 @@ class TestManagedPathsIntegration:
         monkeypatch.setattr(cli, "_install_mcporter_safe", lambda: None)
         monkeypatch.setattr(cli, "_install_skill", lambda: None)
         monkeypatch.setattr("agent_reach.doctor.check_all", lambda config: {})
-        monkeypatch.setattr("agent_reach.doctor.format_report", lambda results: "")
+        monkeypatch.setattr("agent_reach.doctor.format_report", lambda *a, **kw: "")
 
         args = type("Args", (), {
             "safe": True,
@@ -319,7 +319,7 @@ class TestInstallRouting:
         monkeypatch.setattr(cli, "_install_mcporter", lambda: calls.append("mcporter-install"))
         monkeypatch.setattr(cli, "_install_skill", lambda: None)
         monkeypatch.setattr("agent_reach.doctor.check_all", lambda config: {})
-        monkeypatch.setattr("agent_reach.doctor.format_report", lambda results: "")
+        monkeypatch.setattr("agent_reach.doctor.format_report", lambda *a, **kw: "")
 
         cli._cmd_install(_install_args())
 
@@ -334,7 +334,7 @@ class TestInstallRouting:
         monkeypatch.setattr(cli, "_install_mcporter", lambda: calls.append("mcporter-install"))
         monkeypatch.setattr(cli, "_install_skill", lambda: None)
         monkeypatch.setattr("agent_reach.doctor.check_all", lambda config: {})
-        monkeypatch.setattr("agent_reach.doctor.format_report", lambda results: "")
+        monkeypatch.setattr("agent_reach.doctor.format_report", lambda *a, **kw: "")
 
         cli._cmd_install(_install_args(system=True))
 
@@ -348,7 +348,7 @@ class TestInstallRouting:
         monkeypatch.setattr(cli, "_install_twitter_deps", lambda: calls.append("twitter"))
         monkeypatch.setattr(cli, "_install_skill", lambda: None)
         monkeypatch.setattr("agent_reach.doctor.check_all", lambda config: {})
-        monkeypatch.setattr("agent_reach.doctor.format_report", lambda results: "")
+        monkeypatch.setattr("agent_reach.doctor.format_report", lambda *a, **kw: "")
         args = _install_args(safe=True)
         args.channels = "twitter"
 
@@ -367,3 +367,66 @@ class TestInstallRouting:
         cli._cmd_install(_install_args(system=True, dry_run=True))
         output = capsys.readouterr().out
         assert "Would install mcporter globally" in output
+
+    def test_dry_run_does_not_write_tools_dir(self, tmp_path, monkeypatch):
+        """--dry-run must be zero-write: no tools/ directory created."""
+        custom = tmp_path / "managed"
+        monkeypatch.setenv("AGENT_REACH_HOME", str(custom))
+        monkeypatch.setattr(cli, "_detect_environment", lambda: "local")
+        monkeypatch.setattr(cli, "_install_system_deps_safe", lambda: None)
+        monkeypatch.setattr(cli, "_install_mcporter_safe", lambda: None)
+        monkeypatch.setattr(cli, "_install_skill", lambda: None)
+        monkeypatch.setattr("agent_reach.doctor.check_all", lambda config: {})
+        monkeypatch.setattr("agent_reach.doctor.format_report", lambda *a, **kw: "")
+
+        cli._cmd_install(_install_args(dry_run=True))
+
+        assert not (custom / "tools").exists()
+
+    def test_default_dry_run_does_not_claim_gh_install(self, capsys, monkeypatch, tmp_path):
+        """Default dry-run checks deps, should not claim 'would install via apt'. """
+        monkeypatch.setenv("AGENT_REACH_HOME", str(tmp_path / "managed"))
+        cli._cmd_install(_install_args(dry_run=True))
+        output = capsys.readouterr().out
+        assert "would install via" not in output.lower()
+
+    def test_system_dry_run_shows_install_language(self, capsys, monkeypatch, tmp_path):
+        """--system --dry-run should show system-install language."""
+        monkeypatch.setenv("AGENT_REACH_HOME", str(tmp_path / "managed"))
+        cli._cmd_install(_install_args(system=True, dry_run=True))
+        output = capsys.readouterr().out
+        assert "would install via" in output.lower()
+
+
+class TestUninstallSkillResult:
+    """Tests for _uninstall_skill return value and _cmd_uninstall reporting."""
+
+    def test_uninstall_skill_returns_true_when_dir_removed(self, tmp_path):
+        skill_path = tmp_path / ".openclaw" / "skills" / "agent-reach"
+        skill_path.mkdir(parents=True)
+
+        import os as _os
+        with patch("agent_reach.cli._skill_install_targets", return_value=[(str(skill_path), "Test")]):
+            result = cli._uninstall_skill()
+        assert result is True
+        assert not _os.path.exists(skill_path)
+
+    def test_uninstall_skill_returns_false_when_nothing_found(self):
+        with patch("agent_reach.cli._skill_install_targets", return_value=[]):
+            result = cli._uninstall_skill()
+        assert result is False
+
+    def test_uninstall_does_not_report_removed_when_nothing_removed(self, monkeypatch, capsys, tmp_path):
+        """When no config dir and no skill dirs exist, summary must not say removed."""
+        custom = tmp_path / "nonexistent"
+        monkeypatch.setenv("AGENT_REACH_HOME", str(custom))
+        monkeypatch.setattr(cli, "_skill_install_targets", lambda: [])
+        monkeypatch.setattr(cli, "_uninstall_skill", lambda: False)
+        monkeypatch.setattr(shutil, "which", lambda name: None)
+
+        args = type("Args", (), {"dry_run": False, "keep_config": False})()
+        cli._cmd_uninstall(args)
+
+        output = capsys.readouterr().out
+        assert "Agent Reach data removed" not in output
+        assert "Nothing to remove" in output
