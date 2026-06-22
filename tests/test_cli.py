@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 import requests
+
 import agent_reach.cli as cli
 from agent_reach.cli import main
 

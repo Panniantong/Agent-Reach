@@ -11,7 +11,6 @@ Usage:
 import sys
 from typing import Dict, List, Optional, Tuple
 
-
 # Platform cookie specs: (platform_name, domain_pattern, needed_cookies)
 PLATFORM_SPECS = [
     {
