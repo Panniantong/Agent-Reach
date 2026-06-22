@@ -368,8 +368,8 @@ class TestInstallRouting:
         output = capsys.readouterr().out
         assert "Would install mcporter globally" in output
 
-    def test_dry_run_does_not_write_tools_dir(self, tmp_path, monkeypatch):
-        """--dry-run must be zero-write: no tools/ directory created."""
+    def test_dry_run_does_not_write_managed_root(self, tmp_path, monkeypatch):
+        """--dry-run must be zero-write: no <AGENT_REACH_HOME>/ directory created at all."""
         custom = tmp_path / "managed"
         monkeypatch.setenv("AGENT_REACH_HOME", str(custom))
         monkeypatch.setattr(cli, "_detect_environment", lambda: "local")
@@ -381,7 +381,19 @@ class TestInstallRouting:
 
         cli._cmd_install(_install_args(dry_run=True))
 
-        assert not (custom / "tools").exists()
+        assert not custom.exists(), f"dry-run must not create {custom}"
+
+    def test_system_dry_run_does_not_write_managed_root(self, tmp_path, monkeypatch):
+        """--system --dry-run must also be zero-write: no root directory created."""
+        custom = tmp_path / "managed"
+        monkeypatch.setenv("AGENT_REACH_HOME", str(custom))
+        monkeypatch.setattr(cli, "_detect_environment", lambda: "local")
+        monkeypatch.setattr("agent_reach.doctor.check_all", lambda config: {})
+        monkeypatch.setattr("agent_reach.doctor.format_report", lambda *a, **kw: "")
+
+        cli._cmd_install(_install_args(system=True, dry_run=True))
+
+        assert not custom.exists(), f"--system --dry-run must not create {custom}"
 
     def test_default_dry_run_does_not_claim_gh_install(self, capsys, monkeypatch, tmp_path):
         """Default dry-run checks deps, should not claim 'would install via apt'. """

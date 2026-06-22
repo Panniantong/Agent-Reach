@@ -187,14 +187,15 @@ def main():
 def _cmd_install(args):
     """One-shot deterministic installer."""
     import os
-    from agent_reach.config import Config
     from agent_reach.doctor import check_all, format_report
 
     safe_mode = args.safe
     system_mode = bool(getattr(args, "system", False))
     dry_run = args.dry_run
 
-    config = Config()
+    # Defer Config creation so --dry-run never creates directories or files.
+    config = None
+
     print()
     print("Agent Reach Installer")
     print("=" * 40)
@@ -250,6 +251,9 @@ def _cmd_install(args):
         if dry_run:
             print(f"[dry-run] Would save network proxy")
         else:
+            if config is None:
+                from agent_reach.config import Config
+                config = Config()
             config.set("proxy", args.proxy)
             config.set("bilibili_proxy", args.proxy)  # legacy key
             print(f"✅ 代理已保存（Agent 访问受限网络时使用）")
@@ -333,6 +337,9 @@ def _cmd_install(args):
 
     # Test channels
     if not dry_run:
+        if config is None:
+            from agent_reach.config import Config
+            config = Config()
         print()
         print("Testing channels...")
         results = check_all(config)
