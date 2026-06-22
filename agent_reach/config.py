@@ -25,6 +25,7 @@ class Config:
         "groq_whisper": ["groq_api_key"],
         "openai_whisper": ["openai_api_key"],
         "github_token": ["github_token"],
+        "semantic_scholar": ["semantic_scholar_api_key"],  # optional — higher rate limits
     }
 
     def __init__(self, config_path: Optional[Path] = None):

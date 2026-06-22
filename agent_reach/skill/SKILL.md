@@ -10,15 +10,15 @@ description: >
   LinkedIn/领英/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客,
   雪球/股票行情, RSS feeds, or any web URL.
 
-  13 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
-  Zero config for 6 channels. Run `agent-reach doctor --json` to see which
+  16 channels, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  Zero config for 9 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
   NOT for: 写报告/数据分析/翻译等内容加工（本 skill 只负责从互联网获取内容）；
   发帖/评论/点赞等写操作；已有专门 skill 的平台（先用专门 skill）。
 
   【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。
-  分类：search / social (小红书/推特/B站/V2EX/Reddit) / career(LinkedIn) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客)。
+  分类：search / social (小红书/推特/B站/V2EX/Reddit) / career(LinkedIn) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客) / research(学术论文/arXiv/Semantic Scholar)。
 triggers:
   - research: 调研/全网调研/帮我调研/研究一下/research/深入了解
   - search: 搜/查/找/search/搜索/查一下/帮我搜/看看大家怎么说
@@ -33,6 +33,7 @@ triggers:
   - web: 网页/链接/文章/rss/读一下/打开这个
   - video: youtube/视频/播客/字幕/小宇宙/转录/yt
   - finance: 雪球/股票/stock/xueqiu/行情/基金
+  - research: 论文/学术/paper/research/arxiv/semantic scholar/文献/科研/调研论文
 metadata:
   openclaw:
     homepage: https://github.com/Panniantong/Agent-Reach
@@ -60,6 +61,7 @@ metadata:
 | 用户意图 | 分类 | 详细文档 |
 |---------|------|---------|
 | 网页搜索/代码搜索 | search | [references/search.md](references/search.md) |
+| 学术论文/文献调研 | research | [references/research.md](references/research.md) |
 | 小红书/推特/B站/V2EX/Reddit | social | [references/social.md](references/social.md) |
 | 招聘/职位/LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub/代码 | dev | [references/dev.md](references/dev.md) |
@@ -113,11 +115,32 @@ agent-reach doctor --json
 
 **不要在 agent workspace 创建文件。** 使用 `/tmp/` 存放临时输出，`~/.agent-reach/` 存放持久数据。
 
+## 学术论文（research channel）
+
+```bash
+# 按主题搜索论文，自动去重合并 arXiv + Semantic Scholar，按质量打分排序
+agent-reach research search "speech recognition transformer" --max 15
+
+# 侧重点选择
+agent-reach research search "federated learning" --emphasis latest    # 最新论文
+agent-reach research search "transformer" --emphasis classic          # 经典高引论文
+agent-reach research search "medical AI" --emphasis open              # 开源优先
+
+# 指定年份和领域
+agent-reach research search "LLM reasoning" --year 2023-2025 --fields "Computer Science"
+
+# 分析单篇论文
+agent-reach research analyze "Attention Is All You Need"
+```
+
+底层 API 均免费公开，零配置即可使用。详见 [学术论文搜索](references/research.md)。
+
 ## 详细文档
 
 根据用户需求，阅读对应的详细文档：
 
 - [搜索工具](references/search.md) — Exa AI 搜索
+- [学术论文](references/research.md) — arXiv + Semantic Scholar 论文搜索、质量排序、论文分析
 - [社交媒体](references/social.md) — 小红书, Twitter, B站, V2EX, Reddit（多后端命令组）
 - [职场招聘](references/career.md) — LinkedIn
 - [开发工具](references/dev.md) — GitHub CLI
