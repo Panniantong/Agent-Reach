@@ -4,35 +4,54 @@
 Each channel knows how to check itself. Doctor just collects the results.
 """
 
-from typing import Dict
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, Tuple
 from agent_reach.config import Config
-from agent_reach.channels import get_all_channels
+from agent_reach.channels import Channel, get_all_channels
 
 
-def check_all(config: Config) -> Dict[str, dict]:
-    """Check all channels and return status dict.
+def _check_one(ch: Channel, config: Config) -> Tuple[str, dict]:
+    """Probe a single channel; return (name, result). Never raises.
 
     A single misbehaving channel must never take the whole report down,
     so per-channel exceptions degrade to status="error".
     """
-    results = {}
-    for ch in get_all_channels():
-        try:
-            status, message = ch.check(config)
-            active = getattr(ch, "active_backend", None)
-        except Exception as e:  # noqa: BLE001 — doctor must survive any channel
-            # Channels are registry singletons: a stale active_backend from a
-            # previous check must not leak into an errored result.
-            status, message, active = "error", f"体检异常：{e}", None
-        results[ch.name] = {
-            "status": status,
-            "name": ch.description,
-            "message": message,
-            "tier": ch.tier,
-            "backends": ch.backends,
-            "active_backend": active,
-        }
-    return results
+    try:
+        status, message = ch.check(config)
+        active = getattr(ch, "active_backend", None)
+    except Exception as e:  # noqa: BLE001 — doctor must survive any channel
+        # Channels are registry singletons: a stale active_backend from a
+        # previous check must not leak into an errored result.
+        status, message, active = "error", f"体检异常：{e}", None
+    return ch.name, {
+        "status": status,
+        "name": ch.description,
+        "message": message,
+        "tier": ch.tier,
+        "backends": ch.backends,
+        "active_backend": active,
+    }
+
+
+def check_all(config: Config) -> Dict[str, dict]:
+    """Check all channels concurrently and return status dict.
+
+    Each check() does real subprocess/network probing with multi-second
+    timeouts (e.g. `rdt status` waits up to 10s), so sequential probing makes
+    doctor needlessly slow — wall time becomes the *sum* of every timeout.
+    Probing is I/O-bound, so threads sidestep the GIL and wall time collapses
+    to roughly the single slowest channel. Each channel is a distinct registry
+    object and probes are stateless (no shared mutable state), so this is safe.
+
+    Result order follows the channel registry — ThreadPoolExecutor.map()
+    preserves input order — which format_report() relies on for tiered output.
+    """
+    channels = get_all_channels()
+    if not channels:
+        return {}
+    with ThreadPoolExecutor(max_workers=min(len(channels), 16)) as pool:
+        pairs = pool.map(lambda ch: _check_one(ch, config), channels)
+        return dict(pairs)
 
 
 def _name_msg(r: dict, escape) -> str:
