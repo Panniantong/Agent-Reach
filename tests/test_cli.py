@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 import requests
+
 import agent_reach.cli as cli
 from agent_reach.cli import main
 
@@ -32,6 +33,47 @@ class TestCLI:
         captured = capsys.readouterr()
         assert "Agent Reach" in captured.out
         assert "✅" in captured.out
+
+    def test_doctor_preserves_existing_skill_install(self, tmp_path, monkeypatch, capsys):
+        agent_skill_dir = tmp_path / ".agents" / "skills" / "agent-reach"
+        agent_skill_dir.mkdir(parents=True)
+        skill_file = agent_skill_dir / "SKILL.md"
+        skill_file.write_text("custom instructions", encoding="utf-8")
+        claude_skill_parent = tmp_path / ".claude" / "skills"
+        claude_skill_parent.mkdir(parents=True)
+
+        monkeypatch.setattr(cli.os.path, "expanduser", lambda p: p.replace("~", str(tmp_path)))
+        monkeypatch.delenv("OPENCLAW_HOME", raising=False)
+        monkeypatch.setattr(
+            "agent_reach.doctor.check_all",
+            lambda config: {"web": {"status": "ok", "name": "Web", "message": "ok"}},
+        )
+        monkeypatch.setattr("agent_reach.doctor.format_report", lambda results: "Agent Reach\n✅ ok")
+
+        cli._cmd_doctor()
+
+        out = capsys.readouterr().out
+        assert skill_file.read_text(encoding="utf-8") == "custom instructions"
+        assert (claude_skill_parent / "agent-reach" / "SKILL.md").exists()
+        assert "Skill already installed:" in out
+        assert "Skill installed for Agent:" not in out
+        assert "Skill installed for Claude Code:" in out
+
+    def test_doctor_installs_skill_when_missing(self, tmp_path, monkeypatch):
+        skill_parent = tmp_path / ".agents" / "skills"
+        skill_parent.mkdir(parents=True)
+
+        monkeypatch.setattr(cli.os.path, "expanduser", lambda p: p.replace("~", str(tmp_path)))
+        monkeypatch.delenv("OPENCLAW_HOME", raising=False)
+        monkeypatch.setattr(
+            "agent_reach.doctor.check_all",
+            lambda config: {"web": {"status": "ok", "name": "Web", "message": "ok"}},
+        )
+        monkeypatch.setattr("agent_reach.doctor.format_report", lambda results: "Agent Reach\n✅ ok")
+
+        cli._cmd_doctor()
+
+        assert (skill_parent / "agent-reach" / "SKILL.md").exists()
 
     def test_transcribe_command_prints_text(self, capsys):
         with patch("agent_reach.transcribe.transcribe", return_value="hello transcript"):

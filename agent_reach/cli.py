@@ -9,10 +9,10 @@ Usage:
     agent-reach setup
 """
 
-import sys
 import argparse
 import json
 import os
+import sys
 import time
 
 from agent_reach import __version__
@@ -340,11 +340,25 @@ def _cmd_install(args):
         print("Dry run complete. No changes were made.")
 
 
-def _install_skill():
+def _skill_parent_dirs():
+    """Return known agent skill parent directories in installation priority order."""
+    skill_dirs = [
+        os.path.expanduser("~/.agents/skills"),      # Generic agents (priority)
+        os.path.expanduser("~/.openclaw/skills"),    # OpenClaw
+        os.path.expanduser("~/.claude/skills"),      # Claude Code (if exists)
+    ]
+
+    openclaw_home = os.environ.get("OPENCLAW_HOME")
+    if openclaw_home:
+        skill_dirs.insert(0, os.path.join(openclaw_home, ".openclaw", "skills"))
+
+    return skill_dirs
+
+
+def _install_skill(overwrite_existing: bool = True):
     """Install Agent Reach as an agent skill (OpenClaw / Claude Code / .agents)."""
-    import os
-    import shutil
     import importlib.resources
+    import shutil
 
     def _is_english_locale(value: str) -> bool:
         normalized = value.strip().lower()
@@ -368,9 +382,13 @@ def _install_skill():
         except FileNotFoundError:
             return skill_pkg.joinpath("SKILL.md").read_text(encoding="utf-8")
 
-    def _copy_skill_dir(target: str) -> bool:
+    def _copy_skill_dir(target: str) -> str | None:
         """Copy entire skill directory (locale-specific SKILL.md + references/)."""
         try:
+            if not overwrite_existing and os.path.exists(os.path.join(target, "SKILL.md")):
+                print(f"Skill already installed: {target}")
+                return "skipped"
+
             # Clear existing installation. A symlinked skill dir (dotfiles
             # setups) breaks shutil.rmtree — unlink the link itself instead.
             if os.path.islink(target):
@@ -404,38 +422,30 @@ def _install_skill():
                     with open(os.path.join(refs_target, name), "w", encoding="utf-8") as f:
                         f.write(content)
 
-            return True
+            return "installed"
         except Exception as e:
             print(f"  Warning: Could not install skill: {e}")
-            return False
-
-    # Determine skill install path (priority: .agents > openclaw > claude)
-    skill_dirs = [
-        os.path.expanduser("~/.agents/skills"),      # Generic agents (priority)
-        os.path.expanduser("~/.openclaw/skills"),    # OpenClaw
-        os.path.expanduser("~/.claude/skills"),      # Claude Code (if exists)
-    ]
-
-    # Insert OPENCLAW_HOME path at the beginning if environment variable is set
-    openclaw_home = os.environ.get("OPENCLAW_HOME")
-    if openclaw_home:
-        skill_dirs.insert(0, os.path.join(openclaw_home, ".openclaw", "skills"))
+            return None
 
     installed = False
-    for skill_dir in skill_dirs:
+    for skill_dir in _skill_parent_dirs():
         if os.path.isdir(skill_dir):
             target = os.path.join(skill_dir, "agent-reach")
-            if _copy_skill_dir(target):
+            install_result = _copy_skill_dir(target)
+            if install_result:
                 platform_name = "Agent" if ".agents" in skill_dir else "OpenClaw" if "openclaw" in skill_dir else "Claude Code"
-                print(f"Skill installed for {platform_name}: {target}")
+                if install_result == "installed":
+                    print(f"Skill installed for {platform_name}: {target}")
                 installed = True
 
     if not installed:
         # No known skill directory found — create for .agents by default
         target = os.path.expanduser("~/.agents/skills/agent-reach")
         os.makedirs(os.path.dirname(target), exist_ok=True)
-        if _copy_skill_dir(target):
-            print(f"Skill installed: {target}")
+        install_result = _copy_skill_dir(target)
+        if install_result:
+            if install_result == "installed":
+                print(f"Skill installed: {target}")
         else:
             print("  -- Could not install agent skill (optional)")
             print("  -- Tip: install OpenClaw, Claude Code, or create ~/.agents/skills/ manually")
@@ -1460,8 +1470,9 @@ def _cmd_doctor(args=None):
 
     rprint(format_report(results))
 
-    # Auto-install skill if not already present (fixes #154)
-    _install_skill()
+    # Auto-install missing skills only (fixes #154). Doctor is a diagnostic command,
+    # so it must not overwrite user-customized skills.
+    _install_skill(overwrite_existing=False)
 
 
 def _cmd_setup():
