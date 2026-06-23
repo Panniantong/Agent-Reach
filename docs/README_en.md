@@ -339,6 +339,8 @@ For collaboration or questions, add me on WeChat — I'll invite you to the comm
 
 ## Friends
 
+[Ark Agent Plan model subscription](https://dis.chatdesks.cn/chatdesk/hsyqAgent-Reach.html) — integrates ByteDance's in-house SOTA models, including Doubao-Seed, Doubao-Seedance, Doubao-Seedream, and more, covering multimodal tasks across text, code, images, and video. It now supports MiniMax-M3, DeepSeek-V4 series, GLM-5.2, Doubao-Seed-2.0 series, Kimi-K2.6, and more, with no tool restrictions. Upgrade to a full-modal model suite and Harness in one step, with deep support for Agent frameworks and AI coding tools. One subscription lets you switch to the right AI engine for each task.
+
 [OpenClaw on Tencent Cloud](https://www.tencentcloud.com/act/pro/intl-openclaw?referral_code=G76Y819A&lang=en&pg=) — One-click OpenClaw on Tencent Cloud: chat to connect Agent Reach & unlock internet power.
 
 [AtomGit mirror](https://atomgit.com/qq_51337814/Agent-Reach) — Synchronized AtomGit mirror for Agent Reach.
