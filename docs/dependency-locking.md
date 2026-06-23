@@ -11,7 +11,7 @@ Agent Reach uses `constraints.txt` as a reproducible dependency baseline.
 ## Install with constraints
 
 ```bash
-pip install -c constraints.txt -e .[dev]
+pip install -c constraints.txt -e '.[dev]'
 ```
 
 ## Update workflow
