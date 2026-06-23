@@ -214,7 +214,8 @@ def transcribe(
     """Transcribe a URL or local file path. Returns the joined transcript text.
 
     `provider` is one of `auto` (groq → openai), `groq`, or `openai`.
-    `out_dir` defaults to a fresh temp directory; intermediate files stay there.
+    `out_dir` defaults to a fresh temp directory that is removed when this returns.
+    Pass `out_dir` to keep intermediate files in a caller-owned directory.
     """
     cfg = config or Config()
     order = _provider_order(provider)
@@ -224,8 +225,17 @@ def transcribe(
         names = ", ".join(PROVIDERS[p]["key_field"] for p in order)
         raise NoProviderConfigured(f"no provider key configured (need one of: {names})")
 
-    work_dir = Path(out_dir) if out_dir else Path(tempfile.mkdtemp(prefix="transcribe-"))
-    work_dir.mkdir(parents=True, exist_ok=True)
+    if out_dir:
+        work_dir = Path(out_dir)
+        work_dir.mkdir(parents=True, exist_ok=True)
+        return _run_transcribe(source, order, cfg, work_dir)
+
+    with tempfile.TemporaryDirectory(prefix="transcribe-") as tmp_dir:
+        return _run_transcribe(source, order, cfg, Path(tmp_dir))
+
+
+def _run_transcribe(source: str, order: List[str], cfg: Config, work_dir: Path) -> str:
+    """Run the transcription pipeline inside an already-owned work directory."""
 
     src_path = Path(source)
     if src_path.is_file():

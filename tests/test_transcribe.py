@@ -216,6 +216,114 @@ class TestOrchestrator:
         )
         assert text == "part one\npart two"
 
+    def test_auto_temp_dir_removed_after_success(self, monkeypatch, fake_config):
+        fake_config.set("groq_api_key", "gsk_test")
+        captured = {}
+
+        def fake_download(source, out_dir):
+            captured["work_dir"] = out_dir
+            audio = out_dir / "source.m4a"
+            audio.write_bytes(b"audio")
+            return audio
+
+        def fake_compress(src, out_dir):
+            compressed = out_dir / "compressed.m4a"
+            compressed.write_bytes(b"x")
+            return compressed
+
+        monkeypatch.setattr(tr, "download_audio", fake_download)
+        monkeypatch.setattr(tr, "compress_audio", fake_compress)
+        monkeypatch.setattr(
+            tr,
+            "_transcribe_with_fallback",
+            lambda chunk, order, cfg: "transcript text",
+        )
+
+        text = tr.transcribe("https://example.com/audio", config=fake_config)
+
+        assert text == "transcript text"
+        assert not captured["work_dir"].exists()
+
+    def test_auto_temp_dir_removed_after_pipeline_error(self, monkeypatch, fake_config):
+        fake_config.set("groq_api_key", "gsk_test")
+        captured = {}
+
+        def fake_download(source, out_dir):
+            captured["work_dir"] = out_dir
+            audio = out_dir / "source.m4a"
+            audio.write_bytes(b"audio")
+            return audio
+
+        def boom_compress(src, out_dir):
+            raise tr.TranscribeError("compress failed")
+
+        monkeypatch.setattr(tr, "download_audio", fake_download)
+        monkeypatch.setattr(tr, "compress_audio", boom_compress)
+
+        with pytest.raises(tr.TranscribeError, match="compress failed"):
+            tr.transcribe("https://example.com/audio", config=fake_config)
+
+        assert not captured["work_dir"].exists()
+
+    def test_auto_temp_dir_removed_after_transcription_error(self, monkeypatch, fake_config):
+        fake_config.set("groq_api_key", "gsk_test")
+        captured = {}
+
+        def fake_download(source, out_dir):
+            captured["work_dir"] = out_dir
+            audio = out_dir / "source.m4a"
+            audio.write_bytes(b"audio")
+            return audio
+
+        def fake_compress(src, out_dir):
+            compressed = out_dir / "compressed.m4a"
+            compressed.write_bytes(b"x")
+            return compressed
+
+        def boom_transcribe(chunk, order, cfg):
+            raise tr.TranscribeError("provider failed")
+
+        monkeypatch.setattr(tr, "download_audio", fake_download)
+        monkeypatch.setattr(tr, "compress_audio", fake_compress)
+        monkeypatch.setattr(tr, "_transcribe_with_fallback", boom_transcribe)
+
+        with pytest.raises(tr.TranscribeError, match="provider failed"):
+            tr.transcribe("https://example.com/audio", config=fake_config)
+
+        assert not captured["work_dir"].exists()
+
+    def test_explicit_out_dir_is_preserved(self, monkeypatch, fake_config, tmp_path):
+        fake_config.set("groq_api_key", "gsk_test")
+        work_dir = tmp_path / "work"
+
+        def fake_download(source, out_dir):
+            audio = out_dir / "source.m4a"
+            audio.write_bytes(b"audio")
+            return audio
+
+        def fake_compress(src, out_dir):
+            compressed = out_dir / "compressed.m4a"
+            compressed.write_bytes(b"x")
+            return compressed
+
+        monkeypatch.setattr(tr, "download_audio", fake_download)
+        monkeypatch.setattr(tr, "compress_audio", fake_compress)
+        monkeypatch.setattr(
+            tr,
+            "_transcribe_with_fallback",
+            lambda chunk, order, cfg: "transcript text",
+        )
+
+        text = tr.transcribe(
+            "https://example.com/audio",
+            out_dir=work_dir,
+            config=fake_config,
+        )
+
+        assert text == "transcript text"
+        assert (work_dir / "source.m4a").exists()
+        assert (work_dir / "compressed.m4a").exists()
+
     def test_no_provider_configured_fails_fast(self, fake_config, chunk_file):
         with pytest.raises(tr.NoProviderConfigured):
             tr.transcribe(str(chunk_file), config=fake_config)
