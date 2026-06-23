@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from agent_reach.cli import _install_skill, _uninstall_skill
+from agent_reach.cli import _install_skill, _uninstall_skill, _find_project_claude_dir
 
 
 class TestSkillCommand(unittest.TestCase):
@@ -107,7 +107,7 @@ class TestSkillCommand(unittest.TestCase):
                 env.pop("OPENCLAW_HOME", None)
                 env["LANG"] = "en_US.UTF-8"
                 with patch.dict(os.environ, env, clear=True):
-                    _install_skill()
+                    _install_skill(scope="user")
 
             target = os.path.join(skill_parent, "agent-reach", "SKILL.md")
             self.assertTrue(os.path.exists(target))
@@ -119,6 +119,131 @@ class TestSkillCommand(unittest.TestCase):
             self.assertTrue(
                 os.path.exists(os.path.join(skill_parent, "agent-reach", "references"))
             )
+
+    # ── Tests for issue #333: --scope flag ──
+
+    def test_find_project_claude_dir_found_in_cwd(self):
+        """_find_project_claude_dir should find .claude in the given directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            claude_dir = os.path.join(tmpdir, ".claude")
+            os.makedirs(claude_dir)
+            result = _find_project_claude_dir(start=tmpdir)
+            self.assertEqual(result, claude_dir)
+
+    def test_find_project_claude_dir_found_in_parent(self):
+        """_find_project_claude_dir should find .claude in a parent directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            claude_dir = os.path.join(tmpdir, ".claude")
+            os.makedirs(claude_dir)
+            child = os.path.join(tmpdir, "sub", "deep")
+            os.makedirs(child)
+            result = _find_project_claude_dir(start=child)
+            self.assertEqual(result, claude_dir)
+
+    def test_find_project_claude_dir_not_found(self):
+        """_find_project_claude_dir returns None when no .claude exists."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = _find_project_claude_dir(start=tmpdir)
+            self.assertIsNone(result)
+
+    def test_scope_auto_uses_project_local_when_claude_exists(self):
+        """scope=auto installs to project-local .claude/skills when .claude exists."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create project .claude dir
+            claude_dir = os.path.join(tmpdir, ".claude")
+            os.makedirs(claude_dir)
+
+            with patch("agent_reach.cli._find_project_claude_dir", return_value=claude_dir), \
+                 patch("agent_reach.cli.os.path.expanduser",
+                       side_effect=lambda p: p.replace("~", os.path.join(tmpdir, "home"))), \
+                 patch.dict(os.environ, {}, clear=False):
+                env = os.environ.copy()
+                env.pop("OPENCLAW_HOME", None)
+                with patch.dict(os.environ, env, clear=True):
+                    _install_skill(scope="auto")
+
+            target = os.path.join(claude_dir, "skills", "agent-reach", "SKILL.md")
+            self.assertTrue(os.path.exists(target))
+            with open(target, encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn("Agent Reach", content)
+
+    def test_scope_user_ignores_project_local(self):
+        """scope=user installs to global dirs even when .claude exists in project."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create project .claude dir
+            claude_dir = os.path.join(tmpdir, "project", ".claude")
+            os.makedirs(claude_dir)
+
+            # Create a global skill dir
+            global_skill_dir = os.path.join(tmpdir, "home", ".agents", "skills")
+            os.makedirs(global_skill_dir)
+
+            with patch("agent_reach.cli._find_project_claude_dir", return_value=claude_dir), \
+                 patch("agent_reach.cli.os.path.expanduser",
+                       side_effect=lambda p: p.replace("~", os.path.join(tmpdir, "home"))), \
+                 patch.dict(os.environ, {}, clear=False):
+                env = os.environ.copy()
+                env.pop("OPENCLAW_HOME", None)
+                with patch.dict(os.environ, env, clear=True):
+                    _install_skill(scope="user")
+
+            # Should NOT install to project-local
+            project_target = os.path.join(claude_dir, "skills", "agent-reach", "SKILL.md")
+            self.assertFalse(os.path.exists(project_target))
+
+            # Should install to global
+            global_target = os.path.join(global_skill_dir, "agent-reach", "SKILL.md")
+            self.assertTrue(os.path.exists(global_target))
+
+    def test_scope_project_creates_claude_skills_when_no_claude_exists(self):
+        """scope=project creates .claude/skills/agent-reach in cwd when no .claude found."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("agent_reach.cli._find_project_claude_dir", return_value=None), \
+                 patch("os.getcwd", return_value=tmpdir), \
+                 patch.dict(os.environ, {}, clear=False):
+                env = os.environ.copy()
+                env.pop("OPENCLAW_HOME", None)
+                with patch.dict(os.environ, env, clear=True):
+                    _install_skill(scope="project")
+
+            target = os.path.join(tmpdir, ".claude", "skills", "agent-reach", "SKILL.md")
+            self.assertTrue(os.path.exists(target))
+            with open(target, encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn("Agent Reach", content)
+
+    def test_cli_parser_accepts_scope_for_install(self):
+        """The real CLI parser should pass --scope through to install."""
+        from agent_reach.cli import main
+
+        captured = {}
+
+        def fake_cmd_install(args):
+            captured["scope"] = args.scope
+            captured["dry_run"] = args.dry_run
+
+        with patch("sys.argv", ["agent-reach", "install", "--scope=project", "--dry-run"]), \
+             patch("agent_reach.cli._cmd_install", side_effect=fake_cmd_install):
+            main()
+
+        self.assertEqual(captured["scope"], "project")
+        self.assertTrue(captured["dry_run"])
+
+    def test_cli_parser_accepts_scope_for_skill_install(self):
+        """The real CLI parser should pass --scope through to skill --install."""
+        from agent_reach.cli import main
+
+        captured = {}
+
+        def fake_install_skill(scope="auto"):
+            captured["scope"] = scope
+
+        with patch("sys.argv", ["agent-reach", "skill", "--install", "--scope=user"]), \
+             patch("agent_reach.cli._install_skill", side_effect=fake_install_skill):
+            main()
+
+        self.assertEqual(captured["scope"], "user")
 
 
 if __name__ == "__main__":

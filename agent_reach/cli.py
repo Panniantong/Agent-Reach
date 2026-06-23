@@ -76,6 +76,9 @@ def main():
                            help="Comma-separated optional channels to install "
                                 "(twitter,xiaoyuzhou,xueqiu,xiaohongshu,"
                                 "reddit,bilibili,linkedin,all)")
+    p_install.add_argument("--scope", choices=["auto", "project", "user"], default="auto",
+                           help="Skill install scope: auto (project if .claude/ found, else user), "
+                                "project (project-local .claude/skills/), user (global ~/.agents/skills/)")
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
@@ -108,6 +111,9 @@ def main():
                                help="Install SKILL.md to agent skill directories")
     p_skill_group.add_argument("--uninstall", action="store_true",
                                help="Remove SKILL.md from agent skill directories")
+    p_skill.add_argument("--scope", choices=["auto", "project", "user"], default="auto",
+                         help="Skill install scope: auto (project if .claude/ found, else user), "
+                              "project (project-local .claude/skills/), user (global ~/.agents/skills/)")
 
     # ── format ──
     p_format = sub.add_parser("format", help="Clean and format platform API output")
@@ -319,7 +325,7 @@ def _cmd_install(args):
         print()
 
         # ── Install agent skill ──
-        _install_skill()
+        _install_skill(scope=args.scope)
 
         print(f"✅ Installation complete! {ok}/{total} channels active.")
 
@@ -340,7 +346,26 @@ def _cmd_install(args):
         print("Dry run complete. No changes were made.")
 
 
-def _install_skill():
+def _find_project_claude_dir(start: str | None = None) -> str | None:
+    """Walk from start (default cwd) up to filesystem root looking for a .claude/ directory.
+
+    Returns the absolute path to the .claude directory if found, else None.
+    """
+    import os
+
+    current = os.path.abspath(start or os.getcwd())
+    while True:
+        candidate = os.path.join(current, ".claude")
+        if os.path.isdir(candidate):
+            return candidate
+        parent = os.path.dirname(current)
+        if parent == current:
+            break
+        current = parent
+    return None
+
+
+def _install_skill(scope: str = "auto"):
     """Install Agent Reach as an agent skill (OpenClaw / Claude Code / .agents)."""
     import os
     import shutil
@@ -409,36 +434,73 @@ def _install_skill():
             print(f"  Warning: Could not install skill: {e}")
             return False
 
-    # Determine skill install path (priority: .agents > openclaw > claude)
-    skill_dirs = [
-        os.path.expanduser("~/.agents/skills"),      # Generic agents (priority)
-        os.path.expanduser("~/.openclaw/skills"),    # OpenClaw
-        os.path.expanduser("~/.claude/skills"),      # Claude Code (if exists)
-    ]
+    # ── Scope-aware skill install (issue #333) ──
+    # scope=auto: project-local if .claude/ exists in cwd/parents, else global
+    # scope=project: always project-local (create .claude/skills/agent-reach if needed)
+    # scope=user: always global (existing behavior)
 
-    # Insert OPENCLAW_HOME path at the beginning if environment variable is set
-    openclaw_home = os.environ.get("OPENCLAW_HOME")
-    if openclaw_home:
-        skill_dirs.insert(0, os.path.join(openclaw_home, ".openclaw", "skills"))
-
-    installed = False
-    for skill_dir in skill_dirs:
-        if os.path.isdir(skill_dir):
-            target = os.path.join(skill_dir, "agent-reach")
-            if _copy_skill_dir(target):
-                platform_name = "Agent" if ".agents" in skill_dir else "OpenClaw" if "openclaw" in skill_dir else "Claude Code"
-                print(f"Skill installed for {platform_name}: {target}")
-                installed = True
-
-    if not installed:
-        # No known skill directory found — create for .agents by default
-        target = os.path.expanduser("~/.agents/skills/agent-reach")
-        os.makedirs(os.path.dirname(target), exist_ok=True)
+    def _install_to_project(project_claude_dir: str) -> bool:
+        """Install skill to project-local .claude/skills/agent-reach."""
+        skills_dir = os.path.join(project_claude_dir, "skills")
+        os.makedirs(skills_dir, exist_ok=True)
+        target = os.path.join(skills_dir, "agent-reach")
         if _copy_skill_dir(target):
-            print(f"Skill installed: {target}")
+            print(f"Skill installed (project-local): {target}")
+            return True
+        return False
+
+    def _install_to_global() -> bool:
+        """Install skill to global/user directories (existing behavior)."""
+        skill_dirs = [
+            os.path.expanduser("~/.agents/skills"),      # Generic agents (priority)
+            os.path.expanduser("~/.openclaw/skills"),    # OpenClaw
+            os.path.expanduser("~/.claude/skills"),      # Claude Code (if exists)
+        ]
+
+        # Insert OPENCLAW_HOME path at the beginning if environment variable is set
+        openclaw_home = os.environ.get("OPENCLAW_HOME")
+        if openclaw_home:
+            skill_dirs.insert(0, os.path.join(openclaw_home, ".openclaw", "skills"))
+
+        installed = False
+        for skill_dir in skill_dirs:
+            if os.path.isdir(skill_dir):
+                target = os.path.join(skill_dir, "agent-reach")
+                if _copy_skill_dir(target):
+                    platform_name = "Agent" if ".agents" in skill_dir else "OpenClaw" if "openclaw" in skill_dir else "Claude Code"
+                    print(f"Skill installed for {platform_name}: {target}")
+                    installed = True
+
+        if not installed:
+            # No known skill directory found — create for .agents by default
+            target = os.path.expanduser("~/.agents/skills/agent-reach")
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            if _copy_skill_dir(target):
+                print(f"Skill installed: {target}")
+            else:
+                print("  -- Could not install agent skill (optional)")
+                print("  -- Tip: install OpenClaw, Claude Code, or create ~/.agents/skills/ manually")
+                return False
+        return True
+
+    if scope == "project":
+        project_claude = _find_project_claude_dir()
+        if project_claude:
+            _install_to_project(project_claude)
         else:
-            print("  -- Could not install agent skill (optional)")
-            print("  -- Tip: install OpenClaw, Claude Code, or create ~/.agents/skills/ manually")
+            # No .claude/ found — create in cwd
+            project_claude = os.path.join(os.getcwd(), ".claude")
+            os.makedirs(project_claude, exist_ok=True)
+            _install_to_project(project_claude)
+    elif scope == "user":
+        _install_to_global()
+    else:
+        # scope == "auto": prefer project-local if .claude/ exists
+        project_claude = _find_project_claude_dir()
+        if project_claude:
+            _install_to_project(project_claude)
+        else:
+            _install_to_global()
 
 
 def _uninstall_skill():
@@ -480,7 +542,7 @@ def _uninstall_skill():
 def _cmd_skill(args):
     """Manage agent skill registration."""
     if args.install:
-        _install_skill()
+        _install_skill(scope=args.scope)
     elif args.uninstall:
         _uninstall_skill()
 
