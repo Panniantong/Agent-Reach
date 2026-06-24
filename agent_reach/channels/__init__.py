@@ -20,6 +20,14 @@ from .linkedin import LinkedInChannel
 from .xiaoyuzhou import XiaoyuzhouChannel
 from .v2ex import V2EXChannel
 from .xueqiu import XueqiuChannel
+from .arxiv import ArxivChannel
+from .semantic_scholar import SemanticScholarChannel
+from .research import ResearchChannel
+from .openalex import OpenAlexChannel
+from .pubmed import PubMedChannel
+from .dblp import DBLPChannel
+from .core_search import COREChannel
+from .papers_with_code import PapersWithCodeChannel
 
 
 ALL_CHANNELS: List[Channel] = [
@@ -36,6 +44,14 @@ ALL_CHANNELS: List[Channel] = [
     RSSChannel(),
     ExaSearchChannel(),
     WebChannel(),
+    ArxivChannel(),
+    SemanticScholarChannel(),
+    ResearchChannel(),
+    OpenAlexChannel(),
+    PubMedChannel(),
+    DBLPChannel(),
+    COREChannel(),
+    PapersWithCodeChannel(),
 ]
 
 

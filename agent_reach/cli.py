@@ -82,7 +82,7 @@ def main():
     p_conf.add_argument("key", nargs="?", default=None,
                         choices=["proxy", "github-token", "groq-key", "openai-key",
                                  "twitter-cookies", "youtube-cookies",
-                                 "xhs-cookies"],
+                                 "xhs-cookies", "s2-key"],
                         help="What to configure (omit if using --from-browser)")
     p_conf.add_argument("value", nargs="*", help="The value(s) to set")
     p_conf.add_argument("--from-browser", metavar="BROWSER",
@@ -124,6 +124,25 @@ def main():
 
     sub.add_parser("check-update", help="Check for new versions and changes")
 
+    # ── research ──
+    p_research = sub.add_parser("research", help="学术论文搜索（arXiv + Semantic Scholar）")
+    p_research.add_argument("topic", nargs="?", default=None, help="搜索主题，如 '语音识别'")
+    p_research.add_argument("-n", "--max", type=int, default=10, dest="max_results",
+                           help="最多返回几篇（默认 10）")
+    p_research.add_argument("--year", default="", help="年份范围，如 2023-2025")
+    p_research.add_argument("--sort", default="balanced",
+                           choices=["balanced", "latest", "classic", "open"],
+                           help="排序方式：balanced=综合 latest=最新 classic=经典 open=开源（默认 balanced）")
+    p_research.add_argument("--analyze", default=None, metavar="TITLE",
+                           help="分析指定论文（按标题查找）")
+    p_research.add_argument("--json", action="store_true",
+                           help="输出 JSON 格式")
+
+    # ── read (download and read paper PDF) ──
+    p_read = sub.add_parser("read", help="下载并读取论文 PDF")
+    p_read.add_argument("url_or_title", help="论文 PDF 链接或标题（按标题搜 arXiv）")
+    p_read.add_argument("--pages", type=int, default=50, help="最大读取页数（默认 50）")
+
     # ── watch ──
     sub.add_parser("watch", help="Quick health check + update check (for scheduled tasks)")
 
@@ -163,6 +182,10 @@ def main():
         _cmd_format(args)
     elif args.command == "transcribe":
         _cmd_transcribe(args)
+    elif args.command == "research":
+        _cmd_research(args)
+    elif args.command == "read":
+        _cmd_read(args)
 
 
 # ── Command handlers ────────────────────────────────
@@ -1109,6 +1132,12 @@ def _cmd_configure(args):
         config.set("openai_api_key", value)
         print(f"✅ OpenAI key configured!")
 
+    elif args.key == "s2-key":
+        config.set("semantic_scholar_api_key", value)
+        print(f"✅ Semantic Scholar API key configured!")
+        print("  Rate limits: 1000 req/5min (up from 100 req/5min without key)")
+        print("  Register at: https://api.semanticscholar.org/api-docs/#tag/Authentication")
+
 
 def _cmd_transcribe(args):
     """Transcribe a URL or local audio file via Whisper (Groq → OpenAI fallback)."""
@@ -1734,6 +1763,143 @@ def _cmd_check_update():
 
     print(f"[!] 无法检查更新（GitHub 返回 {resp2.status_code}）")
     return "error"
+
+
+def _cmd_research(args):
+    """Academic paper search and analysis.
+
+    Two modes:
+      agent-reach research "topic"          — search papers
+      agent-reach research --analyze "Title" — analyze a specific paper
+    """
+    from agent_reach.channels.research import ResearchChannel
+    from agent_reach.config import Config
+
+    config = Config()
+    ch = ResearchChannel()
+
+    # Mode: analyze a specific paper by title
+    if args.analyze:
+        result = ch.analyze(args.analyze, config=config)
+        if getattr(args, "json", False):
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        elif not result.get("found"):
+            print(f"Paper not found: {args.analyze}")
+            print("Try: agent-reach research \"topic keywords\" first, then analyze by title")
+        else:
+            from rich.console import Console
+            console = Console()
+            console.print(f"\n[bold]{result['title']}[/bold]")
+            if result.get("authors"):
+                console.print(f"Authors: {', '.join(result['authors'])}")
+            if result.get("year"):
+                console.print(f"Year: {result['year']}")
+            if result.get("citation_count"):
+                console.print(f"Citations: {result['citation_count']} (influential: {result.get('influential_citations', 0)})")
+            if result.get("venue"):
+                console.print(f"Venue: {result['venue']}")
+            if result.get("tldr"):
+                console.print(f"TL;DR: {result['tldr']}")
+            if result.get("pdf_url") or result.get("open_access_pdf"):
+                console.print(f"PDF: {result.get('pdf_url') or result.get('open_access_pdf')}")
+            q = result.get("quality") or {}
+            if q:
+                rating_color = {"excellent": "green", "good": "yellow", "ok": "dim"}.get(q.get("rating", ""), "dim")
+                console.print(f"\nQuality: [{rating_color}]{q.get('rating', '?').upper()}[/{rating_color}] (overall: {q.get('overall', 'N/A')})")
+        return
+
+    # Mode: search by topic
+    if not args.topic:
+        print("Usage:")
+        print("  agent-reach research \"topic\"           — search papers")
+        print("  agent-reach research --analyze \"Title\"   — analyze a paper")
+        print()
+        print("Examples:")
+        print("  agent-reach research \"speech recognition\"")
+        print("  agent-reach research \"LLM reasoning\" -n 10 --sort latest")
+        print("  agent-reach research --analyze \"Attention Is All You Need\"")
+        return
+
+    results = ch.search(
+        args.topic,
+        max_results=args.max_results,
+        year=args.year,
+        emphasis=args.sort,
+        config=config,
+    )
+    if getattr(args, "json", False):
+        print(json.dumps(results, ensure_ascii=False, indent=2))
+    else:
+        print(ch.summary(results))
+        print(f"Total: {len(results)} papers (sorted by: {args.sort})")
+        if results:
+            print()
+            print("Tip: agent-reach research --analyze \"Paper Title\" to analyze a specific paper")
+
+
+# ── ResearchAgent CLI handlers ──────────────────────
+
+
+def _cmd_read(args):
+    """Download and read a paper PDF."""
+    from agent_reach.research.pdf_reader import download_and_read, find_pdf_url
+    from agent_reach.research.analyzer import analyze_paper
+    from agent_reach.config import Config
+
+    config = Config()
+    url_or_title = args.url_or_title
+
+    # Determine if it's a URL or a title
+    is_url = url_or_title.startswith("http://") or url_or_title.startswith("https://")
+
+    if is_url:
+        pdf_url = url_or_title
+    else:
+        # Search for the paper first
+        print(f"🔍 正在搜索「{url_or_title}」...")
+        result = analyze_paper(url_or_title, config=config)
+        if result.get("found"):
+            pdf_url = find_pdf_url(result)
+            if not pdf_url:
+                print(f"找到论文但无 PDF 链接：{result.get('title', url_or_title)}")
+                print(f"URL: {result.get('url', 'N/A')}")
+                return
+            print(f"✅ 找到：{result.get('title', url_or_title)} ({result.get('year', '?')})")
+        else:
+            # Try arXiv search directly
+            print(f"在 Semantic Scholar 未找到，尝试 arXiv...")
+            from agent_reach.channels.arxiv import search_arxiv
+            papers = search_arxiv(url_or_title, max_results=1)
+            if papers:
+                p = papers[0]
+                pdf_url = p.pdf_url
+                print(f"✅ 找到：{p.title} ({p.published[:4] if p.published else '?'})")
+            else:
+                print(f"未找到论文：{url_or_title}")
+                print("请提供完整的 PDF URL，或更准确的论文标题。")
+                return
+
+    print(f"📥 下载中: {pdf_url}")
+    text = download_and_read(
+        pdf_url,
+        cache=True,
+        max_pages=args.pages,
+        on_progress=lambda msg: print(f"  {msg}"),
+    )
+
+    if text.startswith("下载失败") or text.startswith("无法提取"):
+        print(text)
+        return
+
+    # Show preview
+    preview_len = min(2000, len(text))
+    print(f"\n{'='*60}")
+    print(f"📄 全文预览 (前 {preview_len} 字符)")
+    print(f"{'='*60}")
+    print(text[:preview_len])
+    if len(text) > preview_len:
+        print(f"\n... (共 {len(text)} 字符，已截断)")
+        print("提示：使用 `--pages` 参数控制读取页数，当前默认 50 页。")
 
 
 def _cmd_watch():
