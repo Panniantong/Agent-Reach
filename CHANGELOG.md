@@ -6,6 +6,21 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### 🆕 New Channels / 新增渠道
+
+#### 🦞 Lobsters
+- Hottest/newest stories, tag browsing, story detail + threaded comments, and user profiles via the public lobste.rs JSON API
+- Zero config — no auth, no proxy, no API key required (tier 0)
+- `get_stories(kind, limit)` / `get_hottest(limit)` / `get_newest(limit)`, `get_tag(tag, limit)`, `get_story(short_id, comment_limit)`, `get_user(username)`
+- `search()` returns guidance (Lobsters has no JSON search endpoint — `search.json` returns 400), pointing to site search / Exa, mirroring the V2EX channel
+- 通过 lobste.rs 公开 JSON API 获取热门/最新故事、标签浏览、故事详情+评论、用户信息
+- 零配置，无需认证、无需代理、无需 API Key
+- Channel count: 13 → 14 / 渠道数量：13 → 14
+
+---
+
 ## [1.3.1] - 2026-03-27
 
 ### 🐛 Bug Fixes / 修复

@@ -28,6 +28,7 @@ class TestChannelRegistry:
         assert "github" in names
         assert "twitter" in names
         assert "v2ex" in names
+        assert "lobsters" in names
 
 
 class TestV2EXChannel:
@@ -1209,3 +1210,238 @@ class TestXiaoyuzhouChannel:
         status, msg = ch.check()
         assert status == "ok"
         assert ch.active_backend == "groq-whisper"
+
+
+class TestLobstersChannel:
+    """Lobsters channel — public JSON API, all mocked."""
+
+    @staticmethod
+    def _fake_urlopen(routes):
+        """Build a urlopen replacement that routes by URL substring."""
+        import urllib.request
+
+        class FakeResponse:
+            def __init__(self, payload):
+                self._payload = payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(self._payload).encode()
+
+        def _open(req, timeout=None):
+            url = req.full_url if isinstance(req, urllib.request.Request) else req
+            for needle, payload in routes:
+                if needle in url:
+                    return FakeResponse(payload)
+            raise AssertionError(f"unexpected URL in test: {url}")
+
+        return _open
+
+    def test_can_handle_lobsters_urls(self):
+        from agent_reach.channels.lobsters import LobstersChannel
+
+        ch = LobstersChannel()
+        assert ch.can_handle("https://lobste.rs/s/abc123/some_title")
+        assert ch.can_handle("https://lobste.rs/~user")
+        assert not ch.can_handle("https://v2ex.com/t/1")
+        assert not ch.can_handle("https://news.ycombinator.com/item?id=1")
+
+    def test_check_ok_when_api_reachable(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.lobsters import LobstersChannel
+
+        monkeypatch.setattr(
+            urllib.request, "urlopen", self._fake_urlopen([("hottest.json", [])])
+        )
+        ch = LobstersChannel()
+        status, msg = ch.check()
+        assert status == "ok"
+        assert "公开 API 可用" in msg
+        assert ch.active_backend == ch.backends[0]
+
+    def test_check_warn_when_api_unreachable(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.lobsters import LobstersChannel
+
+        def raise_error(req, timeout=None):
+            raise URLError("connection refused")
+
+        monkeypatch.setattr(urllib.request, "urlopen", raise_error)
+        ch = LobstersChannel()
+        status, msg = ch.check()
+        assert status == "warn"
+        assert "失败" in msg
+        assert ch.active_backend is None
+
+    def test_get_hottest_returns_list(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.lobsters import LobstersChannel
+
+        routes = [
+            (
+                "hottest.json",
+                [
+                    {
+                        "short_id": "abc123",
+                        "title": "A cool compiler",
+                        "url": "https://example.com/compiler",
+                        "short_id_url": "https://lobste.rs/s/abc123",
+                        "score": 55,
+                        "submitter_user": "alice",
+                        "comment_count": 12,
+                        "tags": ["compilers", "rust"],
+                        "description_plain": "Some text",
+                        "created_at": "2026-06-24T00:00:00.000-05:00",
+                    },
+                    {
+                        "short_id": "def456",
+                        "title": "Ask: best editor?",
+                        "url": "",
+                        "short_id_url": "https://lobste.rs/s/def456",
+                        "score": 8,
+                        "submitter_user": "bob",
+                        "comment_count": 30,
+                        "tags": ["ask"],
+                        "created_at": "2026-06-24T01:00:00.000-05:00",
+                    },
+                ],
+            )
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        stories = LobstersChannel().get_hottest(limit=5)
+        assert len(stories) == 2
+        assert stories[0]["short_id"] == "abc123"
+        assert stories[0]["url"] == "https://example.com/compiler"
+        assert stories[0]["by"] == "alice"
+        assert stories[0]["comments"] == 12
+        assert stories[0]["tags"] == ["compilers", "rust"]
+        # Text post with empty url falls back to the discussion page
+        assert stories[1]["url"] == "https://lobste.rs/s/def456"
+
+    def test_get_stories_respects_limit(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.lobsters import LobstersChannel
+
+        data = [
+            {"short_id": f"id{i}", "title": f"S{i}", "url": "", "short_id_url": f"u{i}"}
+            for i in range(10)
+        ]
+        monkeypatch.setattr(
+            urllib.request, "urlopen", self._fake_urlopen([("newest.json", data)])
+        )
+        assert len(LobstersChannel().get_newest(limit=3)) == 3
+
+    def test_get_stories_rejects_unknown_kind(self):
+        import pytest
+
+        from agent_reach.channels.lobsters import LobstersChannel
+
+        with pytest.raises(ValueError):
+            LobstersChannel().get_stories("bogus")
+
+    def test_get_tag(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.lobsters import LobstersChannel
+
+        routes = [
+            (
+                "/t/rust.json",
+                [
+                    {
+                        "short_id": "r1",
+                        "title": "Rust thing",
+                        "url": "https://example.com/r",
+                        "short_id_url": "https://lobste.rs/s/r1",
+                        "tags": ["rust"],
+                    }
+                ],
+            )
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        stories = LobstersChannel().get_tag("rust")
+        assert len(stories) == 1
+        assert stories[0]["tags"] == ["rust"]
+
+    def test_get_story_returns_detail_and_comments(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.lobsters import LobstersChannel
+
+        routes = [
+            (
+                "/s/abc123.json",
+                {
+                    "short_id": "abc123",
+                    "title": "A cool compiler",
+                    "url": "https://example.com/compiler",
+                    "short_id_url": "https://lobste.rs/s/abc123",
+                    "score": 55,
+                    "submitter_user": "alice",
+                    "comment_count": 2,
+                    "tags": ["compilers"],
+                    "comments": [
+                        {
+                            "commenting_user": "carol",
+                            "comment_plain": "Nice work",
+                            "score": 5,
+                            "depth": 0,
+                            "created_at": "2026-06-24T02:00:00.000-05:00",
+                        },
+                        # Deleted comments are skipped.
+                        {"commenting_user": "dan", "is_deleted": True},
+                    ],
+                },
+            )
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        story = LobstersChannel().get_story("abc123")
+        assert story["title"] == "A cool compiler"
+        assert story["by"] == "alice"
+        assert len(story["replies"]) == 1
+        assert story["replies"][0]["by"] == "carol"
+        assert story["replies"][0]["text"] == "Nice work"
+
+    def test_get_user(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.lobsters import LobstersChannel
+
+        routes = [
+            (
+                "/~alice.json",
+                {
+                    "username": "alice",
+                    "karma": 4200,
+                    "created_at": "2018-01-01T00:00:00.000-05:00",
+                    "about": "I like compilers",
+                    "github_username": "alice-gh",
+                    "is_admin": False,
+                    "is_moderator": True,
+                },
+            )
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        user = LobstersChannel().get_user("alice")
+        assert user["username"] == "alice"
+        assert user["karma"] == 4200
+        assert user["github_username"] == "alice-gh"
+        assert user["is_moderator"] is True
+        assert user["url"] == "https://lobste.rs/~alice"
+
+    def test_search_returns_guidance(self):
+        from agent_reach.channels.lobsters import LobstersChannel
+
+        results = LobstersChannel().search("rust")
+        assert len(results) == 1
+        assert "error" in results[0]
+        assert "lobste.rs" in results[0]["error"]

@@ -1,6 +1,6 @@
 # 社交媒体 & 社区
 
-小红书、Twitter/X、B站、V2EX、Reddit。
+小红书、Twitter/X、B站、V2EX、Reddit、Lobsters。
 
 ## 小红书 / XiaoHongShu（多后端）
 
@@ -230,3 +230,59 @@ rdt all --limit 10              # 浏览 /r/all
 ### 高级选项：官方 API + PRAW（仅限已有凭证的用户）
 
 2025-11 前注册过 Reddit script app（持有 client_id/client_secret）的用户可以用 PRAW 走官方 API（100 QPM 免费）。新申请需人工审批且个人项目基本不批，**不要推荐新用户走这条路**。
+
+## Lobsters (公开 API)
+
+Lobsters（lobste.rs）是一个聚焦计算机/编程的高质量社区。无需认证，绝大多数页面加 `.json` 即得公开 API。
+
+### 热门 / 最新故事
+
+```bash
+curl -s "https://lobste.rs/hottest.json" -H "User-Agent: agent-reach/1.0"
+curl -s "https://lobste.rs/newest.json" -H "User-Agent: agent-reach/1.0"
+```
+
+### 按标签
+
+```bash
+# 标签如: rust, go, python, security, ai, osdev, web
+curl -s "https://lobste.rs/t/rust.json" -H "User-Agent: agent-reach/1.0"
+```
+
+### 故事详情 + 评论
+
+```bash
+# short_id 从 URL 获取，如 https://lobste.rs/s/abc123
+curl -s "https://lobste.rs/s/SHORT_ID.json" -H "User-Agent: agent-reach/1.0"
+```
+
+### 用户信息
+
+```bash
+# 注意：用户 JSON 在 /~<username>.json（/u/ 形式会 301 跳转）
+curl -s "https://lobste.rs/~USERNAME.json" -H "User-Agent: agent-reach/1.0"
+```
+
+### Python 调用示例
+
+```python
+from agent_reach.channels.lobsters import LobstersChannel
+
+ch = LobstersChannel()
+
+# 热门 / 最新
+for s in ch.get_hottest(limit=10):
+    print(f"[{s['score']}pts {s['comments']}c] {s['title']} {s['tags']} — {s['url']}")
+
+# 按标签
+rust = ch.get_tag("rust", limit=10)
+
+# 故事详情 + 评论（带缩进层级 depth）
+story = ch.get_story("abc123", comment_limit=50)
+print(story["title"], "—", story["by"])
+
+# 用户信息
+user = ch.get_user("alice")
+```
+
+> **搜索**: Lobsters 公开 API 不提供 JSON 搜索端点（`search.json` 返回 400）。`ch.search()` 会返回一条指引，建议改用站内搜索页 `https://lobste.rs/search?q=...&what=stories` 或 Exa channel 的 `site:lobste.rs`。
