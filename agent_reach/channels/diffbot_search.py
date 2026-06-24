@@ -68,7 +68,7 @@ class DiffbotSearchChannel(Channel):
                 "需要 Diffbot CLI（diffbot-python）。安装：\n"
                 "  pipx install diffbot-python   （或 uv tool install diffbot-python）\n"
                 "再配置 API Token（有免费额度）：\n"
-                f"  agent-reach configure diffbot-key <token>   获取：{_DIFFBOT_SIGNUP}"
+                f"  agent-reach configure diffbot-token <token>   获取：{_DIFFBOT_SIGNUP}"
             )
         if probe.status == "broken":
             return "error", probe.hint or "db 无法执行，重装：pipx reinstall diffbot-python"
@@ -77,7 +77,7 @@ class DiffbotSearchChannel(Channel):
         if not has_token(config):
             return "warn", (
                 "Diffbot CLI 已装，但缺少 API Token。配置后即可用：\n"
-                f"  agent-reach configure diffbot-key <token>   获取：{_DIFFBOT_SIGNUP}\n"
+                f"  agent-reach configure diffbot-token <token>   获取：{_DIFFBOT_SIGNUP}\n"
                 f"  （或 export {_TOKEN_ENV_VAR}=...）"
             )
         self.active_backend = self.backends[0]

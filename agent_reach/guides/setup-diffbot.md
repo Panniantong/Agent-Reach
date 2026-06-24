@@ -17,7 +17,7 @@ pipx install diffbot-python        # 或：uv tool install diffbot-python
 ### 2. 配置 API Token
 ```bash
 # 免费 Token：https://app.diffbot.com/get-started/
-agent-reach configure diffbot-key <token>
+agent-reach configure diffbot-token <token>
 ```
 这会把 Token 同时写入 agent-reach 配置和 `~/.diffbot/credentials`（`db` 默认读取该文件），之后无需再 export 任何环境变量。
 
@@ -40,7 +40,7 @@ A: Exa 免费、零配置、擅长英文/技术/代码搜索；Diffbot 需免费
 A: 写入 `~/.diffbot/credentials`（权限 0600）和 `~/.agent-reach/config.yaml`（同样 0600）。不会上传到任何第三方。
 
 **Q: `db` 报 "Invalid or unauthorized API token." 怎么办？**
-A: Token 缺失或无效。重新运行 `agent-reach configure diffbot-key <token>`，确认 Token 正确且额度未耗尽。
+A: Token 缺失或无效。重新运行 `agent-reach configure diffbot-token <token>`，确认 Token 正确且额度未耗尽。
 
 **Q: `db` 命令找不到？**
 A: 没装或 PATH 没生效。运行 `pipx install diffbot-python`；若提示存在但无法执行（升级 Python 后 venv 断链），用 `pipx reinstall diffbot-python`。

@@ -81,7 +81,7 @@ def main():
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
     p_conf.add_argument("key", nargs="?", default=None,
                         choices=["proxy", "github-token", "groq-key", "openai-key",
-                                 "diffbot-key", "twitter-cookies", "youtube-cookies",
+                                 "diffbot-token", "twitter-cookies", "youtube-cookies",
                                  "xhs-cookies"],
                         help="What to configure (omit if using --from-browser)")
     p_conf.add_argument("value", nargs="*", help="The value(s) to set")
@@ -874,7 +874,7 @@ def _install_diffbot_deps():
     else:
         print("  -- Diffbot API token not set (free tier available).")
         print("     Get a token: https://app.diffbot.com/get-started/")
-        print("     Then run: agent-reach configure diffbot-key <token>")
+        print("     Then run: agent-reach configure diffbot-token <token>")
 
 
 def _install_system_deps_safe():
@@ -1146,7 +1146,7 @@ def _cmd_configure(args):
         config.set("openai_api_key", value)
         print(f"✅ OpenAI key configured!")
 
-    elif args.key == "diffbot-key":
+    elif args.key == "diffbot-token":
         _configure_diffbot_token(config, value)
 
 

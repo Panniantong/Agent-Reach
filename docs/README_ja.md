@@ -219,6 +219,7 @@ channels/
 | ツイート閲覧 | [twitter-cli](https://github.com/public-clis/twitter-cli) | 2.1K Star、Cookie認証、検索/閲覧/タイムライン/長文 |
 | 動画字幕 + 検索 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | ⭐148K、YouTube + Bilibili + 1800サイト |
 | Web検索 | [Exa](https://exa.ai)（[mcporter](https://github.com/nicepkg/mcporter)経由） | AIセマンティック検索、MCP統合、APIキー不要 |
+| Web検索 | [Diffbot Web Search CLI](https://github.com/diffbot/diffbot-python) | Diffbotによる高速な独立Webインデックス、diffbot-python CLI、無料APIトークン |
 | GitHub | [gh CLI](https://cli.github.com) | 公式ツール、認証後フルAPI |
 | RSS閲覧 | [feedparser](https://github.com/kurtmckee/feedparser) | Pythonエコシステムの標準、⭐2.3K |
 | 小紅書 | [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) | 1.5K Star、pipxインストール、検索/閲覧/コメント/投稿 |

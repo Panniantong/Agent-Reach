@@ -106,7 +106,7 @@ opencli xiaohongshu search "query" -f yaml
 
 ```bash
 # Diffbot 全网搜索（diffbot-python 的 db CLI；结果带相关性评分/时效，-f text 适合 agent）
-# 需免费 Token：agent-reach configure diffbot-key <token>（doctor 显示 diffbot_search 即可用）
+# 需免费 Token：agent-reach configure diffbot-token <token>（doctor 显示 diffbot_search 即可用）
 db web-search "query" -n 5 -f text
 ```
 

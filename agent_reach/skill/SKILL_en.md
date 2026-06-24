@@ -97,7 +97,7 @@ opencli xiaohongshu search "query" -f yaml
 ```bash
 # Diffbot web search (the `db` CLI from diffbot-python; results carry relevance
 # scores + dates, and -f text is agent-friendly). Needs a free token:
-#   agent-reach configure diffbot-key <token>   (doctor shows diffbot_search)
+#   agent-reach configure diffbot-token <token>   (doctor shows diffbot_search)
 db web-search "query" -n 5 -f text
 ```
 

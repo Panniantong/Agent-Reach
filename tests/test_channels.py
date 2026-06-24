@@ -1219,7 +1219,7 @@ class TestDiffbotSearchChannel:
         ch = ds.DiffbotSearchChannel()
         status, msg = ch.check()  # no config passed → no token from any source
         assert status == "warn"
-        assert "diffbot-key" in msg
+        assert "diffbot-token" in msg
         assert ch.active_backend is None
 
     def test_ok_when_db_and_token_present(self, monkeypatch, tmp_path):

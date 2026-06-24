@@ -221,6 +221,7 @@ channels/
 | 비디오 자막 + 검색 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | 154K stars, YouTube + Bilibili + 1800 사이트 |
 | Bilibili 향상 | [bili-cli](https://github.com/public-clis/bilibili-cli) | 590 stars, 인기/순위/검색/피드 |
 | 웹 검색 | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | AI 시맨틱 검색, MCP 통합, API key 불필요 |
+| 웹 검색 | [Diffbot Web Search CLI](https://github.com/diffbot/diffbot-python) | Diffbot의 빠른 독립 웹 인덱스, diffbot-python CLI, 무료 API 토큰 |
 | GitHub | [gh CLI](https://cli.github.com) | 공식 도구, 인증 후 전체 API |
 | RSS 읽기 | [feedparser](https://github.com/kurtmckee/feedparser) | Python 생태계 표준, 2.3K stars |
 | XiaoHongShu | [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) | 1.5K stars, pipx 설치, 검색/읽기/댓글/게시 |
