@@ -20,6 +20,7 @@ from .linkedin import LinkedInChannel
 from .xiaoyuzhou import XiaoyuzhouChannel
 from .v2ex import V2EXChannel
 from .xueqiu import XueqiuChannel
+from .shopify import ShopifyChannel
 
 
 ALL_CHANNELS: List[Channel] = [
@@ -33,6 +34,7 @@ ALL_CHANNELS: List[Channel] = [
     XiaoyuzhouChannel(),
     V2EXChannel(),
     XueqiuChannel(),
+    ShopifyChannel(),
     RSSChannel(),
     ExaSearchChannel(),
     WebChannel(),

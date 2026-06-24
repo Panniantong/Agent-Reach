@@ -51,6 +51,7 @@ dev = [
 
 [project.scripts]
 agent-reach = "agent_reach.cli:main"
+mcp-shopify = "agent_reach.channels.shopify:main"
 
 [project.urls]
 Homepage = "https://github.com/Panniantong/agent-reach"
