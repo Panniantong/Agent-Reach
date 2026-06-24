@@ -28,6 +28,7 @@ class TestChannelRegistry:
         assert "github" in names
         assert "twitter" in names
         assert "v2ex" in names
+        assert "hackernews" in names
 
 
 class TestV2EXChannel:
@@ -1209,3 +1210,231 @@ class TestXiaoyuzhouChannel:
         status, msg = ch.check()
         assert status == "ok"
         assert ch.active_backend == "groq-whisper"
+
+
+class TestHackerNewsChannel:
+    """Hacker News channel — Firebase API + Algolia search, all mocked."""
+
+    @staticmethod
+    def _fake_urlopen(routes):
+        """Build a urlopen replacement that routes by URL substring.
+
+        routes: list of (substring, python_obj) pairs, checked in order.
+        """
+        import urllib.request
+
+        class FakeResponse:
+            def __init__(self, payload):
+                self._payload = payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(self._payload).encode()
+
+        def _open(req, timeout=None):
+            url = req.full_url if isinstance(req, urllib.request.Request) else req
+            for needle, payload in routes:
+                if needle in url:
+                    return FakeResponse(payload)
+            raise AssertionError(f"unexpected URL in test: {url}")
+
+        return _open
+
+    def test_can_handle_hn_urls(self):
+        from agent_reach.channels.hackernews import HackerNewsChannel
+
+        ch = HackerNewsChannel()
+        assert ch.can_handle("https://news.ycombinator.com/item?id=123")
+        assert ch.can_handle("https://news.ycombinator.com/user?id=pg")
+        assert not ch.can_handle("https://v2ex.com/t/1")
+        assert not ch.can_handle("https://reddit.com/r/python")
+
+    def test_check_ok_when_api_reachable(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.hackernews import HackerNewsChannel
+
+        monkeypatch.setattr(
+            urllib.request, "urlopen", self._fake_urlopen([("maxitem.json", 40000000)])
+        )
+        ch = HackerNewsChannel()
+        status, msg = ch.check()
+        assert status == "ok"
+        assert "公开 API 可用" in msg
+        assert ch.active_backend == ch.backends[0]
+
+    def test_check_warn_when_api_unreachable(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.hackernews import HackerNewsChannel
+
+        def raise_error(req, timeout=None):
+            raise URLError("connection refused")
+
+        monkeypatch.setattr(urllib.request, "urlopen", raise_error)
+        ch = HackerNewsChannel()
+        status, msg = ch.check()
+        assert status == "warn"
+        assert "失败" in msg
+        assert ch.active_backend is None
+
+    def test_get_top_stories_returns_list(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.hackernews import HackerNewsChannel
+
+        routes = [
+            ("topstories.json", [111, 222]),
+            (
+                "item/111.json",
+                {
+                    "id": 111,
+                    "type": "story",
+                    "title": "Show HN: My project",
+                    "url": "https://example.com/proj",
+                    "score": 256,
+                    "by": "alice",
+                    "descendants": 42,
+                    "time": 1700000000,
+                },
+            ),
+            (
+                "item/222.json",
+                {
+                    "id": 222,
+                    "type": "story",
+                    "title": "Ask HN: How to learn Rust?",
+                    "score": 80,
+                    "by": "bob",
+                    "descendants": 10,
+                    "text": "Looking for resources",
+                    "time": 1700000001,
+                },
+            ),
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        stories = HackerNewsChannel().get_top_stories(limit=5)
+        assert len(stories) == 2
+        assert stories[0]["id"] == 111
+        assert stories[0]["title"] == "Show HN: My project"
+        assert stories[0]["url"] == "https://example.com/proj"
+        assert stories[0]["score"] == 256
+        assert stories[0]["comments"] == 42
+        # Text post with no url falls back to the HN discussion page
+        assert stories[1]["url"] == "https://news.ycombinator.com/item?id=222"
+        assert stories[1]["hn_url"] == "https://news.ycombinator.com/item?id=222"
+
+    def test_get_stories_respects_limit(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.hackernews import HackerNewsChannel
+
+        routes = [("newstories.json", list(range(1, 21)))]
+        for i in range(1, 4):
+            routes.append((f"item/{i}.json", {"id": i, "type": "story", "title": f"S{i}"}))
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        stories = HackerNewsChannel().get_stories("new", limit=3)
+        assert len(stories) == 3
+
+    def test_get_stories_rejects_unknown_kind(self):
+        import pytest
+
+        from agent_reach.channels.hackernews import HackerNewsChannel
+
+        with pytest.raises(ValueError):
+            HackerNewsChannel().get_stories("bogus")
+
+    def test_get_item_returns_detail_and_comments(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.hackernews import HackerNewsChannel
+
+        routes = [
+            (
+                "item/999.json",
+                {
+                    "id": 999,
+                    "type": "story",
+                    "title": "Big news",
+                    "url": "https://example.com/news",
+                    "by": "carol",
+                    "score": 500,
+                    "descendants": 2,
+                    "time": 1700000000,
+                    "kids": [1001, 1002, 1003],
+                },
+            ),
+            ("item/1001.json", {"id": 1001, "by": "dan", "text": "Great point", "time": 1}),
+            # Deleted/dead comments are skipped.
+            ("item/1002.json", {"id": 1002, "deleted": True}),
+            ("item/1003.json", {"id": 1003, "by": "eve", "text": "Agreed", "time": 2}),
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        result = HackerNewsChannel().get_item(999)
+        assert result["title"] == "Big news"
+        assert result["by"] == "carol"
+        assert result["hn_url"] == "https://news.ycombinator.com/item?id=999"
+        assert len(result["replies"]) == 2
+        assert result["replies"][0]["by"] == "dan"
+        assert result["replies"][1]["text"] == "Agreed"
+
+    def test_get_user(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.hackernews import HackerNewsChannel
+
+        routes = [
+            (
+                "user/pg.json",
+                {
+                    "id": "pg",
+                    "karma": 157000,
+                    "created": 1160418092,
+                    "about": "Founder",
+                    "submitted": [1, 2, 3, 4],
+                },
+            )
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        user = HackerNewsChannel().get_user("pg")
+        assert user["id"] == "pg"
+        assert user["karma"] == 157000
+        assert user["submitted_count"] == 4
+        assert user["url"] == "https://news.ycombinator.com/user?id=pg"
+
+    def test_search_uses_algolia(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.hackernews import HackerNewsChannel
+
+        routes = [
+            (
+                "hn.algolia.com",
+                {
+                    "hits": [
+                        {
+                            "objectID": "555",
+                            "title": "Rust 2.0 released",
+                            "url": "https://example.com/rust",
+                            "author": "frank",
+                            "points": 300,
+                            "num_comments": 120,
+                            "created_at_i": 1700000000,
+                        }
+                    ]
+                },
+            )
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        results = HackerNewsChannel().search("rust", limit=5)
+        assert len(results) == 1
+        assert results[0]["id"] == "555"
+        assert results[0]["title"] == "Rust 2.0 released"
+        assert results[0]["score"] == 300
+        assert results[0]["comments"] == 120
+        assert results[0]["hn_url"] == "https://news.ycombinator.com/item?id=555"

@@ -6,6 +6,20 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### 🆕 New Channels / 新增渠道
+
+#### 🟠 Hacker News
+- Top/new/best stories, Ask HN, Show HN, jobs, story detail + top-level comments, user profiles via the official Firebase API; full-text search via the Algolia HN Search API
+- Zero config — no auth, no proxy, no API key required (tier 0)
+- `get_stories(kind, limit)` / `get_top_stories(limit)`, `get_item(id, comment_limit)`, `get_user(username)`, `search(query, limit, by_date)`
+- 通过官方 Firebase API 获取热门/最新/最佳故事、Ask/Show HN、招聘、故事详情+顶层评论、用户信息；通过 Algolia 全文搜索
+- 零配置，无需认证、无需代理、无需 API Key
+- Channel count: 13 → 14 / 渠道数量：13 → 14
+
+---
+
 ## [1.3.1] - 2026-03-27
 
 ### 🐛 Bug Fixes / 修复
