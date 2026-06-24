@@ -1,6 +1,6 @@
 # 社交媒体 & 社区
 
-小红书、Twitter/X、B站、V2EX、Reddit。
+小红书、Twitter/X、B站、V2EX、Reddit、Hacker News。
 
 ## 小红书 / XiaoHongShu（多后端）
 
@@ -189,6 +189,70 @@ user = ch.get_user("Livid")
 ```
 
 > **节点列表**: https://www.v2ex.com/planes
+
+## Hacker News (公开 API)
+
+无需认证，两个官方公开 API：Firebase（故事/评论/用户）+ Algolia（全文搜索）。
+
+### 全文搜索（Algolia，无需 key）
+
+```bash
+# 按相关性排序
+curl -s "https://hn.algolia.com/api/v1/search?query=QUERY&tags=story&hitsPerPage=10"
+
+# 按时间排序（最新优先）
+curl -s "https://hn.algolia.com/api/v1/search_by_date?query=QUERY&tags=story&hitsPerPage=10"
+```
+
+### 故事列表（Firebase，返回 ID 数组，再取 item 详情）
+
+```bash
+# 热门 / 最新 / 最佳 / Ask HN / Show HN / 招聘
+curl -s "https://hacker-news.firebaseio.com/v0/topstories.json"
+curl -s "https://hacker-news.firebaseio.com/v0/newstories.json"
+curl -s "https://hacker-news.firebaseio.com/v0/beststories.json"
+curl -s "https://hacker-news.firebaseio.com/v0/askstories.json"
+curl -s "https://hacker-news.firebaseio.com/v0/showstories.json"
+curl -s "https://hacker-news.firebaseio.com/v0/jobstories.json"
+```
+
+### 故事详情 + 评论
+
+```bash
+# item_id 从 URL 获取，如 https://news.ycombinator.com/item?id=12345
+# story 的 kids 字段是顶层评论的 item ID，逐个取 item/<kid>.json 即可
+curl -s "https://hacker-news.firebaseio.com/v0/item/ITEM_ID.json"
+```
+
+### 用户信息
+
+```bash
+curl -s "https://hacker-news.firebaseio.com/v0/user/USERNAME.json"
+```
+
+### Python 调用示例
+
+```python
+from agent_reach.channels.hackernews import HackerNewsChannel
+
+ch = HackerNewsChannel()
+
+# 热门故事（kind: top/new/best/ask/show/job）
+for s in ch.get_top_stories(limit=10):
+    print(f"[{s['score']}pts {s['comments']}c] {s['title']} — {s['url']}")
+
+# 全文搜索（by_date=True 按时间排序）
+hits = ch.search("rust async", limit=10)
+
+# 故事详情 + 顶层评论
+item = ch.get_item(12345, comment_limit=20)
+print(item["title"], "—", item["by"])
+
+# 用户信息
+user = ch.get_user("pg")
+```
+
+> 每个故事详情需要 N+1 次请求（先取 ID 列表，再逐个取 item）。`get_top_stories(limit=N)` 已帮你处理；批量抓取时注意控制 limit。
 
 ## Reddit（多后端，必须登录态）
 
