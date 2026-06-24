@@ -100,6 +100,8 @@ rdt search "query" --limit 10            # 存量/服务器
 
 # 小红书（桌面首选 OpenCLI）
 opencli xiaohongshu search "query" -f yaml
+# 下载笔记图片/视频
+opencli xiaohongshu download "NOTE_URL" --output /tmp/xhs-media
 ```
 
 ## 环境检查

@@ -120,7 +120,16 @@ The Agent auto-installs, detects your environment, and tells you what's ready.
 <summary>Manual install</summary>
 
 ```bash
+# Option A: pipx (recommended)
+pipx install https://github.com/Panniantong/agent-reach/archive/main.zip
+
+# Option B: uv tool (faster alternative to pipx)
+uv tool install https://github.com/Panniantong/agent-reach/archive/main.zip
+
+# Option C: plain pip (use a venv if PEP 668 blocks you)
 pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+
+# Then run:
 agent-reach install --env=auto
 ```
 </details>

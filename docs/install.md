@@ -49,8 +49,11 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 ### Step 1: Install the basics
 
 ```bash
-# 推荐：pipx（最省心）
+# 推荐：pipx 或 uv tool（最省心，二选一）
 pipx install https://github.com/Panniantong/agent-reach/archive/main.zip
+# 或者用 uv（更快，兼容 pipx 用法）：
+uv tool install https://github.com/Panniantong/agent-reach/archive/main.zip
+
 agent-reach install --env=auto
 
 # 如果你的 Python 来自 Homebrew / 遇到 PEP 668（externally-managed-environment）
@@ -79,7 +82,7 @@ This installs core infrastructure (gh CLI, Node.js, mcporter, Exa search, yt-dlp
 - Web (Jina Reader), YouTube, GitHub, RSS, Exa Search, V2EX, Bilibili (basic)
 
 > 💡 **macOS / Homebrew Python 提示 `externally-managed-environment`？**
-> 这是 PEP 668 保护，不是 Agent Reach 本身的问题。优先用 `pipx install ...`，或先创建 `venv` 再安装。
+> 这是 PEP 668 保护，不是 Agent Reach 本身的问题。优先用 `pipx install ...` 或 `uv tool install ...`，或先创建 `venv` 再安装。
 
 **Safe mode / Dry run:**
 
