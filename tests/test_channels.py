@@ -28,6 +28,7 @@ class TestChannelRegistry:
         assert "github" in names
         assert "twitter" in names
         assert "v2ex" in names
+        assert "wikipedia" in names
 
 
 class TestV2EXChannel:
@@ -1209,3 +1210,212 @@ class TestXiaoyuzhouChannel:
         status, msg = ch.check()
         assert status == "ok"
         assert ch.active_backend == "groq-whisper"
+
+
+class TestWikipediaChannel:
+    """Wikipedia channel — Wikimedia REST + Action API, all mocked."""
+
+    @staticmethod
+    def _fake_urlopen(routes):
+        """Build a urlopen replacement that routes by URL substring."""
+        import urllib.request
+
+        class FakeResponse:
+            def __init__(self, payload):
+                self._payload = payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(self._payload).encode()
+
+        def _open(req, timeout=None):
+            url = req.full_url if isinstance(req, urllib.request.Request) else req
+            for needle, payload in routes:
+                if needle in url:
+                    return FakeResponse(payload)
+            raise AssertionError(f"unexpected URL in test: {url}")
+
+        return _open
+
+    def test_can_handle_wikipedia_urls(self):
+        from agent_reach.channels.wikipedia import WikipediaChannel
+
+        ch = WikipediaChannel()
+        assert ch.can_handle("https://en.wikipedia.org/wiki/Python")
+        assert ch.can_handle("https://zh.wikipedia.org/wiki/Python")
+        assert not ch.can_handle("https://v2ex.com/t/1")
+        assert not ch.can_handle("https://github.com/user/repo")
+
+    def test_check_ok_when_api_reachable(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.wikipedia import WikipediaChannel
+
+        monkeypatch.setattr(
+            urllib.request,
+            "urlopen",
+            self._fake_urlopen([("siteinfo", {"query": {"general": {}}})]),
+        )
+        ch = WikipediaChannel()
+        status, msg = ch.check()
+        assert status == "ok"
+        assert "公开 API 可用" in msg
+        assert ch.active_backend == ch.backends[0]
+
+    def test_check_warn_when_api_unreachable(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.wikipedia import WikipediaChannel
+
+        def raise_error(req, timeout=None):
+            raise URLError("connection refused")
+
+        monkeypatch.setattr(urllib.request, "urlopen", raise_error)
+        ch = WikipediaChannel()
+        status, msg = ch.check()
+        assert status == "warn"
+        assert "失败" in msg
+        assert ch.active_backend is None
+
+    def test_search_strips_html_and_builds_url(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.wikipedia import WikipediaChannel
+
+        routes = [
+            (
+                "list=search",
+                {
+                    "query": {
+                        "search": [
+                            {
+                                "title": "Python (programming language)",
+                                "snippet": 'A <span class="searchmatch">Python</span> &quot;language&quot;',
+                                "pageid": 23862,
+                                "wordcount": 12000,
+                            }
+                        ]
+                    }
+                },
+            )
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        results = WikipediaChannel().search("python", limit=5)
+        assert len(results) == 1
+        assert results[0]["title"] == "Python (programming language)"
+        assert results[0]["snippet"] == 'A Python "language"'  # tags + entities
+        assert results[0]["pageid"] == 23862
+        assert (
+            results[0]["url"]
+            == "https://en.wikipedia.org/wiki/Python_%28programming_language%29"
+        )
+
+    def test_search_respects_lang(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.wikipedia import WikipediaChannel
+
+        captured = {}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps({"query": {"search": []}}).encode()
+
+        def _open(req, timeout=None):
+            captured["url"] = req.full_url
+            return FakeResponse()
+
+        monkeypatch.setattr(urllib.request, "urlopen", _open)
+        WikipediaChannel().search("测试", limit=3, lang="zh")
+        assert "zh.wikipedia.org" in captured["url"]
+
+    def test_get_summary(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.wikipedia import WikipediaChannel
+
+        routes = [
+            (
+                "page/summary/",
+                {
+                    "title": "Python (programming language)",
+                    "description": "High-level programming language",
+                    "extract": "Python is a programming language.",
+                    "lang": "en",
+                    "content_urls": {
+                        "desktop": {
+                            "page": "https://en.wikipedia.org/wiki/Python_(programming_language)"
+                        }
+                    },
+                    "thumbnail": {"source": "https://example.com/py.png"},
+                },
+            )
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        summary = WikipediaChannel().get_summary("Python (programming language)")
+        assert summary["title"] == "Python (programming language)"
+        assert summary["description"] == "High-level programming language"
+        assert summary["extract"].startswith("Python is")
+        assert summary["thumbnail"] == "https://example.com/py.png"
+        assert summary["url"].endswith("(programming_language)")
+
+    def test_get_article_extracts_plain_text(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.wikipedia import WikipediaChannel
+
+        routes = [
+            (
+                "prop=extracts",
+                {
+                    "query": {
+                        "pages": {
+                            "23862": {
+                                "pageid": 23862,
+                                "title": "Python (programming language)",
+                                "extract": "Full plain-text article body.",
+                            }
+                        }
+                    }
+                },
+            )
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        article = WikipediaChannel().get_article("Python (programming language)")
+        assert article["pageid"] == 23862
+        assert article["extract"] == "Full plain-text article body."
+
+    def test_get_sections(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.wikipedia import WikipediaChannel
+
+        routes = [
+            (
+                "prop=sections",
+                {
+                    "parse": {
+                        "sections": [
+                            {"index": "1", "level": "2", "line": "History", "anchor": "History"},
+                            {"index": "2", "level": "2", "line": "Syntax", "anchor": "Syntax"},
+                        ]
+                    }
+                },
+            )
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        sections = WikipediaChannel().get_sections("Python (programming language)")
+        assert len(sections) == 2
+        assert sections[0]["title"] == "History"
+        assert sections[1]["anchor"] == "Syntax"

@@ -7,18 +7,18 @@ description: >
 
   Also MUST USE when user mentions any platform or shares any URL/链接:
   小红书/xiaohongshu/xhs, Twitter/推特/X, B站/bilibili, Reddit, V2EX,
-  LinkedIn/领英/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客,
-  雪球/股票行情, RSS feeds, or any web URL.
+  维基百科/Wikipedia, LinkedIn/领英/招聘/求职/jobs, YouTube, GitHub code search,
+  小宇宙播客, 雪球/股票行情, RSS feeds, or any web URL.
 
-  13 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
-  Zero config for 6 channels. Run `agent-reach doctor --json` to see which
+  14 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  Zero config for 7 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
   NOT for: 写报告/数据分析/翻译等内容加工（本 skill 只负责从互联网获取内容）；
   发帖/评论/点赞等写操作；已有专门 skill 的平台（先用专门 skill）。
 
   【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。
-  分类：search / social (小红书/推特/B站/V2EX/Reddit) / career(LinkedIn) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客)。
+  分类：search / social (小红书/推特/B站/V2EX/Reddit) / career(LinkedIn) / dev(github) / reference(维基百科) / web(网页/文章/RSS) / video(YouTube/B站/播客)。
 triggers:
   - research: 调研/全网调研/帮我调研/研究一下/research/深入了解
   - search: 搜/查/找/search/搜索/查一下/帮我搜/看看大家怎么说
@@ -30,6 +30,7 @@ triggers:
     - Reddit: reddit
   - career: 招聘/职位/求职/linkedin/领英/找工作
   - dev: github/代码/仓库/gh/issue/pr/分支/commit
+  - reference: 维基百科/wikipedia/wiki/百科/词条/这是谁/什么是
   - web: 网页/链接/文章/rss/读一下/打开这个
   - video: youtube/视频/播客/字幕/小宇宙/转录/yt
   - finance: 雪球/股票/stock/xueqiu/行情/基金
@@ -40,7 +41,7 @@ metadata:
 
 # Agent Reach — 互联网能力路由器
 
-13 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
+14 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
 
 ## 常驻规则（全程适用）
 
@@ -64,6 +65,7 @@ metadata:
 | 招聘/职位/LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub/代码 | dev | [references/dev.md](references/dev.md) |
 | 网页/文章/RSS | web | [references/web.md](references/web.md) |
+| 维基百科/百科/词条 | reference | [references/reference.md](references/reference.md) |
 | YouTube/B站/播客字幕 | video | [references/video.md](references/video.md) |
 
 ## 零配置快速命令
@@ -86,6 +88,12 @@ curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1
 
 # B站搜索（bili-cli，无需登录）
 bili search "query" --type video -n 5
+
+# 维基百科搜索（Action API，无需 key；lang 可换 zh/ja/de 等）
+curl -s "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=QUERY&format=json"
+
+# 维基百科词条摘要（REST API）
+curl -s "https://en.wikipedia.org/api/rest_v1/page/summary/TITLE"
 ```
 
 ## 需登录态的平台（按 doctor 的 active_backend 选命令）
@@ -122,6 +130,7 @@ agent-reach doctor --json
 - [职场招聘](references/career.md) — LinkedIn
 - [开发工具](references/dev.md) — GitHub CLI
 - [网页阅读](references/web.md) — Jina Reader, RSS
+- [百科参考](references/reference.md) — Wikipedia（多语言）
 - [视频播客](references/video.md) — YouTube, B站, 小宇宙
 
 ## 配置渠道
