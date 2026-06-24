@@ -6,6 +6,20 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### 🆕 New Channels / 新增渠道
+
+#### 🧑‍💻 Stack Overflow
+- Question search, question detail + top voted answers (with HTML body), tag questions, and user profiles via the official Stack Exchange API v2.3
+- Zero config — no API key required (anonymous ~300 req/day per IP; responses are gzip-decompressed automatically). Multi-site via a `site` argument (default `stackoverflow`)
+- `search(query, limit, tag, site)`, `get_question(question_id, answer_limit, site)`, `get_tag_questions(tag, limit, site)`, `get_user(user_id, site)`
+- 通过官方 Stack Exchange API v2.3 实现问题搜索、问答详情+高票回答、标签问题、用户信息
+- 零配置，无需 API Key（匿名约 300 次/天，响应自动 gzip 解压）；`site` 参数支持其他 Stack Exchange 站点
+- Channel count: 13 → 14 / 渠道数量：13 → 14
+
+---
+
 ## [1.3.1] - 2026-03-27
 
 ### 🐛 Bug Fixes / 修复

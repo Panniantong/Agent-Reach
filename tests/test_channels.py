@@ -28,6 +28,7 @@ class TestChannelRegistry:
         assert "github" in names
         assert "twitter" in names
         assert "v2ex" in names
+        assert "stackoverflow" in names
 
 
 class TestV2EXChannel:
@@ -1209,3 +1210,274 @@ class TestXiaoyuzhouChannel:
         status, msg = ch.check()
         assert status == "ok"
         assert ch.active_backend == "groq-whisper"
+
+
+class TestStackOverflowChannel:
+    """Stack Overflow channel — Stack Exchange API (gzip), all mocked."""
+
+    @staticmethod
+    def _fake_urlopen(routes, gzip_encode=False):
+        """Build a urlopen replacement that routes by URL substring.
+
+        If gzip_encode is True, payloads are gzip-compressed and the response
+        advertises Content-Encoding: gzip (exercising the decompress path).
+        """
+        import gzip as _gz
+        import urllib.request
+
+        class FakeResponse:
+            def __init__(self, payload):
+                body = json.dumps(payload).encode()
+                if gzip_encode:
+                    body = _gz.compress(body)
+                    self.headers = {"Content-Encoding": "gzip"}
+                else:
+                    self.headers = {}
+                self._body = body
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return self._body
+
+        def _open(req, timeout=None):
+            url = req.full_url if isinstance(req, urllib.request.Request) else req
+            for needle, payload in routes:
+                if needle in url:
+                    return FakeResponse(payload)
+            raise AssertionError(f"unexpected URL in test: {url}")
+
+        return _open
+
+    def test_can_handle_so_urls(self):
+        from agent_reach.channels.stackoverflow import StackOverflowChannel
+
+        ch = StackOverflowChannel()
+        assert ch.can_handle("https://stackoverflow.com/questions/231767/what-does-yield-do")
+        assert not ch.can_handle("https://lobste.rs/s/abc")
+        assert not ch.can_handle("https://news.ycombinator.com/item?id=1")
+
+    def test_check_ok_when_api_reachable(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.stackoverflow import StackOverflowChannel
+
+        monkeypatch.setattr(
+            urllib.request, "urlopen", self._fake_urlopen([("/info", {"items": [{}]})])
+        )
+        ch = StackOverflowChannel()
+        status, msg = ch.check()
+        assert status == "ok"
+        assert "公开 API 可用" in msg
+        assert ch.active_backend == ch.backends[0]
+
+    def test_check_warn_when_api_unreachable(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.stackoverflow import StackOverflowChannel
+
+        def raise_error(req, timeout=None):
+            raise URLError("connection refused")
+
+        monkeypatch.setattr(urllib.request, "urlopen", raise_error)
+        ch = StackOverflowChannel()
+        status, msg = ch.check()
+        assert status == "warn"
+        assert "失败" in msg
+        assert ch.active_backend is None
+
+    def test_search_returns_list(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.stackoverflow import StackOverflowChannel
+
+        routes = [
+            (
+                "search/advanced",
+                {
+                    "items": [
+                        {
+                            "question_id": 231767,
+                            "title": "What does the yield keyword do?",
+                            "link": "https://stackoverflow.com/questions/231767",
+                            "score": 13000,
+                            "answer_count": 50,
+                            "is_answered": True,
+                            "accepted_answer_id": 231855,
+                            "view_count": 3000000,
+                            "tags": ["python", "iterator", "generator"],
+                            "owner": {"display_name": "Alex", "user_id": 1},
+                            "creation_date": 1224800471,
+                        }
+                    ]
+                },
+            )
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        results = StackOverflowChannel().search("yield keyword", limit=5)
+        assert len(results) == 1
+        assert results[0]["question_id"] == 231767
+        assert results[0]["score"] == 13000
+        assert results[0]["is_answered"] is True
+        assert results[0]["tags"] == ["python", "iterator", "generator"]
+        assert results[0]["owner"] == "Alex"
+
+    def test_search_unescapes_title_entities(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.stackoverflow import StackOverflowChannel
+
+        routes = [
+            ("search/advanced", {"items": [{"question_id": 1, "title": "Rust&#39;s String vs &amp;str"}]})
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        results = StackOverflowChannel().search("rust string")
+        assert results[0]["title"] == "Rust's String vs &str"
+
+    def test_search_handles_gzip_response(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.stackoverflow import StackOverflowChannel
+
+        routes = [
+            ("search/advanced", {"items": [{"question_id": 1, "title": "Q", "score": 5}]})
+        ]
+        monkeypatch.setattr(
+            urllib.request, "urlopen", self._fake_urlopen(routes, gzip_encode=True)
+        )
+        results = StackOverflowChannel().search("anything")
+        assert results[0]["question_id"] == 1
+        assert results[0]["title"] == "Q"
+
+    def test_search_passes_tag_and_site(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.stackoverflow import StackOverflowChannel
+
+        captured = {}
+
+        class FakeResponse:
+            headers = {}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps({"items": []}).encode()
+
+        def _open(req, timeout=None):
+            captured["url"] = req.full_url
+            return FakeResponse()
+
+        monkeypatch.setattr(urllib.request, "urlopen", _open)
+        StackOverflowChannel().search("asyncio", tag="python", site="serverfault")
+        assert "tagged=python" in captured["url"]
+        assert "site=serverfault" in captured["url"]
+
+    def test_get_question_returns_detail_and_answers(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.stackoverflow import StackOverflowChannel
+
+        routes = [
+            (
+                "/questions/231767/answers",  # check answers route before question route
+                {
+                    "items": [
+                        {
+                            "answer_id": 231855,
+                            "score": 9000,
+                            "is_accepted": True,
+                            "body": "<p>The answer body</p>",
+                            "owner": {"display_name": "Bob"},
+                            "creation_date": 1224800500,
+                        }
+                    ]
+                },
+            ),
+            (
+                "/questions/231767",
+                {
+                    "items": [
+                        {
+                            "question_id": 231767,
+                            "title": "What does yield do?",
+                            "score": 13000,
+                            "tags": ["python"],
+                            "owner": {"display_name": "Alex"},
+                            "body": "<p>The question body</p>",
+                        }
+                    ]
+                },
+            ),
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        q = StackOverflowChannel().get_question(231767, answer_limit=3)
+        assert q["title"] == "What does yield do?"
+        assert q["body"] == "<p>The question body</p>"
+        assert len(q["answers"]) == 1
+        assert q["answers"][0]["is_accepted"] is True
+        assert q["answers"][0]["owner"] == "Bob"
+
+    def test_get_question_not_found(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.stackoverflow import StackOverflowChannel
+
+        monkeypatch.setattr(
+            urllib.request, "urlopen", self._fake_urlopen([("/questions/999", {"items": []})])
+        )
+        q = StackOverflowChannel().get_question(999)
+        assert "error" in q
+
+    def test_get_tag_questions(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.stackoverflow import StackOverflowChannel
+
+        routes = [
+            (
+                "questions?",
+                {"items": [{"question_id": 1, "title": "T", "tags": ["rust"], "score": 100}]},
+            )
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        results = StackOverflowChannel().get_tag_questions("rust", limit=5)
+        assert len(results) == 1
+        assert results[0]["tags"] == ["rust"]
+
+    def test_get_user(self, monkeypatch):
+        import urllib.request
+
+        from agent_reach.channels.stackoverflow import StackOverflowChannel
+
+        routes = [
+            (
+                "/users/22656",
+                {
+                    "items": [
+                        {
+                            "user_id": 22656,
+                            "display_name": "Jon Skeet",
+                            "link": "https://stackoverflow.com/users/22656",
+                            "reputation": 1400000,
+                            "creation_date": 1222430705,
+                            "location": "Reading, UK",
+                            "badge_counts": {"gold": 800, "silver": 9000, "bronze": 9500},
+                        }
+                    ]
+                },
+            )
+        ]
+        monkeypatch.setattr(urllib.request, "urlopen", self._fake_urlopen(routes))
+        user = StackOverflowChannel().get_user(22656)
+        assert user["display_name"] == "Jon Skeet"
+        assert user["reputation"] == 1400000
+        assert user["badge_gold"] == 800
