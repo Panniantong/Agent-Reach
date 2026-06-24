@@ -6,6 +6,22 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### 🆕 New Channels / 新增渠道
+
+#### 📚 Wikipedia
+- Full-text search, page summaries, full plain-text articles, and section listings via the official Wikimedia REST + MediaWiki Action APIs
+- **Multi-language**: every method takes a `lang` argument (the Wikipedia subdomain, e.g. `en`/`zh`/`ja`); defaults to `en`
+- Zero config — no auth, no proxy, no API key required (tier 0)
+- `search(query, limit, lang)`, `get_summary(title, lang)`, `get_article(title, lang)`, `get_sections(title, lang)`
+- 通过官方 Wikimedia REST + MediaWiki Action API 实现全文搜索、词条摘要、正文全文、章节目录
+- 多语言：每个方法都带 `lang` 参数（Wikipedia 子域名，如 `en`/`zh`/`ja`），默认 `en`
+- 零配置，无需认证、无需代理、无需 API Key
+- Channel count: 13 → 14 / 渠道数量：13 → 14
+
+---
+
 ## [1.3.1] - 2026-03-27
 
 ### 🐛 Bug Fixes / 修复

@@ -7,10 +7,11 @@ description: >
 
   Also MUST USE when user mentions any platform or shares any URL/link:
   Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu,
-  Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
+  Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Wikipedia,
+  Xueqiu (stocks), RSS.
 
-  13 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
-  Zero config for 6 channels. Run `agent-reach doctor --json` to see which
+  14 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  Zero config for 7 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
   NOT for: writing reports/analysis/translation (this skill only FETCHES
@@ -23,7 +24,7 @@ metadata:
 
 # Agent Reach — internet capability router
 
-13 platforms, multiple backends each. **When this skill exists, use it for
+14 platforms, multiple backends each. **When this skill exists, use it for
 these platforms — do not invent your own approach.**
 
 ## Standing rules (apply for the whole session)
@@ -54,6 +55,7 @@ these platforms — do not invent your own approach.**
 | Jobs / LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub / code | dev | [references/dev.md](references/dev.md) |
 | Web pages / articles / RSS | web | [references/web.md](references/web.md) |
+| Wikipedia / encyclopedia | reference | [references/reference.md](references/reference.md) |
 | YouTube / Bilibili / podcast transcripts | video | [references/video.md](references/video.md) |
 
 ## Zero-config quick commands
@@ -76,6 +78,12 @@ curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1
 
 # Bilibili search (bili-cli, no login needed)
 bili search "query" --type video -n 5
+
+# Wikipedia search (Action API, no key; swap lang subdomain en/zh/ja/...)
+curl -s "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=QUERY&format=json"
+
+# Wikipedia page summary (REST API)
+curl -s "https://en.wikipedia.org/api/rest_v1/page/summary/TITLE"
 ```
 
 ## Login-backed platforms (pick by doctor's active_backend)
@@ -115,6 +123,7 @@ chains — note: reference docs are written in Chinese, commands are universal):
 - [Career](references/career.md) — LinkedIn
 - [Dev](references/dev.md) — GitHub CLI
 - [Web](references/web.md) — Jina Reader, RSS
+- [Reference](references/reference.md) — Wikipedia (multi-language)
 - [Video](references/video.md) — YouTube, Bilibili, Xiaoyuzhou
 
 ## Configure a channel
