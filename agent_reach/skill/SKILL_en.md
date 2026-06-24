@@ -7,10 +7,11 @@ description: >
 
   Also MUST USE when user mentions any platform or shares any URL/link:
   Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu,
-  Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
+  Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Lobsters,
+  Xueqiu (stocks), RSS.
 
-  13 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
-  Zero config for 6 channels. Run `agent-reach doctor --json` to see which
+  14 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  Zero config for 7 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
   NOT for: writing reports/analysis/translation (this skill only FETCHES
@@ -23,7 +24,7 @@ metadata:
 
 # Agent Reach — internet capability router
 
-13 platforms, multiple backends each. **When this skill exists, use it for
+14 platforms, multiple backends each. **When this skill exists, use it for
 these platforms — do not invent your own approach.**
 
 ## Standing rules (apply for the whole session)
@@ -50,7 +51,7 @@ these platforms — do not invent your own approach.**
 | User intent | Category | Details |
 |---------|------|---------|
 | Web / code search | search | [references/search.md](references/search.md) |
-| XiaoHongShu / Twitter / Bilibili / V2EX / Reddit | social | [references/social.md](references/social.md) |
+| XiaoHongShu / Twitter / Bilibili / V2EX / Reddit / Lobsters | social | [references/social.md](references/social.md) |
 | Jobs / LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub / code | dev | [references/dev.md](references/dev.md) |
 | Web pages / articles / RSS | web | [references/web.md](references/web.md) |
@@ -76,6 +77,12 @@ curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1
 
 # Bilibili search (bili-cli, no login needed)
 bili search "query" --type video -n 5
+
+# Lobsters hottest stories (public API, no key)
+curl -s "https://lobste.rs/hottest.json" -H "User-Agent: agent-reach/1.0"
+
+# Lobsters by tag (e.g. rust/ai/security)
+curl -s "https://lobste.rs/t/rust.json" -H "User-Agent: agent-reach/1.0"
 ```
 
 ## Login-backed platforms (pick by doctor's active_backend)
@@ -111,7 +118,7 @@ common cases; references hold per-backend command groups, caveats, retry
 chains — note: reference docs are written in Chinese, commands are universal):
 
 - [Search](references/search.md) — Exa AI search
-- [Social](references/social.md) — XiaoHongShu, Twitter, Bilibili, V2EX, Reddit (multi-backend groups)
+- [Social](references/social.md) — XiaoHongShu, Twitter, Bilibili, V2EX, Reddit, Lobsters (multi-backend groups)
 - [Career](references/career.md) — LinkedIn
 - [Dev](references/dev.md) — GitHub CLI
 - [Web](references/web.md) — Jina Reader, RSS
