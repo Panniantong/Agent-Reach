@@ -15,6 +15,8 @@ from .reddit import RedditChannel
 from .rss import RSSChannel
 from .bilibili import BilibiliChannel
 from .exa_search import ExaSearchChannel
+from .diffbot_search import DiffbotSearchChannel
+from .diffbot_kg import DiffbotKGChannel
 from .xiaohongshu import XiaoHongShuChannel
 from .linkedin import LinkedInChannel
 from .xiaoyuzhou import XiaoyuzhouChannel
@@ -35,6 +37,8 @@ ALL_CHANNELS: List[Channel] = [
     XueqiuChannel(),
     RSSChannel(),
     ExaSearchChannel(),
+    DiffbotSearchChannel(),
+    DiffbotKGChannel(),
     WebChannel(),
 ]
 

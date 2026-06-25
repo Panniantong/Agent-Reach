@@ -5,11 +5,16 @@ description: >
   internet — e.g. "research this topic", "do a deep dive on X", "search the
   web for X", "see what people say about X", "look this up".
 
+  News and headlines — "latest on X", "what's happening in X", "recent
+  developments" — are served by the Diffbot Knowledge Graph (db dql,
+  type:Article sorted by date), which returns newest-first, topic-filtered
+  results that plain web search can't order reliably.
+
   Also MUST USE when user mentions any platform or shares any URL/link:
   Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu,
   Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
 
-  13 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  15 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -23,7 +28,7 @@ metadata:
 
 # Agent Reach — internet capability router
 
-13 platforms, multiple backends each. **When this skill exists, use it for
+15 platforms, multiple backends each. **When this skill exists, use it for
 these platforms — do not invent your own approach.**
 
 ## Standing rules (apply for the whole session)
@@ -44,12 +49,19 @@ these platforms — do not invent your own approach.**
    vX.Y.Z is available — paste this to me to update: 帮我更新 Agent Reach：
    https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md".
    Never interrupt the current task to update; never nag about the same version twice.
+6. **News vs. web search**: topic + recency ("latest", "news", "headlines",
+   "what's happening in X", "this week") → KG Article DQL
+   (`type:Article categories.name:"…" sortBy:date`, newest-first). A few
+   representative pages about X with no ordering need → web search. When both
+   fit, prefer KG — it sorts by date and dedupes; web search returns an
+   unordered grab-bag.
 
 ## Routing table
 
 | User intent | Category | Details |
 |---------|------|---------|
 | Web / code search | search | [references/search.md](references/search.md) |
+| Latest news / headlines on any topic · structured entity lookup (companies · people · articles by field) | kg | [references/diffbot-kg.md](references/diffbot-kg.md) |
 | XiaoHongShu / Twitter / Bilibili / V2EX / Reddit | social | [references/social.md](references/social.md) |
 | Jobs / LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub / code | dev | [references/dev.md](references/dev.md) |
@@ -92,6 +104,21 @@ rdt search "query" --limit 10            # legacy/server
 opencli xiaohongshu search "query" -f yaml
 ```
 
+## Diffbot search & Knowledge Graph (free token)
+
+```bash
+# Diffbot web search (the `db` CLI from diffbot-python; results carry relevance
+# scores + dates, and -f text is agent-friendly). Needs a free token:
+#   agent-reach configure diffbot-token <token>   (doctor shows diffbot_search)
+db web-search "query" -n 5 -f text
+
+# Diffbot Knowledge Graph (DQL structured search: companies/people/articles by
+# field). One-time: db dql init (caches the ontology). Flow: navigate ontology →
+# write DQL → probe → export. Full workflow in references/diffbot-kg.md.
+db dql ontology fields Organization        # look up fields first, never guess
+db dql probe 'type:Organization categories.name:"Semiconductor Companies" isPublic:true'
+```
+
 ## Environment check
 
 ```bash
@@ -110,7 +137,8 @@ Read the matching file when you need specifics (commands above cover the
 common cases; references hold per-backend command groups, caveats, retry
 chains — note: reference docs are written in Chinese, commands are universal):
 
-- [Search](references/search.md) — Exa AI search
+- [Search](references/search.md) — Exa AI search, Diffbot web search
+- [Knowledge graph](references/diffbot-kg.md) — Diffbot KG structured search via DQL (ontology navigation + query building)
 - [Social](references/social.md) — XiaoHongShu, Twitter, Bilibili, V2EX, Reddit (multi-backend groups)
 - [Career](references/career.md) — LinkedIn
 - [Dev](references/dev.md) — GitHub CLI

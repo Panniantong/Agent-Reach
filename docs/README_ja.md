@@ -72,6 +72,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 📈 **雪球（Xueqiu）** | 株価・検索・人気投稿・人気銘柄 | 設定不要 | 公開APIで自動セッションCookie、ログイン不要 |
 | 🎙️ **小宇宙Podcast** | 文字起こし | 無料APIキー | Podcast音声 → Groq Whisper（無料）による完全テキスト文字起こし |
 | 🔍 **Web検索** | 検索 | 自動設定 | インストール時に自動設定、無料、APIキー不要（[Exa](https://exa.ai)、[mcporter](https://github.com/nicepkg/mcporter)経由） |
+| 🤖 **ナレッジグラフ & Web検索** | 検索 | 自動設定 | インストール時に自動設定、APIキーで無料（[Diffbot](https://www.diffbot.com)） |
 | 📦 **GitHub** | 閲覧・検索 | 設定不要 | [gh CLI](https://cli.github.com) 搭載。公開リポジトリはすぐ使える。`gh auth login`でFork、Issue、PRが解放 |
 | 📺 **YouTube** | 閲覧・**検索** | 設定不要 | 字幕 + 1800以上の動画サイトでの検索（[yt-dlp](https://github.com/yt-dlp/yt-dlp) ⭐148K） |
 | 📺 **Bilibili** | 閲覧・**検索** | 設定不要 / プロキシ | 動画情報 + 字幕 + 検索。ローカルはそのまま動作、サーバーはプロキシが必要（[yt-dlp](https://github.com/yt-dlp/yt-dlp)） |
@@ -219,6 +220,8 @@ channels/
 | ツイート閲覧 | [twitter-cli](https://github.com/public-clis/twitter-cli) | 2.1K Star、Cookie認証、検索/閲覧/タイムライン/長文 |
 | 動画字幕 + 検索 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | ⭐148K、YouTube + Bilibili + 1800サイト |
 | Web検索 | [Exa](https://exa.ai)（[mcporter](https://github.com/nicepkg/mcporter)経由） | AIセマンティック検索、MCP統合、APIキー不要 |
+| Web検索 | [Diffbot Web Search CLI](https://github.com/diffbot/diffbot-python) | Diffbotによる高速な独立Webインデックス、diffbot-python CLI、無料APIトークン |
+| ニュース・企業を取得 | [Diffbot Knowledge Graph (DQL)](https://github.com/diffbot/diffbot-python) | 企業/人物/ニュース記事を構造化検索、diffbot-python CLI、無料APIトークン |
 | GitHub | [gh CLI](https://cli.github.com) | 公式ツール、認証後フルAPI |
 | RSS閲覧 | [feedparser](https://github.com/kurtmckee/feedparser) | Pythonエコシステムの標準、⭐2.3K |
 | 小紅書 | [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) | 1.5K Star、pipxインストール、検索/閲覧/コメント/投稿 |
