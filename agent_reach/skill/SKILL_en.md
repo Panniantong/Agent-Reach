@@ -9,7 +9,7 @@ description: >
   Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu,
   Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
 
-  14 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  15 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -23,7 +23,7 @@ metadata:
 
 # Agent Reach — internet capability router
 
-14 platforms, multiple backends each. **When this skill exists, use it for
+15 platforms, multiple backends each. **When this skill exists, use it for
 these platforms — do not invent your own approach.**
 
 ## Standing rules (apply for the whole session)
@@ -50,6 +50,7 @@ these platforms — do not invent your own approach.**
 | User intent | Category | Details |
 |---------|------|---------|
 | Web / code search | search | [references/search.md](references/search.md) |
+| Knowledge graph / structured search (companies · people · articles by field) | kg | [references/diffbot-kg.md](references/diffbot-kg.md) |
 | XiaoHongShu / Twitter / Bilibili / V2EX / Reddit | social | [references/social.md](references/social.md) |
 | Jobs / LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub / code | dev | [references/dev.md](references/dev.md) |
@@ -99,6 +100,12 @@ opencli xiaohongshu search "query" -f yaml
 # scores + dates, and -f text is agent-friendly). Needs a free token:
 #   agent-reach configure diffbot-token <token>   (doctor shows diffbot_search)
 db web-search "query" -n 5 -f text
+
+# Diffbot Knowledge Graph (DQL structured search: companies/people/articles by
+# field). One-time: db dql init (caches the ontology). Flow: navigate ontology →
+# write DQL → probe → export. Full workflow in references/diffbot-kg.md.
+db dql ontology fields Organization        # look up fields first, never guess
+db dql probe 'type:Organization categories.name:"Semiconductor Companies" isPublic:true'
 ```
 
 ## Environment check
@@ -120,6 +127,7 @@ common cases; references hold per-backend command groups, caveats, retry
 chains — note: reference docs are written in Chinese, commands are universal):
 
 - [Search](references/search.md) — Exa AI search, Diffbot web search
+- [Knowledge graph](references/diffbot-kg.md) — Diffbot KG structured search via DQL (ontology navigation + query building)
 - [Social](references/social.md) — XiaoHongShu, Twitter, Bilibili, V2EX, Reddit (multi-backend groups)
 - [Career](references/career.md) — LinkedIn
 - [Dev](references/dev.md) — GitHub CLI

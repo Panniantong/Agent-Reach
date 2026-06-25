@@ -1240,6 +1240,93 @@ class TestDiffbotSearchChannel:
         assert ch.active_backend == "Diffbot CLI (db)"
 
 
+class TestDiffbotKGChannel:
+    def test_off_when_db_missing(self, monkeypatch):
+        """没装 db CLI → off + 安装/配置提示。"""
+        monkeypatch.setattr(shutil, "which", lambda _: None)
+        from agent_reach.channels.diffbot_kg import DiffbotKGChannel
+        ch = DiffbotKGChannel()
+        status, msg = ch.check()
+        assert status == "off"
+        assert "diffbot-python" in msg
+        assert ch.active_backend is None
+
+    def test_reports_error_with_reinstall_hint_when_broken(self, monkeypatch):
+        """db which 命中但 exec 失败（venv 断链）→ error + 重装处方。"""
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/db")
+
+        def fake_run(cmd, **kwargs):
+            raise FileNotFoundError(cmd[0])
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        from agent_reach.channels.diffbot_kg import DiffbotKGChannel
+        ch = DiffbotKGChannel()
+        status, msg = ch.check()
+        assert status == "error"
+        assert "diffbot-python" in msg
+        assert ch.active_backend is None
+
+    def test_warn_when_installed_but_no_token(self, monkeypatch):
+        """db 已装但找不到 Token → warn，且不激活后端。"""
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/db")
+
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 0, "db, version 0.2.3", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.delenv("DIFFBOT_API_TOKEN", raising=False)
+        # has_token is reused from diffbot_search; isolate from any real
+        # ~/.diffbot/credentials on the test machine by patching it there.
+        import agent_reach.channels.diffbot_search as ds
+        monkeypatch.setattr(ds, "_credentials_file_has_token", lambda: False)
+        from agent_reach.channels.diffbot_kg import DiffbotKGChannel
+        ch = DiffbotKGChannel()
+        status, msg = ch.check()  # no config passed → no token from any source
+        assert status == "warn"
+        assert "diffbot-token" in msg
+        assert ch.active_backend is None
+
+    def test_ok_when_db_and_token_present(self, monkeypatch, tmp_path):
+        """db 已装 + config 里有 Token + 本体已缓存 → ok + 激活后端。"""
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/db")
+
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 0, "db, version 0.2.3", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        from agent_reach.config import Config
+        import agent_reach.channels.diffbot_kg as dk
+        # Pretend the ontology cache exists so we get the steady-state message.
+        ontology = tmp_path / "ontology.json"
+        ontology.write_text("{}", encoding="utf-8")
+        monkeypatch.setattr(dk, "_ONTOLOGY_PATH", ontology)
+        config = Config(config_path=tmp_path / "config.yaml")
+        config.set("diffbot_api_token", "dbtok_xxx")
+        ch = dk.DiffbotKGChannel()
+        status, msg = ch.check(config)
+        assert status == "ok"
+        assert ch.active_backend == "Diffbot CLI (db dql)"
+
+    def test_ok_but_notes_init_when_ontology_missing(self, monkeypatch, tmp_path):
+        """有 Token 但本体未缓存 → 仍 ok（查询直连 API），消息提示先 db dql init。"""
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/db")
+
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 0, "db, version 0.2.3", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        from agent_reach.config import Config
+        import agent_reach.channels.diffbot_kg as dk
+        monkeypatch.setattr(dk, "_ONTOLOGY_PATH", tmp_path / "does-not-exist.json")
+        config = Config(config_path=tmp_path / "config.yaml")
+        config.set("diffbot_api_token", "dbtok_xxx")
+        ch = dk.DiffbotKGChannel()
+        status, msg = ch.check(config)
+        assert status == "ok"
+        assert ch.active_backend == "Diffbot CLI (db dql)"
+        assert "dql init" in msg
+
+
 class TestXiaoyuzhouChannel:
     def test_reports_error_with_reinstall_hint_when_ffmpeg_broken(self, monkeypatch):
         """ffmpeg which 命中但 exec 失败（pip 假 ffmpeg 断链）→ error + 重装处方。"""

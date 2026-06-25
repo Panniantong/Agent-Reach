@@ -72,6 +72,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 📈 **Xueqiu (雪球)** | 주식 시세 · 검색 · 인기 글 · 인기 종목 | 브라우저 Cookie | 에이전트에 "Xueqiu 설정 도와줘"라고 말하세요 |
 | 🎙️ **Xiaoyuzhou Podcast** | 음성 변환 | 무료 API key | Groq Whisper를 통한 팟캐스트 오디오 → 전체 텍스트 변환 (무료) |
 | 🔍 **Web Search** | 검색 | 자동 설정 | 설치 시 자동 설정, 무료, API key 불필요 ([Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter)) |
+| 🤖 **지식 그래프 & 웹 검색** | 검색 | 자동 설정 | 설치 시 자동 설정, API key로 무료 ([Diffbot](https://www.diffbot.com)) |
 | 📦 **GitHub** | 읽기 · 검색 | 없음 | [gh CLI](https://cli.github.com) 기반. 공개 저장소는 즉시 사용 가능. `gh auth login`으로 Fork, Issue, PR 기능 활성화 |
 | 📺 **YouTube** | 읽기 · **검색** | 없음 | 자막 + 1800+ 비디오 사이트 검색 ([yt-dlp](https://github.com/yt-dlp/yt-dlp) ⭐148K) |
 | 📺 **Bilibili** | 읽기 · **검색** | 없음 / 프록시 | 비디오 정보 + 자막 + 검색. 로컬은 바로 작동, 서버는 프록시 필요 ([yt-dlp](https://github.com/yt-dlp/yt-dlp)) |
@@ -222,6 +223,7 @@ channels/
 | Bilibili 향상 | [bili-cli](https://github.com/public-clis/bilibili-cli) | 590 stars, 인기/순위/검색/피드 |
 | 웹 검색 | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | AI 시맨틱 검색, MCP 통합, API key 불필요 |
 | 웹 검색 | [Diffbot Web Search CLI](https://github.com/diffbot/diffbot-python) | Diffbot의 빠른 독립 웹 인덱스, diffbot-python CLI, 무료 API 토큰 |
+| 뉴스 · 회사 가져오기 | [Diffbot Knowledge Graph (DQL)](https://github.com/diffbot/diffbot-python) | 회사/인물/뉴스 기사 구조화 검색, diffbot-python CLI, 무료 API 토큰 |
 | GitHub | [gh CLI](https://cli.github.com) | 공식 도구, 인증 후 전체 API |
 | RSS 읽기 | [feedparser](https://github.com/kurtmckee/feedparser) | Python 생태계 표준, 2.3K stars |
 | XiaoHongShu | [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) | 1.5K stars, pipx 설치, 검색/읽기/댓글/게시 |

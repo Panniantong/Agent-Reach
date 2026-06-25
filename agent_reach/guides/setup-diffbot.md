@@ -27,6 +27,17 @@ agent-reach doctor --json        # 确认 diffbot_search 为 ok
 db web-search "test" -n 1 -f text
 ```
 
+### 4. 知识图谱（DQL）——可选，同一个 Token
+
+同一个 `db` CLI 还能对 Diffbot 知识图谱做结构化检索（DQL）。配好 Token 后再跑一次性的本体缓存：
+
+```bash
+db dql init                       # 缓存本体（ontology），重置 ~/.diffbot/tmp，校验 Token
+agent-reach doctor --json         # 确认 diffbot_kg 为 ok
+```
+
+查询构造（导航本体 → 写 DQL → probe → export）见 `references/diffbot-kg.md`。
+
 ## 需要用户手动做的步骤
 
 **只有一步：提供 Token。** 在 https://app.diffbot.com/get-started/ 注册即可拿到带免费额度的 Token，发给 Agent 或运行上面的 `configure` 命令。

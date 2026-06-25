@@ -67,6 +67,12 @@ class TestConfig:
         tmp_config.set("diffbot_api_token", "dbtok_xxx")
         assert tmp_config.is_configured("diffbot_search")
 
+    def test_is_configured_diffbot_kg(self, tmp_config, monkeypatch):
+        monkeypatch.delenv("DIFFBOT_API_TOKEN", raising=False)
+        assert not tmp_config.is_configured("diffbot_kg")
+        tmp_config.set("diffbot_api_token", "dbtok_xxx")
+        assert tmp_config.is_configured("diffbot_kg")
+
     def test_get_configured_features(self, tmp_config):
         features = tmp_config.get_configured_features()
         assert isinstance(features, dict)

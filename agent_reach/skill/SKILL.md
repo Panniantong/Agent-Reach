@@ -10,7 +10,7 @@ description: >
   LinkedIn/领英/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客,
   雪球/股票行情, RSS feeds, or any web URL.
 
-  14 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  15 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -40,7 +40,7 @@ metadata:
 
 # Agent Reach — 互联网能力路由器
 
-14 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
+15 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
 
 ## 常驻规则（全程适用）
 
@@ -60,6 +60,7 @@ metadata:
 | 用户意图 | 分类 | 详细文档 |
 |---------|------|---------|
 | 网页搜索/代码搜索 | search | [references/search.md](references/search.md) |
+| 知识图谱/结构化检索（公司·人物·文章按字段查） | kg | [references/diffbot-kg.md](references/diffbot-kg.md) |
 | 小红书/推特/B站/V2EX/Reddit | social | [references/social.md](references/social.md) |
 | 招聘/职位/LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub/代码 | dev | [references/dev.md](references/dev.md) |
@@ -108,6 +109,11 @@ opencli xiaohongshu search "query" -f yaml
 # Diffbot 全网搜索（diffbot-python 的 db CLI；结果带相关性评分/时效，-f text 适合 agent）
 # 需免费 Token：agent-reach configure diffbot-token <token>（doctor 显示 diffbot_search 即可用）
 db web-search "query" -n 5 -f text
+
+# Diffbot 知识图谱（DQL 结构化检索：按字段查公司/人物/文章）。详见 references/diffbot-kg.md
+# 一次性：db dql init（缓存本体）。流程：导航本体 → 写 DQL → probe → export
+db dql ontology fields Organization        # 先查字段，别凭记忆猜
+db dql probe 'type:Organization categories.name:"Semiconductor Companies" isPublic:true'
 ```
 
 ## 环境检查
@@ -126,6 +132,7 @@ agent-reach doctor --json
 根据用户需求，阅读对应的详细文档：
 
 - [搜索工具](references/search.md) — Exa AI 搜索、Diffbot 全网搜索
+- [知识图谱](references/diffbot-kg.md) — Diffbot 知识图谱 DQL 结构化检索（本体导航 + 查询构造）
 - [社交媒体](references/social.md) — 小红书, Twitter, B站, V2EX, Reddit（多后端命令组）
 - [职场招聘](references/career.md) — LinkedIn
 - [开发工具](references/dev.md) — GitHub CLI

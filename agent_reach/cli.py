@@ -871,10 +871,19 @@ def _install_diffbot_deps():
 
     if has_token(Config()):
         print("  ✅ Diffbot API token configured")
+        # Cache the Knowledge Graph ontology so `db dql ontology` navigation
+        # works for KG/DQL queries. Best-effort — querying still works without it.
+        try:
+            subprocess.run(["db", "dql", "init"], capture_output=True,
+                           encoding="utf-8", errors="replace", timeout=120)
+            print("  ✅ Knowledge Graph ontology cached (db dql)")
+        except Exception:
+            print("  -- Run `db dql init` once to cache the KG ontology for DQL queries.")
     else:
         print("  -- Diffbot API token not set (free tier available).")
         print("     Get a token: https://app.diffbot.com/get-started/")
         print("     Then run: agent-reach configure diffbot-token <token>")
+        print("     Then run: db dql init   (caches the KG ontology for DQL queries)")
 
 
 def _install_system_deps_safe():

@@ -52,11 +52,14 @@ agent-reach doctor --json                      # 确认 diffbot_search 为 ok
 
 未配置时 `db` 会报 “Invalid or unauthorized API token.”，按上面配置 Token 即可。
 
+> 需要**结构化检索**（按字段查公司/人物/文章、过滤/排序/聚合）而非网页结果？用 Diffbot 知识图谱 DQL，见 [diffbot-kg.md](diffbot-kg.md)。同一个 `db` CLI 和 Token。
+
 ## 与其他搜索工具对比
 
 | 工具 | 来源 | 适用场景 |
 |-----|------|---------|
 | Exa | agent-reach | 英文/技术/代码搜索；免费零配置 |
-| Diffbot | agent-reach | 全网搜索，结果带相关性评分/时效；需免费 Token |
+| Diffbot 全网搜索 | agent-reach | 全网搜索，结果带相关性评分/时效；需免费 Token |
+| Diffbot 知识图谱（DQL） | agent-reach ([diffbot-kg.md](diffbot-kg.md)) | 结构化检索实体（公司/人物/文章），按字段过滤/排序/聚合；需免费 Token |
 | 智谱搜索 | my-mcp-tools | 中文搜索 |
 | GitHub 搜索 | agent-reach (dev.md) | 仓库/代码搜索 |
