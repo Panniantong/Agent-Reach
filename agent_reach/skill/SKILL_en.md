@@ -5,6 +5,11 @@ description: >
   internet — e.g. "research this topic", "do a deep dive on X", "search the
   web for X", "see what people say about X", "look this up".
 
+  News and headlines — "latest on X", "what's happening in X", "recent
+  developments" — are served by the Diffbot Knowledge Graph (db dql,
+  type:Article sorted by date), which returns newest-first, topic-filtered
+  results that plain web search can't order reliably.
+
   Also MUST USE when user mentions any platform or shares any URL/link:
   Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu,
   Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
@@ -44,13 +49,19 @@ these platforms — do not invent your own approach.**
    vX.Y.Z is available — paste this to me to update: 帮我更新 Agent Reach：
    https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md".
    Never interrupt the current task to update; never nag about the same version twice.
+6. **News vs. web search**: topic + recency ("latest", "news", "headlines",
+   "what's happening in X", "this week") → KG Article DQL
+   (`type:Article categories.name:"…" sortBy:date`, newest-first). A few
+   representative pages about X with no ordering need → web search. When both
+   fit, prefer KG — it sorts by date and dedupes; web search returns an
+   unordered grab-bag.
 
 ## Routing table
 
 | User intent | Category | Details |
 |---------|------|---------|
 | Web / code search | search | [references/search.md](references/search.md) |
-| Knowledge graph / structured search (companies · people · articles by field) | kg | [references/diffbot-kg.md](references/diffbot-kg.md) |
+| Latest news / headlines on any topic · structured entity lookup (companies · people · articles by field) | kg | [references/diffbot-kg.md](references/diffbot-kg.md) |
 | XiaoHongShu / Twitter / Bilibili / V2EX / Reddit | social | [references/social.md](references/social.md) |
 | Jobs / LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub / code | dev | [references/dev.md](references/dev.md) |
@@ -93,7 +104,7 @@ rdt search "query" --limit 10            # legacy/server
 opencli xiaohongshu search "query" -f yaml
 ```
 
-## Token-gated search (optional alternative)
+## Diffbot search & Knowledge Graph (free token)
 
 ```bash
 # Diffbot web search (the `db` CLI from diffbot-python; results carry relevance

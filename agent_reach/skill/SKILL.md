@@ -5,6 +5,10 @@ description: >
   on the internet — e.g. 全网调研 X / 帮我调研一下 X / 查一下 X / 搜搜 X /
   看看大家怎么评价 X / X 上有什么讨论 / research this topic。
 
+  新闻/头条/最新动态类需求（X 最新进展 / X 有什么新闻 / 最近 X 怎么样）由
+  Diffbot 知识图谱处理（db dql，type:Article 按日期排序），返回按时间倒序、
+  按主题过滤的结果——这是全网搜索无法可靠排序的。
+
   Also MUST USE when user mentions any platform or shares any URL/链接:
   小红书/xiaohongshu/xhs, Twitter/推特/X, B站/bilibili, Reddit, V2EX,
   LinkedIn/领英/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客,
@@ -22,6 +26,7 @@ description: >
 triggers:
   - research: 调研/全网调研/帮我调研/研究一下/research/深入了解
   - search: 搜/查/找/search/搜索/查一下/帮我搜/看看大家怎么说
+  - news: 新闻/头条/最新/动态/快讯/news/headlines/latest/breaking/recent → kg
   - social:
     - 小红书: xiaohongshu/xhs/小红书/红书
     - Twitter: twitter/推特/x.com/推文
@@ -54,13 +59,17 @@ metadata:
    「Agent Reach 有新版 vX.Y.Z，复制这句话给我即可更新：帮我更新 Agent Reach：
    https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md」。
    不要中断当前任务去更新，也不要重复提醒同一个版本。
+6. **新闻 vs 全网搜索**：主题 + 时效（「最新」「新闻」「头条」「X 有什么新进展」
+   「这周」）→ KG 文章 DQL（`type:Article categories.name:"…" sortBy:date`，最新在前）；
+   只要几条关于 X 的代表性网页、不需要排序 → 全网搜索。两者都行时优先 KG——
+   它按日期排序并去重，全网搜索返回的是无序大杂烩。
 
 ## 路由表
 
 | 用户意图 | 分类 | 详细文档 |
 |---------|------|---------|
 | 网页搜索/代码搜索 | search | [references/search.md](references/search.md) |
-| 知识图谱/结构化检索（公司·人物·文章按字段查） | kg | [references/diffbot-kg.md](references/diffbot-kg.md) |
+| 任意主题的最新新闻/头条 · 结构化实体检索（公司·人物·文章按字段查） | kg | [references/diffbot-kg.md](references/diffbot-kg.md) |
 | 小红书/推特/B站/V2EX/Reddit | social | [references/social.md](references/social.md) |
 | 招聘/职位/LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub/代码 | dev | [references/dev.md](references/dev.md) |
@@ -103,7 +112,7 @@ rdt search "query" --limit 10            # 存量/服务器
 opencli xiaohongshu search "query" -f yaml
 ```
 
-## 需 Token 的搜索（可选备用）
+## Diffbot 搜索与知识图谱（免费 Token）
 
 ```bash
 # Diffbot 全网搜索（diffbot-python 的 db CLI；结果带相关性评分/时效，-f text 适合 agent）
