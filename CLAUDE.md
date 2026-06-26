@@ -15,7 +15,7 @@ Repo: github.com/Panniantong/Agent-Reach | License: MIT | Version: 1.5.0
 
 ## Structure
 - `agent_reach/cli.py` — CLI entry point (argparse)
-- `agent_reach/core.py` — Core read/search routing logic
+- `agent_reach/core.py` — Health-check facade around doctor/config
 - `agent_reach/config.py` — Config management (YAML, env vars)
 - `agent_reach/doctor.py` — Diagnostics engine
 - `agent_reach/channels/` — One file per platform (twitter.py, reddit.py, youtube.py, etc.)
@@ -28,8 +28,8 @@ Repo: github.com/Panniantong/Agent-Reach | License: MIT | Version: 1.5.0
 
 ## Conventions
 - Python 3.10+ with type hints
-- Each channel is a single file in `channels/`, inherits from `BaseChannel`
-- Channel contract: must implement `can_handle(url)`, `read(url)`, `search(query)`, `check()` methods
+- Each channel is a single file in `channels/`, inherits from `Channel`
+- Channel contract: implement `can_handle(url)` and `check(config)`; `check()` must set `active_backend` when a backend is usable
 - Use `loguru` for logging, `rich` for CLI output
 - Commit format: `type(scope): message` (one commit = one thing)
 - All upstream tool calls go through public API/CLI, never hack internals

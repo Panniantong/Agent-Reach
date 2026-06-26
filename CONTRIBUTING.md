@@ -54,7 +54,7 @@ Agent Reach uses a unified channel interface. To add a new platform:
 1. Create a new file in `agent_reach/channels/`
 2. Implement the channel contract (see existing channels for examples)
 3. Add tests in `tests/test_channels.py`
-4. Update `agent_reach/doctor.py` to include the new channel
+4. Register the channel in `agent_reach/channels/__init__.py`
 5. Update documentation
 
 ## Pull Request Guidelines
