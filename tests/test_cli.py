@@ -204,6 +204,7 @@ class TestVersionCompare:
 class TestWatchVersionCompare:
     def test_watch_does_not_prompt_downgrade(self, monkeypatch, capsys):
         """watch 与 check-update 同语义:本地领先远端 release 时不提示更新。"""
+
         class R:
             status_code = 200
             headers = {}
@@ -215,10 +216,46 @@ class TestWatchVersionCompare:
         monkeypatch.setattr(cli, "_github_get_with_retry", lambda *a, **k: (R(), None, 1))
         monkeypatch.setattr(
             "agent_reach.doctor.check_all",
-            lambda config: {"web": {"status": "ok", "name": "任意网页", "message": "ok",
-                            "tier": 0, "backends": ["Jina Reader"], "active_backend": "Jina Reader"}},
+            lambda config: {
+                "web": {
+                    "status": "ok",
+                    "name": "任意网页",
+                    "message": "ok",
+                    "tier": 0,
+                    "backends": ["Jina Reader"],
+                    "active_backend": "Jina Reader",
+                }
+            },
         )
         cli._cmd_watch()
         out = capsys.readouterr().out
         assert "新版本可用" not in out
         assert "全部正常" in out
+
+
+def test_install_skill_force_false_skips_overwrite(tmp_path):
+    """_install_skill(force=False) must skip if skill is already installed (#413)."""
+    from pathlib import Path
+
+    skill_dir = tmp_path / ".agents" / "skills" / "agent-reach"
+    skill_dir.mkdir(parents=True)
+    skill_file = skill_dir / "SKILL.md"
+    custom_content = "# My Custom Skill\n\nCustom instructions here.\n"
+    skill_file.write_text(custom_content, encoding="utf-8")
+
+    result = cli._install_skill(force=False)
+
+    assert result is True
+    assert skill_file.read_text(encoding="utf-8") == custom_content
+
+
+def test_install_skill_force_true_overwrites(tmp_path):
+    """_install_skill(force=True) must overwrite existing skill."""
+    from pathlib import Path
+
+    skill_dir = tmp_path / ".agents" / "skills" / "agent-reach"
+    skill_dir.mkdir(parents=True)
+    skill_file = skill_dir / "SKILL.md"
+    skill_file.write_text("# Old Custom\n", encoding="utf-8")
+
+    assert cli._install_skill(force=True) is True
