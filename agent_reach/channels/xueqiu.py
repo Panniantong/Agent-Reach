@@ -85,7 +85,10 @@ def _load_cookies_from_browser() -> bool:
             if not any(c.get("name") == "xq_a_token" for c in cookies):
                 return False
             for c in cookies:
-                _cookie_jar.set(c["name"], c["value"], domain=c.get("domain", ".xueqiu.com"))
+                # rookiepy returns plain dicts; use _inject_cookie_string so the
+                # existing Cookie-construction logic handles domain/path/flags.
+                # (CookieJar has no .set() method — calling it raises AttributeError.)
+                _inject_cookie_string(f"{c['name']}={c['value']}")
             return True
         except ImportError:
             import browser_cookie3

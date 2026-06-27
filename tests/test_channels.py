@@ -621,6 +621,43 @@ class TestXueqiuChannel:
         cookie_names = {c.name for c in xq_mod._cookie_jar}
         assert "xq_a_token" in cookie_names
 
+    def test_load_cookies_from_browser_rookiepy_path(self, monkeypatch):
+        """_load_cookies_from_browser() must inject cookies when rookiepy is present.
+
+        Regression test for a bug where the code called ``_cookie_jar.set()``
+        (a non-existent method on ``http.cookiejar.CookieJar``) instead of
+        ``_inject_cookie_string()``.  The resulting ``AttributeError`` was
+        silently swallowed by the outer ``except Exception`` block, so Xueqiu
+        cookies were never loaded when rookiepy was installed.
+        """
+        import sys
+        import types
+        import agent_reach.channels.xueqiu as xq_mod
+
+        # Snapshot and clear the shared cookie jar so the assertion is isolated.
+        existing_cookies = list(xq_mod._cookie_jar)
+        xq_mod._cookie_jar.clear()
+
+        fake_cookies = [
+            {"name": "xq_a_token", "value": "TOKEN_ROOKIEPY", "domain": ".xueqiu.com"},
+            {"name": "xq_is_login", "value": "1", "domain": ".xueqiu.com"},
+        ]
+        fake_rookiepy = types.ModuleType("rookiepy")
+        fake_rookiepy.chrome = lambda *a, **kw: fake_cookies  # type: ignore[attr-defined]
+
+        monkeypatch.setitem(sys.modules, "rookiepy", fake_rookiepy)
+
+        result = xq_mod._load_cookies_from_browser()
+
+        assert result is True, "_load_cookies_from_browser should return True when xq_a_token present"
+        cookie_names = {c.name for c in xq_mod._cookie_jar}
+        assert "xq_a_token" in cookie_names, "xq_a_token must be injected into the CookieJar"
+
+        # Restore cookie jar state so other tests are unaffected.
+        xq_mod._cookie_jar.clear()
+        for c in existing_cookies:
+            xq_mod._cookie_jar.set_cookie(c)
+
     def test_get_json_sends_referer_and_browser_ua(self, monkeypatch):
         """_get_json() must send Referer and a browser-like User-Agent."""
         import agent_reach.channels.xueqiu as xueqiu_mod
