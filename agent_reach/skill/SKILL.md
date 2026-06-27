@@ -8,9 +8,9 @@ description: >
   Also MUST USE when user mentions any platform or shares any URL/链接:
   小红书/xiaohongshu/xhs, Twitter/推特/X, B站/bilibili, Reddit, V2EX,
   LinkedIn/领英/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客,
-  雪球/股票行情, RSS feeds, or any web URL.
+  雪球/股票行情, OKX/加密新闻/币种情绪/crypto sentiment, RSS feeds, or any web URL.
 
-  13 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  14 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -32,7 +32,7 @@ triggers:
   - dev: github/代码/仓库/gh/issue/pr/分支/commit
   - web: 网页/链接/文章/rss/读一下/打开这个
   - video: youtube/视频/播客/字幕/小宇宙/转录/yt
-  - finance: 雪球/股票/stock/xueqiu/行情/基金
+  - finance: 雪球/股票/stock/xueqiu/行情/基金/okx/加密新闻/币种情绪/crypto sentiment
 metadata:
   openclaw:
     homepage: https://github.com/Panniantong/Agent-Reach
@@ -40,7 +40,7 @@ metadata:
 
 # Agent Reach — 互联网能力路由器
 
-13 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
+14 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
 
 ## 常驻规则（全程适用）
 
@@ -86,6 +86,11 @@ curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1
 
 # B站搜索（bili-cli，无需登录）
 bili search "query" --type video -n 5
+
+# OKX 加密新闻搜索 / 情绪追踪（需 OKX CLI 登录/凭据）
+okx news search --keyword BTC --coins BTC --sentiment bullish --lang zh-CN --limit 10 --json
+okx news coin-sentiment --coins BTC,ETH --period 24h --json
+okx news sentiment-rank --period 24h --limit 20 --json
 ```
 
 ## 需登录态的平台（按 doctor 的 active_backend 选命令）

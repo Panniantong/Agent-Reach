@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 import requests
+
 import agent_reach.cli as cli
 from agent_reach.cli import main
 
@@ -100,6 +101,32 @@ class TestCLI:
         monkeypatch.setattr(cli, "_detect_environment", lambda: "server")
         cli._install_reddit_deps()
         assert calls == ["rdt"]
+
+    def test_install_okx_deps_uses_npm_package(self, monkeypatch, capsys):
+        state = {"okx_installed": False}
+        commands = []
+
+        def fake_which(name):
+            if name == "okx":
+                return "/usr/local/bin/okx" if state["okx_installed"] else None
+            if name == "npm":
+                return "/usr/local/bin/npm"
+            return None
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            state["okx_installed"] = True
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr(shutil, "which", fake_which)
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        cli._install_okx_deps()
+
+        out = capsys.readouterr().out
+        assert commands == [["npm", "install", "-g", "@okx_ai/okx-trade-cli"]]
+        assert "okx CLI installed" in out
+        assert "okx config init" in out
 
 
 class TestCheckUpdateRetry:

@@ -7,9 +7,10 @@ description: >
 
   Also MUST USE when user mentions any platform or shares any URL/link:
   Twitter/X, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu,
-  Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
+  Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Xueqiu (stocks),
+  OKX / crypto news / coin sentiment, RSS.
 
-  13 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  14 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -23,7 +24,7 @@ metadata:
 
 # Agent Reach — internet capability router
 
-13 platforms, multiple backends each. **When this skill exists, use it for
+14 platforms, multiple backends each. **When this skill exists, use it for
 these platforms — do not invent your own approach.**
 
 ## Standing rules (apply for the whole session)
@@ -76,6 +77,11 @@ curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1
 
 # Bilibili search (bili-cli, no login needed)
 bili search "query" --type video -n 5
+
+# OKX crypto news search / sentiment tracking (requires OKX CLI auth/config)
+okx news search --keyword BTC --coins BTC --sentiment bullish --lang zh-CN --limit 10 --json
+okx news coin-sentiment --coins BTC,ETH --period 24h --json
+okx news sentiment-rank --period 24h --limit 20 --json
 ```
 
 ## Login-backed platforms (pick by doctor's active_backend)
