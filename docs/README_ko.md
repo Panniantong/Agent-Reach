@@ -70,6 +70,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 📰 **Weibo** | 인기 · 검색 · 피드 · 댓글 | 없음 | 핫 검색, 콘텐츠/사용자/주제 검색, 피드, 댓글 ([mcp-server-weibo](https://github.com/Panniantong/mcp-server-weibo)) |
 | 💻 **V2EX** | 인기 주제 · 노드 주제 · 주제 상세 + 답글 · 사용자 프로필 | 없음 | 공개 JSON API, 인증 없음. 기술 커뮤니티 콘텐츠에 적합 |
 | 📈 **Xueqiu (雪球)** | 주식 시세 · 검색 · 인기 글 · 인기 종목 | 브라우저 Cookie | 에이전트에 "Xueqiu 설정 도와줘"라고 말하세요 |
+| 🪙 **OKX** | 암호화폐 뉴스 검색 · 코인 심리 · 심리 추세 · 심리 순위 | OKX CLI 인증/설정 | 에이전트에 "OKX 설정 도와줘"라고 말하세요 |
 | 🎙️ **Xiaoyuzhou Podcast** | 음성 변환 | 무료 API key | Groq Whisper를 통한 팟캐스트 오디오 → 전체 텍스트 변환 (무료) |
 | 🔍 **Web Search** | 검색 | 자동 설정 | 설치 시 자동 설정, 무료, API key 불필요 ([Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter)) |
 | 📦 **GitHub** | 읽기 · 검색 | 없음 | [gh CLI](https://cli.github.com) 기반. 공개 저장소는 즉시 사용 가능. `gh auth login`으로 Fork, Issue, PR 기능 활성화 |

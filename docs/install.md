@@ -104,6 +104,7 @@ After installing the basics, **ask the user** which additional channels they nee
 > - 📖 **Reddit** — 搜索和阅读帖子（必须登录态：桌面 OpenCLI 或 rdt-cli + Cookie）
 > - 📺 **B站完整版** — 热门、排行、搜索、视频详情（bili-cli，无需登录）
 > - 💼 **LinkedIn** — Profile、职位搜索
+> - 🪙 **OKX** — 加密新闻搜索、币种情绪趋势、情绪排行（需要 OKX CLI 登录/凭据）
 >
 > 告诉我你要哪些，比如"帮我装小红书和 Twitter"。或者说"全部装"。
 
@@ -114,7 +115,7 @@ agent-reach install --env=auto --channels=opencli,xiaohongshu   # Example: deskt
 agent-reach install --env=auto --channels=all              # User wants everything
 ```
 
-Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `bilibili`, `linkedin`, `all`
+Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `bilibili`, `linkedin`, `okx`, `all`
 
 ### Step 3: Fix what's broken
 
@@ -208,6 +209,26 @@ agent-reach configure --from-browser chrome
 ```
 
 > Cookie 会随其他平台一起自动提取。
+
+**OKX (加密新闻 + 情绪追踪):**
+> "OKX 使用官方 okx-trade-cli。先安装 channel，再按 OKX CLI 提示登录或配置凭据："
+
+```bash
+agent-reach install --channels okx
+okx config init
+```
+
+> 可选安装 OKX 官方 sentiment skill：
+> ```bash
+> npx @okx_ai/okx-trade-cli@latest skill add okx-sentiment-tracker
+> ```
+>
+> 常用命令：
+> ```bash
+> okx news search --keyword BTC --coins BTC --sentiment bullish --lang zh-CN --limit 10 --json
+> okx news coin-sentiment --coins BTC,ETH --period 24h --json
+> okx news sentiment-rank --period 24h --limit 20 --json
+> ```
 
 **小宇宙播客 / Xiaoyuzhou Podcast (Groq Whisper):**
 > "小宇宙播客转文字已默认安装，只需要一个免费的 Groq API Key。"

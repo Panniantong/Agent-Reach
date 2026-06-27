@@ -7,6 +7,7 @@ import subprocess
 from urllib.error import URLError
 
 from agent_reach.channels import get_all_channels, get_channel
+from agent_reach.channels.okx import OkxChannel
 from agent_reach.channels.v2ex import V2EXChannel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
 from agent_reach.channels.xueqiu import XueqiuChannel
@@ -28,6 +29,7 @@ class TestChannelRegistry:
         assert "github" in names
         assert "twitter" in names
         assert "v2ex" in names
+        assert "okx" in names
 
 
 class TestV2EXChannel:
@@ -324,6 +326,150 @@ class TestV2EXChannel:
         assert len(result) == 1
         assert "error" in result[0]
         assert "V2EX" in result[0]["error"]
+
+
+class TestOkxChannel:
+    def test_can_handle_okx_urls(self):
+        ch = OkxChannel()
+        assert ch.can_handle("https://www.okx.com/learn/bitcoin-news")
+        assert ch.can_handle("https://okx.com/markets/prices/bitcoin-btc")
+        assert not ch.can_handle("https://xueqiu.com/S/SH600519")
+
+    def test_check_ok_when_configured(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/local/bin/okx" if cmd == "okx" else None)
+
+        def fake_run(cmd, **kwargs):
+            if cmd[-1] == "--version":
+                return subprocess.CompletedProcess(cmd, 0, "1.3.9", "")
+            if cmd[-3:] == ["config", "show", "--json"]:
+                return subprocess.CompletedProcess(cmd, 0, json.dumps({"profiles": {"demo": {}}}), "")
+            raise AssertionError(f"unexpected command: {cmd}")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        ch = OkxChannel()
+        status, msg = ch.check()
+        assert status == "ok"
+        assert "OKX CLI 可用" in msg
+        assert ch.active_backend == "okx CLI"
+
+    def test_check_warn_when_okx_unconfigured(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/local/bin/okx" if cmd == "okx" else None)
+
+        def fake_run(cmd, **kwargs):
+            if cmd[-1] == "--version":
+                return subprocess.CompletedProcess(cmd, 0, "1.3.9", "")
+            if cmd[-3:] == ["config", "show", "--json"]:
+                return subprocess.CompletedProcess(cmd, 0, json.dumps({"profiles": {}}), "")
+            raise AssertionError(f"unexpected command: {cmd}")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        ch = OkxChannel()
+        status, msg = ch.check()
+        assert status == "warn"
+        assert "okx-sentiment-tracker" in msg
+        assert ch.active_backend == "okx CLI"
+
+    def test_check_warns_when_only_npx_available(self, monkeypatch):
+        def fake_which(cmd):
+            if cmd == "npx":
+                return "/usr/local/bin/npx"
+            return None
+
+        monkeypatch.setattr(shutil, "which", fake_which)
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0, "10.9.0", ""),
+        )
+
+        ch = OkxChannel()
+        status, msg = ch.check()
+        assert status == "warn"
+        assert "npx" in msg
+        assert ch.active_backend == "npx @okx_ai/okx-trade-cli@latest"
+
+    def test_check_falls_back_to_npx_when_okx_cli_is_broken(self, monkeypatch):
+        def fake_which(cmd):
+            if cmd == "okx":
+                return "/usr/local/bin/okx"
+            if cmd == "npx":
+                return "/usr/local/bin/npx"
+            return None
+
+        def fake_run(cmd, **kwargs):
+            if cmd[0] == "/usr/local/bin/okx":
+                return subprocess.CompletedProcess(cmd, 127, "", "bad interpreter")
+            return subprocess.CompletedProcess(cmd, 0, "10.9.0", "")
+
+        monkeypatch.setattr(shutil, "which", fake_which)
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        ch = OkxChannel()
+        status, msg = ch.check()
+        assert status == "warn"
+        assert "备选后端异常" in msg
+        assert ch.active_backend == "npx @okx_ai/okx-trade-cli@latest"
+
+    def test_search_news_runs_okx_json_command(self, monkeypatch):
+        captured = {}
+        monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/local/bin/okx" if cmd == "okx" else None)
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            payload = {"details": [{"id": "1", "title": "BTC news"}]}
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(payload), "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        result = OkxChannel().search_news(
+            "BTC",
+            coins="BTC",
+            sentiment="bullish",
+            language="zh-CN",
+            limit=5,
+        )
+
+        assert result["details"][0]["title"] == "BTC news"
+        assert captured["cmd"] == [
+            "/usr/local/bin/okx",
+            "news",
+            "search",
+            "--keyword",
+            "BTC",
+            "--coins",
+            "BTC",
+            "--sentiment",
+            "bullish",
+            "--lang",
+            "zh-CN",
+            "--limit",
+            "5",
+            "--json",
+        ]
+
+    def test_coin_sentiment_runs_okx_json_command(self, monkeypatch):
+        captured = {}
+        monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/local/bin/okx" if cmd == "okx" else None)
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            payload = [{"details": [{"ccy": "BTC"}]}]
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(payload), "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        result = OkxChannel().get_coin_sentiment("BTC,ETH", period="1h")
+        assert result[0]["details"][0]["ccy"] == "BTC"
+        assert captured["cmd"] == [
+            "/usr/local/bin/okx",
+            "news",
+            "coin-sentiment",
+            "--coins",
+            "BTC,ETH",
+            "--period",
+            "1h",
+            "--json",
+        ]
 
 
 class TestXueqiuChannel:

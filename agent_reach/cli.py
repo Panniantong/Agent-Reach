@@ -75,7 +75,7 @@ def main():
     p_install.add_argument("--channels", default="",
                            help="Comma-separated optional channels to install "
                                 "(twitter,xiaoyuzhou,xueqiu,xiaohongshu,"
-                                "reddit,bilibili,linkedin,all)")
+                                "reddit,bilibili,linkedin,okx,all)")
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
@@ -200,6 +200,7 @@ def _cmd_install(args):
         "xiaohongshu": _install_xhs_deps,
         "reddit":      _install_reddit_deps,
         "bilibili":    _install_bili_deps,
+        "okx":         _install_okx_deps,
         "opencli":     _install_opencli_deps,  # cross-channel backend, desktop only
         # xueqiu: cookie-only, no install step
         # linkedin: manual setup, no auto-install
@@ -327,7 +328,7 @@ def _cmd_install(args):
             # First install — hint about optional channels
             print()
             print("More channels available! Use --channels to install:")
-            print("   agent-reach install --channels=twitter,xiaohongshu,reddit,...")
+            print("   agent-reach install --channels=twitter,xiaohongshu,reddit,okx,...")
             print("   agent-reach install --channels=all  (install everything)")
 
         # Star reminder
@@ -838,6 +839,40 @@ def _install_bili_deps():
             except Exception:
                 pass
     print("  [!]  bili-cli install failed. Run: pipx install bilibili-cli")
+
+
+def _install_okx_deps():
+    """Install OKX Trade CLI for crypto news and sentiment tracking."""
+    import shutil
+    import subprocess
+
+    package = "@okx_ai/okx-trade-cli"
+    print("Setting up OKX (news + sentiment)...")
+    if shutil.which("okx"):
+        print("  ✅ okx CLI already installed")
+    else:
+        if not shutil.which("npm"):
+            print("  [!]  OKX CLI requires Node.js/npm. Install Node first:")
+            print("       https://nodejs.org  （或 brew install node）")
+            return
+        try:
+            subprocess.run(
+                ["npm", "install", "-g", package],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=300,
+            )
+        except Exception:
+            pass
+        if shutil.which("okx"):
+            print("  ✅ okx CLI installed")
+        else:
+            print(f"  [!]  okx CLI install failed. Run: npm install -g {package}")
+            return
+
+    print("  下一步：运行 `okx config init` 配置凭据/登录")
+    print("  可选：npx @okx_ai/okx-trade-cli@latest skill add okx-sentiment-tracker")
 
 
 def _install_system_deps_safe():
@@ -1440,6 +1475,7 @@ def _cmd_uninstall(args):
     print()
     print("Optional: remove tools installed by Agent Reach:")
     print("  npm uninstall -g mcporter")
+    print("  npm uninstall -g @okx_ai/okx-trade-cli")
     print("  pipx uninstall twitter-cli")
     print("  npm uninstall -g undici")
 

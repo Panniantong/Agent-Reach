@@ -174,6 +174,7 @@ def test_channel_can_handle_contract():
         "linkedin": "https://www.linkedin.com/in/test",
         "rss": "https://example.com/feed.xml",
         "xueqiu": "https://xueqiu.com/S/SH600519",
+        "okx": "https://www.okx.com/learn/bitcoin-news",
         "exa_search": "https://example.com",
         "web": "https://example.com",
     }
