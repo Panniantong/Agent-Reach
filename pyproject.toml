@@ -23,6 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Internet :: WWW/HTTP",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
@@ -34,7 +35,7 @@ dependencies = [
     "loguru>=0.7",
     "pyyaml>=6.0",
     "rich>=13.0",
-    "yt-dlp>=2024.0",
+    "yt-dlp>=2024.1.1",
 ]
 
 [project.optional-dependencies]
@@ -42,7 +43,7 @@ browser = ["playwright>=1.40"]
 cookies = ["browser-cookie3>=0.19"]
 all = ["playwright>=1.40", "mcp[cli]>=1.0", "browser-cookie3>=0.19"]
 dev = [
-    "pytest>=8.0",
+    "pytest>=8.1",
     "ruff>=0.8",
     "mypy>=1.12",
     "types-requests>=2.32",

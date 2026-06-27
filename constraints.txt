@@ -10,7 +10,7 @@ PyYAML==6.0.3
 rich==14.3.2
 yt-dlp==2025.5.22
 
-pytest==8.0.0
+pytest==8.4.2
 ruff==0.15.1
 mypy==1.19.1
 types-requests==2.32.4.20260107
