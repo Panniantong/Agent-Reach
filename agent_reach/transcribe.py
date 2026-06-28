@@ -13,11 +13,14 @@ Designed to be importable from channels (e.g. YouTubeChannel.transcribe).
 
 from __future__ import annotations
 
+import ipaddress
 import shutil
+import socket
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import urlparse
 
 import requests
 
@@ -49,8 +52,101 @@ class MissingDependency(TranscribeError):
     """Raised when a required external binary is missing."""
 
 
+class SsrfBlocked(TranscribeError):
+    """Raised when the target URL points to a private/internal address."""
+
+
 class NoProviderConfigured(TranscribeError):
     """Raised when no provider has an API key configured."""
+
+
+# SSRF blocklist: hostnames that always resolve to private/internal services.
+_SSRF_BLOCKED_HOSTNAMES = frozenset({
+    "localhost",
+    "127.0.0.1",
+    "::1",
+    "0.0.0.0",
+    "metadata.google.internal",
+    "metadata.goog",
+})
+
+# Cloud metadata IPs — the #1 SSRF target in cloud environments.
+_SSRF_METADATA_IPS = frozenset({
+    "169.254.169.254",
+    "169.254.170.2",
+    "169.254.169.253",
+    "100.100.100.200",
+    "fd00:ec2::254",
+})
+
+# Private IP range string prefixes (fast-path check before ipaddress).
+_SSRF_PRIVATE_PREFIXES = (
+    "10.", "172.16.", "172.17.", "172.18.", "172.19.",
+    "172.20.", "172.21.", "172.22.", "172.23.", "172.24.",
+    "172.25.", "172.26.", "172.27.", "172.28.", "172.29.",
+    "172.30.", "172.31.", "192.168.", "127.",
+)
+
+
+def _check_ssrf(url: str) -> None:
+    """Validate *url* does not target a private/internal host.
+
+    Raises *SsrfBlocked* (a ``TranscribeError`` subclass) when the URL
+    hostname is a known private name, resolves to a private IP, or is a
+    cloud metadata endpoint.
+
+    DNS failures are **not** raised — the caller (yt-dlp) is better
+    positioned to retry or report transient errors.
+    """
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").strip().lower()
+
+    if not host:
+        raise SsrfBlocked("URL has no hostname")
+
+    # 1. Static hostname blocklist (fast, no DNS)
+    if host in _SSRF_BLOCKED_HOSTNAMES:
+        raise SsrfBlocked(f"SSRF blocked: '{host}' is not allowed")
+
+    # 2. Cloud metadata IP blocklist (fast-path string match)
+    if host in _SSRF_METADATA_IPS:
+        raise SsrfBlocked(f"SSRF blocked: '{host}' is a cloud metadata endpoint")
+
+    # 3. Scheme validation — only HTTP/S for download_audio
+    scheme = (parsed.scheme or "").lower()
+    if scheme not in ("http", "https"):
+        raise SsrfBlocked(f"SSRF blocked: scheme '{scheme}' is not supported")
+
+    # 4. DNS resolution + IP check — only when the host is not already an IP
+    try:
+        ipaddress.ip_address(host)
+        is_ip = True
+    except ValueError:
+        is_ip = False
+
+    if is_ip:
+        # Already an IP literal — check it directly
+        ip = ipaddress.ip_address(host)
+        if ip.is_private or ip.is_loopback or ip.is_link_local:
+            raise SsrfBlocked(f"SSRF blocked: '{host}' is a private/reserved IP")
+    else:
+        # Hostname — resolve and check
+        try:
+            addr_info = socket.getaddrinfo(host, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+            for _, _, _, _, sockaddr in addr_info:
+                ip_str = sockaddr[0]
+                ip = ipaddress.ip_address(ip_str)
+                if ip.is_private or ip.is_loopback or ip.is_link_local:
+                    raise SsrfBlocked(
+                        f"SSRF blocked: '{host}' resolves to private IP '{ip_str}'"
+                    )
+                if ip_str in _SSRF_METADATA_IPS:
+                    raise SsrfBlocked(
+                        f"SSRF blocked: '{host}' resolves to metadata IP '{ip_str}'"
+                    )
+        except OSError:
+            # DNS failure — let yt-dlp handle it
+            pass
 
 
 def _require(binary: str) -> None:
@@ -76,6 +172,7 @@ def _run(cmd: List[str], timeout: int = 600) -> None:
 
 def download_audio(url: str, out_dir: Path) -> Path:
     """Download audio with yt-dlp into out_dir; return the resulting file path."""
+    _check_ssrf(url)  # Block SSRF to private/internal hosts
     _require("yt-dlp")
     template = out_dir / "source.%(ext)s"
     _run(
