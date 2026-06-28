@@ -20,6 +20,7 @@ from .linkedin import LinkedInChannel
 from .xiaoyuzhou import XiaoyuzhouChannel
 from .v2ex import V2EXChannel
 from .xueqiu import XueqiuChannel
+from .tiktok import TikTokChannel
 
 
 ALL_CHANNELS: List[Channel] = [
@@ -29,6 +30,7 @@ ALL_CHANNELS: List[Channel] = [
     RedditChannel(),
     BilibiliChannel(),
     XiaoHongShuChannel(),
+    TikTokChannel(),
     LinkedInChannel(),
     XiaoyuzhouChannel(),
     V2EXChannel(),
