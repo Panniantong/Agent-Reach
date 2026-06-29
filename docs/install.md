@@ -74,6 +74,19 @@ agent-reach install --env=auto
 > agent-reach install --env=auto
 > ```
 
+> 🔒 **Reproducible / hash-verified install (recommended for servers & CI).**
+> The commands above resolve dependency ranges and take whatever the index
+> serves today. For a supply-chain-pinned install, use the checked-in lock
+> (exact versions + SHA-256 hashes; pip refuses any tampered/substituted
+> artifact):
+> ```bash
+> pip install --require-hashes -r requirements.lock
+> pip install --no-deps https://github.com/Panniantong/agent-reach/archive/main.zip
+> ```
+> `constraints.txt` is for **development/CI only** and is not applied by the
+> commands above. Regenerate the lock with
+> `pip-compile --generate-hashes -o requirements.lock requirements.in`.
+
 This installs core infrastructure (gh CLI, Node.js, mcporter, Exa search, yt-dlp config) and activates these zero-config channels:
 
 - Web (Jina Reader), YouTube, GitHub, RSS, Exa Search, V2EX, Bilibili (basic)

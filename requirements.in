@@ -1,0 +1,16 @@
+# Runtime dependencies for a reproducible, hash-verified install.
+# Pinned to the tested set (mirrors constraints.txt). Regenerate the lock with:
+#   pip-compile --generate-hashes --output-file=requirements.lock requirements.in
+#
+# NOTE: requirements.lock here was generated on Windows / CPython 3.12. It
+# installs cleanly on Linux/macOS too (the only platform-specific entries,
+# colorama and win32-setctime, ship universal pure-Python wheels), but for
+# marker-precise locks per OS, regenerate it on each target platform (or run
+# pip-compile in a CI matrix).
+requests==2.32.5
+feedparser==6.0.12
+python-dotenv==1.2.1
+loguru==0.7.3
+PyYAML==6.0.3
+rich==14.3.2
+yt-dlp==2025.5.22
