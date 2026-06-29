@@ -352,7 +352,22 @@ Yes! Agent Reach is an installer + configuration tool — any AI coding agent th
 - 📧 **Email:** pnt01@foxmail.com
 - 🐦 **Twitter/X:** [@Neo_Reidlab](https://x.com/Neo_Reidlab)
 
-交流或合作可加微信，拉你进交流群：
+### 正在整理 AI Agent 的真实实践
+
+我最近在整理 AI Agent / AI workflow 在真实场景里的做法、问题和机会。
+
+Agent Reach 是我自己的一个开源尝试：让 Agent 更方便地读取互联网、做 research、做市场雷达、做数据采集，也因此接触到很多有意思的场景。
+
+如果你也在关注或尝试类似方向，欢迎加我微信交流：
+
+- 你在业务里遇到过具体的信息获取、搜索、监控、分析或自动化问题
+- 你正在尝试用 Agent 改造市场、销售、运营、投研、内容、数据等工作流
+- 你在做 AI Agent、浏览器自动化、数据采集、垂直行业工具或相关产品
+- 你对 Agent 如何真正落地有自己的观察、案例或困惑
+
+加好友请备注：`AI Agent + 你关注的方向`。
+
+我会优先回复备注清楚、有具体场景或具体问题的朋友。合适的话，也会邀请进相关交流群。
 
 <p align="center">
   <img src="docs/wechat-group-qr.jpg" width="280" alt="WeChat QR">
