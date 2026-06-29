@@ -21,6 +21,7 @@ from .web import WebChannel
 from .xiaohongshu import XiaoHongShuChannel
 from .xiaoyuzhou import XiaoyuzhouChannel
 from .xueqiu import XueqiuChannel
+from .tiktok import TikTokChannel
 from .youtube import YouTubeChannel
 
 ALL_CHANNELS: List[Channel] = [
@@ -30,6 +31,7 @@ ALL_CHANNELS: List[Channel] = [
     RedditChannel(),
     FacebookChannel(),
     InstagramChannel(),
+    TikTokChannel(),
     BilibiliChannel(),
     XiaoHongShuChannel(),
     LinkedInChannel(),
