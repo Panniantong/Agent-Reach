@@ -1302,3 +1302,94 @@ class TestXiaoyuzhouChannel:
         status, msg = ch.check()
         assert status == "ok"
         assert ch.active_backend == "groq-whisper"
+
+
+class TestGitHubChannel:
+    """can_handle URL patterns + the five check() branches (missing / broken / timeout / ok / unauthenticated)."""
+
+    def _patch_probe(self, monkeypatch, result):
+        from agent_reach.channels import github as github_mod
+        monkeypatch.setattr(github_mod, "probe_command", lambda *a, **k: result)
+
+    def test_can_handle_github_urls(self):
+        from agent_reach.channels.github import GitHubChannel
+        ch = GitHubChannel()
+        assert ch.can_handle("https://github.com/user/repo")
+        assert ch.can_handle("https://GitHub.com/user/repo")
+        assert ch.can_handle("https://gist.github.com/user/abc123")
+
+    def test_can_handle_matches_netloc_not_path(self):
+        """Only the host counts — a github.com path segment on another host must not match."""
+        from agent_reach.channels.github import GitHubChannel
+        ch = GitHubChannel()
+        assert not ch.can_handle("https://example.com/github.com/mirror")
+        assert not ch.can_handle("https://gitlab.com/user/repo")
+
+    def test_check_warn_when_gh_missing(self, monkeypatch):
+        from agent_reach.channels.github import GitHubChannel
+        from agent_reach.probe import ProbeResult
+
+        self._patch_probe(monkeypatch, ProbeResult("missing"))
+        ch = GitHubChannel()
+        status, msg = ch.check()
+        assert status == "warn"
+        assert "https://cli.github.com" in msg
+        assert ch.active_backend is None
+
+    def test_check_error_when_gh_broken(self, monkeypatch):
+        """which() finds gh but exec fails (broken install) → error + binary reinstall prescription."""
+        from agent_reach.channels.github import GitHubChannel
+        from agent_reach.probe import ProbeResult
+
+        self._patch_probe(monkeypatch, ProbeResult("broken"))
+        ch = GitHubChannel()
+        status, msg = ch.check()
+        assert status == "error"
+        assert "brew reinstall gh" in msg
+        assert ch.active_backend is None
+
+    def test_check_warn_when_status_probe_times_out(self, monkeypatch):
+        """gh starts but auth status hangs → tool is alive, so backend stays active."""
+        from agent_reach.channels.github import GitHubChannel
+        from agent_reach.probe import ProbeResult
+
+        self._patch_probe(monkeypatch, ProbeResult("timeout"))
+        ch = GitHubChannel()
+        status, msg = ch.check()
+        assert status == "warn"
+        assert "gh auth status" in msg
+        assert ch.active_backend == "gh CLI"
+
+    def test_check_ok_when_authenticated(self, monkeypatch):
+        from agent_reach.channels.github import GitHubChannel
+        from agent_reach.probe import ProbeResult
+
+        self._patch_probe(monkeypatch, ProbeResult("ok", output="Logged in to github.com"))
+        ch = GitHubChannel()
+        status, msg = ch.check()
+        assert status == "ok"
+        assert ch.active_backend == "gh CLI"
+
+    def test_check_warn_when_unauthenticated(self, monkeypatch):
+        """gh auth status exits non-zero when logged out — normal business state, not an error."""
+        from agent_reach.channels.github import GitHubChannel
+        from agent_reach.probe import ProbeResult
+
+        self._patch_probe(monkeypatch, ProbeResult("error", output="You are not logged into any GitHub hosts"))
+        ch = GitHubChannel()
+        status, msg = ch.check()
+        assert status == "warn"
+        assert "gh auth login" in msg
+        assert ch.active_backend == "gh CLI"
+
+    def test_check_failure_resets_stale_active_backend(self, monkeypatch):
+        """A previously healthy instance must not keep a stale active_backend."""
+        from agent_reach.channels.github import GitHubChannel
+        from agent_reach.probe import ProbeResult
+
+        ch = GitHubChannel()
+        ch.active_backend = "gh CLI"  # pretend an earlier check() succeeded
+        self._patch_probe(monkeypatch, ProbeResult("missing"))
+        status, _ = ch.check()
+        assert status == "warn"
+        assert ch.active_backend is None
