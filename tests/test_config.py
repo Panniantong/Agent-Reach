@@ -1,12 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for Agent Reach config module."""
 
-import os
-import tempfile
-from pathlib import Path
-
 import pytest
-import yaml
 
 from agent_reach.config import Config
 
@@ -21,7 +16,7 @@ def tmp_config(tmp_path):
 class TestConfig:
     def test_init_creates_dir(self, tmp_path):
         config_file = tmp_path / "subdir" / "config.yaml"
-        config = Config(config_path=config_file)
+        Config(config_path=config_file)
         assert config_file.parent.exists()
 
     def test_set_and_get(self, tmp_config):
@@ -74,6 +69,26 @@ class TestConfig:
         assert masked["exa_api_key"] == "super-se..."
         assert masked["normal_setting"] == "visible"
 
+    def test_to_dict_masks_cookie_and_session_credentials(self, tmp_config):
+        secrets = {
+            "twitter_ct0": "csrf-secret-value",
+            "xhs_cookie": "web_session=xhs-secret",
+            "xueqiu_cookie": "xq_a_token=xueqiu-secret",
+            "bilibili_sessdata": "bili-session-secret",
+            "bilibili_csrf": "bili-csrf-secret",
+            "twitter_auth_token": "twitter-auth-secret",
+        }
+        for key, value in secrets.items():
+            tmp_config.set(key, value)
+
+        tmp_config.set("normal_setting", "visible")
+        masked = tmp_config.to_dict()
+
+        dumped = str(masked)
+        for value in secrets.values():
+            assert value not in dumped
+        assert masked["normal_setting"] == "visible"
+
     def test_save_creates_file_with_restricted_permissions(self, tmp_path):
         import stat
         import sys
@@ -86,3 +101,35 @@ class TestConfig:
             # File should be owner-only read/write (0o600)
             assert not (mode & stat.S_IRGRP), "group read should not be set"
             assert not (mode & stat.S_IROTH), "other read should not be set"
+
+    def test_save_tightens_existing_config_file_permissions(self, tmp_path):
+        import os
+        import stat
+        import sys
+
+        config_file = tmp_path / "secure_config.yaml"
+        config_file.write_text("twitter_auth_token: old\n", encoding="utf-8")
+        if sys.platform != "win32":
+            os.chmod(config_file, 0o644)
+
+        config = Config(config_path=config_file)
+        config.set("twitter_auth_token", "new-secret")
+
+        if sys.platform != "win32":
+            mode = config_file.stat().st_mode
+            assert not (mode & stat.S_IRGRP), "group read should be removed"
+            assert not (mode & stat.S_IROTH), "other read should be removed"
+
+    def test_config_dir_has_restricted_permissions(self, tmp_path):
+        import stat
+        import sys
+
+        config_file = tmp_path / "private" / "config.yaml"
+        Config(config_path=config_file)
+
+        if sys.platform != "win32":
+            mode = config_file.parent.stat().st_mode
+            assert not (mode & stat.S_IRGRP), "group read should not be set"
+            assert not (mode & stat.S_IXGRP), "group execute should not be set"
+            assert not (mode & stat.S_IROTH), "other read should not be set"
+            assert not (mode & stat.S_IXOTH), "other execute should not be set"

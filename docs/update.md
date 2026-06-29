@@ -89,9 +89,11 @@ agent-reach version
 agent-reach doctor
 ```
 
-Running `agent-reach doctor` (text mode) also auto-syncs the bundled skill
-(SKILL.md + references) into every detected agent skill directory — no
-separate skill-update step is needed.
+Running `agent-reach doctor` (text mode) also makes sure an Agent Reach skill
+exists in detected agent skill directories. If the user already has a skill
+there, doctor preserves it instead of overwriting local customizations. Use
+`agent-reach skill --install` when you explicitly want to refresh the bundled
+skill files.
 
 Check the doctor output:
 

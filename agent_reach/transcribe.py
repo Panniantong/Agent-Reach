@@ -13,11 +13,13 @@ Designed to be importable from channels (e.g. YouTubeChannel.transcribe).
 
 from __future__ import annotations
 
+import ipaddress
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import urlparse
 
 import requests
 
@@ -53,6 +55,12 @@ class NoProviderConfigured(TranscribeError):
     """Raised when no provider has an API key configured."""
 
 
+_BLOCKED_HOSTS = {
+    "localhost",
+    "metadata.google.internal",
+}
+
+
 def _require(binary: str) -> None:
     if not shutil.which(binary):
         raise MissingDependency(f"{binary} not found in PATH")
@@ -74,8 +82,49 @@ def _run(cmd: List[str], timeout: int = 600) -> None:
         )
 
 
+def _is_private_ip(value: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return any(
+        (
+            ip.is_private,
+            ip.is_loopback,
+            ip.is_link_local,
+            ip.is_reserved,
+            ip.is_multicast,
+            ip.is_unspecified,
+        )
+    )
+
+
+def _assert_safe_public_url(url: str) -> None:
+    """Reject literal local/internal URLs without DNS-resolving public hosts."""
+    if "://" not in url:
+        before_slash = url.split("/", 1)[0]
+        if ":" in before_slash:
+            host_part, port_part = before_slash.rsplit(":", 1)
+            if not host_part or not port_part.isdigit():
+                raise TranscribeError("SSRF blocked: only public http(s) URLs are allowed")
+        parsed = urlparse(f"https://{url}")
+    else:
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"}:
+            raise TranscribeError("SSRF blocked: only public http(s) URLs are allowed")
+
+    host = (parsed.hostname or "").strip().lower().rstrip(".")
+    if not host:
+        raise TranscribeError("SSRF blocked: URL host is missing")
+    if host in _BLOCKED_HOSTS or host.endswith(".localhost"):
+        raise TranscribeError("SSRF blocked: internal host is not allowed")
+    if _is_private_ip(host):
+        raise TranscribeError("SSRF blocked: private/internal IP is not allowed")
+
+
 def download_audio(url: str, out_dir: Path) -> Path:
     """Download audio with yt-dlp into out_dir; return the resulting file path."""
+    _assert_safe_public_url(url)
     _require("yt-dlp")
     template = out_dir / "source.%(ext)s"
     _run(
@@ -88,6 +137,7 @@ def download_audio(url: str, out_dir: Path) -> Path:
             "0",
             "-o",
             str(template),
+            "--",
             url,
         ],
         timeout=1800,  # long podcasts over slow networks — generous but bounded
@@ -224,7 +274,14 @@ def transcribe(
         names = ", ".join(PROVIDERS[p]["key_field"] for p in order)
         raise NoProviderConfigured(f"no provider key configured (need one of: {names})")
 
-    work_dir = Path(out_dir) if out_dir else Path(tempfile.mkdtemp(prefix="transcribe-"))
+    if out_dir:
+        return _transcribe_in_dir(source, order, cfg, Path(out_dir))
+
+    with tempfile.TemporaryDirectory(prefix="transcribe-") as tmp:
+        return _transcribe_in_dir(source, order, cfg, Path(tmp))
+
+
+def _transcribe_in_dir(source: str, order: List[str], cfg: Config, work_dir: Path) -> str:
     work_dir.mkdir(parents=True, exist_ok=True)
 
     src_path = Path(source)

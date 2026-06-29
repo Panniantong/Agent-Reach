@@ -13,10 +13,10 @@ import os
 import stat
 import subprocess
 import sys
-import tempfile
 
 import pytest
 
+from agent_reach.cli import _configure_xhs_cookies
 from agent_reach.cookie_extract import _sync_bird_env, _sync_xfetch_session
 
 
@@ -25,12 +25,28 @@ def _owner_only(path: str) -> bool:
     return not (mode & (stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH | stat.S_IWOTH))
 
 
+def _owner_only_dir(path: str) -> bool:
+    mode = os.stat(path).st_mode
+    return not (
+        mode
+        & (
+            stat.S_IRGRP
+            | stat.S_IWGRP
+            | stat.S_IXGRP
+            | stat.S_IROTH
+            | stat.S_IWOTH
+            | stat.S_IXOTH
+        )
+    )
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX perm semantics only")
 def test_sync_xfetch_session_writes_0600(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     _sync_xfetch_session("auth_xxx", "ct0_yyy")
     session_path = tmp_path / ".config" / "xfetch" / "session.json"
     assert session_path.exists(), "expected ~/.config/xfetch/session.json"
+    assert _owner_only_dir(str(session_path.parent)), "xfetch dir must be 0o700"
     assert _owner_only(str(session_path)), "session.json must be 0o600"
     # Round-trip the content so we know we didn't accidentally corrupt JSON.
     data = json.loads(session_path.read_text(encoding="utf-8"))
@@ -39,12 +55,39 @@ def test_sync_xfetch_session_writes_0600(tmp_path, monkeypatch):
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX perm semantics only")
+def test_sync_xfetch_session_tightens_existing_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    session_path = tmp_path / ".config" / "xfetch" / "session.json"
+    session_path.parent.mkdir(parents=True)
+    session_path.write_text('{"authToken": "old"}', encoding="utf-8")
+    os.chmod(session_path, 0o644)
+
+    _sync_xfetch_session("auth_xxx", "ct0_yyy")
+
+    assert _owner_only(str(session_path)), "existing session.json must be tightened"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX perm semantics only")
 def test_sync_bird_env_writes_0600(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     _sync_bird_env("auth_xxx", "ct0_yyy")
     env_path = tmp_path / ".config" / "bird" / "credentials.env"
     assert env_path.exists(), "expected ~/.config/bird/credentials.env"
+    assert _owner_only_dir(str(env_path.parent)), "bird dir must be 0o700"
     assert _owner_only(str(env_path)), "credentials.env must be 0o600"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX perm semantics only")
+def test_sync_bird_env_tightens_existing_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    env_path = tmp_path / ".config" / "bird" / "credentials.env"
+    env_path.parent.mkdir(parents=True)
+    env_path.write_text("AUTH_TOKEN=old\n", encoding="utf-8")
+    os.chmod(env_path, 0o644)
+
+    _sync_bird_env("auth_xxx", "ct0_yyy")
+
+    assert _owner_only(str(env_path)), "existing credentials.env must be tightened"
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX sh needed for sourcing")
@@ -87,3 +130,22 @@ def test_sync_bird_env_quotes_shell_metachars(tmp_path, monkeypatch):
     # And no side-effect files materialised.
     assert not pwn_auth.exists()
     assert not pwn_ct0.exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX perm semantics only")
+def test_configure_xhs_cookies_tightens_local_fallback_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr("shutil.which", lambda name: None if name == "docker" else name)
+
+    cookie_path = tmp_path / ".agent-reach" / "xhs-cookies.json"
+    cookie_path.parent.mkdir()
+    cookie_path.write_text("[]", encoding="utf-8")
+    os.chmod(cookie_path, 0o644)
+
+    _configure_xhs_cookies("web_session=xhs_secret")
+
+    assert _owner_only_dir(str(cookie_path.parent)), "~/.agent-reach must be 0o700"
+    assert _owner_only(str(cookie_path)), "existing xhs-cookies.json must be tightened"
+    data = json.loads(cookie_path.read_text(encoding="utf-8"))
+    assert data[0]["name"] == "web_session"
+    assert data[0]["value"] == "xhs_secret"

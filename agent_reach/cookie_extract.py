@@ -8,9 +8,7 @@ Usage:
     agent-reach configure --from-browser chrome
 """
 
-import sys
-from typing import Dict, List, Optional, Tuple
-
+from typing import Dict, List, Tuple
 
 # Platform cookie specs: (platform_name, domain_pattern, needed_cookies)
 PLATFORM_SPECS = [
@@ -165,9 +163,14 @@ def _open_owner_only(path: str):
             os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
             stat.S_IRUSR | stat.S_IWUSR,  # 0o600
         )
+        if os.name != "nt":
+            os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
         return os.fdopen(fd, "w", encoding="utf-8")
     except OSError:
-        return open(path, "w", encoding="utf-8")
+        handle = open(path, "w", encoding="utf-8")
+        if os.name != "nt":
+            os.chmod(path, 0o600)
+        return handle
 
 
 def _sync_xfetch_session(auth_token: str, ct0: str) -> None:
@@ -176,8 +179,10 @@ def _sync_xfetch_session(auth_token: str, ct0: str) -> None:
     import os
 
     try:
+        from agent_reach.utils.paths import make_private_dir
+
         xfetch_dir = os.path.join(os.path.expanduser("~"), ".config", "xfetch")
-        os.makedirs(xfetch_dir, exist_ok=True)
+        make_private_dir(xfetch_dir)
         session_path = os.path.join(xfetch_dir, "session.json")
         session_data: dict = {}
         if os.path.exists(session_path):
@@ -207,8 +212,10 @@ def _sync_bird_env(auth_token: str, ct0: str) -> None:
     import shlex
 
     try:
+        from agent_reach.utils.paths import make_private_dir
+
         bird_dir = os.path.join(os.path.expanduser("~"), ".config", "bird")
-        os.makedirs(bird_dir, exist_ok=True)
+        make_private_dir(bird_dir)
         env_path = os.path.join(bird_dir, "credentials.env")
         with _open_owner_only(env_path) as f:
             f.write(f"AUTH_TOKEN={shlex.quote(auth_token)}\n")

@@ -352,7 +352,7 @@ def _cmd_install(args):
         print("Dry run complete. No changes were made.")
 
 
-def _install_skill():
+def _install_skill(force: bool = True):
     """Install Agent Reach as an agent skill (OpenClaw / Claude Code / .agents)."""
     import os
     import shutil
@@ -380,9 +380,12 @@ def _install_skill():
         except FileNotFoundError:
             return skill_pkg.joinpath("SKILL.md").read_text(encoding="utf-8")
 
-    def _copy_skill_dir(target: str) -> bool:
+    def _copy_skill_dir(target: str) -> str | None:
         """Copy entire skill directory (locale-specific SKILL.md + references/)."""
         try:
+            if not force and os.path.exists(os.path.join(target, "SKILL.md")):
+                return "preserved"
+
             # Clear existing installation. A symlinked skill dir (dotfiles
             # setups) breaks shutil.rmtree — unlink the link itself instead.
             if os.path.islink(target):
@@ -416,10 +419,10 @@ def _install_skill():
                     with open(os.path.join(refs_target, name), "w", encoding="utf-8") as f:
                         f.write(content)
 
-            return True
+            return "installed"
         except Exception as e:
             print(f"  Warning: Could not install skill: {e}")
-            return False
+            return None
 
     # Determine skill install path (priority: .agents > openclaw > claude)
     skill_dirs = [
@@ -437,16 +440,23 @@ def _install_skill():
     for skill_dir in skill_dirs:
         if os.path.isdir(skill_dir):
             target = os.path.join(skill_dir, "agent-reach")
-            if _copy_skill_dir(target):
+            status = _copy_skill_dir(target)
+            if status:
                 platform_name = "Agent" if ".agents" in skill_dir else "OpenClaw" if "openclaw" in skill_dir else "Claude Code"
-                print(f"Skill installed for {platform_name}: {target}")
+                if status == "preserved":
+                    print(f"Skill already installed for {platform_name}, preserving existing files: {target}")
+                else:
+                    print(f"Skill installed for {platform_name}: {target}")
                 installed = True
 
     if not installed:
         # No known skill directory found — create for .agents by default
         target = os.path.expanduser("~/.agents/skills/agent-reach")
         os.makedirs(os.path.dirname(target), exist_ok=True)
-        if _copy_skill_dir(target):
+        status = _copy_skill_dir(target)
+        if status == "preserved":
+            print(f"Skill already installed, preserving existing files: {target}")
+        elif status == "installed":
             print(f"Skill installed: {target}")
         else:
             print("  -- Could not install agent skill (optional)")
@@ -1249,14 +1259,21 @@ def _configure_xhs_cookies(value):
         # Create with 0o600 atomically so the file is never world-readable
         # between open() and a follow-up chmod() (same pattern Config.save()
         # uses in config.py).
+        import os
         import stat
-        cookie_path = os.path.expanduser("~/.agent-reach/xhs-cookies.json")
+
+        from agent_reach.utils.paths import make_private_dir
+
+        cookie_dir = make_private_dir(os.path.expanduser("~/.agent-reach"))
+        cookie_path = cookie_dir / "xhs-cookies.json"
         try:
             fd = os.open(
-                cookie_path,
+                str(cookie_path),
                 os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
                 stat.S_IRUSR | stat.S_IWUSR,  # 0o600
             )
+            if os.name != "nt":
+                os.chmod(cookie_path, stat.S_IRUSR | stat.S_IWUSR)
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(cookies_json)
         except OSError:
@@ -1473,7 +1490,7 @@ def _cmd_doctor(args=None):
     rprint(format_report(results))
 
     # Auto-install skill if not already present (fixes #154)
-    _install_skill()
+    _install_skill(force=False)
 
 
 def _cmd_setup():

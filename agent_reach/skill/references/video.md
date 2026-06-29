@@ -47,6 +47,7 @@ agent-reach transcribe "https://www.youtube.com/watch?v=VIDEO_ID"
 agent-reach transcribe ./local_audio.mp3 -o /tmp/transcript.txt
 ```
 
+> `agent-reach transcribe` 只接收公开 http(s) URL 或本地音频文件。用 `ytsearch5:` 搜索时，先从 yt-dlp 结果里选出具体视频 URL，再转写。
 > 需要先配置 key：`agent-reach configure groq-key gsk_xxx`（免费，console.groq.com）
 > 或 `agent-reach configure openai-key sk-xxx`。默认 auto 模式：groq 失败自动降级 openai。
 

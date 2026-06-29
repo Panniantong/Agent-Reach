@@ -685,6 +685,35 @@ class TestXueqiuChannel:
         cookie_names = {c.name for c in xq_mod._cookie_jar}
         assert "xq_a_token" in cookie_names
 
+    def test_load_cookies_from_browser_rookiepy_path(self, monkeypatch):
+        import sys
+        import types
+
+        import agent_reach.channels.xueqiu as xueqiu_mod
+
+        xueqiu_mod._cookie_jar.clear()
+        fake_rookiepy = types.SimpleNamespace(
+            chrome=lambda domains=None: [
+                {
+                    "name": "xq_a_token",
+                    "value": "TOKEN_FROM_BROWSER",
+                    "domain": ".xueqiu.com",
+                },
+                {
+                    "name": "xq_is_login",
+                    "value": "1",
+                    "domain": ".xueqiu.com",
+                },
+            ]
+        )
+        monkeypatch.setitem(sys.modules, "rookiepy", fake_rookiepy)
+
+        assert xueqiu_mod._load_cookies_from_browser() is True
+        assert any(
+            cookie.name == "xq_a_token" and cookie.value == "TOKEN_FROM_BROWSER"
+            for cookie in xueqiu_mod._cookie_jar
+        )
+
     def test_get_json_sends_referer_and_browser_ua(self, monkeypatch):
         """_get_json() must send Referer and a browser-like User-Agent."""
         import agent_reach.channels.xueqiu as xueqiu_mod
