@@ -421,36 +421,116 @@ def _install_skill():
             print(f"  Warning: Could not install skill: {e}")
             return False
 
-    # Determine skill install path (priority: .agents > openclaw > claude)
-    skill_dirs = [
-        os.path.expanduser("~/.agents/skills"),      # Generic agents (priority)
-        os.path.expanduser("~/.openclaw/skills"),    # OpenClaw
-        os.path.expanduser("~/.claude/skills"),      # Claude Code (if exists)
-    ]
+    def _copy_hermes_skill(target: str) -> bool:
+        """Copy Hermes-specific SKILL.md (SKILL_hermes.md) to target dir."""
+        try:
+            if os.path.islink(target):
+                os.unlink(target)
+            elif os.path.exists(target):
+                shutil.rmtree(target)
+            os.makedirs(target, exist_ok=True)
 
-    # Insert OPENCLAW_HOME path at the beginning if environment variable is set
+            # Get the Hermes-specific skill file from package
+            try:
+                from pathlib import Path as _Path
+                skill_pkg = _Path(str(importlib.resources.files("agent_reach"))) / "skill"
+            except Exception:
+                from pathlib import Path as _Path
+                skill_pkg = _Path(__file__).resolve().parent / "skill"
+
+            hermes_skill = skill_pkg.joinpath("SKILL_hermes.md")
+            if hermes_skill.exists():
+                with open(os.path.join(target, "SKILL.md"), "w", encoding="utf-8") as f:
+                    f.write(hermes_skill.read_text(encoding="utf-8"))
+            else:
+                # Fall back to default skill file
+                skill_md = skill_pkg.joinpath("SKILL.md").read_text(encoding="utf-8")
+                with open(os.path.join(target, "SKILL.md"), "w", encoding="utf-8") as f:
+                    f.write(skill_md)
+
+            # Copy references/ directory — best-effort, not a blocker
+            try:
+                refs_pkg = skill_pkg.joinpath("references")
+                if refs_pkg.is_dir():
+                    refs_target = os.path.join(target, "references")
+                    os.makedirs(refs_target, exist_ok=True)
+                    for ref_file in refs_pkg.iterdir():
+                        name = ref_file.name
+                        if name.endswith(".md"):
+                            content = ref_file.read_text(encoding="utf-8")
+                            with open(os.path.join(refs_target, name), "w", encoding="utf-8") as f:
+                                f.write(content)
+            except Exception:
+                # references/ is optional — don't fail the install
+                pass
+
+            return True
+        except Exception as e:
+            print(f"  Warning: Could not install Hermes skill: {e}")
+            return False
+
+    # ── Build skill directory list with explicit platform tags ─────────────
+    # Each entry is (expanded_path, platform_label).
+    # Platform identity is assigned at insertion time so the loop never
+    # needs to guess it from path substrings.
+    skill_dirs: list[tuple[str, str]] = []
+
+    hermes_home = os.environ.get("HERMES_HOME")
+    if hermes_home:
+        skill_dirs.append((os.path.join(hermes_home, "skills"), "Hermes Agent"))
+        # Dual-install note: if HERMES_HOME != ~/.hermes, both that custom
+        # path AND ~/.hermes/skills (below) are provisioned. This is intentional
+        # — guarantees coverage regardless of which path the gateway reads.
+
+    skill_dirs.append((os.path.expanduser("~/.hermes/skills"), "Hermes Agent"))
+    skill_dirs.append((os.path.expanduser("~/.agents/skills"), "Agent"))
+
     openclaw_home = os.environ.get("OPENCLAW_HOME")
     if openclaw_home:
-        skill_dirs.insert(0, os.path.join(openclaw_home, ".openclaw", "skills"))
+        skill_dirs.append((os.path.join(openclaw_home, ".openclaw", "skills"), "OpenClaw"))
 
+    skill_dirs.append((os.path.expanduser("~/.openclaw/skills"), "OpenClaw"))
+    skill_dirs.append((os.path.expanduser("~/.claude/skills"), "Claude Code"))
+
+    # ── Install loop ──────────────────────────────────────────────────────
     installed = False
-    for skill_dir in skill_dirs:
-        if os.path.isdir(skill_dir):
-            target = os.path.join(skill_dir, "agent-reach")
-            if _copy_skill_dir(target):
-                platform_name = "Agent" if ".agents" in skill_dir else "OpenClaw" if "openclaw" in skill_dir else "Claude Code"
-                print(f"Skill installed for {platform_name}: {target}")
-                installed = True
+    for skill_dir, platform_name in skill_dirs:
+        if not os.path.isdir(skill_dir):
+            continue
+
+        target = os.path.join(skill_dir, "agent-reach")
+
+        if platform_name == "Hermes Agent":
+            ok = _copy_hermes_skill(target)
+        else:
+            ok = _copy_skill_dir(target)
+
+        if ok:
+            print(f"  ✓ Skill installed for {platform_name}: {target}")
+            installed = True
 
     if not installed:
         # No known skill directory found — create for .agents by default
         target = os.path.expanduser("~/.agents/skills/agent-reach")
-        os.makedirs(os.path.dirname(target), exist_ok=True)
-        if _copy_skill_dir(target):
-            print(f"Skill installed: {target}")
-        else:
-            print("  -- Could not install agent skill (optional)")
-            print("  -- Tip: install OpenClaw, Claude Code, or create ~/.agents/skills/ manually")
+        parent_dir = os.path.dirname(target)
+
+        # Broken symlink (e.g. from stow/chezmoi dotfile managers) causes
+        # os.makedirs(exist_ok=True) to raise FileExistsError — os.path.isdir()
+        # returns False for broken links, so exist_ok's safety check fails.
+        # Unlink the dead link before creating the directory.
+        if os.path.islink(parent_dir) and not os.path.exists(parent_dir):
+            os.unlink(parent_dir)
+
+        try:
+            os.makedirs(parent_dir, exist_ok=True)
+            if _copy_skill_dir(target):
+                print(f"Skill installed: {target}")
+            else:
+                print("  -- Could not install agent skill (optional)")
+                print("  -- Tip: install OpenClaw, Claude Code, Hermes Agent, or create ~/.agents/skills/ manually")
+        except Exception as e:
+            print(f"  -- Could not initialize default fallback path: {e}")
+            print("  -- Tip: install OpenClaw, Claude Code, Hermes Agent, or create ~/.agents/skills/ manually")
 
 
 def _uninstall_skill():
@@ -458,10 +538,16 @@ def _uninstall_skill():
     import shutil
 
     skill_dirs = [
+        ("~/.hermes/skills/agent-reach", "Hermes Agent"),
         ("~/.openclaw/skills/agent-reach", "OpenClaw"),
         ("~/.claude/skills/agent-reach", "Claude Code"),
         ("~/.agents/skills/agent-reach", "Agent"),
     ]
+
+    # Also check HERMES_HOME
+    hermes_home = os.environ.get("HERMES_HOME")
+    if hermes_home:
+        skill_dirs.insert(0, (os.path.join(hermes_home, "skills", "agent-reach"), "Hermes Agent"))
 
     # Also check OPENCLAW_HOME
     openclaw_home = os.environ.get("OPENCLAW_HOME")
