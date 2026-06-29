@@ -32,6 +32,7 @@ dependencies = [
     "feedparser>=6.0",
     "python-dotenv>=1.0",
     "loguru>=0.7",
+    "packaging>=21.0",
     "pyyaml>=6.0",
     "rich>=13.0",
     "yt-dlp>=2024.0",

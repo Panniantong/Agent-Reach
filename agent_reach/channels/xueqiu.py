@@ -85,7 +85,25 @@ def _load_cookies_from_browser() -> bool:
             if not any(c.get("name") == "xq_a_token" for c in cookies):
                 return False
             for c in cookies:
-                _cookie_jar.set(c["name"], c["value"], domain=c.get("domain", ".xueqiu.com"))
+                cookie = http.cookiejar.Cookie(
+                    version=0,
+                    name=c["name"],
+                    value=c["value"],
+                    port=None,
+                    port_specified=False,
+                    domain=c.get("domain", ".xueqiu.com"),
+                    domain_specified=True,
+                    domain_initial_dot=True,
+                    path=c.get("path", "/"),
+                    path_specified=True,
+                    secure=True,
+                    expires=None,
+                    discard=True,
+                    comment=None,
+                    comment_url=None,
+                    rest={},
+                )
+                _cookie_jar.set_cookie(cookie)
             return True
         except ImportError:
             import browser_cookie3

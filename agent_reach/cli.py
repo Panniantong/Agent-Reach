@@ -1668,22 +1668,26 @@ _UPDATE_INSTRUCTIONS = (
 
 
 def _is_newer_version(remote: str, local: str) -> bool:
-    """True if remote is strictly newer than local (semantic compare).
+    """True if remote is strictly newer than local (PEP 440 compare).
 
     A plain != would tell users "update available" when their local build is
     AHEAD of the latest release (e.g. installed from main during a release
     window) — and walk them into a downgrade.
     """
-    def parse(v):
-        try:
-            return tuple(int(x) for x in v.strip().split("."))
-        except ValueError:
-            return None
-
-    r, l = parse(remote), parse(local)
-    if r is None or l is None:
-        return remote != local  # unparseable — fall back to old behavior
-    return r > l
+    try:
+        from packaging.version import Version, InvalidVersion
+        return Version(remote.strip()) > Version(local.strip())
+    except (InvalidVersion, Exception):
+        # Unparseable — fall back to tuple comparison
+        def parse(v):
+            try:
+                return tuple(int(x) for x in v.strip().split("."))
+            except ValueError:
+                return None
+        r, l = parse(remote), parse(local)
+        if r is None or l is None:
+            return remote != local
+        return r > l
 
 
 def _cmd_check_update():
