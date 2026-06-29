@@ -263,18 +263,6 @@ agent-reach uninstall --keep-config
 
 ---
 
-## 贡献
-
-这个项目是纯 vibe coding 出来的 🎸 可能会有一些不完美的地方，如果遇到问题请多多包涵。有 bug 尽管提 [Issue](https://github.com/Panniantong/agent-reach/issues)，我都会尽快修复。
-
-**想要新渠道？** 直接提 Issue 告诉我们，或者自己提 PR。
-
-**想在本地加？** 让你的 Agent clone 下来改就行，每个渠道就是一个独立文件，加起来很简单。
-
-[PR](https://github.com/Panniantong/agent-reach/pulls) 也随时欢迎！
-
----
-
 ## ⭐ 为什么值得 Star
 
 这个项目我自己每天在用，所以我会一直维护它。
@@ -286,60 +274,6 @@ agent-reach uninstall --keep-config
 为 Web 4.0 基建贡献一份自己的力量。
 
 Star 一下，下次需要的时候能找到。⭐
-
----
-
-## 常见问题 / FAQ
-
-<details>
-<summary><strong>AI Agent 怎么搜索 Twitter / X？不想付 API 费用</strong></summary>
-
-Agent Reach 使用 [twitter-cli](https://github.com/public-clis/twitter-cli) 通过 Cookie 认证访问 Twitter，完全免费。安装：`pipx install twitter-cli`，确保浏览器已登录 x.com，Agent 就可以用 `twitter search "关键词"` 搜索、`twitter tweet URL` 读推文了。
-</details>
-
-<details>
-<summary><strong>How to search Twitter/X with AI agent for free (no API)?</strong></summary>
-
-Agent Reach uses twitter-cli with cookie auth — zero API fees. Install with `pipx install twitter-cli`, make sure you're logged into x.com in your browser, then your agent can search with `twitter search "query"` and read tweets with `twitter tweet URL`.
-</details>
-
-<details>
-<summary><strong>Reddit 返回 403 怎么办？</strong></summary>
-
-Reddit 所有访问都需要登录态（匿名接口已被全面封锁，官方 API 需人工审批）。桌面首选 **OpenCLI**：浏览器里登录过 reddit.com 即可直接 `opencli reddit search "关键词"`。备选 [rdt-cli](https://github.com/public-clis/rdt-cli)：`pipx install 'git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66'`（与代码同一钉定版本，PyPI 落后），然后 `rdt login`。中国大陆网络访问 Reddit 需要代理。
-</details>
-
-<details>
-<summary><strong>How to get YouTube video transcripts for AI?</strong></summary>
-
-`yt-dlp --dump-json "https://youtube.com/watch?v=xxx"` extracts video metadata; `yt-dlp --write-sub --skip-download "URL"` extracts subtitles. Uses yt-dlp under the hood, supports multiple languages. No API key needed.
-</details>
-
-<details>
-<summary><strong>怎么让 AI Agent 读小红书？</strong></summary>
-
-桌面电脑首选 **OpenCLI**（`agent-reach install --channels opencli`）——它复用你浏览器里的登录态，平时刷过小红书就直接能用，零配置；装完在 Chrome 商店点一次「添加扩展」即可。之后 Agent 用 `opencli xiaohongshu search "关键词"` 搜索、`opencli xiaohongshu note URL` 读笔记。服务器上用 [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)（自带无头浏览器，扫码登录）。已装过 xhs-cli 的老用户不受影响，它仍是备选后端（上游 2026-03 起停更，不推荐新装）。
-</details>
-
-<details>
-<summary><strong>怎么让 AI Agent 读 Facebook / Instagram？</strong></summary>
-
-桌面电脑走 **OpenCLI**：`agent-reach install --channels facebook,instagram`。装好 OpenCLI 和 Chrome 扩展后，在 Chrome 里登录 facebook.com / instagram.com，Agent 直接调用 `opencli facebook search "关键词" -f yaml`、`opencli facebook groups -f yaml`、`opencli instagram search "用户名或关键词" -f yaml`（搜用户）、`opencli instagram user USERNAME -f yaml`（读指定用户最近帖子）。服务器/无桌面环境不推荐支持这两个平台。
-</details>
-
-<details>
-<summary><strong>Compatible with Claude Code / Cursor / OpenClaw / Windsurf?</strong></summary>
-
-Yes! Agent Reach is an installer + configuration tool — any AI coding agent that can run shell commands can use it. Works with Claude Code, Cursor, OpenClaw, Windsurf, Codex, and more. Just `pip install agent-reach`, run `agent-reach install`, and the agent can start using the upstream tools immediately.
-
-**OpenClaw note:** If your OpenClaw is using the default `messaging` tool profile, the agent won't be able to run shell commands. Enable exec first: `openclaw config set tools.profile "coding"` (or set `"tools": { "profile": "coding" }` in `~/.openclaw/openclaw.json`), then restart the Gateway and start a new conversation before installing.
-</details>
-
-<details>
-<summary><strong>Is this free? Any API costs?</strong></summary>
-
-100% free. All backends are open-source tools (OpenCLI, twitter-cli, bili-cli, rdt-cli, yt-dlp, Jina Reader, Exa, xiaohongshu-mcp, etc.) that don't require paid API keys. The only optional cost is a residential proxy (~$1/month) if your network blocks Reddit/Twitter (e.g. mainland China).
-</details>
 
 ---
 
