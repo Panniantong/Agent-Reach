@@ -1302,3 +1302,84 @@ class TestXiaoyuzhouChannel:
         status, msg = ch.check()
         assert status == "ok"
         assert ch.active_backend == "groq-whisper"
+
+
+class TestRSSChannel:
+    """can_handle URL patterns + the three check() branches (ok / off / error)."""
+
+    def test_can_handle_feed_urls(self):
+        from agent_reach.channels.rss import RSSChannel
+        ch = RSSChannel()
+        assert ch.can_handle("https://example.com/feed")
+        assert ch.can_handle("https://example.com/rss")
+        assert ch.can_handle("https://example.com/feed.xml")
+        assert ch.can_handle("https://blog.example.com/atom.xml")
+        assert ch.can_handle("https://example.com/index.atom")
+
+    def test_can_handle_is_case_insensitive(self):
+        from agent_reach.channels.rss import RSSChannel
+        ch = RSSChannel()
+        assert ch.can_handle("https://example.com/FEED")
+        assert ch.can_handle("https://example.com/Atom.XML")
+
+    def test_can_handle_rejects_non_feed_urls(self):
+        from agent_reach.channels.rss import RSSChannel
+        ch = RSSChannel()
+        assert not ch.can_handle("https://github.com/user/repo")
+        assert not ch.can_handle("https://example.com/blog/post-1")
+        assert not ch.can_handle("https://v2ex.com/t/123")
+
+    def test_check_ok_when_feedparser_importable(self, monkeypatch):
+        import sys
+        import types
+
+        monkeypatch.setitem(sys.modules, "feedparser", types.ModuleType("feedparser"))
+        from agent_reach.channels.rss import RSSChannel
+        ch = RSSChannel()
+        status, msg = ch.check()
+        assert status == "ok"
+        assert ch.active_backend == "feedparser"
+
+    def test_check_off_when_feedparser_missing(self, monkeypatch):
+        """feedparser not installed → off + pip install prescription."""
+        import sys
+
+        # None in sys.modules makes `import feedparser` raise ImportError
+        monkeypatch.setitem(sys.modules, "feedparser", None)
+        from agent_reach.channels.rss import RSSChannel
+        ch = RSSChannel()
+        status, msg = ch.check()
+        assert status == "off"
+        assert "pip install feedparser" in msg
+        assert ch.active_backend is None
+
+    def test_check_error_when_import_crashes(self, monkeypatch):
+        """Installed but crashes at import time (half-broken install) → error + reinstall prescription."""
+        import builtins
+
+        real_import = builtins.__import__
+
+        def crashing_import(name, *args, **kwargs):
+            if name == "feedparser":
+                raise RuntimeError("broken install")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", crashing_import)
+        from agent_reach.channels.rss import RSSChannel
+        ch = RSSChannel()
+        status, msg = ch.check()
+        assert status == "error"
+        assert "--force-reinstall" in msg
+        assert ch.active_backend is None
+
+    def test_check_failure_resets_stale_active_backend(self, monkeypatch):
+        """A previously healthy instance must not keep a stale active_backend."""
+        import sys
+
+        from agent_reach.channels.rss import RSSChannel
+        ch = RSSChannel()
+        ch.active_backend = "feedparser"  # pretend an earlier check() succeeded
+        monkeypatch.setitem(sys.modules, "feedparser", None)
+        status, _ = ch.check()
+        assert status == "off"
+        assert ch.active_backend is None
