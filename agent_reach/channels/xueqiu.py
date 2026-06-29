@@ -190,13 +190,27 @@ class XueqiuChannel(Channel):
 
         Returns a dict with keys:
           symbol, name, current, percent, chg, high, low, open, last_close,
-          volume, amount, market_capital, turnover_rate, pe_ttm, timestamp
+          volume, amount, market_capital, turnover_rate, pe_ttm, pe_forecast,
+          pb, eps, timestamp
+
+        Note:
+            Uses the ``extend=detail`` quote endpoint instead of
+            ``batch/quote.json``. The batch endpoint omits valuation fields,
+            so ``pe_ttm`` (and pb/eps) always came back ``None``. The detail
+            endpoint returns every field the batch one does, plus
+            pe_ttm/pe_forecast/pb/eps — and ``None`` for instruments that
+            legitimately have no valuation (e.g. indices).
         """
         data = _get_json(
-            f"https://stock.xueqiu.com/v5/stock/batch/quote.json?symbol={symbol}"
+            f"https://stock.xueqiu.com/v5/stock/quote.json?symbol={symbol}&extend=detail"
         )
-        items = (data.get("data") or {}).get("items") or []
-        q = (items[0].get("quote") or {}) if items else {}
+        d = data.get("data") or {}
+        # detail endpoint -> data.quote ; batch endpoint -> data.items[0].quote
+        q = d.get("quote")
+        if not q:
+            items = d.get("items") or []
+            q = (items[0].get("quote") or {}) if items else {}
+        q = q or {}
         return {
             "symbol": q.get("symbol", symbol),
             "name": q.get("name", ""),
@@ -212,6 +226,9 @@ class XueqiuChannel(Channel):
             "market_capital": q.get("market_capital"),
             "turnover_rate": q.get("turnover_rate"),
             "pe_ttm": q.get("pe_ttm"),
+            "pe_forecast": q.get("pe_forecast"),
+            "pb": q.get("pb"),
+            "eps": q.get("eps"),
             "timestamp": q.get("timestamp"),
         }
 
