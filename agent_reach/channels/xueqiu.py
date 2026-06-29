@@ -154,8 +154,8 @@ class XueqiuChannel(Channel):
     # ------------------------------------------------------------------ #
 
     def can_handle(self, url: str) -> bool:
-        d = urllib.parse.urlparse(url).netloc.lower()
-        return "xueqiu.com" in d
+        from ..utils.urlmatch import host_matches
+        return host_matches(url, "xueqiu.com")
 
     # ------------------------------------------------------------------ #
     # Health check

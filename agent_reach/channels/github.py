@@ -13,8 +13,8 @@ class GitHubChannel(Channel):
     tier = 0
 
     def can_handle(self, url: str) -> bool:
-        from urllib.parse import urlparse
-        return "github.com" in urlparse(url).netloc.lower()
+        from ..utils.urlmatch import host_matches
+        return host_matches(url, "github.com")
 
     def check(self, config=None):
         # 真跑 gh auth status 探活。注意：未登录时 rc!=0 是正常业务态（warn），不是 error。

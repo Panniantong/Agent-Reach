@@ -39,9 +39,8 @@ class BilibiliChannel(Channel):
     tier = 1
 
     def can_handle(self, url: str) -> bool:
-        from urllib.parse import urlparse
-        d = urlparse(url).netloc.lower()
-        return "bilibili.com" in d or "b23.tv" in d
+        from ..utils.urlmatch import host_matches
+        return host_matches(url, "bilibili.com", "b23.tv")
 
     def check(self, config=None):
         """Probe candidates in order; first fully-usable backend wins."""
