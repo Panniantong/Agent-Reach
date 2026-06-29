@@ -4,6 +4,7 @@
 import os
 from agent_reach.config import Config
 from agent_reach.probe import probe_command
+from agent_reach.paths import xiaoyuzhou_tools_dir
 from .base import Channel
 
 
@@ -36,7 +37,7 @@ class XiaoyuzhouChannel(Channel):
             )
 
         # Check script exists
-        script = os.path.expanduser("~/.agent-reach/tools/xiaoyuzhou/transcribe.sh")
+        script = str(xiaoyuzhou_tools_dir() / "transcribe.sh")
         if not os.path.isfile(script):
             return "off", (
                 "转录脚本未安装。运行：\n"

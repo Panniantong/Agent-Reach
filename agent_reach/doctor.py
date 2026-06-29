@@ -44,8 +44,15 @@ def _name_msg(r: dict, escape) -> str:
     return text
 
 
-def format_report(results: Dict[str, dict]) -> str:
-    """Format results as a readable text report (with Rich markup)."""
+def format_report(results: Dict[str, dict], config_path=None) -> str:
+    """Format results as a readable text report (with Rich markup).
+
+    Args:
+        results: Channel check results from ``check_all``.
+        config_path: Optional ``Path`` to the active config file.  When
+            provided the permission check uses this path; otherwise
+            ``agent_reach.paths.config_file()`` is used as a fallback.
+    """
     try:
         from rich.markup import escape
     except ImportError:
@@ -111,7 +118,9 @@ def format_report(results: Dict[str, dict]) -> str:
     import stat
     import sys
 
-    config_path = Config.CONFIG_DIR / "config.yaml"
+    if config_path is None:
+        from agent_reach.paths import config_file as _default_config_file
+        config_path = _default_config_file()
     if config_path.exists() and sys.platform != "win32":
         try:
             mode = config_path.stat().st_mode

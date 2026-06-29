@@ -222,10 +222,30 @@ Agent Reach 在设计上重视安全：
 | 措施 | 说明 |
 |------|------|
 | 🔒 **凭据本地存储** | Cookie、Token 只存在你本机 `~/.agent-reach/config.yaml`，文件权限 600（仅所有者可读写），不上传不外传 |
-| 🛡️ **安全模式** | `agent-reach install --safe` 不会自动修改系统，只列出需要什么，由你决定装不装 |
+| 🛡️ **非侵入式默认** | `agent-reach install` 默认只检查和写入托管数据；`--system` 才允许系统级变更 |
 | 👀 **完全开源** | 代码透明，随时可审查。所有依赖工具也是开源项目 |
 | 🔍 **Dry Run** | `agent-reach install --dry-run` 预览所有操作，不做任何改动 |
 | 🧩 **可插拔架构** | 不信任某个组件？换掉对应的 channel 文件即可，不影响其他 |
+| 🗺️ **路径透明** | `agent-reach paths` 显示所有托管、注册和外部路径及其所有者 |
+
+### 📁 路径所有权
+
+Agent Reach 区分三类路径，各自有明确的所有者：
+
+| 类别 | 示例 | 所有者 | 随 `AGENT_REACH_HOME` 移动 |
+|---|---|---|---|
+| Agent Reach 数据 | `~/.agent-reach/config.yaml` | Agent Reach | 是 |
+| Agent Reach 工具 | `~/.agent-reach/tools/` | Agent Reach | 是 |
+| Skill 注册 | `~/.agents/skills/agent-reach/` | Agent 平台 | 否 |
+| CLI 可执行文件 | `which gh` / `which twitter` 的输出 | 包管理器 | 否 |
+| 上游缓存/状态 | 上游 CLI 创建的目录 | 上游项目 | 否 |
+
+自定义根路径：
+```bash
+export AGENT_REACH_HOME="$HOME/.local/share/agent-reach"
+agent-reach paths
+```
+变量必须解析为绝对路径，不会自动迁移已有数据，卸载只影响当前选中的托管根。
 
 ### 🍪 Cookie 安全建议
 
@@ -239,9 +259,12 @@ Agent Reach 在设计上重视安全：
 
 | 方式 | 命令 | 适合场景 |
 |------|------|---------|
-| 一键全自动（默认） | `agent-reach install --env=auto` | 个人电脑、开发环境 |
-| 安全模式 | `agent-reach install --env=auto --safe` | 生产服务器、多人共用机器 |
+| 非侵入式检查（默认） | `agent-reach install --env=auto` | 检查依赖，不自动装系统包或全局 npm 包 |
+| 系统安装 | `agent-reach install --env=auto --system` | 明确允许 apt/Homebrew/全局 npm 变更 |
+| 安全模式 | `agent-reach install --env=auto --safe` | 跳过所有自动安装（包括可选渠道） |
 | 仅预览 | `agent-reach install --env=auto --dry-run` | 先看看会做什么 |
+
+`--channels=twitter,...` 显式授权安装指定的可选渠道工具。
 
 ### 🗑️ 卸载
 

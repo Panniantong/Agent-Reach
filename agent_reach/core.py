@@ -39,4 +39,4 @@ class AgentReach:
     def doctor_report(self) -> str:
         """Get formatted health report."""
         from agent_reach.doctor import check_all, format_report
-        return format_report(check_all(self.config))
+        return format_report(check_all(self.config), config_path=self.config.config_path)

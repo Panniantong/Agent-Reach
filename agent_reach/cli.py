@@ -16,6 +16,7 @@ import os
 import time
 
 from agent_reach import __version__
+from agent_reach.paths import agent_reach_home, tools_dir, xhs_cookie_file, xiaoyuzhou_tools_dir
 
 # Pinned to the 0.4.2 state — PyPI still only has 0.4.1 (upstream issue #10).
 _RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66"
@@ -68,8 +69,17 @@ def main():
     p_install.add_argument("--proxy", default="",
                            help="Network proxy saved for agents to export as HTTP(S)_PROXY "
                                 "in restricted networks (http://user:pass@ip:port)")
-    p_install.add_argument("--safe", action="store_true",
-                           help="Safe mode: skip automatic system changes, show what's needed instead")
+    system_mode = p_install.add_mutually_exclusive_group()
+    system_mode.add_argument(
+        "--system",
+        action="store_true",
+        help="Allow system package-manager and core global npm changes",
+    )
+    system_mode.add_argument(
+        "--safe",
+        action="store_true",
+        help="Skip automatic system, core, and optional channel tool installation",
+    )
     p_install.add_argument("--dry-run", action="store_true",
                            help="Show what would be done without making any changes")
     p_install.add_argument("--channels", default="",
@@ -127,6 +137,10 @@ def main():
     # ── watch ──
     sub.add_parser("watch", help="Quick health check + update check (for scheduled tasks)")
 
+    # ── paths ──
+    p_paths = sub.add_parser("paths", help="Show managed, registration, and upstream paths")
+    p_paths.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
     # ── version ──
     sub.add_parser("version", help="Show version")
 
@@ -145,6 +159,8 @@ def main():
 
     if args.command == "doctor":
         _cmd_doctor(args)
+    elif args.command == "paths":
+        _cmd_paths(args)
     elif args.command == "check-update":
         _cmd_check_update()
     elif args.command == "watch":
@@ -171,27 +187,33 @@ def main():
 def _cmd_install(args):
     """One-shot deterministic installer."""
     import os
-    from agent_reach.config import Config
     from agent_reach.doctor import check_all, format_report
 
     safe_mode = args.safe
+    system_mode = bool(getattr(args, "system", False))
     dry_run = args.dry_run
 
-    config = Config()
+    # Defer Config creation so --dry-run never creates directories or files.
+    config = None
+
     print()
     print("Agent Reach Installer")
     print("=" * 40)
-
-    # Ensure tools directory exists (for upstream tool repos)
-    tools_dir = os.path.expanduser("~/.agent-reach/tools")
-    os.makedirs(tools_dir, exist_ok=True)
 
     if dry_run:
         print("DRY RUN — showing what would be done (no changes)")
         print()
     if safe_mode:
-        print("SAFE MODE — skipping automatic system changes")
+        print("SAFE MODE — skipping automatic system, core, and optional channel tool installation")
         print()
+    elif not system_mode:
+        print("Non-mutating mode — checking core dependencies without system/global installs")
+        print("  Use --system to enable apt/npm global installs, --safe to skip everything")
+        print()
+
+    # Ensure tools directory exists (for upstream tool repos) — only when writing
+    if not dry_run:
+        tools_dir().mkdir(parents=True, exist_ok=True)
 
     # ── Parse --channels ──
     CHANNEL_INSTALLERS = {
@@ -238,27 +260,32 @@ def _cmd_install(args):
         if dry_run:
             print(f"[dry-run] Would save network proxy")
         else:
+            if config is None:
+                from agent_reach.config import Config
+                config = Config()
             config.set("proxy", args.proxy)
             config.set("bilibili_proxy", args.proxy)  # legacy key
             print(f"✅ 代理已保存（Agent 访问受限网络时使用）")
 
-    # ── Install core system dependencies (lightweight, always) ──
+    # ── Install core system dependencies ──
     print()
     if dry_run:
-        _install_system_deps_dryrun()
-    elif safe_mode:
-        _install_system_deps_safe()
-    else:
+        if system_mode:
+            _install_system_deps_dryrun()
+            print()
+            print("[dry-run] Would install mcporter globally and configure Exa search")
+        else:
+            _install_system_deps_safe()
+            print()
+            print("[dry-run] Would check mcporter and suggest Exa configuration")
+    elif system_mode:
         _install_system_deps()
-
-    # ── mcporter (for Exa search) ──
-    print()
-    if dry_run:
-        print("[dry-run] Would install mcporter and configure Exa search")
-    elif safe_mode:
-        _install_mcporter_safe()
-    else:
+        print()
         _install_mcporter()
+    else:
+        _install_system_deps_safe()
+        print()
+        _install_mcporter_safe()
 
     if server_skipped_opencli_channels:
         print()
@@ -266,7 +293,10 @@ def _cmd_install(args):
               f"{', '.join(sorted(server_skipped_opencli_channels))}")
 
     # ── Install optional channels (only if --channels specified) ──
-    if requested_channels and not dry_run and not safe_mode:
+    # --safe skips all tool installation, including explicitly listed channels.
+    if args.safe:
+        requested_channels.clear()
+    if requested_channels and not dry_run:
         print()
         print("Installing optional channels...")
         ran_installers = set()
@@ -319,6 +349,9 @@ def _cmd_install(args):
 
     # Test channels
     if not dry_run:
+        if config is None:
+            from agent_reach.config import Config
+            config = Config()
         print()
         print("Testing channels...")
         results = check_all(config)
@@ -327,7 +360,7 @@ def _cmd_install(args):
 
         # Final status
         print()
-        print(format_report(results))
+        print(format_report(results, config_path=config.config_path))
         print()
 
         # ── Install agent skill ──
@@ -453,27 +486,53 @@ def _install_skill():
             print("  -- Tip: install OpenClaw, Claude Code, or create ~/.agents/skills/ manually")
 
 
-def _uninstall_skill():
-    """Remove SKILL.md from all known agent skill directories."""
-    import shutil
-
+def _skill_install_targets() -> list:
+    """Return list of (path, platform_name) tuples for all skill directories."""
     skill_dirs = [
-        ("~/.openclaw/skills/agent-reach", "OpenClaw"),
-        ("~/.claude/skills/agent-reach", "Claude Code"),
-        ("~/.agents/skills/agent-reach", "Agent"),
+        (os.path.expanduser("~/.openclaw/skills/agent-reach"), "OpenClaw"),
+        (os.path.expanduser("~/.claude/skills/agent-reach"), "Claude Code"),
+        (os.path.expanduser("~/.agents/skills/agent-reach"), "Agent"),
     ]
 
-    # Also check OPENCLAW_HOME
     openclaw_home = os.environ.get("OPENCLAW_HOME")
     if openclaw_home:
         skill_dirs.insert(
             0,
             (os.path.join(openclaw_home, ".openclaw", "skills", "agent-reach"), "OpenClaw"),
         )
+    return skill_dirs
+
+
+def _prune_empty_skill_parents(skill_path: str) -> list[str]:
+    """Remove empty skill registration parent dirs after deleting agent-reach.
+
+    Only removes the immediate ``skills`` directory and its platform root when
+    they are empty.  Never removes HOME or any non-empty directory.
+    """
+    removed: list[str] = []
+    skills_dir = os.path.dirname(skill_path)
+    platform_dir = os.path.dirname(skills_dir)
+
+    for path in (skills_dir, platform_dir):
+        try:
+            if os.path.isdir(path) and not os.listdir(path):
+                os.rmdir(path)
+                removed.append(path)
+        except OSError:
+            pass
+
+    return removed
+
+
+def _uninstall_skill():
+    """Remove SKILL.md from all known agent skill directories.
+
+    Returns True if at least one skill directory was removed.
+    """
+    import shutil
 
     removed = False
-    for skill_path_template, platform_name in skill_dirs:
-        skill_path = os.path.expanduser(skill_path_template)
+    for skill_path, platform_name in _skill_install_targets():
         if os.path.isdir(skill_path):
             try:
                 if os.path.islink(skill_path):
@@ -482,11 +541,14 @@ def _uninstall_skill():
                     shutil.rmtree(skill_path)
                 print(f"  Removed {platform_name} skill: {skill_path}")
                 removed = True
+                for parent in _prune_empty_skill_parents(skill_path):
+                    print(f"  Removed empty skill parent directory: {parent}")
             except Exception as e:
                 print(f"  Could not remove {skill_path}: {e}")
 
     if not removed:
         print("  No skill installations found.")
+    return removed
 
 
 def _cmd_skill(args):
@@ -654,20 +716,20 @@ def _install_xiaoyuzhou_deps():
     config = Config()
     print("Setting up Xiaoyuzhou podcast transcription...")
 
-    tools_dir = os.path.expanduser("~/.agent-reach/tools/xiaoyuzhou")
-    script_dst = os.path.join(tools_dir, "transcribe.sh")
+    tools_path = xiaoyuzhou_tools_dir()
+    script_dst = tools_path / "transcribe.sh"
 
-    if os.path.isfile(script_dst):
+    if script_dst.is_file():
         print("  ✅ Xiaoyuzhou transcription script already installed")
     else:
         # Copy script from package
         script_src = os.path.join(os.path.dirname(__file__), "scripts", "transcribe_xiaoyuzhou.sh")
         if os.path.isfile(script_src):
             try:
-                os.makedirs(tools_dir, exist_ok=True)
+                tools_path.mkdir(parents=True, exist_ok=True)
                 import shutil as _shutil
-                _shutil.copy2(script_src, script_dst)
-                os.chmod(script_dst, 0o755)
+                _shutil.copy2(script_src, str(script_dst))
+                os.chmod(str(script_dst), 0o755)
                 print("  ✅ Xiaoyuzhou transcription script installed")
             except Exception as e:
                 print(f"  [!]  Failed to install script: {e}")
@@ -852,6 +914,24 @@ def _install_bili_deps():
     print("  [!]  bili-cli install failed. Run: pipx install bilibili-cli")
 
 
+def _gh_install_hint() -> str:
+    """Return a platform-appropriate manual install hint for GitHub CLI."""
+    if sys.platform == "win32":
+        return "https://cli.github.com — or: winget install --id GitHub.cli"
+    if sys.platform == "darwin":
+        return "https://cli.github.com — or: brew install gh"
+    return "https://cli.github.com — or: apt install gh"
+
+
+def _node_install_hint() -> str:
+    """Return a platform-appropriate manual install hint for Node.js."""
+    if sys.platform == "win32":
+        return "https://nodejs.org — or: winget install OpenJS.NodeJS.LTS"
+    if sys.platform == "darwin":
+        return "https://nodejs.org — or: brew install node"
+    return "https://nodejs.org — or: apt install nodejs npm"
+
+
 def _install_system_deps_safe():
     """Safe mode: check what's installed, print instructions for what's missing."""
     import shutil
@@ -859,8 +939,8 @@ def _install_system_deps_safe():
     print("Checking system dependencies (safe mode — no auto-install)...")
 
     deps = [
-        ("gh", ["gh"], "GitHub CLI", "https://cli.github.com — or: apt install gh / brew install gh"),
-        ("node", ["node", "npm"], "Node.js", "https://nodejs.org — or: apt install nodejs npm"),
+        ("gh", ["gh"], "GitHub CLI", _gh_install_hint()),
+        ("node", ["node", "npm"], "Node.js", _node_install_hint()),
     ]
 
     missing = []
@@ -888,8 +968,8 @@ def _install_system_deps_dryrun():
     print("[dry-run] System dependency check:")
 
     checks = [
-        ("gh CLI", ["gh"], "apt install gh / brew install gh"),
-        ("Node.js", ["node"], "curl NodeSource setup | bash + apt install nodejs"),
+        ("gh CLI", ["gh"], _gh_install_hint()),
+        ("Node.js", ["node"], _node_install_hint()),
     ]
 
     for label, binaries, method in checks:
@@ -1250,7 +1330,7 @@ def _configure_xhs_cookies(value):
         # between open() and a follow-up chmod() (same pattern Config.save()
         # uses in config.py).
         import stat
-        cookie_path = os.path.expanduser("~/.agent-reach/xhs-cookies.json")
+        cookie_path = str(xhs_cookie_file())
         try:
             fd = os.open(
                 cookie_path,
@@ -1374,7 +1454,7 @@ def _cmd_uninstall(args):
     removed_any = False
 
     # ── 1. Config directory (~/.agent-reach/) ──
-    config_dir = os.path.expanduser("~/.agent-reach")
+    config_dir = str(agent_reach_home())
     if not keep_config:
         if os.path.isdir(config_dir):
             if dry_run:
@@ -1393,27 +1473,14 @@ def _cmd_uninstall(args):
         print(f"  Skipping config directory (--keep-config): {config_dir}")
 
     # ── 2. Skill files ──
-    skill_dirs = [
-        ("~/.openclaw/skills/agent-reach", "OpenClaw"),
-        ("~/.claude/skills/agent-reach", "Claude Code"),
-        ("~/.agents/skills/agent-reach", "Agent"),
-    ]
-
-    for skill_path_template, platform_name in skill_dirs:
-        skill_path = os.path.expanduser(skill_path_template)
-        if os.path.isdir(skill_path):
-            if dry_run:
+    if dry_run:
+        for skill_path, platform_name in _skill_install_targets():
+            if os.path.isdir(skill_path):
                 print(f"[dry-run] Would remove {platform_name} skill: {skill_path}")
-            else:
-                try:
-                    if os.path.islink(skill_path):
-                        os.unlink(skill_path)
-                    else:
-                        shutil.rmtree(skill_path)
-                    print(f"  Removed {platform_name} skill: {skill_path}")
-                    removed_any = True
-                except Exception as e:
-                    print(f"  Could not remove {skill_path}: {e}")
+    else:
+        skill_removed = _uninstall_skill()
+        if skill_removed:
+            removed_any = True
 
     # ── 3. mcporter MCP entries ──
     if shutil.which("mcporter"):
@@ -1470,10 +1537,31 @@ def _cmd_doctor(args=None):
         print(json.dumps(results, ensure_ascii=False, indent=2))
         return
 
-    rprint(format_report(results))
+    rprint(format_report(results, config_path=config.config_path))
 
     # Auto-install skill if not already present (fixes #154)
     _install_skill()
+
+
+def _cmd_paths(args):
+    from agent_reach.paths import path_report
+
+    report = path_report()
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return
+
+    headings = (
+        ("managed", "Agent Reach managed"),
+        ("registration", "Agent platform registration"),
+        ("external", "Upstream managed"),
+    )
+    for key, heading in headings:
+        print(f"\n{heading}:")
+        for item in report[key]:
+            path = item["path"] or "(not installed)"
+            print(f"  {item['key']}: {path}")
+    print("\nUpstream-managed paths are not moved or removed by Agent Reach.")
 
 
 def _cmd_setup():
