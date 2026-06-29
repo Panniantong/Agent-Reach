@@ -44,8 +44,9 @@ class V2EXChannel(Channel):
             self.active_backend = self.backends[0]
             return "ok", "公开 API 可用（热门主题、节点浏览、主题详情、用户信息）"
         except Exception as e:
+            from ..utils.text import scrub_url_credentials
             self.active_backend = None
-            return "warn", f"V2EX API 连接失败（可能需要代理）：{e}"
+            return "warn", f"V2EX API 连接失败（可能需要代理）：{scrub_url_credentials(e)}"
 
     # ------------------------------------------------------------------ #
     # Data-fetching methods
