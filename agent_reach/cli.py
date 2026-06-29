@@ -9,11 +9,14 @@ Usage:
     agent-reach setup
 """
 
-import sys
 import argparse
+import csv
+import io
 import json
 import os
+import sys
 import time
+from datetime import datetime, timezone
 
 from agent_reach import __version__
 
@@ -127,6 +130,19 @@ def main():
     # ── watch ──
     sub.add_parser("watch", help="Quick health check + update check (for scheduled tasks)")
 
+    # ── export ──
+    p_export = sub.add_parser("export", help="Export channel data in multiple formats (JSON/CSV)")
+    p_export.add_argument("--channel", required=True,
+                          help="Channel name (e.g., v2ex, twitter, github)")
+    p_export.add_argument("--method", required=True,
+                          help="Method name on the channel (e.g., get_hot_topics, search)")
+    p_export.add_argument("--args", default="{}",
+                          help='Method arguments as JSON (e.g., \'{"query":"Python","limit":10}\')')
+    p_export.add_argument("--format", choices=["json", "csv"], default="json",
+                          help="Output format (default: json)")
+    p_export.add_argument("-o", "--output", default=None,
+                          help="Output file path (default: stdout)")
+
     # ── version ──
     sub.add_parser("version", help="Show version")
 
@@ -163,6 +179,8 @@ def main():
         _cmd_format(args)
     elif args.command == "transcribe":
         _cmd_transcribe(args)
+    elif args.command == "export":
+        _cmd_export(args)
 
 
 # ── Command handlers ────────────────────────────────
@@ -171,6 +189,7 @@ def main():
 def _cmd_install(args):
     """One-shot deterministic installer."""
     import os
+
     from agent_reach.config import Config
     from agent_reach.doctor import check_all, format_report
 
@@ -223,9 +242,9 @@ def _cmd_install(args):
         env = _detect_environment()
 
     if env == "server":
-        print(f"Environment: Server/VPS (auto-detected)")
+        print("Environment: Server/VPS (auto-detected)")
     else:
-        print(f"Environment: Local computer (auto-detected)")
+        print("Environment: Local computer (auto-detected)")
 
     server_skipped_opencli_channels = set()
     if env == "server" and requested_channels:
@@ -236,11 +255,11 @@ def _cmd_install(args):
     # Apply explicit flags
     if args.proxy:
         if dry_run:
-            print(f"[dry-run] Would save network proxy")
+            print("[dry-run] Would save network proxy")
         else:
             config.set("proxy", args.proxy)
             config.set("bilibili_proxy", args.proxy)  # legacy key
-            print(f"✅ 代理已保存（Agent 访问受限网络时使用）")
+            print("✅ 代理已保存（Agent 访问受限网络时使用）")
 
     # ── Install core system dependencies (lightweight, always) ──
     print()
@@ -354,9 +373,9 @@ def _cmd_install(args):
 
 def _install_skill(force: bool = True):
     """Install Agent Reach as an agent skill (OpenClaw / Claude Code / .agents)."""
+    import importlib.resources
     import os
     import shutil
-    import importlib.resources
 
     def _is_english_locale(value: str) -> bool:
         normalized = value.strip().lower()
@@ -529,11 +548,102 @@ def _cmd_format(args):
         print(json.dumps(cleaned, ensure_ascii=False, indent=2))
 
 
+def _cmd_export(args):
+    """Export channel data in multiple formats (JSON/CSV)."""
+    from agent_reach.channels import get_channel
+
+    # Get channel
+    channel = get_channel(args.channel)
+    if channel is None:
+        print(f"Error: unknown channel '{args.channel}'", file=sys.stderr)
+        sys.exit(1)
+
+    # Parse method arguments
+    try:
+        method_args = json.loads(args.args)
+        if not isinstance(method_args, dict):
+            print("Error: --args must be a JSON object", file=sys.stderr)
+            sys.exit(1)
+    except json.JSONDecodeError as e:
+        print(f"Error: invalid --args JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Get method
+    method_name = args.method
+    if not hasattr(channel, method_name):
+        print(f"Error: channel '{args.channel}' has no method '{method_name}'", file=sys.stderr)
+        print(f"Available methods: {[m for m in dir(channel) if not m.startswith('_')]}", file=sys.stderr)
+        sys.exit(1)
+
+    method = getattr(channel, method_name)
+    if not callable(method):
+        print(f"Error: '{method_name}' is not a callable method", file=sys.stderr)
+        sys.exit(1)
+
+    # Call method with arguments
+    try:
+        result = method(**method_args)
+    except TypeError as e:
+        print(f"Error: invalid arguments for '{method_name}': {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: failed to call '{method_name}': {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Handle error responses
+    if isinstance(result, list) and result and isinstance(result[0], dict) and "error" in result[0]:
+        # Single error response
+        print(json.dumps(result[0], ensure_ascii=False, indent=2))
+        sys.exit(0)
+
+    # Prepare output
+    output_data = {
+        "channel": args.channel,
+        "method": method_name,
+        "args": method_args,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "data": result,
+        "count": len(result) if isinstance(result, list) else 1
+    }
+
+    # Generate output
+    if args.format == "json":
+        output_text = json.dumps(output_data, ensure_ascii=False, indent=2)
+    else:  # csv
+        # Flatten nested structures for CSV
+        if isinstance(result, list) and result:
+            headers = []
+            for item in result:
+                if isinstance(item, dict):
+                    for key in item.keys():
+                        if key not in headers:
+                            headers.append(key)
+
+            buffer = io.StringIO()
+            writer = csv.DictWriter(buffer, fieldnames=headers, extrasaction='ignore')
+            writer.writeheader()
+            for item in result:
+                if isinstance(item, dict):
+                    writer.writerow(item)
+            output_text = buffer.getvalue()
+        else:
+            print("Error: CSV format requires a list of dictionaries", file=sys.stderr)
+            sys.exit(1)
+
+    # Write output
+    if args.output:
+        with open(args.output, 'w', encoding='utf-8') as f:
+            f.write(output_text)
+        print(f"Exported to {args.output}", file=sys.stderr)
+    else:
+        print(output_text)
+
+
 def _install_system_deps():
     """Install system-level dependencies: gh CLI, Node.js (for mcporter)."""
+    import platform
     import shutil
     import subprocess
-    import platform
     import tempfile
 
     print("Checking system dependencies...")
@@ -659,6 +769,7 @@ def _install_system_deps():
 def _install_xiaoyuzhou_deps():
     """Install Xiaoyuzhou podcast transcription script."""
     import shutil
+
     from agent_reach.config import Config
 
     config = Config()
@@ -1019,6 +1130,7 @@ def _detect_environment():
 def _cmd_configure(args):
     """Set a config value and test it, or auto-extract from browser."""
     import shutil
+
     from agent_reach.config import Config
 
     config = Config()
@@ -1121,15 +1233,15 @@ def _cmd_configure(args):
 
     elif args.key == "github-token":
         config.set("github_token", value)
-        print(f"✅ GitHub token configured!")
+        print("✅ GitHub token configured!")
 
     elif args.key == "groq-key":
         config.set("groq_api_key", value)
-        print(f"✅ Groq key configured!")
+        print("✅ Groq key configured!")
 
     elif args.key == "openai-key":
         config.set("openai_api_key", value)
-        print(f"✅ OpenAI key configured!")
+        print("✅ OpenAI key configured!")
 
 
 def _cmd_transcribe(args):
@@ -1545,7 +1657,7 @@ def _cmd_setup():
     print("  获取: https://github.com/settings/tokens (无需任何权限)")
     current = config.get("github_token")
     if current:
-        print(f"  当前状态: ✅ 已配置")
+        print("  当前状态: ✅ 已配置")
     else:
         key = input("  GITHUB_TOKEN (回车跳过): ").strip()
         if key:
@@ -1566,7 +1678,7 @@ def _cmd_setup():
     print("  免费额度，注册: https://console.groq.com")
     current = config.get("groq_api_key")
     if current:
-        print(f"  当前状态: ✅ 已配置")
+        print("  当前状态: ✅ 已配置")
     else:
         key = input("  GROQ_API_KEY (回车跳过): ").strip()
         if key:
@@ -1697,10 +1809,10 @@ def _is_newer_version(remote: str, local: str) -> bool:
         except ValueError:
             return None
 
-    r, l = parse(remote), parse(local)
-    if r is None or l is None:
+    r, local_parsed = parse(remote), parse(local)
+    if r is None or local_parsed is None:
         return remote != local  # unparseable — fall back to old behavior
-    return r > l
+    return r > local_parsed
 
 
 def _cmd_check_update():
@@ -1733,7 +1845,7 @@ def _cmd_check_update():
             print()
             print(_UPDATE_INSTRUCTIONS)
             return "update_available"
-        print(f"✅ 已是最新版本")
+        print("✅ 已是最新版本")
         return "up_to_date"
 
     release_err = _classify_github_response_error(resp)
@@ -1770,9 +1882,9 @@ def _cmd_watch():
 
     Only outputs problems. If everything is fine, outputs a single line.
     """
+    from agent_reach import __version__
     from agent_reach.config import Config
     from agent_reach.doctor import check_all
-    from agent_reach import __version__
 
     config = Config()
     issues = []
@@ -1811,8 +1923,8 @@ def _cmd_watch():
         print(f"Agent Reach: 全部正常 ({ok}/{total} 渠道可用，v{__version__} 已是最新)")
         return
 
-    print(f"Agent Reach 监控报告")
-    print(f"=" * 40)
+    print("Agent Reach 监控报告")
+    print("=" * 40)
     print(f"版本: v{__version__}  |  渠道: {ok}/{total}")
 
     if issues:
