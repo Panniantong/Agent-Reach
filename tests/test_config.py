@@ -74,6 +74,17 @@ class TestConfig:
         assert masked["exa_api_key"] == "super-se..."
         assert masked["normal_setting"] == "visible"
 
+    def test_to_dict_masks_session_cookies(self, tmp_config):
+        # Session cookies / SESSDATA contain no "key"/"token" substring and
+        # must still be masked so they never leak through diagnostics.
+        tmp_config.set("xhs_cookie", "web_session=abcdef123456")
+        tmp_config.set("xueqiu_cookie", "xq_a_token=deadbeefcafe")
+        tmp_config.set("bilibili_sessdata", "SESSDATA=zzzzzzzzzzzz")
+        masked = tmp_config.to_dict()
+        assert masked["xhs_cookie"] == "web_sess..."
+        assert masked["xueqiu_cookie"] == "xq_a_tok..."
+        assert masked["bilibili_sessdata"] == "SESSDATA..."
+
     def test_save_creates_file_with_restricted_permissions(self, tmp_path):
         import stat
         import sys
