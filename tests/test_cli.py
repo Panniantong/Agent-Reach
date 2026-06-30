@@ -88,6 +88,44 @@ class TestCLI:
         assert auth_token == "token123"
         assert ct0 == "ct0abc"
 
+    def test_configure_xhs_cookies_detects_running_docker_container(self, monkeypatch, capsys):
+        calls = []
+
+        def fake_which(name):
+            if name == "docker":
+                return "/usr/bin/docker"
+            return None
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            if cmd[:2] == ["/usr/bin/docker", "ps"]:
+                return subprocess.CompletedProcess(cmd, 0, "xiaohongshu-mcp\n", "")
+            if cmd[:4] == ["/usr/bin/docker", "exec", "xiaohongshu-mcp", "printenv"]:
+                return subprocess.CompletedProcess(cmd, 0, "/app/data/cookies.json\n", "")
+            if cmd[:2] == ["/usr/bin/docker", "cp"]:
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            if cmd == ["/usr/bin/docker", "restart", "xiaohongshu-mcp"]:
+                return subprocess.CompletedProcess(cmd, 0, "xiaohongshu-mcp\n", "")
+            raise AssertionError(f"unexpected docker command: {cmd}")
+
+        monkeypatch.setattr(shutil, "which", fake_which)
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        cli._configure_xhs_cookies("a=1; b=2")
+
+        out = capsys.readouterr().out
+        assert calls[0] == [
+            "/usr/bin/docker",
+            "ps",
+            "--filter",
+            "name=xiaohongshu-mcp",
+            "--format",
+            "{{.Names}}",
+        ]
+        assert any(cmd[:2] == ["/usr/bin/docker", "cp"] for cmd in calls)
+        assert "container is not running" not in out
+        assert "Cookies written to xiaohongshu-mcp:/app/data/cookies.json" in out
+
     def test_install_rdt_cli_prefers_github_source(self, monkeypatch, capsys):
         state = {"rdt_installed": False}
         commands = []
