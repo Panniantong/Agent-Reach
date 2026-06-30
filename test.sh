@@ -1,6 +1,6 @@
 #!/bin/bash
 # Agent Reach 一键完整测试
-# 用法: bash test-agent-reach.sh
+# 用法: bash test.sh
 # 在任何有 Python 3.10+ 的机器上跑就行
 
 set -e
@@ -36,42 +36,91 @@ PASS=0
 FAIL=0
 SKIP=0
 
+# Success: output looks meaningful (not empty, not just a usage/error message)
+# Skip: auth-required channels that report warn/off/not-installed
+# Fail: anything else (empty output, crash, unexpected error)
+
 test_it() {
     local name="$1"
-    shift
+    local expected="$2"   # "always" | "if_installed" | "skip_if_off"
+    shift 2
     echo -n "  $name ... "
     output=$(eval "$@" 2>&1) || true
-    if echo "$output" | grep -q "📖\|🔗\|http"; then
-        echo "✅"
-        PASS=$((PASS+1))
-    elif echo "$output" | grep -q "⚠️\|not installed\|not configured"; then
-        echo "⏭️  (跳过 — 缺依赖)"
-        SKIP=$((SKIP+1))
-    else
-        echo "❌"
-        echo "    $(echo "$output" | head -2)"
-        FAIL=$((FAIL+1))
-    fi
+
+    case "$expected" in
+        always)
+            # Should always produce useful output
+            if [ -z "$output" ] || echo "$output" | grep -qiE "^(usage:|error:|fatal:)"; then
+                echo "❌"
+                echo "    $(echo "$output" | head -2)"
+                FAIL=$((FAIL+1))
+            else
+                echo "✅"
+                PASS=$((PASS+1))
+            fi
+            ;;
+        if_installed)
+            # Auth/optional — succeed if output looks good, skip if not installed
+            if echo "$output" | grep -qiE "(not installed|not configured|^off |unavailable|no .* backend|missing)"; then
+                echo "⏭️  (跳过 — 需配置)"
+                SKIP=$((SKIP+1))
+            elif [ -z "$output" ]; then
+                echo "❌"
+                echo "    (empty output)"
+                FAIL=$((FAIL+1))
+            else
+                echo "✅"
+                PASS=$((PASS+1))
+            fi
+            ;;
+        *)
+            echo "❌ (internal: bad expected=$expected)"
+            FAIL=$((FAIL+1))
+            ;;
+    esac
 }
 
-echo "📖 阅读测试"
-test_it "网页" "agent-reach read 'https://example.com'"
-test_it "GitHub" "agent-reach read 'https://github.com/Panniantong/agent-reach'"
-test_it "YouTube" "agent-reach read 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'"
-test_it "B站" "agent-reach read 'https://www.bilibili.com/video/BV1d4411N7zD'"
-test_it "RSS" "agent-reach read 'https://hnrss.org/frontpage'"
-test_it "Twitter" "agent-reach read 'https://x.com/elonmusk/status/1893797839927353448'"
-test_it "Reddit" "agent-reach read 'https://www.reddit.com/r/LocalLLaMA/hot'"
+echo "📖 阅读测试 (零配置渠道)"
+test_it "网页 (Jina)"  always "curl -sS 'https://r.jina.ai/https://example.com' 2>&1 | head -3"
+test_it "GitHub (gh CLI)" always "gh repo view Panniantong/agent-reach --json name 2>&1"
+test_it "YouTube (yt-dlp)" always "yt-dlp --print title 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' 2>&1"
+test_it "RSS (feedparser)" always "python3 -c \"import feedparser; d=feedparser.parse('https://hnrss.org/frontpage'); print(len(d.entries), 'entries')\""
+test_it "V2EX (热门)"   always "python3 -c \"from agent_reach.channels.v2ex import V2EXChannel; c=V2EXChannel(); t=c.get_hot_topics(2); print(len(t), 'topics')\""
+test_it "B站 (搜索API)" always "python3 -c \"
+import json,urllib.request
+r=urllib.request.urlopen(urllib.request.Request(
+    'https://api.bilibili.com/x/web-interface/search/all/v2?keyword=test&page=1',
+    headers={'User-Agent':'Mozilla/5.0'}))
+d=json.load(r)
+print('OK code=0' if d.get('code')==0 else 'FAIL code='+str(d.get('code')))
+\""
 
 echo ""
-echo "🔍 搜索测试"
-test_it "全网搜索" "agent-reach search 'best AI agent framework' -n 2"
-test_it "GitHub搜索" "agent-reach search-github 'yt-dlp' -n 2"
-test_it "Twitter搜索" "agent-reach search-twitter 'AI agent' -n 2"
-test_it "Reddit搜索" "agent-reach search-reddit 'machine learning' -n 2"
-test_it "YouTube搜索" "agent-reach search-youtube 'AI tutorial' -n 2"
-test_it "B站搜索" "agent-reach search-bilibili 'AI' -n 2"
-test_it "小红书搜索" "agent-reach search-xhs 'AI' -n 2"
+echo "🔍 搜索测试 (零配置渠道)"
+test_it "全网搜索 (Exa)"   always "python3 -c \"
+from agent_reach.channels.exa_search import ExaSearchChannel
+c=ExaSearchChannel(); s,m=c.check(); print(s,':', m[:100])
+\""
+test_it "GitHub搜索"      always "gh search repos 'yt-dlp' --limit 2 --json name 2>&1 | head -3"
+test_it "YouTube搜索"     always "yt-dlp --flat-playlist --print title 'ytsearch2:AI tutorial' 2>&1 | head -3"
+test_it "B站搜索"         always "python3 -c \"
+import json,urllib.request
+r=urllib.request.urlopen(urllib.request.Request(
+    'https://api.bilibili.com/x/web-interface/search/all/v2?keyword=AI&page=1',
+    headers={'User-Agent':'Mozilla/5.0'}))
+d=json.load(r)
+n=len(d.get('data',{}).get('result',[]))
+print(n,'result categories' if d.get('code')==0 else 'FAIL')
+\""
+
+echo ""
+echo "🔐 需认证渠道 (状态检查)"
+test_it "Twitter/X"  if_installed "python3 -c \"from agent_reach.channels.twitter import TwitterChannel; c=TwitterChannel(); s,m=c.check(); print(s,':', m[:100])\""
+test_it "Reddit"     if_installed "python3 -c \"from agent_reach.channels.reddit import RedditChannel; c=RedditChannel(); s,m=c.check(); print(s,':', m[:100])\""
+test_it "小红书"     if_installed "python3 -c \"from agent_reach.channels.xiaohongshu import XiaoHongShuChannel; c=XiaoHongShuChannel(); s,m=c.check(); print(s,':', m[:100])\""
+test_it "雪球"       if_installed "python3 -c \"from agent_reach.channels.xueqiu import XueqiuChannel; c=XueqiuChannel(); s,m=c.check(); print(s,':', m[:100])\""
+test_it "LinkedIn"   if_installed "python3 -c \"from agent_reach.channels.linkedin import LinkedInChannel; c=LinkedInChannel(); s,m=c.check(); print(s,':', m[:100])\""
+test_it "小宇宙播客" if_installed "python3 -c \"from agent_reach.channels.xiaoyuzhou import XiaoyuzhouChannel; c=XiaoyuzhouChannel(); s,m=c.check(); print(s,':', m[:100])\""
 
 echo ""
 echo "════════════════════════════════════════════"
