@@ -106,6 +106,39 @@ class TestDoctor:
         assert "可选渠道可以解锁" in plain
 
 
+def test_check_all_runs_channels_concurrently(monkeypatch):
+    """探测必须并发执行：墙钟时间应接近最慢渠道，而不是各渠道之和。
+
+    同时校验结果顺序仍跟随注册表 —— format_report 的分层渲染依赖此顺序。
+    """
+    import time
+
+    class _SlowChannel:
+        tier = 0
+        backends = []
+        active_backend = None
+
+        def __init__(self, name):
+            self.name = name
+            self.description = name
+
+        def check(self, config=None):
+            time.sleep(0.3)
+            return "ok", "done"
+
+    channels = [_SlowChannel(f"ch{i}") for i in range(8)]
+    monkeypatch.setattr(doctor, "get_all_channels", lambda: channels)
+
+    t0 = time.perf_counter()
+    results = doctor.check_all(config=None)
+    elapsed = time.perf_counter() - t0
+
+    # 串行需 8 × 0.3 = 2.4s；并发（max_workers≥8）应远低于 1s。
+    assert elapsed < 1.0, f"探测疑似未并发：耗时 {elapsed:.2f}s"
+    # 顺序必须与注册表一致。
+    assert list(results.keys()) == [f"ch{i}" for i in range(8)]
+
+
 def test_stale_active_backend_does_not_leak_into_errored_result(monkeypatch):
     """渠道单例上一轮的 active_backend 不得泄漏进本轮异常结果(Codex review 发现)。"""
     from agent_reach import doctor
