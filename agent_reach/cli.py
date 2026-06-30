@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 Agent Reach CLI — installer, doctor, and configuration tool.
 
@@ -126,6 +126,7 @@ def main():
 
     # ── watch ──
     sub.add_parser("watch", help="Quick health check + update check (for scheduled tasks)")
+    sub.add_parser("health", help="Show channel health status")
 
     # ── version ──
     sub.add_parser("version", help="Show version")
@@ -149,6 +150,8 @@ def main():
         _cmd_check_update()
     elif args.command == "watch":
         _cmd_watch()
+    elif args.command == "health":
+        _cmd_health(args)
     elif args.command == "setup":
         _cmd_setup()
     elif args.command == "install":
@@ -1765,6 +1768,20 @@ def _cmd_check_update():
     return "error"
 
 
+def _cmd_health(args=None):
+    """Print channel health status table."""
+    from agent_reach.config import Config
+    from agent_reach.doctor import check_all
+    from agent_reach.health import get_registry
+
+    config = Config()
+    check_all(config)  # Populates the health registry
+    registry = get_registry()
+
+    for name in sorted(registry.get_all_health().keys()):
+        health = registry.get_health(name)
+        print(f"{health.channel_name:20s} {health.status.value.upper()}")
+
 def _cmd_watch():
     """Quick health check + update check, designed for scheduled tasks.
 
@@ -1832,3 +1849,4 @@ def _cmd_watch():
 
 if __name__ == "__main__":
     main()
+
