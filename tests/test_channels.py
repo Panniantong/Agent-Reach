@@ -1242,6 +1242,8 @@ class TestLinkedInChannel:
 
 
 class TestExaSearchChannel:
+    """Backward-compat: ExaSearchChannel still works via deprecated import."""
+
     def test_reports_error_with_reinstall_hint_when_broken(self, monkeypatch):
         """mcporter which 命中但 exec 失败 → error + npm 重装处方。"""
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
@@ -1269,6 +1271,67 @@ class TestExaSearchChannel:
         status, msg = ch.check()
         assert status == "ok"
         assert ch.active_backend == "Exa via mcporter"
+
+
+class TestWebSearchChannel:
+    """Tests for the new multi-backend WebSearchChannel."""
+
+    def test_web_search_channel_registered(self):
+        from agent_reach.channels import get_channel
+        ch = get_channel("web_search")
+        assert ch is not None
+        assert ch.name == "web_search"
+        assert "DuckDuckGo" in ch.backends
+        assert "Exa via mcporter" in ch.backends
+        assert ch.tier == 0
+
+    def test_exa_backend_ok_when_mcporter_has_exa(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
+
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 0, "exa  https://mcp.exa.ai/mcp", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        from agent_reach.channels.web_search import WebSearchChannel
+        ch = WebSearchChannel()
+        status, msg = ch.check()
+        assert status == "ok"
+        assert ch.active_backend == "Exa via mcporter"
+
+    def test_ddg_backend_reports_ok_when_installed(self, monkeypatch):
+        """When mcporter is missing but ddgs is available → DuckDuckGo wins."""
+        # mcporter not found
+        monkeypatch.setattr(shutil, "which", lambda x: "/usr/bin/ddgs" if x == "ddgs" else None)
+
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 0, "ddgs v7.0", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        from agent_reach.channels.web_search import WebSearchChannel
+        ch = WebSearchChannel()
+        status, msg = ch.check()
+        assert status == "ok"
+        assert ch.active_backend == "DuckDuckGo"
+
+    def test_off_when_no_backend_available(self, monkeypatch):
+        """When both backends are missing → off with install instructions."""
+        monkeypatch.setattr(shutil, "which", lambda _: None)
+
+        def fake_run(cmd, **kwargs):
+            raise FileNotFoundError(cmd[0])
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        from agent_reach.channels.web_search import WebSearchChannel
+        ch = WebSearchChannel()
+        status, msg = ch.check()
+        assert status == "off"
+        assert "duckduckgo-search" in msg.lower()
+
+    def test_cannot_handle_urls(self):
+        from agent_reach.channels.web_search import WebSearchChannel
+        ch = WebSearchChannel()
+        assert ch.can_handle("https://example.com") is False
+        assert ch.can_handle("https://google.com/search?q=test") is False
 
 
 class TestXiaoyuzhouChannel:

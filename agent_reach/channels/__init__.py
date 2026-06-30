@@ -8,7 +8,8 @@ from typing import List, Optional
 # Import all channels
 from .base import Channel
 from .bilibili import BilibiliChannel
-from .exa_search import ExaSearchChannel
+from .exa_search import ExaSearchChannel  # backward compat
+from .web_search import WebSearchChannel
 from .facebook import FacebookChannel
 from .github import GitHubChannel
 from .instagram import InstagramChannel
@@ -37,7 +38,7 @@ ALL_CHANNELS: List[Channel] = [
     V2EXChannel(),
     XueqiuChannel(),
     RSSChannel(),
-    ExaSearchChannel(),
+    WebSearchChannel(),
     WebChannel(),
 ]
 
