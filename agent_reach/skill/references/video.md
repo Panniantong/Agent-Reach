@@ -4,27 +4,37 @@ YouTube、B站、小宇宙播客的字幕和转录。
 
 ## YouTube (yt-dlp)
 
+> **通用 flag**: 以下命令都带 `--ignore-no-formats-error`。这几个场景只读元数据/字幕/评论，不需要可播放的视频格式；YouTube 的 JS 挑战偶尔解不出来会导致格式解析失败，不加这个 flag 会连读字幕都跟着报错退出。
+
 ### 获取视频元数据
 
 ```bash
-yt-dlp --dump-json "URL"
+yt-dlp --ignore-no-formats-error --dump-json "URL"
 ```
 
 ### 下载字幕
 
 ```bash
 # 下载字幕 (不下载视频)
-yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -o "/tmp/%(id)s" "URL"
+yt-dlp --ignore-no-formats-error --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -o "/tmp/%(id)s" "URL"
 
 # 然后读取 .vtt 文件
 cat /tmp/VIDEO_ID.*.vtt
 ```
 
+> **触发 "Sign in to confirm you're not a bot"？** 部分视频会被 YouTube 风控拦截，纯匿名请求过不去。仅限**本地有浏览器**的环境（服务器没有浏览器就跳过这条，直接走下面的 Whisper 兜底），带浏览器登录态重试：
+>
+> ```bash
+> yt-dlp --ignore-no-formats-error --cookies-from-browser chrome --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -o "/tmp/%(id)s" "URL"
+> ```
+>
+> 多 Chrome Profile 时默认的 `chrome` 可能读到没登录过的 Profile，用 `--cookies-from-browser "chrome:Profile 2"` 指定具体 profile（`ls -t ~/Library/Application\ Support/Google/Chrome/ | head` 找最近用过的那个）。重试后如果提示变成 "no subtitles for the requested languages"，先用 `yt-dlp --list-subs "URL"` 确认这条视频到底有没有字幕——很多视频压根没上字幕，不是 cookie 问题，直接改用下面的 Whisper 兜底。
+
 ### 获取评论
 
 ```bash
 # 提取评论（best-effort，不保证完整）
-yt-dlp --write-comments --skip-download --write-info-json \
+yt-dlp --ignore-no-formats-error --write-comments --skip-download --write-info-json \
   --extractor-args "youtube:max_comments=20" \
   -o "/tmp/%(id)s" "URL"
 # 评论在 .info.json 的 comments 字段中
@@ -33,7 +43,7 @@ yt-dlp --write-comments --skip-download --write-info-json \
 ### 搜索视频
 
 ```bash
-yt-dlp --dump-json "ytsearch5:query"
+yt-dlp --ignore-no-formats-error --dump-json "ytsearch5:query"
 ```
 
 > **字幕注意**: 手动上传的字幕提取可靠；自动生成字幕可能存在行间重复，需后处理。

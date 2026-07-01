@@ -1,5 +1,28 @@
 # 常见问题排查
 
+## YouTube: yt-dlp 报 "Sign in to confirm you're not a bot"
+
+**症状：** `yt-dlp --dump-json` / `--write-sub` 等命令直接报错退出，提示需要登录验证；有些视频紧接着还会报 `Requested format is not available`。
+
+**原因：** 部分视频被 YouTube 风控要求验证是否为真人。纯匿名请求（无 Cookie）会被拦截；即使带了 Cookie，YouTube 的 JS 挑战偶尔本地解不出来，导致可播放格式解析失败，如果没加 `--ignore-no-formats-error` 会连读元数据/字幕这种不需要下载视频的操作也一起报错。
+
+**解决方案：** 仅限本地有浏览器的环境（服务器没有浏览器就跳过这条，改用下方的 Whisper 音频转写兜底）：
+
+```bash
+yt-dlp --ignore-no-formats-error --cookies-from-browser chrome --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -o "/tmp/%(id)s" "URL"
+```
+
+多 Chrome Profile 时默认的 `chrome` 可能读到没登录过的 Profile，用 `--cookies-from-browser "chrome:Profile 2"` 指定具体 profile。
+
+如果重试后提示变成 "no subtitles for the requested languages"，先用 `yt-dlp --list-subs "URL"` 确认这条视频到底有没有字幕——很多视频压根没上字幕，不是 Cookie 或风控问题。这种情况下改用音频转写：
+
+```bash
+agent-reach configure groq-key gsk_xxx   # 免费，console.groq.com
+agent-reach transcribe "URL"
+```
+
+---
+
 ## 雪球 / Xueqiu: API 返回 400
 
 **症状：** `agent-reach doctor` 显示雪球 ⚠️，报 `HTTP Error 400`
