@@ -52,15 +52,16 @@ class TestConfig:
         assert tmp_config.get("to_delete") is None
 
     def test_is_configured(self, tmp_config):
-        assert not tmp_config.is_configured("exa_search")
-        tmp_config.set("exa_api_key", "test-key")
-        assert tmp_config.is_configured("exa_search")
+        # web_search is zero-config (no requirements) → always configured
+        assert tmp_config.is_configured("web_search")
 
     def test_get_configured_features(self, tmp_config):
         features = tmp_config.get_configured_features()
         assert isinstance(features, dict)
-        assert "exa_search" in features
-        assert all(v is False for v in features.values())
+        assert "web_search" in features
+        # web_search is zero-config → True; all others False
+        assert features["web_search"] is True
+        assert all(v is False for k, v in features.items() if k != "web_search")
 
     def test_to_dict_masks_sensitive(self, tmp_config):
         tmp_config.set("exa_api_key", "super-secret-key-12345")
