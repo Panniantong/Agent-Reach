@@ -9,10 +9,10 @@ Usage:
     agent-reach setup
 """
 
-import sys
 import argparse
 import json
 import os
+import sys
 import time
 
 from agent_reach import __version__
@@ -171,6 +171,7 @@ def main():
 def _cmd_install(args):
     """One-shot deterministic installer."""
     import os
+
     from agent_reach.config import Config
     from agent_reach.doctor import check_all, format_report
 
@@ -354,9 +355,9 @@ def _cmd_install(args):
 
 def _install_skill(force: bool = True):
     """Install Agent Reach as an agent skill (OpenClaw / Claude Code / .agents)."""
+    import importlib.resources
     import os
     import shutil
-    import importlib.resources
 
     def _is_english_locale(value: str) -> bool:
         normalized = value.strip().lower()
@@ -531,9 +532,9 @@ def _cmd_format(args):
 
 def _install_system_deps():
     """Install system-level dependencies: gh CLI, Node.js (for mcporter)."""
+    import platform
     import shutil
     import subprocess
-    import platform
     import tempfile
 
     print("Checking system dependencies...")
@@ -659,6 +660,7 @@ def _install_system_deps():
 def _install_xiaoyuzhou_deps():
     """Install Xiaoyuzhou podcast transcription script."""
     import shutil
+
     from agent_reach.config import Config
 
     config = Config()
@@ -1019,6 +1021,7 @@ def _detect_environment():
 def _cmd_configure(args):
     """Set a config value and test it, or auto-extract from browser."""
     import shutil
+
     from agent_reach.config import Config
 
     config = Config()
@@ -1770,9 +1773,9 @@ def _cmd_watch():
 
     Only outputs problems. If everything is fine, outputs a single line.
     """
+    from agent_reach import __version__
     from agent_reach.config import Config
     from agent_reach.doctor import check_all
-    from agent_reach import __version__
 
     config = Config()
     issues = []

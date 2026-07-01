@@ -4,7 +4,6 @@ Channel registry — lists all supported platforms for doctor checks.
 """
 
 from typing import List, Optional
-
 # Import all channels
 from .base import Channel
 from .bilibili import BilibiliChannel

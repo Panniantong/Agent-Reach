@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Twitter/X — check if twitter-cli or bird CLI is available."""
 
-from .base import Channel
 from agent_reach.probe import probe_command
+
+from .base import Channel
 
 
 class TwitterChannel(Channel):
