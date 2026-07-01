@@ -9,10 +9,10 @@ Usage:
     agent-reach setup
 """
 
-import sys
 import argparse
 import json
 import os
+import sys
 import time
 
 from agent_reach import __version__
@@ -171,6 +171,7 @@ def main():
 def _cmd_install(args):
     """One-shot deterministic installer."""
     import os
+
     from agent_reach.config import Config
     from agent_reach.doctor import check_all, format_report
 
@@ -223,9 +224,9 @@ def _cmd_install(args):
         env = _detect_environment()
 
     if env == "server":
-        print(f"Environment: Server/VPS (auto-detected)")
+        print("Environment: Server/VPS (auto-detected)")
     else:
-        print(f"Environment: Local computer (auto-detected)")
+        print("Environment: Local computer (auto-detected)")
 
     server_skipped_opencli_channels = set()
     if env == "server" and requested_channels:
@@ -236,11 +237,11 @@ def _cmd_install(args):
     # Apply explicit flags
     if args.proxy:
         if dry_run:
-            print(f"[dry-run] Would save network proxy")
+            print("[dry-run] Would save network proxy")
         else:
             config.set("proxy", args.proxy)
             config.set("bilibili_proxy", args.proxy)  # legacy key
-            print(f"✅ 代理已保存（Agent 访问受限网络时使用）")
+            print("✅ 代理已保存（Agent 访问受限网络时使用）")
 
     # ── Install core system dependencies (lightweight, always) ──
     print()
@@ -289,15 +290,15 @@ def _cmd_install(args):
         print("   it only happens once during install. Enter your password or click 'Allow'.)")
         try:
             from agent_reach.cookie_extract import configure_from_browser
-            results = configure_from_browser("chrome", config)
+            browser_results = configure_from_browser("chrome", config)
             found = False
-            for platform, success, message in results:
+            for platform, success, message in browser_results:
                 if success:
                     print(f"  ✅ {platform}: {message}")
                     found = True
             if not found:
-                results = configure_from_browser("firefox", config)
-                for platform, success, message in results:
+                browser_results = configure_from_browser("firefox", config)
+                for platform, success, message in browser_results:
                     if success:
                         print(f"  ✅ {platform}: {message}")
                         found = True
@@ -321,13 +322,13 @@ def _cmd_install(args):
     if not dry_run:
         print()
         print("Testing channels...")
-        results = check_all(config)
-        ok = sum(1 for r in results.values() if r["status"] == "ok")
-        total = len(results)
+        channel_results = check_all(config)
+        ok = sum(1 for r in channel_results.values() if r["status"] == "ok")
+        total = len(channel_results)
 
         # Final status
         print()
-        print(format_report(results))
+        print(format_report(channel_results))
         print()
 
         # ── Install agent skill ──
@@ -354,9 +355,9 @@ def _cmd_install(args):
 
 def _install_skill(force: bool = True):
     """Install Agent Reach as an agent skill (OpenClaw / Claude Code / .agents)."""
+    import importlib.resources
     import os
     import shutil
-    import importlib.resources
 
     def _is_english_locale(value: str) -> bool:
         normalized = value.strip().lower()
@@ -531,9 +532,9 @@ def _cmd_format(args):
 
 def _install_system_deps():
     """Install system-level dependencies: gh CLI, Node.js (for mcporter)."""
+    import platform
     import shutil
     import subprocess
-    import platform
     import tempfile
 
     print("Checking system dependencies...")
@@ -659,6 +660,7 @@ def _install_system_deps():
 def _install_xiaoyuzhou_deps():
     """Install Xiaoyuzhou podcast transcription script."""
     import shutil
+
     from agent_reach.config import Config
 
     config = Config()
@@ -1019,6 +1021,7 @@ def _detect_environment():
 def _cmd_configure(args):
     """Set a config value and test it, or auto-extract from browser."""
     import shutil
+
     from agent_reach.config import Config
 
     config = Config()
@@ -1121,15 +1124,15 @@ def _cmd_configure(args):
 
     elif args.key == "github-token":
         config.set("github_token", value)
-        print(f"✅ GitHub token configured!")
+        print("✅ GitHub token configured!")
 
     elif args.key == "groq-key":
         config.set("groq_api_key", value)
-        print(f"✅ Groq key configured!")
+        print("✅ Groq key configured!")
 
     elif args.key == "openai-key":
         config.set("openai_api_key", value)
-        print(f"✅ OpenAI key configured!")
+        print("✅ OpenAI key configured!")
 
 
 def _cmd_transcribe(args):
@@ -1476,10 +1479,11 @@ def _cmd_uninstall(args):
 def _cmd_doctor(args=None):
     from agent_reach.config import Config
     from agent_reach.doctor import check_all, format_report
+    rich_module: object | None
     try:
-        from rich import print as rprint
+        import rich as rich_module
     except ImportError:
-        rprint = print
+        rich_module = None
     config = Config()
     results = check_all(config)
 
@@ -1487,7 +1491,10 @@ def _cmd_doctor(args=None):
         print(json.dumps(results, ensure_ascii=False, indent=2))
         return
 
-    rprint(format_report(results))
+    if rich_module is not None:
+        getattr(rich_module, "print")(format_report(results))
+    else:
+        print(format_report(results))
 
     # Auto-install skill if not already present (fixes #154)
     _install_skill(force=False)
@@ -1545,7 +1552,7 @@ def _cmd_setup():
     print("  获取: https://github.com/settings/tokens (无需任何权限)")
     current = config.get("github_token")
     if current:
-        print(f"  当前状态: ✅ 已配置")
+        print("  当前状态: ✅ 已配置")
     else:
         key = input("  GITHUB_TOKEN (回车跳过): ").strip()
         if key:
@@ -1566,7 +1573,7 @@ def _cmd_setup():
     print("  免费额度，注册: https://console.groq.com")
     current = config.get("groq_api_key")
     if current:
-        print(f"  当前状态: ✅ 已配置")
+        print("  当前状态: ✅ 已配置")
     else:
         key = input("  GROQ_API_KEY (回车跳过): ").strip()
         if key:
@@ -1697,10 +1704,10 @@ def _is_newer_version(remote: str, local: str) -> bool:
         except ValueError:
             return None
 
-    r, l = parse(remote), parse(local)
-    if r is None or l is None:
+    remote_version, local_version = parse(remote), parse(local)
+    if remote_version is None or local_version is None:
         return remote != local  # unparseable — fall back to old behavior
-    return r > l
+    return remote_version > local_version
 
 
 def _cmd_check_update():
@@ -1733,7 +1740,7 @@ def _cmd_check_update():
             print()
             print(_UPDATE_INSTRUCTIONS)
             return "update_available"
-        print(f"✅ 已是最新版本")
+        print("✅ 已是最新版本")
         return "up_to_date"
 
     release_err = _classify_github_response_error(resp)
@@ -1770,9 +1777,9 @@ def _cmd_watch():
 
     Only outputs problems. If everything is fine, outputs a single line.
     """
+    from agent_reach import __version__
     from agent_reach.config import Config
     from agent_reach.doctor import check_all
-    from agent_reach import __version__
 
     config = Config()
     issues = []
@@ -1811,8 +1818,8 @@ def _cmd_watch():
         print(f"Agent Reach: 全部正常 ({ok}/{total} 渠道可用，v{__version__} 已是最新)")
         return
 
-    print(f"Agent Reach 监控报告")
-    print(f"=" * 40)
+    print("Agent Reach 监控报告")
+    print("=" * 40)
     print(f"版本: v{__version__}  |  渠道: {ok}/{total}")
 
     if issues:

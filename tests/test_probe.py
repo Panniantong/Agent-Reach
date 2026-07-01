@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from agent_reach.probe import ProbeResult, probe_command, reinstall_hint
+from agent_reach.probe import probe_command, reinstall_hint
 
 
 def _make_executable(path, content):
@@ -25,7 +25,7 @@ def test_missing_command():
 @pytest.mark.skipif(sys.platform == "win32", reason="shebang semantics are POSIX-only")
 def test_broken_shebang_detected_as_broken(tmp_path, monkeypatch):
     """A stale venv shim: which() finds it, exec raises FileNotFoundError."""
-    script = _make_executable(
+    _make_executable(
         tmp_path / "stale-tool", "#!/nonexistent/venv/bin/python\nprint('hi')\n"
     )
     monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ.get("PATH", ""))
@@ -38,7 +38,7 @@ def test_broken_shebang_detected_as_broken(tmp_path, monkeypatch):
 
 @pytest.mark.skipif(sys.platform == "win32", reason="shell script fixture is POSIX-only")
 def test_healthy_command_returns_ok_with_output(tmp_path, monkeypatch):
-    script = _make_executable(
+    _make_executable(
         tmp_path / "healthy-tool", "#!/bin/sh\necho 'healthy-tool 1.2.3'\n"
     )
     monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ.get("PATH", ""))
@@ -50,7 +50,7 @@ def test_healthy_command_returns_ok_with_output(tmp_path, monkeypatch):
 
 @pytest.mark.skipif(sys.platform == "win32", reason="shell script fixture is POSIX-only")
 def test_nonzero_exit_classified_as_error(tmp_path, monkeypatch):
-    script = _make_executable(
+    _make_executable(
         tmp_path / "failing-tool", "#!/bin/sh\necho 'boom' >&2\nexit 3\n"
     )
     monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ.get("PATH", ""))
@@ -62,7 +62,7 @@ def test_nonzero_exit_classified_as_error(tmp_path, monkeypatch):
 
 @pytest.mark.skipif(sys.platform == "win32", reason="shell script fixture is POSIX-only")
 def test_exit_127_classified_as_broken(tmp_path, monkeypatch):
-    script = _make_executable(tmp_path / "wrapper-tool", "#!/bin/sh\nexit 127\n")
+    _make_executable(tmp_path / "wrapper-tool", "#!/bin/sh\nexit 127\n")
     monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ.get("PATH", ""))
 
     r = probe_command("wrapper-tool", package="wrapper-pkg")
@@ -74,7 +74,7 @@ def test_exit_127_classified_as_broken(tmp_path, monkeypatch):
 def test_retries_help_transient_failures(tmp_path, monkeypatch):
     """First call fails (exit 1), second succeeds — retries=1 should return ok."""
     marker = tmp_path / "ran-once"
-    script = _make_executable(
+    _make_executable(
         tmp_path / "flaky-tool",
         f"#!/bin/sh\nif [ -f {marker} ]; then echo ok; exit 0; fi\ntouch {marker}\nexit 1\n",
     )
