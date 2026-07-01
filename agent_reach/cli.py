@@ -739,7 +739,7 @@ def _install_xhs_deps():
         print("    1. 下载 binary：https://github.com/xpzouying/xiaohongshu-mcp/releases")
         print("       （建议放到 ~/.agent-reach/tools/ 下）")
         print("    2. 启动服务（首次运行会下载约 150MB 浏览器，请等待完成）")
-        print("    3. 扫码登录后接入：mcporter config add xiaohongshu http://localhost:18060/mcp")
+        print("    3. 扫码登录后接入：mcporter config add xiaohongshu http://localhost:18060/mcp --scope home")
         print("    4. 验证：agent-reach doctor")
         return
 
@@ -947,14 +947,14 @@ def _install_mcporter():
         )
         if "exa" not in r.stdout:
             subprocess.run(
-                ["mcporter", "config", "add", "exa", "https://mcp.exa.ai/mcp"],
+                ["mcporter", "config", "add", "exa", "https://mcp.exa.ai/mcp", "--scope", "home"],
                 capture_output=True, encoding="utf-8", errors="replace", timeout=10,
             )
             print("  ✅ Exa search configured (free, no API key needed)")
         else:
             print("  ✅ Exa search already configured")
     except Exception:
-        print("  [!]  Could not configure Exa. Run manually: mcporter config add exa https://mcp.exa.ai/mcp")
+        print("  [!]  Could not configure Exa. Run manually: mcporter config add exa https://mcp.exa.ai/mcp --scope home")
 
     # NOTE: xhs-cli is now optional, installed via --channels=xiaohongshu
 
@@ -967,11 +967,11 @@ def _install_mcporter_safe():
 
     if shutil.which("mcporter"):
         print("  ✅ mcporter already installed")
-        print("  To configure Exa search: mcporter config add exa https://mcp.exa.ai/mcp")
+        print("  To configure Exa search: mcporter config add exa https://mcp.exa.ai/mcp --scope home")
     else:
         print("  -- mcporter not installed")
         print("  To install: npm install -g mcporter")
-        print("  Then configure Exa: mcporter config add exa https://mcp.exa.ai/mcp")
+        print("  Then configure Exa: mcporter config add exa https://mcp.exa.ai/mcp --scope home")
 
 
 def _detect_environment():
@@ -1512,7 +1512,7 @@ def _cmd_setup():
     if not shutil.which("mcporter"):
         print("  当前状态: -- mcporter 未安装")
         print("  安装：npm install -g mcporter")
-        print("  然后：mcporter config add exa https://mcp.exa.ai/mcp")
+        print("  然后：mcporter config add exa https://mcp.exa.ai/mcp --scope home")
         print()
     else:
         try:
@@ -1526,17 +1526,17 @@ def _cmd_setup():
                 setup_now = input("  现在自动配置 Exa 吗？[Y/n]: ").strip().lower()
                 if setup_now in ("", "y", "yes"):
                     add_r = subprocess.run(
-                        ["mcporter", "config", "add", "exa", "https://mcp.exa.ai/mcp"],
+                        ["mcporter", "config", "add", "exa", "https://mcp.exa.ai/mcp", "--scope", "home"],
                         capture_output=True, encoding="utf-8", errors="replace", timeout=10,
                     )
                     if add_r.returncode == 0:
                         print("  ✅ Exa 已配置")
                     else:
                         print("  [!] 自动配置失败，请手动执行：")
-                        print("     mcporter config add exa https://mcp.exa.ai/mcp")
+                        print("     mcporter config add exa https://mcp.exa.ai/mcp --scope home")
         except Exception:
             print("  [!] 无法检查 Exa 配置，请手动执行：")
-            print("     mcporter config add exa https://mcp.exa.ai/mcp")
+            print("     mcporter config add exa https://mcp.exa.ai/mcp --scope home")
         print()
 
     # Step 2: GitHub token

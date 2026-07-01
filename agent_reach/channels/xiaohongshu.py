@@ -225,7 +225,7 @@ class XiaoHongShuChannel(Channel):
             )
         return "warn", (
             "xiaohongshu-mcp 服务在跑但 mcporter 未接入。运行：\n"
-            f"  mcporter config add xiaohongshu {_MCP_ENDPOINT}"
+            f"  mcporter config add xiaohongshu {_MCP_ENDPOINT} --scope home"
         )
 
     def _check_xhs_cli(self):
