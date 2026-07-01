@@ -3,6 +3,7 @@
 
 import urllib.request
 from .base import Channel
+from ..transcribe import _assert_safe_public_url
 
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
@@ -23,6 +24,8 @@ class WebChannel(Channel):
 
     def read(self, url: str) -> str:
         """通过 Jina Reader 读取网页，返回 Markdown 全文。"""
+        # SSRF protection: reject private/internal URLs before fetching
+        _assert_safe_public_url(url)
         if not url.startswith(("http://", "https://")):
             url = "https://" + url
         jina_url = f"https://r.jina.ai/{url}"
