@@ -9,7 +9,7 @@
 **解决方案：** 在 Chrome 里登录 xueqiu.com，然后运行：
 
 ```bash
-agent-reach configure --from-browser chrome
+agent-reach configure --from-browser chrome --channels xueqiu
 ```
 
 再次运行 `agent-reach doctor` 确认恢复 ✅。Cookie 过期后重新运行即可。

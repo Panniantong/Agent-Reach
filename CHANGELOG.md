@@ -6,6 +6,31 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### 🔒 Security / 安全
+
+- **Cookie 过度采集修复：** 安装期自动导入（`install --channels ...`）不再顺带抓取未请求平台的 Cookie —— 现在只导入 `--channels` 指定的渠道，提取与保存都严格限定在该范围。`configure --from-browser` 保持原有默认（不带 `--channels` 时导入全部），但会明确提示并支持用 `--channels` 缩小范围。
+  - Install-time auto-import no longer silently harvests cookies for platforms you didn't request — it is now scoped to `--channels`. `configure --from-browser` keeps its original default (imports all when `--channels` is omitted) but is now transparent about it and supports `--channels` scoping. New `resolve_cookie_targets()` maps channel names to cookie config keys (incl. `xiaohongshu → xhs`).
+- **仿冒域名路由修复：** 渠道 `can_handle()` 不再使用子串匹配（`"x.com" in url`），改用新的 `host_matches()` 主机名精确匹配。`notx.com`、`x.com.evil.test`、`x.com@evil.test`（userinfo 伪装）、端口等仿冒/欺骗手段均被拒绝，避免带凭证的渠道把用户 Cookie 附加到攻击者控制的 URL。
+  - All channel routing now uses exact host / real-subdomain matching via `agent_reach.utils.urls.host_matches`, closing lookalike-domain and userinfo-spoof routing.
+- **Cookie 域名匹配修复：** 浏览器 Cookie 提取此前用 `endswith` 匹配平台域名，`notxueqiu.com`、`evilxueqiu.com` 等仿冒域名的 Cookie 会被误纳入雪球 Cookie 字符串并保存。改用 `domain_covers()` 精确/子域匹配，杜绝攻击者 Cookie 注入。
+  - Browser cookie extraction matched platform domains with `endswith`, so cookies from lookalike hosts (`notxueqiu.com`) were swept into the saved Xueqiu cookie string. Now uses exact-or-subdomain matching (`domain_covers`).
+
+### 🐛 Fixes / 修复
+
+- **`doctor` 变为只读诊断：** 移除 `doctor` 运行时自动安装 skill 的副作用。skill 安装仅发生在 `install` 和 `skill --install`。
+  - `doctor` is now read-only diagnostics — it no longer installs the agent skill as a side effect.
+- **Exa/mcporter 配置固定到 home scope：** `mcporter config add exa` 现在带 `--scope home`，确保 Exa 配置写入用户主目录（`~/.mcporter`）而非当前工作目录的项目配置，跨目录持久可用。（`config list` 不支持 `--scope`，保持不变。）
+  - `mcporter config add exa` now pins to `--scope home` so Exa search persists for the agent regardless of cwd.
+
+### 🔧 Chore
+
+- `test.sh` 重写为安装冒烟测试（干净 venv 装本地副本，跑 version/doctor），不再调用已废弃的 `read`/`search` 子命令。
+  - `test.sh` rewritten as an install smoke test (fresh venv, local install, version/doctor) instead of calling the removed `read`/`search` subcommands.
+
+---
+
 ## [1.3.1] - 2026-03-27
 
 ### 🐛 Bug Fixes / 修复

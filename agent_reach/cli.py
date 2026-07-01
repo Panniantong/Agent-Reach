@@ -87,7 +87,12 @@ def main():
     p_conf.add_argument("value", nargs="*", help="The value(s) to set")
     p_conf.add_argument("--from-browser", metavar="BROWSER",
                         choices=["chrome", "firefox", "edge", "brave", "opera"],
-                        help="Auto-extract ALL platform cookies from browser (chrome/firefox/edge/brave/opera)")
+                        help="Auto-extract cookies from browser (chrome/firefox/edge/brave/opera). "
+                             "Use --channels to scope which platforms to import (default: all).")
+    p_conf.add_argument("--channels", default="",
+                        help="Comma-separated cookie channels to import with --from-browser "
+                             "(twitter,xiaohongshu,bilibili,xueqiu), or 'all'. "
+                             "Omit to import all supported platforms.")
 
     # ── doctor ──
     p_doctor = sub.add_parser("doctor", help="Check platform availability")
@@ -207,7 +212,6 @@ def _cmd_install(args):
         # linkedin: manual setup, no auto-install
     }
     OPENCLI_ONLY_CHANNELS = {"opencli", "facebook", "instagram"}
-    COOKIE_CHANNELS = {"twitter", "xueqiu", "bilibili"}
 
     requested_channels = set()
     if args.channels:
@@ -280,23 +284,27 @@ def _cmd_install(args):
         print()
         print(f"[dry-run] Would install optional channels: {', '.join(sorted(requested_channels))}")
 
-    # ── Auto-import cookies (only if cookie-needing channels are requested) ──
-    needs_cookies = bool(requested_channels & COOKIE_CHANNELS)
+    # ── Auto-import cookies (only for the requested cookie channels) ──
+    from agent_reach.cookie_extract import (
+        configure_from_browser,
+        resolve_cookie_targets,
+    )
+    cookie_targets = resolve_cookie_targets(requested_channels)
+    needs_cookies = bool(cookie_targets)
     if env == "local" and needs_cookies and not safe_mode and not dry_run:
         print()
         print("Importing cookies from browser...")
         print("  (macOS may ask for your login password to access the Keychain — this is normal,")
         print("   it only happens once during install. Enter your password or click 'Allow'.)")
         try:
-            from agent_reach.cookie_extract import configure_from_browser
-            results = configure_from_browser("chrome", config)
+            results = configure_from_browser("chrome", config, cookie_targets)
             found = False
             for platform, success, message in results:
                 if success:
                     print(f"  ✅ {platform}: {message}")
                     found = True
             if not found:
-                results = configure_from_browser("firefox", config)
+                results = configure_from_browser("firefox", config, cookie_targets)
                 for platform, success, message in results:
                     if success:
                         print(f"  ✅ {platform}: {message}")
@@ -946,15 +954,18 @@ def _install_mcporter():
             ["mcporter", "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=5
         )
         if "exa" not in r.stdout:
+            # --scope home pins Exa to ~/.mcporter so it persists for the agent
+            # regardless of cwd (a project mcporter.json would otherwise capture
+            # the default project scope). config list has no --scope flag.
             subprocess.run(
-                ["mcporter", "config", "add", "exa", "https://mcp.exa.ai/mcp"],
+                ["mcporter", "config", "add", "exa", "https://mcp.exa.ai/mcp", "--scope", "home"],
                 capture_output=True, encoding="utf-8", errors="replace", timeout=10,
             )
             print("  ✅ Exa search configured (free, no API key needed)")
         else:
             print("  ✅ Exa search already configured")
     except Exception:
-        print("  [!]  Could not configure Exa. Run manually: mcporter config add exa https://mcp.exa.ai/mcp")
+        print("  [!]  Could not configure Exa. Run manually: mcporter config add exa https://mcp.exa.ai/mcp --scope home")
 
     # NOTE: xhs-cli is now optional, installed via --channels=xiaohongshu
 
@@ -967,11 +978,11 @@ def _install_mcporter_safe():
 
     if shutil.which("mcporter"):
         print("  ✅ mcporter already installed")
-        print("  To configure Exa search: mcporter config add exa https://mcp.exa.ai/mcp")
+        print("  To configure Exa search: mcporter config add exa https://mcp.exa.ai/mcp --scope home")
     else:
         print("  -- mcporter not installed")
         print("  To install: npm install -g mcporter")
-        print("  Then configure Exa: mcporter config add exa https://mcp.exa.ai/mcp")
+        print("  Then configure Exa: mcporter config add exa https://mcp.exa.ai/mcp --scope home")
 
 
 def _detect_environment():
@@ -1025,13 +1036,31 @@ def _cmd_configure(args):
 
     # ── Auto-extract from browser ──
     if args.from_browser:
-        from agent_reach.cookie_extract import configure_from_browser
+        from agent_reach.cookie_extract import (
+            configure_from_browser,
+            resolve_cookie_targets,
+        )
+
+        raw_channels = [c.strip() for c in (args.channels or "").split(",") if c.strip()]
+        if raw_channels:
+            cookie_targets = resolve_cookie_targets(raw_channels)
+            if not cookie_targets:
+                print(f"No cookie-based channels in --channels {args.channels}.")
+                print("   Cookie channels: twitter, xiaohongshu, bilibili, xueqiu (or 'all').")
+                return
+        else:
+            # No --channels: keep the original import-everything behavior so
+            # existing invocations don't break, but make it transparent and
+            # point at scoping.
+            cookie_targets = resolve_cookie_targets(["all"])
+            print("No --channels given — importing cookies for all supported platforms.")
+            print("   Tip: scope with --channels twitter (or bilibili, xiaohongshu, xueqiu).")
 
         browser = args.from_browser
-        print(f"Extracting cookies from {browser}...")
+        print(f"Extracting cookies from {browser} for: {', '.join(sorted(cookie_targets))}")
         print()
 
-        results = configure_from_browser(browser, config)
+        results = configure_from_browser(browser, config, cookie_targets)
 
         found_any = False
         for platform, success, message in results:
@@ -1489,8 +1518,9 @@ def _cmd_doctor(args=None):
 
     rprint(format_report(results))
 
-    # Auto-install skill if not already present (fixes #154)
-    _install_skill(force=False)
+    # doctor is read-only diagnostics — it never mutates the system. Skill
+    # installation happens in `agent-reach install` and `agent-reach skill
+    # --install`, not here.
 
 
 def _cmd_setup():
@@ -1512,7 +1542,7 @@ def _cmd_setup():
     if not shutil.which("mcporter"):
         print("  当前状态: -- mcporter 未安装")
         print("  安装：npm install -g mcporter")
-        print("  然后：mcporter config add exa https://mcp.exa.ai/mcp")
+        print("  然后：mcporter config add exa https://mcp.exa.ai/mcp --scope home")
         print()
     else:
         try:
@@ -1526,17 +1556,17 @@ def _cmd_setup():
                 setup_now = input("  现在自动配置 Exa 吗？[Y/n]: ").strip().lower()
                 if setup_now in ("", "y", "yes"):
                     add_r = subprocess.run(
-                        ["mcporter", "config", "add", "exa", "https://mcp.exa.ai/mcp"],
+                        ["mcporter", "config", "add", "exa", "https://mcp.exa.ai/mcp", "--scope", "home"],
                         capture_output=True, encoding="utf-8", errors="replace", timeout=10,
                     )
                     if add_r.returncode == 0:
                         print("  ✅ Exa 已配置")
                     else:
                         print("  [!] 自动配置失败，请手动执行：")
-                        print("     mcporter config add exa https://mcp.exa.ai/mcp")
+                        print("     mcporter config add exa https://mcp.exa.ai/mcp --scope home")
         except Exception:
             print("  [!] 无法检查 Exa 配置，请手动执行：")
-            print("     mcporter config add exa https://mcp.exa.ai/mcp")
+            print("     mcporter config add exa https://mcp.exa.ai/mcp --scope home")
         print()
 
     # Step 2: GitHub token

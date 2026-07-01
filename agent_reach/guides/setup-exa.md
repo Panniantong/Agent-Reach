@@ -17,7 +17,7 @@ npm install -g mcporter
 
 ### 2. 注册 Exa MCP
 ```bash
-mcporter config add exa https://mcp.exa.ai/mcp
+mcporter config add exa https://mcp.exa.ai/mcp --scope home
 ```
 
 ### 3. 验证
