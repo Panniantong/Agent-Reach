@@ -79,7 +79,7 @@ docker run -d \
   -p 18060:18060 \
   xpzouying/xiaohongshu-mcp
 
-mcporter config add xiaohongshu http://localhost:18060/mcp
+mcporter config add xiaohongshu http://localhost:18060/mcp --scope home
 ```
 
 xhs-cli 是当前推荐方案，不需要 Docker，安装更简单。

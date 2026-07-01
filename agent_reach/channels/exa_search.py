@@ -25,7 +25,7 @@ class ExaSearchChannel(Channel):
             return "off", (
                 "需要 mcporter + Exa MCP。安装：\n"
                 "  npm install -g mcporter\n"
-                "  mcporter config add exa https://mcp.exa.ai/mcp"
+                "  mcporter config add exa https://mcp.exa.ai/mcp --scope home"
             )
         if probe.status == "broken":
             return "error", _MCPORTER_BROKEN_HINT
@@ -36,5 +36,5 @@ class ExaSearchChannel(Channel):
             return "ok", "全网语义搜索可用（免费，无需 API Key）"
         return "off", (
             "mcporter 已装但 Exa 未配置。运行：\n"
-            "  mcporter config add exa https://mcp.exa.ai/mcp"
+            "  mcporter config add exa https://mcp.exa.ai/mcp --scope home"
         )

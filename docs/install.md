@@ -195,7 +195,7 @@ agent-reach install --channels opencli
 > 1. 从 https://github.com/xpzouying/xiaohongshu-mcp/releases 下载对应平台 binary 到 `~/.agent-reach/tools/`
 > 2. 启动服务（首次运行会自动下载约 150MB 无头浏览器，耐心等完成）
 > 3. 让用户扫码登录（agent 调 `get_login_qrcode` 工具取二维码）
-> 4. 接入：`mcporter config add xiaohongshu http://localhost:18060/mcp`
+> 4. 接入：`mcporter config add xiaohongshu http://localhost:18060/mcp --scope home`
 > 5. 调用时务必带 `--timeout 120000`
 >
 > **存量用户（xhs-cli）：** 已装好的 xhs-cli 继续作为备选后端工作（上游 2026-03 起停更，不推荐新装）。`xhs login` 自动提取浏览器 Cookie；失败时用 Cookie-Editor 导出后：
@@ -297,7 +297,7 @@ pip install linkedin-scraper-mcp
 > **登录后启动 MCP 服务：**
 > ```bash
 > linkedin-scraper-mcp --transport streamable-http --port 8001
-> mcporter config add linkedin http://localhost:8001/mcp
+> mcporter config add linkedin http://localhost:8001/mcp --scope home
 > ```
 >
 > 详见 https://github.com/stickerdaniel/linkedin-mcp-server

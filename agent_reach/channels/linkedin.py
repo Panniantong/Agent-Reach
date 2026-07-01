@@ -26,7 +26,7 @@ class LinkedInChannel(Channel):
             return "off", (
                 "基本内容可通过 Jina Reader 读取。完整功能需要：\n"
                 "  pip install linkedin-scraper-mcp\n"
-                "  mcporter config add linkedin http://localhost:3000/mcp\n"
+                "  mcporter config add linkedin http://localhost:3000/mcp --scope home\n"
                 "  详见 https://github.com/stickerdaniel/linkedin-mcp-server"
             )
         if probe.status == "broken":
@@ -39,5 +39,5 @@ class LinkedInChannel(Channel):
         return "off", (
             "mcporter 已装但 LinkedIn MCP 未配置。运行：\n"
             "  pip install linkedin-scraper-mcp\n"
-            "  mcporter config add linkedin http://localhost:3000/mcp"
+            "  mcporter config add linkedin http://localhost:3000/mcp --scope home"
         )
