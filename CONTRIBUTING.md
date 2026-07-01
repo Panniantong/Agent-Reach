@@ -36,16 +36,24 @@ We use the following tools to maintain code quality:
 Run all checks before submitting a PR:
 
 ```bash
-# Linting
+# Linting and import sorting
 ruff check agent_reach tests
 ruff format agent_reach tests
 
 # Type checking
 mypy agent_reach
 
-# Tests
-pytest
+# Unit tests
+pytest tests/
+
+# Clean-environment CLI smoke test
+bash test.sh
+
+# Package build
+python -m build
 ```
+
+`test.sh` intentionally verifies the supported installer/doctor/version/API contract. Agent Reach is not a `read`/`search` wrapper CLI; after installation, agents should call the upstream tools directly as documented in the generated skill.
 
 ## Adding New Channels
 

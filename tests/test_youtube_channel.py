@@ -13,9 +13,9 @@ reddit (#364), xueqiu (#365) and v2ex (#366).
 
 from unittest.mock import Mock, patch
 
-from agent_reach.probe import ProbeResult
 from agent_reach.channels import youtube as yt
 from agent_reach.channels.youtube import YouTubeChannel, _has_js_runtime_config
+from agent_reach.probe import ProbeResult
 
 
 def _which(*present):

@@ -8,10 +8,10 @@ Usage:
     agent-reach configure --from-browser chrome
 """
 
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 # Platform cookie specs: (platform_name, domain_pattern, needed_cookies)
-PLATFORM_SPECS = [
+PLATFORM_SPECS: List[Dict[str, Any]] = [
     {
         "name": "Twitter/X",
         "domains": [".x.com", ".twitter.com"],

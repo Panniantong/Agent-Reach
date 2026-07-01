@@ -2,6 +2,7 @@
 """Web — any URL via Jina Reader. Always available."""
 
 import urllib.request
+
 from .base import Channel
 
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"

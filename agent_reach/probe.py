@@ -73,6 +73,7 @@ def probe_command(
         # failures (timeout/error) are worth a second attempt
         if last.status in ("missing", "broken"):
             return last
+    assert last is not None
     return last
 
 
