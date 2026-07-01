@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for agent_reach.transcribe — provider routing, fallback, and errors."""
 
+from pathlib import Path
 from typing import List
 
 import pytest
@@ -223,6 +224,144 @@ class TestOrchestrator:
     def test_invalid_provider_string(self, fake_config, chunk_file):
         with pytest.raises(tr.TranscribeError, match="unknown provider"):
             tr.transcribe(str(chunk_file), provider="azure", config=fake_config)
+
+    def test_auto_temp_dir_is_cleaned_up(self, monkeypatch, fake_config, tmp_path):
+        fake_config.set("groq_api_key", "gsk_test")
+        created_work_dirs = []
+
+        class FakeTemporaryDirectory:
+            def __init__(self, prefix=None):
+                self.path = tmp_path / "auto-work"
+
+            def __enter__(self):
+                self.path.mkdir()
+                created_work_dirs.append(self.path)
+                return str(self.path)
+
+            def __exit__(self, *_):
+                for child in self.path.iterdir():
+                    child.unlink()
+                self.path.rmdir()
+
+        def fake_download(source, out_dir):
+            assert Path(out_dir) == tmp_path / "auto-work"
+            audio = Path(out_dir) / "source.m4a"
+            audio.write_bytes(b"audio")
+            return audio
+
+        def fake_compress(src, out_dir):
+            compressed = Path(out_dir) / "compressed.m4a"
+            compressed.write_bytes(b"x" * 1024)
+            return compressed
+
+        monkeypatch.setattr(tr.tempfile, "TemporaryDirectory", FakeTemporaryDirectory)
+        monkeypatch.setattr(tr, "download_audio", fake_download)
+        monkeypatch.setattr(tr, "compress_audio", fake_compress)
+        monkeypatch.setattr(
+            tr.requests,
+            "post",
+            lambda *a, **k: FakeResponse(200, "transcript text"),
+        )
+
+        text = tr.transcribe("https://example.com/video", config=fake_config)
+
+        assert text == "transcript text"
+        assert created_work_dirs
+        assert not created_work_dirs[0].exists()
+
+    def test_explicit_out_dir_is_preserved(self, monkeypatch, fake_config, tmp_path):
+        fake_config.set("groq_api_key", "gsk_test")
+        work = tmp_path / "caller-owned"
+
+        def fake_download(source, out_dir):
+            audio = Path(out_dir) / "source.m4a"
+            audio.write_bytes(b"audio")
+            return audio
+
+        def fake_compress(src, out_dir):
+            compressed = Path(out_dir) / "compressed.m4a"
+            compressed.write_bytes(b"x" * 1024)
+            return compressed
+
+        monkeypatch.setattr(tr, "download_audio", fake_download)
+        monkeypatch.setattr(tr, "compress_audio", fake_compress)
+        monkeypatch.setattr(
+            tr.requests,
+            "post",
+            lambda *a, **k: FakeResponse(200, "transcript text"),
+        )
+
+        tr.transcribe("https://example.com/video", out_dir=work, config=fake_config)
+
+        assert work.exists()
+        assert (work / "compressed.m4a").exists()
+
+
+class TestDownloadAudioSafety:
+    def test_rejects_private_network_url_before_yt_dlp(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(tr, "_require", lambda binary: None)
+
+        def should_not_run(*args, **kwargs):
+            raise AssertionError("yt-dlp must not run for private/internal URLs")
+
+        monkeypatch.setattr(tr, "_run", should_not_run)
+
+        with pytest.raises(tr.TranscribeError, match="private|internal|SSRF"):
+            tr.download_audio("http://169.254.169.254/latest/meta-data/", tmp_path)
+
+    def test_passes_public_url_after_end_of_options_marker(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(tr, "_require", lambda binary: None)
+        captured = {}
+
+        def fake_run(cmd, timeout=600):
+            captured["cmd"] = cmd
+            (tmp_path / "source.m4a").write_bytes(b"audio")
+
+        monkeypatch.setattr(tr, "_run", fake_run)
+
+        audio = tr.download_audio("https://example.com/watch?v=123", tmp_path)
+
+        assert audio == tmp_path / "source.m4a"
+        assert "--" in captured["cmd"]
+        marker_index = captured["cmd"].index("--")
+        assert captured["cmd"][marker_index + 1] == "https://example.com/watch?v=123"
+
+    def test_preserves_bare_public_urls_supported_by_yt_dlp(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(tr, "_require", lambda binary: None)
+        captured = {}
+
+        def fake_run(cmd, timeout=600):
+            captured["cmd"] = cmd
+            (tmp_path / "source.m4a").write_bytes(b"audio")
+
+        monkeypatch.setattr(tr, "_run", fake_run)
+
+        tr.download_audio("youtu.be/abc123", tmp_path)
+
+        assert captured["cmd"][-1] == "youtu.be/abc123"
+
+    def test_does_not_dns_resolve_public_hostnames(self, monkeypatch, tmp_path):
+        import socket
+
+        monkeypatch.setattr(tr, "_require", lambda binary: None)
+        monkeypatch.setattr(
+            socket,
+            "getaddrinfo",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                AssertionError("public hostnames should not be DNS-resolved here")
+            ),
+        )
+        captured = {}
+
+        def fake_run(cmd, timeout=600):
+            captured["cmd"] = cmd
+            (tmp_path / "source.m4a").write_bytes(b"audio")
+
+        monkeypatch.setattr(tr, "_run", fake_run)
+
+        tr.download_audio("https://youtu.be/abc123", tmp_path)
+
+        assert captured["cmd"][-1] == "https://youtu.be/abc123"
 
 
 # --- YouTubeChannel integration --------------------------------------- #

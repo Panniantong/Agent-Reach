@@ -1,10 +1,19 @@
-"""Cross-platform path and remediation helpers for yt-dlp."""
+"""Cross-platform path and remediation helpers."""
 
 from __future__ import annotations
 
 import os
 import sys
 from pathlib import Path
+
+
+def make_private_dir(path: str | Path) -> Path:
+    """Create a directory restricted to the current user where supported."""
+    target = Path(path)
+    target.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if sys.platform != "win32":
+        os.chmod(target, 0o700)
+    return target
 
 
 def get_ytdlp_config_dir() -> Path:

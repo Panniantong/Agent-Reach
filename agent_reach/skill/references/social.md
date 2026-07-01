@@ -1,6 +1,6 @@
 # 社交媒体 & 社区
 
-小红书、Twitter/X、B站、V2EX、Reddit。
+小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram。
 
 ## 小红书 / XiaoHongShu（多后端）
 
@@ -230,3 +230,46 @@ rdt all --limit 10              # 浏览 /r/all
 ### 高级选项：官方 API + PRAW（仅限已有凭证的用户）
 
 2025-11 前注册过 Reddit script app（持有 client_id/client_secret）的用户可以用 PRAW 走官方 API（100 QPM 免费）。新申请需人工审批且个人项目基本不批，**不要推荐新用户走这条路**。
+
+## Facebook（OpenCLI，必须登录态）
+
+Facebook 走 OpenCLI，复用用户 Chrome 里的 facebook.com 登录态。先跑 `agent-reach doctor --json` 看 facebook 的 `active_backend`，正常应为 `OpenCLI`。不要推荐 Jina/Exa/Graph API 作为默认路径。
+
+```bash
+# 搜索用户 / 主页 / 帖子
+opencli facebook search "query" -f yaml
+
+# 用户或主页信息
+opencli facebook profile zuck -f yaml
+
+# 当前账号 News Feed
+opencli facebook feed --limit 10 -f yaml
+
+# 当前账号可见的群组列表/最近动态
+opencli facebook groups --limit 20 -f yaml
+```
+
+> 要求 Chrome 打开且装了 OpenCLI 扩展，并已登录 facebook.com。Facebook Groups 当前只承诺读取当前账号可见的群组列表/最近动态，不承诺任意群帖子和评论 API。
+
+## Instagram（OpenCLI，必须登录态）
+
+Instagram 走 OpenCLI，复用用户 Chrome 里的 instagram.com 登录态。先跑 `agent-reach doctor --json` 看 instagram 的 `active_backend`，正常应为 `OpenCLI`。不要默认恢复 instaloader；历史上 cookies/401/429 不稳定。
+
+```bash
+# 搜索用户（不是全站帖子关键词搜索）
+opencli instagram search "query" -f yaml
+
+# 用户 Profile
+opencli instagram profile nasa -f yaml
+
+# 用户最近帖子
+opencli instagram user nasa --limit 12 -f yaml
+
+# Explore / Discover
+opencli instagram explore --limit 20 -f yaml
+
+# 当前账号收藏
+opencli instagram saved --limit 20 -f yaml
+```
+
+> 要求 Chrome 打开且装了 OpenCLI 扩展，并已登录 instagram.com。`instagram search` 是用户搜索；读帖子需要先确定 username，再用 `instagram user USERNAME`。若出现 429 / login required，先让用户在 Chrome 里重新登录并降低频率。

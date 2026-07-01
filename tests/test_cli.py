@@ -3,6 +3,7 @@
 
 import shutil
 import subprocess
+from argparse import Namespace
 from unittest.mock import patch
 
 import pytest
@@ -10,6 +11,7 @@ import requests
 
 import agent_reach.cli as cli
 from agent_reach.cli import main
+from agent_reach.config import Config
 
 
 class TestCLI:
@@ -33,6 +35,31 @@ class TestCLI:
         captured = capsys.readouterr()
         assert "Agent Reach" in captured.out
         assert "✅" in captured.out
+
+    def test_doctor_preserves_existing_skill_install(self, monkeypatch, tmp_path, capsys):
+        skill_dir = tmp_path / ".agents" / "skills" / "agent-reach"
+        skill_dir.mkdir(parents=True)
+        skill_file = skill_dir / "SKILL.md"
+        custom_content = "# custom Agent Reach skill\n"
+        skill_file.write_text(custom_content, encoding="utf-8")
+
+        monkeypatch.setattr(
+            cli.os.path,
+            "expanduser",
+            lambda p: p.replace("~", str(tmp_path)),
+        )
+        config_dir = tmp_path / ".agent-reach"
+        monkeypatch.setattr(Config, "CONFIG_DIR", config_dir)
+        monkeypatch.setattr(Config, "CONFIG_FILE", config_dir / "config.yaml")
+        monkeypatch.setattr("agent_reach.doctor.check_all", lambda config: {})
+        monkeypatch.setattr("agent_reach.doctor.format_report", lambda results: "report")
+
+        cli._cmd_doctor(Namespace(json=False))
+
+        assert skill_file.read_text(encoding="utf-8") == custom_content
+        out = capsys.readouterr().out
+        assert "preserving existing files" in out
+        assert f"Skill installed for Agent: {skill_dir}" not in out
 
     def test_transcribe_command_prints_text(self, capsys):
         with patch("agent_reach.transcribe.transcribe", return_value="hello transcript"):
@@ -101,6 +128,60 @@ class TestCLI:
         monkeypatch.setattr(cli, "_detect_environment", lambda: "server")
         cli._install_reddit_deps()
         assert calls == ["rdt"]
+
+    def test_install_facebook_instagram_routes_to_opencli_once(self, monkeypatch, capsys):
+        calls = []
+
+        monkeypatch.setattr(cli, "_detect_environment", lambda: "local")
+        monkeypatch.setattr(cli, "_install_system_deps", lambda: None)
+        monkeypatch.setattr(cli, "_install_mcporter", lambda: None)
+        monkeypatch.setattr(cli, "_install_opencli_deps", lambda: calls.append("opencli"))
+        monkeypatch.setattr(cli, "_install_skill", lambda: None)
+        monkeypatch.setattr(
+            "agent_reach.doctor.check_all",
+            lambda config: {
+                "facebook": {
+                    "status": "ok",
+                    "name": "Facebook",
+                    "message": "ok",
+                    "tier": 1,
+                    "backends": ["OpenCLI"],
+                    "active_backend": "OpenCLI",
+                }
+            },
+        )
+        monkeypatch.setattr("agent_reach.doctor.format_report", lambda results: "report")
+
+        cli._cmd_install(
+            Namespace(
+                env="auto",
+                proxy="",
+                safe=False,
+                dry_run=False,
+                channels="facebook,instagram,opencli",
+            )
+        )
+
+        assert calls == ["opencli"]
+        assert "Installation complete" in capsys.readouterr().out
+
+    def test_install_server_dry_run_skips_opencli_only_channels(self, monkeypatch, capsys):
+        monkeypatch.setattr(cli, "_install_system_deps_dryrun", lambda: None)
+
+        cli._cmd_install(
+            Namespace(
+                env="server",
+                proxy="",
+                safe=False,
+                dry_run=True,
+                channels="facebook,instagram,opencli,bilibili",
+            )
+        )
+
+        out = capsys.readouterr().out
+        assert "服务器环境跳过：facebook, instagram, opencli" in out
+        assert "[dry-run] Would install optional channels: bilibili" in out
+        assert "facebook, instagram, opencli, bilibili" not in out
 
 
 class TestCheckUpdateRetry:

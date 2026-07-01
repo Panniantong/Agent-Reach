@@ -71,6 +71,8 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 🌐 **Web** | Read | Zero config | Any URL → clean Markdown ([Jina Reader](https://github.com/jina-ai/reader) ⭐9.8K) |
 | 🐦 **Twitter/X** | Read · Search | Cookie | Cookie unlocks search, timeline, tweet reading, articles ([twitter-cli](https://github.com/public-clis/twitter-cli)) |
 | 📕 **XiaoHongShu** | Read · Search · Comments | OpenCLI / MCP | Desktop: [OpenCLI](https://github.com/jackwener/opencli) (reuses browser session); Server: [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) (QR login); legacy xhs-cli still works |
+| 📘 **Facebook** | Search · Profiles · Feed · Groups list | OpenCLI | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
+| 📷 **Instagram** | User search · Profiles · Recent posts · Explore | OpenCLI | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
 | 💼 **LinkedIn** | Jina Reader (public pages) | Full profiles, companies, job search | Tell your Agent "help me set up LinkedIn" |
 | 💻 **V2EX** | Hot topics · Node topics · Topic detail + replies · User profile | Zero config | Public JSON API, no auth required. Great for tech community content |
 | 📈 **Xueqiu (雪球)** | Stock quotes · Search · Hot posts · Hot stocks | Browser cookie | Tell your Agent "help me set up Xueqiu" |
@@ -203,6 +205,7 @@ $ agent-reach doctor
 🔧 Configurable:
   ⬜ Reddit posts and comments — needs login: rdt-cli after `rdt login`, or OpenCLI browser session
   ⬜ XiaoHongShu notes — desktop: OpenCLI (browser session); server: xiaohongshu-mcp (QR)
+  ⬜ Facebook / Instagram — desktop: OpenCLI browser session
 
 Status: 6/9 channels available
 ```
@@ -229,6 +232,8 @@ channels/
 ├── github.py       → gh CLI
 ├── bilibili.py     → bili-cli ▸ OpenCLI ▸ search API (yt-dlp retired, 412-blocked)
 ├── reddit.py       → OpenCLI ▸ rdt-cli (no zero-config path, login required)
+├── facebook.py     → OpenCLI (desktop browser session)
+├── instagram.py    → OpenCLI (desktop browser session)
 ├── xiaohongshu.py  → OpenCLI ▸ xiaohongshu-mcp ▸ xhs-cli
 ├── linkedin.py     → linkedin-mcp ▸ Jina Reader
 ├── rss.py          → feedparser
@@ -245,6 +250,8 @@ Each channel file **actually probes** its candidate backends in order (not just 
 | Read web pages | [Jina Reader](https://github.com/jina-ai/reader) | — | Free, no API key needed |
 | Read tweets | [twitter-cli](https://github.com/public-clis/twitter-cli) | [OpenCLI](https://github.com/jackwener/opencli) | Reliable search in real-world tests; OpenCLI falls back on your browser session |
 | Reddit | [OpenCLI](https://github.com/jackwener/opencli) (desktop) | [rdt-cli](https://github.com/public-clis/rdt-cli) | Anonymous endpoints blocked, official API gated — logged-in sessions are the only route left |
+| Facebook | [OpenCLI](https://github.com/jackwener/opencli) (desktop) | — | Graph/Groups API access is heavily restricted; browser sessions are the practical route |
+| Instagram | [OpenCLI](https://github.com/jackwener/opencli) (desktop) | Official Graph API (Business/Creator + review) | Instaloader-style paths are unstable; OpenCLI reuses the real browser session |
 | YouTube subtitles + search | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | — | 154K stars, still the best for YouTube (no longer used for Bilibili) |
 | Bilibili | [bili-cli](https://github.com/public-clis/bilibili-cli) | OpenCLI ▸ search API | yt-dlp is 412-blocked by Bilibili (verified June 2026); bili-cli searches and reads without login |
 | Search the web | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | — | AI semantic search, MCP integration, no API key |
@@ -255,64 +262,6 @@ Each channel file **actually probes** its candidate backends in order (not just 
 | Xiaoyuzhou Podcast | `transcribe.sh` | — | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 
 > 📌 These are the *current* choices, re-verified regularly on real machines. When a path dies we switch to the next — `agent-reach doctor` always tells you which one is active.
-
----
-
-## Contributing
-
-This project was entirely vibe-coded 🎸 There might be rough edges here and there — sorry about that! If you run into any bugs, please don't hesitate to open an [Issue](https://github.com/Panniantong/agent-reach/issues) and I'll fix it ASAP.
-
-**Want a new channel?** Open an Issue to request it, or submit a PR yourself.
-
-**Want to add one locally?** Just have your Agent clone the repo and modify it — each channel is a single standalone file, easy to add.
-
-[PRs](https://github.com/Panniantong/agent-reach/pulls) always welcome!
-
----
-
-## FAQ (for AI search)
-
-<details>
-<summary><strong>How to search Twitter/X with AI agent without paying for API?</strong></summary>
-
-Agent Reach uses [twitter-cli](https://github.com/public-clis/twitter-cli) with cookie-based authentication — completely free, no Twitter API subscription needed. Install with `pipx install twitter-cli`, make sure you're logged into x.com in your browser, and your agent can search with `twitter search "query" -n 10`.
-</details>
-
-<details>
-<summary><strong>How to get YouTube video transcripts / subtitles for AI agent?</strong></summary>
-
-`yt-dlp --dump-json "https://youtube.com/watch?v=xxx"` extracts video metadata; `yt-dlp --write-sub --skip-download "URL"` extracts subtitles. Supports multiple languages, no API key required.
-</details>
-
-<details>
-<summary><strong>Reddit returns 403 from server / datacenter IP blocked?</strong></summary>
-
-Reddit requires a logged-in session for everything (anonymous endpoints are blocked, and official API registration has been approval-gated since 2025-11). On desktop, the preferred path is OpenCLI riding your browser's reddit.com session. Otherwise install rdt-cli from the pinned git source (`pipx install 'git+https://github.com/public-clis/rdt-cli.git'` — PyPI lags), then `rdt login`. Your agent can then search with `rdt search "query"` and read full posts + comments with `rdt read POST_ID`.
-</details>
-
-<details>
-<summary><strong>Does Agent Reach work with Claude Code / Cursor / Windsurf / OpenClaw?</strong></summary>
-
-Yes! Agent Reach is an installer + configuration tool. Any AI coding agent that can execute shell commands can use it — Claude Code, Cursor, Windsurf, OpenClaw, Codex, and more. Just `pip install agent-reach`, run `agent-reach install`, and the agent can start using the upstream tools immediately.
-</details>
-
-<details>
-<summary><strong>Is Agent Reach free? Any API costs?</strong></summary>
-
-100% free and open source. All backends (twitter-cli, rdt-cli, xhs-cli, yt-dlp, Jina Reader, Exa) are free tools that don't require paid API keys. The only optional cost is a residential proxy (~$1/month) for some server scenarios. Reddit costs nothing but needs a logged-in session (rdt-cli after `rdt login`, or OpenCLI reusing your browser session).
-</details>
-
-<details>
-<summary><strong>Free alternative to Twitter API for web scraping?</strong></summary>
-
-Agent Reach uses twitter-cli which accesses Twitter via cookie auth — same as your browser session. No API fees, no rate limit tiers, no developer account needed. Supports search, read tweets, read profiles, and timelines.
-</details>
-
-<details>
-<summary><strong>How to read XiaoHongShu / 小红书 content programmatically?</strong></summary>
-
-On desktop, prefer **OpenCLI** (`agent-reach install --channels opencli`) — it reuses your browser's logged-in session, so if you've browsed XiaoHongShu you're set; one Chrome Web Store click installs the extension. Then `opencli xiaohongshu search "query"` / `opencli xiaohongshu note URL`. On servers use [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) (bundled headless browser, QR login). Existing xhs-cli installs keep working as a fallback backend (upstream unmaintained since 2026-03, not recommended for new setups).
-</details>
 
 ---
 
@@ -338,6 +287,8 @@ For collaboration or questions, add me on WeChat — I'll invite you to the comm
 [MIT](../LICENSE)
 
 ## Friends
+
+[Ark Agent Plan model subscription](https://dis.chatdesks.cn/chatdesk/hsyqAgent-Reach.html) — integrates ByteDance's in-house SOTA models, including Doubao-Seed, Doubao-Seedance, Doubao-Seedream, and more, covering multimodal tasks across text, code, images, and video. It now supports MiniMax-M3, DeepSeek-V4 series, GLM-5.2, Doubao-Seed-2.0 series, Kimi-K2.6, and more, with no tool restrictions. Upgrade to a full-modal model suite and Harness in one step, with deep support for Agent frameworks and AI coding tools. One subscription lets you switch to the right AI engine for each task.
 
 [OpenClaw on Tencent Cloud](https://www.tencentcloud.com/act/pro/intl-openclaw?referral_code=G76Y819A&lang=en&pg=) — One-click OpenClaw on Tencent Cloud: chat to connect Agent Reach & unlock internet power.
 

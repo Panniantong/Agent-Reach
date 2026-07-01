@@ -75,7 +75,7 @@ def main():
     p_install.add_argument("--channels", default="",
                            help="Comma-separated optional channels to install "
                                 "(twitter,xiaoyuzhou,xueqiu,xiaohongshu,"
-                                "reddit,bilibili,linkedin,all)")
+                                "reddit,facebook,instagram,bilibili,linkedin,all)")
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
@@ -200,11 +200,14 @@ def _cmd_install(args):
         "xiaoyuzhou":  _install_xiaoyuzhou_deps,
         "xiaohongshu": _install_xhs_deps,
         "reddit":      _install_reddit_deps,
+        "facebook":    _install_opencli_deps,
+        "instagram":   _install_opencli_deps,
         "bilibili":    _install_bili_deps,
         "opencli":     _install_opencli_deps,  # cross-channel backend, desktop only
         # xueqiu: cookie-only, no install step
         # linkedin: manual setup, no auto-install
     }
+    OPENCLI_ONLY_CHANNELS = {"opencli", "facebook", "instagram"}
     COOKIE_CHANNELS = {"twitter", "xueqiu", "bilibili"}
 
     requested_channels = set()
@@ -224,6 +227,12 @@ def _cmd_install(args):
         print(f"Environment: Server/VPS (auto-detected)")
     else:
         print(f"Environment: Local computer (auto-detected)")
+
+    server_skipped_opencli_channels = set()
+    if env == "server" and requested_channels:
+        # OpenCLI rides a real desktop Chrome session — useless headless
+        server_skipped_opencli_channels = requested_channels & OPENCLI_ONLY_CHANNELS
+        requested_channels -= server_skipped_opencli_channels
 
     # Apply explicit flags
     if args.proxy:
@@ -252,18 +261,21 @@ def _cmd_install(args):
     else:
         _install_mcporter()
 
+    if server_skipped_opencli_channels:
+        print()
+        print("  -- OpenCLI 需要桌面环境 + Chrome，服务器环境跳过："
+              f"{', '.join(sorted(server_skipped_opencli_channels))}")
+
     # ── Install optional channels (only if --channels specified) ──
     if requested_channels and not dry_run and not safe_mode:
         print()
         print("Installing optional channels...")
-        if env == "server" and "opencli" in requested_channels:
-            # OpenCLI rides a real desktop Chrome session — useless headless
-            requested_channels.discard("opencli")
-            print("  -- OpenCLI 需要桌面环境 + Chrome，服务器环境跳过")
+        ran_installers = set()
         for ch_name in sorted(requested_channels):
             installer = CHANNEL_INSTALLERS.get(ch_name)
-            if installer:
+            if installer and installer not in ran_installers:
                 installer()
+                ran_installers.add(installer)
 
     if requested_channels and dry_run:
         print()
@@ -328,7 +340,7 @@ def _cmd_install(args):
             # First install — hint about optional channels
             print()
             print("More channels available! Use --channels to install:")
-            print("   agent-reach install --channels=twitter,xiaohongshu,reddit,...")
+            print("   agent-reach install --channels=twitter,xiaohongshu,reddit,facebook,instagram,...")
             print("   agent-reach install --channels=all  (install everything)")
 
         # Star reminder
@@ -341,7 +353,7 @@ def _cmd_install(args):
         print("Dry run complete. No changes were made.")
 
 
-def _install_skill():
+def _install_skill(force: bool = True):
     """Install Agent Reach as an agent skill (OpenClaw / Claude Code / .agents)."""
     import importlib.resources
     import os
@@ -369,9 +381,12 @@ def _install_skill():
         except FileNotFoundError:
             return skill_pkg.joinpath("SKILL.md").read_text(encoding="utf-8")
 
-    def _copy_skill_dir(target: str) -> bool:
+    def _copy_skill_dir(target: str) -> str | None:
         """Copy entire skill directory (locale-specific SKILL.md + references/)."""
         try:
+            if not force and os.path.exists(os.path.join(target, "SKILL.md")):
+                return "preserved"
+
             # Clear existing installation. A symlinked skill dir (dotfiles
             # setups) breaks shutil.rmtree — unlink the link itself instead.
             if os.path.islink(target):
@@ -405,10 +420,10 @@ def _install_skill():
                     with open(os.path.join(refs_target, name), "w", encoding="utf-8") as f:
                         f.write(content)
 
-            return True
+            return "installed"
         except Exception as e:
             print(f"  Warning: Could not install skill: {e}")
-            return False
+            return None
 
     # Determine skill install path (priority: .agents > openclaw > claude)
     skill_dirs = [
@@ -426,16 +441,23 @@ def _install_skill():
     for skill_dir in skill_dirs:
         if os.path.isdir(skill_dir):
             target = os.path.join(skill_dir, "agent-reach")
-            if _copy_skill_dir(target):
+            status = _copy_skill_dir(target)
+            if status:
                 platform_name = "Agent" if ".agents" in skill_dir else "OpenClaw" if "openclaw" in skill_dir else "Claude Code"
-                print(f"Skill installed for {platform_name}: {target}")
+                if status == "preserved":
+                    print(f"Skill already installed for {platform_name}, preserving existing files: {target}")
+                else:
+                    print(f"Skill installed for {platform_name}: {target}")
                 installed = True
 
     if not installed:
         # No known skill directory found — create for .agents by default
         target = os.path.expanduser("~/.agents/skills/agent-reach")
         os.makedirs(os.path.dirname(target), exist_ok=True)
-        if _copy_skill_dir(target):
+        status = _copy_skill_dir(target)
+        if status == "preserved":
+            print(f"Skill already installed, preserving existing files: {target}")
+        elif status == "installed":
             print(f"Skill installed: {target}")
         else:
             print("  -- Could not install agent skill (optional)")
@@ -1240,14 +1262,21 @@ def _configure_xhs_cookies(value):
         # Create with 0o600 atomically so the file is never world-readable
         # between open() and a follow-up chmod() (same pattern Config.save()
         # uses in config.py).
+        import os
         import stat
-        cookie_path = os.path.expanduser("~/.agent-reach/xhs-cookies.json")
+
+        from agent_reach.utils.paths import make_private_dir
+
+        cookie_dir = make_private_dir(os.path.expanduser("~/.agent-reach"))
+        cookie_path = cookie_dir / "xhs-cookies.json"
         try:
             fd = os.open(
-                cookie_path,
+                str(cookie_path),
                 os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
                 stat.S_IRUSR | stat.S_IWUSR,  # 0o600
             )
+            if os.name != "nt":
+                os.chmod(cookie_path, stat.S_IRUSR | stat.S_IWUSR)
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(cookies_json)
         except OSError:
@@ -1464,7 +1493,7 @@ def _cmd_doctor(args=None):
     rprint(format_report(results))
 
     # Auto-install skill if not already present (fixes #154)
-    _install_skill()
+    _install_skill(force=False)
 
 
 def _cmd_setup():

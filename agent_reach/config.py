@@ -11,6 +11,8 @@ from typing import Any, Optional
 
 import yaml
 
+from agent_reach.utils.paths import make_private_dir
+
 
 class Config:
     """Manages Agent Reach configuration."""
@@ -36,7 +38,7 @@ class Config:
 
     def _ensure_dir(self):
         """Create config directory if it doesn't exist."""
-        self.config_dir.mkdir(parents=True, exist_ok=True)
+        make_private_dir(self.config_dir)
 
     def load(self):
         """Load config from YAML file."""
@@ -58,6 +60,8 @@ class Config:
                 os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
                 stat.S_IRUSR | stat.S_IWUSR,  # 0o600
             )
+            if os.name != "nt":
+                os.chmod(self.config_path, stat.S_IRUSR | stat.S_IWUSR)
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 yaml.dump(self.data, f, default_flow_style=False, allow_unicode=True)
         except OSError:
@@ -65,6 +69,8 @@ class Config:
             # are not fully supported.
             with open(self.config_path, "w", encoding="utf-8") as f:
                 yaml.dump(self.data, f, default_flow_style=False, allow_unicode=True)
+            if os.name != "nt":
+                os.chmod(self.config_path, 0o600)
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a config value. Also checks environment variables (uppercase)."""
@@ -101,9 +107,23 @@ class Config:
 
     def to_dict(self) -> dict:
         """Return config as dict (masks sensitive values)."""
+        sensitive_markers = (
+            "key",
+            "token",
+            "password",
+            "proxy",
+            "cookie",
+            "secret",
+            "session",
+            "sessdata",
+            "csrf",
+            "auth",
+            "cred",
+            "ct0",
+        )
         masked = {}
         for k, v in self.data.items():
-            if any(s in k.lower() for s in ("key", "token", "password", "proxy")):
+            if any(s in k.lower() for s in sensitive_markers):
                 masked[k] = f"{str(v)[:8]}..." if v else None
             else:
                 masked[k] = v

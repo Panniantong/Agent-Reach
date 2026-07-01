@@ -6,7 +6,10 @@ import shutil
 import subprocess
 from urllib.error import URLError
 
+from agent_reach.backends import OpenCLIStatus
 from agent_reach.channels import get_all_channels, get_channel
+from agent_reach.channels.facebook import FacebookChannel
+from agent_reach.channels.instagram import InstagramChannel
 from agent_reach.channels.v2ex import V2EXChannel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
 from agent_reach.channels.xueqiu import XueqiuChannel
@@ -27,7 +30,68 @@ class TestChannelRegistry:
         assert "web" in names
         assert "github" in names
         assert "twitter" in names
+        assert "facebook" in names
+        assert "instagram" in names
         assert "v2ex" in names
+
+
+class TestOpenCLISiteChannels:
+    def test_facebook_can_handle_common_urls(self):
+        ch = FacebookChannel()
+        assert ch.can_handle("https://www.facebook.com/zuck")
+        assert ch.can_handle("https://m.facebook.com/groups/123")
+        assert ch.can_handle("https://fb.com/some-page")
+        assert ch.can_handle("https://fb.watch/abc123")
+        assert not ch.can_handle("https://instagram.com/openai")
+
+    def test_instagram_can_handle_common_urls(self):
+        ch = InstagramChannel()
+        assert ch.can_handle("https://www.instagram.com/openai/")
+        assert ch.can_handle("https://instagram.com/p/abc123/")
+        assert ch.can_handle("https://instagr.am/p/abc123/")
+        assert not ch.can_handle("https://facebook.com/openai")
+
+    def test_opencli_ready_reports_ok(self, monkeypatch):
+        monkeypatch.setattr(
+            "agent_reach.backends.opencli_status",
+            lambda: OpenCLIStatus(
+                installed=True,
+                extension_connected=True,
+                version="1.8.3",
+            ),
+        )
+        ch = FacebookChannel()
+        status, msg = ch.check()
+        assert status == "ok"
+        assert ch.active_backend == "OpenCLI"
+        assert "opencli facebook search/profile/feed/groups -f yaml" in msg
+        assert "facebook.com" in msg
+
+    def test_opencli_missing_reports_off(self, monkeypatch):
+        monkeypatch.setattr(
+            "agent_reach.backends.opencli_status",
+            lambda: OpenCLIStatus(installed=False),
+        )
+        ch = InstagramChannel()
+        status, msg = ch.check()
+        assert status == "off"
+        assert ch.active_backend is None
+        assert "agent-reach install --channels opencli" in msg
+        assert "instagram.com" in msg
+
+    def test_opencli_installed_without_extension_reports_warn(self, monkeypatch):
+        monkeypatch.setattr(
+            "agent_reach.backends.opencli_status",
+            lambda: OpenCLIStatus(
+                installed=True,
+                hint="OpenCLI 已安装，但 Chrome 扩展未安装。",
+            ),
+        )
+        ch = InstagramChannel()
+        status, msg = ch.check()
+        assert status == "warn"
+        assert ch.active_backend == "OpenCLI"
+        assert "Chrome 扩展" in msg
 
 
 class TestV2EXChannel:
@@ -620,6 +684,35 @@ class TestXueqiuChannel:
         assert xq_mod._cookies_initialized is True
         cookie_names = {c.name for c in xq_mod._cookie_jar}
         assert "xq_a_token" in cookie_names
+
+    def test_load_cookies_from_browser_rookiepy_path(self, monkeypatch):
+        import sys
+        import types
+
+        import agent_reach.channels.xueqiu as xueqiu_mod
+
+        xueqiu_mod._cookie_jar.clear()
+        fake_rookiepy = types.SimpleNamespace(
+            chrome=lambda domains=None: [
+                {
+                    "name": "xq_a_token",
+                    "value": "TOKEN_FROM_BROWSER",
+                    "domain": ".xueqiu.com",
+                },
+                {
+                    "name": "xq_is_login",
+                    "value": "1",
+                    "domain": ".xueqiu.com",
+                },
+            ]
+        )
+        monkeypatch.setitem(sys.modules, "rookiepy", fake_rookiepy)
+
+        assert xueqiu_mod._load_cookies_from_browser() is True
+        assert any(
+            cookie.name == "xq_a_token" and cookie.value == "TOKEN_FROM_BROWSER"
+            for cookie in xueqiu_mod._cookie_jar
+        )
 
     def test_get_json_sends_referer_and_browser_ua(self, monkeypatch):
         """_get_json() must send Referer and a browser-like User-Agent."""

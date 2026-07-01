@@ -4,18 +4,18 @@ Channel registry — lists all supported platforms for doctor checks.
 """
 
 from typing import List, Optional
-
+# Import all channels
 from .base import Channel
 from .bilibili import BilibiliChannel
 from .exa_search import ExaSearchChannel
+from .facebook import FacebookChannel
 from .github import GitHubChannel
+from .instagram import InstagramChannel
 from .linkedin import LinkedInChannel
 from .reddit import RedditChannel
 from .rss import RSSChannel
 from .twitter import TwitterChannel
 from .v2ex import V2EXChannel
-
-# Import all channels
 from .web import WebChannel
 from .xiaohongshu import XiaoHongShuChannel
 from .xiaoyuzhou import XiaoyuzhouChannel
@@ -27,6 +27,8 @@ ALL_CHANNELS: List[Channel] = [
     TwitterChannel(),
     YouTubeChannel(),
     RedditChannel(),
+    FacebookChannel(),
+    InstagramChannel(),
     BilibiliChannel(),
     XiaoHongShuChannel(),
     LinkedInChannel(),
@@ -55,5 +57,6 @@ def get_all_channels() -> List[Channel]:
 __all__ = [
     "Channel",
     "ALL_CHANNELS",
-    "get_channel", "get_all_channels",
+    "get_channel",
+    "get_all_channels",
 ]

@@ -169,6 +169,8 @@ def test_channel_can_handle_contract():
         "twitter": "https://x.com/user/status/1",
         "youtube": "https://youtube.com/watch?v=abc",
         "reddit": "https://reddit.com/r/python",
+        "facebook": "https://www.facebook.com/zuck",
+        "instagram": "https://www.instagram.com/openai/",
         "bilibili": "https://www.bilibili.com/video/BV1xx411",
         "xiaohongshu": "https://www.xiaohongshu.com/explore/123",
         "linkedin": "https://www.linkedin.com/in/test",
