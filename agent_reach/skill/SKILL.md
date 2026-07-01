@@ -80,8 +80,8 @@ curl -s "https://r.jina.ai/URL"
 # GitHub 搜索
 gh search repos "query" --sort stars --limit 10
 
-# YouTube 字幕（注意：B站不要用 yt-dlp，见 video.md）
-yt-dlp --write-sub --skip-download -o "/tmp/%(id)s" "URL"
+# YouTube 字幕（注意：B站不要用 yt-dlp，见 video.md；被风控要求登录时的 cookie 兜底也在 video.md）
+yt-dlp --ignore-no-formats-error --write-sub --skip-download -o "/tmp/%(id)s" "URL"
 
 # V2EX 热门
 curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1.0"

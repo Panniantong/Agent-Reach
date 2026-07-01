@@ -68,8 +68,8 @@ curl -s "https://r.jina.ai/URL"
 # GitHub search
 gh search repos "query" --sort stars --limit 10
 
-# YouTube subtitles (NOTE: never use yt-dlp for Bilibili — see video.md)
-yt-dlp --write-sub --skip-download -o "/tmp/%(id)s" "URL"
+# YouTube subtitles (NOTE: never use yt-dlp for Bilibili — see video.md; cookie fallback for bot-checks is there too)
+yt-dlp --ignore-no-formats-error --write-sub --skip-download -o "/tmp/%(id)s" "URL"
 
 # V2EX hot topics
 curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1.0"
