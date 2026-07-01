@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="#빠른-시작">빠른 시작</a> · 한국어 · <a href="../README.md">中文</a> · <a href="README_en.md">English</a> · <a href="README_ja.md">日本語</a> · <a href="#지원-플랫폼">지원 플랫폼</a> · <a href="#설계-철학">설계 철학</a>
+  <a href="#빠른-시작">빠른 시작</a> · 한국어 · <a href="../README.md">中文</a> · <a href="README_en.md">English</a> · <a href="README_id.md">Bahasa Indonesia</a> · <a href="README_ja.md">日本語</a> · <a href="#지원-플랫폼">지원 플랫폼</a> · <a href="#설계-철학">설계 철학</a>
 </p>
 
 ---
