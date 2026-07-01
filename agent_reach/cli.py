@@ -1114,7 +1114,8 @@ def _cmd_configure(args):
     elif args.key == "youtube-cookies":
         config.set("youtube_cookies_from", value)
         print(f"✅ YouTube cookie source configured: {value}")
-        print("   yt-dlp will use cookies from this browser for age-restricted/member videos.")
+        print("   yt-dlp will use cookies from this browser for age-restricted/member videos,")
+        print("   and as the automatic retry when a video triggers YouTube's bot-check.")
 
     elif args.key == "xhs-cookies":
         _configure_xhs_cookies(value)
