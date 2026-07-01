@@ -243,7 +243,7 @@ class TestOrchestrator:
                     child.unlink()
                 self.path.rmdir()
 
-        def fake_download(source, out_dir):
+        def fake_download(source, out_dir, config=None):
             assert Path(out_dir) == tmp_path / "auto-work"
             audio = Path(out_dir) / "source.m4a"
             audio.write_bytes(b"audio")
@@ -273,7 +273,7 @@ class TestOrchestrator:
         fake_config.set("groq_api_key", "gsk_test")
         work = tmp_path / "caller-owned"
 
-        def fake_download(source, out_dir):
+        def fake_download(source, out_dir, config=None):
             audio = Path(out_dir) / "source.m4a"
             audio.write_bytes(b"audio")
             return audio
@@ -362,6 +362,97 @@ class TestDownloadAudioSafety:
         tr.download_audio("https://youtu.be/abc123", tmp_path)
 
         assert captured["cmd"][-1] == "https://youtu.be/abc123"
+
+
+class TestDownloadAudioBotCheckRetry:
+    """YouTube's bot-check blocks fully anonymous requests on some videos.
+
+    download_audio should retry once with --cookies-from-browser, using the
+    configured `youtube_cookies_from` browser (falling back to "chrome"), and
+    only for that specific failure — anything else should propagate as-is.
+    """
+
+    @staticmethod
+    def _bot_check_error() -> "tr.TranscribeError":
+        err = tr.TranscribeError(
+            "yt-dlp failed (exit 1): ERROR: Sign in to confirm you're not a bot. "
+            "Use --cookies-from-browser or --cookies for the authentication."
+        )
+        err.stderr = (
+            "WARNING: [youtube] No title found in player responses\n"
+            "ERROR: [youtube] abc123: Sign in to confirm you're not a bot. "
+            "Use --cookies-from-browser or --cookies for the authentication."
+        )
+        return err
+
+    def test_retries_with_configured_browser(self, monkeypatch, fake_config, tmp_path):
+        monkeypatch.setattr(tr, "_require", lambda binary: None)
+        fake_config.set("youtube_cookies_from", "chrome:Profile 2")
+        calls: List[List[str]] = []
+
+        def fake_run(cmd, timeout=600):
+            calls.append(cmd)
+            if len(calls) == 1:
+                raise self._bot_check_error()
+            (tmp_path / "source.m4a").write_bytes(b"audio")
+
+        monkeypatch.setattr(tr, "_run", fake_run)
+
+        audio = tr.download_audio("https://youtu.be/abc123", tmp_path, fake_config)
+
+        assert audio == tmp_path / "source.m4a"
+        assert len(calls) == 2
+        idx = calls[1].index("--cookies-from-browser")
+        assert calls[1][idx + 1] == "chrome:Profile 2"
+
+    def test_defaults_to_chrome_when_unconfigured(self, monkeypatch, fake_config, tmp_path):
+        monkeypatch.setattr(tr, "_require", lambda binary: None)
+        calls: List[List[str]] = []
+
+        def fake_run(cmd, timeout=600):
+            calls.append(cmd)
+            if len(calls) == 1:
+                raise self._bot_check_error()
+            (tmp_path / "source.m4a").write_bytes(b"audio")
+
+        monkeypatch.setattr(tr, "_run", fake_run)
+
+        tr.download_audio("https://youtu.be/abc123", tmp_path, fake_config)
+
+        idx = calls[1].index("--cookies-from-browser")
+        assert calls[1][idx + 1] == "chrome"
+
+    def test_works_without_config_argument(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(tr, "_require", lambda binary: None)
+        calls: List[List[str]] = []
+
+        def fake_run(cmd, timeout=600):
+            calls.append(cmd)
+            if len(calls) == 1:
+                raise self._bot_check_error()
+            (tmp_path / "source.m4a").write_bytes(b"audio")
+
+        monkeypatch.setattr(tr, "_run", fake_run)
+
+        audio = tr.download_audio("https://youtu.be/abc123", tmp_path)
+
+        assert audio == tmp_path / "source.m4a"
+        assert len(calls) == 2
+
+    def test_does_not_retry_on_unrelated_failure(self, monkeypatch, fake_config, tmp_path):
+        monkeypatch.setattr(tr, "_require", lambda binary: None)
+        calls: List[List[str]] = []
+
+        def fake_run(cmd, timeout=600):
+            calls.append(cmd)
+            raise tr.TranscribeError("yt-dlp failed (exit 1): ERROR: video unavailable")
+
+        monkeypatch.setattr(tr, "_run", fake_run)
+
+        with pytest.raises(tr.TranscribeError, match="video unavailable"):
+            tr.download_audio("https://youtu.be/abc123", tmp_path, fake_config)
+
+        assert len(calls) == 1  # no retry for a non-bot-check failure
 
 
 # --- YouTubeChannel integration --------------------------------------- #

@@ -77,9 +77,11 @@ def _run(cmd: List[str], timeout: int = 600) -> None:
     except subprocess.TimeoutExpired:
         raise TranscribeError(f"{cmd[0]} timed out after {timeout}s")
     if proc.returncode != 0:
-        raise TranscribeError(
+        err = TranscribeError(
             f"{cmd[0]} failed (exit {proc.returncode}): {proc.stderr.strip()[:300]}"
         )
+        err.stderr = proc.stderr  # full, untruncated — callers may need to pattern-match on it
+        raise err
 
 
 def _is_private_ip(value: str) -> bool:
@@ -122,26 +124,38 @@ def _assert_safe_public_url(url: str) -> None:
         raise TranscribeError("SSRF blocked: private/internal IP is not allowed")
 
 
-def download_audio(url: str, out_dir: Path) -> Path:
-    """Download audio with yt-dlp into out_dir; return the resulting file path."""
+def download_audio(url: str, out_dir: Path, config: Optional[Config] = None) -> Path:
+    """Download audio with yt-dlp into out_dir; return the resulting file path.
+
+    Retries once with browser cookies if YouTube's bot-check blocks the
+    anonymous request (only helps when a local browser with a logged-in
+    session is available — never fires on a headless server, where the
+    retry itself would just fail and the original error surfaces instead).
+    """
     _assert_safe_public_url(url)
     _require("yt-dlp")
     template = out_dir / "source.%(ext)s"
-    _run(
-        [
-            "yt-dlp",
-            "-x",
-            "--audio-format",
-            "m4a",
-            "--audio-quality",
-            "0",
-            "-o",
-            str(template),
-            "--",
-            url,
-        ],
-        timeout=1800,  # long podcasts over slow networks — generous but bounded
-    )
+    cmd = [
+        "yt-dlp",
+        "-x",
+        "--audio-format",
+        "m4a",
+        "--audio-quality",
+        "0",
+        "-o",
+        str(template),
+        "--",
+        url,
+    ]
+    try:
+        _run(cmd, timeout=1800)  # long podcasts over slow networks — generous but bounded
+    except TranscribeError as e:
+        stderr = getattr(e, "stderr", str(e))
+        if "sign in to confirm you" not in stderr.lower():
+            raise
+        browser = ((config.get("youtube_cookies_from") if config else None) or "chrome")
+        _run(cmd[:1] + ["--cookies-from-browser", browser] + cmd[1:], timeout=1800)
+
     files = sorted(out_dir.glob("source.*"))
     if not files:
         raise TranscribeError("yt-dlp produced no output file")
@@ -288,7 +302,7 @@ def _transcribe_in_dir(source: str, order: List[str], cfg: Config, work_dir: Pat
     if src_path.is_file():
         audio = src_path
     else:
-        audio = download_audio(source, work_dir)
+        audio = download_audio(source, work_dir, cfg)
 
     compressed = compress_audio(audio, work_dir)
     if compressed.stat().st_size <= SIZE_LIMIT_BYTES:
