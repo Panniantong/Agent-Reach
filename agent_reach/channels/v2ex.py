@@ -28,9 +28,8 @@ class V2EXChannel(Channel):
     # ------------------------------------------------------------------ #
 
     def can_handle(self, url: str) -> bool:
-        from urllib.parse import urlparse
-        d = urlparse(url).netloc.lower()
-        return "v2ex.com" in d
+        from agent_reach.utils.urls import host_matches
+        return host_matches(url, "v2ex.com")
 
     # ------------------------------------------------------------------ #
     # Health check

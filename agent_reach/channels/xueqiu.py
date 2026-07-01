@@ -157,8 +157,8 @@ class XueqiuChannel(Channel):
     # ------------------------------------------------------------------ #
 
     def can_handle(self, url: str) -> bool:
-        d = urllib.parse.urlparse(url).netloc.lower()
-        return "xueqiu.com" in d
+        from agent_reach.utils.urls import host_matches
+        return host_matches(url, "xueqiu.com")
 
     # ------------------------------------------------------------------ #
     # Health check
@@ -178,7 +178,7 @@ class XueqiuChannel(Channel):
         except Exception as e:
             return "warn", (
                 f"Xueqiu API 连接失败：{e}。"
-                "请先登录雪球后运行：agent-reach configure --from-browser chrome"
+                "请先登录雪球后运行：agent-reach configure --from-browser chrome --channels xueqiu"
             )
 
     # ------------------------------------------------------------------ #

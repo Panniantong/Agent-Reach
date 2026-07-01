@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Shared channel helper for OpenCLI browser-session-only platforms."""
 
-from urllib.parse import urlparse
+from agent_reach.utils.urls import host_matches
 
 from .base import Channel
 
@@ -22,8 +22,7 @@ class OpenCLISiteChannel(Channel):
     tier = 1
 
     def can_handle(self, url: str) -> bool:
-        domain = urlparse(url).netloc.lower()
-        return any(domain == d or domain.endswith(f".{d}") for d in self.domains)
+        return host_matches(url, *self.domains)
 
     def check(self, config=None):
         from agent_reach.backends import opencli_status

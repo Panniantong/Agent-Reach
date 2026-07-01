@@ -27,10 +27,8 @@ class YouTubeChannel(Channel):
     tier = 0
 
     def can_handle(self, url: str) -> bool:
-        from urllib.parse import urlparse
-
-        d = urlparse(url).netloc.lower()
-        return "youtube.com" in d or "youtu.be" in d
+        from agent_reach.utils.urls import host_matches
+        return host_matches(url, "youtube.com", "youtu.be")
 
     def check(self, config=None):
         # 真跑 yt-dlp --version 探活，区分未装 / venv 断链 / 跑不动

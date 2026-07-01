@@ -36,30 +36,20 @@ class TestCLI:
         assert "Agent Reach" in captured.out
         assert "✅" in captured.out
 
-    def test_doctor_preserves_existing_skill_install(self, monkeypatch, tmp_path, capsys):
-        skill_dir = tmp_path / ".agents" / "skills" / "agent-reach"
-        skill_dir.mkdir(parents=True)
-        skill_file = skill_dir / "SKILL.md"
-        custom_content = "# custom Agent Reach skill\n"
-        skill_file.write_text(custom_content, encoding="utf-8")
+    def test_doctor_is_read_only_no_skill_install(self, monkeypatch, capsys):
+        """doctor is read-only diagnostics: it must never install the skill."""
+        called = {"install": False}
 
-        monkeypatch.setattr(
-            cli.os.path,
-            "expanduser",
-            lambda p: p.replace("~", str(tmp_path)),
-        )
-        config_dir = tmp_path / ".agent-reach"
-        monkeypatch.setattr(Config, "CONFIG_DIR", config_dir)
-        monkeypatch.setattr(Config, "CONFIG_FILE", config_dir / "config.yaml")
+        def _spy(*a, **k):
+            called["install"] = True
+
+        monkeypatch.setattr(cli, "_install_skill", _spy)
         monkeypatch.setattr("agent_reach.doctor.check_all", lambda config: {})
         monkeypatch.setattr("agent_reach.doctor.format_report", lambda results: "report")
 
         cli._cmd_doctor(Namespace(json=False))
 
-        assert skill_file.read_text(encoding="utf-8") == custom_content
-        out = capsys.readouterr().out
-        assert "preserving existing files" in out
-        assert f"Skill installed for Agent: {skill_dir}" not in out
+        assert called["install"] is False
 
     def test_transcribe_command_prints_text(self, capsys):
         with patch("agent_reach.transcribe.transcribe", return_value="hello transcript"):
@@ -75,6 +65,62 @@ class TestCLI:
                 main()
         assert out_file.read_text(encoding="utf-8").strip() == "saved text"
         assert "Transcript written" in capsys.readouterr().out
+
+    def test_configure_from_browser_without_channels_imports_all(self, monkeypatch, capsys):
+        """Softer landing: omitting --channels keeps the original import-all flow,
+        so existing `configure --from-browser chrome` invocations don't break."""
+        captured = {}
+
+        def _spy(browser, config, config_keys):
+            captured["targets"] = set(config_keys)
+            return [("Twitter/X", True, "auth_token + ct0")]
+
+        monkeypatch.setattr("agent_reach.cookie_extract.configure_from_browser", _spy)
+        cli._cmd_configure(
+            Namespace(from_browser="chrome", channels="", key=None, value=[])
+        )
+        assert captured["targets"] == {"twitter", "xhs", "bilibili", "xueqiu"}
+
+    def test_configure_from_browser_scopes_to_requested_channels(self, monkeypatch, capsys):
+        """--channels twitter must pass only {'twitter'} targets to the importer."""
+        captured = {}
+
+        def _spy(browser, config, config_keys):
+            captured["browser"] = browser
+            captured["targets"] = set(config_keys)
+            return [("Twitter/X", True, "auth_token + ct0")]
+
+        monkeypatch.setattr("agent_reach.cookie_extract.configure_from_browser", _spy)
+        cli._cmd_configure(
+            Namespace(from_browser="chrome", channels="twitter", key=None, value=[])
+        )
+        assert captured["targets"] == {"twitter"}
+        assert captured["browser"] == "chrome"
+
+    def test_install_mcporter_pins_exa_add_to_home_scope(self, monkeypatch):
+        """config add must target home scope so Exa persists for the agent,
+        not the cwd's project config. config list must NOT get --scope
+        (mcporter's config list does not support that flag)."""
+        calls = []
+
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/mcporter")
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        cli._install_mcporter()
+
+        add_cmds = [c for c in calls if "config" in c and "add" in c]
+        assert add_cmds, "expected a 'mcporter config add' call"
+        for c in add_cmds:
+            assert "--scope" in c and c[c.index("--scope") + 1] == "home"
+
+        list_cmds = [c for c in calls if c[:3] == ["mcporter", "config", "list"]]
+        assert list_cmds, "expected a 'mcporter config list' call"
+        for c in list_cmds:
+            assert "--scope" not in c
 
     def test_parse_twitter_cookie_input_separate_values(self):
         auth_token, ct0 = cli._parse_twitter_cookie_input("token123 ct0abc")

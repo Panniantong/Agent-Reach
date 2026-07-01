@@ -1,14 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Auto-extract cookies from local browsers for all supported platforms.
+"""Auto-extract cookies from local browsers for the requested platforms.
 
-Supports: Chrome, Firefox, Edge, Brave, Opera
-Extracts: Twitter, XiaoHongShu, Bilibili cookies in one shot.
+Supports browsers: Chrome, Firefox, Edge, Brave, Opera
+Cookie platforms: Twitter/X, XiaoHongShu, Bilibili, Xueqiu. Extraction can be
+scoped to specific channels via config_keys / ``--channels``; the bare
+``configure --from-browser`` command imports all supported platforms by
+default (see resolve_cookie_targets / the CLI's soft-landing behavior).
 
 Usage:
-    agent-reach configure --from-browser chrome
+    agent-reach configure --from-browser chrome --channels twitter
+    agent-reach configure --from-browser chrome            # all platforms
 """
 
 from typing import Dict, List, Tuple
+
+from agent_reach.utils.urls import domain_covers
 
 # Platform cookie specs: (platform_name, domain_pattern, needed_cookies)
 PLATFORM_SPECS = [
@@ -39,10 +45,48 @@ PLATFORM_SPECS = [
 ]
 
 
-def extract_all(browser: str = "chrome") -> Dict[str, dict]:
+# CLI channel name → cookie config_key. Only these channels use browser
+# cookies; everything else (reddit, youtube, ...) never needs an import.
+COOKIE_CHANNEL_ALIASES = {
+    "twitter": "twitter",
+    "xiaohongshu": "xhs",
+    "xhs": "xhs",
+    "bilibili": "bilibili",
+    "xueqiu": "xueqiu",
+}
+
+# Every cookie platform (config_key), in PLATFORM_SPECS order.
+ALL_COOKIE_KEYS = [spec["config_key"] for spec in PLATFORM_SPECS]
+
+
+def resolve_cookie_targets(channels) -> set:
+    """Map requested channel names to the cookie config_keys to import.
+
+    Accepts CLI channel names (``xiaohongshu``), config_keys (``xhs``), or the
+    special token ``all``. Non-cookie channels (reddit, youtube, ...) are
+    dropped so a broad ``--channels`` never silently harvests extra cookies.
     """
-    Extract cookies for all supported platforms from the specified browser.
-    
+    targets = set()
+    for ch in channels:
+        c = str(ch).strip().lower()
+        if c == "all":
+            return set(ALL_COOKIE_KEYS)
+        key = COOKIE_CHANNEL_ALIASES.get(c)
+        if key:
+            targets.add(key)
+    return targets
+
+
+def extract_all(browser: str = "chrome", config_keys=None) -> Dict[str, dict]:
+    """
+    Extract cookies for the requested platforms from the specified browser.
+
+    config_keys: optional iterable of cookie config_keys to limit extraction
+    to (e.g. {"twitter"}). When None, every supported platform is extracted.
+    Note: the browser backend still loads the full cookie jar; scoping here
+    filters it so only the requested platforms' cookies are *extracted and
+    returned* — unrelated platforms are never persisted to config.
+
     Returns:
         {
             "twitter": {"auth_token": "xxx", "ct0": "yyy"},
@@ -113,17 +157,21 @@ def extract_all(browser: str = "chrome") -> Dict[str, dict]:
 
     results = {}
 
-    for spec in PLATFORM_SPECS:
+    if config_keys is not None:
+        wanted = set(config_keys)
+        specs = [s for s in PLATFORM_SPECS if s["config_key"] in wanted]
+    else:
+        specs = PLATFORM_SPECS
+
+    for spec in specs:
         platform_cookies = {}
         all_cookies_for_domain = []
 
         for cookie in cookie_jar:
-            # Check if cookie belongs to this platform
-            domain_match = any(
-                cookie.domain.endswith(d) or cookie.domain == d.lstrip(".")
-                for d in spec["domains"]
-            )
-            if not domain_match:
+            # Check if cookie belongs to this platform. Exact-or-dot-boundary
+            # matching (not substring) so lookalike hosts like notxueqiu.com
+            # can't sneak attacker cookies into the saved cookie string.
+            if not domain_covers(cookie.domain, *spec["domains"]):
                 continue
 
             all_cookies_for_domain.append(cookie)
@@ -229,16 +277,26 @@ def _sync_bird_env(auth_token: str, ct0: str) -> None:
 _sync_bird_credentials = _sync_bird_env
 
 
-def configure_from_browser(browser: str, config) -> List[Tuple[str, bool, str]]:
+def configure_from_browser(browser: str, config, config_keys) -> List[Tuple[str, bool, str]]:
     """
-    Extract cookies and configure all found platforms.
-    
+    Extract cookies for the requested platforms and configure the ones found.
+
+    config_keys: iterable of cookie config_keys to import (e.g. {"twitter"}).
+    This is required — extraction and persistence are scoped to it so
+    unrelated platforms' cookies are never extracted or saved to config.
+
     Returns list of (platform_name, success, message) tuples.
     """
     results_list = []
 
+    wanted = set(config_keys)
+    if not wanted:
+        return [("All platforms", False,
+                 "No cookie channels selected. Pass --channels "
+                 "(e.g. --channels twitter) or --channels all.")]
+
     try:
-        extracted = extract_all(browser)
+        extracted = extract_all(browser, config_keys=wanted)
     except Exception as e:
         return [("Browser", False, str(e))]
 

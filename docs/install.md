@@ -143,7 +143,7 @@ Some channels need credentials only the user can provide. Based on the doctor ou
 > 3. 点击插件 → Export → Header String
 > 4. 把导出的字符串发给 Agent
 >
-> **本地电脑用户**也可以用 `agent-reach configure --from-browser chrome` 一键自动提取（支持 Twitter + 小红书 + 雪球）。OpenCLI 平台（Reddit、小红书桌面后端、Facebook、Instagram）优先复用 Chrome 登录态，不需要把 Cookie 发给 Agent。
+> **本地电脑用户**也可以用 `agent-reach configure --from-browser chrome` 一键自动提取（默认导入全部：Twitter + 小红书 + B站 + 雪球）。只想导入某个平台时加 `--channels`，例如 `--channels xueqiu`。OpenCLI 平台（Reddit、小红书桌面后端、Facebook、Instagram）优先复用 Chrome 登录态，不需要把 Cookie 发给 Agent。
 
 **Twitter search & posting:**
 > "To unlock Twitter search, I need your Twitter cookies. Install the Cookie-Editor Chrome extension, go to x.com/twitter.com, click the extension → Export → Header String, and paste it to me."
@@ -229,10 +229,10 @@ agent-reach install --channels facebook,instagram
 > "雪球需要登录后的 Cookie。请先在 Chrome 里登录 xueqiu.com，然后运行："
 
 ```bash
-agent-reach configure --from-browser chrome
+agent-reach configure --from-browser chrome --channels xueqiu
 ```
 
-> Cookie 会随其他平台一起自动提取。
+> `--channels xueqiu` 只导入雪球 Cookie；省略 `--channels` 则默认导入全部平台。
 
 **小宇宙播客 / Xiaoyuzhou Podcast (Groq Whisper):**
 > "小宇宙播客转文字已默认安装，只需要一个免费的 Groq API Key。"

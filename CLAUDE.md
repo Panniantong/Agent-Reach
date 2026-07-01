@@ -9,7 +9,7 @@ Repo: github.com/Panniantong/Agent-Reach | License: MIT | Version: 1.5.0
 - `pip install -e .` — Dev install
 - `pytest tests/ -v` — All tests
 - `pytest tests/test_cli.py -v` — CLI tests only
-- `bash test.sh` — Full integration test (creates venv, installs, runs doctor + channel tests)
+- `bash test.sh` — Install smoke test (fresh venv, installs local copy, runs version/doctor). NOT unit tests — use pytest for those.
 - `python -m agent_reach.cli doctor` — Run diagnostics
 - `python -m agent_reach.cli install --env=auto` — Auto-configure
 
