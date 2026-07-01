@@ -117,9 +117,8 @@ for i in $(seq 0 $((NUM_CHUNKS - 1))); do
         -F file="@$TMPDIR/chunk_${i}.mp3" \
         -F model="whisper-large-v3" \
         -F language="zh" \
-        -F prompt="以下是一段中文普通话播客录音，请输出包含完整中文标点（，。？！：；“”‘’）的转写文本。" \
+        -F prompt="以下是一段中文普通话播客录音，请输出包含完整中文标点（，。？！：；""''）的转写文本。" \
         -F response_format="text")
-    
     HTTP_CODE=$(echo "$RESPONSE" | tail -1)
     BODY=$(echo "$RESPONSE" | sed '$d')
     
@@ -141,7 +140,7 @@ for i in $(seq 0 $((NUM_CHUNKS - 1))); do
                 -F file="@$TMPDIR/chunk_${i}.mp3" \
                 -F model="whisper-large-v3" \
                 -F language="zh" \
-                -F prompt="以下是一段中文普通话播客录音，请输出包含完整中文标点（，。？！：；“”‘’）的转写文本。" \
+                -F prompt="以下是一段中文普通话播客录音，请输出包含完整中文标点（，。？！：；""''）的转写文本。" \
                 -F response_format="text")
             HTTP_CODE=$(echo "$RESPONSE" | tail -1)
             BODY=$(echo "$RESPONSE" | sed '$d')
