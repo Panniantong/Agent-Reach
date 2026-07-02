@@ -3,15 +3,82 @@
 
 import importlib.resources
 import os
+import re
 import tempfile
 import unittest
 from unittest.mock import patch
 
+import yaml
+
 from agent_reach.cli import _install_skill, _uninstall_skill
+
+# OpenCode only recognizes these frontmatter keys (see opencode.ai/docs/skills).
+OPENCODE_ALLOWED_FRONTMATTER_KEYS = frozenset(
+    {"name", "description", "license", "compatibility", "metadata"}
+)
+
+
+def _read_skill_frontmatter(resource_name: str) -> dict:
+    skill_dir = importlib.resources.files("agent_reach").joinpath("skill")
+    text = skill_dir.joinpath(resource_name).read_text(encoding="utf-8")
+    match = re.match(r"^---\n(.*?)\n---", text, re.DOTALL)
+    assert match, f"{resource_name} must start with YAML frontmatter"
+    return yaml.safe_load(match.group(1))
 
 
 class TestSkillCommand(unittest.TestCase):
     """Test skill install and uninstall via CLI helpers."""
+
+    def test_skill_frontmatter_is_opencode_compatible(self):
+        """Frontmatter should only use fields recognized by OpenCode agents."""
+        for resource_name in ("SKILL.md", "SKILL_en.md"):
+            with self.subTest(resource=resource_name):
+                frontmatter = _read_skill_frontmatter(resource_name)
+                unknown_keys = set(frontmatter) - OPENCODE_ALLOWED_FRONTMATTER_KEYS
+                self.assertEqual(
+                    unknown_keys,
+                    set(),
+                    f"Unsupported frontmatter keys in {resource_name}: {unknown_keys}",
+                )
+                metadata = frontmatter.get("metadata")
+                if metadata is not None:
+                    self.assertIsInstance(metadata, dict)
+                    for key, value in metadata.items():
+                        self.assertIsInstance(
+                            key,
+                            str,
+                            f"metadata key must be a string in {resource_name}",
+                        )
+                        self.assertIsInstance(
+                            value,
+                            str,
+                            f"metadata[{key!r}] must be a string in {resource_name}",
+                        )
+                description = frontmatter.get("description", "")
+                self.assertGreaterEqual(len(description), 1)
+                self.assertLessEqual(len(description), 1024)
+
+    def test_install_skill_to_opencode_directory(self):
+        """_install_skill should install to ~/.config/opencode/skills when present."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            skill_parent = os.path.join(tmpdir, ".config", "opencode", "skills")
+            os.makedirs(skill_parent)
+
+            with patch(
+                "agent_reach.cli.os.path.expanduser",
+                side_effect=lambda p: p.replace("~", tmpdir),
+            ):
+                env = os.environ.copy()
+                env.pop("OPENCLAW_HOME", None)
+                with patch.dict(os.environ, env, clear=True):
+                    _install_skill()
+
+            target = os.path.join(skill_parent, "agent-reach", "SKILL.md")
+            self.assertTrue(os.path.exists(target))
+            with open(target, encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn("Agent Reach", content)
+            self.assertNotIn("\ntriggers:", content[: content.index("\n# ")])
 
     def test_skill_resources_include_both_locales(self):
         """Package resources should expose both default and English skill markdown files."""

@@ -424,11 +424,12 @@ def _install_skill(force: bool = True):
             print(f"  Warning: Could not install skill: {e}")
             return None
 
-    # Determine skill install path (priority: .agents > openclaw > claude)
+    # Determine skill install path (priority: .agents > opencode > openclaw > claude)
     skill_dirs = [
-        os.path.expanduser("~/.agents/skills"),      # Generic agents (priority)
-        os.path.expanduser("~/.openclaw/skills"),    # OpenClaw
-        os.path.expanduser("~/.claude/skills"),      # Claude Code (if exists)
+        os.path.expanduser("~/.agents/skills"),           # Generic agents (priority)
+        os.path.expanduser("~/.config/opencode/skills"),  # OpenCode
+        os.path.expanduser("~/.openclaw/skills"),       # OpenClaw
+        os.path.expanduser("~/.claude/skills"),         # Claude Code (if exists)
     ]
 
     # Insert OPENCLAW_HOME path at the beginning if environment variable is set
@@ -442,7 +443,12 @@ def _install_skill(force: bool = True):
             target = os.path.join(skill_dir, "agent-reach")
             status = _copy_skill_dir(target)
             if status:
-                platform_name = "Agent" if ".agents" in skill_dir else "OpenClaw" if "openclaw" in skill_dir else "Claude Code"
+                platform_name = (
+                    "OpenCode" if "opencode" in skill_dir
+                    else "Agent" if ".agents" in skill_dir
+                    else "OpenClaw" if "openclaw" in skill_dir
+                    else "Claude Code"
+                )
                 if status == "preserved":
                     print(f"Skill already installed for {platform_name}, preserving existing files: {target}")
                 else:
@@ -460,7 +466,7 @@ def _install_skill(force: bool = True):
             print(f"Skill installed: {target}")
         else:
             print("  -- Could not install agent skill (optional)")
-            print("  -- Tip: install OpenClaw, Claude Code, or create ~/.agents/skills/ manually")
+            print("  -- Tip: install OpenClaw, OpenCode, Claude Code, or create ~/.agents/skills/ manually")
 
 
 def _uninstall_skill():
@@ -469,6 +475,7 @@ def _uninstall_skill():
 
     skill_dirs = [
         ("~/.openclaw/skills/agent-reach", "OpenClaw"),
+        ("~/.config/opencode/skills/agent-reach", "OpenCode"),
         ("~/.claude/skills/agent-reach", "Claude Code"),
         ("~/.agents/skills/agent-reach", "Agent"),
     ]
@@ -1412,6 +1419,7 @@ def _cmd_uninstall(args):
     # ── 2. Skill files ──
     skill_dirs = [
         ("~/.openclaw/skills/agent-reach", "OpenClaw"),
+        ("~/.config/opencode/skills/agent-reach", "OpenCode"),
         ("~/.claude/skills/agent-reach", "Claude Code"),
         ("~/.agents/skills/agent-reach", "Agent"),
     ]

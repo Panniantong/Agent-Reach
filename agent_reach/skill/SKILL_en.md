@@ -17,8 +17,7 @@ description: >
   internet content); posting/commenting/liking (write operations); platforms
   that already have a dedicated skill installed (prefer that skill).
 metadata:
-  openclaw:
-    homepage: https://github.com/Panniantong/Agent-Reach
+  homepage: https://github.com/Panniantong/Agent-Reach
 ---
 
 # Agent Reach — internet capability router
