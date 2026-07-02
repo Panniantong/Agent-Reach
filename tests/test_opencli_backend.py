@@ -39,6 +39,23 @@ def test_broken_node_env_gives_npm_hint():
     assert not st.ready
 
 
+def test_daemon_port_env_conflict_gives_unset_hint():
+    """opencli >=1.8 hard-exits (EX_CONFIG/78) when OPENCLI_DAEMON_PORT is set —
+    even before `--version` — so probing fails. It must be diagnosed as an env
+    conflict (unset the var), NOT as a broken node install (reinstall)."""
+    rejection = (
+        "error: OPENCLI_DAEMON_PORT is no longer supported (received 19825). "
+        "The OpenCLI Chrome extension can only connect to localhost:19825. "
+        "Unset OPENCLI_DAEMON_PORT and rerun opencli."
+    )
+    st, _ = _status_with(ProbeResult("error", output=rejection))
+    assert st.installed and st.broken and st.env_conflict
+    assert "unset OPENCLI_DAEMON_PORT" in st.hint
+    assert "npm install" not in st.hint  # must not misprescribe a reinstall
+    assert not st.ready
+    assert "OPENCLI_DAEMON_PORT" in opencli_summary(st)
+
+
 def test_daemon_running_extension_connected_is_ready():
     daemon_out = "Daemon: running (PID 37389)\nVersion: v1.8.3\nExtension: connected\n"
     st, _ = _status_with(

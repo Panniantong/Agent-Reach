@@ -28,6 +28,19 @@ OPENCLI_EXTENSION_URL = (
     f"https://chromewebstore.google.com/detail/opencli/{OPENCLI_EXTENSION_ID}"
 )
 
+#: Deprecated env var. Newer opencli (>=1.8) hard-exits (EX_CONFIG / 78) the
+#: moment OPENCLI_DAEMON_PORT is set — even to the correct default port — and
+#: the guard runs before `--version`, so every probe fails. The OpenCLIApp
+#: desktop build still injects it, so a fresh macOS app install is DOA until
+#: the var is unset. Detect this so we prescribe `unset` instead of a useless
+#: "reinstall node" — nothing is actually broken.
+_DAEMON_PORT_ENV = "OPENCLI_DAEMON_PORT"
+
+
+def _is_daemon_port_conflict(probe) -> bool:
+    """True when a failed probe was rejected for the deprecated port env var."""
+    return _DAEMON_PORT_ENV in (probe.output or "")
+
 #: Chrome-family profile roots that contain <Profile>/Extensions/<id>/
 _CHROME_PROFILE_ROOTS = (
     "~/Library/Application Support/Google/Chrome",  # macOS Chrome
@@ -59,6 +72,7 @@ def _extension_installed_on_disk() -> bool:
 class OpenCLIStatus:
     installed: bool = False
     broken: bool = False
+    env_conflict: bool = False
     daemon_running: bool = False
     extension_connected: bool = False
     extension_installed: bool = False
@@ -84,6 +98,18 @@ def opencli_status(timeout: int = 10) -> OpenCLIStatus:
     )
     if version_probe.status == "missing":
         return OpenCLIStatus(installed=False)
+    if _is_daemon_port_conflict(version_probe):
+        return OpenCLIStatus(
+            installed=True,
+            broken=True,
+            env_conflict=True,
+            hint=(
+                f"opencli 已安装，但环境变量 {_DAEMON_PORT_ENV} 已被设置，"
+                "新版 opencli 会直接拒绝启动（常见于旧版 OpenCLIApp 桌面端注入）。\n"
+                f"  取消设置后即可使用：unset {_DAEMON_PORT_ENV}\n"
+                "  （node 环境正常，无需重装）"
+            ),
+        )
     if not version_probe.ok:
         return OpenCLIStatus(
             installed=True,
@@ -125,6 +151,8 @@ def opencli_summary(st: OpenCLIStatus) -> str:
     """One-line state description for channel messages / install output."""
     if not st.installed:
         return "OpenCLI 未安装"
+    if st.env_conflict:
+        return f"OpenCLI 无法启动（{_DAEMON_PORT_ENV} 环境变量冲突，需 unset）"
     if st.broken:
         return "OpenCLI 无法执行（node 环境损坏）"
     if st.extension_connected:
