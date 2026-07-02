@@ -74,8 +74,9 @@ twitter feed -n 20
 # 读取单条推文（含回复）
 twitter tweet URL_OR_ID
 
-# 读取长文 / X Article
-twitter article URL_OR_ID
+# 读取长文 / X Article（X 原生文章有登录墙：jina 会 451、WebFetch 会 402，只能用本命令）
+# ⚠️ 传"推文 ID/URL"，不是推文里 x.com/i/article/<N> 的文章 ID（用文章 ID 会 not_found）
+twitter article TWEET_ID_OR_URL
 
 # 用户时间线
 twitter user-posts @username -n 20
