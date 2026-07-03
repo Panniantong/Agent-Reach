@@ -634,8 +634,15 @@ def _install_system_deps():
 
     # ── yt-dlp JS runtime config (YouTube requires external JS runtime) ──
     if shutil.which("node"):
-        ytdlp_config_dir = os.path.expanduser("~/.config/yt-dlp")
-        ytdlp_config = os.path.join(ytdlp_config_dir, "config")
+        # Use the cross-platform helper so the config lands where yt-dlp
+        # actually reads it on every OS. The previous hardcoded
+        # ~/.config/yt-dlp path is Linux-only; on Windows yt-dlp reads
+        # %APPDATA%/yt-dlp/config, so install wrote to a location yt-dlp
+        # never consults and doctor (which uses this helper) reported the
+        # runtime as unconfigured. See utils/paths.get_ytdlp_config_path.
+        from agent_reach.utils.paths import get_ytdlp_config_path
+        ytdlp_config = str(get_ytdlp_config_path())
+        ytdlp_config_dir = os.path.dirname(ytdlp_config)
         needs_config = True
         if os.path.exists(ytdlp_config):
             with open(ytdlp_config, "r") as f:
@@ -918,20 +925,33 @@ def _install_mcporter():
 
     print("Setting up mcporter (search backend)...")
 
-    if shutil.which("mcporter"):
+    # Resolve command short names to their full path before subprocess.run.
+    # On Windows, npm/mcporter/npx are .CMD/.BAT shims; CreateProcess does
+    # not append PATHEXT, so subprocess.run(["npm", ...]) raises
+    # FileNotFoundError (WinError 2) even though shutil.which("npm") finds
+    # it. which() returns the path with the real extension, so executing
+    # that path directly works on every platform. Mirrors probe_command.
+    def _which(cmd):
+        return shutil.which(cmd)
+
+    npm_path = _which("npm") or _which("npx")
+    mcporter_path = _which("mcporter")
+
+    if mcporter_path:
         print("  ✅ mcporter already installed")
     else:
         # Check for npm/npx
-        if not shutil.which("npm") and not shutil.which("npx"):
+        if not npm_path:
             print("  [!]  mcporter requires Node.js. Install Node.js first:")
             print("     https://nodejs.org/ or: curl -fsSL https://fnm.vercel.app/install | bash")
             return
         try:
             subprocess.run(
-                ["npm", "install", "-g", "mcporter"],
+                [npm_path, "install", "-g", "mcporter"],
                 capture_output=True, encoding="utf-8", errors="replace", timeout=120,
             )
-            if shutil.which("mcporter"):
+            mcporter_path = _which("mcporter")
+            if mcporter_path:
                 print("  ✅ mcporter installed")
             else:
                 print("  [X] mcporter install failed. Retry: npm install -g mcporter (check network/timeout), or try: npx mcporter@latest list")
@@ -943,11 +963,11 @@ def _install_mcporter():
     # Configure Exa MCP (free, no key needed)
     try:
         r = subprocess.run(
-            ["mcporter", "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=5
+            [mcporter_path, "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=5
         )
         if "exa" not in r.stdout:
             subprocess.run(
-                ["mcporter", "config", "add", "exa", "https://mcp.exa.ai/mcp"],
+                [mcporter_path, "config", "add", "exa", "https://mcp.exa.ai/mcp"],
                 capture_output=True, encoding="utf-8", errors="replace", timeout=10,
             )
             print("  ✅ Exa search configured (free, no API key needed)")
