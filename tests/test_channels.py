@@ -485,13 +485,22 @@ class TestXueqiuChannel:
             def read(self):
                 return json.dumps(fake_data).encode()
 
-        monkeypatch.setattr(xueqiu_mod._opener, "open", lambda req, timeout=None: FakeResponse())
+        captured = {}
+
+        def fake_open(req, timeout=None):
+            captured["url"] = req.full_url
+            return FakeResponse()
+
+        monkeypatch.setattr(xueqiu_mod._opener, "open", fake_open)
         quote = XueqiuChannel().get_stock_quote("SH600519")
+        assert "quote.json" in captured["url"]
+        assert "extend=detail" in captured["url"]
         assert quote["symbol"] == "SH600519"
         assert quote["name"] == "贵州茅台"
         assert quote["current"] == 1800.0
         assert quote["percent"] == 1.5
         assert quote["volume"] == 12345678
+        assert quote["pe_ttm"] == 30.5
 
     # ------------------------------------------------------------------ #
     # search_stock
