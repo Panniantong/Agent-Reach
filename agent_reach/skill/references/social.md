@@ -1,6 +1,6 @@
 # 社交媒体 & 社区
 
-小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram。
+小红书、Twitter/X、B站、V2EX、Reddit、知乎、Facebook、Instagram。
 
 ## 小红书 / XiaoHongShu（多后端）
 
@@ -273,3 +273,72 @@ opencli instagram saved --limit 20 -f yaml
 ```
 
 > 要求 Chrome 打开且装了 OpenCLI 扩展，并已登录 instagram.com。`instagram search` 是用户搜索；读帖子需要先确定 username，再用 `instagram user USERNAME`。若出现 429 / login required，先让用户在 Chrome 里重新登录并降低频率。
+
+## 知乎 / Zhihu (OpenCLI)
+
+知乎通过 OpenCLI 使用 Chrome 浏览器登录态访问。
+
+### 前置条件
+
+> **桌面推荐**: 安装 OpenCLI（`npm install -g @jackwener/opencli`）和 Chrome 扩展
+> （https://chromewebstore.google.com/detail/opencli/ildkmabpimmkaediidaifkhjpohdnifk）。
+
+### 只读命令（热榜无需登录，搜索需登录）
+
+```bash
+# 知乎热榜（无需登录）
+opencli zhihu hot --limit 10 -f yaml
+
+# 知乎搜索（需 Chrome 已登录 zhihu.com）
+opencli zhihu search "query" --limit 10 -f yaml
+
+# 知乎问题详情（含回答列表）
+opencli zhihu question QUESTION_ID -f yaml
+
+# 知乎回答完整内容
+opencli zhihu answer-detail ANSWER_ID -f yaml
+
+# 知乎回答评论列表
+opencli zhihu answer-comments ANSWER_ID -f yaml
+
+# 知乎首页推荐（需登录）
+opencli zhihu recommend -f yaml
+
+# 知乎收藏夹列表（需登录）
+opencli zhihu collections -f yaml
+
+# 知乎收藏夹内容（需登录）
+opencli zhihu collection COLLECTION_ID --limit 10 -f yaml
+
+# 导出知乎文章为 Markdown
+opencli zhihu download -f yaml
+```
+
+### 写操作（需登录，谨慎使用）
+
+```bash
+# 点赞回答/文章
+opencli zhihu like ANSWER_URL
+
+# 收藏回答/文章
+opencli zhihu favorite ANSWER_URL
+
+# 关注用户/问题
+opencli zhihu follow TARGET_URL
+
+# 发表评论
+opencli zhihu comment ANSWER_URL --text "评论内容"
+
+# 回答问题
+opencli zhihu answer QUESTION_URL --text "回答内容"
+```
+
+### 注意事项
+
+> **认证**: 知乎 `search`、`recommend`、个人收藏夹等需要 Chrome 已登录 zhihu.com。热榜 `hot` 无需登录即可使用。
+>
+> **search 失败时**: 确认 Chrome 已登录知乎，重试。如果仍然 `AUTH_REQUIRED`，在 Chrome 里重新打开 zhihu.com 登录一次。
+>
+> **频率控制**: 写操作（点赞/评论/回答/关注）会触发风控，间隔至少 3-5 秒。建议只读为主，写操作用户手动确认后再执行。
+>
+> **输出格式**: 建议用 `-f yaml` 或 `-f json` 获得结构化输出，对 AI agent 更友好。
