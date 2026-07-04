@@ -11,6 +11,7 @@ Usage:
 
 import sys
 import argparse
+import getpass
 import json
 import os
 import time
@@ -677,7 +678,7 @@ def _install_xiaoyuzhou_deps():
                 os.makedirs(tools_dir, exist_ok=True)
                 import shutil as _shutil
                 _shutil.copy2(script_src, script_dst)
-                os.chmod(script_dst, 0o755)
+                os.chmod(script_dst, 0o644)
                 print("  ✅ Xiaoyuzhou transcription script installed")
             except Exception as e:
                 print(f"  [!]  Failed to install script: {e}")
@@ -1547,7 +1548,7 @@ def _cmd_setup():
     if current:
         print(f"  当前状态: ✅ 已配置")
     else:
-        key = input("  GITHUB_TOKEN (回车跳过): ").strip()
+        key = getpass.getpass("  GITHUB_TOKEN (回车跳过): ").strip()
         if key:
             config.set("github_token", key)
             print("  ✅ GitHub API 已提升至 5000 次/小时！")
@@ -1568,7 +1569,7 @@ def _cmd_setup():
     if current:
         print(f"  当前状态: ✅ 已配置")
     else:
-        key = input("  GROQ_API_KEY (回车跳过): ").strip()
+        key = getpass.getpass("  GROQ_API_KEY (回车跳过): ").strip()
         if key:
             config.set("groq_api_key", key)
             print("  ✅ 语音转文字已开启！")
