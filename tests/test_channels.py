@@ -451,27 +451,26 @@ class TestXueqiuChannel:
 
         fake_data = {
             "data": {
-                "items": [
-                    {
-                        "quote": {
-                            "symbol": "SH600519",
-                            "name": "贵州茅台",
-                            "current": 1800.0,
-                            "percent": 1.5,
-                            "chg": 26.6,
-                            "high": 1810.0,
-                            "low": 1770.0,
-                            "open": 1775.0,
-                            "last_close": 1773.4,
-                            "volume": 12345678,
-                            "amount": 22000000000,
-                            "market_capital": 2260000000000,
-                            "turnover_rate": 0.098,
-                            "pe_ttm": 30.5,
-                            "timestamp": 1700000000000,
-                        }
-                    }
-                ]
+                "quote": {
+                    "symbol": "SH600519",
+                    "name": "贵州茅台",
+                    "current": 1800.0,
+                    "percent": 1.5,
+                    "chg": 26.6,
+                    "high": 1810.0,
+                    "low": 1770.0,
+                    "open": 1775.0,
+                    "last_close": 1773.4,
+                    "volume": 12345678,
+                    "amount": 22000000000,
+                    "market_capital": 2260000000000,
+                    "turnover_rate": 0.098,
+                    "pe_ttm": 30.5,
+                    "pe_forecast": 25.2,
+                    "pb": 8.5,
+                    "eps": 59.0,
+                    "timestamp": 1700000000000,
+                }
             }
         }
 
