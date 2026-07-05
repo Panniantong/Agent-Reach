@@ -1,11 +1,11 @@
 ---
 name: agent-reach
 description: >
-  MUST USE when user wants to research/search/look up/find anything on the
-  internet — e.g. "research this topic", "do a deep dive on X", "search the
-  web for X", "see what people say about X", "look this up".
+  Use only when the user explicitly asks to use Agent Reach, asks for
+  multi-platform/social-platform collection, or mentions one of Agent Reach's
+  specialized platforms/backends.
 
-  Also MUST USE when user mentions any platform or shares any URL/link:
+  Specialized platforms:
   Twitter/X, Reddit, Facebook, Instagram, YouTube, GitHub, Bilibili, XiaoHongShu,
   Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
 
@@ -13,9 +13,30 @@ description: >
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
+  NOT for: ordinary web search, web fetch/page reading, generic "deep research",
+  "deep investigation", "look this up", or arbitrary URLs. Use the agent's native
+  web search / web fetch tools for those unless a specialized platform above is
+  explicitly required.
+
   NOT for: writing reports/analysis/translation (this skill only FETCHES
   internet content); posting/commenting/liking (write operations); platforms
   that already have a dedicated skill installed (prefer that skill).
+triggers:
+  - explicit: agent-reach/Agent Reach/use agent-reach
+  - multi_platform: multi-platform/social platforms/community discussion/what people say
+  - social:
+    - Twitter: twitter/x.com/tweets
+    - Reddit: reddit
+    - Facebook: facebook/fb/facebook groups
+    - Instagram: instagram/ig
+    - Bilibili: bilibili/bilibili video
+    - XiaoHongShu: xiaohongshu/xhs/rednote
+    - V2EX: v2ex
+  - career: linkedin/jobs/recruiting
+  - dev: github code search/github search/gh search/repo search
+  - web: rss/feed
+  - video: youtube/video/podcast/transcript/xiaoyuzhou
+  - finance: xueqiu/stocks/funds
 metadata:
   openclaw:
     homepage: https://github.com/Panniantong/Agent-Reach
@@ -23,8 +44,10 @@ metadata:
 
 # Agent Reach — internet capability router
 
-15 platforms, multiple backends each. **When this skill exists, use it for
-these platforms — do not invent your own approach.**
+15 platforms, multiple backends each. **Use this skill only when the task
+explicitly needs the specialized platforms/backends below. For ordinary web
+search, web page reading, generic deep research/deep investigation, or arbitrary
+URLs, prefer the current agent's native web search / web fetch tools.**
 
 ## Standing rules (apply for the whole session)
 
@@ -35,9 +58,11 @@ these platforms — do not invent your own approach.**
    before starting.
 3. **On failure, follow the retry chains in references/** — never guess
    commands.
-4. **For broad research tasks**: combine platforms (Exa for web search +
-   Twitter/Reddit for discussions + XiaoHongShu/Bilibili for Chinese
-   perspectives), collect in parallel, then synthesize.
+4. **For multi-platform discussion tasks**: only when the user explicitly needs
+   social/community/platform discussion, combine the relevant platforms
+   (Twitter/Reddit/XiaoHongShu/Bilibili/V2EX/Facebook/Instagram, etc.), collect
+   in parallel, then synthesize. Ordinary deep research should not route through
+   this skill.
 5. **Watch versions for the user**: after finishing a substantial
    multi-platform task, run `agent-reach check-update` (fast, one API call).
    If a new version exists, append one line to your wrap-up: "Agent Reach
@@ -49,20 +74,20 @@ these platforms — do not invent your own approach.**
 
 | User intent | Category | Details |
 |---------|------|---------|
-| Web / code search | search | [references/search.md](references/search.md) |
+| Code / specialized search fallback | search | [references/search.md](references/search.md) |
 | XiaoHongShu / Twitter / Bilibili / V2EX / Reddit / Facebook / Instagram | social | [references/social.md](references/social.md) |
 | Jobs / LinkedIn | career | [references/career.md](references/career.md) |
-| GitHub / code | dev | [references/dev.md](references/dev.md) |
-| Web pages / articles / RSS | web | [references/web.md](references/web.md) |
+| GitHub code search | dev | [references/dev.md](references/dev.md) |
+| RSS / restricted-page fallback | web | [references/web.md](references/web.md) |
 | YouTube / Bilibili / podcast transcripts | video | [references/video.md](references/video.md) |
 
 ## Zero-config quick commands
 
 ```bash
-# Exa web search
+# Agent Reach specialized search fallback; prefer native web search for ordinary web search
 mcporter call 'exa.web_search_exa(query: "query", numResults: 5)'
 
-# Read any web page
+# RSS/restricted-page fallback; prefer native web fetch for ordinary URLs/pages
 curl -s "https://r.jina.ai/URL"
 
 # GitHub search
