@@ -36,8 +36,7 @@ triggers:
   - video: youtube/视频/播客/字幕/小宇宙/转录/yt
   - finance: 雪球/股票/stock/xueqiu/行情/基金
 metadata:
-  openclaw:
-    homepage: https://github.com/Panniantong/Agent-Reach
+  openclaw.homepage: https://github.com/Panniantong/Agent-Reach
 ---
 
 # Agent Reach — 互联网能力路由器
