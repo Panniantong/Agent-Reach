@@ -40,6 +40,11 @@ PROVIDERS = {
         "model": "whisper-1",
         "key_field": "openai_api_key",
     },
+    "openrouter": {
+        "endpoint": "https://openrouter.ai/api/v1/audio/transcriptions",
+        "model": "openai/whisper-1",
+        "key_field": "openrouter_api_key",
+    },
 }
 
 
