@@ -39,10 +39,13 @@ PLATFORM_SPECS = [
 ]
 
 
-def extract_all(browser: str = "chrome") -> Dict[str, dict]:
+def extract_all(browser: str = "chrome", platform: str | None = None) -> Dict[str, dict]:
     """
-    Extract cookies for all supported platforms from the specified browser.
-    
+    Extract cookies for supported platforms from the specified browser.
+
+    When *platform* is given, only that platform's cookies are
+    extracted (#446). Otherwise all platforms are extracted.
+
     Returns:
         {
             "twitter": {"auth_token": "xxx", "ct0": "yyy"},
@@ -50,6 +53,13 @@ def extract_all(browser: str = "chrome") -> Dict[str, dict]:
             "bilibili": {"SESSDATA": "xxx", "bili_jct": "yyy"},
         }
     """
+    # Filter platforms if a specific one is requested
+    specs = PLATFORM_SPECS
+    if platform:
+        specs = [s for s in PLATFORM_SPECS if s["config_key"] == platform]
+        if not specs:
+            raise ValueError(f"Unknown platform: {platform}")
+
     # Try rookiepy first (Rust-based, more stable), fallback to browser_cookie3
     use_rookiepy = False
     try:
@@ -113,7 +123,7 @@ def extract_all(browser: str = "chrome") -> Dict[str, dict]:
 
     results = {}
 
-    for spec in PLATFORM_SPECS:
+    for spec in specs:
         platform_cookies = {}
         all_cookies_for_domain = []
 
@@ -229,16 +239,22 @@ def _sync_bird_env(auth_token: str, ct0: str) -> None:
 _sync_bird_credentials = _sync_bird_env
 
 
-def configure_from_browser(browser: str, config) -> List[Tuple[str, bool, str]]:
+def configure_from_browser(
+    browser: str, config, platform: str | None = None
+) -> List[Tuple[str, bool, str]]:
     """
-    Extract cookies and configure all found platforms.
-    
+    Extract cookies and configure found platforms.
+
+    When *platform* is given, only that platform is extracted and
+    configured, avoiding over-collection of unrelated browser cookies
+    (#446).
+
     Returns list of (platform_name, success, message) tuples.
     """
     results_list = []
 
     try:
-        extracted = extract_all(browser)
+        extracted = extract_all(browser, platform=platform)
     except Exception as e:
         return [("Browser", False, str(e))]
 

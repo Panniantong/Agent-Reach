@@ -87,7 +87,10 @@ def main():
     p_conf.add_argument("value", nargs="*", help="The value(s) to set")
     p_conf.add_argument("--from-browser", metavar="BROWSER",
                         choices=["chrome", "firefox", "edge", "brave", "opera"],
-                        help="Auto-extract ALL platform cookies from browser (chrome/firefox/edge/brave/opera)")
+                        help="Auto-extract platform cookies from browser")
+    p_conf.add_argument("--platform", metavar="PLATFORM",
+                        choices=["twitter", "xhs", "bilibili", "xueqiu"],
+                        help="Only extract cookies for this platform (omit for all)")
 
     # ── doctor ──
     p_doctor = sub.add_parser("doctor", help="Check platform availability")
@@ -1031,7 +1034,10 @@ def _cmd_configure(args):
         print(f"Extracting cookies from {browser}...")
         print()
 
-        results = configure_from_browser(browser, config)
+        results = configure_from_browser(
+            browser, config,
+            platform=getattr(args, "platform", None),
+        )
 
         found_any = False
         for platform, success, message in results:

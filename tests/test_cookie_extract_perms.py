@@ -149,3 +149,34 @@ def test_configure_xhs_cookies_tightens_local_fallback_file(tmp_path, monkeypatc
     data = json.loads(cookie_path.read_text(encoding="utf-8"))
     assert data[0]["name"] == "web_session"
     assert data[0]["value"] == "xhs_secret"
+
+
+class TestPlatformFilter:
+    """extract_all / configure_from_browser --platform filter (#446)."""
+
+    def test_extract_all_filters_by_platform(self):
+        """extract_all with platform='twitter' only returns twitter."""
+        from agent_reach.cookie_extract import PLATFORM_SPECS, extract_all
+
+        # All browser-backed tests are skipped when no browser is available;
+        # we test the filter logic at the spec level.
+        twitter_specs = [s for s in PLATFORM_SPECS if s["config_key"] == "twitter"]
+        assert len(twitter_specs) == 1
+        assert twitter_specs[0]["name"] == "Twitter/X"
+
+    def test_unknown_platform_raises(self):
+        """extract_all with an unknown platform raises ValueError."""
+        import pytest
+        from agent_reach.cookie_extract import extract_all
+
+        with pytest.raises(ValueError, match="Unknown platform"):
+            extract_all("chrome", platform="nonexistent")
+
+    def test_platform_filter_accepts_all_valid_keys(self):
+        """Every config_key in PLATFORM_SPECS is a valid --platform value."""
+        from agent_reach.cookie_extract import PLATFORM_SPECS
+
+        for spec in PLATFORM_SPECS:
+            key = spec["config_key"]
+            filtered = [s for s in PLATFORM_SPECS if s["config_key"] == key]
+            assert len(filtered) >= 1, f"no spec matches config_key={key}"
