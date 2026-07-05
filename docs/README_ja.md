@@ -64,10 +64,8 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 🌐 **Web** | 閲覧 | 設定不要 | 任意のURL → クリーンなMarkdown（[Jina Reader](https://github.com/jina-ai/reader) ⭐9.8K） |
 | 🐦 **Twitter/X** | 閲覧・検索 | 設定不要 / Cookie | 単一ツイートはすぐに閲覧可能。Cookieで検索、タイムライン、投稿が解放（[twitter-cli](https://github.com/public-clis/twitter-cli)） |
 | 📕 **小紅書** | 閲覧・検索・**投稿・コメント・いいね** | Cookie | `pipx install xiaohongshu-cli` + `xhs login`（[xhs-cli](https://github.com/jackwener/xiaohongshu-cli)） |
-| 🎵 **抖音** | 動画解析・ウォーターマークなしダウンロード | mcporter | [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server)、ログイン不要 |
 | 💼 **LinkedIn** | Jina Reader（公開ページ） | プロフィール、企業、求人検索 | エージェントに「LinkedInの設定を手伝って」と伝えてください |
 | 💬 **WeChat記事** | 検索 + 閲覧 | 設定不要 | WeChat公式アカウント記事の検索+閲覧（完全Markdown）（[Exa](https://exa.ai) + [Camoufox](https://github.com/daijro/camoufox)（オプション）） |
-| 📰 **Weibo** | トレンド・検索・フィード・コメント | 設定不要 | ホット検索、コンテンツ/ユーザー/トピック検索、フィード、コメント（[mcp-server-weibo](https://github.com/Panniantong/mcp-server-weibo)） |
 | 💻 **V2EX** | 人気トピック・ノードトピック・トピック詳細+返信・ユーザープロフィール | 設定不要 | 公開JSON API、認証不要。技術コミュニティのコンテンツに最適 |
 | 📈 **雪球（Xueqiu）** | 株価・検索・人気投稿・人気銘柄 | 設定不要 | 公開APIで自動セッションCookie、ログイン不要 |
 | 🎙️ **小宇宙Podcast** | 文字起こし | 無料APIキー | Podcast音声 → Groq Whisper（無料）による完全テキスト文字起こし |
@@ -202,7 +200,6 @@ channels/
 ├── bilibili.py     → yt-dlp          ← bilibili-apiなどに差し替え可能…
 ├── reddit.py       → rdt-cli          ← 検索+閲覧、Cookie認証が必要
 ├── xiaohongshu.py  → xhs-cli          ← 他のXHSツールに差し替え可能…
-├── douyin.py       → mcporter MCP    ← 他の抖音ツールに差し替え可能…
 ├── linkedin.py     → linkedin-mcp    ← LinkedIn APIに差し替え可能…
 ├── rss.py          → feedparser      ← atomaなどに差し替え可能…
 ├── exa_search.py   → mcporter MCP    ← Tavily、SerpAPIなどに差し替え可能…
@@ -222,10 +219,8 @@ channels/
 | GitHub | [gh CLI](https://cli.github.com) | 公式ツール、認証後フルAPI |
 | RSS閲覧 | [feedparser](https://github.com/kurtmckee/feedparser) | Pythonエコシステムの標準、⭐2.3K |
 | 小紅書 | [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) | 1.5K Star、pipxインストール、検索/閲覧/コメント/投稿 |
-| 抖音 | [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) | MCPサーバー、ログイン不要、動画解析 + ウォーターマークなしダウンロード |
 | LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | ⭐900+、MCPサーバー、ブラウザ自動化 |
 | WeChat記事 | [Exa](https://exa.ai)（検索+閲覧）+ [Camoufox](https://github.com/daijro/camoufox)（オプション） | ゼロ設定で検索+全文閲覧、Camoufoxでオプション強化 |
-| Weibo | `mcporter` | `mcporter call 'weibo.get_trendings(limit: 10)'` |
 | 小宇宙Podcast | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 
 > 📌 これらは*現在*の選択です。気に入らなければファイルを差し替えるだけ。それがスキャフォールディングの要点です。
@@ -288,17 +283,11 @@ Agent Reach はtwitter-cliを使用し、Cookie認証でTwitterにアクセス�
 `pipx install xiaohongshu-cli` でインストール後、`xhs login`（ブラウザからCookieを自動抽出）。エージェントは `xhs search "query"` でノートを検索、`xhs read NOTE_ID` で詳細を閲覧、`xhs comments NOTE_ID` でコメントを表示できます。Dockerは不要です。
 </details>
 
-<details>
-<summary><strong>AIエージェントで抖音の動画を解析するには？</strong></summary>
-
-douyin-mcp-serverをインストールすれば、`mcporter call 'douyin.parse_douyin_video_info(share_link: "share_url")'` で動画情報を解析し、ウォーターマークなしのダウンロードリンクを取得できます。ログイン不要 — 抖音のリンクを共有するだけ。詳細は https://github.com/yzfly/douyin-mcp-server を参照。
-</details>
-
 ---
 
 ## クレジット
 
-[twitter-cli](https://github.com/public-clis/twitter-cli) · [rdt-cli](https://github.com/public-clis/rdt-cli) · [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) · [Jina Reader](https://github.com/jina-ai/reader) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [Exa](https://exa.ai) · [feedparser](https://github.com/kurtmckee/feedparser) · [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) · [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server)
+[twitter-cli](https://github.com/public-clis/twitter-cli) · [rdt-cli](https://github.com/public-clis/rdt-cli) · [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) · [Jina Reader](https://github.com/jina-ai/reader) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [Exa](https://exa.ai) · [feedparser](https://github.com/kurtmckee/feedparser) · [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server)
 
 ## お問い合わせ
 
