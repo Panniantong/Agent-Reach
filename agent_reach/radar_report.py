@@ -366,8 +366,16 @@ def mentor_critique(
 ) -> Optional[dict]:
     """Main teacher: per-student scores + gold rewrite, informed by assistant
     critiques. Returns None without an Anthropic key (interactive fallback)."""
+    from agent_reach.knowledge import knowledge_rules
+
     config = config or Config()
     model = model or config.get("radar_mentor_model") or DEFAULT_MENTOR_MODEL
+    system = MENTOR_SYSTEM
+    rules = knowledge_rules()
+    if rules:
+        # Terse fact-free methodology rules only — the full KB never reaches
+        # the students (they'd plagiarize it), the mentor can hold it.
+        system = f"{MENTOR_SYSTEM}\n\n【評審方法論參考】\n{rules}"
     user = f"【今日原始材料】\n{material}\n\n{_drafts_block(drafts)}\n\n"
     for note in assistant_notes or []:
         user += (
@@ -375,7 +383,7 @@ def mentor_critique(
             f"{json.dumps({k: v for k, v in note.items() if k != 'assistant'}, ensure_ascii=False)}\n\n"
         )
     user += "请按要求输出 JSON。"
-    text = _panel_chat("anthropic", model, MENTOR_SYSTEM, user, config, temperature=temperature)
+    text = _panel_chat("anthropic", model, system, user, config, temperature=temperature)
     if text is None:
         return None
     return _extract_json(text)

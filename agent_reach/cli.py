@@ -168,6 +168,23 @@ def main():
     p_students.add_argument("--seed", type=int, default=None)
     p_students.add_argument("--reason", default="", help="Retirement reason (retire)")
 
+    # ── radar-backfill (guru historical posts + repos → knowledge base) ──
+    p_backfill = sub.add_parser(
+        "radar-backfill",
+        help="Backfill a guru's historical X posts + key repos, optionally distill a knowledge-base draft",
+    )
+    p_backfill.add_argument("--handle", default="karpathy", help="X handle to backfill ('' to skip Twitter)")
+    p_backfill.add_argument(
+        "--repos", default="karpathy/autoresearch,karpathy/nanochat",
+        help="Comma-separated owner/repo list ('' to skip GitHub)",
+    )
+    p_backfill.add_argument("--count", type=int, default=300, help="Max posts to pull")
+    p_backfill.add_argument(
+        "--distill", action="store_true",
+        help="Distill raw material into a knowledge-base draft (needs ANTHROPIC_API_KEY)",
+    )
+    p_backfill.add_argument("--out", default=None, help="Path for the distilled KB draft")
+
     # ── kol-post (single-stock KOL post scaffold, KG-driven) ──
     p_kol = sub.add_parser(
         "kol-post", help="Scaffold a single-stock KOL post (繁中) with supply-chain KG chokepoints injected"
@@ -223,6 +240,8 @@ def main():
         _cmd_radar_report(args)
     elif args.command == "radar-students":
         _cmd_radar_students(args)
+    elif args.command == "radar-backfill":
+        _cmd_radar_backfill(args)
     elif args.command == "kol-post":
         _cmd_kol_post(args)
 
@@ -363,6 +382,30 @@ def _cmd_radar_students(args):
         print(f"   {r['id']:<20} {r['model']:<14} mean={mean:<6} runs={r['runs']}{status}")
     for sid in retirement_suggestions(board):
         print(f"   💡 {sid} 長期落後榜首，建議評估退役: agent-reach radar-students retire --id {sid}")
+
+
+def _cmd_radar_backfill(args):
+    """Backfill a guru's history and optionally distill the knowledge base."""
+    from agent_reach.radar_backfill import run_backfill
+
+    repos = [r.strip() for r in (args.repos or "").split(",") if r.strip()]
+    print(f"⛏️  回溯中: @{args.handle or '—'} + {repos or '無 repo'} ...")
+    result = run_backfill(
+        handle=args.handle,
+        repos=repos,
+        count=args.count,
+        distill=getattr(args, "distill", False),
+        out_path=getattr(args, "out", None),
+    )
+    print(f"✅ 原始材料 → {result['backfill_dir']}")
+    print(f"   posts: {result['tweets']} 條 · repos: {result['repos']}")
+    if getattr(args, "distill", False):
+        if result.get("kb_draft"):
+            print(f"   🧪 知識庫草稿 → {result['kb_draft']}")
+            print("   人工審核後覆蓋 agent_reach/knowledge/<name>.md 再 commit（知識庫永遠人工把關）")
+        else:
+            print("   ⚠️ 蒸餾未執行（未設 ANTHROPIC_API_KEY）。")
+            print("   讓互動式 Claude 讀 backfill 原始材料，按 knowledge/karpathy.md 的結構蒸餾。")
 
 
 def _cmd_kol_post(args):
