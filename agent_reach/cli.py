@@ -146,14 +146,27 @@ def main():
     )
     p_dive.add_argument("--top", type=int, default=None, help="How many papers to deep-dive (default: arxiv_deep_dive_n)")
 
-    # ── radar-report (mentor/student daily report pipeline) ──
+    # ── radar-report (mentor-panel / multi-student daily report pipeline) ──
     p_report = sub.add_parser(
         "radar-report",
-        help="Run the mentor/student pipeline: student (Ollama) drafts the daily report, mentor (Opus) critiques",
+        help="Run the report pipeline: roster students (Ollama) draft, assistants critique, main mentor scores + writes gold",
     )
     p_report.add_argument(
-        "--student-model", default="qwen2.5:7b", help="Ollama model for the student draft"
+        "--student-model", default=None,
+        help="Ad-hoc single-student override (normally the roster decides; see radar-students)",
     )
+
+    # ── radar-students (student roster management) ──
+    p_students = sub.add_parser(
+        "radar-students", help="Manage the student roster: list / add / retire / leaderboard"
+    )
+    p_students.add_argument("action", choices=["list", "add", "retire", "leaderboard"])
+    p_students.add_argument("--id", dest="student_id", help="Student id (add/retire)")
+    p_students.add_argument("--model", help="Ollama model tag, e.g. qwen3:4b (add)")
+    p_students.add_argument("--persona", default="", help="Reading angle for this student (add)")
+    p_students.add_argument("--temperature", type=float, default=0.3)
+    p_students.add_argument("--seed", type=int, default=None)
+    p_students.add_argument("--reason", default="", help="Retirement reason (retire)")
 
     # ── kol-post (single-stock KOL post scaffold, KG-driven) ──
     p_kol = sub.add_parser(
@@ -208,6 +221,8 @@ def main():
         _cmd_radar_deepdive(args)
     elif args.command == "radar-report":
         _cmd_radar_report(args)
+    elif args.command == "radar-students":
+        _cmd_radar_students(args)
     elif args.command == "kol-post":
         _cmd_kol_post(args)
 
@@ -280,22 +295,74 @@ def _cmd_radar_deepdive(args):
 
 
 def _cmd_radar_report(args):
-    """Mentor/student daily-report pipeline: student drafts, mentor critiques."""
+    """Mentor-panel daily-report pipeline: roster students draft, panel critiques."""
     from agent_reach.radar_report import run_report_pipeline
 
-    print("🛰️  收集 + 学生(Ollama)起草中...")
-    rec = run_report_pipeline(student_model=getattr(args, "student_model", "qwen2.5:7b"))
+    print("🛰️  收集 + 學生們(Ollama)起草中...")
+    rec = run_report_pipeline(student_model=getattr(args, "student_model", None))
     print(f"✅ 草稿完成 → {rec['record_path']}")
-    print(f"   学生模型: {rec['student_model']} · 教训规则: {'有' if rec.get('lessons_used') else '无'} · 材料 {rec['material_chars']} 字")
+    roster = " / ".join(f"{s['id']}({s['model']})" for s in rec["students"])
+    print(f"   學生: {roster} · 教訓規則: {'有' if rec.get('lessons_used') else '無'} · 材料 {rec['material_chars']} 字")
+    if rec.get("assistant_critiques"):
+        names = ", ".join(a.get("assistant", "?") for a in rec["assistant_critiques"])
+        print(f"   🧑‍🏫 助教在場: {names}")
     if rec["mentor_ran"]:
         c = rec["critique"]
-        print(f"   🎓 导师(Opus)已评分: total={c.get('total')} {c.get('scores')}")
-        print("   范本已存 → radar/training/gold/  （回灌下次 few-shot）")
+        per = {sid: e.get("total") for sid, e in (c.get("per_student") or {}).items() if isinstance(e, dict)}
+        print(f"   🎓 主師已評分: {per} · 最佳: {c.get('best_student')}")
+        print("   範本已存 → radar/training/gold/ · 排行榜: agent-reach radar-students leaderboard")
     else:
-        print("   🎓 导师未自动运行（未设 ANTHROPIC_API_KEY）。")
-        print('   让 Claude Code 当导师：「读最新 training 记录，按 5 维评分+修正出 gold」')
-    print("\n--- 学生草稿预览 ---")
-    print(rec["draft"][:1200])
+        print("   🎓 主師未自動運行（未設 ANTHROPIC_API_KEY）。")
+        print('   讓 Claude Code 當主師：「讀最新 training 記錄，按 5 維對每位學生評分+修正出 gold」')
+    best = (rec.get("critique") or {}).get("best_student") if rec["mentor_ran"] else None
+    preview_id = best if best in rec["drafts"] else next(iter(rec["drafts"]))
+    print(f"\n--- 學生草稿預覽（{preview_id}） ---")
+    print(rec["drafts"][preview_id][:1200])
+
+
+def _cmd_radar_students(args):
+    """Student roster: list / add / retire / leaderboard."""
+    from agent_reach.radar_students import (
+        add_student,
+        leaderboard,
+        load_students,
+        retire_student,
+        retirement_suggestions,
+        student_scores,
+    )
+
+    action = args.action
+    if action == "add":
+        if not (args.student_id and args.model):
+            print("用法: agent-reach radar-students add --id qwen3-8b-x --model qwen3:8b [--persona ...]")
+            return
+        add_student(args.student_id, args.model, args.persona, args.temperature, args.seed)
+        print(f"✅ 已加入學生 {args.student_id}（{args.model}）。先 `ollama pull {args.model}` 確保模型在本地。")
+        return
+    if action == "retire":
+        if not args.student_id:
+            print("用法: agent-reach radar-students retire --id <student_id> [--reason ...]")
+            return
+        retire_student(args.student_id, args.reason)
+        print(f"✅ 已退役 {args.student_id}（保留歷史成績）")
+        return
+
+    students = load_students()
+    if action == "list":
+        for s in students:
+            mark = "🟢" if s.get("status", "active") == "active" else "⚪"
+            persona = f" · {s['persona']}" if s.get("persona") else ""
+            print(f"{mark} {s['id']}  ({s['model']}){persona}")
+        return
+
+    board = leaderboard(students, student_scores())
+    print("🏆 學生排行榜（近 10 次 rolling mean）")
+    for r in board:
+        mean = "—" if r["rolling_mean"] is None else f"{r['rolling_mean']:.1f}"
+        status = "" if r["status"] == "active" else " [已退役]"
+        print(f"   {r['id']:<20} {r['model']:<14} mean={mean:<6} runs={r['runs']}{status}")
+    for sid in retirement_suggestions(board):
+        print(f"   💡 {sid} 長期落後榜首，建議評估退役: agent-reach radar-students retire --id {sid}")
 
 
 def _cmd_kol_post(args):
