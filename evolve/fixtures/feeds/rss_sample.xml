@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Frozen Health Feed</title>
+    <link>https://example.com</link>
+    <item>
+      <title>NVIDIA ships next-gen HBM stacks for AI datacenters</title>
+      <link>https://example.com/hbm-stacks</link>
+      <description>Supply chain checkpoints for AI accelerators.</description>
+      <pubDate>Tue, 07 Jul 2026 08:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Open-source LLM inference engine hits 2x throughput</title>
+      <link>https://example.com/inference-2x</link>
+      <description>KV cache paging and speculative decoding land upstream.</description>
+      <pubDate>Tue, 07 Jul 2026 09:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

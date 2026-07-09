@@ -185,6 +185,19 @@ def main():
     )
     p_backfill.add_argument("--out", default=None, help="Path for the distilled KB draft")
 
+    # ── radar-evolve (autoresearch-style self-iteration loop) ──
+    p_evolve = sub.add_parser(
+        "radar-evolve",
+        help="Self-evolve loop: fixed eval + short experiments + auto keep/discard (autoresearch-style)",
+    )
+    p_evolve.add_argument("evolve_action", metavar="action", choices=["run", "freeze", "status"])
+    p_evolve.add_argument("--budget", type=int, default=5, help="Experiments per run")
+    p_evolve.add_argument("--epsilon", type=float, default=1.0, help="Keep iff cand >= base + epsilon")
+    p_evolve.add_argument("--base-branch", default="radar-evolve", help="Branch accumulating kept experiments")
+    p_evolve.add_argument("--dry-run", action="store_true", help="Full cycle but never merge keeps")
+    p_evolve.add_argument("--max-minutes", type=int, default=None, help="Wall-clock budget")
+    p_evolve.add_argument("--from-training", type=int, default=5, help="freeze: heldout fixtures to build")
+
     # ── kol-post (single-stock KOL post scaffold, KG-driven) ──
     p_kol = sub.add_parser(
         "kol-post", help="Scaffold a single-stock KOL post (繁中) with supply-chain KG chokepoints injected"
@@ -242,6 +255,8 @@ def main():
         _cmd_radar_students(args)
     elif args.command == "radar-backfill":
         _cmd_radar_backfill(args)
+    elif args.command == "radar-evolve":
+        _cmd_radar_evolve(args)
     elif args.command == "kol-post":
         _cmd_kol_post(args)
 
@@ -406,6 +421,47 @@ def _cmd_radar_backfill(args):
         else:
             print("   ⚠️ 蒸餾未執行（未設 ANTHROPIC_API_KEY）。")
             print("   讓互動式 Claude 讀 backfill 原始材料，按 knowledge/karpathy.md 的結構蒸餾。")
+
+
+def _cmd_radar_evolve(args):
+    """Autoresearch-style self-evolve: run / freeze / status."""
+    action = args.evolve_action
+    if action == "freeze":
+        from agent_reach.radar_evolve import freeze
+
+        manifest = freeze(from_training=args.from_training)
+        print(f"🧊 已凍結 {len(manifest['fixtures'])} 份 heldout 材料 + manifest")
+        print(f"   pinned 學生: {manifest['pinned_student']['model']} (temp 0) · 主師: {manifest['pinned_mentor']}")
+        print("   把 evolve/fixtures/ commit 進 repo，評測基準才算釘死。")
+        return
+    if action == "status":
+        from agent_reach.radar_evolve import JOURNAL_MD, journal_tail_text
+
+        tail = journal_tail_text(n=15)
+        print(tail or "（journal 為空 — 還沒跑過實驗）")
+        if JOURNAL_MD.exists():
+            print(f"\n完整日誌: {JOURNAL_MD}")
+        return
+
+    from agent_reach.radar_evolve import run_evolve
+
+    print(f"🧬 evolve 啟動: budget={args.budget} epsilon={args.epsilon} "
+          f"base={args.base_branch}{' [dry-run]' if args.dry_run else ''}")
+    print("   （固定評測 + 單變因實驗 + 自動保留/丟棄；touch evolve/STOP 可隨時叫停）")
+    results = run_evolve(
+        budget=args.budget,
+        base_branch=args.base_branch,
+        epsilon=args.epsilon,
+        dry_run=args.dry_run,
+        max_minutes=args.max_minutes,
+    )
+    kept = [r for r in results if str(r.get("decision", "")).startswith("keep")]
+    print(f"✅ 完成 {len(results)} 個實驗 · 保留 {len(kept)} · 詳見 evolve/journal.md")
+    for r in results:
+        print(f"   {r['id']}: {r['decision']}  base={r.get('base_score')} cand={r.get('cand_score')}"
+              f"  {r.get('hypothesis', '')[:60]}")
+    if kept and not args.dry_run:
+        print(f"   保留的實驗已 ff 進 `{args.base_branch}` branch — 人工審 diff 後自行開 PR（不自動上 main）")
 
 
 def _cmd_kol_post(args):

@@ -1,0 +1,11 @@
+# Agent-editable radar sources for evolve experiments.
+# Merged over DEFAULT_SOURCES by load_sources(path) — only overrides live here.
+# NOTE: mutations to this file do NOT move the frozen eval (material is
+# frozen); it exists for collection-side experiments once a collection
+# metric lands. Keep changes conservative.
+
+# Example override (uncomment to experiment):
+# arxiv_keywords:
+#   kv cache: 3
+#   speculative decoding: 3
+#   hbm: 3

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <entry>
+    <id>http://arxiv.org/abs/2607.00001v1</id>
+    <title>Frozen Probe: KV Cache Eviction for Long-Context Serving</title>
+    <summary>We study kv cache eviction policies to reduce memory pressure at inference time.</summary>
+    <published>2026-07-07T00:00:00Z</published>
+    <author><name>Frozen Author</name></author>
+    <category term="cs.LG"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2607.00002v1</id>
+    <title>A Survey of Medieval Basket Weaving Techniques</title>
+    <summary>Entirely unrelated to machine learning; must be gated out by the scorer.</summary>
+    <published>2026-07-07T00:00:00Z</published>
+    <author><name>Off Topic</name></author>
+    <category term="cs.DL"/>
+  </entry>
+</feed>

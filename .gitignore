@@ -20,3 +20,8 @@ uv.lock
 
 # Radar generated output (digests/reports/training) — local only
 radar/
+
+# evolve runtime artifacts (journal is append-only by the harness, local)
+evolve/journal.jsonl
+evolve/journal.md
+evolve/STOP
