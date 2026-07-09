@@ -25,6 +25,12 @@ class Config:
         "groq_whisper": ["groq_api_key"],
         "openai_whisper": ["openai_api_key"],
         "github_token": ["github_token"],
+        # Radar: main teacher (critique/deep-dive/distill/evolve) needs Anthropic;
+        # assistant mentors are optional and show up per-provider.
+        "radar_mentor": ["anthropic_api_key"],
+        "radar_evolve": ["anthropic_api_key"],
+        "radar_assistant_codex": ["openai_api_key"],
+        "radar_assistant_grok": ["xai_api_key"],
     }
 
     def __init__(self, config_path: Optional[Path] = None):
