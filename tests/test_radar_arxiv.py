@@ -89,8 +89,8 @@ def test_score_paper_word_boundary():
 
 
 def test_collect_arxiv_filters_and_sorts(monkeypatch):
-    parsed = feedparser.parse(ATOM_FIXTURE)  # parse BEFORE patching (shared module object)
-    monkeypatch.setattr(ra.feedparser, "parse", lambda url: parsed)
+    parsed = feedparser.parse(ATOM_FIXTURE)
+    monkeypatch.setattr(ra, "_parse_feed", lambda src, timeout=15: parsed)
     sources = {
         "arxiv_categories": ["cs.AI"], "arxiv_keywords": KW, "arxiv_orgs": ORGS,
         "gurus": {"research": [{"handle": "tri_dao", "arxiv_names": ["Tri Dao"]}]},
@@ -103,10 +103,10 @@ def test_collect_arxiv_filters_and_sorts(monkeypatch):
 
 
 def test_collect_arxiv_never_raises(monkeypatch):
-    def boom(url):
+    def boom(src, timeout=15):
         raise RuntimeError("network down")
 
-    monkeypatch.setattr(ra.feedparser, "parse", boom)
+    monkeypatch.setattr(ra, "_parse_feed", boom)
     assert collect_arxiv({"arxiv_categories": ["cs.AI"]}, config=None) == []
 
 

@@ -37,10 +37,26 @@ from pathlib import Path
 from typing import Optional
 
 import feedparser
+import requests
 import yaml
 from loguru import logger
 
 from agent_reach.config import Config
+
+_FEED_UA = "Mozilla/5.0 (compatible; agent-reach-radar)"
+
+
+def _parse_feed(src: str, timeout: int = 15):
+    """feedparser.parse with a real network timeout (feedparser has none —
+    one dead feed would otherwise hang the whole collection run).
+
+    Accepts a URL or raw XML content (health fixtures / tests pass XML).
+    """
+    if src.startswith(("http://", "https://")):
+        resp = requests.get(src, timeout=timeout, headers={"User-Agent": _FEED_UA})
+        resp.raise_for_status()
+        return feedparser.parse(resp.content)
+    return feedparser.parse(src)
 
 def _radar_output_dir() -> Path:
     """Output dir for digests/reports — `radar_output_dir` in config, else ~/.agent-reach/radar."""
@@ -606,7 +622,7 @@ def collect_rss(sources: dict) -> list[Item]:
             urls.append(url)
     for url in urls:
         try:
-            feed = feedparser.parse(url)
+            feed = _parse_feed(url)
         except Exception as e:  # noqa: BLE001
             logger.warning(f"RSS parse failed for {url}: {e}")
             continue
@@ -637,7 +653,7 @@ def collect_google_trends(sources: dict) -> list[Item]:
     for geo in sources.get("google_trends_geo", []):
         url = f"https://trends.google.com/trending/rss?geo={geo}"
         try:
-            feed = feedparser.parse(url)
+            feed = _parse_feed(url)
         except Exception as e:  # noqa: BLE001
             logger.warning(f"Google Trends fetch failed for {geo}: {e}")
             continue

@@ -25,12 +25,11 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
 
-import feedparser
 import requests
 from loguru import logger
 
 from agent_reach.config import Config
-from agent_reach.radar import RADAR_DIR, Item, guru_author_names
+from agent_reach.radar import RADAR_DIR, Item, _parse_feed, guru_author_names
 
 ARXIV_API = "http://export.arxiv.org/api/query"
 DEEPDIVE_DIR = RADAR_DIR / "deepdive"
@@ -157,7 +156,7 @@ def collect_arxiv(sources: dict, config: Config) -> list[Item]:
         return []
     url = _arxiv_query_url(categories, int(sources.get("arxiv_max_results", 100)))
     try:
-        feed = feedparser.parse(url)
+        feed = _parse_feed(url, timeout=30)
     except Exception as e:  # noqa: BLE001 - collector must never abort the run
         logger.warning(f"arXiv fetch failed: {e}")
         return []
