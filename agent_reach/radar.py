@@ -191,6 +191,25 @@ DEFAULT_SOURCES = {
     # pulse. Off by default (general daily trends are mostly off-topic noise
     # for an AI/investment radar). Set e.g. ["US", "TW"] to enable.
     "google_trends_geo": [],
+    # ── arXiv 論文雷達（tier 1 = 摘要掃描；tier 2 = top-N 全文深讀）───────
+    "arxiv_categories": ["cs.AI", "cs.LG", "cs.CL", "cs.DC", "cs.AR"],
+    "arxiv_max_results": 100,
+    "arxiv_top_n": 8,  # tier 1: 進 digest 的篇數
+    "arxiv_deep_dive_n": 4,  # tier 2: 全文蒸餾篇數
+    # Weighted keywords — the scorer is the relevance gate (title hits ×2).
+    "arxiv_keywords": {
+        "kv cache": 3, "speculative decoding": 3, "hbm": 3,
+        "mixture of experts": 2, "quantization": 2, "inference": 2,
+        "distributed training": 2, "interconnect": 2, "scaling law": 2,
+        "attention": 1, "reasoning": 1, "reinforcement learning": 1,
+        "agent": 1, "pretraining": 1, "fine-tuning": 1,
+    },
+    "arxiv_orgs": [
+        "DeepMind", "OpenAI", "Anthropic", "Meta AI", "NVIDIA",
+        "Microsoft Research", "Qwen", "DeepSeek", "Alibaba", "ByteDance",
+    ],
+    "arxiv_author_boost": 6,
+    "arxiv_org_boost": 4,
     # Cap per section in the digest.
     "max_items_per_section": 8,
 }
@@ -652,6 +671,9 @@ def collect_all(sources: dict, config: Config) -> dict[str, list[Item]]:
     Noisy sources (RSS, Google Trends) are passed through the topic gate when
     their ``filter_*`` flag is on. Every group is de-duplicated.
     """
+    # Deferred import — radar_arxiv imports from this module.
+    from agent_reach.radar_arxiv import collect_arxiv
+
     kw = sources.get("topic_keywords", [])
     rss = collect_rss(sources)
     if sources.get("filter_rss", True):
@@ -666,6 +688,8 @@ def collect_all(sources: dict, config: Config) -> dict[str, list[Item]]:
         "web": _dedupe(collect_exa(sources)),
         "rss": _dedupe(rss),
         "trend": _dedupe(trends),
+        # Papers carry their own scorer-gate; no topic filter here.
+        "paper": _dedupe(collect_arxiv(sources, config)),
     }
 
 
@@ -691,7 +715,7 @@ def build_digest(grouped: dict[str, list[Item]], sources: dict, when: datetime) 
     total = sum(counts.values())
     lines.append(
         f"> 共 {total} 条 · 推文 {counts.get('tweet',0)} · 网文 {counts.get('web',0)} "
-        f"· RSS {counts.get('rss',0)} · 趋势 {counts.get('trend',0)}"
+        f"· RSS {counts.get('rss',0)} · 论文 {counts.get('paper',0)} · 趋势 {counts.get('trend',0)}"
     )
     lines.append("")
     lines.append("## 🧠 今日洞察")
@@ -739,6 +763,26 @@ def build_digest(grouped: dict[str, list[Item]], sources: dict, when: datetime) 
                 _emit_tweets(sorted(buckets.pop(cat), key=lambda i: i.score, reverse=True)[:cap])
         else:
             _emit_tweets(sorted(all_tweets, key=lambda i: i.score, reverse=True)[:cap])
+
+    # arXiv papers — 軟硬體架構脈搏, ranked by the relevance scorer.
+    papers = sorted(grouped.get("paper", []), key=lambda i: i.score, reverse=True)
+    if papers:
+        top_n = int(sources.get("arxiv_top_n", 8))
+        dive_n = int(sources.get("arxiv_deep_dive_n", 4))
+        lines.append("## 📄 arXiv 論文雷達（軟硬體架構脈搏）")
+        lines.append("")
+        for rank, it in enumerate(papers[:top_n]):
+            flag = " 🔬" if rank < dive_n else ""
+            lines.append(f"- [{it.title}]({it.url}){flag} · score {it.score:g}")
+            why = it.extra.get("why") or []
+            if why:
+                lines.append(f"  - _{'、'.join(why[:6])}_")
+            if it.author:
+                lines.append(f"  - {it.author[:120]}")
+        lines.append("")
+        if dive_n and len(papers) > 0:
+            lines.append("> 🔬 = 深讀候選（`agent-reach radar-deepdive` 產出全文蒸餾報告）")
+            lines.append("")
 
     # Exa web.
     web = grouped.get("web", [])[:cap]

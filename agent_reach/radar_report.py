@@ -109,6 +109,14 @@ def build_material(grouped: dict[str, list[Item]], per_account: int = 2, max_cha
         for it in rss:
             lines.append(f"- {it.title} ({it.url})")
 
+    papers = sorted(grouped.get("paper", []), key=lambda x: x.score, reverse=True)
+    if papers:
+        lines.append("\n## arXiv 論文（摘要級）")
+        for it in papers[:8]:
+            why = "、".join(it.extra.get("why", [])[:4])
+            tag = f" [{why}]" if why else ""
+            lines.append(f"- {it.title}{tag} — {it.text[:200]} ({it.url})")
+
     text = "\n".join(lines)
     return text[:max_chars]
 

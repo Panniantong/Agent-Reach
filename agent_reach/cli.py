@@ -135,6 +135,16 @@ def main():
     p_radar.add_argument(
         "--print", dest="to_stdout", action="store_true", help="Print the digest to stdout too"
     )
+    p_radar.add_argument(
+        "--deep-dive", action="store_true", help="Also distill the top arXiv papers into deep-dive reports"
+    )
+
+    # ── radar-deepdive (tier-2 arXiv full-text distillation) ──
+    p_dive = sub.add_parser(
+        "radar-deepdive",
+        help="Pull full text of the top-scored arXiv papers and distill deep-dive reports (繁中)",
+    )
+    p_dive.add_argument("--top", type=int, default=None, help="How many papers to deep-dive (default: arxiv_deep_dive_n)")
 
     # ── radar-report (mentor/student daily report pipeline) ──
     p_report = sub.add_parser(
@@ -194,6 +204,8 @@ def main():
         _cmd_transcribe(args)
     elif args.command == "radar":
         _cmd_radar(args)
+    elif args.command == "radar-deepdive":
+        _cmd_radar_deepdive(args)
     elif args.command == "radar-report":
         _cmd_radar_report(args)
     elif args.command == "kol-post":
@@ -224,13 +236,47 @@ def _cmd_radar(args):
     print(f"   最新快照: {out_path.parent / 'latest.md'}")
     print(
         f"   推文 {len(grouped.get('tweet', []))} · 网文 {len(grouped.get('web', []))} "
-        f"· RSS {len(grouped.get('rss', []))} · 趋势 {len(grouped.get('trend', []))}"
+        f"· RSS {len(grouped.get('rss', []))} · 论文 {len(grouped.get('paper', []))} "
+        f"· 趋势 {len(grouped.get('trend', []))}"
     )
     print('   让 Agent 总结洞察：「读 radar/latest.md，挑出今天真正重要的 3-5 条并说明为什么」')
+
+    if getattr(args, "deep_dive", False) and grouped.get("paper"):
+        from agent_reach.radar import load_sources
+        from agent_reach.radar_arxiv import run_deep_dive
+
+        print("🔬 深讀 arXiv top 論文中...")
+        paths = run_deep_dive(grouped["paper"], load_sources())
+        for p in paths:
+            print(f"   → {p}")
 
     if getattr(args, "to_stdout", False):
         print()
         print(out_path.read_text(encoding="utf-8"))
+
+
+def _cmd_radar_deepdive(args):
+    """Tier-2: full-text distillation of the top-scored arXiv papers."""
+    from agent_reach.config import Config
+    from agent_reach.radar import load_sources
+    from agent_reach.radar_arxiv import collect_arxiv, run_deep_dive
+
+    sources = load_sources()
+    if args.top:
+        sources["arxiv_deep_dive_n"] = args.top
+    print("📄 掃描 arXiv 摘要中...")
+    papers = collect_arxiv(sources, Config())
+    if not papers:
+        print("⚠️ 沒有命中任何論文（檢查 arxiv_categories / arxiv_keywords）")
+        return
+    print(f"   命中 {len(papers)} 篇，深讀 top {int(sources.get('arxiv_deep_dive_n', 4))} ...")
+    paths = run_deep_dive(papers, sources)
+    for p in paths:
+        print(f"   → {p}")
+    import os
+
+    if not (os.environ.get("ANTHROPIC_API_KEY") or Config().get("anthropic_api_key")):
+        print("   （未設 ANTHROPIC_API_KEY → 產出為 PENDING 鷹架，讓互動式 Claude 補完）")
 
 
 def _cmd_radar_report(args):
