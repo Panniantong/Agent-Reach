@@ -8,7 +8,15 @@ build/
 .env
 .agent-reach/
 *.log
+.venv/
+venv/
+
+# mcporter server list is user-local and may hold MCP server keys/tokens — never commit
+config/mcporter.json
 
 # Claude Code personal permission settings — local only, never commit
 .claude/settings.local.json
 uv.lock
+
+# Radar generated output (digests/reports/training) — local only
+radar/

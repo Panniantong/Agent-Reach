@@ -9,10 +9,10 @@ Usage:
     agent-reach setup
 """
 
-import sys
 import argparse
 import json
 import os
+import sys
 import time
 
 from agent_reach import __version__
@@ -127,6 +127,35 @@ def main():
     # ── watch ──
     sub.add_parser("watch", help="Quick health check + update check (for scheduled tasks)")
 
+    # ── radar ──
+    p_radar = sub.add_parser(
+        "radar", help="Collect AI×investment hot posts across platforms into one ranked digest"
+    )
+    p_radar.add_argument("--json", action="store_true", help="Print collected items as JSON")
+    p_radar.add_argument(
+        "--print", dest="to_stdout", action="store_true", help="Print the digest to stdout too"
+    )
+
+    # ── radar-report (mentor/student daily report pipeline) ──
+    p_report = sub.add_parser(
+        "radar-report",
+        help="Run the mentor/student pipeline: student (Ollama) drafts the daily report, mentor (Opus) critiques",
+    )
+    p_report.add_argument(
+        "--student-model", default="qwen2.5:7b", help="Ollama model for the student draft"
+    )
+
+    # ── kol-post (single-stock KOL post scaffold, KG-driven) ──
+    p_kol = sub.add_parser(
+        "kol-post", help="Scaffold a single-stock KOL post (繁中) with supply-chain KG chokepoints injected"
+    )
+    p_kol.add_argument("ticker", help="Stock ticker / 代号, e.g. 6324 or RKLB")
+    p_kol.add_argument(
+        "--sector",
+        default="robotics",
+        help="space | software | robotics | semi | critical_minerals | github",
+    )
+
     # ── version ──
     sub.add_parser("version", help="Show version")
 
@@ -163,14 +192,79 @@ def main():
         _cmd_format(args)
     elif args.command == "transcribe":
         _cmd_transcribe(args)
+    elif args.command == "radar":
+        _cmd_radar(args)
+    elif args.command == "radar-report":
+        _cmd_radar_report(args)
+    elif args.command == "kol-post":
+        _cmd_kol_post(args)
 
 
 # ── Command handlers ────────────────────────────────
 
 
+def _cmd_radar(args):
+    """Collect hot posts across platforms into one ranked markdown digest."""
+    import json as _json
+
+    from agent_reach.radar import run_radar
+
+    print("🛰️  收集中（Twitter / Exa / RSS / Trends）...")
+    out_path, grouped = run_radar()
+    total = sum(len(v) for v in grouped.values())
+
+    if getattr(args, "json", False):
+        payload = {
+            k: [vars(i) for i in v] for k, v in grouped.items()
+        }
+        print(_json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+
+    print(f"✅ 收集 {total} 条 → {out_path}")
+    print(f"   最新快照: {out_path.parent / 'latest.md'}")
+    print(
+        f"   推文 {len(grouped.get('tweet', []))} · 网文 {len(grouped.get('web', []))} "
+        f"· RSS {len(grouped.get('rss', []))} · 趋势 {len(grouped.get('trend', []))}"
+    )
+    print('   让 Agent 总结洞察：「读 radar/latest.md，挑出今天真正重要的 3-5 条并说明为什么」')
+
+    if getattr(args, "to_stdout", False):
+        print()
+        print(out_path.read_text(encoding="utf-8"))
+
+
+def _cmd_radar_report(args):
+    """Mentor/student daily-report pipeline: student drafts, mentor critiques."""
+    from agent_reach.radar_report import run_report_pipeline
+
+    print("🛰️  收集 + 学生(Ollama)起草中...")
+    rec = run_report_pipeline(student_model=getattr(args, "student_model", "qwen2.5:7b"))
+    print(f"✅ 草稿完成 → {rec['record_path']}")
+    print(f"   学生模型: {rec['student_model']} · 教训规则: {'有' if rec.get('lessons_used') else '无'} · 材料 {rec['material_chars']} 字")
+    if rec["mentor_ran"]:
+        c = rec["critique"]
+        print(f"   🎓 导师(Opus)已评分: total={c.get('total')} {c.get('scores')}")
+        print("   范本已存 → radar/training/gold/  （回灌下次 few-shot）")
+    else:
+        print("   🎓 导师未自动运行（未设 ANTHROPIC_API_KEY）。")
+        print('   让 Claude Code 当导师：「读最新 training 记录，按 5 维评分+修正出 gold」')
+    print("\n--- 学生草稿预览 ---")
+    print(rec["draft"][:1200])
+
+
+def _cmd_kol_post(args):
+    """Scaffold a single-stock KOL post with supply-chain KG chokepoints injected."""
+    from agent_reach.kol_post import write_scaffold
+
+    path = write_scaffold(args.ticker, getattr(args, "sector", "robotics"))
+    print(f"✅ KOL post 骨架已生成 → {path}")
+    print("   已注入 KG 卡脖子节点 + 留好你的补充占位。让 Claude 填实时事实(Exa)后精修，你再补 KG 细节。")
+
+
 def _cmd_install(args):
     """One-shot deterministic installer."""
     import os
+
     from agent_reach.config import Config
     from agent_reach.doctor import check_all, format_report
 
@@ -220,18 +314,18 @@ def _cmd_install(args):
         env = _detect_environment()
 
     if env == "server":
-        print(f"Environment: Server/VPS (auto-detected)")
+        print("Environment: Server/VPS (auto-detected)")
     else:
-        print(f"Environment: Local computer (auto-detected)")
+        print("Environment: Local computer (auto-detected)")
 
     # Apply explicit flags
     if args.proxy:
         if dry_run:
-            print(f"[dry-run] Would save network proxy")
+            print("[dry-run] Would save network proxy")
         else:
             config.set("proxy", args.proxy)
             config.set("bilibili_proxy", args.proxy)  # legacy key
-            print(f"✅ 代理已保存（Agent 访问受限网络时使用）")
+            print("✅ 代理已保存（Agent 访问受限网络时使用）")
 
     # ── Install core system dependencies (lightweight, always) ──
     print()
@@ -342,9 +436,9 @@ def _cmd_install(args):
 
 def _install_skill():
     """Install Agent Reach as an agent skill (OpenClaw / Claude Code / .agents)."""
+    import importlib.resources
     import os
     import shutil
-    import importlib.resources
 
     def _is_english_locale(value: str) -> bool:
         normalized = value.strip().lower()
@@ -509,9 +603,9 @@ def _cmd_format(args):
 
 def _install_system_deps():
     """Install system-level dependencies: gh CLI, Node.js (for mcporter)."""
+    import platform
     import shutil
     import subprocess
-    import platform
     import tempfile
 
     print("Checking system dependencies...")
@@ -637,6 +731,7 @@ def _install_system_deps():
 def _install_xiaoyuzhou_deps():
     """Install Xiaoyuzhou podcast transcription script."""
     import shutil
+
     from agent_reach.config import Config
 
     config = Config()
@@ -997,6 +1092,7 @@ def _detect_environment():
 def _cmd_configure(args):
     """Set a config value and test it, or auto-extract from browser."""
     import shutil
+
     from agent_reach.config import Config
 
     config = Config()
@@ -1099,15 +1195,15 @@ def _cmd_configure(args):
 
     elif args.key == "github-token":
         config.set("github_token", value)
-        print(f"✅ GitHub token configured!")
+        print("✅ GitHub token configured!")
 
     elif args.key == "groq-key":
         config.set("groq_api_key", value)
-        print(f"✅ Groq key configured!")
+        print("✅ Groq key configured!")
 
     elif args.key == "openai-key":
         config.set("openai_api_key", value)
-        print(f"✅ OpenAI key configured!")
+        print("✅ OpenAI key configured!")
 
 
 def _cmd_transcribe(args):
@@ -1516,7 +1612,7 @@ def _cmd_setup():
     print("  获取: https://github.com/settings/tokens (无需任何权限)")
     current = config.get("github_token")
     if current:
-        print(f"  当前状态: ✅ 已配置")
+        print("  当前状态: ✅ 已配置")
     else:
         key = input("  GITHUB_TOKEN (回车跳过): ").strip()
         if key:
@@ -1537,7 +1633,7 @@ def _cmd_setup():
     print("  免费额度，注册: https://console.groq.com")
     current = config.get("groq_api_key")
     if current:
-        print(f"  当前状态: ✅ 已配置")
+        print("  当前状态: ✅ 已配置")
     else:
         key = input("  GROQ_API_KEY (回车跳过): ").strip()
         if key:
@@ -1704,7 +1800,7 @@ def _cmd_check_update():
             print()
             print(_UPDATE_INSTRUCTIONS)
             return "update_available"
-        print(f"✅ 已是最新版本")
+        print("✅ 已是最新版本")
         return "up_to_date"
 
     release_err = _classify_github_response_error(resp)
@@ -1741,9 +1837,9 @@ def _cmd_watch():
 
     Only outputs problems. If everything is fine, outputs a single line.
     """
+    from agent_reach import __version__
     from agent_reach.config import Config
     from agent_reach.doctor import check_all
-    from agent_reach import __version__
 
     config = Config()
     issues = []
@@ -1782,8 +1878,8 @@ def _cmd_watch():
         print(f"Agent Reach: 全部正常 ({ok}/{total} 渠道可用，v{__version__} 已是最新)")
         return
 
-    print(f"Agent Reach 监控报告")
-    print(f"=" * 40)
+    print("Agent Reach 监控报告")
+    print("=" * 40)
     print(f"版本: v{__version__}  |  渠道: {ok}/{total}")
 
     if issues:
