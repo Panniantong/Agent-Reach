@@ -92,6 +92,7 @@ class TestConfig:
     def test_save_creates_file_with_restricted_permissions(self, tmp_path):
         import stat
         import sys
+
         config_file = tmp_path / "secure_config.yaml"
         config = Config(config_path=config_file)
         config.set("secret_key", "my-secret")
@@ -133,3 +134,92 @@ class TestConfig:
             assert not (mode & stat.S_IXGRP), "group execute should not be set"
             assert not (mode & stat.S_IROTH), "other read should not be set"
             assert not (mode & stat.S_IXOTH), "other execute should not be set"
+
+    def test_save_does_not_follow_symlink_at_config_path(self, tmp_path):
+        """A symlink planted at the config path must be replaced, not followed.
+
+        Otherwise save() would write through the link and clobber an
+        attacker-chosen target file with the user's credentials.
+        """
+        import os
+
+        import yaml
+
+        victim = tmp_path / "victim.yaml"
+        victim.write_text("secret: victim-data\n", encoding="utf-8")
+
+        config_file = tmp_path / "config.yaml"
+        try:
+            os.symlink(victim, config_file)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlinks not supported on this platform")
+
+        # load() reads through the symlink -> victim's {"secret": "victim-data"}.
+        config = Config(config_path=config_file)
+        config.set("exa_api_key", "new-secret")
+
+        # The victim file must be untouched: save() replaced the symlink,
+        # it did not write through it.
+        assert yaml.safe_load(victim.read_text(encoding="utf-8")) == {"secret": "victim-data"}, (
+            "save() wrote through the symlink into the victim file"
+        )
+
+        # The config path is now a regular file holding the new data.
+        assert not os.path.islink(config_file), "config path is still a symlink"
+        saved = yaml.safe_load(config_file.read_text(encoding="utf-8"))
+        assert saved["exa_api_key"] == "new-secret"
+
+    def test_save_preserves_previous_config_on_write_failure(self, tmp_path, monkeypatch):
+        """A failed write must not truncate or corrupt the existing config.
+
+        The old O_TRUNC write emptied the file before the YAML dump ran,
+        so any failure mid-write left credentials unreadable. The atomic
+        temp-then-rename write leaves the previous file untouched.
+        """
+        config_file = tmp_path / "config.yaml"
+        config = Config(config_path=config_file)
+        config.set("keep_key", "keep_value")  # establishes a valid prior file
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("simulated write failure")
+
+        monkeypatch.setattr("agent_reach.config.yaml.dump", boom)
+
+        with pytest.raises(RuntimeError):
+            config.set("new_key", "new_value")
+
+        monkeypatch.undo()  # restore yaml.dump so Config can reload
+
+        reloaded = Config(config_path=config_file)
+        assert reloaded.get("keep_key") == "keep_value", "prior config was corrupted"
+        assert reloaded.get("new_key") is None
+
+        # No orphaned temp file should litter the config directory.
+        leftovers = [p for p in tmp_path.iterdir() if p.name != "config.yaml"]
+        assert leftovers == [], f"temp file left behind: {leftovers}"
+
+    def test_save_writes_temp_in_same_directory_as_target(self, tmp_path, monkeypatch):
+        """The temp file must live in the target's directory.
+
+        os.replace() is only atomic across the same filesystem; a temp
+        in the system temp dir could span a mount boundary and fall back
+        to a non-atomic copy.
+        """
+        import tempfile as _tempfile
+
+        config_file = tmp_path / "sub" / "config.yaml"
+        config = Config(config_path=config_file)
+
+        captured = {}
+        real_mkstemp = _tempfile.mkstemp
+
+        def spy(*args, **kwargs):
+            captured["dir"] = kwargs.get("dir")
+            return real_mkstemp(*args, **kwargs)
+
+        monkeypatch.setattr("agent_reach.config.tempfile.mkstemp", spy)
+
+        config.set("k", "v")
+        assert captured["dir"] == str(config_file.parent), (
+            "temp file must live in the target directory for an atomic same-FS rename"
+        )

@@ -6,12 +6,59 @@ Auto-creates directory on first use.
 """
 
 import os
+import stat
+import tempfile
 from pathlib import Path
 from typing import Any, Optional
 
 import yaml
 
 from agent_reach.utils.paths import make_private_dir
+
+
+def _atomic_write_yaml(target: Path, data: dict) -> None:
+    """Write ``data`` as YAML to ``target`` atomically and symlink-safely.
+
+    Writes to a sibling temp file (created mode 0o600 by
+    ``tempfile.mkstemp``, so credentials are never briefly world-readable)
+    in the SAME directory as the target, then ``os.replace()``s it into
+    place. This fixes two hazards of a naive ``O_TRUNC`` write:
+
+    - Torn writes / corruption on failure: ``os.replace`` is atomic, so a
+      crash or exception mid-write leaves the previous config untouched.
+    - Symlink swap: a symlink planted at the target path is REPLACED by the
+      new regular file (``os.replace`` renames the directory entry; it does
+      not follow the link) instead of being written through to an
+      attacker-chosen target.
+
+    On any exception the temp file is removed and the prior file is left
+    intact; the exception then propagates.
+    """
+    # mkstemp creates the file mode 0o600 on every platform (owner-only), so
+    # there is no race window where credentials are world-readable.
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(target.parent), prefix=f".{target.name}.", suffix=".tmp"
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except OSError:
+                pass  # fsync is best-effort; some filesystems don't support it
+        if os.name != "nt":
+            os.chmod(tmp_path, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
+        os.replace(tmp_path, target)
+    except BaseException:
+        # Crash or write failure: remove the orphaned temp file so it can't
+        # leak credentials, and leave the previous config untouched.
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
 
 
 class Config:
@@ -23,7 +70,10 @@ class Config:
     # Feature → required config keys
     FEATURE_REQUIREMENTS = {
         "exa_search": ["exa_api_key"],
-        "twitter_xreach": ["twitter_auth_token", "twitter_ct0"],  # legacy key name; used by twitter-cli
+        "twitter_xreach": [
+            "twitter_auth_token",
+            "twitter_ct0",
+        ],  # legacy key name; used by twitter-cli
         "groq_whisper": ["groq_api_key"],
         "openai_whisper": ["openai_api_key"],
         "github_token": ["github_token"],
@@ -49,28 +99,14 @@ class Config:
             self.data = {}
 
     def save(self):
-        """Save config to YAML file."""
+        """Save config to YAML file.
+
+        Atomic and symlink-safe — see :func:`_atomic_write_yaml`. The
+        previous config is left untouched if the write fails, and a symlink
+        planted at the config path is replaced rather than followed.
+        """
         self._ensure_dir()
-        # Create file with restricted permissions from the start to avoid
-        # a race window where credentials are briefly world-readable.
-        try:
-            import stat
-            fd = os.open(
-                str(self.config_path),
-                os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-                stat.S_IRUSR | stat.S_IWUSR,  # 0o600
-            )
-            if os.name != "nt":
-                os.chmod(self.config_path, stat.S_IRUSR | stat.S_IWUSR)
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                yaml.dump(self.data, f, default_flow_style=False, allow_unicode=True)
-        except OSError:
-            # Fallback for Windows or other edge cases where os.open flags
-            # are not fully supported.
-            with open(self.config_path, "w", encoding="utf-8") as f:
-                yaml.dump(self.data, f, default_flow_style=False, allow_unicode=True)
-            if os.name != "nt":
-                os.chmod(self.config_path, 0o600)
+        _atomic_write_yaml(self.config_path, self.data)
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a config value. Also checks environment variables (uppercase)."""
@@ -100,10 +136,7 @@ class Config:
 
     def get_configured_features(self) -> dict:
         """Return status of all optional features."""
-        return {
-            feature: self.is_configured(feature)
-            for feature in self.FEATURE_REQUIREMENTS
-        }
+        return {feature: self.is_configured(feature) for feature in self.FEATURE_REQUIREMENTS}
 
     def to_dict(self) -> dict:
         """Return config as dict (masks sensitive values)."""
