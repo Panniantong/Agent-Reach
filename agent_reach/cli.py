@@ -1101,6 +1101,22 @@ def _install_mcporter():
     except Exception:
         print("  [!]  Could not configure Exa. Run manually: mcporter config add exa https://mcp.exa.ai/mcp --scope home")
 
+    # Configure Keenable MCP (free, no key needed; also does page fetch)
+    try:
+        r = subprocess.run(
+            ["mcporter", "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=5
+        )
+        if "keenable" not in configured_server_names(r.stdout):
+            subprocess.run(
+                ["mcporter", "config", "add", "keenable", "https://api.keenable.ai/mcp", "--scope", "home"],
+                capture_output=True, encoding="utf-8", errors="replace", timeout=10,
+            )
+            print("  ✅ Keenable search configured (free, no API key needed)")
+        else:
+            print("  ✅ Keenable search already configured")
+    except Exception:
+        print("  [!]  Could not configure Keenable. Run manually: mcporter config add keenable https://api.keenable.ai/mcp --scope home")
+
     # NOTE: xhs-cli is now optional, installed via --channels=xiaohongshu
 
 
@@ -1113,10 +1129,12 @@ def _install_mcporter_safe():
     if shutil.which("mcporter"):
         print("  ✅ mcporter already installed")
         print("  To configure Exa search: mcporter config add exa https://mcp.exa.ai/mcp --scope home")
+        print("  To configure Keenable search: mcporter config add keenable https://api.keenable.ai/mcp --scope home")
     else:
         print("  -- mcporter not installed")
         print("  To install: npm install -g mcporter")
         print("  Then configure Exa: mcporter config add exa https://mcp.exa.ai/mcp --scope home")
+        print("  And Keenable: mcporter config add keenable https://api.keenable.ai/mcp --scope home")
 
 
 def _detect_environment():

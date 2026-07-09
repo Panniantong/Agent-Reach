@@ -12,6 +12,7 @@ from .exa_search import ExaSearchChannel
 from .facebook import FacebookChannel
 from .github import GitHubChannel
 from .instagram import InstagramChannel
+from .keenable_search import KeenableSearchChannel
 from .linkedin import LinkedInChannel
 from .reddit import RedditChannel
 from .rss import RSSChannel
@@ -38,6 +39,7 @@ ALL_CHANNELS: List[Channel] = [
     XueqiuChannel(),
     RSSChannel(),
     ExaSearchChannel(),
+    KeenableSearchChannel(),
     WebChannel(),
 ]
 
