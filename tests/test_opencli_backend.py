@@ -29,7 +29,7 @@ def test_not_installed():
     st, _ = _status_with(ProbeResult("missing"))
     assert not st.installed
     assert not st.ready
-    assert "未安装" in opencli_summary(st)
+    assert "not installed" in opencli_summary(st)
 
 
 def test_broken_node_env_gives_npm_hint():
@@ -74,7 +74,7 @@ def test_sleeping_extension_counts_as_ready():
     assert not st.extension_connected
     assert st.extension_installed
     assert st.ready
-    assert "唤醒" in opencli_summary(st)
+    assert "wakes" in opencli_summary(st)
     assert st.hint == ""
 
 
@@ -86,7 +86,7 @@ def test_daemon_not_running_parsed_correctly():
     assert st.installed
     assert not st.daemon_running
     assert not st.extension_connected
-    assert "自动启动" in opencli_summary(st)
+    assert "starts automatically" in opencli_summary(st)
 
 
 def test_probe_uses_daemon_status_not_doctor():

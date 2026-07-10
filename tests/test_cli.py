@@ -179,7 +179,7 @@ class TestCLI:
         )
 
         out = capsys.readouterr().out
-        assert "服务器环境跳过：facebook, instagram, opencli" in out
+        assert "skipped on server: facebook, instagram, opencli" in out
         assert "[dry-run] Would install optional channels: bilibili" in out
         assert "facebook, instagram, opencli, bilibili" not in out
 
@@ -263,8 +263,8 @@ class TestCheckUpdateRetry:
 
         captured = capsys.readouterr()
         assert result == "error"
-        assert "网络超时" in captured.out
-        assert "已重试 3 次" in captured.out
+        assert "network timeout" in captured.out
+        assert "retried 3 times" in captured.out
 
 
 class TestVersionCompare:
@@ -297,10 +297,10 @@ class TestWatchVersionCompare:
         monkeypatch.setattr(cli, "_github_get_with_retry", lambda *a, **k: (R(), None, 1))
         monkeypatch.setattr(
             "agent_reach.doctor.check_all",
-            lambda config: {"web": {"status": "ok", "name": "任意网页", "message": "ok",
+            lambda config: {"web": {"status": "ok", "name": "Any webpage", "message": "ok",
                             "tier": 0, "backends": ["Jina Reader"], "active_backend": "Jina Reader"}},
         )
         cli._cmd_watch()
         out = capsys.readouterr().out
-        assert "新版本可用" not in out
-        assert "全部正常" in out
+        assert "New version available" not in out
+        assert "all clear" in out

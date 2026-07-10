@@ -6,7 +6,7 @@ from ._opencli_site import OpenCLISiteChannel
 
 class FacebookChannel(OpenCLISiteChannel):
     name = "facebook"
-    description = "Facebook 帖子、主页和群组"
+    description = "Facebook posts, profiles, and groups"
     site = "facebook"
     domains = ("facebook.com", "fb.com", "fb.watch")
     usage = "opencli facebook search/profile/feed/groups -f yaml"

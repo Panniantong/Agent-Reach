@@ -100,10 +100,10 @@ class TestDoctor:
         import re
         plain = re.sub(r"\[[^\]]*\]", "", report)
         assert "Agent Reach" in plain
-        assert "装好即用：" in plain
-        assert "1/3 个渠道可用" in plain
+        assert "Ready to use:" in plain
+        assert "1/3 channels available" in plain
         # Inactive optional channels should be summarized in one line
-        assert "可选渠道可以解锁" in plain
+        assert "optional channel(s) available to unlock" in plain
 
 
 def test_stale_active_backend_does_not_leak_into_errored_result(monkeypatch):

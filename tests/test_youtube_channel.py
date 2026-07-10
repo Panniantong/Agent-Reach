@@ -118,7 +118,7 @@ def test_check_ok_with_deno():
          patch("shutil.which", side_effect=_which("deno")):
         status, message = ch.check()
     assert status == "ok"
-    assert message == "可提取视频信息和字幕"
+    assert message == "Can extract video info and subtitles"
     assert ch.active_backend == "yt-dlp"
 
 
@@ -133,7 +133,7 @@ def test_check_ok_reports_transcription_when_provider_and_ffmpeg_present():
         status, message = ch.check(config=cfg)
     assert status == "ok"
     assert "groq" in message
-    assert "可转写音频" in message
+    assert "can transcribe audio" in message
 
 
 def test_check_ok_flags_missing_ffmpeg_for_transcription():

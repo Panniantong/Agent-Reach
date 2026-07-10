@@ -5,13 +5,13 @@ from agent_reach.probe import probe_command
 
 from .base import Channel
 
-#: mcporter 是 npm 包，断链处方与默认的 pipx/uv 不同
-_MCPORTER_BROKEN_HINT = "mcporter 无法执行（node 环境损坏），重装：\n  npm install -g mcporter"
+#: mcporter is an npm package, so its broken-install hint differs from the default pipx/uv one
+_MCPORTER_BROKEN_HINT = "mcporter cannot execute (broken node environment), reinstall:\n  npm install -g mcporter"
 
 
 class ExaSearchChannel(Channel):
     name = "exa_search"
-    description = "全网语义搜索"
+    description = "Web-wide semantic search"
     backends = ["Exa via mcporter"]
     tier = 0
 
@@ -23,18 +23,18 @@ class ExaSearchChannel(Channel):
         probe = probe_command("mcporter", ["config", "list"], timeout=10, package="mcporter")
         if probe.status == "missing":
             return "off", (
-                "需要 mcporter + Exa MCP。安装：\n"
+                "Requires mcporter + Exa MCP. Install:\n"
                 "  npm install -g mcporter\n"
                 "  mcporter config add exa https://mcp.exa.ai/mcp"
             )
         if probe.status == "broken":
             return "error", _MCPORTER_BROKEN_HINT
         if not probe.ok:  # timeout / error
-            return "error", f"mcporter 执行异常：{probe.hint or probe.output or probe.status}"
+            return "error", f"mcporter execution error: {probe.hint or probe.output or probe.status}"
         if "exa" in probe.output.lower():
             self.active_backend = self.backends[0]
-            return "ok", "全网语义搜索可用（免费，无需 API Key）"
+            return "ok", "Web-wide semantic search available (free, no API key needed)"
         return "off", (
-            "mcporter 已装但 Exa 未配置。运行：\n"
+            "mcporter is installed but Exa is not configured. Run:\n"
             "  mcporter config add exa https://mcp.exa.ai/mcp"
         )

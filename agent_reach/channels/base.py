@@ -30,7 +30,7 @@ class Channel(ABC):
     """Base class for all channels."""
 
     name: str = ""                    # e.g. "youtube"
-    description: str = ""             # e.g. "YouTube 视频和字幕"
+    description: str = ""             # e.g. "YouTube videos and subtitles"
     backends: List[str] = []          # ordered candidates — backends[0] = preferred
     tier: int = 0                     # 0=zero-config, 1=needs free key, 2=needs setup
 
@@ -66,5 +66,5 @@ class Channel(ABC):
         Subclasses with external backends must really probe them (see
         agent_reach.probe.probe_command) and set self.active_backend.
         """
-        self.active_backend = self.backends[0] if self.backends else "内置"
-        return "ok", f"{'、'.join(self.backends) if self.backends else '内置'}"
+        self.active_backend = self.backends[0] if self.backends else "built-in"
+        return "ok", f"{', '.join(self.backends) if self.backends else 'built-in'}"
