@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AGENT REACH // RADAR</title>
+<style>
+:root{
+  --bg:#050807; --panel:#0a100d; --panel2:#0d1511; --line:#1b2a20;
+  --fg:#c8ffe0; --dim:#5d8a70; --green:#2be26b; --cyan:#3be8ff;
+  --amber:#ffb454; --red:#ff4f58; --sel:#12241a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--fg);
+  font:13px/1.5 "JetBrains Mono","Cascadia Code",Consolas,"Courier New",monospace;
+  display:grid; grid-template-rows:44px 1fr 190px;
+  grid-template-columns:200px 1fr 320px;
+  grid-template-areas:"head head head" "nav main deck" "cons cons cons";
+  height:100vh; overflow:hidden;
+}
+body::after{ /* scanlines */
+  content:""; pointer-events:none; position:fixed; inset:0; z-index:9;
+  background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(0,0,0,.16) 2px 3px);
+}
+#head{grid-area:head; display:flex; align-items:center; gap:16px;
+  border-bottom:1px solid var(--line); padding:0 14px; background:var(--panel);}
+#logo{color:var(--green); font-weight:700; letter-spacing:1px; white-space:pre;}
+#logo b{color:var(--cyan)}
+#lights{display:flex; gap:10px; margin-left:auto; flex-wrap:wrap}
+.light{display:flex; align-items:center; gap:5px; color:var(--dim); font-size:11px; cursor:default}
+.dot{width:8px;height:8px;border-radius:50%;background:#333;box-shadow:0 0 6px #000}
+.dot.ok{background:var(--green); box-shadow:0 0 8px var(--green)}
+.dot.bad{background:var(--red); box-shadow:0 0 8px var(--red)}
+#nav{grid-area:nav; border-right:1px solid var(--line); background:var(--panel);
+  padding:10px 0; display:flex; flex-direction:column;}
+.navitem{padding:7px 16px; cursor:pointer; color:var(--dim); letter-spacing:1px}
+.navitem:hover{color:var(--fg)}
+.navitem.active{color:var(--green); background:var(--sel); border-left:2px solid var(--green)}
+#main{grid-area:main; display:grid; grid-template-columns:300px 1fr; min-height:0}
+#filelist{border-right:1px solid var(--line); overflow-y:auto; background:var(--panel2)}
+.file{padding:6px 12px; cursor:pointer; color:var(--dim); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; font-size:12px}
+.file:hover{color:var(--fg)}
+.file.sel{color:var(--cyan); background:var(--sel)}
+#viewer{overflow-y:auto; padding:18px 26px; min-width:0}
+#viewer h1{color:var(--green); font-size:18px; margin:14px 0 8px; border-bottom:1px solid var(--line); padding-bottom:6px}
+#viewer h2{color:var(--cyan); font-size:15px; margin:16px 0 6px}
+#viewer h3{color:var(--amber); font-size:13px; margin:12px 0 4px}
+#viewer p{margin:6px 0}
+#viewer ul{margin:4px 0 4px 22px}
+#viewer a{color:var(--cyan); text-decoration:none}
+#viewer a:hover{text-decoration:underline}
+#viewer blockquote{border-left:2px solid var(--green); padding:2px 10px; color:var(--dim); margin:8px 0}
+#viewer code{background:#10201a; padding:1px 5px; border-radius:3px; color:var(--amber)}
+#viewer pre{background:#08120d; border:1px solid var(--line); padding:10px; overflow-x:auto; margin:8px 0}
+#viewer .empty{color:var(--dim); margin-top:40px; text-align:center; white-space:pre}
+#deck{grid-area:deck; border-left:1px solid var(--line); background:var(--panel);
+  overflow-y:auto; padding:12px}
+.card{border:1px solid var(--line); background:var(--panel2); border-radius:4px;
+  padding:10px 12px; margin-bottom:12px}
+.card h4{color:var(--green); font-size:12px; letter-spacing:1px; margin-bottom:4px}
+.card .desc{color:var(--dim); font-size:11px; margin-bottom:8px}
+.card.locked h4{color:var(--dim)}
+.card .missing{color:var(--red); font-size:11px; margin-bottom:6px}
+.card label{display:block; color:var(--dim); font-size:11px; margin:5px 0 2px}
+.card input,.card select{width:100%; background:#08120d; color:var(--fg);
+  border:1px solid var(--line); padding:4px 6px; font:inherit; font-size:12px}
+.card .chk{display:flex; align-items:center; gap:6px; color:var(--fg); font-size:12px; margin:3px 0}
+.card .chk input{width:auto}
+button.run{margin-top:9px; width:100%; background:transparent; color:var(--green);
+  border:1px solid var(--green); padding:6px; font:inherit; cursor:pointer; letter-spacing:2px}
+button.run:hover{background:var(--green); color:#04110a; box-shadow:0 0 12px var(--green)}
+button.run:disabled{color:var(--dim); border-color:var(--line); cursor:not-allowed; box-shadow:none; background:transparent}
+#cons{grid-area:cons; border-top:1px solid var(--line); background:#040906;
+  display:flex; flex-direction:column}
+#constitle{padding:4px 14px; color:var(--dim); font-size:11px; letter-spacing:2px;
+  border-bottom:1px solid var(--line); display:flex; gap:14px}
+#constitle .jobtag{color:var(--cyan)}
+#conslog{flex:1; overflow-y:auto; padding:6px 14px; font-size:12px; color:var(--green); white-space:pre-wrap}
+#conslog .err{color:var(--red)}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--line)}
+::-webkit-scrollbar-track{background:transparent}
+.blink{animation:bl 1.1s steps(2) infinite}
+@keyframes bl{50%{opacity:.25}}
+</style>
+</head>
+<body>
+<header id="head">
+  <div id="logo">AGENT REACH <b>▞▞</b> RADAR</div>
+  <div id="overview" style="color:var(--dim);font-size:11px"></div>
+  <div id="lights"></div>
+</header>
+
+<nav id="nav"></nav>
+
+<section id="main">
+  <div id="filelist"></div>
+  <div id="viewer"><div class="empty">
+╔═══════════════════════════════╗
+║  AGENT REACH // RADAR CONSOLE ║
+║  j/k 移動 · Enter 開啟        ║
+║  右側 TRIGGER DECK 觸發任務   ║
+╚═══════════════════════════════╝</div></div>
+</section>
+
+<aside id="deck"></aside>
+
+<footer id="cons">
+  <div id="constitle">CONSOLE<span id="jobinfo" class="jobtag"></span></div>
+  <div id="conslog">λ 待命中…</div>
+</footer>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const api=async(p,opt)=>{const r=await fetch(p,opt); if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail||r.status); return r.json();};
+
+/* ── tiny markdown renderer (headings/lists/links/bold/code/quote) ── */
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function inline(s){
+  return s
+    .replace(/`([^`]+)`/g,(m,c)=>"<code>"+c+"</code>")
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>")
+    .replace(/(^|[^_])_([^_]+)_(?=$|[^_])/g,'$1<i>$2</i>');
+}
+function renderMd(src){
+  const out=[]; let list=false, code=false;
+  for(const raw of src.split(/\r?\n/)){
+    if(raw.startsWith("```")){ if(code){out.push("</pre>");}else{out.push("<pre>");} code=!code; continue; }
+    if(code){ out.push(esc(raw)); continue; }
+    const line=esc(raw);
+    const li=line.match(/^\s*[-*] (.*)/);
+    if(li){ if(!list){out.push("<ul>");list=true;} out.push("<li>"+inline(li[1])+"</li>"); continue; }
+    if(list){out.push("</ul>");list=false;}
+    let m;
+    if((m=line.match(/^### (.*)/))) out.push("<h3>"+inline(m[1])+"</h3>");
+    else if((m=line.match(/^## (.*)/))) out.push("<h2>"+inline(m[1])+"</h2>");
+    else if((m=line.match(/^# (.*)/))) out.push("<h1>"+inline(m[1])+"</h1>");
+    else if((m=line.match(/^> ?(.*)/))) out.push("<blockquote>"+inline(m[1])+"</blockquote>");
+    else if(line.trim()==="") out.push("");
+    else out.push("<p>"+inline(line)+"</p>");
+  }
+  if(list) out.push("</ul>"); if(code) out.push("</pre>");
+  return out.join("\n");
+}
+
+/* ── nav / files / viewer ── */
+const SECTIONS=[["digests","DIGEST"],["deepdive","DEEPDIVE"],["reports","REPORTS"],
+  ["summaries","SUMMARIES"],["social","SOCIAL"],["wiki","WIKI"],["wiki-drafts","WIKI DRAFTS"]];
+let curDir="digests", files=[], fileIdx=-1;
+
+function drawNav(){
+  $("#nav").innerHTML=SECTIONS.map(([k,l])=>
+    `<div class="navitem${k===curDir?" active":""}" data-k="${k}">${l}</div>`).join("");
+  document.querySelectorAll(".navitem").forEach(el=>
+    el.onclick=()=>{curDir=el.dataset.k; loadFiles();});
+}
+async function loadFiles(){
+  drawNav();
+  try{ files=await api("/api/files?dir="+curDir); }catch(e){ files=[]; }
+  fileIdx=files.length?0:-1;
+  drawFiles();
+  if(fileIdx>=0) openFile(files[0].name);
+  else $("#viewer").innerHTML='<div class="empty">（此區還沒有檔案）</div>';
+}
+function drawFiles(){
+  $("#filelist").innerHTML=files.map((f,i)=>
+    `<div class="file${i===fileIdx?" sel":""}" data-i="${i}">${f.name}</div>`).join("");
+  document.querySelectorAll(".file").forEach(el=>
+    el.onclick=()=>{fileIdx=+el.dataset.i; drawFiles(); openFile(files[fileIdx].name);});
+}
+async function openFile(name){
+  try{
+    const d=await api(`/api/file?dir=${curDir}&name=${encodeURIComponent(name)}`);
+    $("#viewer").innerHTML=name.endsWith(".json")
+      ? "<pre>"+esc(JSON.stringify(JSON.parse(d.content),null,1))+"</pre>"
+      : renderMd(d.content);
+    $("#viewer").scrollTop=0;
+  }catch(e){ $("#viewer").innerHTML='<div class="empty">讀取失敗: '+esc(String(e))+"</div>"; }
+}
+document.addEventListener("keydown",e=>{
+  if(["INPUT","SELECT","TEXTAREA"].includes(document.activeElement.tagName)) return;
+  if(e.key==="j"&&fileIdx<files.length-1){fileIdx++; drawFiles();}
+  if(e.key==="k"&&fileIdx>0){fileIdx--; drawFiles();}
+  if(e.key==="Enter"&&fileIdx>=0) openFile(files[fileIdx].name);
+});
+
+/* ── provider lights ── */
+async function loadProviders(){
+  try{
+    const st=await api("/api/providers");
+    $("#lights").innerHTML=Object.entries(st).map(([n,s])=>
+      `<span class="light" title="${esc(s.detail||"")}"><span class="dot ${s.ok?"ok":"bad"}"></span>${n}</span>`).join("");
+  }catch(e){}
+}
+async function loadOverview(){
+  try{
+    const o=await api("/api/overview");
+    const c=o.counts||{};
+    $("#overview").textContent=o.generated_at
+      ? `最近收集 ${o.generated_at.slice(0,16)} · 論文 ${c.paper||0} · 推文 ${c.tweet||0} · 市場 ${c.market||0}`
+      : "（還沒收集過 — 先按 COLLECT）";
+  }catch(e){}
+}
+
+/* ── trigger deck ── */
+async function loadDeck(){
+  let platforms=[], data={scenarios:[],actions:[]};
+  try{ platforms=await api("/api/platforms"); }catch(e){}
+  try{ data=await api("/api/scenarios"); }catch(e){}
+  const deck=$("#deck");
+  const collectCard=`<div class="card"><h4>▚ COLLECT</h4>
+    <div class="desc">勾選要爬的平台 → 一鍵收集進今日 digest</div>
+    ${platforms.map(p=>`<label class="chk"><input type="checkbox" data-p="${p.name}" checked> ${p.name} · ${esc(p.label)}</label>`).join("")}
+    <button class="run" id="btncollect">▶ COLLECT</button></div>`;
+  const cardHtml=sc=>{
+    const locked=sc.ready===false;
+    const params=(sc.params||[]).map(p=>{
+      const id=`p-${sc.id}-${p.name}`;
+      if(p.choices) return `<label for="${id}">${esc(p.label)}</label>
+        <select id="${id}" data-name="${p.name}">${p.choices.map(c=>`<option${String(c)===String(p.default)?" selected":""}>${esc(String(c))}</option>`).join("")}</select>`;
+      return `<label for="${id}">${esc(p.label)}</label>
+        <input id="${id}" data-name="${p.name}" value="${esc(String(p.default??""))}">`;
+    }).join("");
+    return `<div class="card${locked?" locked":""}" data-sc="${sc.id}">
+      <h4>▞ ${esc(sc.label)}</h4><div class="desc">${esc(sc.desc)}</div>
+      ${locked?`<div class="missing">✖ 缺 provider: ${sc.missing.join(", ")}</div>`:""}
+      ${params}<button class="run" ${locked?"disabled":""}>▶ RUN</button></div>`;
+  };
+  deck.innerHTML=collectCard
+    +data.scenarios.map(cardHtml).join("")
+    +`<div style="color:var(--dim);font-size:11px;letter-spacing:2px;margin:6px 0">── PIPELINES ──</div>`
+    +data.actions.map(cardHtml).join("");
+  $("#btncollect").onclick=async()=>{
+    const sel=[...deck.querySelectorAll("[data-p]:checked")].map(el=>el.dataset.p);
+    const job=await api("/api/collect",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({platforms:sel})});
+    followJob(job,"collect");
+  };
+  deck.querySelectorAll(".card[data-sc]").forEach(card=>{
+    const btn=card.querySelector("button.run");
+    if(btn.disabled) return;
+    btn.onclick=async()=>{
+      const params={};
+      card.querySelectorAll("[data-name]").forEach(el=>{ if(el.value!=="") params[el.dataset.name]=el.value; });
+      const job=await api("/api/run",{method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({scenario:card.dataset.sc,params})});
+      followJob(job,card.dataset.sc);
+    };
+  });
+}
+
+/* ── console / SSE ── */
+let es=null;
+function logLine(t,err){
+  const el=$("#conslog");
+  const div=document.createElement("div");
+  if(err) div.className="err";
+  div.textContent=t;
+  el.appendChild(div);
+  el.scrollTop=el.scrollHeight;
+}
+function followJob(job,label){
+  $("#jobinfo").innerHTML=`job ${job.id} · ${label} <span class="blink">▮</span>`;
+  logLine(`λ ${label} → job ${job.id}`);
+  if(es) es.close();
+  es=new EventSource(`/api/jobs/${job.id}/log`);
+  es.onmessage=e=>logLine(JSON.parse(e.data));
+  es.addEventListener("end",e=>{
+    const d=JSON.parse(e.data);
+    logLine(d.status==="done"?`✔ ${label} 完成`:`✖ ${label} 失敗: ${d.error}`, d.status!=="done");
+    $("#jobinfo").textContent=`job ${job.id} · ${d.status}`;
+    es.close(); es=null;
+    loadFiles(); loadOverview();
+  });
+}
+
+/* ── boot ── */
+loadProviders(); loadOverview(); loadFiles(); loadDeck();
+setInterval(loadProviders, 120000);
+</script>
+</body>
+</html>

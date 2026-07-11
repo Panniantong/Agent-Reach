@@ -230,6 +230,13 @@ def main():
     p_run.add_argument("--set", dest="params", action="append", default=[],
                        metavar="K=V", help="場景參數（可重複），如 --set topic=ee --set top_n=2")
 
+    # ── radar-ui (dark geek web console) ──
+    p_ui = sub.add_parser(
+        "radar-ui", help="啟動暗黑極客控制台（瀏覽產出 + 觸發 pipeline；需 [ui] extra）"
+    )
+    p_ui.add_argument("--port", type=int, default=8123)
+    p_ui.add_argument("--no-open", action="store_true", help="不自動開瀏覽器")
+
     # ── kol-post (single-stock KOL post scaffold, KG-driven) ──
     p_kol = sub.add_parser(
         "kol-post", help="Scaffold a single-stock KOL post (繁中) with supply-chain KG chokepoints injected"
@@ -295,6 +302,8 @@ def main():
         _cmd_radar_sync(args)
     elif args.command == "radar-run":
         _cmd_radar_run(args)
+    elif args.command == "radar-ui":
+        _cmd_radar_ui(args)
     elif args.command == "kol-post":
         _cmd_kol_post(args)
 
@@ -657,6 +666,27 @@ def _cmd_radar_run(args):
     print(f"✅ {result.get('summary', '完成')}")
     for out in result.get("outputs", []):
         print(f"   → {out}")
+
+
+def _cmd_radar_ui(args):
+    """Launch the dark geek web console (127.0.0.1 only)."""
+    try:
+        import uvicorn
+    except ImportError:
+        print('⚠️ 缺 UI 依賴 — 安裝: pip install "agent-reach[ui]"')
+        return
+    from agent_reach.radar_ui.server import create_app
+
+    url = f"http://127.0.0.1:{args.port}"
+    print("╔══════════════════════════════════╗")
+    print("║  AGENT REACH ▞▞ RADAR CONSOLE    ║")
+    print("╚══════════════════════════════════╝")
+    print(f"🖥️  {url}  （僅本機；Ctrl+C 停止）")
+    if not getattr(args, "no_open", False):
+        import webbrowser
+
+        webbrowser.open(url)
+    uvicorn.run(create_app(), host="127.0.0.1", port=args.port, log_level="warning")
 
 
 def _cmd_kol_post(args):

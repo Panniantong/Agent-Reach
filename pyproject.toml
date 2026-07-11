@@ -43,6 +43,7 @@ cookies = ["browser-cookie3>=0.19"]
 # Pinned exact: unofficial alpha client against Google's private RPC — only
 # ever bump deliberately. Deliberately NOT in `all`.
 notebooklm = ["notebooklm-py[headless]==0.8.0a3"]
+ui = ["fastapi>=0.110", "uvicorn>=0.27"]
 all = ["playwright>=1.40", "mcp[cli]>=1.0", "browser-cookie3>=0.19"]
 dev = [
     "pytest>=8.0",
