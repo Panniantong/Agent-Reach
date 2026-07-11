@@ -31,6 +31,9 @@ class Config:
         "radar_evolve": ["anthropic_api_key"],
         "radar_assistant_codex": ["openai_api_key"],
         "radar_assistant_grok": ["xai_api_key"],
+        "radar_wiki": ["anthropic_api_key"],
+        # notebooklm_profile comes from `notebooklm login` (usually "default").
+        "notebooklm_sync": ["notebooklm_profile"],
     }
 
     def __init__(self, config_path: Optional[Path] = None):

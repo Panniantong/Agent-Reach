@@ -211,6 +211,15 @@ def main():
     p_wiki.add_argument("wiki_action", metavar="action", choices=["update", "promote", "status"])
     p_wiki.add_argument("--topic", default=None, help="ee|rf|ai|spacetech|quantum（update 默認全部）")
 
+    # ── radar-sync (push papers/deep-dives into per-topic NotebookLM notebooks) ──
+    p_sync = sub.add_parser(
+        "radar-sync",
+        help="把高分論文/深讀報告推進每主題 NotebookLM notebook（需 [notebooklm] extra）",
+    )
+    p_sync.add_argument("sync_action", metavar="action", choices=["run", "setup", "status"])
+    p_sync.add_argument("--topic", default=None, help="只同步這個主題（默認全部）")
+    p_sync.add_argument("--dry-run", action="store_true", help="只列計畫，不推送、不寫狀態")
+
     # ── kol-post (single-stock KOL post scaffold, KG-driven) ──
     p_kol = sub.add_parser(
         "kol-post", help="Scaffold a single-stock KOL post (繁中) with supply-chain KG chokepoints injected"
@@ -272,6 +281,8 @@ def main():
         _cmd_radar_evolve(args)
     elif args.command == "radar-wiki":
         _cmd_radar_wiki(args)
+    elif args.command == "radar-sync":
+        _cmd_radar_sync(args)
     elif args.command == "kol-post":
         _cmd_kol_post(args)
 
@@ -535,6 +546,55 @@ def _cmd_radar_wiki(args):
         if not (_os.environ.get("ANTHROPIC_API_KEY") or Config().get("anthropic_api_key")):
             print("   （未設 ANTHROPIC_API_KEY → draft 為 PENDING 鷹架，讓互動式 Claude 補完）")
         print("   審核 draft 後：agent-reach radar-wiki promote --topic <topic> → git diff → commit")
+
+
+def _cmd_radar_sync(args):
+    """NotebookLM per-topic sync: run / setup / status."""
+    from agent_reach.integrations.notebooklm_sync import sync_available, sync_status
+
+    action = args.sync_action
+    if action == "setup":
+        ok, msg = sync_available()
+        if ok:
+            print("✅ NotebookLM sync 就緒（套件已裝、profile 已設）")
+            print("   驗證登入態: notebooklm auth check --test --json（預期 status: ok）")
+        else:
+            print(f"⚠️ 尚未就緒: {msg}")
+            print("   步驟:")
+            print('   1. pip install "agent-reach[notebooklm]"')
+            print("   2. notebooklm login --master-token --account <你的Google帳號>  （一次性）")
+            print("   3. 在 ~/.agent-reach/config.yaml 設 notebooklm_profile: default")
+        return
+
+    if action == "status":
+        st = sync_status()
+        print(f"📓 NotebookLM 同步狀態（{st['state_file']}）")
+        if not st["notebooks"]:
+            print("   （還沒同步過）")
+        for topic, nb in st["notebooks"].items():
+            pushed = st["pushed_counts"].get(topic, 0)
+            print(f"   {topic:<10} → {nb.get('title')} · 來源 {nb.get('source_count', 0)} · 已推 {pushed} keys")
+        return
+
+    from agent_reach.integrations.notebooklm_sync import run_sync
+
+    topics = [args.topic] if args.topic else None
+    mode = "[dry-run] " if getattr(args, "dry_run", False) else ""
+    print(f"📓 {mode}同步到 NotebookLM（{args.topic or '全部主題'}）...")
+    result = run_sync(topics=topics, dry_run=getattr(args, "dry_run", False))
+    if not result.get("ok"):
+        print(f"⚠️ {result.get('error')}")
+        print("   先跑: agent-reach radar-sync setup")
+        return
+    for t, r in (result.get("topics") or {}).items():
+        if not r.get("ok"):
+            print(f"   ❌ {t}: {r.get('error')}")
+        elif r.get("dry_run"):
+            print(f"   📋 {t}: 將推送 {len(r.get('planned') or [])} 項 → {r.get('planned')}")
+        elif r.get("skipped"):
+            print(f"   ⏭️ {t}: 無新內容")
+        else:
+            print(f"   ✅ {t}: +{r.get('added', 0)} 來源 → notebook {r.get('notebook')}")
 
 
 def _cmd_kol_post(args):
