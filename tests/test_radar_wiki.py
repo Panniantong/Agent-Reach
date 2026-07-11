@@ -143,6 +143,19 @@ def test_run_wiki_update_never_raises(monkeypatch, tmp_path):
     assert results == {"ee": None}
 
 
+def test_load_all_papers_falls_back_when_sidecar_empty(monkeypatch, tmp_path):
+    import json as _json
+
+    monkeypatch.setattr(rw, "RADAR_DIR", tmp_path)
+    (tmp_path / "latest-items.json").write_text(_json.dumps({
+        "date": "2026-07-11", "items": {"paper": [], "market": [{"title": "x"}]},
+    }), encoding="utf-8")
+    import agent_reach.radar_arxiv as ra
+    monkeypatch.setattr(ra, "collect_arxiv", lambda s, c: [_paper("2607.7", "Fresh", 4)])
+    papers = rw._load_all_papers({}, None, WHEN)
+    assert [p.extra["arxiv_id"] for p in papers] == ["2607.7"]
+
+
 def test_promote_rejects_pending_and_copies_good_draft(monkeypatch, tmp_path):
     monkeypatch.setattr(rw, "WIKI_DRAFTS_DIR", tmp_path / "drafts")
     monkeypatch.setattr(rw, "WIKI_PAGES_DIR", tmp_path / "pages")

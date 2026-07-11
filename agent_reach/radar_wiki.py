@@ -171,13 +171,19 @@ def _pending_scaffold(topic: str, material: str, current_page: str, when: dateti
 
 
 def _load_all_papers(sources: dict, config: Optional[Config], when: datetime) -> list[Item]:
-    """Today's papers from the run_radar sidecar; fall back to a fresh collect."""
+    """Today's papers from the run_radar sidecar; fall back to a fresh collect.
+
+    An empty paper list also falls through — a finviz/twitter-only collection
+    earlier in the day must not make the wiki think arXiv had nothing.
+    """
     sidecar = RADAR_DIR / "latest-items.json"
     if sidecar.exists():
         try:
             data = json.loads(sidecar.read_text(encoding="utf-8"))
             if data.get("date") == f"{when:%Y-%m-%d}":
-                return [Item(**d) for d in (data.get("items") or {}).get("paper", [])]
+                papers = [Item(**d) for d in (data.get("items") or {}).get("paper", [])]
+                if papers:
+                    return papers
         except Exception as e:  # noqa: BLE001
             logger.warning(f"latest-items.json unreadable, re-collecting: {e}")
     from agent_reach.radar_arxiv import collect_arxiv
