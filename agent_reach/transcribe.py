@@ -13,6 +13,7 @@ Designed to be importable from channels (e.g. YouTubeChannel.transcribe).
 
 from __future__ import annotations
 
+import base64
 import ipaddress
 import shutil
 import subprocess
@@ -234,6 +235,39 @@ def transcribe_chunk(
         )
 
     info = PROVIDERS[provider]
+
+    # OpenRouter's /audio/transcriptions is NOT OpenAI-compatible: it expects a
+    # JSON body with base64-encoded audio (`input_audio.data`) and returns JSON
+    # (`{"text": ...}`), unlike Groq/OpenAI which take a multipart file upload
+    # and can return plain text. Branch here so each provider gets its format.
+    if provider == "openrouter":
+        audio_b64 = base64.b64encode(chunk.read_bytes()).decode("ascii")
+        fmt = chunk.suffix.lstrip(".").lower() or "m4a"
+        try:
+            resp = requests.post(
+                info["endpoint"],
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": info["model"],
+                    "input_audio": {"data": audio_b64, "format": fmt},
+                },
+                timeout=timeout,
+            )
+        except requests.RequestException as e:
+            raise TranscribeError(f"{provider}: network error: {e}") from e
+
+        if not resp.ok:
+            raise TranscribeError(f"{provider}: HTTP {resp.status_code}: {resp.text[:300]}")
+        try:
+            return resp.json()["text"]
+        except (ValueError, KeyError, TypeError) as e:
+            raise TranscribeError(
+                f"{provider}: unexpected response: {resp.text[:300]}"
+            ) from e
+
     with chunk.open("rb") as fh:
         try:
             resp = requests.post(
