@@ -296,6 +296,13 @@ DEFAULT_SOURCES = {
     # Token env-file fallback paths（FINVIZ_AUTH_TOKEN= 行）；空列表用
     # radar_finviz.DEFAULT_ENV_PATHS。
     "finviz_env_paths": [],
+    # ── 場景模型（radar-run / UI 觸發的 pipeline；依序 fallback）─────────
+    # spec 格式 "provider:model"：ollama:… 本地、nvidia:… NIM API、anthropic:…
+    "scenario_models": {
+        "arxiv_expert": ["ollama:qwen3:4b"],
+        "x_summary": ["nvidia:nvidia/llama-3.3-nemotron-super-49b-v1.5", "ollama:nemotron"],
+        "social_post": ["anthropic:claude-fable-5"],
+    },
     # Cap per section in the digest.
     "max_items_per_section": 8,
 }

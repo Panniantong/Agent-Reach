@@ -58,6 +58,8 @@ PROVIDERS = {
     "anthropic": {"key": "anthropic_api_key"},
     "openai": {"key": "openai_api_key", "base_url": "https://api.openai.com/v1"},
     "xai": {"key": "xai_api_key", "base_url": "https://api.x.ai/v1"},
+    # NVIDIA NIM — OpenAI-compatible; serves Nemotron etc. (build.nvidia.com)
+    "nvidia": {"key": "nvidia_api_key", "base_url": "https://integrate.api.nvidia.com/v1"},
 }
 
 STUDENT_SYSTEM = """你是一个 AI×投资 研究助手。基于【今日多平台原始材料】写一份精炼、有深度、可操作的中文每日简报。
