@@ -113,6 +113,28 @@ class TestCLI:
         assert commands == [["pipx", "install", cli._RDT_GIT_SOURCE]]
         assert "✅ rdt-cli installed" in out
 
+    def test_install_system_deps_uses_platform_ytdlp_config_path(
+        self, monkeypatch, tmp_path
+    ):
+        config_path = tmp_path / "Library" / "Application Support" / "yt-dlp" / "config"
+
+        monkeypatch.setattr("agent_reach.utils.paths.sys.platform", "darwin")
+        monkeypatch.setattr("agent_reach.utils.paths.Path.home", lambda: tmp_path)
+        monkeypatch.setattr(
+            shutil,
+            "which",
+            lambda name: f"/usr/bin/{name}" if name in {"gh", "node", "npm"} else None,
+        )
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0, "", ""),
+        )
+
+        cli._install_system_deps()
+
+        assert config_path.read_text(encoding="utf-8") == "--js-runtimes node\n"
+
     def test_install_reddit_deps_routes_by_environment(self, monkeypatch):
         """桌面 → OpenCLI;服务器 → rdt-cli(钉 git 源)。"""
         calls = []

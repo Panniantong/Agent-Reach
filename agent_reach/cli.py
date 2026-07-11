@@ -9,13 +9,14 @@ Usage:
     agent-reach setup
 """
 
-import sys
 import argparse
 import json
 import os
+import sys
 import time
 
 from agent_reach import __version__
+from agent_reach.utils.paths import get_ytdlp_config_path
 
 # Pinned to the 0.4.2 state — PyPI still only has 0.4.1 (upstream issue #10).
 _RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66"
@@ -634,8 +635,8 @@ def _install_system_deps():
 
     # ── yt-dlp JS runtime config (YouTube requires external JS runtime) ──
     if shutil.which("node"):
-        ytdlp_config_dir = os.path.expanduser("~/.config/yt-dlp")
-        ytdlp_config = os.path.join(ytdlp_config_dir, "config")
+        ytdlp_config = str(get_ytdlp_config_path())
+        ytdlp_config_dir = os.path.dirname(ytdlp_config)
         needs_config = True
         if os.path.exists(ytdlp_config):
             with open(ytdlp_config, "r") as f:
