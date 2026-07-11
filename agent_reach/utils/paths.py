@@ -50,5 +50,5 @@ def render_ytdlp_fix_command() -> str:
     return (
         f"mkdir -p '{config_path.parent}' && "
         f"grep -qxF -- '--js-runtimes node' '{config_path}' 2>/dev/null || "
-        f"printf '%s\n' '--js-runtimes node' >> '{config_path}'"
+        f"printf '%s\\n' '--js-runtimes node' >> '{config_path}'"
     )
