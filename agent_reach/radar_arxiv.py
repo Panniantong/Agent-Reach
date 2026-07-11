@@ -274,6 +274,16 @@ def distill_paper(
     if not key:
         return None
     model = model or config.get("radar_mentor_model") or DEFAULT_MENTOR_MODEL
+    # Topic-tagged papers get that topic's accumulated wiki rules (fact-free
+    # methodology only) folded into the system prompt.
+    system = DEEPDIVE_SYSTEM
+    topic = item.extra.get("topic")
+    if topic:
+        from agent_reach.knowledge import knowledge_rules
+
+        rules = knowledge_rules(f"wiki/{topic}")
+        if rules:
+            system = f"{DEEPDIVE_SYSTEM}\n\n【該主題累積的精要規則（僅方法，不含事實）】\n{rules}"
     body = fulltext or item.text
     user = (
         f"【論文】{item.title}（arXiv:{item.extra.get('arxiv_id')}）\n"
@@ -292,7 +302,7 @@ def distill_paper(
             json={
                 "model": model,
                 "max_tokens": 4000,
-                "system": DEEPDIVE_SYSTEM,
+                "system": system,
                 "messages": [{"role": "user", "content": user}],
             },
             timeout=300,

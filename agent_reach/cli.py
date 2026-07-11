@@ -203,6 +203,14 @@ def main():
     p_evolve.add_argument("--max-minutes", type=int, default=None, help="Wall-clock budget")
     p_evolve.add_argument("--from-training", type=int, default=5, help="freeze: heldout fixtures to build")
 
+    # ── radar-wiki (per-topic industry wiki: LLM draft → human review → commit) ──
+    p_wiki = sub.add_parser(
+        "radar-wiki",
+        help="每主題產業 wiki：LLM 起草更新 → 人工審核 git diff → commit",
+    )
+    p_wiki.add_argument("wiki_action", metavar="action", choices=["update", "promote", "status"])
+    p_wiki.add_argument("--topic", default=None, help="ee|rf|ai|spacetech|quantum（update 默認全部）")
+
     # ── kol-post (single-stock KOL post scaffold, KG-driven) ──
     p_kol = sub.add_parser(
         "kol-post", help="Scaffold a single-stock KOL post (繁中) with supply-chain KG chokepoints injected"
@@ -262,6 +270,8 @@ def main():
         _cmd_radar_backfill(args)
     elif args.command == "radar-evolve":
         _cmd_radar_evolve(args)
+    elif args.command == "radar-wiki":
+        _cmd_radar_wiki(args)
     elif args.command == "kol-post":
         _cmd_kol_post(args)
 
@@ -476,6 +486,55 @@ def _cmd_radar_evolve(args):
               f"  {r.get('hypothesis', '')[:60]}")
     if kept and not args.dry_run:
         print(f"   保留的實驗已 ff 進 `{args.base_branch}` branch — 人工審 diff 後自行開 PR（不自動上 main）")
+
+
+def _cmd_radar_wiki(args):
+    """Per-topic wiki: LLM drafts an update, a human promotes + commits."""
+    from agent_reach.config import Config
+
+    action = args.wiki_action
+    if action == "status":
+        from agent_reach.radar_wiki import wiki_status
+
+        print("📚 主題 Wiki 狀態")
+        for row in wiki_status():
+            mark = "🟢" if row["page_exists"] else "⚪"
+            updated = row["last_updated"] or "—"
+            draft = row["latest_draft"] or "無"
+            print(f"{mark} {row['topic']:<10} 最後更新 {updated:<12} 最新 draft: {draft}")
+        return
+
+    if action == "promote":
+        from agent_reach.radar_wiki import promote_draft
+
+        if not args.topic:
+            print("用法: agent-reach radar-wiki promote --topic ee")
+            return
+        try:
+            page = promote_draft(args.topic)
+        except (FileNotFoundError, ValueError) as e:
+            print(f"⚠️ {e}")
+            return
+        print(f"✅ 已覆蓋 {page}")
+        print("   人工把關：先 `git diff agent_reach/knowledge/wiki/` 審核內容，滿意再 commit。")
+        return
+
+    from agent_reach.radar_wiki import run_wiki_update
+
+    topics = [args.topic] if args.topic else None
+    print(f"📚 起草 wiki 更新中（{args.topic or '全部主題'}）...")
+    results = run_wiki_update(topics=topics)
+    drafted = {t: p for t, p in results.items() if p}
+    for t, p in drafted.items():
+        print(f"   ✏️ {t} → {p}")
+    for t in (t for t, p in results.items() if not p):
+        print(f"   ⏭️ {t}: 今日無新材料或起草失敗")
+    if drafted:
+        import os as _os
+
+        if not (_os.environ.get("ANTHROPIC_API_KEY") or Config().get("anthropic_api_key")):
+            print("   （未設 ANTHROPIC_API_KEY → draft 為 PENDING 鷹架，讓互動式 Claude 補完）")
+        print("   審核 draft 後：agent-reach radar-wiki promote --topic <topic> → git diff → commit")
 
 
 def _cmd_kol_post(args):

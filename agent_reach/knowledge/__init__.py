@@ -32,3 +32,11 @@ def knowledge_rules(name: str = "karpathy") -> str:
         return ""
     m = re.search(r"^## 精要規則\s*$(.*?)(?=^## |\Z)", text, re.MULTILINE | re.DOTALL)
     return m.group(1).strip() if m else ""
+
+
+def list_wiki_topics() -> list[str]:
+    """Topics that have a committed wiki page under ``knowledge/wiki/``."""
+    wiki = _KNOWLEDGE_DIR / "wiki"
+    if not wiki.is_dir():
+        return []
+    return sorted(p.stem for p in wiki.glob("*.md"))
