@@ -285,6 +285,17 @@ DEFAULT_SOURCES = {
             },
         },
     },
+    # ── Finviz Elite（市場新聞 + 板塊輪動異常；需 FINVIZ_AUTH_TOKEN）──────
+    "finviz": {
+        "news": True,             # export/news → 市場新聞（過 topic 關鍵字閘）
+        "filter_news": True,
+        "news_top_n": 12,
+        "groups": True,           # export/groups → 板塊單日異動訊號
+        "sector_alert_pct": 1.5,  # |漲跌| 超過此 % 才進 digest
+    },
+    # Token env-file fallback paths（FINVIZ_AUTH_TOKEN= 行）；空列表用
+    # radar_finviz.DEFAULT_ENV_PATHS。
+    "finviz_env_paths": [],
     # Cap per section in the digest.
     "max_items_per_section": 8,
 }
@@ -299,6 +310,7 @@ PLATFORMS: dict[str, dict] = {
     "rss": {"kind": "rss", "label": "RSS 精選源"},
     "trends": {"kind": "trend", "label": "Google Trends"},
     "arxiv": {"kind": "paper", "label": "arXiv 論文"},
+    "finviz": {"kind": "market", "label": "Finviz 市場"},
 }
 
 
@@ -793,6 +805,10 @@ def collect_all(
     if "arxiv" in selected:
         # Papers carry their own scorer-gate; no topic filter here.
         grouped["paper"] = _dedupe(collect_arxiv(sources, config))
+    if "finviz" in selected:
+        from agent_reach.radar_finviz import collect_finviz
+
+        grouped["market"] = _dedupe(collect_finviz(sources, config))
     return grouped
 
 
@@ -816,10 +832,13 @@ def build_digest(grouped: dict[str, list[Item]], sources: dict, when: datetime) 
     lines.append("")
     counts = {k: len(v) for k, v in grouped.items()}
     total = sum(counts.values())
-    lines.append(
+    summary = (
         f"> 共 {total} 条 · 推文 {counts.get('tweet',0)} · 网文 {counts.get('web',0)} "
         f"· RSS {counts.get('rss',0)} · 论文 {counts.get('paper',0)} · 趋势 {counts.get('trend',0)}"
     )
+    if counts.get("market"):
+        summary += f" · 市場 {counts['market']}"
+    lines.append(summary)
     lines.append("")
     lines.append("## 🧠 今日洞察")
     lines.append("")
@@ -906,6 +925,25 @@ def build_digest(grouped: dict[str, list[Item]], sources: dict, when: datetime) 
             lines.append("")
         if dive_n and len(papers) > 0:
             lines.append("> 🔬 = 深讀候選（`agent-reach radar-deepdive` 產出全文蒸餾報告）")
+            lines.append("")
+
+    # Finviz market signals — sector moves up top, then topic-gated news.
+    market = grouped.get("market", [])
+    if market:
+        lines.append("## 📊 市場訊號（Finviz）")
+        lines.append("")
+        sectors = sorted(
+            (i for i in market if i.extra.get("type") == "sector"),
+            key=lambda i: abs(i.extra.get("change", 0)), reverse=True,
+        )
+        if sectors:
+            lines.append("> 板塊異動: " + " · ".join(s.title for s in sectors[:8]))
+            lines.append("")
+        news = [i for i in market if i.extra.get("type") == "news"][:cap]
+        for it in news:
+            src = f" _({it.text})_" if it.text else ""
+            lines.append(f"- [{it.title}]({it.url}){src}")
+        if news:
             lines.append("")
 
     # Exa web.

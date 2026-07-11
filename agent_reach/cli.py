@@ -140,7 +140,7 @@ def main():
     )
     p_radar.add_argument(
         "--platforms", default=None,
-        help="Comma-separated platforms to collect (twitter,exa,rss,trends,arxiv); default: all",
+        help="Comma-separated platforms to collect (twitter,exa,rss,trends,arxiv,finviz); default: all",
     )
 
     # ── radar-deepdive (tier-2 arXiv full-text distillation) ──
@@ -313,11 +313,14 @@ def _cmd_radar(args):
 
     print(f"✅ 收集 {total} 条 → {out_path}")
     print(f"   最新快照: {out_path.parent / 'latest.md'}")
-    print(
+    counts_line = (
         f"   推文 {len(grouped.get('tweet', []))} · 网文 {len(grouped.get('web', []))} "
         f"· RSS {len(grouped.get('rss', []))} · 论文 {len(grouped.get('paper', []))} "
         f"· 趋势 {len(grouped.get('trend', []))}"
     )
+    if grouped.get("market"):
+        counts_line += f" · 市場 {len(grouped['market'])}"
+    print(counts_line)
     print('   让 Agent 总结洞察：「读 radar/latest.md，挑出今天真正重要的 3-5 条并说明为什么」')
 
     if getattr(args, "deep_dive", False) and grouped.get("paper"):

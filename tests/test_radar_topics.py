@@ -162,11 +162,11 @@ def test_collect_all_platform_filter(monkeypatch):
     grouped = collect_all({}, None, platforms=["arxiv", "rss"])
     assert set(ran) == {"arxiv", "rss"}
     # Stable shape: unselected groups still present, just empty.
-    assert set(grouped) == {"tweet", "web", "rss", "trend", "paper"}
+    assert set(grouped) == {"tweet", "web", "rss", "trend", "paper", "market"}
     assert grouped["tweet"] == [] and grouped["paper"] == []
 
 
 def test_collect_all_ignores_unknown_platform(monkeypatch):
     monkeypatch.setattr(radar, "collect_rss", lambda s: [])
     grouped = collect_all({}, None, platforms=["rss", "myspace"])
-    assert set(grouped) == {"tweet", "web", "rss", "trend", "paper"}
+    assert set(grouped) == {"tweet", "web", "rss", "trend", "paper", "market"}
