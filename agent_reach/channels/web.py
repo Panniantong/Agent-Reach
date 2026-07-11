@@ -75,10 +75,11 @@ class WebChannel(Channel):
         with urllib.request.urlopen(req, timeout=30) as resp:
             text = resp.read().decode("utf-8")
 
-        # Detect Cloudflare / anti-bot blocks and fall back to direct fetch
+        # Detect Cloudflare / anti-bot blocks and fall back to a direct fetch.
+        # If the direct fetch also fails (returns None/empty), keep the
+        # original Jina response instead of dropping the data.
         if _is_blocked(text):
             direct = _direct_fetch(url)
-            if direct:
-                return direct
+            return direct or text
 
         return text
