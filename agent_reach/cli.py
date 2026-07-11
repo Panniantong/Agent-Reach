@@ -220,6 +220,16 @@ def main():
     p_sync.add_argument("--topic", default=None, help="只同步這個主題（默認全部）")
     p_sync.add_argument("--dry-run", action="store_true", help="只列計畫，不推送、不寫狀態")
 
+    # ── radar-run (scenario pipelines: list / providers / <scenario_id>) ──
+    p_run = sub.add_parser(
+        "radar-run",
+        help="觸發場景 pipeline：list 列場景、providers 查各供應商健康、<id> 執行",
+    )
+    p_run.add_argument("run_target", metavar="scenario",
+                       help="list | providers | arxiv_expert_report | x_guru_summary | github_trending_post | market_signal_post")
+    p_run.add_argument("--set", dest="params", action="append", default=[],
+                       metavar="K=V", help="場景參數（可重複），如 --set topic=ee --set top_n=2")
+
     # ── kol-post (single-stock KOL post scaffold, KG-driven) ──
     p_kol = sub.add_parser(
         "kol-post", help="Scaffold a single-stock KOL post (繁中) with supply-chain KG chokepoints injected"
@@ -283,6 +293,8 @@ def main():
         _cmd_radar_wiki(args)
     elif args.command == "radar-sync":
         _cmd_radar_sync(args)
+    elif args.command == "radar-run":
+        _cmd_radar_run(args)
     elif args.command == "kol-post":
         _cmd_kol_post(args)
 
@@ -598,6 +610,53 @@ def _cmd_radar_sync(args):
             print(f"   ⏭️ {t}: 無新內容")
         else:
             print(f"   ✅ {t}: +{r.get('added', 0)} 來源 → notebook {r.get('notebook')}")
+
+
+def _cmd_radar_run(args):
+    """Scenario runner: list / providers / <scenario_id> --set k=v."""
+    target = args.run_target
+
+    if target == "providers":
+        from agent_reach.llm import providers_status
+
+        print("🔌 Provider 健康檢查（含 Ollama 探測）")
+        for name, st in providers_status(probe=True).items():
+            mark = "🟢" if st.get("ok") else "🔴"
+            print(f"   {mark} {name:<12} {st.get('detail', '')}")
+        return
+
+    if target == "list":
+        from agent_reach.llm import providers_status
+        from agent_reach.radar_scenarios import scenarios_manifest
+
+        status = providers_status(probe=True)
+        print("🎬 可用場景")
+        for sc in scenarios_manifest(status):
+            mark = "🟢" if sc["ready"] else "🔴"
+            need = ",".join(sc["required_providers"])
+            print(f"   {mark} {sc['id']:<24} {sc['label']}（需 {need}）")
+            if sc["missing"]:
+                print(f"      ⚠️ 缺: {', '.join(sc['missing'])}")
+            params = " ".join(f"{p['name']}={p['default']}" for p in sc["params"])
+            print(f"      參數: {params}")
+        print("   執行: agent-reach radar-run <id> --set k=v")
+        return
+
+    from agent_reach.radar_scenarios import run_scenario
+
+    params: dict = {}
+    for kv in args.params or []:
+        k, _, v = kv.partition("=")
+        if k:
+            params[k.strip()] = v.strip()
+    print(f"🎬 執行場景 {target} {params or ''}...")
+    result = run_scenario(target, params)
+    if not result.get("ok"):
+        print(f"❌ {result.get('error')}")
+        return
+    print(f"✅ {result.get('summary', '完成')}")
+    for out in result.get("outputs", []):
+        print(f"   → {out}")
 
 
 def _cmd_kol_post(args):
