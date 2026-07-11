@@ -6,6 +6,30 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [1.6.0] - 2026-07-11
+
+### 🆕 New Features / 新功能
+
+#### 🛰️ 雷達升級：資料綜合收集器
+
+- **多主題 arXiv 垂直**：EE / RF / AI / Spacetech / Quantum 五主題，每主題獨立
+  分類與加權關鍵字，一主題一查詢（≥3s 間隔）、跨主題去重、digest 分主題小節。
+  無 `topics` 配置時完整保留 legacy 單查詢路徑（evolve 評測不受影響）
+- **平台複選收集**：`radar --platforms twitter,arxiv,finviz`；`PLATFORMS` 註冊表
+- **主題 Wiki 知識庫**（`radar-wiki`）：LLM 起草敘事區 + 程式碼管理論文索引，
+  draft → 人審 → promote → git diff 把關；`knowledge/wiki/` 五份種子頁
+- **NotebookLM 同步**（`radar-sync`，`[notebooklm]` extra）：每主題一個 notebook，
+  高分論文 add_url + 深讀報告 add_text，逼近來源上限自動分片，雙重去重
+- **Finviz Elite 收集器**：市場新聞（topic 閘）+ 板塊輪動異常訊號進 digest
+- **統一 LLM 路由**（`llm.py`）：`provider:model` spec（ollama / anthropic /
+  openai / xai / **nvidia NIM**），fallback 清單；`radar-run providers` 健康檢查
+- **場景 pipeline**（`radar-run`）：ArXiv→Qwen 專家長報告、X 大神→Nemotron 總結、
+  GitHub 熱門 repo→雙語貼文草稿、市場訊號→雙語貼文草稿（一律人審後才發）
+- **暗黑極客控制台**（`radar-ui`，`[ui]` extra）：127.0.0.1 web console —
+  provider 狀態燈、平台複選 COLLECT、場景觸發卡、markdown 瀏覽器、SSE 即時 job log
+
+---
+
 ## [1.3.1] - 2026-03-27
 
 ### 🐛 Bug Fixes / 修复
