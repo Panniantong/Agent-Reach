@@ -226,8 +226,79 @@ DEFAULT_SOURCES = {
     ],
     "arxiv_author_boost": 6,
     "arxiv_org_boost": 4,
+    # ── 多主題垂直領域（每主題一次 arXiv 查詢，Item 標 extra["topic"]）────
+    # 有 topics 時 arXiv 走 per-topic 路徑；刪掉整個 topics 則回退到上面的
+    # 頂層 arxiv_categories/arxiv_keywords（legacy 單查詢）。使用者在
+    # radar.yaml 自訂 topics 會整組取代預設（shallow merge）。
+    "topics": {
+        "ai": {
+            "label": "AI / LLM 系統",
+            "arxiv_categories": ["cs.AI", "cs.LG", "cs.CL", "cs.DC", "cs.AR"],
+            "arxiv_keywords": {
+                "kv cache": 3, "speculative decoding": 3, "hbm": 3,
+                "mixture of experts": 2, "quantization": 2, "inference": 2,
+                "distributed training": 2, "interconnect": 2, "scaling law": 2,
+                "attention": 1, "reasoning": 1, "reinforcement learning": 1,
+                "agent": 1, "pretraining": 1, "fine-tuning": 1,
+            },
+        },
+        "ee": {
+            "label": "電子工程 / 半導體",
+            "arxiv_categories": ["eess.SY", "cs.AR", "cs.ET", "physics.app-ph"],
+            "arxiv_keywords": {
+                "chiplet": 3, "advanced packaging": 3, "hbm": 3,
+                "interposer": 2, "3d integration": 2, "power electronics": 2,
+                "gan": 2, "sic": 2, "eda": 2, "photonics": 2,
+                "asic": 1, "fpga": 1, "analog": 1, "thermal": 1,
+            },
+        },
+        "rf": {
+            "label": "射頻 / 通訊",
+            "arxiv_categories": ["eess.SP", "physics.app-ph"],
+            "arxiv_keywords": {
+                "mmwave": 3, "phased array": 3, "rf front-end": 3,
+                "beamforming": 2, "power amplifier": 2, "transceiver": 2,
+                "satellite communication": 2, "6g": 2,
+                "antenna": 1, "spectrum": 1, "radar": 1,
+            },
+        },
+        "spacetech": {
+            "label": "太空科技",
+            "arxiv_categories": ["physics.space-ph", "astro-ph.IM", "astro-ph.EP", "eess.SY"],
+            "arxiv_keywords": {
+                "satellite constellation": 3, "launch vehicle": 3,
+                "in-orbit servicing": 3, "inter-satellite link": 3,
+                "propulsion": 2, "leo": 2, "earth observation": 2,
+                "cubesat": 2, "space debris": 2,
+                "reentry": 1, "lunar": 1,
+            },
+        },
+        "quantum": {
+            "label": "量子科技",
+            "arxiv_categories": ["quant-ph"],
+            "arxiv_keywords": {
+                "error correction": 3, "logical qubit": 3,
+                "superconducting qubit": 2, "trapped ion": 2, "neutral atom": 2,
+                "quantum advantage": 2, "qkd": 2, "quantum sensing": 2,
+                "cryogenic": 2,
+                "transmon": 1, "photonic": 1,
+            },
+        },
+    },
     # Cap per section in the digest.
     "max_items_per_section": 8,
+}
+
+
+# Platform registry: what `collect_all(platforms=[...])` / the UI can select.
+# name -> {kind: digest group key, label: human label}. radar_finviz registers
+# "finviz" as a market-signal source (see collect_all).
+PLATFORMS: dict[str, dict] = {
+    "twitter": {"kind": "tweet", "label": "X / Twitter"},
+    "exa": {"kind": "web", "label": "Exa 語義搜索"},
+    "rss": {"kind": "rss", "label": "RSS 精選源"},
+    "trends": {"kind": "trend", "label": "Google Trends"},
+    "arxiv": {"kind": "paper", "label": "arXiv 論文"},
 }
 
 
@@ -680,9 +751,15 @@ def collect_google_trends(sources: dict) -> list[Item]:
 # ── orchestration + digest ────────────────────────────────────────────────
 
 
-def collect_all(sources: dict, config: Config) -> dict[str, list[Item]]:
-    """Run every collector, grouped by kind. Failures degrade gracefully.
+def collect_all(
+    sources: dict,
+    config: Config,
+    platforms: Optional[list[str]] = None,
+) -> dict[str, list[Item]]:
+    """Run the selected collectors (default: all), grouped by kind.
 
+    ``platforms`` filters against the PLATFORMS registry — unselected groups
+    come back as empty lists so downstream consumers keep a stable shape.
     Trusted sources (curated Twitter accounts, Exa queries) are kept as-is.
     Noisy sources (RSS, Google Trends) are passed through the topic gate when
     their ``filter_*`` flag is on. Every group is de-duplicated.
@@ -690,23 +767,33 @@ def collect_all(sources: dict, config: Config) -> dict[str, list[Item]]:
     # Deferred import — radar_arxiv imports from this module.
     from agent_reach.radar_arxiv import collect_arxiv
 
+    selected = {p.strip().lower() for p in platforms if p.strip()} if platforms else set(PLATFORMS)
+    unknown = selected - set(PLATFORMS)
+    if unknown:
+        logger.warning(f"unknown platforms ignored: {', '.join(sorted(unknown))}")
+
     kw = sources.get("topic_keywords", [])
-    rss = collect_rss(sources)
-    if sources.get("filter_rss", True):
-        # Guru feeds are curated/trusted — only generic feeds go through the
-        # topic gate (a Lilian Weng post shouldn't die on keyword mismatch).
-        rss = [i for i in rss if i.extra.get("guru_category") or _is_on_topic(i, kw)]
-    trends = collect_google_trends(sources)
-    if sources.get("filter_trends", True):
-        trends = [i for i in trends if _is_on_topic(i, kw)]
-    return {
-        "tweet": _dedupe(collect_twitter(sources, config)),
-        "web": _dedupe(collect_exa(sources)),
-        "rss": _dedupe(rss),
-        "trend": _dedupe(trends),
+    grouped: dict[str, list[Item]] = {spec["kind"]: [] for spec in PLATFORMS.values()}
+    if "twitter" in selected:
+        grouped["tweet"] = _dedupe(collect_twitter(sources, config))
+    if "exa" in selected:
+        grouped["web"] = _dedupe(collect_exa(sources))
+    if "rss" in selected:
+        rss = collect_rss(sources)
+        if sources.get("filter_rss", True):
+            # Guru feeds are curated/trusted — only generic feeds go through the
+            # topic gate (a Lilian Weng post shouldn't die on keyword mismatch).
+            rss = [i for i in rss if i.extra.get("guru_category") or _is_on_topic(i, kw)]
+        grouped["rss"] = _dedupe(rss)
+    if "trends" in selected:
+        trends = collect_google_trends(sources)
+        if sources.get("filter_trends", True):
+            trends = [i for i in trends if _is_on_topic(i, kw)]
+        grouped["trend"] = _dedupe(trends)
+    if "arxiv" in selected:
         # Papers carry their own scorer-gate; no topic filter here.
-        "paper": _dedupe(collect_arxiv(sources, config)),
-    }
+        grouped["paper"] = _dedupe(collect_arxiv(sources, config))
+    return grouped
 
 
 def _fmt_metrics(m: dict) -> str:
@@ -781,21 +868,42 @@ def build_digest(grouped: dict[str, list[Item]], sources: dict, when: datetime) 
             _emit_tweets(sorted(all_tweets, key=lambda i: i.score, reverse=True)[:cap])
 
     # arXiv papers — 軟硬體架構脈搏, ranked by the relevance scorer.
+    # Topic-tagged papers (multi-topic collection) get one subsection per
+    # topic; untagged papers (legacy single-query path) render flat.
     papers = sorted(grouped.get("paper", []), key=lambda i: i.score, reverse=True)
     if papers:
         top_n = int(sources.get("arxiv_top_n", 8))
         dive_n = int(sources.get("arxiv_deep_dive_n", 4))
         lines.append("## 📄 arXiv 論文雷達（軟硬體架構脈搏）")
         lines.append("")
-        for rank, it in enumerate(papers[:top_n]):
-            flag = " 🔬" if rank < dive_n else ""
-            lines.append(f"- [{it.title}]({it.url}){flag} · score {it.score:g}")
-            why = it.extra.get("why") or []
-            if why:
-                lines.append(f"  - _{'、'.join(why[:6])}_")
-            if it.author:
-                lines.append(f"  - {it.author[:120]}")
-        lines.append("")
+
+        def _emit_papers(picks: list[Item]) -> None:
+            for rank, it in enumerate(picks):
+                flag = " 🔬" if rank < dive_n else ""
+                lines.append(f"- [{it.title}]({it.url}){flag} · score {it.score:g}")
+                why = it.extra.get("why") or []
+                if why:
+                    lines.append(f"  - _{'、'.join(why[:6])}_")
+                if it.author:
+                    lines.append(f"  - {it.author[:120]}")
+
+        topics_cfg = sources.get("topics") or {}
+        if any(i.extra.get("topic") for i in papers):
+            buckets: dict[str, list[Item]] = {}
+            for it in papers:
+                buckets.setdefault(it.extra.get("topic", ""), []).append(it)
+            t_order = [t for t in topics_cfg if t in buckets] + [
+                t for t in buckets if t not in topics_cfg
+            ]
+            for t in t_order:
+                label = (topics_cfg.get(t) or {}).get("label") or t or "未分類"
+                lines.append(f"### {label}")
+                lines.append("")
+                _emit_papers(buckets[t][:top_n])
+                lines.append("")
+        else:
+            _emit_papers(papers[:top_n])
+            lines.append("")
         if dive_n and len(papers) > 0:
             lines.append("> 🔬 = 深讀候選（`agent-reach radar-deepdive` 產出全文蒸餾報告）")
             lines.append("")
@@ -832,16 +940,31 @@ def build_digest(grouped: dict[str, list[Item]], sources: dict, when: datetime) 
     return "\n".join(lines)
 
 
-def run_radar(config: Optional[Config] = None, when: Optional[datetime] = None) -> tuple[Path, dict]:
+def run_radar(
+    config: Optional[Config] = None,
+    when: Optional[datetime] = None,
+    platforms: Optional[list[str]] = None,
+) -> tuple[Path, dict]:
     """Collect, build the digest, write it, and return (path, grouped_items)."""
     config = config or Config()
     when = when or datetime.now(timezone.utc).astimezone()
     sources = load_sources()
-    grouped = collect_all(sources, config)
+    grouped = collect_all(sources, config, platforms=platforms)
     digest = build_digest(grouped, sources, when)
     RADAR_DIR.mkdir(parents=True, exist_ok=True)
     out = RADAR_DIR / f"{when:%Y-%m-%d-%H%M}.md"
     out.write_text(digest, encoding="utf-8")
     # Also keep a stable "latest" pointer for easy reading/cron.
     (RADAR_DIR / "latest.md").write_text(digest, encoding="utf-8")
+    # Items sidecar: same-day downstream consumers (wiki / notebooklm sync /
+    # scenarios) reuse this instead of hitting the sources again.
+    sidecar = {
+        "date": f"{when:%Y-%m-%d}",
+        "generated_at": when.isoformat(),
+        "platforms": sorted(platforms) if platforms else "all",
+        "items": {k: [vars(i) for i in v] for k, v in grouped.items()},
+    }
+    (RADAR_DIR / "latest-items.json").write_text(
+        json.dumps(sidecar, ensure_ascii=False, indent=1), encoding="utf-8"
+    )
     return out, grouped

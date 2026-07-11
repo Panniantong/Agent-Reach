@@ -138,6 +138,10 @@ def main():
     p_radar.add_argument(
         "--deep-dive", action="store_true", help="Also distill the top arXiv papers into deep-dive reports"
     )
+    p_radar.add_argument(
+        "--platforms", default=None,
+        help="Comma-separated platforms to collect (twitter,exa,rss,trends,arxiv); default: all",
+    )
 
     # ── radar-deepdive (tier-2 arXiv full-text distillation) ──
     p_dive = sub.add_parser(
@@ -145,6 +149,7 @@ def main():
         help="Pull full text of the top-scored arXiv papers and distill deep-dive reports (繁中)",
     )
     p_dive.add_argument("--top", type=int, default=None, help="How many papers to deep-dive (default: arxiv_deep_dive_n)")
+    p_dive.add_argument("--topic", default=None, help="Only deep-dive papers tagged with this topic (ee|rf|ai|spacetech|quantum)")
 
     # ── radar-report (mentor-panel / multi-student daily report pipeline) ──
     p_report = sub.add_parser(
@@ -270,8 +275,12 @@ def _cmd_radar(args):
 
     from agent_reach.radar import run_radar
 
-    print("🛰️  收集中（Twitter / Exa / RSS / Trends）...")
-    out_path, grouped = run_radar()
+    platforms = None
+    if getattr(args, "platforms", None):
+        platforms = [p.strip() for p in args.platforms.split(",") if p.strip()]
+    label = " / ".join(platforms) if platforms else "Twitter / Exa / RSS / Trends / arXiv"
+    print(f"🛰️  收集中（{label}）...")
+    out_path, grouped = run_radar(platforms=platforms)
     total = sum(len(v) for v in grouped.values())
 
     if getattr(args, "json", False):
@@ -318,8 +327,13 @@ def _cmd_radar_deepdive(args):
     if not papers:
         print("⚠️ 沒有命中任何論文（檢查 arxiv_categories / arxiv_keywords）")
         return
-    print(f"   命中 {len(papers)} 篇，深讀 top {int(sources.get('arxiv_deep_dive_n', 4))} ...")
-    paths = run_deep_dive(papers, sources)
+    topic = getattr(args, "topic", None)
+    scope = f"（主題 {topic}）" if topic else ""
+    print(f"   命中 {len(papers)} 篇，深讀 top {int(sources.get('arxiv_deep_dive_n', 4))}{scope} ...")
+    paths = run_deep_dive(papers, sources, topic=topic)
+    if not paths:
+        print("⚠️ 該主題下沒有命中論文")
+        return
     for p in paths:
         print(f"   → {p}")
     import os

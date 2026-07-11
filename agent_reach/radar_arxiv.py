@@ -18,8 +18,10 @@ no new dependency, no scraping. Collectors never raise.
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -33,6 +35,9 @@ from agent_reach.radar import RADAR_DIR, Item, _parse_feed, guru_author_names
 
 ARXIV_API = "http://export.arxiv.org/api/query"
 DEEPDIVE_DIR = RADAR_DIR / "deepdive"
+
+# arXiv API etiquette asks ≥3s between requests. Module-level so tests zero it.
+_ARXIV_PACING_S = 3.0
 
 DEFAULT_MENTOR_MODEL = "claude-fable-5"
 
@@ -149,30 +154,88 @@ def score_paper(
     return score
 
 
+def arxiv_topic_plan(sources: dict) -> list[dict]:
+    """Per-topic query plan from ``sources["topics"]``.
+
+    Without ``topics`` this falls back to a single untagged entry built from
+    the top-level ``arxiv_categories``/``arxiv_keywords`` — the legacy path
+    that older configs and the evolve health fixtures ride (exactly one
+    query, no pacing sleep).
+    """
+    plan: list[dict] = []
+    for tid, spec in (sources.get("topics") or {}).items():
+        if not isinstance(spec, dict):
+            continue
+        cats = [str(c) for c in (spec.get("arxiv_categories") or []) if str(c).strip()]
+        if not cats:
+            continue
+        plan.append({
+            "topic": str(tid),
+            "label": str(spec.get("label") or tid),
+            "categories": cats,
+            "keywords": spec.get("arxiv_keywords") or {},
+        })
+    if plan:
+        return plan
+    cats = sources.get("arxiv_categories") or []
+    if not cats:
+        return []
+    return [{
+        "topic": "",
+        "label": "",
+        "categories": cats,
+        "keywords": sources.get("arxiv_keywords") or {},
+    }]
+
+
 def collect_arxiv(sources: dict, config: Config) -> list[Item]:
-    """One Atom API call (arXiv asks ≥3s between calls), scored + sorted. Never raises."""
-    categories = sources.get("arxiv_categories") or []
-    if not categories:
+    """One paced Atom query per topic, scored per-topic, cross-topic deduped.
+
+    Papers get ``extra["topic"]`` (primary = first topic that hit) and
+    ``extra["topics"]`` (all topics that hit). The legacy single-query path
+    leaves ``topic`` as "". Never raises.
+    """
+    plan = arxiv_topic_plan(sources)
+    if not plan:
         return []
-    url = _arxiv_query_url(categories, int(sources.get("arxiv_max_results", 100)))
-    try:
-        feed = _parse_feed(url, timeout=30)
-    except Exception as e:  # noqa: BLE001 - collector must never abort the run
-        logger.warning(f"arXiv fetch failed: {e}")
-        return []
-    kw_weights = sources.get("arxiv_keywords") or {}
+    max_results = int(sources.get("arxiv_max_results", 100))
     gurus = guru_author_names(sources)
     orgs = sources.get("arxiv_orgs") or []
     author_boost = float(sources.get("arxiv_author_boost", 6))
     org_boost = float(sources.get("arxiv_org_boost", 4))
-    items: list[Item] = []
-    for entry in feed.entries:
-        it = _arxiv_entry_to_item(entry)
-        if not it:
+    best: dict[str, Item] = {}  # arxiv_id → highest-scoring copy across topics
+    for idx, entry in enumerate(plan):
+        if idx:
+            time.sleep(_ARXIV_PACING_S)
+        url = _arxiv_query_url(entry["categories"], max_results)
+        try:
+            feed = _parse_feed(url, timeout=30)
+        except Exception as e:  # noqa: BLE001 - collector must never abort the run
+            logger.warning(f"arXiv fetch failed ({entry['topic'] or 'default'}): {e}")
             continue
-        # The scorer IS the relevance gate: unscored papers are off-radar.
-        if score_paper(it, kw_weights, gurus, orgs, author_boost, org_boost) > 0:
-            items.append(it)
+        for raw in feed.entries:
+            it = _arxiv_entry_to_item(raw)
+            if not it:
+                continue
+            # The scorer IS the relevance gate: unscored papers are off-radar.
+            if score_paper(it, entry["keywords"], gurus, orgs, author_boost, org_boost) <= 0:
+                continue
+            it.extra["topic"] = entry["topic"]
+            it.extra["topics"] = [entry["topic"]] if entry["topic"] else []
+            aid = it.extra["arxiv_id"]
+            prev = best.get(aid)
+            if prev is None:
+                best[aid] = it
+                continue
+            hits = prev.extra.get("topics") or []
+            if entry["topic"] and entry["topic"] not in hits:
+                hits.append(entry["topic"])
+            if it.score > prev.score:
+                it.extra["topics"] = hits
+                best[aid] = it
+            else:
+                prev.extra["topics"] = hits
+    items = list(best.values())
     items.sort(key=lambda i: i.score, reverse=True)
     return items
 
@@ -259,12 +322,23 @@ def run_deep_dive(
     sources: dict,
     config: Optional[Config] = None,
     when: Optional[datetime] = None,
+    topic: Optional[str] = None,
 ) -> list[Path]:
-    """Distill the top-N papers into standalone reports; returns written paths."""
+    """Distill the top-N papers into standalone reports; returns written paths.
+
+    ``topic`` narrows the candidate pool to papers tagged with that topic
+    (multi-topic collection); None keeps today's behavior.
+    """
     config = config or Config()
     when = when or datetime.now(timezone.utc).astimezone()
     top_n = int(sources.get("arxiv_deep_dive_n", 4))
-    picks = sorted(papers, key=lambda i: i.score, reverse=True)[:top_n]
+    pool = papers
+    if topic:
+        pool = [
+            p for p in papers
+            if p.extra.get("topic") == topic or topic in (p.extra.get("topics") or [])
+        ]
+    picks = sorted(pool, key=lambda i: i.score, reverse=True)[:top_n]
     if not picks:
         return []
     DEEPDIVE_DIR.mkdir(parents=True, exist_ok=True)
@@ -281,4 +355,19 @@ def run_deep_dive(
     for p, item in zip(written, picks):
         index.append(f"- [{item.title}]({p.name}) · score {item.score:g} · {item.url}")
     (DEEPDIVE_DIR / "latest-index.md").write_text("\n".join(index) + "\n", encoding="utf-8")
+    # Machine-readable index — wiki/sync/scenarios pick today's reports up here.
+    index_json = [
+        {
+            "file": p.name,
+            "arxiv_id": item.extra.get("arxiv_id", ""),
+            "topic": item.extra.get("topic", ""),
+            "title": item.title,
+            "score": item.score,
+            "url": item.url,
+        }
+        for p, item in zip(written, picks)
+    ]
+    (DEEPDIVE_DIR / f"{when:%Y-%m-%d}-index.json").write_text(
+        json.dumps(index_json, ensure_ascii=False, indent=1), encoding="utf-8"
+    )
     return written
