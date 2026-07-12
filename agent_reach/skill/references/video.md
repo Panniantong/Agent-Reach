@@ -39,6 +39,21 @@ yt-dlp --dump-json "ytsearch5:query"
 > **字幕注意**: 手动上传的字幕提取可靠；自动生成字幕可能存在行间重复，需后处理。
 > **评论注意**: `--write-comments` 基于网页抓取（非 YouTube Data API），部分评论可能丢失。
 
+### 浏览器会话兜底：OpenCLI transcript
+
+当 `yt-dlp` 遇到 bot-check、JS challenge 或本机匿名请求受限时，如果用户
+已经在桌面浏览器中登录 YouTube，并且 OpenCLI Browser Bridge 已连接，可以
+使用浏览器会话读取视频字幕：
+
+```bash
+opencli doctor
+opencli youtube transcript "https://www.youtube.com/watch?v=VIDEO_ID" -f json
+```
+
+该命令返回带时间戳的字幕片段，适合直接交给 Agent 做后续整理。它只复用
+用户已经授权的浏览器会话，不绕过 CAPTCHA、付费墙、私密权限或地区限制。
+如果 OpenCLI 也没有可用字幕，再使用下面的 Whisper 音频转写兜底。
+
 ### 无字幕兜底：Whisper 音频转写
 
 ```bash
@@ -124,7 +139,7 @@ agent-reach doctor
 
 | 场景 | 推荐工具 |
 |-----|---------|
-| YouTube 字幕 | yt-dlp |
+| YouTube 字幕 | yt-dlp；bot-check / JS challenge 时用 `opencli youtube transcript` |
 | B站视频详情/搜索 | bili-cli |
 | B站字幕 | opencli bilibili subtitle |
 | 播客转录 | 小宇宙 transcribe.sh |

@@ -22,6 +22,8 @@ class TestSkillCommand(unittest.TestCase):
 
         self.assertTrue(default_skill.strip())
         self.assertTrue(english_skill.strip())
+        self.assertIn("opencli youtube transcript", default_skill)
+        self.assertIn("opencli youtube transcript", english_skill)
 
     def test_install_skill_creates_skill_md(self):
         """_install_skill should create SKILL.md in the first available skill dir."""

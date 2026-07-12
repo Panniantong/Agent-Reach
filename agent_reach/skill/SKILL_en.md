@@ -71,6 +71,9 @@ gh search repos "query" --sort stars --limit 10
 # YouTube subtitles (NOTE: never use yt-dlp for Bilibili — see video.md)
 yt-dlp --write-sub --skip-download -o "/tmp/%(id)s" "URL"
 
+# Browser-session fallback when yt-dlp hits a bot-check or JS challenge
+opencli youtube transcript "URL" -f json
+
 # V2EX hot topics
 curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1.0"
 

@@ -83,6 +83,9 @@ gh search repos "query" --sort stars --limit 10
 # YouTube 字幕（注意：B站不要用 yt-dlp，见 video.md）
 yt-dlp --write-sub --skip-download -o "/tmp/%(id)s" "URL"
 
+# YouTube 浏览器会话字幕兜底（yt-dlp 遇到 bot-check / JS challenge 时）
+opencli youtube transcript "URL" -f json
+
 # V2EX 热门
 curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1.0"
 

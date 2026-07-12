@@ -59,3 +59,22 @@ twitter check
 > 如果返回 "Missing credentials"，需要设置 AUTH_TOKEN 和 CT0 环境变量。
 >
 > **Fallback：** 如果你已经安装了 bird CLI（`npm install -g @steipete/bird`），它也能正常工作。Agent Reach 会自动检测已安装的工具。
+
+---
+
+## YouTube: yt-dlp 遇到 bot-check 或 JS challenge
+
+**症状：** `yt-dlp` 报 `Sign in to confirm you're not a bot`、JS challenge
+失败，或者匿名请求拿不到字幕。
+
+**解决方案：** 在本地桌面浏览器中登录 YouTube，安装并连接 OpenCLI
+Browser Bridge，然后运行：
+
+```bash
+opencli doctor
+opencli youtube transcript "https://www.youtube.com/watch?v=VIDEO_ID" -f json
+```
+
+OpenCLI 读取的是用户已经授权的浏览器会话，返回带时间戳的字幕片段。它不
+绕过 CAPTCHA、付费墙、私密权限或地区限制。若浏览器会话也没有字幕，使用
+`agent-reach transcribe` 配合 Groq/OpenAI Whisper 作为音频转写兜底。

@@ -110,8 +110,11 @@ def test_youtube_warns_when_node_only_and_no_config(monkeypatch, tmp_path):
 
     monkeypatch.setattr("shutil.which", fake_which)
     monkeypatch.setattr("subprocess.run", _fake_run_ok)  # yt-dlp probe really executes now
-    # Point to a non-existent config file
-    monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path / ".config/yt-dlp/config"))
+    # Point the current platform-aware helper to a deterministic empty config.
+    monkeypatch.setattr(
+        "agent_reach.channels.youtube.get_ytdlp_config_path",
+        lambda: tmp_path / ".config/yt-dlp/config",
+    )
 
     ch = YouTubeChannel()
     status, message = ch.check()
