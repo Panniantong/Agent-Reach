@@ -158,7 +158,7 @@ class TestCLI:
                 proxy="",
                 safe=False,
                 dry_run=False,
-                channels="facebook,instagram,opencli",
+                channels="facebook,instagram,zhihu,opencli",
             )
         )
 
@@ -174,14 +174,14 @@ class TestCLI:
                 proxy="",
                 safe=False,
                 dry_run=True,
-                channels="facebook,instagram,opencli,bilibili",
+                channels="facebook,instagram,zhihu,opencli,bilibili",
             )
         )
 
         out = capsys.readouterr().out
-        assert "服务器环境跳过：facebook, instagram, opencli" in out
+        assert "服务器环境跳过：facebook, instagram, opencli, zhihu" in out
         assert "[dry-run] Would install optional channels: bilibili" in out
-        assert "facebook, instagram, opencli, bilibili" not in out
+        assert "facebook, instagram, opencli, zhihu, bilibili" not in out
 
 
 class TestCheckUpdateRetry:

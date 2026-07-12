@@ -75,7 +75,7 @@ def main():
     p_install.add_argument("--channels", default="",
                            help="Comma-separated optional channels to install "
                                 "(twitter,xiaoyuzhou,xueqiu,xiaohongshu,"
-                                "reddit,facebook,instagram,bilibili,linkedin,all)")
+                                "reddit,facebook,instagram,zhihu,bilibili,linkedin,all)")
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
@@ -201,12 +201,13 @@ def _cmd_install(args):
         "reddit":      _install_reddit_deps,
         "facebook":    _install_opencli_deps,
         "instagram":   _install_opencli_deps,
+        "zhihu":       _install_opencli_deps,
         "bilibili":    _install_bili_deps,
         "opencli":     _install_opencli_deps,  # cross-channel backend, desktop only
         # xueqiu: cookie-only, no install step
         # linkedin: manual setup, no auto-install
     }
-    OPENCLI_ONLY_CHANNELS = {"opencli", "facebook", "instagram"}
+    OPENCLI_ONLY_CHANNELS = {"opencli", "facebook", "instagram", "zhihu"}
     COOKIE_CHANNELS = {"twitter", "xueqiu", "bilibili"}
 
     requested_channels = set()
@@ -339,7 +340,7 @@ def _cmd_install(args):
             # First install — hint about optional channels
             print()
             print("More channels available! Use --channels to install:")
-            print("   agent-reach install --channels=twitter,xiaohongshu,reddit,facebook,instagram,...")
+            print("   agent-reach install --channels=twitter,xiaohongshu,reddit,facebook,instagram,zhihu,...")
             print("   agent-reach install --channels=all  (install everything)")
 
         # Star reminder

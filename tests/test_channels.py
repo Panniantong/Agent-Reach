@@ -13,6 +13,7 @@ from agent_reach.channels.instagram import InstagramChannel
 from agent_reach.channels.v2ex import V2EXChannel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
 from agent_reach.channels.xueqiu import XueqiuChannel
+from agent_reach.channels.zhihu import ZhihuChannel
 
 
 class TestChannelRegistry:
@@ -33,6 +34,7 @@ class TestChannelRegistry:
         assert "facebook" in names
         assert "instagram" in names
         assert "v2ex" in names
+        assert "zhihu" in names
 
 
 class TestOpenCLISiteChannels:
@@ -50,6 +52,14 @@ class TestOpenCLISiteChannels:
         assert ch.can_handle("https://instagram.com/p/abc123/")
         assert ch.can_handle("https://instagr.am/p/abc123/")
         assert not ch.can_handle("https://facebook.com/openai")
+
+    def test_zhihu_can_handle_common_urls(self):
+        ch = ZhihuChannel()
+        assert ch.can_handle("https://www.zhihu.com/question/12345")
+        assert ch.can_handle("https://zhuanlan.zhihu.com/p/98765")
+        assert ch.can_handle("https://www.zhihu.com/people/someone")
+        assert not ch.can_handle("https://zhihu.example.com/x")
+        assert not ch.can_handle("https://www.v2ex.com/t/1")
 
     def test_opencli_ready_reports_ok(self, monkeypatch):
         monkeypatch.setattr(
@@ -78,6 +88,22 @@ class TestOpenCLISiteChannels:
         assert ch.active_backend is None
         assert "agent-reach install --channels opencli" in msg
         assert "instagram.com" in msg
+
+    def test_zhihu_opencli_ready_reports_ok(self, monkeypatch):
+        monkeypatch.setattr(
+            "agent_reach.backends.opencli_status",
+            lambda: OpenCLIStatus(
+                installed=True,
+                extension_connected=True,
+                version="1.8.3",
+            ),
+        )
+        ch = ZhihuChannel()
+        status, msg = ch.check()
+        assert status == "ok"
+        assert ch.active_backend == "OpenCLI"
+        assert "opencli zhihu" in msg
+        assert "zhihu.com" in msg
 
     def test_opencli_installed_without_extension_reports_warn(self, monkeypatch):
         monkeypatch.setattr(
