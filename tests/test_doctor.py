@@ -54,7 +54,7 @@ class TestDoctor:
                 "configured": True,
                 "authenticated": None,
                 "network_accessible": None,
-                "sandbox_accessible": True,
+                "sandbox_accessible": None,
                 "available": True,
                 "failure_kind": None,
                 "reason": "可抓取网页",
@@ -70,7 +70,7 @@ class TestDoctor:
                 "configured": None,
                 "authenticated": None,
                 "network_accessible": None,
-                "sandbox_accessible": True,
+                "sandbox_accessible": None,
                 "available": False,
                 "failure_kind": None,
                 "reason": "gh 未安装",
@@ -86,7 +86,7 @@ class TestDoctor:
                 "configured": None,
                 "authenticated": None,
                 "network_accessible": None,
-                "sandbox_accessible": True,
+                "sandbox_accessible": None,
                 "available": False,
                 "failure_kind": None,
                 "reason": "mcporter 未配置",
@@ -163,3 +163,4 @@ def test_health_fields_identify_network_and_sandbox_failures():
     assert unknown["configured"] is None
     assert unknown["authenticated"] is None
     assert unknown["network_accessible"] is None
+    assert unknown["sandbox_accessible"] is None

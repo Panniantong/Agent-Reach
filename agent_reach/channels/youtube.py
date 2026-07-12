@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 """YouTube — check if yt-dlp is available with JS runtime."""
 
+import glob
+import os
 import shutil
 import sys
+import tempfile
 
 from agent_reach.probe import probe_command
 from agent_reach.utils.paths import get_ytdlp_config_path, render_ytdlp_fix_command
@@ -85,6 +88,50 @@ class YouTubeChannel(Channel):
     def read_command(self, url: str):
         return [sys.executable, "-m", "yt_dlp", "--dump-single-json", "--skip-download", url]
 
+    def extract_content(self, url: str, run_command):
+        metadata = run_command(self.read_command(url))
+        if not isinstance(metadata, dict):
+            raise RuntimeError("yt-dlp did not return video metadata")
+
+        manual = metadata.get("subtitles") or {}
+        automatic = metadata.get("automatic_captions") or {}
+        tracks = manual or automatic
+        available = {key for key in tracks if key != "live_chat"}
+        configured = [
+            lang.strip() for lang in os.environ.get("AGENT_REACH_SUB_LANGS", "").split(",")
+            if lang.strip()
+        ]
+        preferences = configured + [
+            metadata.get("original_language"), metadata.get("language"), "en", "en-US", "en-GB"
+        ]
+        language = next((lang for lang in preferences if lang in available), None)
+        if language is None and available:
+            language = sorted(available)[0]
+        if language is None:
+            raise RuntimeError("no subtitles were available for this YouTube video")
+
+        with tempfile.TemporaryDirectory(prefix="agent-reach-youtube-") as temp_dir:
+            output = f"{temp_dir}/%(id)s"
+            run_command(
+                [
+                    sys.executable, "-m", "yt_dlp", "--write-sub", "--write-auto-sub",
+                    "--sub-langs", language, "--sub-format", "vtt", "--skip-download",
+                    "-o", output, url,
+                ],
+                timeout=120,
+            )
+            subtitle_paths = sorted(glob.glob(f"{temp_dir}/*.vtt"))
+            if not subtitle_paths:
+                raise RuntimeError(f"subtitle track {language!r} could not be downloaded")
+            transcript = "\n".join(_clean_vtt(path) for path in subtitle_paths)
+
+        return {
+            "content": transcript,
+            "author": metadata.get("uploader") or metadata.get("channel"),
+            "published_at": metadata.get("timestamp") or metadata.get("upload_date"),
+            "media": [{"url": metadata["thumbnail"]}] if metadata.get("thumbnail") else [],
+        }
+
     def transcribe(self, url: str, *, provider: str = "auto", config=None) -> str:
         """Download a YouTube video's audio and return its transcript.
 
@@ -95,3 +142,16 @@ class YouTubeChannel(Channel):
         from agent_reach.transcribe import transcribe as _transcribe
 
         return _transcribe(url, provider=provider, config=config)
+
+
+def _clean_vtt(path: str) -> str:
+    """Remove VTT timing/metadata and collapse adjacent duplicate lines."""
+    lines: list[str] = []
+    with open(path, encoding="utf-8") as subtitle:
+        for raw_line in subtitle:
+            line = raw_line.strip()
+            if not line or line == "WEBVTT" or "-->" in line or line.startswith(("Kind:", "Language:")):
+                continue
+            if line != (lines[-1] if lines else None):
+                lines.append(line)
+    return "\n".join(lines)

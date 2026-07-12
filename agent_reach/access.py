@@ -3,11 +3,8 @@
 
 from __future__ import annotations
 
-import glob
 import json
 import subprocess
-import sys
-import tempfile
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -73,7 +70,7 @@ class AccessRouter:
                         "backend": "Exa via mcporter",
                         "content": content,
                     }
-                except (FileNotFoundError, RuntimeError):
+                except (OSError, RuntimeError, subprocess.TimeoutExpired):
                     pass
         return {
             "platform": "web_search",
@@ -85,15 +82,17 @@ class AccessRouter:
         }
 
     def read(self, url: str) -> dict:
-        channel = next(ch for ch in get_all_channels() if ch.can_handle(url))
-        status, reason = channel.check(self.config)
-        backend = channel.active_backend
-        if status == "error" or backend is None:
-            raise RuntimeError(reason)
+        channel, backend = self._ready_channel(url)
 
         command = channel.read_command(url)
         if command is not None:
-            content = _run(command)
+            try:
+                content = _run(command)
+            except (OSError, RuntimeError, subprocess.TimeoutExpired):
+                from agent_reach.channels.web import WebChannel
+
+                content = WebChannel().read(url)
+                backend = "Jina Reader fallback"
         elif channel.name == "web":
             content = cast(Any, channel).read(url)
         else:
@@ -105,48 +104,19 @@ class AccessRouter:
         return {"platform": channel.name, "backend": backend, "content": content}
 
     def extract(self, url: str) -> dict:
-        """Extract consumable content; for YouTube this means subtitle text."""
-        channel = next(ch for ch in get_all_channels() if ch.can_handle(url))
-        if channel.name != "youtube":
+        """Extract consumable platform content through the channel capability."""
+        channel, backend = self._ready_channel(url)
+        extracted = channel.extract_content(url, _run)
+        if extracted is None:
             return self.read(url)
+        return {"platform": channel.name, "backend": backend, **extracted}
 
+    def _ready_channel(self, url: str):
+        channel = next(ch for ch in get_all_channels() if ch.can_handle(url))
         status, reason = channel.check(self.config)
         if status == "error" or channel.active_backend is None:
             raise RuntimeError(reason)
-        with tempfile.TemporaryDirectory(prefix="agent-reach-youtube-") as temp_dir:
-            output = f"{temp_dir}/%(id)s"
-            _run(
-                [
-                    sys.executable, "-m", "yt_dlp", "--write-sub", "--write-auto-sub",
-                    "--sub-langs", "en,en-US,en-GB",
-                    "--sub-format", "vtt", "--skip-download", "-o", output, url,
-                ],
-                timeout=120,
-            )
-            subtitle_paths = sorted(glob.glob(f"{temp_dir}/*.vtt"))
-            if not subtitle_paths:
-                raise RuntimeError("no subtitles were available for this YouTube video")
-            transcript = "\n".join(
-                _clean_vtt(path) for path in subtitle_paths
-            )
-        return {
-            "platform": "youtube",
-            "backend": channel.active_backend,
-            "content": transcript,
-        }
-
-
-def _clean_vtt(path: str) -> str:
-    """Remove VTT timing/metadata and collapse adjacent duplicate lines."""
-    lines: list[str] = []
-    with open(path, encoding="utf-8") as subtitle:
-        for raw_line in subtitle:
-            line = raw_line.strip()
-            if not line or line == "WEBVTT" or "-->" in line or line.startswith(("Kind:", "Language:")):
-                continue
-            if line != (lines[-1] if lines else None):
-                lines.append(line)
-    return "\n".join(lines)
+        return channel, channel.active_backend
 
 
 class NormalizedResult(TypedDict):
@@ -191,7 +161,8 @@ def normalize_result(
         "content": normalized_content,
         "author": raw.get("author", metadata.get("author") or metadata.get("user")),
         "published_at": raw.get(
-            "published_at", metadata.get("published_at") or metadata.get("created_at")
+            "published_at",
+            metadata.get("published_at") or metadata.get("created_at") or metadata.get("createdAt"),
         ),
         "replies": replies if isinstance(replies, list) else [],
         "media": media if isinstance(media, list) else [],

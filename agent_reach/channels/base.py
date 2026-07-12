@@ -72,3 +72,7 @@ class Channel(ABC):
     def read_command(self, url: str) -> Optional[List[str]]:
         """Return the active backend's read-only command, or None for web fallback."""
         return None
+
+    def extract_content(self, url: str, run_command):
+        """Return extracted content when the platform has richer semantics than read."""
+        return None

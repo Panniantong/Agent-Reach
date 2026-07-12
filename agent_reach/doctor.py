@@ -38,7 +38,7 @@ def _health_fields(
         "configured": True if status == "ok" else None,
         "authenticated": None,
         "network_accessible": None,
-        "sandbox_accessible": True,
+        "sandbox_accessible": None,
         "available": status == "ok",
         "failure_kind": None,
     }

@@ -64,6 +64,11 @@ def test_normalizer_promotes_backend_metadata():
     assert result["replies"] == [{"id": "2"}]
     assert result["media"] == [{"url": "https://example.com/image.jpg"}]
 
+    github = normalize_result(
+        {"platform": "github", "backend": "gh CLI", "content": {"createdAt": "now"}}
+    )
+    assert github["published_at"] == "now"
+
 
 def test_search_returns_normalized_json(capsys):
     with patch("agent_reach.access.AccessRouter.search", return_value={
@@ -140,6 +145,29 @@ def test_github_issue_uses_issue_command_and_blob_uses_web_fallback():
     assert channel.read_command("https://github.com/acme/repo/blob/main/README.md") is None
 
 
+def test_read_falls_back_to_jina_after_selected_backend_fails():
+    class ChannelStub:
+        name = "github"
+        active_backend = "gh CLI"
+
+        def can_handle(self, url):
+            return True
+
+        def check(self, config):
+            return "warn", "gh unauthenticated"
+
+        def read_command(self, url):
+            return ["gh", "issue", "view", "1"]
+
+    with patch("agent_reach.access.get_all_channels", return_value=[ChannelStub()]), patch(
+        "agent_reach.access._run", side_effect=RuntimeError("auth failed")
+    ), patch("agent_reach.channels.web.WebChannel.read", return_value="web fallback"):
+        result = AccessRouter().read("https://github.com/acme/repo/issues/1")
+
+    assert result["backend"] == "Jina Reader fallback"
+    assert result["content"] == "web fallback"
+
+
 def test_youtube_extract_returns_clean_subtitle_text(tmp_path):
     class YouTubeStub:
         name = "youtube"
@@ -151,7 +179,18 @@ def test_youtube_extract_returns_clean_subtitle_text(tmp_path):
         def check(self, config):
             return "ok", "ready"
 
+        def extract_content(self, url, run_command):
+            from agent_reach.channels.youtube import YouTubeChannel
+
+            return YouTubeChannel().extract_content(url, run_command)
+
     def fake_run(command, timeout=60):
+        if "--dump-single-json" in command:
+            return {
+                "id": "video",
+                "original_language": "th",
+                "automatic_captions": {"th": [{"url": "https://example.com/sub"}]},
+            }
         output_template = command[command.index("-o") + 1]
         subtitle = output_template.replace("%(id)s", "video") + ".en.vtt"
         with open(subtitle, "w", encoding="utf-8") as handle:
