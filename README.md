@@ -84,6 +84,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 | 📖 **Reddit** | —（没有零配置路径：匿名接口已被封） | 搜索 + 读帖子和评论 | 桌面装 OpenCLI 用浏览器登录态；或 rdt-cli + Cookie |
 | 📘 **Facebook** | — | 搜索、主页、Feed、群组列表 | 桌面装 OpenCLI（复用 Chrome 登录态） |
 | 📷 **Instagram** | — | 用户搜索、Profile、用户最近帖子、Explore | 桌面装 OpenCLI（复用 Chrome 登录态） |
+| 💭 **知乎** | — | 搜索、热榜、问题详情、用户主页/回答/文章 | 桌面装 OpenCLI（复用 Chrome 登录态） |
 | 📕 **小红书** | — | 搜索、阅读、评论 | 桌面装 OpenCLI（刷过小红书即可用）；服务器用 xiaohongshu-mcp 扫码 |
 | 💼 **LinkedIn** | Jina Reader 读公开页面 | Profile 详情、公司页面、职位搜索 | 告诉 Agent「帮我配 LinkedIn」 |
 | 💻 **V2EX** | 热门帖子、节点帖子、帖子详情+回复、用户信息 | — | 无需配置 |
@@ -92,7 +93,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 
 > **不知道怎么配？不用查文档。** 直接告诉 Agent「帮我配 XXX」，它知道需要什么、会一步一步引导你。
 >
-> 🍪 需要 Cookie/登录态的平台（Twitter、小红书、Reddit、Facebook、Instagram 等），优先让用户在自己的浏览器里登录。OpenCLI 复用 Chrome 登录态；传统 CLI 才需要 Cookie-Editor 导出 Cookie。
+> 🍪 需要 Cookie/登录态的平台（Twitter、小红书、Reddit、Facebook、Instagram、知乎 等），优先让用户在自己的浏览器里登录。OpenCLI 复用 Chrome 登录态；传统 CLI 才需要 Cookie-Editor 导出 Cookie。
 >
 > 🔒 Cookie 只存在你本地，不上传不外传。代码完全开源，随时可审查。
 > 💻 本地电脑不需要代理。代理只有部署在服务器上才需要（~$1/月）。
@@ -138,7 +139,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 3. **配置搜索引擎** — 通过 MCP 接入 Exa（免费，无需 API Key）
 4. **检测环境** — 判断是本地电脑还是服务器，给出对应的配置建议
 5. **注册 SKILL.md** — 在 Agent 的 skills 目录安装使用指南，以后 Agent 遇到"全网调研"、"搜推特"、"看视频"这类需求，会自动知道该调哪个上游工具
-6. **问你要不要更多** — 默认只激活 6 个零配置渠道；小红书、Twitter、Reddit、Facebook、Instagram 这些需要登录态的，Agent 会列菜单问你要哪些，点名才装
+6. **问你要不要更多** — 默认只激活 6 个零配置渠道；小红书、Twitter、Reddit、Facebook、Instagram、知乎 这些需要登录态的，Agent 会列菜单问你要哪些，点名才装
 
 安装完之后，`agent-reach doctor` 一条命令告诉你每个渠道的状态、当前走哪条路。
 </details>
@@ -156,7 +157,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 - "全网搜一下 LLM 框架对比" → Exa 语义搜索
 - "订阅这个 RSS" → `feedparser` 解析
 
-**不需要记命令。** Agent 读了 SKILL.md 之后自己知道该调什么。需要登录的平台（小红书、Twitter、Reddit、Facebook、Instagram），告诉 Agent「帮我配 XXX」即可解锁。
+**不需要记命令。** Agent 读了 SKILL.md 之后自己知道该调什么。需要登录的平台（小红书、Twitter、Reddit、Facebook、Instagram、知乎），告诉 Agent「帮我配 XXX」即可解锁。
 
 ---
 
@@ -188,6 +189,7 @@ channels/
 ├── reddit.py       → OpenCLI ▸ rdt-cli（无零配置路径，必须登录态）
 ├── facebook.py     → OpenCLI（桌面浏览器登录态）
 ├── instagram.py    → OpenCLI（桌面浏览器登录态）
+├── zhihu.py        → OpenCLI（桌面浏览器登录态）
 ├── xiaohongshu.py  → OpenCLI ▸ xiaohongshu-mcp ▸ xhs-cli
 ├── linkedin.py     → linkedin-mcp ▸ Jina Reader
 ├── rss.py          → feedparser
@@ -206,6 +208,7 @@ channels/
 | Reddit | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | [rdt-cli](https://github.com/public-clis/rdt-cli) | 匿名接口已被封、官方 API 审批制——只剩登录态路线 |
 | Facebook | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | — | Graph API/Groups API 权限收紧；浏览器登录态是当前最实用路径 |
 | Instagram | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | 官方 Graph API（Business/Creator + 审批） | instaloader 类路径不稳定；OpenCLI 复用真实浏览器会话 |
+| 知乎 | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | — | 无公开匿名 API；OpenCLI 复用真实浏览器登录态，覆盖搜索/热榜/问答/用户 |
 | YouTube 字幕 + 搜索 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | — | 154K Star，YouTube 仍是最佳（注意：不再用于 B站） |
 | B站 | [bili-cli](https://github.com/public-clis/bilibili-cli) | OpenCLI ▸ 搜索 API | yt-dlp 被 B站风控 412 封死（2026-06 实测），bili-cli 无登录可搜可读 |
 | 搜全网 | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | — | AI 语义搜索，MCP 接入免 Key |
@@ -234,7 +237,7 @@ Agent Reach 在设计上重视安全：
 
 > ⚠️ **封号风险提醒：** 使用 Cookie 登录的平台（Twitter、小红书等），通过脚本/API 调用**存在被平台检测并封号的风险**。请务必使用**专用小号**，不要用你的主账号。
 
-需要 Cookie 或登录态的平台（Twitter、小红书、Reddit、Facebook、Instagram 等）建议使用**专用小号**，不要用主账号。原因有二：
+需要 Cookie 或登录态的平台（Twitter、小红书、Reddit、Facebook、Instagram、知乎 等）建议使用**专用小号**，不要用主账号。原因有二：
 1. **封号风险** — 平台可能检测到非正常浏览器的 API 调用行为，导致账号被限制或封禁
 2. **安全风险** — Cookie 等同于完整登录权限，用小号可以在凭据泄露时限制影响范围
 

@@ -1,6 +1,6 @@
 # 社交媒体 & 社区
 
-小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram。
+小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram、知乎。
 
 ## 小红书 / XiaoHongShu（多后端）
 
@@ -273,3 +273,33 @@ opencli instagram saved --limit 20 -f yaml
 ```
 
 > 要求 Chrome 打开且装了 OpenCLI 扩展，并已登录 instagram.com。`instagram search` 是用户搜索；读帖子需要先确定 username，再用 `instagram user USERNAME`。若出现 429 / login required，先让用户在 Chrome 里重新登录并降低频率。
+
+## 知乎 / Zhihu（OpenCLI，必须登录态）
+
+知乎走 OpenCLI，复用用户 Chrome 里的 zhihu.com 登录态。先跑 `agent-reach doctor --json` 看 zhihu 的 `active_backend`，正常应为 `OpenCLI`。知乎没有匿名公开 API，所有读取命令都需要登录态。
+
+```bash
+# 搜索（问题/回答/文章）
+opencli zhihu search "query" -f yaml
+
+# 热榜
+opencli zhihu hot -f yaml
+
+# 问题详情 + 回答列表
+opencli zhihu question QUESTION_ID -f yaml
+
+# 单个回答完整内容
+opencli zhihu answer-detail ANSWER_ID -f yaml
+
+# 用户主页资料（粉丝/关注/回答/文章/获赞数）
+opencli zhihu user USERNAME -f yaml
+
+# 用户的回答列表 / 文章列表
+opencli zhihu user-answers USERNAME -f yaml
+opencli zhihu user-articles USERNAME -f yaml
+
+# 导出知乎文章为 Markdown
+opencli zhihu download ARTICLE_URL -f yaml
+```
+
+> 要求 Chrome 打开且装了 OpenCLI 扩展，并已登录 zhihu.com（`opencli zhihu login` 可打开登录页等待认证完成）。写操作（`answer`/`comment`/`like`/`follow`）在 OpenCLI 上游存在，但 Agent Reach 只负责读取/搜索，不要调用写操作命令。若提示登录错误，先让用户在 Chrome 里重新登录 zhihu.com。

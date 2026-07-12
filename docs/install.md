@@ -96,7 +96,7 @@ After installing the basics, **ask the user** which additional channels they nee
 >
 > 还有这些可选渠道，你需要哪些？
 >
-> - 🌟 **OpenCLI**（桌面推荐）— 一次安装，小红书/Reddit/Facebook/Instagram/B站字幕/Twitter 备选全解锁（复用浏览器登录态，零配置；只需在 Chrome 商店点一次"添加扩展"）
+> - 🌟 **OpenCLI**（桌面推荐）— 一次安装，小红书/Reddit/Facebook/Instagram/知乎/B站字幕/Twitter 备选全解锁（复用浏览器登录态，零配置；只需在 Chrome 商店点一次"添加扩展"）
 > - 🐦 **Twitter/X** — 搜推文、看时间线（需要登录 Cookie）
 > - 📈 **雪球** — 股票行情、热门帖子（需要登录 Cookie）
 > - 🎙️ **小宇宙播客** — 音频转文字（需要免费 Groq Key）
@@ -104,6 +104,7 @@ After installing the basics, **ask the user** which additional channels they nee
 > - 📖 **Reddit** — 搜索和阅读帖子（必须登录态：桌面 OpenCLI 或 rdt-cli + Cookie）
 > - 📘 **Facebook** — 搜索、主页、Feed、群组列表（桌面走 OpenCLI，复用 Chrome 登录态）
 > - 📷 **Instagram** — 用户搜索、Profile、用户最近帖子、Explore（桌面走 OpenCLI，复用 Chrome 登录态）
+> - 💭 **知乎** — 搜索、热榜、问题详情、用户主页/回答/文章（桌面走 OpenCLI，复用 Chrome 登录态）
 > - 📺 **B站完整版** — 热门、排行、搜索、视频详情（bili-cli，无需登录）
 > - 💼 **LinkedIn** — Profile、职位搜索
 >
@@ -114,10 +115,11 @@ Based on the user's choice, run:
 ```bash
 agent-reach install --env=auto --channels=opencli,xiaohongshu   # Example: desktop user chose XHS (OpenCLI-backed)
 agent-reach install --env=auto --channels=facebook,instagram    # Example: desktop user chose Meta social channels
+agent-reach install --env=auto --channels=zhihu                 # Example: desktop user chose Zhihu
 agent-reach install --env=auto --channels=all              # User wants everything
 ```
 
-Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `facebook`, `instagram`, `bilibili`, `linkedin`, `all`
+Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `facebook`, `instagram`, `zhihu`, `bilibili`, `linkedin`, `all`
 
 ### Step 3: Fix what's broken
 
@@ -131,7 +133,7 @@ Only ask the user when you genuinely need their input (credentials, permissions,
 
 Some channels need credentials only the user can provide. Based on the doctor output, ask for what's missing:
 
-> 🔒 **Security tip:** For platforms that need cookies or browser sessions (Twitter, XiaoHongShu, Reddit, Facebook, Instagram), we recommend using a **dedicated/secondary account** rather than your main account. Cookie/browser-session auth carries two risks:
+> 🔒 **Security tip:** For platforms that need cookies or browser sessions (Twitter, XiaoHongShu, Reddit, Facebook, Instagram, Zhihu), we recommend using a **dedicated/secondary account** rather than your main account. Cookie/browser-session auth carries two risks:
 > 1. **Account ban** — platforms may detect non-browser API calls and restrict or ban the account
 > 2. **Credential exposure** — cookies grant full account access; using a secondary account limits the blast radius if credentials are ever compromised
 
@@ -143,7 +145,7 @@ Some channels need credentials only the user can provide. Based on the doctor ou
 > 3. 点击插件 → Export → Header String
 > 4. 把导出的字符串发给 Agent
 >
-> **本地电脑用户**也可以用 `agent-reach configure --from-browser chrome` 一键自动提取（支持 Twitter + 小红书 + 雪球）。OpenCLI 平台（Reddit、小红书桌面后端、Facebook、Instagram）优先复用 Chrome 登录态，不需要把 Cookie 发给 Agent。
+> **本地电脑用户**也可以用 `agent-reach configure --from-browser chrome` 一键自动提取（支持 Twitter + 小红书 + 雪球）。OpenCLI 平台（Reddit、小红书桌面后端、Facebook、Instagram、知乎）优先复用 Chrome 登录态，不需要把 Cookie 发给 Agent。
 
 **Twitter search & posting:**
 > "To unlock Twitter search, I need your Twitter cookies. Install the Cookie-Editor Chrome extension, go to x.com/twitter.com, click the extension → Export → Header String, and paste it to me."
@@ -224,6 +226,27 @@ agent-reach install --channels facebook,instagram
 >    ```
 >
 > Facebook Groups 当前只承诺读取用户登录后可见的群组列表/最近动态，不承诺任意群帖子和评论 API。Instagram 的 search 是用户搜索，不是全站帖子关键词搜索；若提示 429/登录错误，先让用户在 Chrome 里重新登录并降低频率。
+
+**知乎（桌面 OpenCLI）:**
+> 知乎走 OpenCLI：复用用户自己的 Chrome 登录态，覆盖搜索、热榜、问题详情、用户主页/回答/文章。所有读取命令都需要登录态（无匿名接口）。服务器/无桌面环境不推荐支持。
+
+```bash
+agent-reach install --channels zhihu
+```
+
+> 装完后：
+> 1. 确认 Chrome 已安装 OpenCLI 扩展并通过 `opencli doctor`
+> 2. 在 Chrome 里登录 zhihu.com（或 `opencli zhihu login`）
+> 3. Agent 直接调用：
+>    ```bash
+>    opencli zhihu search "query" -f yaml
+>    opencli zhihu hot -f yaml
+>    opencli zhihu question <question_id> -f yaml
+>    opencli zhihu user <username> -f yaml
+>    opencli zhihu answer-detail <answer_id> -f yaml
+>    ```
+>
+> 若提示登录错误，先让用户在 Chrome 里重新登录 zhihu.com。
 
 **雪球 / Xueqiu (股票行情 + 热门帖子):**
 > "雪球需要登录后的 Cookie。请先在 Chrome 里登录 xueqiu.com，然后运行："
@@ -351,6 +374,7 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 | Reddit | `opencli`（备选 `rdt`） | `opencli reddit search "query" -f yaml` / `rdt read POST_ID` |
 | Facebook | `opencli` | `opencli facebook search "query" -f yaml` |
 | Instagram | `opencli` | `opencli instagram user nasa -f yaml` |
+| 知乎 | `opencli` | `opencli zhihu search "query" -f yaml` |
 | GitHub | `gh` | `gh search repos "query"` |
 | Web | `curl` + Jina | `curl -s "https://r.jina.ai/URL"` |
 | Exa Search | `mcporter` | `mcporter call 'exa.web_search_exa(...)'` |
