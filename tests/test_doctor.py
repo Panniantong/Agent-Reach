@@ -50,6 +50,14 @@ class TestDoctor:
                 "tier": 0,
                 "backends": ["requests"],
                 "active_backend": "requests",
+                "backend_installed": True,
+                "configured": True,
+                "authenticated": None,
+                "network_accessible": None,
+                "sandbox_accessible": True,
+                "available": True,
+                "failure_kind": None,
+                "reason": "可抓取网页",
             },
             "github": {
                 "status": "warn",
@@ -58,6 +66,14 @@ class TestDoctor:
                 "tier": 0,
                 "backends": ["gh"],
                 "active_backend": None,
+                "backend_installed": False,
+                "configured": False,
+                "authenticated": None,
+                "network_accessible": None,
+                "sandbox_accessible": True,
+                "available": False,
+                "failure_kind": "backend_missing",
+                "reason": "gh 未安装",
             },
             "exa_search": {
                 "status": "off",
@@ -66,6 +82,14 @@ class TestDoctor:
                 "tier": 1,
                 "backends": ["Exa"],
                 "active_backend": None,
+                "backend_installed": False,
+                "configured": False,
+                "authenticated": None,
+                "network_accessible": None,
+                "sandbox_accessible": True,
+                "available": False,
+                "failure_kind": "backend_missing",
+                "reason": "mcporter 未配置",
             },
         }
 
@@ -124,3 +148,16 @@ def test_stale_active_backend_does_not_leak_into_errored_result(monkeypatch):
     results = doctor.check_all(config=None)
     assert results["boom"]["status"] == "error"
     assert results["boom"]["active_backend"] is None
+    assert results["boom"]["network_accessible"] is None
+    assert results["boom"]["available"] is False
+    assert results["boom"]["failure_kind"] == "backend_missing"
+
+
+def test_health_fields_identify_network_and_sandbox_failures():
+    network = doctor._health_fields("warn", "DNS lookup failed", None)
+    assert network["network_accessible"] is False
+    assert network["failure_kind"] == "network_blocked"
+
+    sandbox = doctor._health_fields("error", "Operation not permitted", None)
+    assert sandbox["sandbox_accessible"] is False
+    assert sandbox["failure_kind"] == "sandbox_blocked"

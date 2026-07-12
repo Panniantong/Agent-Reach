@@ -65,7 +65,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 | 💰 **完全免费** | 所有工具开源、所有 API 免费。唯一可能花钱的是服务器代理（$1/月），本地电脑不需要 |
 | 🔒 **隐私安全** | Cookie 只存在你本地，不上传不外传。代码完全开源，随时可审查 |
 | 🔄 **持续换代** | 每个平台都是「首选 + 备选」多后端路由。某个接入方式失效了，我们换下一个，你无感（2026-06 实例：yt-dlp 被 B站风控封死 → 已切换 bili-cli，用户零操作） |
-| 🤖 **兼容所有 Agent** | Claude Code、OpenClaw、Cursor、Windsurf……任何能跑命令行的 Agent 都能用 |
+| 🤖 **兼容所有 Agent** | Codex、Claude Code、OpenClaw、Cursor、Windsurf……任何能跑命令行的 Agent 都能用 |
 | 🩺 **自带诊断** | `agent-reach doctor` 一条命令告诉你哪个通、哪个不通、怎么修 |
 
 ---
@@ -141,6 +141,17 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 6. **问你要不要更多** — 默认只激活 6 个零配置渠道；小红书、Twitter、Reddit、Facebook、Instagram 这些需要登录态的，Agent 会列菜单问你要哪些，点名才装
 
 安装完之后，`agent-reach doctor` 一条命令告诉你每个渠道的状态、当前走哪条路。
+
+Agent 也可以通过统一、只读的 JSON 接口调用，无需自己拼接每个平台的命令：
+
+```bash
+agent-reach search "query" --json
+agent-reach read "https://example.com/article" --json
+agent-reach extract "https://x.com/user/status/123" --json
+```
+
+`doctor --json` 不写入 home 目录；沙箱环境可以用 `AGENT_REACH_HOME`
+指定其他配置目录。
 </details>
 
 ---

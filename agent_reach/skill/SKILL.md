@@ -71,6 +71,11 @@ metadata:
 ## 零配置快速命令
 
 ```bash
+# Agent Reach 的稳定统一入口（优先）
+agent-reach search "query" --json
+agent-reach read "URL" --json
+agent-reach extract "URL" --json
+
 # Exa 网页搜索
 mcporter call 'exa.web_search_exa(query: "query", numResults: 5)'
 
@@ -89,6 +94,10 @@ curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1
 # B站搜索（bili-cli，无需登录）
 bili search "query" --type video -n 5
 ```
+
+统一入口负责选择后端并返回标准 JSON；Exa 不可用时 `search` 自动回退到
+DuckDuckGo + Jina Reader。
+下面的后端命令用于排障或需要平台特有操作时。
 
 ## 需登录态的平台（按 doctor 的 active_backend 选命令）
 

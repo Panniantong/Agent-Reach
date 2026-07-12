@@ -29,11 +29,16 @@ class Config:
         "github_token": ["github_token"],
     }
 
-    def __init__(self, config_path: Optional[Path] = None):
-        self.config_path = Path(config_path) if config_path else self.CONFIG_FILE
+    def __init__(self, config_path: Optional[Path] = None, *, read_only: bool = False):
+        if config_path is None:
+            config_dir = Path(os.environ.get("AGENT_REACH_HOME", self.CONFIG_DIR))
+            config_path = config_dir / "config.yaml"
+        self.config_path = Path(config_path)
         self.config_dir = self.config_path.parent
+        self.read_only = read_only
         self.data: dict = {}
-        self._ensure_dir()
+        if not read_only:
+            self._ensure_dir()
         self.load()
 
     def _ensure_dir(self):
@@ -50,6 +55,8 @@ class Config:
 
     def save(self):
         """Save config to YAML file."""
+        if self.read_only:
+            raise PermissionError("cannot save a read-only Agent Reach configuration")
         self._ensure_dir()
         # Create file with restricted permissions from the start to avoid
         # a race window where credentials are briefly world-readable.

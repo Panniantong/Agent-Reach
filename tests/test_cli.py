@@ -36,7 +36,7 @@ class TestCLI:
         assert "Agent Reach" in captured.out
         assert "✅" in captured.out
 
-    def test_doctor_preserves_existing_skill_install(self, monkeypatch, tmp_path, capsys):
+    def test_doctor_is_read_only_and_does_not_touch_existing_skill(self, monkeypatch, tmp_path, capsys):
         skill_dir = tmp_path / ".agents" / "skills" / "agent-reach"
         skill_dir.mkdir(parents=True)
         skill_file = skill_dir / "SKILL.md"
@@ -58,7 +58,7 @@ class TestCLI:
 
         assert skill_file.read_text(encoding="utf-8") == custom_content
         out = capsys.readouterr().out
-        assert "preserving existing files" in out
+        assert out == "report\n"
         assert f"Skill installed for Agent: {skill_dir}" not in out
 
     def test_transcribe_command_prints_text(self, capsys):

@@ -94,6 +94,17 @@ def main():
     p_doctor.add_argument("--json", action="store_true",
                           help="Output machine-readable JSON instead of the text report")
 
+    for command, help_text, noun in (
+        ("search", "Search the web through the active Agent Reach backend", "query"),
+        ("read", "Read a URL through the active Agent Reach backend", "source"),
+        ("extract", "Extract a URL using the same normalized contract as read", "source"),
+    ):
+        p_access = sub.add_parser(command, help=help_text)
+        p_access.add_argument(noun)
+        p_access.add_argument("--json", action="store_true", help="Output normalized JSON")
+        if command == "search":
+            p_access.add_argument("-n", "--limit", type=int, default=5)
+
     # ── uninstall ──
     p_uninstall = sub.add_parser("uninstall", help="Remove all Agent Reach config, tokens, and skill files")
     p_uninstall.add_argument("--dry-run", action="store_true",
@@ -163,6 +174,8 @@ def main():
         _cmd_format(args)
     elif args.command == "transcribe":
         _cmd_transcribe(args)
+    elif args.command in ("search", "read", "extract"):
+        _cmd_access(args)
 
 
 # ── Command handlers ────────────────────────────────
@@ -424,8 +437,9 @@ def _install_skill(force: bool = True):
             print(f"  Warning: Could not install skill: {e}")
             return None
 
-    # Determine skill install path (priority: .agents > openclaw > claude)
+    # Install into every agent host whose global skills directory exists.
     skill_dirs = [
+        os.path.expanduser("~/.codex/skills"),       # OpenAI Codex
         os.path.expanduser("~/.agents/skills"),      # Generic agents (priority)
         os.path.expanduser("~/.openclaw/skills"),    # OpenClaw
         os.path.expanduser("~/.claude/skills"),      # Claude Code (if exists)
@@ -442,7 +456,15 @@ def _install_skill(force: bool = True):
             target = os.path.join(skill_dir, "agent-reach")
             status = _copy_skill_dir(target)
             if status:
-                platform_name = "Agent" if ".agents" in skill_dir else "OpenClaw" if "openclaw" in skill_dir else "Claude Code"
+                platform_name = (
+                    "Codex"
+                    if ".codex" in skill_dir
+                    else "Agent"
+                    if ".agents" in skill_dir
+                    else "OpenClaw"
+                    if "openclaw" in skill_dir
+                    else "Claude Code"
+                )
                 if status == "preserved":
                     print(f"Skill already installed for {platform_name}, preserving existing files: {target}")
                 else:
@@ -468,6 +490,7 @@ def _uninstall_skill():
     import shutil
 
     skill_dirs = [
+        ("~/.codex/skills/agent-reach", "Codex"),
         ("~/.openclaw/skills/agent-reach", "OpenClaw"),
         ("~/.claude/skills/agent-reach", "Claude Code"),
         ("~/.agents/skills/agent-reach", "Agent"),
@@ -1411,6 +1434,7 @@ def _cmd_uninstall(args):
 
     # ── 2. Skill files ──
     skill_dirs = [
+        ("~/.codex/skills/agent-reach", "Codex"),
         ("~/.openclaw/skills/agent-reach", "OpenClaw"),
         ("~/.claude/skills/agent-reach", "Claude Code"),
         ("~/.agents/skills/agent-reach", "Agent"),
@@ -1480,7 +1504,7 @@ def _cmd_doctor(args=None):
         from rich import print as rprint
     except ImportError:
         rprint = print
-    config = Config()
+    config = Config(read_only=True)
     results = check_all(config)
 
     if args is not None and getattr(args, "json", False):
@@ -1489,8 +1513,39 @@ def _cmd_doctor(args=None):
 
     rprint(format_report(results))
 
-    # Auto-install skill if not already present (fixes #154)
-    _install_skill(force=False)
+
+
+def _cmd_access(args):
+    """Run the stable access facade and emit its normalized result."""
+    from agent_reach.access import AccessRouter, normalize_result
+
+    router = AccessRouter()
+    source: str | None = getattr(args, "source", None)
+    query: str | None = getattr(args, "query", None)
+    try:
+        if args.command == "search":
+            assert query is not None
+            raw = router.search(query, limit=args.limit)
+        else:
+            assert source is not None
+            raw = router.read(source)
+        result = normalize_result(raw, source_url=source, query=query)
+    except Exception as exc:  # the CLI contract reports backend failures as data
+        result = normalize_result(
+            {}, source_url=source, query=query, status="error", limitations=[str(exc)]
+        )
+
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    elif result["status"] == "success":
+        content = result["content"]
+        print(
+            content
+            if isinstance(content, str)
+            else json.dumps(content, ensure_ascii=False, indent=2)
+        )
+    else:
+        print(f"Agent Reach error: {result['limitations'][0]}", file=sys.stderr)
 
 
 def _cmd_setup():

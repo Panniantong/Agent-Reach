@@ -4,9 +4,46 @@
 Each channel knows how to check itself. Doctor just collects the results.
 """
 
+from pathlib import Path
 from typing import Dict
-from agent_reach.config import Config
+
 from agent_reach.channels import get_all_channels
+from agent_reach.config import Config
+
+
+def _escape_markup(value: str) -> str:
+    try:
+        from rich.markup import escape
+    except ImportError:
+        return value
+    return escape(value)
+
+
+def _health_fields(status: str, message: str, active_backend: str | None) -> dict:
+    """Classify only states doctor can prove; leave unprobed states unknown."""
+    text = message.lower()
+    installed = active_backend is not None
+    fields = {
+        "backend_installed": installed,
+        "configured": True if status == "ok" else False if status == "off" else None,
+        "authenticated": None,
+        "network_accessible": None,
+        "sandbox_accessible": True,
+        "available": status == "ok",
+        "failure_kind": None,
+        "reason": message,
+    }
+    if any(marker in text for marker in ("operation not permitted", "permission denied", "权限")):
+        fields.update(sandbox_accessible=False, failure_kind="sandbox_blocked")
+    elif any(marker in text for marker in ("nodename", "dns", "连接失败", "不可达", "timeout", "超时")):
+        fields.update(network_accessible=False, failure_kind="network_blocked")
+    elif any(marker in text for marker in ("未认证", "not_authenticated", "需要登录", "登录态")):
+        fields.update(configured=True, authenticated=False, failure_kind="authentication_required")
+    elif not installed:
+        fields.update(configured=False, failure_kind="backend_missing")
+    elif status != "ok":
+        fields.update(failure_kind="backend_unhealthy")
+    return fields
 
 
 def check_all(config: Config) -> Dict[str, dict]:
@@ -31,6 +68,7 @@ def check_all(config: Config) -> Dict[str, dict]:
             "tier": ch.tier,
             "backends": ch.backends,
             "active_backend": active,
+            **_health_fields(status, message, active),
         }
     return results
 
@@ -46,11 +84,6 @@ def _name_msg(r: dict, escape) -> str:
 
 def format_report(results: Dict[str, dict]) -> str:
     """Format results as a readable text report (with Rich markup)."""
-    try:
-        from rich.markup import escape
-    except ImportError:
-        escape = lambda x: x
-
     lines = []
     lines.append("[bold cyan]Agent Reach 状态[/bold cyan]")
     lines.append("[cyan]" + "=" * 40 + "[/cyan]")
@@ -64,7 +97,7 @@ def format_report(results: Dict[str, dict]) -> str:
     lines.append("[bold]✅ 装好即用：[/bold]")
     for key, r in results.items():
         if r["tier"] == 0:
-            name_msg = _name_msg(r, escape)
+            name_msg = _name_msg(r, _escape_markup)
             if r["status"] == "ok":
                 lines.append(f"  [green]✅[/green] {name_msg}")
             elif r["status"] == "warn":
@@ -80,7 +113,7 @@ def format_report(results: Dict[str, dict]) -> str:
         lines.append("")
         lines.append("[bold]可选渠道（已安装）：[/bold]")
         for key, r in tier1_active.items():
-            lines.append(f"  [green]✅[/green] {_name_msg(r, escape)}")
+            lines.append(f"  [green]✅[/green] {_name_msg(r, _escape_markup)}")
 
     # Tier 2 — optional complex setup
     tier2 = {k: r for k, r in results.items() if r["tier"] == 2}
@@ -91,7 +124,7 @@ def format_report(results: Dict[str, dict]) -> str:
             lines.append("")
             lines.append("[bold]可选渠道（已安装）：[/bold]")
         for key, r in tier2_active.items():
-            lines.append(f"  [green]✅[/green] {_name_msg(r, escape)}")
+            lines.append(f"  [green]✅[/green] {_name_msg(r, _escape_markup)}")
 
     lines.append("")
     status_color = "green" if ok_count == total else ("yellow" if ok_count > 0 else "red")
@@ -111,7 +144,7 @@ def format_report(results: Dict[str, dict]) -> str:
     import stat
     import sys
 
-    config_path = Config.CONFIG_DIR / "config.yaml"
+    config_path = Path(os.environ.get("AGENT_REACH_HOME", Config.CONFIG_DIR)) / "config.yaml"
     if config_path.exists() and sys.platform != "win32":
         try:
             mode = config_path.stat().st_mode

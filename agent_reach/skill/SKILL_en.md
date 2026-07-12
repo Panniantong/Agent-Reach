@@ -59,6 +59,11 @@ these platforms — do not invent your own approach.**
 ## Zero-config quick commands
 
 ```bash
+# Stable Agent Reach facade (preferred)
+agent-reach search "query" --json
+agent-reach read "URL" --json
+agent-reach extract "URL" --json
+
 # Exa web search
 mcporter call 'exa.web_search_exa(query: "query", numResults: 5)'
 
@@ -77,6 +82,10 @@ curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1
 # Bilibili search (bili-cli, no login needed)
 bili search "query" --type video -n 5
 ```
+
+The facade selects a backend and returns normalized JSON. `search` falls back
+to DuckDuckGo via Jina Reader when Exa is unavailable. Use the backend commands
+below for troubleshooting or platform-specific operations.
 
 ## Login-backed platforms (pick by doctor's active_backend)
 

@@ -14,6 +14,17 @@ def tmp_config(tmp_path):
 
 
 class TestConfig:
+    def test_read_only_init_does_not_create_missing_directory(self, tmp_path):
+        config_file = tmp_path / "missing" / "config.yaml"
+        config = Config(config_path=config_file, read_only=True)
+        assert not config_file.parent.exists()
+        assert config.data == {}
+
+    def test_agent_reach_home_controls_default_config_location(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AGENT_REACH_HOME", str(tmp_path / "alternate"))
+        config = Config(read_only=True)
+        assert config.config_dir == tmp_path / "alternate"
+
     def test_init_creates_dir(self, tmp_path):
         config_file = tmp_path / "subdir" / "config.yaml"
         Config(config_path=config_file)

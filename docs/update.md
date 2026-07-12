@@ -89,11 +89,10 @@ agent-reach version
 agent-reach doctor
 ```
 
-Running `agent-reach doctor` (text mode) also makes sure an Agent Reach skill
-exists in detected agent skill directories. If the user already has a skill
-there, doctor preserves it instead of overwriting local customizations. Use
-`agent-reach skill --install` when you explicitly want to refresh the bundled
-skill files.
+`agent-reach doctor` is a read-only diagnostic and never installs or changes
+skill files. Run `agent-reach skill --install` explicitly to install or refresh
+the bundled skill in detected Codex, Claude Code, OpenClaw, and generic agent
+skill directories.
 
 Check the doctor output:
 

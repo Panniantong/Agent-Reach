@@ -93,6 +93,23 @@ class TestSkillCommand(unittest.TestCase):
                 content = f.read()
             self.assertIn("Agent Reach", content)
 
+    def test_install_and_uninstall_manage_codex_skill_directory(self):
+        """Codex is a first-class skill target, not a manual-copy workaround."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            codex_parent = os.path.join(tmpdir, ".codex", "skills")
+            os.makedirs(codex_parent)
+
+            with patch(
+                "agent_reach.cli.os.path.expanduser",
+                side_effect=lambda p: p.replace("~", tmpdir),
+            ), patch.dict(os.environ, {}, clear=True):
+                _install_skill()
+                target = os.path.join(codex_parent, "agent-reach", "SKILL.md")
+                self.assertTrue(os.path.exists(target))
+                _uninstall_skill()
+
+            self.assertFalse(os.path.exists(os.path.dirname(target)))
+
     def test_install_uses_english_skill_for_english_locale(self):
         """_install_skill should install the English skill file for English locales."""
         with tempfile.TemporaryDirectory() as tmpdir:
