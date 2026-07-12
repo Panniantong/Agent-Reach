@@ -23,7 +23,20 @@ Backend routing semantics:
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Protocol, Tuple, TypedDict
+
+
+class CommandRunner(Protocol):
+    def __call__(self, command: List[str], timeout: int = 60) -> Any: ...
+
+
+class ExtractionPayload(TypedDict, total=False):
+    content: Any
+    author: Any
+    published_at: Any
+    replies: List[Any]
+    media: List[Any]
+    limitations: List[str]
 
 
 class Channel(ABC):
@@ -73,6 +86,8 @@ class Channel(ABC):
         """Return the active backend's read-only command, or None for web fallback."""
         return None
 
-    def extract_content(self, url: str, run_command):
+    def extract_content(
+        self, url: str, run_command: CommandRunner
+    ) -> Optional[ExtractionPayload]:
         """Return extracted content when the platform has richer semantics than read."""
         return None

@@ -83,6 +83,10 @@ class AccessRouter:
 
     def read(self, url: str) -> dict:
         channel, backend = self._ready_channel(url)
+        return self._read_ready(channel, backend, url)
+
+    def _read_ready(self, channel, backend: str, url: str) -> dict:
+        """Read through an already-probed channel, falling back after runtime failure."""
 
         command = channel.read_command(url)
         if command is not None:
@@ -106,10 +110,13 @@ class AccessRouter:
     def extract(self, url: str) -> dict:
         """Extract consumable platform content through the channel capability."""
         channel, backend = self._ready_channel(url)
-        extracted = channel.extract_content(url, _run)
+        try:
+            extracted = channel.extract_content(url, _run)
+        except (OSError, RuntimeError, subprocess.TimeoutExpired):
+            return self._read_ready(channel, backend, url)
         if extracted is None:
-            return self.read(url)
-        return {"platform": channel.name, "backend": backend, **extracted}
+            return self._read_ready(channel, backend, url)
+        return {**extracted, "platform": channel.name, "backend": backend}
 
     def _ready_channel(self, url: str):
         channel = next(ch for ch in get_all_channels() if ch.can_handle(url))

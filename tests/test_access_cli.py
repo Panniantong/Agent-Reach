@@ -168,6 +168,38 @@ def test_read_falls_back_to_jina_after_selected_backend_fails():
     assert result["content"] == "web fallback"
 
 
+def test_extract_runtime_failure_falls_back_without_second_health_probe():
+    class ChannelStub:
+        name = "youtube"
+        active_backend = "yt-dlp"
+
+        def __init__(self):
+            self.check_count = 0
+
+        def can_handle(self, url):
+            return True
+
+        def check(self, config):
+            self.check_count += 1
+            return "ok", "ready"
+
+        def extract_content(self, url, run_command):
+            raise subprocess.TimeoutExpired("yt-dlp", 30)
+
+        def read_command(self, url):
+            return None
+
+    channel = ChannelStub()
+    with patch("agent_reach.access.get_all_channels", return_value=[channel]), patch(
+        "agent_reach.channels.web.WebChannel.read", return_value="metadata fallback"
+    ):
+        result = AccessRouter().extract("https://youtube.com/watch?v=1")
+
+    assert channel.check_count == 1
+    assert result["backend"] == "Jina Reader fallback"
+    assert result["content"] == "metadata fallback"
+
+
 def test_youtube_extract_returns_clean_subtitle_text(tmp_path):
     class YouTubeStub:
         name = "youtube"
