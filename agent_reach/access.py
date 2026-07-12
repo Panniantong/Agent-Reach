@@ -3,14 +3,17 @@
 
 from __future__ import annotations
 
+import glob
 import json
 import subprocess
+import sys
+import tempfile
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 
-from agent_reach.channels import get_all_channels
+from agent_reach.channels import get_all_channels, get_channel
 from agent_reach.config import Config
 from agent_reach.utils.process import utf8_subprocess_env
 
@@ -59,22 +62,27 @@ class AccessRouter:
 
     def search(self, query: str, *, limit: int = 5) -> dict:
         expression = f"exa.web_search_exa(query: {json.dumps(query)}, numResults: {limit})"
-        try:
-            content = _run(["mcporter", "call", expression])
-            return {
-                "platform": "exa_search",
-                "backend": "Exa via mcporter",
-                "content": content,
-            }
-        except (FileNotFoundError, RuntimeError):
-            return {
-                "platform": "web_search",
-                "backend": "DuckDuckGo via Jina Reader",
-                "content": _jina_search(query),
-                "limitations": [
-                    "Exa via mcporter unavailable; used DuckDuckGo via Jina Reader"
-                ],
-            }
+        exa = get_channel("exa_search")
+        if exa is not None:
+            status, _ = exa.check(self.config)
+            if status == "ok":
+                try:
+                    content = _run(["mcporter", "call", expression])
+                    return {
+                        "platform": "exa_search",
+                        "backend": "Exa via mcporter",
+                        "content": content,
+                    }
+                except (FileNotFoundError, RuntimeError):
+                    pass
+        return {
+            "platform": "web_search",
+            "backend": "DuckDuckGo via Jina Reader",
+            "content": _jina_search(query),
+            "limitations": [
+                "Exa via mcporter unavailable; used DuckDuckGo via Jina Reader"
+            ],
+        }
 
     def read(self, url: str) -> dict:
         channel = next(ch for ch in get_all_channels() if ch.can_handle(url))
@@ -83,29 +91,77 @@ class AccessRouter:
         if status == "error" or backend is None:
             raise RuntimeError(reason)
 
-        if channel.name == "web":
+        command = channel.read_command(url)
+        if command is not None:
+            content = _run(command)
+        elif channel.name == "web":
             content = cast(Any, channel).read(url)
-        elif channel.name == "youtube":
-            content = _run(["yt-dlp", "--dump-single-json", "--skip-download", url])
-        elif channel.name == "twitter" and backend == "twitter-cli":
-            content = _run(["twitter", "tweet", url, "--json"])
-        elif channel.name == "github":
-            content = _run(["gh", "repo", "view", url, "--json", "nameWithOwner,description,url"])
-        elif channel.name == "bilibili" and backend == "bili-cli":
-            content = _run(["bili", "video", url])
-        elif backend == "OpenCLI":
-            action = "note" if channel.name == "xiaohongshu" else "read"
-            content = _run(["opencli", channel.name, action, url, "-f", "json"])
-        elif channel.name == "reddit" and backend == "rdt-cli":
-            content = _run(["rdt", "read", url, "--json"])
         else:
-            # Jina remains the documented universal, read-only fallback.
             from agent_reach.channels.web import WebChannel
 
             content = WebChannel().read(url)
             backend = "Jina Reader fallback"
 
         return {"platform": channel.name, "backend": backend, "content": content}
+
+    def extract(self, url: str) -> dict:
+        """Extract consumable content; for YouTube this means subtitle text."""
+        channel = next(ch for ch in get_all_channels() if ch.can_handle(url))
+        if channel.name != "youtube":
+            return self.read(url)
+
+        status, reason = channel.check(self.config)
+        if status == "error" or channel.active_backend is None:
+            raise RuntimeError(reason)
+        with tempfile.TemporaryDirectory(prefix="agent-reach-youtube-") as temp_dir:
+            output = f"{temp_dir}/%(id)s"
+            _run(
+                [
+                    sys.executable, "-m", "yt_dlp", "--write-sub", "--write-auto-sub",
+                    "--sub-langs", "en,en-US,en-GB",
+                    "--sub-format", "vtt", "--skip-download", "-o", output, url,
+                ],
+                timeout=120,
+            )
+            subtitle_paths = sorted(glob.glob(f"{temp_dir}/*.vtt"))
+            if not subtitle_paths:
+                raise RuntimeError("no subtitles were available for this YouTube video")
+            transcript = "\n".join(
+                _clean_vtt(path) for path in subtitle_paths
+            )
+        return {
+            "platform": "youtube",
+            "backend": channel.active_backend,
+            "content": transcript,
+        }
+
+
+def _clean_vtt(path: str) -> str:
+    """Remove VTT timing/metadata and collapse adjacent duplicate lines."""
+    lines: list[str] = []
+    with open(path, encoding="utf-8") as subtitle:
+        for raw_line in subtitle:
+            line = raw_line.strip()
+            if not line or line == "WEBVTT" or "-->" in line or line.startswith(("Kind:", "Language:")):
+                continue
+            if line != (lines[-1] if lines else None):
+                lines.append(line)
+    return "\n".join(lines)
+
+
+class NormalizedResult(TypedDict):
+    status: str
+    platform: str | None
+    backend: str | None
+    source_url: str | None
+    query: str | None
+    content: Any
+    author: Any
+    published_at: Any
+    replies: list[Any]
+    media: list[Any]
+    limitations: list[str]
+    retrieved_at: str
 
 
 def normalize_result(
@@ -115,19 +171,30 @@ def normalize_result(
     query: str | None = None,
     status: str = "success",
     limitations: list[str] | None = None,
-) -> dict:
+) -> NormalizedResult:
     """Return the common machine-readable envelope for every backend."""
-    result = {
+    payload = raw.get("content")
+    metadata = payload if isinstance(payload, dict) else {}
+    normalized_content = payload
+    for key in ("full_text", "text", "body", "description"):
+        if metadata.get(key) is not None:
+            normalized_content = metadata[key]
+            break
+    replies = raw.get("replies", metadata.get("replies") or metadata.get("comments") or [])
+    media = raw.get("media", metadata.get("media") or metadata.get("attachments") or [])
+    result: NormalizedResult = {
         "status": status,
         "platform": raw.get("platform"),
         "backend": raw.get("backend"),
         "source_url": source_url,
         "query": query,
-        "content": raw.get("content"),
-        "author": raw.get("author"),
-        "published_at": raw.get("published_at"),
-        "replies": raw.get("replies", []),
-        "media": raw.get("media", []),
+        "content": normalized_content,
+        "author": raw.get("author", metadata.get("author") or metadata.get("user")),
+        "published_at": raw.get(
+            "published_at", metadata.get("published_at") or metadata.get("created_at")
+        ),
+        "replies": replies if isinstance(replies, list) else [],
+        "media": media if isinstance(media, list) else [],
         "limitations": limitations or raw.get("limitations", []),
         "retrieved_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }

@@ -20,6 +20,21 @@ from agent_reach import __version__
 # Pinned to the 0.4.2 state — PyPI still only has 0.4.1 (upstream issue #10).
 _RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66"
 
+_SKILL_HOSTS = (
+    ("~/.codex/skills", "Codex"),
+    ("~/.agents/skills", "Agent"),
+    ("~/.openclaw/skills", "OpenClaw"),
+    ("~/.claude/skills", "Claude Code"),
+)
+
+
+def _skill_hosts() -> list[tuple[str, str]]:
+    hosts = list(_SKILL_HOSTS)
+    openclaw_home = os.environ.get("OPENCLAW_HOME")
+    if openclaw_home:
+        hosts.insert(0, (os.path.join(openclaw_home, ".openclaw", "skills"), "OpenClaw"))
+    return [(os.path.expanduser(path), name) for path, name in hosts]
+
 
 def _ensure_utf8_console():
     """Best-effort Windows console UTF-8 setup for CLI runtime only."""
@@ -438,33 +453,15 @@ def _install_skill(force: bool = True):
             return None
 
     # Install into every agent host whose global skills directory exists.
-    skill_dirs = [
-        os.path.expanduser("~/.codex/skills"),       # OpenAI Codex
-        os.path.expanduser("~/.agents/skills"),      # Generic agents (priority)
-        os.path.expanduser("~/.openclaw/skills"),    # OpenClaw
-        os.path.expanduser("~/.claude/skills"),      # Claude Code (if exists)
-    ]
-
-    # Insert OPENCLAW_HOME path at the beginning if environment variable is set
-    openclaw_home = os.environ.get("OPENCLAW_HOME")
-    if openclaw_home:
-        skill_dirs.insert(0, os.path.join(openclaw_home, ".openclaw", "skills"))
-
     installed = False
-    for skill_dir in skill_dirs:
+    for skill_dir, platform_name in _skill_hosts():
+        # A fresh Codex home has ~/.codex before its skills directory exists.
+        if platform_name == "Codex" and os.path.isdir(os.path.dirname(skill_dir)):
+            os.makedirs(skill_dir, exist_ok=True)
         if os.path.isdir(skill_dir):
             target = os.path.join(skill_dir, "agent-reach")
             status = _copy_skill_dir(target)
             if status:
-                platform_name = (
-                    "Codex"
-                    if ".codex" in skill_dir
-                    else "Agent"
-                    if ".agents" in skill_dir
-                    else "OpenClaw"
-                    if "openclaw" in skill_dir
-                    else "Claude Code"
-                )
                 if status == "preserved":
                     print(f"Skill already installed for {platform_name}, preserving existing files: {target}")
                 else:
@@ -489,24 +486,9 @@ def _uninstall_skill():
     """Remove SKILL.md from all known agent skill directories."""
     import shutil
 
-    skill_dirs = [
-        ("~/.codex/skills/agent-reach", "Codex"),
-        ("~/.openclaw/skills/agent-reach", "OpenClaw"),
-        ("~/.claude/skills/agent-reach", "Claude Code"),
-        ("~/.agents/skills/agent-reach", "Agent"),
-    ]
-
-    # Also check OPENCLAW_HOME
-    openclaw_home = os.environ.get("OPENCLAW_HOME")
-    if openclaw_home:
-        skill_dirs.insert(
-            0,
-            (os.path.join(openclaw_home, ".openclaw", "skills", "agent-reach"), "OpenClaw"),
-        )
-
     removed = False
-    for skill_path_template, platform_name in skill_dirs:
-        skill_path = os.path.expanduser(skill_path_template)
+    for skill_dir, platform_name in _skill_hosts():
+        skill_path = os.path.join(skill_dir, "agent-reach")
         if os.path.isdir(skill_path):
             try:
                 if os.path.islink(skill_path):
@@ -1433,15 +1415,8 @@ def _cmd_uninstall(args):
         print(f"  Skipping config directory (--keep-config): {config_dir}")
 
     # ── 2. Skill files ──
-    skill_dirs = [
-        ("~/.codex/skills/agent-reach", "Codex"),
-        ("~/.openclaw/skills/agent-reach", "OpenClaw"),
-        ("~/.claude/skills/agent-reach", "Claude Code"),
-        ("~/.agents/skills/agent-reach", "Agent"),
-    ]
-
-    for skill_path_template, platform_name in skill_dirs:
-        skill_path = os.path.expanduser(skill_path_template)
+    for skill_dir, platform_name in _skill_hosts():
+        skill_path = os.path.join(skill_dir, "agent-reach")
         if os.path.isdir(skill_path):
             if dry_run:
                 print(f"[dry-run] Would remove {platform_name} skill: {skill_path}")
@@ -1526,9 +1501,12 @@ def _cmd_access(args):
         if args.command == "search":
             assert query is not None
             raw = router.search(query, limit=args.limit)
-        else:
+        elif args.command == "read":
             assert source is not None
             raw = router.read(source)
+        else:
+            assert source is not None
+            raw = router.extract(source)
         result = normalize_result(raw, source_url=source, query=query)
     except Exception as exc:  # the CLI contract reports backend failures as data
         result = normalize_result(

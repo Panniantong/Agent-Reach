@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Twitter/X — check if twitter-cli or bird CLI is available."""
 
-from .base import Channel
 from agent_reach.probe import probe_command
+
+from .base import Channel
 
 
 class TwitterChannel(Channel):
@@ -55,6 +56,15 @@ class TwitterChannel(Channel):
             "或：\n"
             "  uv tool install twitter-cli"
         )
+
+    def read_command(self, url: str):
+        if self.active_backend == "twitter-cli":
+            return ["twitter", "tweet", url, "--json"]
+        if self.active_backend == "OpenCLI":
+            return ["opencli", "twitter", "tweet", url, "-f", "json"]
+        if self.active_backend == "bird CLI (legacy)":
+            return ["bird", "read", url, "--json"]
+        return None
 
     def _check_twitter_cli(self):
         """探测 twitter-cli。返回 None 表示未安装，否则返回 (status, message)。

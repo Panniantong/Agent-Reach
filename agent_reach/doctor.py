@@ -5,7 +5,7 @@ Each channel knows how to check itself. Doctor just collects the results.
 """
 
 from pathlib import Path
-from typing import Dict
+from typing import Dict, TypedDict
 
 from agent_reach.channels import get_all_channels
 from agent_reach.config import Config
@@ -19,30 +19,34 @@ def _escape_markup(value: str) -> str:
     return escape(value)
 
 
-def _health_fields(status: str, message: str, active_backend: str | None) -> dict:
-    """Classify only states doctor can prove; leave unprobed states unknown."""
-    text = message.lower()
-    installed = active_backend is not None
-    fields = {
-        "backend_installed": installed,
-        "configured": True if status == "ok" else False if status == "off" else None,
+class HealthFields(TypedDict):
+    backend_installed: bool | None
+    configured: bool | None
+    authenticated: bool | None
+    network_accessible: bool | None
+    sandbox_accessible: bool | None
+    available: bool
+    failure_kind: str | None
+
+
+def _health_fields(
+    status: str, active_backend: str | None, error: Exception | None
+) -> HealthFields:
+    """Report only independently observed facts; unknown facts stay null."""
+    fields: HealthFields = {
+        "backend_installed": True if active_backend is not None else None,
+        "configured": True if status == "ok" else None,
         "authenticated": None,
         "network_accessible": None,
         "sandbox_accessible": True,
         "available": status == "ok",
         "failure_kind": None,
-        "reason": message,
     }
-    if any(marker in text for marker in ("operation not permitted", "permission denied", "权限")):
-        fields.update(sandbox_accessible=False, failure_kind="sandbox_blocked")
-    elif any(marker in text for marker in ("nodename", "dns", "连接失败", "不可达", "timeout", "超时")):
-        fields.update(network_accessible=False, failure_kind="network_blocked")
-    elif any(marker in text for marker in ("未认证", "not_authenticated", "需要登录", "登录态")):
-        fields.update(configured=True, authenticated=False, failure_kind="authentication_required")
-    elif not installed:
-        fields.update(configured=False, failure_kind="backend_missing")
-    elif status != "ok":
-        fields.update(failure_kind="backend_unhealthy")
+    if isinstance(error, PermissionError):
+        fields["sandbox_accessible"] = False
+        fields["failure_kind"] = "sandbox_blocked"
+    elif error is not None:
+        fields["failure_kind"] = "backend_error"
     return fields
 
 
@@ -54,6 +58,7 @@ def check_all(config: Config) -> Dict[str, dict]:
     """
     results = {}
     for ch in get_all_channels():
+        error = None
         try:
             status, message = ch.check(config)
             active = getattr(ch, "active_backend", None)
@@ -61,6 +66,7 @@ def check_all(config: Config) -> Dict[str, dict]:
             # Channels are registry singletons: a stale active_backend from a
             # previous check must not leak into an errored result.
             status, message, active = "error", f"体检异常：{e}", None
+            error = e
         results[ch.name] = {
             "status": status,
             "name": ch.description,
@@ -68,7 +74,8 @@ def check_all(config: Config) -> Dict[str, dict]:
             "tier": ch.tier,
             "backends": ch.backends,
             "active_backend": active,
-            **_health_fields(status, message, active),
+            **_health_fields(status, active, error),
+            "reason": message,
         }
     return results
 

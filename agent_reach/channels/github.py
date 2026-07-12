@@ -40,3 +40,24 @@ class GitHubChannel(Channel):
         # rc != 0：gh 活着但未认证（gh auth status 的正常业务态）
         self.active_backend = "gh CLI"
         return "warn", "gh CLI 已安装但未认证。运行 gh auth login 可解锁完整功能"
+
+    def read_command(self, url: str):
+        from urllib.parse import urlparse
+
+        parts = [part for part in urlparse(url).path.split("/") if part]
+        if len(parts) < 2:
+            return None
+        repo = "/".join(parts[:2])
+        if len(parts) == 2:
+            return ["gh", "repo", "view", repo, "--json", "nameWithOwner,description,url"]
+        if len(parts) == 4 and parts[2] == "issues" and parts[3].isdigit():
+            return [
+                "gh", "issue", "view", parts[3], "--repo", repo, "--json",
+                "number,title,body,author,createdAt,url,comments",
+            ]
+        if len(parts) == 4 and parts[2] == "pull" and parts[3].isdigit():
+            return [
+                "gh", "pr", "view", parts[3], "--repo", repo, "--json",
+                "number,title,body,author,createdAt,url,comments,reviews",
+            ]
+        return None

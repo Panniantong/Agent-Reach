@@ -157,6 +157,13 @@ class XiaoHongShuChannel(Channel):
         d = urlparse(url).netloc.lower()
         return "xiaohongshu.com" in d or "xhslink.com" in d
 
+    def read_command(self, url: str):
+        if self.active_backend == "OpenCLI":
+            return ["opencli", "xiaohongshu", "note", url, "-f", "json"]
+        if self.active_backend == "xhs-cli (xiaohongshu-cli)":
+            return ["xhs", "read", url]
+        return None
+
     def check(self, config=None):
         """Probe candidates in order; first fully-usable backend wins.
 

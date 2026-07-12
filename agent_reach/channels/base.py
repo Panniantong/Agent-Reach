@@ -68,3 +68,7 @@ class Channel(ABC):
         """
         self.active_backend = self.backends[0] if self.backends else "内置"
         return "ok", f"{'、'.join(self.backends) if self.backends else '内置'}"
+
+    def read_command(self, url: str) -> Optional[List[str]]:
+        """Return the active backend's read-only command, or None for web fallback."""
+        return None

@@ -44,6 +44,13 @@ class RedditChannel(Channel):
         d = urlparse(url).netloc.lower()
         return "reddit.com" in d or "redd.it" in d
 
+    def read_command(self, url: str):
+        if self.active_backend == "OpenCLI":
+            return ["opencli", "reddit", "read", url, "-f", "json"]
+        if self.active_backend == "rdt-cli":
+            return ["rdt", "read", url, "--json"]
+        return None
+
     def check(self, config=None):
         """Probe candidates in order; first fully-usable backend wins."""
         self.active_backend = None

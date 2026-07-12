@@ -110,6 +110,22 @@ class TestSkillCommand(unittest.TestCase):
 
             self.assertFalse(os.path.exists(os.path.dirname(target)))
 
+    def test_install_creates_codex_skills_when_codex_home_exists(self):
+        """A fresh Codex home need not already contain a skills directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.makedirs(os.path.join(tmpdir, ".codex"))
+            with patch(
+                "agent_reach.cli.os.path.expanduser",
+                side_effect=lambda p: p.replace("~", tmpdir),
+            ), patch.dict(os.environ, {}, clear=True):
+                _install_skill()
+
+            self.assertTrue(
+                os.path.exists(
+                    os.path.join(tmpdir, ".codex", "skills", "agent-reach", "SKILL.md")
+                )
+            )
+
     def test_install_uses_english_skill_for_english_locale(self):
         """_install_skill should install the English skill file for English locales."""
         with tempfile.TemporaryDirectory() as tmpdir:

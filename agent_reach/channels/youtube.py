@@ -2,6 +2,7 @@
 """YouTube — check if yt-dlp is available with JS runtime."""
 
 import shutil
+import sys
 
 from agent_reach.probe import probe_command
 from agent_reach.utils.paths import get_ytdlp_config_path, render_ytdlp_fix_command
@@ -34,7 +35,10 @@ class YouTubeChannel(Channel):
 
     def check(self, config=None):
         # 真跑 yt-dlp --version 探活，区分未装 / venv 断链 / 跑不动
-        probe = probe_command("yt-dlp", ["--version"], timeout=10, package="yt-dlp")
+        executable = shutil.which("yt-dlp")
+        command = "yt-dlp" if executable else sys.executable
+        args = ["--version"] if executable else ["-m", "yt_dlp", "--version"]
+        probe = probe_command(command, args, timeout=10, package="yt-dlp")
         if probe.status == "missing":
             self.active_backend = None
             return "off", "yt-dlp 未安装。安装：pip install yt-dlp"
@@ -78,6 +82,9 @@ class YouTubeChannel(Channel):
                     msg += f"，可转写音频（{'→'.join(providers)}）"
         return "ok", msg
 
+    def read_command(self, url: str):
+        return [sys.executable, "-m", "yt_dlp", "--dump-single-json", "--skip-download", url]
+
     def transcribe(self, url: str, *, provider: str = "auto", config=None) -> str:
         """Download a YouTube video's audio and return its transcript.
 
@@ -88,4 +95,3 @@ class YouTubeChannel(Channel):
         from agent_reach.transcribe import transcribe as _transcribe
 
         return _transcribe(url, provider=provider, config=config)
-

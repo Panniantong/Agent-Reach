@@ -66,13 +66,13 @@ class TestDoctor:
                 "tier": 0,
                 "backends": ["gh"],
                 "active_backend": None,
-                "backend_installed": False,
-                "configured": False,
+                "backend_installed": None,
+                "configured": None,
                 "authenticated": None,
                 "network_accessible": None,
                 "sandbox_accessible": True,
                 "available": False,
-                "failure_kind": "backend_missing",
+                "failure_kind": None,
                 "reason": "gh 未安装",
             },
             "exa_search": {
@@ -82,13 +82,13 @@ class TestDoctor:
                 "tier": 1,
                 "backends": ["Exa"],
                 "active_backend": None,
-                "backend_installed": False,
-                "configured": False,
+                "backend_installed": None,
+                "configured": None,
                 "authenticated": None,
                 "network_accessible": None,
                 "sandbox_accessible": True,
                 "available": False,
-                "failure_kind": "backend_missing",
+                "failure_kind": None,
                 "reason": "mcporter 未配置",
             },
         }
@@ -150,14 +150,16 @@ def test_stale_active_backend_does_not_leak_into_errored_result(monkeypatch):
     assert results["boom"]["active_backend"] is None
     assert results["boom"]["network_accessible"] is None
     assert results["boom"]["available"] is False
-    assert results["boom"]["failure_kind"] == "backend_missing"
+    assert results["boom"]["failure_kind"] == "backend_error"
 
 
 def test_health_fields_identify_network_and_sandbox_failures():
-    network = doctor._health_fields("warn", "DNS lookup failed", None)
-    assert network["network_accessible"] is False
-    assert network["failure_kind"] == "network_blocked"
-
-    sandbox = doctor._health_fields("error", "Operation not permitted", None)
+    sandbox = doctor._health_fields("error", None, PermissionError("denied"))
     assert sandbox["sandbox_accessible"] is False
     assert sandbox["failure_kind"] == "sandbox_blocked"
+
+    unknown = doctor._health_fields("warn", None, None)
+    assert unknown["backend_installed"] is None
+    assert unknown["configured"] is None
+    assert unknown["authenticated"] is None
+    assert unknown["network_accessible"] is None

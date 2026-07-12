@@ -13,9 +13,9 @@ reddit (#364), xueqiu (#365) and v2ex (#366).
 
 from unittest.mock import Mock, patch
 
-from agent_reach.probe import ProbeResult
 from agent_reach.channels import youtube as yt
 from agent_reach.channels.youtube import YouTubeChannel, _has_js_runtime_config
+from agent_reach.probe import ProbeResult
 
 
 def _which(*present):
@@ -71,6 +71,13 @@ def test_check_off_when_ytdlp_missing():
         status, message = ch.check()
     assert status == "off"
     assert ch.active_backend is None
+
+
+def test_read_command_uses_bundled_python_module():
+    import sys
+
+    command = YouTubeChannel().read_command("https://youtube.com/watch?v=abc")
+    assert command[:3] == [sys.executable, "-m", "yt_dlp"]
 
 
 def test_check_error_when_ytdlp_broken():
