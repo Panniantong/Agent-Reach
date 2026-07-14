@@ -290,7 +290,9 @@ def _provider_order(provider: str) -> List[str]:
         return ["groq", "openai"]
     if provider in PROVIDERS:
         return [provider]
-    raise TranscribeError(f"unknown provider: {provider} (use groq|openai|auto)")
+    raise TranscribeError(
+        f"unknown provider: {provider} (use groq|openai|openrouter|auto)"
+    )
 
 
 def transcribe(
@@ -302,8 +304,9 @@ def transcribe(
 ) -> str:
     """Transcribe a URL or local file path. Returns the joined transcript text.
 
-    `provider` is one of `auto` (groq → openai), `groq`, or `openai`.
-    `out_dir` defaults to a fresh temp directory; intermediate files stay there.
+    `provider` is one of `auto` (groq → openai), `groq`, `openai`, or
+    `openrouter`. `out_dir` defaults to a fresh temp directory; intermediate
+    files stay there.
     """
     cfg = config or Config()
     order = _provider_order(provider)

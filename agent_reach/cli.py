@@ -81,6 +81,7 @@ def main():
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
     p_conf.add_argument("key", nargs="?", default=None,
                         choices=["proxy", "github-token", "groq-key", "openai-key",
+                                 "openrouter-key",
                                  "twitter-cookies", "youtube-cookies",
                                  "xhs-cookies"],
                         help="What to configure (omit if using --from-browser)")
@@ -115,9 +116,9 @@ def main():
 
     # ── check-update ──
     # ── transcribe ──
-    p_tr = sub.add_parser("transcribe", help="Transcribe a URL or local audio file (Whisper via Groq/OpenAI)")
+    p_tr = sub.add_parser("transcribe", help="Transcribe a URL or local audio file (Whisper via Groq/OpenAI/OpenRouter)")
     p_tr.add_argument("source", help="Audio/video URL or local file path")
-    p_tr.add_argument("--provider", choices=["auto", "groq", "openai"], default="auto",
+    p_tr.add_argument("--provider", choices=["auto", "groq", "openai", "openrouter"], default="auto",
                       help="Transcription provider (default: auto = groq → openai fallback)")
     p_tr.add_argument("-o", "--output", default=None,
                       help="Write transcript to a file instead of stdout")
@@ -1131,10 +1132,16 @@ def _cmd_configure(args):
         config.set("openai_api_key", value)
         print(f"✅ OpenAI key configured!")
 
+    elif args.key == "openrouter-key":
+        config.set("openrouter_api_key", value)
+        print(f"✅ OpenRouter key configured!")
+
 
 def _cmd_transcribe(args):
     """Transcribe a URL or local audio file via Whisper (Groq → OpenAI fallback)."""
     from pathlib import Path
+    # Note: the transcribe() helper also accepts "openrouter" as a provider;
+    # it just isn't part of the auto-fallback chain so it must be requested explicitly.
 
     from agent_reach.transcribe import TranscribeError, transcribe
 

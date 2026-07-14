@@ -26,6 +26,7 @@ class Config:
         "twitter_xreach": ["twitter_auth_token", "twitter_ct0"],  # legacy key name; used by twitter-cli
         "groq_whisper": ["groq_api_key"],
         "openai_whisper": ["openai_api_key"],
+        "openrouter_whisper": ["openrouter_api_key"],
         "github_token": ["github_token"],
     }
 

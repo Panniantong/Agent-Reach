@@ -4,7 +4,9 @@
 from pathlib import Path
 from typing import List
 
+import os
 import pytest
+import yaml
 
 from agent_reach import transcribe as tr
 from agent_reach.config import Config
@@ -14,10 +16,21 @@ from agent_reach.config import Config
 
 @pytest.fixture
 def fake_config(tmp_path, monkeypatch):
-    """A Config that writes to a temp dir and never touches the user's HOME."""
+    """A Config that writes to a temp dir and never touches the user's HOME or env."""
     cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(yaml.safe_dump({}), encoding="utf-8")
     monkeypatch.setattr(Config, "CONFIG_DIR", tmp_path)
     monkeypatch.setattr(Config, "CONFIG_FILE", cfg_path)
+    # Prevent ambient API keys from leaking into the fake config.
+    clean_env = {
+        k: v
+        for k, v in os.environ.items()
+        if not any(
+            marker in k.lower()
+            for marker in ("api_key", "auth_token", "ct0", "token", "secret")
+        )
+    }
+    monkeypatch.setattr(os, "environ", clean_env)
     cfg = Config(config_path=cfg_path)
     return cfg
 
@@ -30,13 +43,19 @@ def chunk_file(tmp_path):
 
 
 class FakeResponse:
-    def __init__(self, status_code: int, text: str = ""):
+    def __init__(self, status_code: int, text: str = "", payload=None):
         self.status_code = status_code
         self.text = text
+        self._payload = payload
 
     @property
     def ok(self) -> bool:
         return 200 <= self.status_code < 300
+
+    def json(self):
+        if self._payload is not None:
+            return self._payload
+        raise ValueError("no json payload set")
 
 
 # --- transcribe_chunk: provider routing -------------------------------- #
@@ -92,6 +111,66 @@ class TestTranscribeChunk:
     def test_unknown_provider(self, fake_config, chunk_file):
         with pytest.raises(tr.TranscribeError, match="unknown provider"):
             tr.transcribe_chunk(chunk_file, "azure", config=fake_config)
+
+    def test_routes_to_openrouter_json_base64(self, monkeypatch, fake_config, chunk_file):
+        """OpenRouter must POST JSON+base64 audio, not multipart, and read .json()['text']."""
+        import base64
+
+        fake_config.set("openrouter_api_key", "or-test")
+        captured = {}
+
+        def fake_post(url, headers=None, files=None, data=None, timeout=None, json=None):
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["json"] = json
+            captured["files_used"] = files is not None
+            return FakeResponse(200, "", payload={"text": "openrouter output"})
+
+        monkeypatch.setattr(tr.requests, "post", fake_post)
+        text = tr.transcribe_chunk(chunk_file, "openrouter", config=fake_config)
+
+        assert text == "openrouter output"
+        assert captured["url"] == tr.PROVIDERS["openrouter"]["endpoint"]
+        assert captured["headers"]["Authorization"] == "Bearer or-test"
+        assert captured["headers"]["Content-Type"] == "application/json"
+        assert captured["files_used"] is False
+        assert captured["json"]["model"] == "openai/whisper-1"
+        assert captured["json"]["input_audio"]["data"] == base64.b64encode(
+            chunk_file.read_bytes()
+        ).decode("ascii")
+        assert captured["json"]["input_audio"]["format"] == "m4a"
+
+    def test_openrouter_http_error_raises(self, monkeypatch, fake_config, chunk_file):
+        fake_config.set("openrouter_api_key", "or-test")
+        monkeypatch.setattr(
+            tr.requests,
+            "post",
+            lambda *a, **k: FakeResponse(400, "bad audio"),
+        )
+        with pytest.raises(tr.TranscribeError, match="HTTP 400"):
+            tr.transcribe_chunk(chunk_file, "openrouter", config=fake_config)
+
+    def test_openrouter_unexpected_json_raises(self, monkeypatch, fake_config, chunk_file):
+        fake_config.set("openrouter_api_key", "or-test")
+        monkeypatch.setattr(
+            tr.requests,
+            "post",
+            lambda *a, **k: FakeResponse(200, "", payload={"oops": "no text"}),
+        )
+        with pytest.raises(tr.TranscribeError, match="unexpected response"):
+            tr.transcribe_chunk(chunk_file, "openrouter", config=fake_config)
+
+    def test_openrouter_network_error_raises(self, monkeypatch, fake_config, chunk_file):
+        import requests as req
+
+        fake_config.set("openrouter_api_key", "or-test")
+
+        def boom(*a, **k):
+            raise req.ConnectionError("boom")
+
+        monkeypatch.setattr(tr.requests, "post", boom)
+        with pytest.raises(tr.TranscribeError, match="network error"):
+            tr.transcribe_chunk(chunk_file, "openrouter", config=fake_config)
 
 
 # --- _transcribe_with_fallback ----------------------------------------- #
@@ -399,3 +478,68 @@ class TestConfigOpenAIWhisper:
         assert not fake_config.is_configured("openai_whisper")
         fake_config.set("openai_api_key", "sk-test")
         assert fake_config.is_configured("openai_whisper")
+
+    def test_openrouter_whisper_feature_registered(self, fake_config):
+        assert "openrouter_whisper" in Config.FEATURE_REQUIREMENTS
+        assert Config.FEATURE_REQUIREMENTS["openrouter_whisper"] == [
+            "openrouter_api_key"
+        ]
+        assert not fake_config.is_configured("openrouter_whisper")
+        fake_config.set("openrouter_api_key", "or-test")
+        assert fake_config.is_configured("openrouter_whisper")
+
+
+# --- CLI surface ------------------------------------------------------- #
+
+
+class TestCliSurface:
+    def test_configure_subcommand_accepts_openrouter_key(self, monkeypatch, capsys):
+        import sys
+
+        from agent_reach.cli import main as cli_main
+
+        saved = sys.argv
+        exit_code = None
+        try:
+            sys.argv = [
+                "agent-reach",
+                "configure",
+                "openrouter-key",
+                "or-key-value",
+            ]
+            cli_main()
+        except SystemExit as exc:
+            exit_code = exc.code
+        finally:
+            sys.argv = saved
+
+        # argparse error would be code 2; success is 0/no exit.
+        assert exit_code != 2, "CLI rejected openrouter-key"
+        captured = capsys.readouterr()
+        assert "OpenRouter key configured" in captured.out
+
+    def test_transcribe_subcommand_accepts_openrouter(self, monkeypatch, fake_config):
+        """CLI parser exposes the openrouter provider on `agent-reach transcribe`."""
+        import sys
+
+        from agent_reach.cli import main as cli_main
+
+        saved = sys.argv
+        exit_code = None
+        try:
+            sys.argv = [
+                "agent-reach",
+                "transcribe",
+                "https://example.com/audio",
+                "--provider",
+                "openrouter",
+            ]
+            cli_main()
+        except SystemExit as exc:
+            exit_code = exc.code
+        finally:
+            sys.argv = saved
+
+        # argparse rejection is code 2; any other exit is fine (we did not pass
+        # a real audio file, so execution may fail later).
+        assert exit_code != 2, "CLI rejected --provider openrouter"
