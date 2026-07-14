@@ -40,7 +40,13 @@ dependencies = [
 [project.optional-dependencies]
 browser = ["playwright>=1.40"]
 cookies = ["browser-cookie3>=0.19"]
-all = ["playwright>=1.40", "mcp[cli]>=1.0", "browser-cookie3>=0.19"]
+firecrawl = ["firecrawl-py>=4.17"]
+all = [
+    "playwright>=1.40",
+    "mcp[cli]>=1.0",
+    "browser-cookie3>=0.19",
+    "firecrawl-py>=4.17",
+]
 dev = [
     "pytest>=8.0",
     "ruff>=0.8",

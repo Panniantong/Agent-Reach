@@ -27,6 +27,7 @@ class Config:
         "groq_whisper": ["groq_api_key"],
         "openai_whisper": ["openai_api_key"],
         "github_token": ["github_token"],
+        "firecrawl": ["firecrawl_api_key"],
     }
 
     def __init__(self, config_path: Optional[Path] = None):
