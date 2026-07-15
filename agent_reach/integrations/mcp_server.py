@@ -48,6 +48,18 @@ _MCPORTER_TIMEOUT = 120
 # Max characters returned to the MCP client per call (protects context windows).
 MAX_OUTPUT_CHARS = 20000
 
+# OpenCLI fallbacks (browser login state) used when the preferred CLI for a
+# platform is not installed — mirrors doctor's multi-backend routing.
+OPENCLI_SEARCH_FALLBACKS = {
+    "twitter": lambda q, n: ["opencli", "twitter", "search", q, "-f", "yaml"],
+    "bilibili": lambda q, n: ["opencli", "bilibili", "search", q, "-f", "yaml"],
+}
+
+OPENCLI_READ_FALLBACKS = {
+    "twitter": lambda url: ["opencli", "twitter", "article", url, "-f", "yaml"],
+    "bilibili": lambda url: ["opencli", "bilibili", "video", url, "-f", "yaml"],
+}
+
 
 def build_search_command(platform: str, query: str, limit: int = 5) -> Tuple[List[str], int]:
     """Return (argv, timeout_seconds) for a platform search.
@@ -162,7 +174,7 @@ def run_upstream(cmd: List[str], timeout: int) -> Tuple[bool, str]:
         )
     except FileNotFoundError:
         return False, (
-            f"Upstream tool '{cmd[0]}' is not installed. "
+            f"MISSING_TOOL:{cmd[0]} Upstream tool '{cmd[0]}' is not installed. "
             "Run `agent-reach install --env=auto`, then `agent-reach doctor` to verify."
         )
     except subprocess.TimeoutExpired:
@@ -185,15 +197,19 @@ def _clip(text: str) -> str:
 def do_search(query: str, platform: str = "web", limit: int = 5) -> str:
     cmd, timeout = build_search_command(platform, query, limit)
     ok, output = run_upstream(cmd, timeout)
-    return _clip(output) if ok else output
+    if not ok and output.startswith("MISSING_TOOL:") and platform in OPENCLI_SEARCH_FALLBACKS:
+        ok, output = run_upstream(OPENCLI_SEARCH_FALLBACKS[platform](query, limit), timeout)
+    return _clip(output) if ok else output.replace("MISSING_TOOL:", "", 1)
 
 
 def do_read(url: str) -> str:
     platform, cmd, timeout = build_read_command(url)
     ok, output = run_upstream(cmd, timeout)
+    if not ok and output.startswith("MISSING_TOOL:") and platform in OPENCLI_READ_FALLBACKS:
+        ok, output = run_upstream(OPENCLI_READ_FALLBACKS[platform](url), timeout)
     if ok and platform == "youtube":
         output = _trim_youtube_json(output)
-    return _clip(output) if ok else output
+    return _clip(output) if ok else output.replace("MISSING_TOOL:", "", 1)
 
 
 def create_server():

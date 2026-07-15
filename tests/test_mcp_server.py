@@ -152,6 +152,48 @@ def test_clip_truncates():
 
 # ---------- subprocess wrapper ----------
 
+def test_search_twitter_falls_back_to_opencli(monkeypatch):
+    import agent_reach.integrations.mcp_server as m
+
+    calls = []
+
+    def fake_run(cmd, timeout):
+        calls.append(cmd)
+        if cmd[0] == "twitter":
+            return False, "MISSING_TOOL:twitter not installed"
+        return True, "opencli result"
+
+    monkeypatch.setattr(m, "run_upstream", fake_run)
+    out = m.do_search("query", "twitter", 5)
+    assert out == "opencli result"
+    assert calls[0][0] == "twitter"
+    assert calls[1][:2] == ["opencli", "twitter"]
+
+
+def test_search_no_fallback_strips_marker(monkeypatch):
+    import agent_reach.integrations.mcp_server as m
+
+    monkeypatch.setattr(
+        m, "run_upstream",
+        lambda cmd, timeout: (False, "MISSING_TOOL:gh gh is not installed."))
+    out = m.do_search("q", "github", 5)
+    assert not out.startswith("MISSING_TOOL:")
+    assert "not installed" in out
+
+
+def test_read_bilibili_falls_back_to_opencli(monkeypatch):
+    import agent_reach.integrations.mcp_server as m
+
+    def fake_run(cmd, timeout):
+        if cmd[0] == "bili":
+            return False, "MISSING_TOOL:bili not installed"
+        return True, "opencli video"
+
+    monkeypatch.setattr(m, "run_upstream", fake_run)
+    out = m.do_read("https://www.bilibili.com/video/BV1xx411c7mD")
+    assert out == "opencli video"
+
+
 def test_run_upstream_missing_tool_gives_install_hint():
     ok, out = run_upstream(["definitely-not-a-real-binary-xyz"], timeout=5)
     assert not ok
