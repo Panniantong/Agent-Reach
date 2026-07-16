@@ -1218,7 +1218,7 @@ class TestLinkedInChannel:
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
 
         def fake_run(cmd, **kwargs):
-            return subprocess.CompletedProcess(cmd, 0, "linkedin  http://localhost:3000/mcp", "")
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({"servers": [{"name": "linkedin"}]}), "")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
         from agent_reach.channels.linkedin import LinkedInChannel
@@ -1227,11 +1227,28 @@ class TestLinkedInChannel:
         assert status == "ok"
         assert ch.active_backend == "linkedin-scraper-mcp"
 
+    def test_config_path_containing_linkedin_is_not_a_backend(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
+
+        def fake_run(cmd, **kwargs):
+            payload = {
+                "servers": [{
+                    "name": "unrelated",
+                    "source": {"path": "/tmp/linkedin-project/config/mcporter.json"},
+                }],
+            }
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(payload), "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        from agent_reach.channels.linkedin import LinkedInChannel
+        status, _ = LinkedInChannel().check()
+        assert status == "off"
+
     def test_off_without_backend_when_linkedin_not_configured(self, monkeypatch):
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
 
         def fake_run(cmd, **kwargs):
-            return subprocess.CompletedProcess(cmd, 0, "exa  https://mcp.exa.ai/mcp", "")
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({"servers": [{"name": "exa"}]}), "")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
         from agent_reach.channels.linkedin import LinkedInChannel
@@ -1261,7 +1278,7 @@ class TestExaSearchChannel:
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
 
         def fake_run(cmd, **kwargs):
-            return subprocess.CompletedProcess(cmd, 0, "exa  https://mcp.exa.ai/mcp", "")
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({"servers": [{"name": "exa"}]}), "")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
         from agent_reach.channels.exa_search import ExaSearchChannel
@@ -1269,6 +1286,23 @@ class TestExaSearchChannel:
         status, msg = ch.check()
         assert status == "ok"
         assert ch.active_backend == "Exa via mcporter"
+
+    def test_config_path_containing_exa_is_not_a_backend(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
+
+        def fake_run(cmd, **kwargs):
+            payload = {
+                "servers": [{
+                    "name": "unrelated",
+                    "source": {"path": "/tmp/example-project/config/mcporter.json"},
+                }],
+            }
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(payload), "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        from agent_reach.channels.exa_search import ExaSearchChannel
+        status, _ = ExaSearchChannel().check()
+        assert status == "off"
 
 
 class TestXiaoyuzhouChannel:
