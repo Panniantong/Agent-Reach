@@ -44,7 +44,12 @@ PLATFORM_SPECS = [
 def extract_all(browser: str = "chrome") -> Dict[str, dict]:
     """
     Extract cookies for all supported platforms from the specified browser.
-    
+
+    NOTE: This reads cookies for the configured browser profile. Only cookies
+    matching the target platform domains (Twitter/X, XiaoHongShu, Bilibili,
+    Xueqiu) are retained — other sites' cookies are not stored. However, the
+    underlying cookie library may still load all cookies into memory briefly.
+
     Returns:
         {
             "twitter": {"auth_token": "xxx", "ct0": "yyy"},

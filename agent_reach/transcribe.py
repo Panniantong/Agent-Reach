@@ -24,6 +24,12 @@ import requests
 from agent_reach.config import Config
 
 # Whisper API limit is 25MB; leave headroom for multipart overhead.
+# Common audio file extensions accepted for local file transcription.
+_AUDIO_EXTENSIONS = frozenset({
+    ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus",
+    ".aac", ".wma", ".aiff", ".webm",
+})
+
 SIZE_LIMIT_BYTES = 24 * 1024 * 1024
 CHUNK_SECONDS = 600  # 10 min — small enough that boundary cuts rarely lose meaning
 
@@ -88,6 +94,7 @@ def download_audio(url: str, out_dir: Path) -> Path:
             "0",
             "-o",
             str(template),
+            "--",  # guard against url injection as yt-dlp option
             url,
         ],
         timeout=1800,  # long podcasts over slow networks — generous but bounded
@@ -229,6 +236,13 @@ def transcribe(
 
     src_path = Path(source)
     if src_path.is_file():
+        # Local file path: validate it looks like audio before processing.
+        if src_path.suffix.lower() not in _AUDIO_EXTENSIONS:
+            raise TranscribeError(
+                f"unsupported file type '{src_path.suffix}': "
+                f"only audio files ({', '.join(sorted(_AUDIO_EXTENSIONS))}) "
+                f"can be transcribed. For non-audio files, use a URL instead."
+            )
         audio = src_path
     else:
         audio = download_audio(source, work_dir)

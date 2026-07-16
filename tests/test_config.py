@@ -33,13 +33,13 @@ class TestConfig:
         assert tmp_config.get("nonexistent", "default") == "default"
 
     def test_get_from_env(self, tmp_config, monkeypatch):
-        monkeypatch.setenv("TEST_ENV_KEY", "env_value")
-        assert tmp_config.get("test_env_key") == "env_value"
+        monkeypatch.setenv("EXA_API_KEY", "env_value")
+        assert tmp_config.get("exa_api_key") == "env_value"
 
     def test_config_file_priority_over_env(self, tmp_config, monkeypatch):
-        monkeypatch.setenv("MY_KEY", "from_env")
-        tmp_config.set("my_key", "from_config")
-        assert tmp_config.get("my_key") == "from_config"
+        monkeypatch.setenv("EXA_API_KEY", "from_env")
+        tmp_config.set("exa_api_key", "from_config")
+        assert tmp_config.get("exa_api_key") == "from_config"
 
     def test_save_and_load(self, tmp_config):
         tmp_config.set("key1", "value1")
