@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 """Tests for the OpenCLI cross-channel backend probing."""
 
+import os
+from pathlib import Path
 from unittest.mock import patch
 
 from agent_reach.backends import opencli_status, opencli_summary
+from agent_reach.backends.opencli import OPENCLI_EXTENSION_ID, _extension_installed_on_disk
 from agent_reach.probe import ProbeResult
 
 
@@ -98,3 +101,44 @@ def test_probe_uses_daemon_status_not_doctor():
     )
     assert ["daemon", "status"] in calls
     assert ["doctor"] not in calls
+
+
+def test_extension_installed_detects_edge_profile(tmp_path, monkeypatch):
+    edge_root = tmp_path / "Microsoft Edge"
+    ext_dir = edge_root / "Default" / "Extensions" / OPENCLI_EXTENSION_ID / "1.0.0"
+    ext_dir.mkdir(parents=True)
+
+    monkeypatch.setattr(
+        "agent_reach.backends.opencli._CHROME_PROFILE_ROOTS",
+        (str(edge_root),),
+    )
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path / "empty-home"))
+    (tmp_path / "empty-home").mkdir()
+
+    assert _extension_installed_on_disk() is True
+
+
+def test_extension_installed_detects_opencli_unpacked_dir(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    manifest = home / ".opencli" / "extension" / "manifest.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text('{"name": "OpenCLI"}', encoding="utf-8")
+
+    monkeypatch.setattr("agent_reach.backends.opencli._CHROME_PROFILE_ROOTS", ())
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(os.path, "expanduser", lambda p: str(home / p.replace("~/", "")))
+
+    assert _extension_installed_on_disk() is True
+
+
+def test_extension_installed_false_without_chrome_edge_or_unpacked(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr("agent_reach.backends.opencli._CHROME_PROFILE_ROOTS", ())
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(os.path, "expanduser", lambda p: str(home / p.replace("~/", "")))
+
+    assert _extension_installed_on_disk() is False
