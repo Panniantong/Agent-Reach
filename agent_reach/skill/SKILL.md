@@ -8,7 +8,7 @@ description: >
   Also MUST USE when user mentions any platform or shares any URL/链接:
   小红书/xiaohongshu/xhs, Twitter/推特/X, B站/bilibili, Reddit, Facebook,
   Instagram, V2EX, LinkedIn/领英/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客,
-  雪球/股票行情, RSS feeds, or any web URL.
+  雪球/股票行情, RSS feeds, 微信公众号/weixin/mp.weixin.qq.com, or any web URL.
 
   15 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
@@ -32,7 +32,7 @@ triggers:
     - Instagram: instagram/ig
   - career: 招聘/职位/求职/linkedin/领英/找工作
   - dev: github/代码/仓库/gh/issue/pr/分支/commit
-  - web: 网页/链接/文章/rss/读一下/打开这个
+  - web: 网页/链接/文章/rss/读一下/打开这个/微信公众号/微信文章/mp.weixin.qq.com
   - video: youtube/视频/播客/字幕/小宇宙/转录/yt
   - finance: 雪球/股票/stock/xueqiu/行情/基金
 metadata:
@@ -65,7 +65,7 @@ metadata:
 | 小红书/推特/B站/V2EX/Reddit/Facebook/Instagram | social | [references/social.md](references/social.md) |
 | 招聘/职位/LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub/代码 | dev | [references/dev.md](references/dev.md) |
-| 网页/文章/RSS | web | [references/web.md](references/web.md) |
+| 网页/文章/RSS（含微信公众号直链，非零配置） | web | [references/web.md](references/web.md) |
 | YouTube/B站/播客字幕 | video | [references/video.md](references/video.md) |
 
 ## 零配置快速命令
@@ -129,7 +129,7 @@ agent-reach doctor --json
 - [社交媒体](references/social.md) — 小红书, Twitter, B站, V2EX, Reddit, Facebook, Instagram（多后端/登录态命令组）
 - [职场招聘](references/career.md) — LinkedIn
 - [开发工具](references/dev.md) — GitHub CLI
-- [网页阅读](references/web.md) — Jina Reader, RSS
+- [网页阅读](references/web.md) — Jina Reader, RSS, 微信公众号（Tier-2，勿用 Jina）
 - [视频播客](references/video.md) — YouTube, B站, 小宇宙
 
 ## 配置渠道
