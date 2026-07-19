@@ -11,11 +11,12 @@ channel coverage after rss (#360), github (#361), web (#363),
 reddit (#364), xueqiu (#365) and v2ex (#366).
 """
 
+from pathlib import Path
 from unittest.mock import Mock, patch
 
-from agent_reach.probe import ProbeResult
 from agent_reach.channels import youtube as yt
 from agent_reach.channels.youtube import YouTubeChannel, _has_js_runtime_config
+from agent_reach.probe import ProbeResult
 
 
 def _which(*present):
@@ -104,12 +105,44 @@ def test_check_warn_when_no_js_runtime_but_backend_active():
 
 def test_check_warn_when_node_only_and_config_missing_flag():
     ch = YouTubeChannel()
-    with patch.object(yt, "probe_command", return_value=ProbeResult("ok")), \
+    probe = ProbeResult("ok", output="2026.07.04")
+    with patch.object(yt, "probe_command", return_value=probe), \
          patch("shutil.which", side_effect=_which("node")), \
          patch.object(yt, "_has_js_runtime_config", return_value=False):
         status, message = ch.check()
     assert status == "warn"
+    assert "--js-runtimes" in message
     assert ch.active_backend == "yt-dlp"
+
+
+def test_check_warns_to_upgrade_stale_ytdlp_before_prescribing_node_runtime():
+    ch = YouTubeChannel()
+    with patch.object(yt, "probe_command", return_value=ProbeResult("ok", output="2025.05.22")), \
+         patch("shutil.which", side_effect=_which("node")), \
+         patch.object(yt, "_has_js_runtime_config", return_value=False):
+        status, message = ch.check()
+    assert status == "warn"
+    assert "pip install -U yt-dlp" in message
+    assert "--js-runtimes" not in message
+    assert ch.active_backend == "yt-dlp"
+
+
+def test_check_keeps_node_runtime_prescription_for_unparseable_ytdlp_version():
+    for output in ("", "dev"):
+        ch = YouTubeChannel()
+        with patch.object(yt, "probe_command", return_value=ProbeResult("ok", output=output)), \
+             patch("shutil.which", side_effect=_which("node")), \
+             patch.object(yt, "_has_js_runtime_config", return_value=False):
+            status, message = ch.check()
+        assert status == "warn"
+        assert "--js-runtimes" in message
+
+
+def test_constraints_pin_ytdlp_to_2026_or_later():
+    constraints = Path(__file__).parents[1] / "constraints.txt"
+    pin = next(line for line in constraints.read_text(encoding="utf-8").splitlines()
+               if line.startswith("yt-dlp=="))
+    assert int(pin.removeprefix("yt-dlp==").split(".", 1)[0]) >= 2026
 
 
 def test_check_ok_with_deno():

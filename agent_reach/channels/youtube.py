@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """YouTube — check if yt-dlp is available with JS runtime."""
 
+import re
 import shutil
 
 from agent_reach.probe import probe_command
@@ -8,6 +9,8 @@ from agent_reach.utils.paths import get_ytdlp_config_path, render_ytdlp_fix_comm
 from agent_reach.utils.text import read_utf8_text
 
 from .base import Channel
+
+_JS_RUNTIMES_SUPPORTED_FROM = (2026, 7, 4)
 
 
 def _has_js_runtime_config(config_path) -> bool:
@@ -18,6 +21,12 @@ def _has_js_runtime_config(config_path) -> bool:
         return "--js-runtimes" in read_utf8_text(config_path)
     except OSError:
         return False
+
+
+def _parse_ytdlp_version(version: str):
+    """Return a comparable yt-dlp version tuple, or ``None`` if unknown."""
+    match = re.fullmatch(r"\s*(\d+)\.(\d+)\.(\d+)\s*", version)
+    return tuple(map(int, match.groups())) if match else None
 
 
 class YouTubeChannel(Channel):
@@ -60,6 +69,12 @@ class YouTubeChannel(Channel):
         if not has_deno:
             ytdlp_config = get_ytdlp_config_path()
             if not _has_js_runtime_config(ytdlp_config):
+                version = _parse_ytdlp_version(probe.output)
+                if version is not None and version < _JS_RUNTIMES_SUPPORTED_FROM:
+                    return "warn", (
+                        "yt-dlp 版本过旧，无法配置 JS runtime。请升级：\n"
+                        "  pip install -U yt-dlp"
+                    )
                 return "warn", (
                     f"yt-dlp 已安装但未配置 JS runtime。运行：\n  {render_ytdlp_fix_command()}"
                 )
@@ -88,4 +103,3 @@ class YouTubeChannel(Channel):
         from agent_reach.transcribe import transcribe as _transcribe
 
         return _transcribe(url, provider=provider, config=config)
-
