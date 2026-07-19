@@ -259,7 +259,7 @@ class XueqiuChannel(Channel):
         """
         data = _get_json(
             "https://xueqiu.com/v4/statuses/public_timeline_by_category.json"
-            "?since_id=-1&max_id=-1&count=20&category=-1"
+            f"?since_id=-1&max_id=-1&count={limit}&category=-1"
         )
         items = data.get("list") or []
         results = []
