@@ -13,7 +13,8 @@ Probing notes (verified live):
     service worker sleeps and any real opencli command wakes it up
     (verified: status flips disconnected→connected after one call).
     Since daemon status can't tell "sleeping" from "never installed",
-    we check Chrome's Extensions directory on disk to disambiguate.
+    we check Chrome/Edge/Chromium Extensions directories and OpenCLI's
+    unpacked layout on disk to disambiguate.
 """
 
 import glob
@@ -28,30 +29,38 @@ OPENCLI_EXTENSION_URL = (
     f"https://chromewebstore.google.com/detail/opencli/{OPENCLI_EXTENSION_ID}"
 )
 
-#: Chrome-family profile roots that contain <Profile>/Extensions/<id>/
+#: Chromium-family profile roots that contain <Profile>/Extensions/<id>/
 _CHROME_PROFILE_ROOTS = (
     "~/Library/Application Support/Google/Chrome",  # macOS Chrome
     "~/Library/Application Support/Chromium",       # macOS Chromium
+    "~/Library/Application Support/Microsoft Edge",  # macOS Edge
     "~/.config/google-chrome",                      # Linux Chrome
     "~/.config/chromium",                           # Linux Chromium
+    "~/.config/microsoft-edge",                     # Linux Edge
 )
+
+_OPENCLI_UNPACKED_EXTENSION = "~/.opencli/extension"
 
 
 def _extension_installed_on_disk() -> bool:
-    """True if the OpenCLI extension exists in any Chrome profile.
+    """True if the OpenCLI extension exists on disk.
 
-    Store-installed extensions always live under
-    <profile>/Extensions/<extension id>/ — this disambiguates a sleeping
-    service worker from a never-installed extension. Dev installs via
-    "Load unpacked" are not covered (those users can read `opencli doctor`).
+    Covers Chrome Web Store installs under any known Chrome/Edge/Chromium
+    profile, plus OpenCLI's common unpacked layout at ~/.opencli/extension/
+    (Load unpacked in Chrome or Edge). Distinguishes a sleeping service
+    worker from a never-installed extension without calling `opencli doctor`.
     """
     roots = [os.path.expanduser(p) for p in _CHROME_PROFILE_ROOTS]
     local_app_data = os.environ.get("LOCALAPPDATA")
     if local_app_data:  # Windows
         roots.append(os.path.join(local_app_data, "Google", "Chrome", "User Data"))
+        roots.append(os.path.join(local_app_data, "Microsoft", "Edge", "User Data"))
     for root in roots:
         if glob.glob(os.path.join(root, "*", "Extensions", OPENCLI_EXTENSION_ID)):
             return True
+    unpacked = os.path.expanduser(_OPENCLI_UNPACKED_EXTENSION)
+    if os.path.isfile(os.path.join(unpacked, "manifest.json")):
+        return True
     return False
 
 
@@ -114,9 +123,10 @@ def opencli_status(timeout: int = 10) -> OpenCLIStatus:
         st.extension_installed = _extension_installed_on_disk()
         if not st.extension_installed:
             st.hint = (
-                "OpenCLI 已安装，但 Chrome 扩展未安装。\n"
-                f"  1. 安装扩展（需手动点一次）：{OPENCLI_EXTENSION_URL}\n"
-                "  2. 保持 Chrome 打开，运行 `opencli doctor` 验证"
+                "OpenCLI 已安装，但浏览器扩展未安装。\n"
+                f"  1. 安装扩展（Chrome 商店或 Edge/Chrome Load unpacked）："
+                f"{OPENCLI_EXTENSION_URL}\n"
+                "  2. 保持浏览器打开，运行 `opencli doctor` 验证"
             )
     return st
 

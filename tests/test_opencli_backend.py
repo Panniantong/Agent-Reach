@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """Tests for the OpenCLI cross-channel backend probing."""
 
-import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -128,7 +127,6 @@ def test_extension_installed_detects_opencli_unpacked_dir(tmp_path, monkeypatch)
     monkeypatch.setattr("agent_reach.backends.opencli._CHROME_PROFILE_ROOTS", ())
     monkeypatch.delenv("LOCALAPPDATA", raising=False)
     monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setattr(os.path, "expanduser", lambda p: str(home / p.replace("~/", "")))
 
     assert _extension_installed_on_disk() is True
 
@@ -139,6 +137,5 @@ def test_extension_installed_false_without_chrome_edge_or_unpacked(tmp_path, mon
     monkeypatch.setattr("agent_reach.backends.opencli._CHROME_PROFILE_ROOTS", ())
     monkeypatch.delenv("LOCALAPPDATA", raising=False)
     monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setattr(os.path, "expanduser", lambda p: str(home / p.replace("~/", "")))
 
     assert _extension_installed_on_disk() is False
