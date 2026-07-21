@@ -10,6 +10,7 @@ build/
 *.log
 .venv/
 venv/
+/.worktrees/
 
 # mcporter server list is user-local and may hold MCP server keys/tokens — never commit
 config/mcporter.json
