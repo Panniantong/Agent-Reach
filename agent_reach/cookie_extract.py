@@ -2,7 +2,7 @@
 """Auto-extract cookies from local browsers for all supported platforms.
 
 Supports: Chrome, Firefox, Edge, Brave, Opera
-Extracts: Twitter, XiaoHongShu, Bilibili cookies in one shot.
+Extracts: Twitter, XiaoHongShu, Bilibili, Xueqiu, Douyin cookies in one shot.
 
 Usage:
     agent-reach configure --from-browser chrome
@@ -35,6 +35,12 @@ PLATFORM_SPECS = [
         "domains": [".xueqiu.com", "xueqiu.com"],
         "cookies": None,  # grab all — xq_a_token + session cookies required
         "config_key": "xueqiu",
+    },
+    {
+        "name": "Douyin",
+        "domains": [".douyin.com"],
+        "cookies": None,  # grab all — sessionid + msToken etc. required
+        "config_key": "douyin",
     },
 ]
 
@@ -293,5 +299,18 @@ def configure_from_browser(browser: str, config) -> List[Tuple[str, bool, str]]:
             results_list.append(("Xueqiu", False,
                                  f"找到 {len(cookie_str.split(';'))} 个 Cookie 但缺少 xq_a_token，"
                                  f"请先在 {browser} 中登录 xueqiu.com"))
+
+    if "douyin" in extracted:
+        cookie_str = extracted["douyin"].get("cookie_string", "")
+        # Only save if sessionid is present — anonymous cookies are useless
+        if cookie_str and "sessionid" in cookie_str:
+            config.set("douyin_cookies", cookie_str)
+            config.delete("douyin_cookies_from")
+            n_cookies = len(cookie_str.split(";"))
+            results_list.append(("Douyin", True, f"{n_cookies} cookies (含 sessionid)"))
+        elif cookie_str:
+            results_list.append(("Douyin", False,
+                                 f"找到 {len(cookie_str.split(';'))} 个 Cookie 但缺少 sessionid，"
+                                 f"请先在 {browser} 中登录 douyin.com"))
 
     return results_list

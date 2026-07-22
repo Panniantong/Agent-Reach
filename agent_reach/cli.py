@@ -75,14 +75,14 @@ def main():
     p_install.add_argument("--channels", default="",
                            help="Comma-separated optional channels to install "
                                 "(twitter,xiaoyuzhou,xueqiu,xiaohongshu,"
-                                "reddit,facebook,instagram,bilibili,linkedin,all)")
+                                "reddit,facebook,instagram,bilibili,douyin,linkedin,all)")
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
     p_conf.add_argument("key", nargs="?", default=None,
                         choices=["proxy", "github-token", "groq-key", "openai-key",
                                  "twitter-cookies", "youtube-cookies",
-                                 "xhs-cookies"],
+                                 "xhs-cookies", "douyin-cookies"],
                         help="What to configure (omit if using --from-browser)")
     p_conf.add_argument("value", nargs="*", help="The value(s) to set")
     p_conf.add_argument("--from-browser", metavar="BROWSER",
@@ -204,16 +204,17 @@ def _cmd_install(args):
         "bilibili":    _install_bili_deps,
         "opencli":     _install_opencli_deps,  # cross-channel backend, desktop only
         # xueqiu: cookie-only, no install step
+        # douyin: cookie-only, no install step (yt-dlp is a core dep)
         # linkedin: manual setup, no auto-install
     }
     OPENCLI_ONLY_CHANNELS = {"opencli", "facebook", "instagram"}
-    COOKIE_CHANNELS = {"twitter", "xueqiu", "bilibili"}
+    COOKIE_CHANNELS = {"twitter", "xueqiu", "bilibili", "douyin"}
 
     requested_channels = set()
     if args.channels:
         raw = [c.strip().lower() for c in args.channels.split(",") if c.strip()]
         if "all" in raw:
-            requested_channels = set(CHANNEL_INSTALLERS.keys()) | {"xueqiu", "linkedin"}
+            requested_channels = set(CHANNEL_INSTALLERS.keys()) | {"xueqiu", "douyin", "linkedin"}
         else:
             requested_channels = set(raw)
 
@@ -1116,6 +1117,9 @@ def _cmd_configure(args):
         print(f"✅ YouTube cookie source configured: {value}")
         print("   yt-dlp will use cookies from this browser for age-restricted/member videos.")
 
+    elif args.key == "douyin-cookies":
+        _configure_douyin_cookies(config, value)
+
     elif args.key == "xhs-cookies":
         _configure_xhs_cookies(value)
 
@@ -1170,6 +1174,43 @@ def _parse_twitter_cookie_input(value: str):
         ct0 = parts[1]
 
     return auth_token, ct0
+
+
+# Browsers yt-dlp's --cookies-from-browser can read.
+_DOUYIN_COOKIE_BROWSERS = {
+    "brave", "chrome", "chromium", "edge", "firefox",
+    "opera", "safari", "vivaldi", "whale",
+}
+
+
+def _configure_douyin_cookies(config, value):
+    """Configure Douyin cookies: browser name or raw Cookie header string.
+
+    A browser name is stored as ``douyin_cookies_from`` and read live by
+    yt-dlp on every call (never goes stale). A pasted header string is
+    stored as ``douyin_cookies`` and injected via ``--add-headers`` — it
+    works headless but expires with the session.
+    """
+    if "=" in value:
+        config.set("douyin_cookies", value)
+        config.delete("douyin_cookies_from")
+        print("✅ 抖音 Cookie 已保存（header 字符串）")
+        print("   注意：Cookie 会随会话过期，失效后请重新配置。")
+        return
+
+    browser = value.strip().lower()
+    if browser not in _DOUYIN_COOKIE_BROWSERS:
+        print(f"[X] 无法识别的值：{value}")
+        print("   用法（二选一）：")
+        print("   1. agent-reach configure douyin-cookies chrome   # 从浏览器实时读取（推荐）")
+        print('   2. agent-reach configure douyin-cookies "sessionid=xxx; msToken=yyy; ..."')
+        return
+
+    config.set("douyin_cookies_from", browser)
+    config.delete("douyin_cookies")
+    print(f"✅ 抖音 Cookie 来源已配置：{browser}")
+    print("   yt-dlp 将通过 --cookies-from-browser 实时读取该浏览器的登录态。")
+    print("   前提：该浏览器里已登录 douyin.com。")
 
 
 def _configure_xhs_cookies(value):

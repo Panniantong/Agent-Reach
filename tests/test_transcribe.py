@@ -243,7 +243,7 @@ class TestOrchestrator:
                     child.unlink()
                 self.path.rmdir()
 
-        def fake_download(source, out_dir):
+        def fake_download(source, out_dir, config=None):
             assert Path(out_dir) == tmp_path / "auto-work"
             audio = Path(out_dir) / "source.m4a"
             audio.write_bytes(b"audio")
@@ -273,7 +273,7 @@ class TestOrchestrator:
         fake_config.set("groq_api_key", "gsk_test")
         work = tmp_path / "caller-owned"
 
-        def fake_download(source, out_dir):
+        def fake_download(source, out_dir, config=None):
             audio = Path(out_dir) / "source.m4a"
             audio.write_bytes(b"audio")
             return audio
@@ -362,6 +362,62 @@ class TestDownloadAudioSafety:
         tr.download_audio("https://youtu.be/abc123", tmp_path)
 
         assert captured["cmd"][-1] == "https://youtu.be/abc123"
+
+
+# --- Platform cookie injection (Douyin) --------------------------------- #
+
+
+class TestPlatformCookieArgs:
+    def _run_download(self, monkeypatch, tmp_path, url, config=None):
+        monkeypatch.setattr(tr, "_require", lambda binary: None)
+        captured = {}
+
+        def fake_run(cmd, timeout=600):
+            captured["cmd"] = cmd
+            (tmp_path / "source.m4a").write_bytes(b"audio")
+
+        monkeypatch.setattr(tr, "_run", fake_run)
+        tr.download_audio(url, tmp_path, config=config)
+        return captured["cmd"]
+
+    def test_douyin_url_injects_browser_cookies(self, monkeypatch, tmp_path):
+        cfg = Config(config_path=tmp_path / "config.yaml")
+        cfg.set("douyin_cookies_from", "chrome")
+        cmd = self._run_download(
+            monkeypatch, tmp_path,
+            "https://www.douyin.com/video/7653652590353321258", config=cfg,
+        )
+        marker = cmd.index("--")
+        assert ["--cookies-from-browser", "chrome"] == cmd[marker - 2:marker]
+
+    def test_douyin_url_injects_header_string_cookies(self, monkeypatch, tmp_path):
+        cfg = Config(config_path=tmp_path / "config.yaml")
+        cfg.set("douyin_cookies", "sessionid=x; msToken=y")
+        cmd = self._run_download(
+            monkeypatch, tmp_path,
+            "https://www.douyin.com/video/7653652590353321258", config=cfg,
+        )
+        assert "--add-headers" in cmd
+        idx = cmd.index("--add-headers")
+        assert cmd[idx + 1] == "Cookie:sessionid=x; msToken=y"
+
+    def test_douyin_url_without_config_adds_nothing(self, monkeypatch, tmp_path):
+        cmd = self._run_download(
+            monkeypatch, tmp_path,
+            "https://www.douyin.com/video/7653652590353321258",
+        )
+        assert "--cookies-from-browser" not in cmd
+        assert "--add-headers" not in cmd
+
+    def test_non_douyin_url_adds_nothing_even_with_cookies(self, monkeypatch, tmp_path):
+        cfg = Config(config_path=tmp_path / "config.yaml")
+        cfg.set("douyin_cookies_from", "chrome")
+        cmd = self._run_download(
+            monkeypatch, tmp_path,
+            "https://www.youtube.com/watch?v=abc", config=cfg,
+        )
+        assert "--cookies-from-browser" not in cmd
+        assert "--add-headers" not in cmd
 
 
 # --- YouTubeChannel integration --------------------------------------- #

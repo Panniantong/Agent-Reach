@@ -120,6 +120,49 @@ agent-reach doctor
 
 > 输出 Markdown 文件默认保存到 `/tmp/`。
 
+## 抖音 / Douyin（yt-dlp + 浏览器 Cookie）
+
+> ⚠️ **必须带 Cookie**：抖音风控会拦裸连 yt-dlp（报 `Fresh cookies needed`）。先在浏览器里登录 douyin.com，再配置 Cookie 来源（二选一）：
+>
+> ```bash
+> agent-reach configure douyin-cookies chrome   # 每次实时从浏览器读取（推荐）
+> agent-reach configure --from-browser chrome   # 或一次性提取存为 header 字符串
+> ```
+
+### URL 形态处理
+
+yt-dlp 只认规范视频链接。用户给的链接先转换：
+
+- `https://www.douyin.com/video/<视频ID>` — 可直接用
+- `https://v.douyin.com/xxxx/` 短链 — 可直接用（yt-dlp 会跟随跳转）
+- 用户主页带 `modal_id=<视频ID>` 参数的链接（如 `douyin.com/user/self?...&modal_id=7653652590353321258`）— 取 `modal_id` 拼成 `https://www.douyin.com/video/<视频ID>`
+
+### 获取视频元数据
+
+```bash
+yt-dlp --cookies-from-browser chrome --dump-json "https://www.douyin.com/video/视频ID"
+# 关键字段：title（标题）、description（文案+话题标签）、uploader、duration、like_count、comment_count
+```
+
+> 若配置的是 header 字符串（`douyin_cookies`）而非浏览器来源，改用：
+> `yt-dlp --add-headers "Cookie:$(agent-reach 配置里的 douyin_cookies)" ...`，或直接从 `~/.agent-reach/config.yaml` 读出该值拼接。
+
+### 下载音频 / 转写文稿
+
+```bash
+# 下音频（口播类视频提取内容的主路径——抖音视频没有字幕）
+yt-dlp --cookies-from-browser chrome -x --audio-format mp3 -o "/tmp/dy_%(id)s.%(ext)s" "URL"
+
+# 或直接转写（已配置 groq-key/openai-key 时；会自动带上抖音 Cookie）
+agent-reach transcribe "https://www.douyin.com/video/视频ID"
+```
+
+### 排错
+
+- `Fresh cookies (not necessarily logged in) are needed` → Cookie 缺失或失效。用 `--cookies-from-browser` 方式的基本不会遇到；header 字符串方式的需重新 `configure --from-browser`。
+- `Failed to parse JSON` + 上述报错同时出现 → 同上是 Cookie 问题，不是链接问题。
+- 浏览器直读在 macOS 首次可能弹钥匙串授权，属正常。
+
 ## 选择指南
 
 | 场景 | 推荐工具 |
@@ -127,5 +170,6 @@ agent-reach doctor
 | YouTube 字幕 | yt-dlp |
 | B站视频详情/搜索 | bili-cli |
 | B站字幕 | opencli bilibili subtitle |
+| 抖音元数据/音频 | yt-dlp + Cookie（见上） |
 | 播客转录 | 小宇宙 transcribe.sh |
 | 无字幕音视频 | agent-reach transcribe（B站音频先 `bili audio`） |

@@ -122,7 +122,20 @@ def _assert_safe_public_url(url: str) -> None:
         raise TranscribeError("SSRF blocked: private/internal IP is not allowed")
 
 
-def download_audio(url: str, out_dir: Path) -> Path:
+def _platform_cookie_args(url: str, config: Optional[Config]) -> List[str]:
+    """Extra yt-dlp args carrying platform cookies for URL gated platforms.
+
+    Currently only Douyin: its risk control rejects cookie-less yt-dlp
+    requests ("Fresh cookies needed"). Other platforms need nothing extra.
+    """
+    from agent_reach.channels.douyin import douyin_cookie_args, is_douyin_url
+
+    if is_douyin_url(url):
+        return douyin_cookie_args(config)
+    return []
+
+
+def download_audio(url: str, out_dir: Path, config: Optional[Config] = None) -> Path:
     """Download audio with yt-dlp into out_dir; return the resulting file path."""
     _assert_safe_public_url(url)
     _require("yt-dlp")
@@ -137,6 +150,7 @@ def download_audio(url: str, out_dir: Path) -> Path:
             "0",
             "-o",
             str(template),
+            *_platform_cookie_args(url, config),
             "--",
             url,
         ],
@@ -288,7 +302,7 @@ def _transcribe_in_dir(source: str, order: List[str], cfg: Config, work_dir: Pat
     if src_path.is_file():
         audio = src_path
     else:
-        audio = download_audio(source, work_dir)
+        audio = download_audio(source, work_dir, config=cfg)
 
     compressed = compress_audio(audio, work_dir)
     if compressed.stat().st_size <= SIZE_LIMIT_BYTES:
