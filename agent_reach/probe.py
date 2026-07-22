@@ -81,6 +81,12 @@ def _run_once(path: str, args: Sequence[str], timeout: int, package: str) -> Pro
         r = subprocess.run(
             [path, *args],
             capture_output=True,
+            # Health probes must never read the terminal: a CLI that falls
+            # through to an interactive prompt when unconfigured (e.g. `tg
+            # status` asking for a phone number when no session exists) would
+            # otherwise block on the user's TTY until `timeout`. DEVNULL turns
+            # any such prompt into an immediate EOF so the command exits fast.
+            stdin=subprocess.DEVNULL,
             encoding="utf-8",
             errors="replace",
             timeout=timeout,

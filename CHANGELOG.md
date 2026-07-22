@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - 两者均为 tier-1 单后端渠道，`check()` 以 `status` 退出码作认证信号（0 = 已登录），设计参照小红书 / Twitter 渠道，保持一致。
 - 已接入 `agent-reach doctor`、`agent-reach install --channels discord,telegram`、SKILL.md 路由表与 references/social.md 命令组；新增 `guides/setup-discord.md` / `guides/setup-telegram.md` 配置指南。
 - 支持平台数 15 → 17。
+- 健壮性：`probe_command` 健康探测改用 `stdin=DEVNULL`，避免像 `tg status` 这类未配置时会交互式提示（要求输入手机号）的命令在 `doctor` 里阻塞到超时。由新 Telegram 渠道触发，惠及所有渠道。
 
 ---
 
