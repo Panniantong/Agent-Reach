@@ -173,6 +173,8 @@ def test_channel_can_handle_contract():
         "instagram": "https://www.instagram.com/openai/",
         "bilibili": "https://www.bilibili.com/video/BV1xx411",
         "xiaohongshu": "https://www.xiaohongshu.com/explore/123",
+        "discord": "https://discord.com/channels/123/456",
+        "telegram": "https://t.me/durov",
         "linkedin": "https://www.linkedin.com/in/test",
         "rss": "https://example.com/feed.xml",
         "xueqiu": "https://xueqiu.com/S/SH600519",

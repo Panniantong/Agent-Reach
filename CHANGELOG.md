@@ -6,6 +6,20 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [1.6.0] - 2026-07-22
+
+### ✨ Features / 新增
+
+#### 🎮 Discord + ✈️ Telegram —— 两个新渠道
+
+- **Discord**（`discord-cli` / PyPI `kabi-discord-cli`，命令 `discord`）：用账号 user token 走 Discord HTTP API，同步/搜索/导出你能访问的服务器与频道消息，本地优先存 SQLite。⚠️ user token 自动化违反 Discord ToS，建议使用专用小号。
+- **Telegram**（`tg-cli` / PyPI `kabi-tg-cli`，命令 `tg`）：MTProto 用户账号（非 Bot API），同步/搜索/导出/监听对话与频道，可读你加入的私有群。首次 `tg chats` 手机号登录。
+- 两者均为 tier-1 单后端渠道，`check()` 以 `status` 退出码作认证信号（0 = 已登录），设计参照小红书 / Twitter 渠道，保持一致。
+- 已接入 `agent-reach doctor`、`agent-reach install --channels discord,telegram`、SKILL.md 路由表与 references/social.md 命令组；新增 `guides/setup-discord.md` / `guides/setup-telegram.md` 配置指南。
+- 支持平台数 15 → 17。
+
+---
+
 ## [1.3.1] - 2026-03-27
 
 ### 🐛 Bug Fixes / 修复

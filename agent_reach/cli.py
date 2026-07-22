@@ -75,7 +75,8 @@ def main():
     p_install.add_argument("--channels", default="",
                            help="Comma-separated optional channels to install "
                                 "(twitter,xiaoyuzhou,xueqiu,xiaohongshu,"
-                                "reddit,facebook,instagram,bilibili,linkedin,all)")
+                                "reddit,facebook,instagram,bilibili,discord,"
+                                "telegram,linkedin,all)")
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
@@ -202,6 +203,8 @@ def _cmd_install(args):
         "facebook":    _install_opencli_deps,
         "instagram":   _install_opencli_deps,
         "bilibili":    _install_bili_deps,
+        "discord":     _install_discord_deps,
+        "telegram":    _install_telegram_deps,
         "opencli":     _install_opencli_deps,  # cross-channel backend, desktop only
         # xueqiu: cookie-only, no install step
         # linkedin: manual setup, no auto-install
@@ -860,6 +863,56 @@ def _install_bili_deps():
             except Exception:
                 pass
     print("  [!]  bili-cli install failed. Run: pipx install bilibili-cli")
+
+
+def _install_discord_deps():
+    """Install discord-cli for Discord sync/search/export."""
+    import shutil
+    import subprocess
+
+    print("Setting up Discord (discord-cli)...")
+    if shutil.which("discord"):
+        print("  ✅ discord-cli already installed")
+        print("     登录：discord auth --save（自动提取本地会话 user token）")
+        return
+    for tool, cmd in [("pipx", ["pipx", "install", "kabi-discord-cli"]),
+                      ("uv", ["uv", "tool", "install", "kabi-discord-cli"])]:
+        if shutil.which(tool):
+            try:
+                subprocess.run(cmd, capture_output=True, encoding="utf-8",
+                               errors="replace", timeout=120)
+                if shutil.which("discord"):
+                    print("  ✅ discord-cli installed")
+                    print("     登录：discord auth --save（自动提取本地会话 user token）")
+                    return
+            except Exception:
+                pass
+    print("  [!]  discord-cli install failed. Run: pipx install kabi-discord-cli")
+
+
+def _install_telegram_deps():
+    """Install tg-cli for Telegram sync/search/export."""
+    import shutil
+    import subprocess
+
+    print("Setting up Telegram (tg-cli)...")
+    if shutil.which("tg"):
+        print("  ✅ tg-cli already installed")
+        print("     登录：tg chats（首次输入手机号+验证码）")
+        return
+    for tool, cmd in [("pipx", ["pipx", "install", "kabi-tg-cli"]),
+                      ("uv", ["uv", "tool", "install", "kabi-tg-cli"])]:
+        if shutil.which(tool):
+            try:
+                subprocess.run(cmd, capture_output=True, encoding="utf-8",
+                               errors="replace", timeout=120)
+                if shutil.which("tg"):
+                    print("  ✅ tg-cli installed")
+                    print("     登录：tg chats（首次输入手机号+验证码）")
+                    return
+            except Exception:
+                pass
+    print("  [!]  tg-cli install failed. Run: pipx install kabi-tg-cli")
 
 
 def _install_system_deps_safe():

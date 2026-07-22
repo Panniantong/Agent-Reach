@@ -8,6 +8,7 @@ from typing import List, Optional
 # Import all channels
 from .base import Channel
 from .bilibili import BilibiliChannel
+from .discord import DiscordChannel
 from .exa_search import ExaSearchChannel
 from .facebook import FacebookChannel
 from .github import GitHubChannel
@@ -15,6 +16,7 @@ from .instagram import InstagramChannel
 from .linkedin import LinkedInChannel
 from .reddit import RedditChannel
 from .rss import RSSChannel
+from .telegram import TelegramChannel
 from .twitter import TwitterChannel
 from .v2ex import V2EXChannel
 from .web import WebChannel
@@ -32,6 +34,8 @@ ALL_CHANNELS: List[Channel] = [
     InstagramChannel(),
     BilibiliChannel(),
     XiaoHongShuChannel(),
+    DiscordChannel(),
+    TelegramChannel(),
     LinkedInChannel(),
     XiaoyuzhouChannel(),
     V2EXChannel(),

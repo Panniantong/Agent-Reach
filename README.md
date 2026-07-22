@@ -85,6 +85,8 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 | 📘 **Facebook** | — | 搜索、主页、Feed、群组列表 | 桌面装 OpenCLI（复用 Chrome 登录态） |
 | 📷 **Instagram** | — | 用户搜索、Profile、用户最近帖子、Explore | 桌面装 OpenCLI（复用 Chrome 登录态） |
 | 📕 **小红书** | — | 搜索、阅读、评论 | 桌面装 OpenCLI（刷过小红书即可用）；服务器用 xiaohongshu-mcp 扫码 |
+| 🎮 **Discord** | — | 服务器/频道消息同步、搜索、导出 | 告诉 Agent「帮我配 Discord」（user token，建议专用小号） |
+| ✈️ **Telegram** | — | 对话/频道消息同步、搜索、导出、监听 | 告诉 Agent「帮我配 Telegram」（手机号登录一次） |
 | 💼 **LinkedIn** | Jina Reader 读公开页面 | Profile 详情、公司页面、职位搜索 | 告诉 Agent「帮我配 LinkedIn」 |
 | 💻 **V2EX** | 热门帖子、节点帖子、帖子详情+回复、用户信息 | — | 无需配置 |
 | 📈 **雪球** | 股票行情、搜索股票、热门帖子、热门股票排行 | — | 告诉 Agent「帮我配雪球」 |
@@ -212,6 +214,8 @@ channels/
 | GitHub | [gh CLI](https://cli.github.com) | — | 官方工具，认证后完整 API 能力 |
 | 读 RSS | [feedparser](https://github.com/kurtmckee/feedparser) | — | Python 生态标准选择 |
 | 小红书 | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)（服务器）▸ xhs-cli | xhs-cli 作者已转投 OpenCLI（24K Star）；浏览器登录态零摩擦 |
+| Discord | [discord-cli](https://github.com/jackwener/discord-cli) | — | user token 走 HTTP API，本地优先同步进 SQLite；注意 ToS/封号风险 |
+| Telegram | [tg-cli](https://github.com/jackwener/tg-cli) | — | MTProto 用户账号（非 Bot API），可读私有群/频道，本地优先同步 |
 | LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | Jina Reader | MCP 服务，浏览器自动化 |
 
 > 📌 这些都是「当前选型」，基于真机实测定期复核。某条路失效了我们换下一条——`agent-reach doctor` 永远告诉你现在走的是哪条。

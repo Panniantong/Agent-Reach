@@ -1,6 +1,6 @@
 # 社交媒体 & 社区
 
-小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram。
+小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram、Discord、Telegram。
 
 ## 小红书 / XiaoHongShu（多后端）
 
@@ -273,3 +273,67 @@ opencli instagram saved --limit 20 -f yaml
 ```
 
 > 要求 Chrome 打开且装了 OpenCLI 扩展，并已登录 instagram.com。`instagram search` 是用户搜索；读帖子需要先确定 username，再用 `instagram user USERNAME`。若出现 429 / login required，先让用户在 Chrome 里重新登录并降低频率。
+
+## Discord (discord-cli，必须登录态)
+
+Discord 走 [discord-cli](https://github.com/jackwener/discord-cli)（PyPI 包 `kabi-discord-cli`，命令 `discord`），用账号的 **user token** 走 Discord HTTP API，本地优先同步进 SQLite。先跑 `agent-reach doctor --json` 看 discord 的 `active_backend`。
+
+> ⚠️ **封号风险**：user token 自动化违反 Discord ToS，可能触发风控封号。**只用专用小号**，不要用主账号。只能读到你账号有权限看到的服务器/频道。
+
+```bash
+# 列服务器 / 频道 / 服务器信息
+discord dc guilds --yaml
+discord dc channels <GUILD> --yaml
+discord dc info <GUILD> --yaml
+
+# 搜索某频道消息（优先指定 -c 频道，别全服扫）
+discord search "query" -c general --yaml
+
+# 读最近 / 今天的消息
+discord recent -c general -n 50 --yaml
+discord today -c general --yaml
+
+# 同步可访问的文本频道（首次引导）
+discord dc sync-all
+
+# 导出大数据集到文件
+discord export -c general -o /tmp/general.yaml
+```
+
+> **安装**：`uv tool install kabi-discord-cli`（或 `pipx install kabi-discord-cli`）。
+>
+> **认证**：`discord auth --save`（自动从本地 Discord/浏览器会话提取 user token）。`discord status` 退出码 0 = 已认证；非零输出 `not_authenticated` = 未登录。
+>
+> **输出格式**：用 `--yaml` / `--json` 获得结构化输出（非 TTY 默认即 YAML），`-n` 控制条数，对 AI agent 更友好。
+
+## Telegram (tg-cli，必须登录态)
+
+Telegram 走 [tg-cli](https://github.com/jackwener/tg-cli)（PyPI 包 `kabi-tg-cli`，命令 `tg`），用**你自己的 MTProto 用户账号**（不是 Bot API），能读到你加入的私有群/频道，本地优先同步进 SQLite。先跑 `agent-reach doctor --json` 看 telegram 的 `active_backend`。
+
+```bash
+# 列对话 / 当前用户
+tg chats --type group
+tg whoami --yaml
+
+# 拉历史、增量同步（查询走本地缓存，先 sync 保持新鲜）
+tg history CHAT -n 1000
+tg sync CHAT
+tg refresh                       # 推荐的每日刷新入口
+
+# 搜索存量缓存（支持 chat/sender/时间过滤、正则）
+tg search "query" -c "chat_name" --yaml
+tg search "Rust|Golang" --regex
+tg search "query" --sync-first --yaml   # 先刷新再查
+
+# 近实时缓存（后台监听，自动重连）
+tg listen --persist
+
+# 会话详情 / 导出
+tg info CHAT --yaml
+```
+
+> **安装**：`uv tool install kabi-tg-cli`（或 `pipx install kabi-tg-cli`）。
+>
+> **认证**：**首次需交互登录**——`tg chats` 会提示输入手机号（含国家码）+ 验证码，Agent 无法代填，让用户自己跑一次。自带 Telegram Desktop API 凭据，无需自建应用（也可用 `TG_API_ID` / `TG_API_HASH` 覆盖）。`tg status` 退出码 0 = 已登录。
+>
+> **输出格式**：用 `--yaml` / `--json`（非 TTY 默认即 YAML）。

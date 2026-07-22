@@ -6,10 +6,11 @@ description: >
   web for X", "see what people say about X", "look this up".
 
   Also MUST USE when user mentions any platform or shares any URL/link:
-  Twitter/X, Reddit, Facebook, Instagram, YouTube, GitHub, Bilibili, XiaoHongShu,
-  Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
+  Twitter/X, Reddit, Facebook, Instagram, Discord, Telegram, YouTube, GitHub,
+  Bilibili, XiaoHongShu, Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX,
+  Xueqiu (stocks), RSS.
 
-  15 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  17 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -23,7 +24,7 @@ metadata:
 
 # Agent Reach — internet capability router
 
-15 platforms, multiple backends each. **When this skill exists, use it for
+17 platforms, multiple backends each. **When this skill exists, use it for
 these platforms — do not invent your own approach.**
 
 ## Standing rules (apply for the whole session)
@@ -50,7 +51,7 @@ these platforms — do not invent your own approach.**
 | User intent | Category | Details |
 |---------|------|---------|
 | Web / code search | search | [references/search.md](references/search.md) |
-| XiaoHongShu / Twitter / Bilibili / V2EX / Reddit / Facebook / Instagram | social | [references/social.md](references/social.md) |
+| XiaoHongShu / Twitter / Bilibili / V2EX / Reddit / Facebook / Instagram / Discord / Telegram | social | [references/social.md](references/social.md) |
 | Jobs / LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub / code | dev | [references/dev.md](references/dev.md) |
 | Web pages / articles / RSS | web | [references/web.md](references/web.md) |
@@ -96,6 +97,14 @@ opencli facebook search "query" -f yaml
 opencli facebook groups -f yaml
 opencli instagram search "query" -f yaml       # user search
 opencli instagram user USERNAME -f yaml        # recent posts from one user
+
+# Discord (discord-cli, user token; run `discord auth --save` first)
+discord dc guilds --yaml                        # list servers
+discord search "query" -c general --yaml        # search one channel
+
+# Telegram (tg-cli, MTProto user account; run `tg chats` to log in first)
+tg chats --yaml                                 # list dialogs
+tg search "query" -c "chat_name" --yaml         # search local cache
 ```
 
 ## Environment check
@@ -117,7 +126,7 @@ common cases; references hold per-backend command groups, caveats, retry
 chains — note: reference docs are written in Chinese, commands are universal):
 
 - [Search](references/search.md) — Exa AI search
-- [Social](references/social.md) — XiaoHongShu, Twitter, Bilibili, V2EX, Reddit, Facebook, Instagram (multi-backend/login-backed groups)
+- [Social](references/social.md) — XiaoHongShu, Twitter, Bilibili, V2EX, Reddit, Facebook, Instagram, Discord, Telegram (multi-backend/login-backed groups)
 - [Career](references/career.md) — LinkedIn
 - [Dev](references/dev.md) — GitHub CLI
 - [Web](references/web.md) — Jina Reader, RSS

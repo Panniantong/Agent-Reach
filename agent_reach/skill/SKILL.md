@@ -7,10 +7,10 @@ description: >
 
   Also MUST USE when user mentions any platform or shares any URL/链接:
   小红书/xiaohongshu/xhs, Twitter/推特/X, B站/bilibili, Reddit, Facebook,
-  Instagram, V2EX, LinkedIn/领英/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客,
-  雪球/股票行情, RSS feeds, or any web URL.
+  Instagram, Discord, Telegram/tg, V2EX, LinkedIn/领英/招聘/求职/jobs, YouTube,
+  GitHub code search, 小宇宙播客, 雪球/股票行情, RSS feeds, or any web URL.
 
-  15 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  17 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -18,7 +18,7 @@ description: >
   发帖/评论/点赞等写操作；已有专门 skill 的平台（先用专门 skill）。
 
   【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。
-  分类：search / social (小红书/推特/B站/V2EX/Reddit/Facebook/Instagram) / career(LinkedIn) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客)。
+  分类：search / social (小红书/推特/B站/V2EX/Reddit/Facebook/Instagram/Discord/Telegram) / career(LinkedIn) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客)。
 triggers:
   - research: 调研/全网调研/帮我调研/研究一下/research/深入了解
   - search: 搜/查/找/search/搜索/查一下/帮我搜/看看大家怎么说
@@ -30,6 +30,8 @@ triggers:
     - Reddit: reddit
     - Facebook: facebook/fb/facebook groups
     - Instagram: instagram/ig
+    - Discord: discord/dc/服务器/频道
+    - Telegram: telegram/tg/电报/tme
   - career: 招聘/职位/求职/linkedin/领英/找工作
   - dev: github/代码/仓库/gh/issue/pr/分支/commit
   - web: 网页/链接/文章/rss/读一下/打开这个
@@ -42,7 +44,7 @@ metadata:
 
 # Agent Reach — 互联网能力路由器
 
-15 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
+17 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
 
 ## 常驻规则（全程适用）
 
@@ -62,7 +64,7 @@ metadata:
 | 用户意图 | 分类 | 详细文档 |
 |---------|------|---------|
 | 网页搜索/代码搜索 | search | [references/search.md](references/search.md) |
-| 小红书/推特/B站/V2EX/Reddit/Facebook/Instagram | social | [references/social.md](references/social.md) |
+| 小红书/推特/B站/V2EX/Reddit/Facebook/Instagram/Discord/Telegram | social | [references/social.md](references/social.md) |
 | 招聘/职位/LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub/代码 | dev | [references/dev.md](references/dev.md) |
 | 网页/文章/RSS | web | [references/web.md](references/web.md) |
@@ -108,6 +110,14 @@ opencli facebook search "query" -f yaml
 opencli facebook groups -f yaml
 opencli instagram search "query" -f yaml       # 搜用户
 opencli instagram user USERNAME -f yaml        # 读指定用户最近帖子
+
+# Discord（discord-cli，user token；先 discord auth --save 登录）
+discord dc guilds --yaml                        # 列服务器
+discord search "query" -c general --yaml        # 搜某频道消息
+
+# Telegram（tg-cli，MTProto 用户账号；先 tg chats 登录）
+tg chats --yaml                                 # 列对话
+tg search "query" -c "chat_name" --yaml         # 搜存量缓存
 ```
 
 ## 环境检查
@@ -126,7 +136,7 @@ agent-reach doctor --json
 根据用户需求，阅读对应的详细文档：
 
 - [搜索工具](references/search.md) — Exa AI 搜索
-- [社交媒体](references/social.md) — 小红书, Twitter, B站, V2EX, Reddit, Facebook, Instagram（多后端/登录态命令组）
+- [社交媒体](references/social.md) — 小红书, Twitter, B站, V2EX, Reddit, Facebook, Instagram, Discord, Telegram（多后端/登录态命令组）
 - [职场招聘](references/career.md) — LinkedIn
 - [开发工具](references/dev.md) — GitHub CLI
 - [网页阅读](references/web.md) — Jina Reader, RSS
