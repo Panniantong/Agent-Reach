@@ -219,6 +219,8 @@ class TestCLI:
 
         def fake_run(cmd, **kwargs):
             commands.append(cmd)
+            if cmd == ["uv", "tool", "dir"]:
+                return subprocess.CompletedProcess(cmd, 0, "/uv/tools\n", "")
             return subprocess.CompletedProcess(cmd, 0, "", "")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
@@ -229,8 +231,10 @@ class TestCLI:
                 "uv", "tool", "install", cli._LINUXDO_READER_SOURCE,
                 "--with", "playwright", "--force",
             ],
-            ["uv", "tool", "run", "playwright", "install", "chromium"],
+            ["uv", "tool", "dir"],
+            ["/uv/tools/linuxdo-reader/bin/playwright", "install", "chromium"],
         ]
+        assert not any(cmd[:4] == ["uv", "tool", "run", "playwright"] for cmd in commands)
         out = capsys.readouterr().out
         assert out.index("large download") < out.index("v0.3.0 installed")
         assert "v0.3.0 installed" in out
@@ -249,7 +253,30 @@ class TestCLI:
 
         assert len(commands) == 1
         assert "v0.3.0" in " ".join(commands[0])
-        assert "install failed" in capsys.readouterr().out
+        out = capsys.readouterr().out
+        assert "install failed" in out
+        assert "agent-reach install --channels=linuxdo" in out
+
+    def test_install_linuxdo_ignores_different_system_playwright_tool(
+        self, monkeypatch, capsys
+    ):
+        commands = []
+        monkeypatch.setattr(shutil, "which", lambda name: f"/system/bin/{name}")
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            if cmd == ["uv", "tool", "dir"]:
+                return subprocess.CompletedProcess(cmd, 0, "/isolated/uv/tools\n", "")
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        cli._install_linuxdo_deps()
+
+        assert [
+            "/isolated/uv/tools/linuxdo-reader/bin/playwright", "install", "chromium"
+        ] in commands
+        assert ["/system/bin/playwright", "install", "chromium"] not in commands
+        assert "Chromium installed" in capsys.readouterr().out
 
 
 class TestCheckUpdateRetry:

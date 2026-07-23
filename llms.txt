@@ -20,7 +20,7 @@
 - Auto-installs dependencies: `agent-reach install --env=auto`; Linux.do remains optional via `--channels=linuxdo` because Playwright Chromium is large
 - Browser-session / cookie auth for platforms that require login (Twitter, Reddit, Facebook, Instagram, XiaoHongShu, Xueqiu)
 - Proxy support for platforms that block server IPs (Reddit, Twitter)
-- Zero API fees: all backends are free and open-source (OpenCLI, twitter-cli, rdt-cli, bili-cli, linuxdo-reader, yt-dlp, Jina Reader, mcporter/Exa, etc.)
+- Zero API fees: Agent Reach uses backends that do not require paid API access
 
 ## Troubleshooting
 

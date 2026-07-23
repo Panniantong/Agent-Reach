@@ -9,17 +9,22 @@ Usage:
     agent-reach setup
 """
 
-import sys
 import argparse
 import json
 import os
+import sys
 import time
 
 from agent_reach import __version__
+from agent_reach.channels.linuxdo import (
+    LINUXDO_INSTALL_COMMAND,
+    LINUXDO_READER_SOURCE,
+    linuxdo_tool_executable,
+)
 
 # Pinned to the 0.4.2 state — PyPI still only has 0.4.1 (upstream issue #10).
 _RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66"
-_LINUXDO_READER_SOURCE = "git+https://github.com/kadaliao/linuxdo-reader.git@v0.3.0"
+_LINUXDO_READER_SOURCE = LINUXDO_READER_SOURCE
 
 
 def _ensure_utf8_console():
@@ -668,6 +673,7 @@ def _install_linuxdo_deps():
     if not shutil.which("uv"):
         print("  [!]  linuxdo-reader requires uv (it needs Python 3.11+ in an isolated tool environment).")
         print("       Install uv first: https://docs.astral.sh/uv/getting-started/installation/")
+        print(f"       Then run: {LINUXDO_INSTALL_COMMAND}")
         return
 
     install_cmd = [
@@ -686,13 +692,23 @@ def _install_linuxdo_deps():
         installed = None
 
     if installed is None or installed.returncode != 0:
-        print(f"  [!]  linuxdo-reader install failed. Run: {' '.join(install_cmd)}")
+        print(f"  [!]  linuxdo-reader install failed. Retry: {LINUXDO_INSTALL_COMMAND}")
         return
 
     print("  ✅ linuxdo-reader v0.3.0 installed in an isolated uv tool environment")
     try:
+        tool_dir = subprocess.run(
+            ["uv", "tool", "dir"],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+        )
+        if tool_dir.returncode != 0 or not tool_dir.stdout.strip():
+            raise OSError("uv tool dir failed")
+        playwright = linuxdo_tool_executable(tool_dir.stdout.strip(), "playwright")
         browser = subprocess.run(
-            ["uv", "tool", "run", "playwright", "install", "chromium"],
+            [playwright, "install", "chromium"],
             capture_output=True,
             encoding="utf-8",
             errors="replace",
@@ -704,7 +720,7 @@ def _install_linuxdo_deps():
     if browser is not None and browser.returncode == 0:
         print("  ✅ Playwright Chromium installed")
     else:
-        print("  [!]  Chromium install failed. Run: uv tool run playwright install chromium")
+        print(f"  [!]  Chromium install failed. Retry: {LINUXDO_INSTALL_COMMAND}")
 
 
 def _install_xiaoyuzhou_deps():
