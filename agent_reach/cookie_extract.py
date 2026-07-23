@@ -8,7 +8,110 @@ Usage:
     agent-reach configure --from-browser chrome
 """
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
+
+# "User Data" root per Chromium-based browser, per OS. Mirrors the glob roots
+# browser_cookie3 uses internally (minus the trailing profile segment), so
+# profile selection stays consistent with the paths the library would have
+# picked itself.
+_CHROMIUM_USER_DATA_DIRS = {
+    "chrome": {
+        "darwin": "~/Library/Application Support/Google/Chrome",
+        "win32": ["Google", "Chrome", "User Data"],
+        "linux": "~/.config/google-chrome",
+    },
+    "edge": {
+        "darwin": "~/Library/Application Support/Microsoft Edge",
+        "win32": ["Microsoft", "Edge", "User Data"],
+        "linux": "~/.config/microsoft-edge",
+    },
+    "brave": {
+        "darwin": "~/Library/Application Support/BraveSoftware/Brave-Browser",
+        "win32": ["BraveSoftware", "Brave-Browser", "User Data"],
+        "linux": "~/.config/BraveSoftware/Brave-Browser",
+    },
+    "opera": {
+        "darwin": "~/Library/Application Support/com.operasoftware.Opera",
+        "win32": ["Opera Software", "Opera Stable"],
+        "linux": "~/.config/opera",
+    },
+}
+
+
+def _chromium_user_data_dir(browser: str) -> Optional[str]:
+    """Return the Chromium "User Data" root for *browser* on this OS, or
+    None if the browser isn't a supported Chromium-based one."""
+    import os
+    import sys
+
+    table = _CHROMIUM_USER_DATA_DIRS.get(browser)
+    if not table:
+        return None
+    if sys.platform == "darwin":
+        darwin_path = table["darwin"]
+        assert isinstance(darwin_path, str)
+        return os.path.expanduser(darwin_path)
+    if sys.platform == "win32":
+        local_appdata = os.environ.get("LOCALAPPDATA", "")
+        if not local_appdata:
+            return None
+        win32_parts = table["win32"]
+        assert isinstance(win32_parts, list)
+        return os.path.join(local_appdata, *win32_parts)
+    linux_path = table["linux"]
+    assert isinstance(linux_path, str)
+    return os.path.expanduser(linux_path)
+
+
+def list_chrome_profiles(browser: str = "chrome") -> List[Dict[str, str]]:
+    """List installed profiles for a Chromium-based browser by reading its
+    ``Local State`` file — the same source Chrome's own profile picker uses.
+
+    Cookie-extraction libraries (rookiepy, browser_cookie3) silently resolve
+    to the "Default" profile whenever more than one profile exists, with no
+    way to target another one — this is how callers discover what else is
+    available and where its cookie database actually lives.
+
+    Returns a list of dicts: {"folder", "name", "email", "cookies_path"},
+    Default-profile first, sorted by folder name after that. Browsers with
+    no Local State file (not installed, or a non-Chromium browser) yield [].
+    """
+    import json
+    import os
+
+    user_data_dir = _chromium_user_data_dir(browser)
+    if not user_data_dir:
+        return []
+
+    local_state_path = os.path.join(user_data_dir, "Local State")
+    if not os.path.exists(local_state_path):
+        return []
+
+    try:
+        with open(local_state_path, "r", encoding="utf-8") as f:
+            state = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return []
+
+    info_cache = state.get("profile", {}).get("info_cache", {})
+    profiles = []
+    for folder, info in info_cache.items():
+        cookies_path = os.path.join(user_data_dir, folder, "Cookies")
+        if not os.path.exists(cookies_path):
+            # Chrome >= 96 moved the cookie DB under Network/ on some platforms.
+            cookies_path = os.path.join(user_data_dir, folder, "Network", "Cookies")
+        if not os.path.exists(cookies_path):
+            continue
+        profiles.append({
+            "folder": folder,
+            "name": info.get("name", folder),
+            "email": info.get("user_name", ""),
+            "cookies_path": cookies_path,
+        })
+
+    profiles.sort(key=lambda p: (p["folder"] != "Default", p["folder"]))
+    return profiles
+
 
 # Platform cookie specs: (platform_name, domain_pattern, needed_cookies)
 PLATFORM_SPECS = [
@@ -39,10 +142,18 @@ PLATFORM_SPECS = [
 ]
 
 
-def extract_all(browser: str = "chrome") -> Dict[str, dict]:
+def extract_all(browser: str = "chrome", profile: Optional[str] = None) -> Dict[str, dict]:
     """
     Extract cookies for all supported platforms from the specified browser.
-    
+
+    Args:
+        browser: chrome/firefox/edge/brave/opera.
+        profile: Chromium profile *folder* name (e.g. "Profile 1", as shown
+            by list_chrome_profiles()). When omitted, both rookiepy and
+            browser_cookie3 silently resolve to whichever profile they find
+            first — in practice always "Default" — even if you intended a
+            different one. Ignored for firefox.
+
     Returns:
         {
             "twitter": {"auth_token": "xxx", "ct0": "yyy"},
@@ -50,12 +161,40 @@ def extract_all(browser: str = "chrome") -> Dict[str, dict]:
             "bilibili": {"SESSDATA": "xxx", "bili_jct": "yyy"},
         }
     """
-    # Try rookiepy first (Rust-based, more stable), fallback to browser_cookie3
+    browser = browser.lower()
+    supported = ["chrome", "firefox", "edge", "brave", "opera"]
+    if browser not in supported:
+        raise ValueError(
+            f"Unsupported browser: {browser}. Supported: {', '.join(supported)}"
+        )
+
+    cookie_file = None
+    if profile:
+        if browser == "firefox":
+            raise ValueError(
+                "Profile selection is only supported for Chromium-based "
+                "browsers (chrome/edge/brave/opera), not firefox."
+            )
+        matches = [p for p in list_chrome_profiles(browser) if p["folder"] == profile]
+        if not matches:
+            available = ", ".join(p["folder"] for p in list_chrome_profiles(browser))
+            raise RuntimeError(
+                f"Profile '{profile}' not found for {browser}."
+                + (f" Available: {available}" if available else " No profiles found.")
+            )
+        cookie_file = matches[0]["cookies_path"]
+
+    # rookiepy (Rust-based, more stable) has no way to target a specific
+    # profile, so an explicit profile request always goes through
+    # browser_cookie3, which accepts a cookie_file= override.
     use_rookiepy = False
-    try:
-        import rookiepy
-        use_rookiepy = True
-    except ImportError:
+    if not cookie_file:
+        try:
+            import rookiepy
+            use_rookiepy = True
+        except ImportError:
+            pass
+    if not use_rookiepy:
         try:
             import browser_cookie3
         except ImportError:
@@ -64,13 +203,6 @@ def extract_all(browser: str = "chrome") -> Dict[str, dict]:
                 "Install: pip install rookiepy  (recommended)\n"
                 "     or: pip install browser-cookie3"
             )
-
-    browser = browser.lower()
-    supported = ["chrome", "firefox", "edge", "brave", "opera"]
-    if browser not in supported:
-        raise ValueError(
-            f"Unsupported browser: {browser}. Supported: {', '.join(supported)}"
-        )
 
     if use_rookiepy:
         # rookiepy returns list of dicts with name/value/domain/path keys
@@ -104,7 +236,10 @@ def extract_all(browser: str = "chrome") -> Dict[str, dict]:
             "opera": browser_cookie3.opera,
         }
         try:
-            cookie_jar = browser_funcs[browser]()
+            if cookie_file:
+                cookie_jar = browser_funcs[browser](cookie_file=cookie_file)
+            else:
+                cookie_jar = browser_funcs[browser]()
         except Exception as e:
             raise RuntimeError(
                 f"Could not read {browser} cookies: {e}\n"
@@ -229,16 +364,19 @@ def _sync_bird_env(auth_token: str, ct0: str) -> None:
 _sync_bird_credentials = _sync_bird_env
 
 
-def configure_from_browser(browser: str, config) -> List[Tuple[str, bool, str]]:
+def configure_from_browser(
+    browser: str, config, profile: Optional[str] = None
+) -> List[Tuple[str, bool, str]]:
     """
     Extract cookies and configure all found platforms.
-    
+
+    profile: optional Chromium profile folder (see list_chrome_profiles()).
     Returns list of (platform_name, success, message) tuples.
     """
     results_list = []
 
     try:
-        extracted = extract_all(browser)
+        extracted = extract_all(browser, profile=profile)
     except Exception as e:
         return [("Browser", False, str(e))]
 

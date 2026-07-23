@@ -88,6 +88,12 @@ def main():
     p_conf.add_argument("--from-browser", metavar="BROWSER",
                         choices=["chrome", "firefox", "edge", "brave", "opera"],
                         help="Auto-extract ALL platform cookies from browser (chrome/firefox/edge/brave/opera)")
+    p_conf.add_argument("--chrome-profile", metavar="PROFILE", default=None,
+                        help="Profile folder to extract from with --from-browser on a "
+                             "Chromium-based browser (e.g. 'Profile 1'), for when you keep "
+                             "burner/research accounts in a separate profile from your main "
+                             "one. Without this, extraction silently reads the 'Default' "
+                             "profile. Omit to be prompted when more than one profile exists.")
 
     # ── doctor ──
     p_doctor = sub.add_parser("doctor", help="Check platform availability")
@@ -1025,13 +1031,36 @@ def _cmd_configure(args):
 
     # ── Auto-extract from browser ──
     if args.from_browser:
-        from agent_reach.cookie_extract import configure_from_browser
+        from agent_reach.cookie_extract import configure_from_browser, list_chrome_profiles
 
         browser = args.from_browser
-        print(f"Extracting cookies from {browser}...")
+        profile = args.chrome_profile
+
+        if not profile and browser != "firefox":
+            profiles = list_chrome_profiles(browser)
+            if len(profiles) > 1:
+                if sys.stdin.isatty():
+                    print(f"Found {len(profiles)} {browser} profiles:")
+                    for i, p in enumerate(profiles, 1):
+                        label = f"{p['name']} ({p['email']})" if p["email"] else p["name"]
+                        print(f"  {i}. {label}  [{p['folder']}]")
+                    choice = input(f"Which profile has the accounts you want? [1-{len(profiles)}]: ").strip()
+                    try:
+                        profile = profiles[int(choice) - 1]["folder"]
+                    except (ValueError, IndexError):
+                        print("Invalid choice, aborting.")
+                        return
+                else:
+                    folders = ", ".join(p["folder"] for p in profiles)
+                    print(f"Found {len(profiles)} {browser} profiles ({folders}) and no "
+                          f"--chrome-profile was given — re-run with "
+                          f"--chrome-profile '<folder>' to pick one non-interactively.")
+                    return
+
+        print(f"Extracting cookies from {browser}" + (f" [{profile}]" if profile else "") + "...")
         print()
 
-        results = configure_from_browser(browser, config)
+        results = configure_from_browser(browser, config, profile=profile)
 
         found_any = False
         for platform, success, message in results:
