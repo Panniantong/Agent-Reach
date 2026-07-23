@@ -10,7 +10,7 @@ from agent_reach.probe import probe_command
 
 from .base import Channel
 
-LINUXDO_READER_SOURCE = "git+https://github.com/kadaliao/linuxdo-reader.git@v0.3.0"
+LINUXDO_READER_SOURCE = "git+https://github.com/kadaliao/linuxdo-reader.git@v0.3.1"
 LINUXDO_INSTALL_COMMAND = "agent-reach install --channels=linuxdo"
 
 

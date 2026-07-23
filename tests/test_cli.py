@@ -236,8 +236,8 @@ class TestCLI:
         ]
         assert not any(cmd[:4] == ["uv", "tool", "run", "playwright"] for cmd in commands)
         out = capsys.readouterr().out
-        assert out.index("large download") < out.index("v0.3.0 installed")
-        assert "v0.3.0 installed" in out
+        assert out.index("large download") < out.index("v0.3.1 installed")
+        assert "v0.3.1 installed" in out
         assert "Chromium installed" in out
 
     def test_install_linuxdo_stops_when_tool_install_fails(self, monkeypatch, capsys):
@@ -252,7 +252,7 @@ class TestCLI:
         cli._install_linuxdo_deps()
 
         assert len(commands) == 1
-        assert "v0.3.0" in " ".join(commands[0])
+        assert "v0.3.1" in " ".join(commands[0])
         out = capsys.readouterr().out
         assert "install failed" in out
         assert "agent-reach install --channels=linuxdo" in out

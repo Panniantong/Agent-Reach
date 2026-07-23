@@ -695,7 +695,7 @@ def _install_linuxdo_deps():
         print(f"  [!]  linuxdo-reader install failed. Retry: {LINUXDO_INSTALL_COMMAND}")
         return
 
-    print("  ✅ linuxdo-reader v0.3.0 installed in an isolated uv tool environment")
+    print("  ✅ linuxdo-reader v0.3.1 installed in an isolated uv tool environment")
     try:
         tool_dir = subprocess.run(
             ["uv", "tool", "dir"],

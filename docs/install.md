@@ -264,7 +264,7 @@ agent-reach configure groq-key gsk_xxxxx
 > - 转录质量高（Whisper large-v3），但不区分说话人
 > - 2 小时以上的播客建议分批处理
 
-**Linux.do（可选 — linuxdo-reader v0.3.0）：**
+**Linux.do（可选 — linuxdo-reader v0.3.1）：**
 > linuxdo-reader 要求 Python 3.11+，Agent Reach 通过独立 `uv tool` 安装，保持与 Python 3.10+ 主环境隔离。安装包含 Playwright Chromium，下载体积和磁盘占用较大，因此不加入默认基础安装。
 
 ```bash
@@ -352,7 +352,7 @@ If the user wants a different agent to handle it, let them choose.
 |---------|-------------|
 | `agent-reach install --env=auto` | Install core channels (lightweight, zero-config) |
 | `agent-reach install --env=auto --channels=twitter,xiaohongshu` | Install core + optional channels |
-| `agent-reach install --env=auto --channels=linuxdo` | Install linuxdo-reader v0.3.0 in an isolated uv tool plus Playwright Chromium |
+| `agent-reach install --env=auto --channels=linuxdo` | Install linuxdo-reader v0.3.1 in an isolated uv tool plus Playwright Chromium |
 | `agent-reach install --env=auto --channels=all` | Install everything |
 | `agent-reach install --env=auto --safe` | Safe setup (no auto system changes) |
 | `agent-reach install --env=auto --dry-run` | Preview what would be done |
