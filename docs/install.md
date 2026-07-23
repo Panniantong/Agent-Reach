@@ -145,6 +145,21 @@ Some channels need credentials only the user can provide. Based on the doctor ou
 >
 > **本地电脑用户**也可以用 `agent-reach configure --from-browser chrome` 一键自动提取（支持 Twitter + 小红书 + 雪球）。OpenCLI 平台（Reddit、小红书桌面后端、Facebook、Instagram）优先复用 Chrome 登录态，不需要把 Cookie 发给 Agent。
 
+> 🧑‍💻 **多 Chrome 用户档案（profile）？** 如果你把研究/小号登录在**单独的 Chrome profile** 里（推荐做法，避免和主账号混用），用 `--chrome-profile` 指定从哪个 profile 提取。否则默认只读 `Default`，通常就是你的主账号：
+> ```bash
+> # 只有一个 profile：无需任何额外参数
+> agent-reach configure --from-browser chrome
+>
+> # 多个 profile：不加 --chrome-profile 时会先列出所有 profile 供你选择，
+> # 也可以直接指定 profile 的文件夹名（如 "Profile 1"）：
+> agent-reach configure --from-browser chrome --chrome-profile "Profile 1"
+> ```
+> profile 文件夹名是 `Default`、`Profile 1`、`Profile 2`… 这类固定名字（不是显示名）。查看方式二选一：
+> - 直接运行上面第一条命令，agent-reach 会列出每个 profile 的显示名、登录邮箱和文件夹名；
+> - 或在 Chrome 地址栏打开 `chrome://version`，看 **Profile Path** 末尾那一段。
+>
+> 仅 Chromium 内核浏览器（chrome/edge/brave/opera）支持按 profile 提取；Firefox 不支持。
+
 **Twitter search & posting:**
 > "To unlock Twitter search, I need your Twitter cookies. Install the Cookie-Editor Chrome extension, go to x.com/twitter.com, click the extension → Export → Header String, and paste it to me."
 
@@ -338,6 +353,8 @@ If the user wants a different agent to handle it, let them choose.
 | `agent-reach watch` | Quick health + update check (for scheduled tasks) |
 | `agent-reach check-update` | Check for new versions |
 | `agent-reach configure twitter-cookies "..."` | Unlock Twitter search + posting |
+| `agent-reach configure --from-browser chrome` | Auto-extract cookies from Chrome (lists profiles if more than one) |
+| `agent-reach configure --from-browser chrome --chrome-profile "Profile 1"` | Extract from a specific Chrome profile (for burner accounts in a separate profile) |
 | `agent-reach configure proxy URL` | 保存代理地址（Agent 访问 Reddit/Twitter 等受限网络时读取它设置 HTTP_PROXY/HTTPS_PROXY，不是自动解锁开关） |
 | `agent-reach configure groq-key gsk_xxx` | Unlock Xiaoyuzhou podcast transcription |
 
