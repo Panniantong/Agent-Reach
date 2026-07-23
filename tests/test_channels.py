@@ -32,6 +32,7 @@ class TestChannelRegistry:
         assert "twitter" in names
         assert "facebook" in names
         assert "instagram" in names
+        assert "linuxdo" in names
         assert "v2ex" in names
 
 

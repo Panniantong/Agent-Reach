@@ -22,6 +22,14 @@ class TestSkillCommand(unittest.TestCase):
 
         self.assertTrue(default_skill.strip())
         self.assertTrue(english_skill.strip())
+        self.assertIn("linuxdo-reader crawl", default_skill)
+        self.assertIn("linuxdo-reader hydrate", default_skill)
+        self.assertIn("linuxdo-reader crawl", english_skill)
+        self.assertIn("linuxdo-reader hydrate", english_skill)
+
+        social = skill_dir.joinpath("references/social.md").read_text(encoding="utf-8")
+        self.assertIn("BEGIN/END UNTRUSTED LINUX.DO DATA", social)
+        self.assertIn("search` 只搜索本地缓存", social)
 
     def test_install_skill_creates_skill_md(self):
         """_install_skill should create SKILL.md in the first available skill dir."""

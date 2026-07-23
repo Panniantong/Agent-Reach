@@ -69,6 +69,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 💬 **WeChat Articles** | 검색 + 읽기 | 없음 | Exa를 통한 WeChat 공식 계정 게시글 검색 + 읽기 (설정 없음) + 선택적 [Camoufox](https://github.com/daijro/camoufox) |
 | 📰 **Weibo** | 인기 · 검색 · 피드 · 댓글 | 없음 | 핫 검색, 콘텐츠/사용자/주제 검색, 피드, 댓글 ([mcp-server-weibo](https://github.com/Panniantong/mcp-server-weibo)) |
 | 💻 **V2EX** | 인기 주제 · 노드 주제 · 주제 상세 + 답글 · 사용자 프로필 | 없음 | 공개 JSON API, 인증 없음. 기술 커뮤니티 콘텐츠에 적합 |
+| 💬 **Linux.do** | 인기 주제 · 스레드 · 댓글 · 캐시 검색 | 선택 설치 | `agent-reach install --channels=linuxdo`; 브라우저 대체 경로는 Chromium을 다운로드합니다 |
 | 📈 **Xueqiu (雪球)** | 주식 시세 · 검색 · 인기 글 · 인기 종목 | 브라우저 Cookie | 에이전트에 "Xueqiu 설정 도와줘"라고 말하세요 |
 | 🎙️ **Xiaoyuzhou Podcast** | 음성 변환 | 무료 API key | Groq Whisper를 통한 팟캐스트 오디오 → 전체 텍스트 변환 (무료) |
 | 🔍 **Web Search** | 검색 | 자동 설정 | 설치 시 자동 설정, 무료, API key 불필요 ([Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter)) |
@@ -201,6 +202,7 @@ channels/
 ├── github.py       → gh CLI          → REST API, PyGithub로 교체...
 ├── bilibili.py     → yt-dlp          → bilibili-api로 교체...
 ├── reddit.py       → rdt-cli          → 검색 + 읽기, cookie 인증 필요
+├── linuxdo.py      → linuxdo-reader CLI (독립 Python 3.11+ uv tool)
 ├── xiaohongshu.py  → mcporter MCP    ← 다른 XHS 도구로 교체...
 ├── douyin.py       → mcporter MCP    ← 다른 Douyin 도구로 교체...
 ├── linkedin.py     → linkedin-mcp    ← LinkedIn API로 교체...
@@ -223,6 +225,7 @@ channels/
 | 웹 검색 | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | AI 시맨틱 검색, MCP 통합, API key 불필요 |
 | GitHub | [gh CLI](https://cli.github.com) | 공식 도구, 인증 후 전체 API |
 | RSS 읽기 | [feedparser](https://github.com/kurtmckee/feedparser) | Python 생태계 표준, 2.3K stars |
+| Linux.do | [linuxdo-reader](https://github.com/kadaliao/linuxdo-reader) | RSS/JSON/브라우저 가져오기, 로컬 캐시와 완전성 표시 관리 |
 | XiaoHongShu | [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) | 1.5K stars, pipx 설치, 검색/읽기/댓글/게시 |
 | Douyin | [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) | MCP 서버, 로그인 불필요, 비디오 파싱 + 워터마크 없는 다운로드 |
 | LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | 1.2K stars, MCP 서버, 브라우저 자동화 |

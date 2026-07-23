@@ -69,6 +69,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 💬 **WeChat記事** | 検索 + 閲覧 | 設定不要 | WeChat公式アカウント記事の検索+閲覧（完全Markdown）（[Exa](https://exa.ai) + [Camoufox](https://github.com/daijro/camoufox)（オプション）） |
 | 📰 **Weibo** | トレンド・検索・フィード・コメント | 設定不要 | ホット検索、コンテンツ/ユーザー/トピック検索、フィード、コメント（[mcp-server-weibo](https://github.com/Panniantong/mcp-server-weibo)） |
 | 💻 **V2EX** | 人気トピック・ノードトピック・トピック詳細+返信・ユーザープロフィール | 設定不要 | 公開JSON API、認証不要。技術コミュニティのコンテンツに最適 |
+| 💬 **Linux.do** | 人気トピック・スレッド・返信・キャッシュ検索 | オプション | `agent-reach install --channels=linuxdo`。ブラウザフォールバックはChromiumをダウンロードします |
 | 📈 **雪球（Xueqiu）** | 株価・検索・人気投稿・人気銘柄 | 設定不要 | 公開APIで自動セッションCookie、ログイン不要 |
 | 🎙️ **小宇宙Podcast** | 文字起こし | 無料APIキー | Podcast音声 → Groq Whisper（無料）による完全テキスト文字起こし |
 | 🔍 **Web検索** | 検索 | 自動設定 | インストール時に自動設定、無料、APIキー不要（[Exa](https://exa.ai)、[mcporter](https://github.com/nicepkg/mcporter)経由） |
@@ -201,6 +202,7 @@ channels/
 ├── github.py       → gh CLI          ← REST API、PyGithubなどに差し替え可能…
 ├── bilibili.py     → yt-dlp          ← bilibili-apiなどに差し替え可能…
 ├── reddit.py       → rdt-cli          ← 検索+閲覧、Cookie認証が必要
+├── linuxdo.py      → linuxdo-reader CLI（独立したPython 3.11+ uv tool）
 ├── xiaohongshu.py  → xhs-cli          ← 他のXHSツールに差し替え可能…
 ├── douyin.py       → mcporter MCP    ← 他の抖音ツールに差し替え可能…
 ├── linkedin.py     → linkedin-mcp    ← LinkedIn APIに差し替え可能…
@@ -221,6 +223,7 @@ channels/
 | Web検索 | [Exa](https://exa.ai)（[mcporter](https://github.com/nicepkg/mcporter)経由） | AIセマンティック検索、MCP統合、APIキー不要 |
 | GitHub | [gh CLI](https://cli.github.com) | 公式ツール、認証後フルAPI |
 | RSS閲覧 | [feedparser](https://github.com/kurtmckee/feedparser) | Pythonエコシステムの標準、⭐2.3K |
+| Linux.do | [linuxdo-reader](https://github.com/kadaliao/linuxdo-reader) | RSS/JSON/ブラウザで取得し、ローカルキャッシュと完全性表示を管理 |
 | 小紅書 | [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) | 1.5K Star、pipxインストール、検索/閲覧/コメント/投稿 |
 | 抖音 | [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) | MCPサーバー、ログイン不要、動画解析 + ウォーターマークなしダウンロード |
 | LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | ⭐900+、MCPサーバー、ブラウザ自動化 |

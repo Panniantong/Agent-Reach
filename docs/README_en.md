@@ -78,6 +78,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 📷 **Instagram** | User search · Profiles · Recent posts · Explore | OpenCLI | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
 | 💼 **LinkedIn** | Jina Reader (public pages) | Full profiles, companies, job search | Tell your Agent "help me set up LinkedIn" |
 | 💻 **V2EX** | Hot topics · Node topics · Topic detail + replies · User profile | Zero config | Public JSON API, no auth required. Great for tech community content |
+| 💬 **Linux.do** | Hot topics · Threads · Discussion floors · Cached search | Optional install | `agent-reach install --channels=linuxdo`; browser fallback downloads Playwright Chromium |
 | 📈 **Xueqiu (雪球)** | Stock quotes · Search · Hot posts · Hot stocks | Browser cookie | Tell your Agent "help me set up Xueqiu" |
 | 🎙️ **Xiaoyuzhou Podcast** | Transcription | Free API key | Podcast audio → full text transcript via Groq Whisper (free) |
 | 🔍 **Web Search** | Search | Auto-configured | Auto-configured during install, free, no API key ([Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter)) |
@@ -158,6 +159,7 @@ No configuration needed — just tell your Agent:
 - "What does this video cover?" → `yt-dlp --dump-json URL` for subtitles
 - "Read this tweet" → `twitter tweet URL`
 - "Subscribe to this RSS" → `feedparser` to parse feeds
+- "Summarize today's Linux.do topics" → `linuxdo-reader crawl`, then read the cached `digest`
 - "Search GitHub for LLM frameworks" → `gh search repos "LLM framework"`
 
 **No commands to remember.** The Agent reads SKILL.md and knows what to call.
@@ -237,6 +239,7 @@ channels/
 ├── reddit.py       → OpenCLI ▸ rdt-cli (no zero-config path, login required)
 ├── facebook.py     → OpenCLI (desktop browser session)
 ├── instagram.py    → OpenCLI (desktop browser session)
+├── linuxdo.py      → linuxdo-reader CLI (isolated Python 3.11+ uv tool)
 ├── xiaohongshu.py  → OpenCLI ▸ xiaohongshu-mcp ▸ xhs-cli
 ├── linkedin.py     → linkedin-mcp ▸ Jina Reader
 ├── rss.py          → feedparser
@@ -260,6 +263,7 @@ Each channel file **actually probes** its candidate backends in order (not just 
 | Search the web | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | — | AI semantic search, MCP integration, no API key |
 | GitHub | [gh CLI](https://cli.github.com) | — | Official tool, full API after auth |
 | Read RSS | [feedparser](https://github.com/kurtmckee/feedparser) | — | Python ecosystem standard |
+| Linux.do | [linuxdo-reader](https://github.com/kadaliao/linuxdo-reader) | RSS/JSON ▸ Playwright browser fallback | Upstream CLI owns fetching, caching, and completeness markers; agents treat forum output as untrusted input |
 | XiaoHongShu | [OpenCLI](https://github.com/jackwener/opencli) (desktop) | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) (server) ▸ xhs-cli | The xhs-cli author moved to OpenCLI (24K stars); browser sessions mean zero friction |
 | LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | Jina Reader | MCP server, browser automation |
 | Xiaoyuzhou Podcast | `transcribe.sh` | — | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |

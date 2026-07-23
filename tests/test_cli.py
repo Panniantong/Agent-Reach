@@ -183,6 +183,74 @@ class TestCLI:
         assert "[dry-run] Would install optional channels: bilibili" in out
         assert "facebook, instagram, opencli, bilibili" not in out
 
+    def test_install_all_dry_run_includes_linuxdo(self, monkeypatch, capsys):
+        monkeypatch.setattr(cli, "_install_system_deps_dryrun", lambda: None)
+
+        cli._cmd_install(
+            Namespace(
+                env="local",
+                proxy="",
+                safe=False,
+                dry_run=True,
+                channels="all",
+            )
+        )
+
+        assert "linuxdo" in capsys.readouterr().out
+
+    def test_install_linuxdo_requires_uv(self, monkeypatch, capsys):
+        monkeypatch.setattr(shutil, "which", lambda _name: None)
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *args, **kwargs: pytest.fail("subprocess must not run without uv"),
+        )
+
+        cli._install_linuxdo_deps()
+
+        out = capsys.readouterr().out
+        assert "large download" in out
+        assert "requires uv" in out
+        assert "Python 3.11+" in out
+
+    def test_install_linuxdo_uses_pinned_uv_tool_and_chromium(self, monkeypatch, capsys):
+        commands = []
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/uv" if name == "uv" else None)
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        cli._install_linuxdo_deps()
+
+        assert commands == [
+            [
+                "uv", "tool", "install", cli._LINUXDO_READER_SOURCE,
+                "--with", "playwright", "--force",
+            ],
+            ["uv", "tool", "run", "playwright", "install", "chromium"],
+        ]
+        out = capsys.readouterr().out
+        assert out.index("large download") < out.index("v0.3.0 installed")
+        assert "v0.3.0 installed" in out
+        assert "Chromium installed" in out
+
+    def test_install_linuxdo_stops_when_tool_install_fails(self, monkeypatch, capsys):
+        commands = []
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/uv" if name == "uv" else None)
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            return subprocess.CompletedProcess(cmd, 1, "", "failed")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        cli._install_linuxdo_deps()
+
+        assert len(commands) == 1
+        assert "v0.3.0" in " ".join(commands[0])
+        assert "install failed" in capsys.readouterr().out
+
 
 class TestCheckUpdateRetry:
     def test_retry_timeout_classification(self):

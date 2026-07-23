@@ -19,6 +19,7 @@ from agent_reach import __version__
 
 # Pinned to the 0.4.2 state — PyPI still only has 0.4.1 (upstream issue #10).
 _RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66"
+_LINUXDO_READER_SOURCE = "git+https://github.com/kadaliao/linuxdo-reader.git@v0.3.0"
 
 
 def _ensure_utf8_console():
@@ -74,7 +75,7 @@ def main():
                            help="Show what would be done without making any changes")
     p_install.add_argument("--channels", default="",
                            help="Comma-separated optional channels to install "
-                                "(twitter,xiaoyuzhou,xueqiu,xiaohongshu,"
+                                "(twitter,xiaoyuzhou,xueqiu,xiaohongshu,linuxdo,"
                                 "reddit,facebook,instagram,bilibili,linkedin,all)")
 
     # ── configure ──
@@ -202,6 +203,7 @@ def _cmd_install(args):
         "facebook":    _install_opencli_deps,
         "instagram":   _install_opencli_deps,
         "bilibili":    _install_bili_deps,
+        "linuxdo":     _install_linuxdo_deps,
         "opencli":     _install_opencli_deps,  # cross-channel backend, desktop only
         # xueqiu: cookie-only, no install step
         # linkedin: manual setup, no auto-install
@@ -654,6 +656,55 @@ def _install_system_deps():
     # NOTE: twitter-cli, xiaoyuzhou, xhs-cli etc. are optional.
     # They are installed via --channels flag, not here.
     # See CHANNEL_INSTALLERS in _cmd_install().
+
+
+def _install_linuxdo_deps():
+    """Install linuxdo-reader in its own Python 3.11+ uv tool environment."""
+    import shutil
+    import subprocess
+
+    print("Setting up Linux.do Reader...")
+    print("  Note: Playwright Chromium is a large download and uses extra disk space.")
+    if not shutil.which("uv"):
+        print("  [!]  linuxdo-reader requires uv (it needs Python 3.11+ in an isolated tool environment).")
+        print("       Install uv first: https://docs.astral.sh/uv/getting-started/installation/")
+        return
+
+    install_cmd = [
+        "uv", "tool", "install", _LINUXDO_READER_SOURCE,
+        "--with", "playwright", "--force",
+    ]
+    try:
+        installed = subprocess.run(
+            install_cmd,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=300,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        installed = None
+
+    if installed is None or installed.returncode != 0:
+        print(f"  [!]  linuxdo-reader install failed. Run: {' '.join(install_cmd)}")
+        return
+
+    print("  ✅ linuxdo-reader v0.3.0 installed in an isolated uv tool environment")
+    try:
+        browser = subprocess.run(
+            ["uv", "tool", "run", "playwright", "install", "chromium"],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=600,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        browser = None
+
+    if browser is not None and browser.returncode == 0:
+        print("  ✅ Playwright Chromium installed")
+    else:
+        print("  [!]  Chromium install failed. Run: uv tool run playwright install chromium")
 
 
 def _install_xiaoyuzhou_deps():

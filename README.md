@@ -87,6 +87,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 | 📕 **小红书** | — | 搜索、阅读、评论 | 桌面装 OpenCLI（刷过小红书即可用）；服务器用 xiaohongshu-mcp 扫码 |
 | 💼 **LinkedIn** | Jina Reader 读公开页面 | Profile 详情、公司页面、职位搜索 | 告诉 Agent「帮我配 LinkedIn」 |
 | 💻 **V2EX** | 热门帖子、节点帖子、帖子详情+回复、用户信息 | — | 无需配置 |
+| 💬 **Linux.do** | — | 热点、单帖与讨论楼层抓取、缓存搜索和摘要 | `agent-reach install --channels=linuxdo`（浏览器 fallback 会下载 Chromium） |
 | 📈 **雪球** | 股票行情、搜索股票、热门帖子、热门股票排行 | — | 告诉 Agent「帮我配雪球」 |
 | 🎙️ **小宇宙播客** | — | 播客音频转文字（Whisper 转录，免费 Key） | 告诉 Agent「帮我配小宇宙播客」 |
 
@@ -155,6 +156,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 - "B站搜一下 AI 教程" → `bili search`（无需登录）
 - "全网搜一下 LLM 框架对比" → Exa 语义搜索
 - "订阅这个 RSS" → `feedparser` 解析
+- "总结今天的 Linux.do 热帖" → `linuxdo-reader crawl` 后用 `digest` 读取缓存摘要
 
 **不需要记命令。** Agent 读了 SKILL.md 之后自己知道该调什么。需要登录的平台（小红书、Twitter、Reddit、Facebook、Instagram），告诉 Agent「帮我配 XXX」即可解锁。
 
@@ -188,6 +190,7 @@ channels/
 ├── reddit.py       → OpenCLI ▸ rdt-cli（无零配置路径，必须登录态）
 ├── facebook.py     → OpenCLI（桌面浏览器登录态）
 ├── instagram.py    → OpenCLI（桌面浏览器登录态）
+├── linuxdo.py      → linuxdo-reader CLI（独立 Python 3.11+ uv tool）
 ├── xiaohongshu.py  → OpenCLI ▸ xiaohongshu-mcp ▸ xhs-cli
 ├── linkedin.py     → linkedin-mcp ▸ Jina Reader
 ├── rss.py          → feedparser
@@ -211,6 +214,7 @@ channels/
 | 搜全网 | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | — | AI 语义搜索，MCP 接入免 Key |
 | GitHub | [gh CLI](https://cli.github.com) | — | 官方工具，认证后完整 API 能力 |
 | 读 RSS | [feedparser](https://github.com/kurtmckee/feedparser) | — | Python 生态标准选择 |
+| Linux.do | [linuxdo-reader](https://github.com/kadaliao/linuxdo-reader) | RSS/JSON ▸ Playwright browser fallback | 抓取、缓存和完整性标记集中在上游 CLI；Agent 只读取不可信论坛数据 |
 | 小红书 | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)（服务器）▸ xhs-cli | xhs-cli 作者已转投 OpenCLI（24K Star）；浏览器登录态零摩擦 |
 | LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | Jina Reader | MCP 服务，浏览器自动化 |
 
