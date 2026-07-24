@@ -10,10 +10,17 @@ Usage:
 
 from typing import Dict, List, Optional, Tuple
 
-# "User Data" root per Chromium-based browser, per OS. Mirrors the glob roots
-# browser_cookie3 uses internally (minus the trailing profile segment), so
-# profile selection stays consistent with the paths the library would have
+# "User Data" root per browser that lays profiles out the Chrome way
+# (Default/ + Profile N/ subfolders under one root), per OS. Mirrors the glob
+# roots browser_cookie3 uses internally (minus the trailing profile segment),
+# so profile selection stays consistent with the paths the library would have
 # picked itself.
+#
+# Opera is deliberately excluded: it is Chromium-based but does NOT use
+# Default/Profile N subfolders, and on Windows it stores under %APPDATA%
+# (Roaming) rather than %LOCALAPPDATA% — so the per-profile model here does not
+# apply. Opera still works for plain (non-profile) extraction via browser_cookie3;
+# it just can't be targeted with --chrome-profile.
 _CHROMIUM_USER_DATA_DIRS = {
     "chrome": {
         "darwin": "~/Library/Application Support/Google/Chrome",
@@ -30,12 +37,10 @@ _CHROMIUM_USER_DATA_DIRS = {
         "win32": ["BraveSoftware", "Brave-Browser", "User Data"],
         "linux": "~/.config/BraveSoftware/Brave-Browser",
     },
-    "opera": {
-        "darwin": "~/Library/Application Support/com.operasoftware.Opera",
-        "win32": ["Opera Software", "Opera Stable"],
-        "linux": "~/.config/opera",
-    },
 }
+
+#: Browsers whose cookies can be extracted from a named profile (see above).
+PROFILE_SELECTABLE_BROWSERS = tuple(_CHROMIUM_USER_DATA_DIRS)
 
 
 def _chromium_user_data_dir(browser: str) -> Optional[str]:
@@ -109,7 +114,15 @@ def list_chrome_profiles(browser: str = "chrome") -> List[Dict[str, str]]:
             "cookies_path": cookies_path,
         })
 
-    profiles.sort(key=lambda p: (p["folder"] != "Default", p["folder"]))
+    def _sort_key(p):
+        folder = p["folder"]
+        # Default first, then numerically by the "Profile N" number so
+        # "Profile 10" sorts after "Profile 2", not before it.
+        trailing = folder.rsplit(" ", 1)[-1]
+        number = int(trailing) if trailing.isdigit() else 0
+        return (folder != "Default", number, folder)
+
+    profiles.sort(key=_sort_key)
     return profiles
 
 
@@ -170,18 +183,20 @@ def extract_all(browser: str = "chrome", profile: Optional[str] = None) -> Dict[
 
     cookie_file = None
     if profile:
-        if browser == "firefox":
+        if browser not in PROFILE_SELECTABLE_BROWSERS:
             raise ValueError(
-                "Profile selection is only supported for Chromium-based "
-                "browsers (chrome/edge/brave/opera), not firefox."
+                "Profile selection is only supported for "
+                f"{'/'.join(PROFILE_SELECTABLE_BROWSERS)}, not {browser}."
             )
-        matches = [p for p in list_chrome_profiles(browser) if p["folder"] == profile]
+        profiles = list_chrome_profiles(browser)
+        matches = [p for p in profiles if p["folder"] == profile]
         if not matches:
-            available = ", ".join(p["folder"] for p in list_chrome_profiles(browser))
-            raise RuntimeError(
-                f"Profile '{profile}' not found for {browser}."
-                + (f" Available: {available}" if available else " No profiles found.")
+            available = ", ".join(p["folder"] for p in profiles)
+            hint = f" Available: {available}" if available else (
+                " No extractable profiles found (a profile you just created "
+                "has no cookies until you log into something in it)."
             )
+            raise RuntimeError(f"Profile '{profile}' not found for {browser}.{hint}")
         cookie_file = matches[0]["cookies_path"]
 
     # rookiepy (Rust-based, more stable) has no way to target a specific
@@ -198,6 +213,12 @@ def extract_all(browser: str = "chrome", profile: Optional[str] = None) -> Dict[
         try:
             import browser_cookie3
         except ImportError:
+            if cookie_file:  # profile requested — rookiepy can't do this
+                raise RuntimeError(
+                    f"Extracting from a specific profile ('{profile}') requires "
+                    "browser_cookie3 (rookiepy cannot target a profile).\n"
+                    "Install: pip install browser-cookie3"
+                )
             raise RuntimeError(
                 "Cookie extraction requires rookiepy or browser_cookie3.\n"
                 "Install: pip install rookiepy  (recommended)\n"

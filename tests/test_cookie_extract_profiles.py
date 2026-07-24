@@ -130,5 +130,29 @@ def test_extract_all_rejects_unknown_profile(tmp_path, monkeypatch):
 
 
 def test_extract_all_rejects_profile_for_firefox():
-    with pytest.raises(ValueError, match="Chromium-based"):
+    with pytest.raises(ValueError, match="only supported"):
         extract_all("firefox", profile="whatever")
+
+
+def test_extract_all_rejects_profile_for_opera():
+    """Opera is Chromium-based but doesn't use Default/Profile N folders, so
+    per-profile selection is unsupported and must fail with a clear message."""
+    with pytest.raises(ValueError, match="only supported"):
+        extract_all("opera", profile="whatever")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="path layout differs on Windows")
+def test_list_chrome_profiles_sorts_profile_numbers_numerically(tmp_path, monkeypatch):
+    """'Profile 10' must sort after 'Profile 2', not lexically before it."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    user_data_dir = _chrome_user_data_dir(tmp_path)
+    info_cache = {
+        "Default": _make_profile(user_data_dir, "Default", "Main", "main@gmail.com"),
+        "Profile 10": _make_profile(user_data_dir, "Profile 10", "Ten", "ten@gmail.com"),
+        "Profile 2": _make_profile(user_data_dir, "Profile 2", "Two", "two@gmail.com"),
+    }
+    _write_local_state(user_data_dir, info_cache)
+
+    folders = [p["folder"] for p in list_chrome_profiles("chrome")]
+
+    assert folders == ["Default", "Profile 2", "Profile 10"]

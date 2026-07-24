@@ -89,11 +89,12 @@ def main():
                         choices=["chrome", "firefox", "edge", "brave", "opera"],
                         help="Auto-extract ALL platform cookies from browser (chrome/firefox/edge/brave/opera)")
     p_conf.add_argument("--chrome-profile", metavar="PROFILE", default=None,
-                        help="Profile folder to extract from with --from-browser on a "
-                             "Chromium-based browser (e.g. 'Profile 1'), for when you keep "
+                        help="Profile folder to extract from with --from-browser on "
+                             "chrome/edge/brave (e.g. 'Profile 1'), for when you keep "
                              "burner/research accounts in a separate profile from your main "
-                             "one. Without this, extraction silently reads the 'Default' "
-                             "profile. Omit to be prompted when more than one profile exists.")
+                             "one. Without this, extraction defaults to the 'Default' profile; "
+                             "if several profiles exist you'll be prompted to pick one when "
+                             "running interactively, or asked to pass this flag otherwise.")
 
     # ── doctor ──
     p_doctor = sub.add_parser("doctor", help="Check platform availability")
@@ -1022,6 +1023,22 @@ def _detect_environment():
     return "server" if indicators >= 2 else "local"
 
 
+def _resolve_profile_choice(profiles, raw):
+    """Map a 1-based menu string to a profile folder name.
+
+    Returns the selected folder, or None if the input isn't a valid position.
+    Guards against Python's negative indexing: '0' or '-1' must be rejected,
+    not silently resolved to profiles[-1] (the last profile).
+    """
+    try:
+        n = int(raw)
+    except (ValueError, TypeError):
+        return None
+    if not 1 <= n <= len(profiles):
+        return None
+    return profiles[n - 1]["folder"]
+
+
 def _cmd_configure(args):
     """Set a config value and test it, or auto-extract from browser."""
     import shutil
@@ -1036,7 +1053,10 @@ def _cmd_configure(args):
         browser = args.from_browser
         profile = args.chrome_profile
 
-        if not profile and browser != "firefox":
+        # list_chrome_profiles() returns [] for browsers that don't support
+        # per-profile extraction (firefox, opera), so the picker is naturally
+        # skipped for them without a special-case.
+        if not profile:
             profiles = list_chrome_profiles(browser)
             if len(profiles) > 1:
                 if sys.stdin.isatty():
@@ -1044,11 +1064,14 @@ def _cmd_configure(args):
                     for i, p in enumerate(profiles, 1):
                         label = f"{p['name']} ({p['email']})" if p["email"] else p["name"]
                         print(f"  {i}. {label}  [{p['folder']}]")
-                    choice = input(f"Which profile has the accounts you want? [1-{len(profiles)}]: ").strip()
                     try:
-                        profile = profiles[int(choice) - 1]["folder"]
-                    except (ValueError, IndexError):
-                        print("Invalid choice, aborting.")
+                        choice = input(f"Which profile has the accounts you want? [1-{len(profiles)}]: ").strip()
+                    except EOFError:
+                        print("\nNo choice given, aborting.")
+                        return
+                    profile = _resolve_profile_choice(profiles, choice)
+                    if profile is None:
+                        print(f"Invalid choice (expected 1-{len(profiles)}), aborting.")
                         return
                 else:
                     folders = ", ".join(p["folder"] for p in profiles)
