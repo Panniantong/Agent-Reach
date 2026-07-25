@@ -23,7 +23,7 @@ AI 에이전트는 이미 인터넷에 접근할 수 있습니다 — 하지만 
 가장 가치 있는 정보는 소셜 미디어와 특화된 플랫폼에 분포되어 있습니다: Twitter 토론, Reddit 피드백, YouTube 튜토리얼, XiaoHongShu 리뷰, Bilibili 비디오, GitHub 활동... **여기가 정보 밀도가 가장 높은 곳**이지만, 각 플랫폼은 고유한 진입장벽이 있습니다:
 
 | 문제점 | 현실 |
-|------------|---------|
+| ------------ | --------- |
 | Twitter API | 유료 사용, 중간 정도 사용량 ~월 $215 |
 | Reddit | 서버 IP가 403 오류 발생 |
 | XiaoHongShu | 둘러보기 위해 로그인 필요 |
@@ -48,7 +48,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 ### ✅ 시작하기 전에 알면 좋은 것들
 
 | | |
-|---|---|
+| --- | --- |
 | 💰 **완전 무료** | 모든 도구는 오픈 소스, 모든 API는 무료입니다. 유일한 비용은 서버 프록시(월 $1)일 수 있습니다 — 로컬 컴퓨터에서는 불필요 |
 | 🔒 **프라이버시 안전** | Cookie는 로컬에 유지됩니다. 업로드되지 않습니다. 완전 오픈 소스 — 언제든지 감사 가능 |
 | 🔄 **최신 상태 유지** | 업스트림 도구(yt-dlp, twitter-cli, rdt-cli, Jina Reader 등)를 추적하고 정기적으로 업데이트 |
@@ -60,10 +60,10 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 ## 지원 플랫폼
 
 | 플랫폼 | 기능 | 설정 | 참고 |
-|----------|-------------|:-----:|-------|
+| ---------- | ------------- | :-----: | ------- |
 | 🌐 **Web** | 읽기 | 없음 | 모든 URL → 깨끗한 Markdown ([Jina Reader](https://github.com/jina-ai/reader) ⭐9.8K) |
 | 🐦 **Twitter/X** | 읽기 · 검색 | Cookie | Cookie로 검색, 타임라인, 트윗 읽기, 아티클 읽기 가능 ([twitter-cli](https://github.com/public-clis/twitter-cli)) |
-| 📕 **XiaoHongShu** | 읽기 · 검색 · **게시글 작성 · 댓글 · 좋아요** | Cookie | `pipx install xiaohongshu-cli` + `xhs login` ([xhs-cli](https://github.com/jackwener/xiaohongshu-cli)) |
+| 📕 **XiaoHongShu** | 읽기 · 검색 · 댓글 | OpenCLI / Cookie | OpenCLI는 사용자가 관리하는 기존 Chrome 세션만 사용하며, MCP/기존 도구는 Cookie-Editor 사용 |
 | 🎵 **Douyin** | 비디오 파싱 · 워터마크 없는 다운로드 | mcporter | [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) 통해, 로그인 불필요 |
 | 💼 **LinkedIn** | Jina Reader (공개 페이지) | Cookie | 전체 프로필, 회사, 채용 공고 검색 가능. 에이전트에 "LinkedIn 설정 도와줘"라고 말하세요 |
 | 💬 **WeChat Articles** | 검색 + 읽기 | 없음 | Exa를 통한 WeChat 공식 계정 게시글 검색 + 읽기 (설정 없음) + 선택적 [Camoufox](https://github.com/daijro/camoufox) |
@@ -75,7 +75,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 🔍 **Web Search** | 검색 | 자동 설정 | 설치 시 자동 설정, 무료, API key 불필요 ([Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter)) |
 | 📦 **GitHub** | 읽기 · 검색 | 없음 | [gh CLI](https://cli.github.com) 기반. 공개 저장소는 즉시 사용 가능. `gh auth login`으로 Fork, Issue, PR 기능 활성화 |
 | 📺 **YouTube** | 읽기 · **검색** | 없음 | 자막 + 1800+ 비디오 사이트 검색 ([yt-dlp](https://github.com/yt-dlp/yt-dlp) ⭐148K) |
-| 📺 **Bilibili** | 읽기 · **검색** | 없음 / 프록시 | 비디오 정보 + 자막 + 검색. 로컬은 바로 작동, 서버는 프록시 필요 ([yt-dlp](https://github.com/yt-dlp/yt-dlp)) |
+| 📺 **Bilibili** | 읽기 · **검색** | 설정 없음 | [bili-cli](https://github.com/public-clis/bilibili-cli)로 검색·비디오 정보(로그인 불필요), 자막은 OpenCLI. yt-dlp는 Bilibili의 412 차단으로 사용하지 않음 |
 | 📡 **RSS** | 읽기 | 없음 | 모든 RSS/Atom 피드 ([feedparser](https://github.com/kurtmckee/feedparser) ⭐2.3K) |
 | 📖 **Reddit** | 검색 · 읽기 | Cookie | 2024년부터 인증 필요 — 설치 후 `rdt login` 실행 ([rdt-cli](https://github.com/public-clis/rdt-cli)) |
 
@@ -94,6 +94,7 @@ Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/m
 에이전트가 자동으로 설치하고, 환경을 감지하고, 준비된 항목을 알려줍니다.
 
 > 🔄 **이미 설치하셨나요?** 한 번에 업데이트:
+>
 > ```
 > Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
 > ```
@@ -105,6 +106,7 @@ Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/m
 pip install https://github.com/Panniantong/agent-reach/archive/main.zip
 agent-reach install --env=auto
 ```
+
 </details>
 
 <details>
@@ -128,7 +130,7 @@ Skill이 설치된 후, 에이전트는 `agent-reach` CLI 사용 가능 여부�
 - "이 링크 읽어줘" → 모든 웹 페이지에 대해 `curl https://r.jina.ai/URL`
 - "이 GitHub 저장소는 무엇인가요?" → `gh repo view owner/repo`
 - "이 비디오는 무엇을 다루나요?" → 자막을 위해 `yt-dlp --dump-json URL`
-- "이 트윗 읽어줘" → `twitter tweet URL`
+- "이 트윗 읽어줘" → `TWITTER_AUTH_TOKEN` / `TWITTER_CT0` 설정 후 `twitter tweet URL`
 - "이 RSS 구독해줘" → 피드 파싱을 위해 `feedparser`
 - "GitHub에서 LLM 프레임워크 검색" → `gh search repos "LLM framework"`
 
@@ -142,11 +144,15 @@ Skill이 설치된 후, 에이전트는 `agent-reach` CLI 사용 가능 여부�
 
 ### 🍪 Cookies — 무료, 2분
 
-에이전트에 "Twitter 쿠키 설정 도와줘"라고 말하세요 — 브라우저에서 내보내는 과정을 안내해 줍니다. 로컬 컴퓨터는 자동으로 가져올 수 있습니다.
+에이전트에 "Twitter 쿠키 설정 도와줘"라고 말하세요. Cookie-Editor 수동
+내보내기 절차를 안내합니다. 저장한 값은 `agent-reach doctor`가 명시적
+자격 증명의 존재 여부를 확인할 때만 사용하며, doctor는 `twitter status`를
+실행하지 않습니다. 직접 실행하는 `twitter` 프로세스에는
+`TWITTER_AUTH_TOKEN`과 `TWITTER_CT0`를 명시적으로 전달해야 합니다.
 
 ### 🌐 Proxy — 월 $1, 서버 전용
 
-Bilibili은 서버 IP를 차단합니다. 프록시를 가져오세요([Webshare](https://webshare.io) 추천, 월 $1)하고 주소를 에이전트에 보내세요.
+대부분의 사용자는 프록시가 필요 없습니다. 네트워크에서 Reddit/Twitter가 차단된 경우에만 프록시를 설정하세요. Bilibili는 bili-cli를 사용합니다.
 
 > Reddit은 이제 프록시 없이 rdt-cli를 통해 무료로 작동합니다. 로컬 컴퓨터는 Bilibili에도 프록시가 필요 없습니다.
 
@@ -162,9 +168,8 @@ $ agent-reach doctor
 
 ✅ 사용 가능:
   ✅ GitHub 저장소 및 코드 — 공개 저장소 읽기 및 검색 가능
-  ✅ Twitter/X 트윗 — 읽기 가능. Cookie로 검색 및 게시 가능
   ✅ YouTube 비디오 자막 — yt-dlp
-  ⚠️  Bilibili 비디오 정보 — 서버 IP가 차단될 수 있음, 프록시 설정
+  ✅ Bilibili 검색 및 비디오 정보 — bili-cli (자막은 OpenCLI)
   ✅ RSS/Atom 피드 — feedparser
   ✅ 웹 페이지 (모든 URL) — Jina Reader API
 
@@ -172,8 +177,9 @@ $ agent-reach doctor
   ⬜ 웹 시맨틱 검색 — exa.ai에서 무료 key 발급
 
 🔧 설정 가능:
+  ⚠️  Twitter/X — doctor는 명시적 자격 증명의 존재만 확인하며, 업스트림 CLI에는 환경 변수가 필요
   ✅ Reddit 글 및 댓글 — rdt-cli를 통한 검색 및 읽기 (무료, 프록시 없음)
-  ⬜ XiaoHongShu 노트 — 쿠키 필요. 브라우저에서 내보내기
+  ⬜ XiaoHongShu 노트 — OpenCLI는 기존 세션만 사용하며, 그 외에는 Cookie-Editor로 MCP/기존 도구 설정
 
 상태: 6/9 채널 사용 가능
 ```
@@ -200,10 +206,10 @@ channels/
 ├── twitter.py      → twitter-cli      ← 공식 API로 교체...
 ├── youtube.py      → yt-dlp          ← YouTube API, Whisper로 교체...
 ├── github.py       → gh CLI          → REST API, PyGithub로 교체...
-├── bilibili.py     → yt-dlp          → bilibili-api로 교체...
-├── reddit.py       → rdt-cli          → 검색 + 읽기, cookie 인증 필요
+├── bilibili.py     → bili-cli ▸ OpenCLI ▸ 검색 API (yt-dlp는 412 차단으로 폐기)
+├── reddit.py       → OpenCLI ▸ rdt-cli (로그인 상태 필요)
 ├── linuxdo.py      → linuxdo-reader CLI (독립 Python 3.11+ uv tool)
-├── xiaohongshu.py  → mcporter MCP    ← 다른 XHS 도구로 교체...
+├── xiaohongshu.py  → OpenCLI ▸ xiaohongshu-mcp ▸ xhs-cli
 ├── douyin.py       → mcporter MCP    ← 다른 Douyin 도구로 교체...
 ├── linkedin.py     → linkedin-mcp    ← LinkedIn API로 교체...
 ├── rss.py          → feedparser      ← atoma로 교체...
@@ -216,17 +222,17 @@ channels/
 ### 현재 도구 선택
 
 | 시나리오 | 도구 | 이유 |
-|----------|------|-----|
+| ---------- | ------ | ----- |
 | 웹 페이지 읽기 | [Jina Reader](https://github.com/jina-ai/reader) | 9.8K stars, 무료, API key 불필요 |
 | 트윗 읽기 | [twitter-cli](https://github.com/public-clis/twitter-cli) | 2.1K stars, cookie 인증, 검색/읽기/타임라인/글 |
 | Reddit | [rdt-cli](https://github.com/public-clis/rdt-cli) | 304 stars, cookie 인증, 검색 + 전체 글 + 댓글 |
-| 비디오 자막 + 검색 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | 154K stars, YouTube + Bilibili + 1800 사이트 |
-| Bilibili 향상 | [bili-cli](https://github.com/public-clis/bilibili-cli) | 590 stars, 인기/순위/검색/피드 |
+| YouTube 자막 + 검색 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | YouTube 및 지원 비디오 사이트용(Bilibili에는 사용하지 않음) |
+| Bilibili | [bili-cli](https://github.com/public-clis/bilibili-cli) ▸ OpenCLI ▸ 검색 API | yt-dlp는 412 차단으로 폐기. bili-cli는 로그인 없이 검색·읽기 가능 |
 | 웹 검색 | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | AI 시맨틱 검색, MCP 통합, API key 불필요 |
 | GitHub | [gh CLI](https://cli.github.com) | 공식 도구, 인증 후 전체 API |
 | RSS 읽기 | [feedparser](https://github.com/kurtmckee/feedparser) | Python 생태계 표준, 2.3K stars |
 | Linux.do | [linuxdo-reader](https://github.com/kadaliao/linuxdo-reader) | RSS/JSON/브라우저 가져오기, 로컬 캐시와 완전성 표시 관리 |
-| XiaoHongShu | [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) | 1.5K stars, pipx 설치, 검색/읽기/댓글/게시 |
+| XiaoHongShu | [OpenCLI](https://github.com/jackwener/opencli) (데스크톱) ▸ [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) (서버) ▸ xhs-cli | OpenCLI는 사용자가 관리하는 기존 세션만 사용하며, 그 외에는 Cookie-Editor로 수동 설정 |
 | Douyin | [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) | MCP 서버, 로그인 불필요, 비디오 파싱 + 워터마크 없는 다운로드 |
 | LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | 1.2K stars, MCP 서버, 브라우저 자동화 |
 | WeChat Articles | [Exa](https://exa.ai) (검색 + 읽기) + [Camoufox](https://github.com/daijro/camoufox) (선택) | 설정 없이 검색 + 전체 글 읽기 |
@@ -254,7 +260,7 @@ channels/
 <details>
 <summary><strong>AI 에이전트로 Twitter/X를 API 비용 없이 검색하는 방법?</strong></summary>
 
-Agent Reach는 cookie 기반 인증을 사용하는 [twitter-cli](https://github.com/public-clis/twitter-cli)를 사용합니다 — 완전 무료, Twitter API 구독 불필요. `pipx install twitter-cli`로 설치하고, 브라우저에서 x.com에 로그인되어 있는지 확인하세요. 에이전트가 `twitter search "query" -n 10`으로 검색할 수 있습니다.
+Agent Reach는 cookie 기반 인증을 사용하는 [twitter-cli](https://github.com/public-clis/twitter-cli)를 사용합니다. Cookie-Editor로 수동 내보낸 뒤 `agent-reach configure twitter-cookies "..."`로 저장합니다. 이 값은 doctor의 설정 확인용이며 실시간 인증 성공을 뜻하지 않습니다. `twitter search "query" -n 10`을 직접 실행하는 프로세스에는 `TWITTER_AUTH_TOKEN`과 `TWITTER_CT0`를 명시적으로 전달해야 합니다.
 </details>
 
 <details>
@@ -278,7 +284,7 @@ Agent Reach는 Reddit을 위해 [rdt-cli](https://github.com/public-clis/rdt-cli
 <details>
 <summary><strong>Agent Reach는 무료인가요? API 비용이 있나요?</strong></summary>
 
-100% 무료 오픈 소스입니다. 모든 백엔드(twitter-cli, rdt-cli, xhs-cli, yt-dlp, Jina Reader, Exa)는 유료 API key가 필요 없는 무료 도구입니다. 유일한 선택적 비용은 서버에서 Bilibili 접근이 필요한 경우 주거용 프록시(월 ~$1)입니다. Reddit은 프록시 없이 rdt-cli를 통해 무료로 작동합니다.
+100% 무료 오픈 소스입니다. 모든 백엔드(twitter-cli, rdt-cli, OpenCLI, bili-cli, yt-dlp, Jina Reader, Exa)는 유료 API key가 필요 없는 무료 도구입니다. 네트워크에서 특정 사이트가 차단된 경우에만 선택적으로 프록시 비용이 발생할 수 있습니다.
 </details>
 
 <details>
@@ -290,13 +296,13 @@ Agent Reach는 cookie 인증을 통해 Twitter에 접근하는 twitter-cli를 �
 <details>
 <summary><strong>XiaoHongShu / 小红书 콘텐츠를 프로그래밍 방식으로 읽는 방법?</strong></summary>
 
-`pipx install xiaohongshu-cli`를 설치한 다음 `xhs login`(브라우저에서 cookie 자동 추출)을 실행하세요. 에이전트가 `xhs search "query"`로 노트를 검색하고, `xhs read NOTE_ID`로 상세 정보를 읽고, `xhs comments NOTE_ID`로 댓글을 볼 수 있습니다. Docker 불필요.
+Agent Reach는 XiaoHongShu 로그인을 대신 수행하거나 브라우저 cookie를 읽지 않습니다. OpenCLI는 사용자가 이미 보유하고 명시적으로 관리하는 Chrome 세션만 사용합니다. 기존 세션이 없다면 자동 로그인하지 말고 Cookie-Editor로 수동 내보내 xiaohongshu-mcp 또는 기존 도구를 설정하세요. `agent-reach configure xhs-cookies`는 OpenCLI/Chrome에 cookie를 주입하지 않습니다.
 </details>
 
 <details>
 <summary><strong>AI 에이전트로 Douyin / 抖音 비디오를 파싱하는 방법?</strong></summary>
 
-douyin-mcp-server를 설치한 다음, 에이전트가 `mcporter call 'douyin.parse_douyin_video_info(share_link: "share_url")'`를 사용하여 비디오 정보를 파싱하고 워터마크 없는 다운로드 링크를 가져올 수 있습니다. 로그인 불필요 — Douyin 링크를 공유하기만 하면 됩니다. https://github.com/yzfly/douyin-mcp-server 참조
+douyin-mcp-server를 설치한 다음, 에이전트가 `mcporter call 'douyin.parse_douyin_video_info(share_link: "share_url")'`를 사용하여 비디오 정보를 파싱하고 워터마크 없는 다운로드 링크를 가져올 수 있습니다. 로그인 불필요 — Douyin 링크를 공유하기만 하면 됩니다. <https://github.com/yzfly/douyin-mcp-server> 참조
 </details>
 
 <details>
@@ -310,7 +316,7 @@ douyin-mcp-server를 설치한 다음, 에이전트가 `mcporter call 'douyin.pa
 
 그리고 직접 `script.md` + `info.json`을 작성하려면, 기존 `douyin` mcporter 별칭을 다음으로 변경할 수 있습니다:
 
-- https://github.com/JNHFlow21/social-post-extractor-mcp
+- <https://github.com/JNHFlow21/social-post-extractor-mcp>
 
 다음과 호환성을 유지합니다:
 
@@ -334,7 +340,7 @@ douyin-mcp-server를 설치한 다음, 에이전트가 `mcporter call 'douyin.pa
 
 ## 연락처
 
-- 📧 **이메일:** pnt01@foxmail.com
+- 📧 **이메일:** <pnt01@foxmail.com>
 - 🐦 **Twitter/X:** [@Neo_Reidlab](https://x.com/Neo_Reidlab)
 
 협력이나 질문은 WeChat에 추가해주세요 — 커뮤니티 그룹에 초대해 드리겠습니다:

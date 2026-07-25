@@ -61,7 +61,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 ### ✅ 在你用之前，你可能想知道
 
 | | |
-|---|---|
+| --- | --- |
 | 💰 **完全免费** | 所有工具开源、所有 API 免费。唯一可能花钱的是服务器代理（$1/月），本地电脑不需要 |
 | 🔒 **隐私安全** | Cookie 只存在你本地，不上传不外传。代码完全开源，随时可审查 |
 | 🔄 **持续换代** | 每个平台都是「首选 + 备选」多后端路由。某个接入方式失效了，我们换下一个，你无感（2026-06 实例：yt-dlp 被 B站风控封死 → 已切换 bili-cli，用户零操作） |
@@ -73,7 +73,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 ## 支持的平台
 
 | 平台 | 装好即用 | 配置后解锁 | 怎么配 |
-|------|---------|-----------|-------|
+| ------ | --------- | ----------- | ------- |
 | 🌐 **网页** | 阅读任意网页 | — | 无需配置 |
 | 📺 **YouTube** | 字幕提取 + 视频搜索 | — | 无需配置 |
 | 📡 **RSS** | 阅读任意 RSS/Atom 源 | — | 无需配置 |
@@ -84,7 +84,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 | 📖 **Reddit** | —（没有零配置路径：匿名接口已被封） | 搜索 + 读帖子和评论 | 桌面装 OpenCLI 用浏览器登录态；或 rdt-cli + Cookie |
 | 📘 **Facebook** | — | 搜索、主页、Feed、群组列表 | 桌面装 OpenCLI（复用 Chrome 登录态） |
 | 📷 **Instagram** | — | 用户搜索、Profile、用户最近帖子、Explore | 桌面装 OpenCLI（复用 Chrome 登录态） |
-| 📕 **小红书** | — | 搜索、阅读、评论 | 桌面装 OpenCLI（刷过小红书即可用）；服务器用 xiaohongshu-mcp 扫码 |
+| 📕 **小红书** | — | 搜索、阅读、评论 | OpenCLI 只用用户已有 Chrome 会话；MCP/存量工具用 Cookie-Editor |
 | 💼 **LinkedIn** | Jina Reader 读公开页面 | Profile 详情、公司页面、职位搜索 | 告诉 Agent「帮我配 LinkedIn」 |
 | 💻 **V2EX** | 热门帖子、节点帖子、帖子详情+回复、用户信息 | — | 无需配置 |
 | 💬 **Linux.do** | — | 热点、单帖与讨论楼层抓取、缓存搜索和摘要 | `agent-reach install --channels=linuxdo`（浏览器 fallback 会下载 Chromium） |
@@ -93,7 +93,9 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 
 > **不知道怎么配？不用查文档。** 直接告诉 Agent「帮我配 XXX」，它知道需要什么、会一步一步引导你。
 >
-> 🍪 需要 Cookie/登录态的平台（Twitter、小红书、Reddit、Facebook、Instagram 等），优先让用户在自己的浏览器里登录。OpenCLI 复用 Chrome 登录态；传统 CLI 才需要 Cookie-Editor 导出 Cookie。
+> 🍪 Twitter 只接受用户通过 Cookie-Editor 手工导出的内容。Agent Reach 不替用户执行小红书登录，也不读取小红书浏览器 Cookie；OpenCLI 只使用用户已经存在且明确控制的 Chrome 会话。`agent-reach configure xhs-cookies` 不会把 Cookie 注入 OpenCLI / Chrome；没有现成会话时，改用 Cookie-Editor 导出后配置 xiaohongshu-mcp / 存量工具。
+>
+> Twitter Cookie 保存后仅供 `agent-reach doctor` 检查配置是否齐全；直接运行上游 `twitter` 命令前，仍需在当前进程环境中显式设置 `TWITTER_AUTH_TOKEN` 和 `TWITTER_CT0`。
 >
 > 🔒 Cookie 只存在你本地，不上传不外传。代码完全开源，随时可审查。
 > 💻 本地电脑不需要代理。代理只有部署在服务器上才需要（~$1/月）。
@@ -109,6 +111,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 > ```bash
 > openclaw config set tools.profile "coding"
 > ```
+>
 > 或在 `~/.openclaw/openclaw.json` 中设置 `"tools": { "profile": "coding" }`。
 > 设置后重启 Gateway（`openclaw gateway restart`）并开启新对话即可。其他平台（Claude Code、Cursor、Windsurf 等）不受此限制。
 
@@ -121,11 +124,13 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 就这一步。Agent 会自己完成剩下的所有事情。
 
 > 🔄 **已安装过？** 更新也是一句话：
+>
 > ```
 > 帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
 > ```
 
 > 🛡️ **担心安全？** 可以用安全模式——不会自动装系统包，只告诉你需要什么：
+>
 > ```
 > 帮我安装 Agent Reach（安全模式）：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
 > 安装时使用 --safe 参数
@@ -162,9 +167,9 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 
 ---
 
-## 能力边界：读内容 vs 操作网页
+## 能力边界：读取页面 vs 提取复杂网页数据
 
-有些任务超出"读"的范围：登录后的网页操作、表单提交、多账号隔离、并行浏览器会话、自动化流程中的登录、验证、风控提示等高摩擦环节的人工接手。这类"动手"场景，可以配合 [BrowserAct](https://www.browseract.com/?co-from=Agent&redirect=https://github.com/browser-act/skills/tree/main) 这类浏览器自动化工具——30+ 预制平台技能，支持 Claude Code / OpenClaw / Cursor 等主流 Agent。
+当任务涉及动态页面、筛选、分页、详情页或多步导航时，可以使用 [BrowserAct](https://www.browseract.ai/Agent)。BrowserAct 支持从任意网站提取数据。只需描述所需数据，BrowserAct 就会在真实浏览器中探索并测试网页，生成可靠、可复用的数据采集 Bot，并返回结构化结果。内置隐身浏览和验证码处理，并提供高质量住宅代理。无需代码
 
 ---
 
@@ -203,7 +208,7 @@ channels/
 ### 当前选型
 
 | 场景 | 首选 | 备选 | 为什么这么选 |
-|------|------|------|-----------|
+| ------ | ------ | ------ | ----------- |
 | 读网页 | [Jina Reader](https://github.com/jina-ai/reader) | — | 免费，不需要 API Key |
 | 读推特 | [twitter-cli](https://github.com/public-clis/twitter-cli) | [OpenCLI](https://github.com/jackwener/opencli) | 实测搜索稳定；OpenCLI 走浏览器登录态兜底 |
 | Reddit | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | [rdt-cli](https://github.com/public-clis/rdt-cli) | 匿名接口已被封、官方 API 审批制——只剩登录态路线 |
@@ -215,7 +220,7 @@ channels/
 | GitHub | [gh CLI](https://cli.github.com) | — | 官方工具，认证后完整 API 能力 |
 | 读 RSS | [feedparser](https://github.com/kurtmckee/feedparser) | — | Python 生态标准选择 |
 | Linux.do | [linuxdo-reader](https://github.com/kadaliao/linuxdo-reader) | RSS/JSON ▸ Playwright browser fallback | 抓取、缓存和完整性标记集中在上游 CLI；Agent 只读取不可信论坛数据 |
-| 小红书 | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)（服务器）▸ xhs-cli | xhs-cli 作者已转投 OpenCLI（24K Star）；浏览器登录态零摩擦 |
+| 小红书 | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)（服务器）▸ xhs-cli | OpenCLI 只用用户已有会话；其余后端用 Cookie-Editor 手工导出 |
 | LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | Jina Reader | MCP 服务，浏览器自动化 |
 
 > 📌 这些都是「当前选型」，基于真机实测定期复核。某条路失效了我们换下一条——`agent-reach doctor` 永远告诉你现在走的是哪条。
@@ -227,7 +232,7 @@ channels/
 Agent Reach 在设计上重视安全：
 
 | 措施 | 说明 |
-|------|------|
+| ------ | ------ |
 | 🔒 **凭据本地存储** | Cookie、Token 只存在你本机 `~/.agent-reach/config.yaml`，文件权限 600（仅所有者可读写），不上传不外传 |
 | 🛡️ **安全模式** | `agent-reach install --safe` 不会自动修改系统，只列出需要什么，由你决定装不装 |
 | 👀 **完全开源** | 代码透明，随时可审查。所有依赖工具也是开源项目 |
@@ -239,13 +244,14 @@ Agent Reach 在设计上重视安全：
 > ⚠️ **封号风险提醒：** 使用 Cookie 登录的平台（Twitter、小红书等），通过脚本/API 调用**存在被平台检测并封号的风险**。请务必使用**专用小号**，不要用你的主账号。
 
 需要 Cookie 或登录态的平台（Twitter、小红书、Reddit、Facebook、Instagram 等）建议使用**专用小号**，不要用主账号。原因有二：
+
 1. **封号风险** — 平台可能检测到非正常浏览器的 API 调用行为，导致账号被限制或封禁
 2. **安全风险** — Cookie 等同于完整登录权限，用小号可以在凭据泄露时限制影响范围
 
 ### 📦 安装方式
 
 | 方式 | 命令 | 适合场景 |
-|------|------|---------|
+| ------ | ------ | --------- |
 | 一键全自动（默认） | `agent-reach install --env=auto` | 个人电脑、开发环境 |
 | 安全模式 | `agent-reach install --env=auto --safe` | 生产服务器、多人共用机器 |
 | 仅预览 | `agent-reach install --env=auto --dry-run` | 先看看会做什么 |
@@ -290,7 +296,7 @@ Star 一下，下次需要的时候能找到。⭐
 
 ## 联系
 
-- 📧 **Email:** pnt01@foxmail.com
+- 📧 **Email:** <pnt01@foxmail.com>
 - 🐦 **Twitter/X:** [@Neo_Reidlab](https://x.com/Neo_Reidlab)
 
 ## 业务合作 / Agent 落地

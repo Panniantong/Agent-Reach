@@ -5,8 +5,12 @@ Each channel knows how to check itself. Doctor just collects the results.
 """
 
 from typing import Dict
-from agent_reach.config import Config
+
+from rich.markup import escape
+
 from agent_reach.channels import get_all_channels
+from agent_reach.config import Config
+from agent_reach.utils.text import scrub_url_credentials
 
 
 def check_all(config: Config) -> Dict[str, dict]:
@@ -23,7 +27,13 @@ def check_all(config: Config) -> Dict[str, dict]:
         except Exception as e:  # noqa: BLE001 — doctor must survive any channel
             # Channels are registry singletons: a stale active_backend from a
             # previous check must not leak into an errored result.
-            status, message, active = "error", f"体检异常：{e}", None
+            status = "error"
+            message = f"体检异常：{e}"
+            active = None
+        # Doctor is the final output boundary for both expected channel
+        # messages and unexpected exceptions. Upstream probe output can echo a
+        # configured URL, so scrub every path before JSON/text rendering.
+        message = scrub_url_credentials(message)
         results[ch.name] = {
             "status": status,
             "name": ch.description,
@@ -46,11 +56,6 @@ def _name_msg(r: dict, escape) -> str:
 
 def format_report(results: Dict[str, dict]) -> str:
     """Format results as a readable text report (with Rich markup)."""
-    try:
-        from rich.markup import escape
-    except ImportError:
-        escape = lambda x: x
-
     lines = []
     lines.append("[bold cyan]Agent Reach 状态[/bold cyan]")
     lines.append("[cyan]" + "=" * 40 + "[/cyan]")
@@ -107,7 +112,6 @@ def format_report(results: Dict[str, dict]) -> str:
         )
 
     # Security check: config file permissions (Unix only)
-    import os
     import stat
     import sys
 

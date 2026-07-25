@@ -14,11 +14,13 @@ import sys
 
 from agent_reach.config import Config
 from agent_reach.core import AgentReach
+from agent_reach.utils.text import scrub_url_credentials
 
 try:
     from mcp.server import Server
     from mcp.server.stdio import stdio_server
-    from mcp.types import Tool, TextContent
+    from mcp.types import TextContent, Tool
+
     HAS_MCP = True
 except ImportError:
     HAS_MCP = False
@@ -30,7 +32,7 @@ def create_server():
         sys.exit(1)
 
     server = Server("agent-reach")
-    config = Config()
+    config = Config(read_only=True)
     eyes = AgentReach(config)
 
     @server.list_tools()
@@ -52,7 +54,12 @@ def create_server():
             text = json.dumps(result, ensure_ascii=False, indent=2) if isinstance(result, (dict, list)) else str(result)
             return [TextContent(type="text", text=text)]
         except Exception as e:
-            return [TextContent(type="text", text=f"Error: {str(e)}")]
+            return [
+                TextContent(
+                    type="text",
+                    text=f"Error: {scrub_url_credentials(e)}",
+                )
+            ]
 
     return server
 

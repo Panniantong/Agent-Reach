@@ -19,7 +19,19 @@ Here's how to export cookies from your local computer — **fastest method first
 That's it! Your Agent will run:
 ```bash
 agent-reach configure twitter-cookies <your_pasted_string>
+agent-reach configure xhs-cookies <your_pasted_string>
 ```
+
+Twitter values saved by Agent Reach are used by `agent-reach doctor` only to
+check whether explicit credentials are present. Doctor does not run
+`twitter status`. Direct `twitter` commands still require
+`TWITTER_AUTH_TOKEN` and `TWITTER_CT0` in their process environment.
+
+This XiaoHongShu export is for xiaohongshu-mcp or a legacy tool.
+`agent-reach configure xhs-cookies` does not inject cookies into OpenCLI or
+Chrome. OpenCLI may use only an existing Chrome session explicitly controlled
+by the user. Agent Reach never logs the user in or reads XiaoHongShu browser
+cookies.
 
 ### Sites to export:
 

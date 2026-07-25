@@ -33,7 +33,7 @@ AI Agents can already access the internet — but "can go online" is barely the 
 The most valuable information lives across social and niche platforms: Twitter discussions, Reddit feedback, YouTube tutorials, XiaoHongShu reviews, Bilibili videos, GitHub activity… **These are where information density is highest**, but each platform has its own barriers:
 
 | Pain Point | Reality |
-|------------|---------|
+| ------------ | --------- |
 | Twitter API | Pay-per-use, moderate usage ~$215/month |
 | Reddit | Server IPs get 403'd |
 | XiaoHongShu | Login required to browse |
@@ -58,7 +58,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 ### ✅ Before you start, you might want to know
 
 | | |
-|---|---|
+| --- | --- |
 | 💰 **Completely free** | All tools are open source, all APIs are free. The only possible cost is a server proxy ($1/month) — local computers don't need one |
 | 🔒 **Privacy safe** | Cookies stay local. Never uploaded. Fully open source — audit anytime |
 | 🔄 **Kept up to date** | Every platform routes through a primary + fallback backend list. When an access path dies, we switch to the next — you won't notice (June 2026: Bilibili 412-blocked yt-dlp → switched to bili-cli, zero action on your side) |
@@ -70,10 +70,10 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 ## Supported Platforms
 
 | Platform | Capabilities | Setup | Notes |
-|----------|-------------|:-----:|-------|
+| ---------- | ------------- | :-----: | ------- |
 | 🌐 **Web** | Read | Zero config | Any URL → clean Markdown ([Jina Reader](https://github.com/jina-ai/reader) ⭐9.8K) |
 | 🐦 **Twitter/X** | Read · Search | Cookie | Cookie unlocks search, timeline, tweet reading, articles ([twitter-cli](https://github.com/public-clis/twitter-cli)) |
-| 📕 **XiaoHongShu** | Read · Search · Comments | OpenCLI / MCP | Desktop: [OpenCLI](https://github.com/jackwener/opencli) (reuses browser session); Server: [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) (QR login); legacy xhs-cli still works |
+| 📕 **XiaoHongShu** | Read · Search · Comments | OpenCLI / MCP | OpenCLI uses only an existing user-controlled Chrome session; MCP/legacy tools use a manual Cookie-Editor export |
 | 📘 **Facebook** | Search · Profiles · Feed · Groups list | OpenCLI | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
 | 📷 **Instagram** | User search · Profiles · Recent posts · Explore | OpenCLI | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
 | 💼 **LinkedIn** | Jina Reader (public pages) | Full profiles, companies, job search | Tell your Agent "help me set up LinkedIn" |
@@ -101,6 +101,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 > ```bash
 > openclaw config set tools.profile "coding"
 > ```
+>
 > Or set `"tools": { "profile": "coding" }` in `~/.openclaw/openclaw.json`. After changing it, restart the Gateway (`openclaw gateway restart`) and start a new conversation. Other platforms (Claude Code, Cursor, Windsurf, etc.) are not affected.
 
 Copy this to your AI Agent (Claude Code, OpenClaw, Cursor, etc.):
@@ -112,11 +113,13 @@ Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/m
 The Agent auto-installs, detects your environment, and tells you what's ready.
 
 > 🔄 **Already installed?** Update in one command:
+>
 > ```
 > Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
 > ```
 
 > 🛡️ **Worried about security?** Use safe mode — it won't auto-install system packages, it only tells you what you need:
+>
 > ```
 > Install Agent Reach (safe mode): https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
 > Use the --safe flag during install
@@ -129,6 +132,7 @@ The Agent auto-installs, detects your environment, and tells you what's ready.
 pip install https://github.com/Panniantong/agent-reach/archive/main.zip
 agent-reach install --env=auto
 ```
+
 </details>
 
 <details>
@@ -157,7 +161,7 @@ No configuration needed — just tell your Agent:
 - "Read this link" → `curl https://r.jina.ai/URL` for any web page
 - "What's this GitHub repo about?" → `gh repo view owner/repo`
 - "What does this video cover?" → `yt-dlp --dump-json URL` for subtitles
-- "Read this tweet" → `twitter tweet URL`
+- "Read this tweet" → set `TWITTER_AUTH_TOKEN` / `TWITTER_CT0`, then run `twitter tweet URL`
 - "Subscribe to this RSS" → `feedparser` to parse feeds
 - "Summarize today's Linux.do topics" → `linuxdo-reader crawl`, then read the cached `digest`
 - "Search GitHub for LLM frameworks" → `gh search repos "LLM framework"`
@@ -178,7 +182,17 @@ Don't use it? Don't configure it. Every step is optional.
 
 ### 🍪 Cookies — Free, 2 minutes
 
-Tell your Agent "help me configure Twitter cookies" — it'll guide you through exporting from your browser. Local computers can auto-import.
+Tell your Agent "help me configure Twitter cookies" — it'll guide you through a
+manual Cookie-Editor export. Agent Reach saves the values for `doctor` to check
+whether credentials are present; `doctor` does not run `twitter status`.
+Direct `twitter` commands still require `TWITTER_AUTH_TOKEN` and `TWITTER_CT0`
+in their process environment.
+
+For XiaoHongShu, Agent Reach never logs the user in or reads browser cookies.
+OpenCLI may use only an existing Chrome session explicitly controlled by the
+user. If none exists, do not automate login; use a manual Cookie-Editor export
+with xiaohongshu-mcp or a legacy tool. `agent-reach configure xhs-cookies`
+does not inject cookies into OpenCLI or Chrome.
 
 ### 🌐 Proxy — $1/month, restricted networks only
 
@@ -198,7 +212,6 @@ $ agent-reach doctor
 
 ✅ Ready to use:
   ✅ GitHub repos and code — public repos readable and searchable
-  ✅ Twitter/X tweets — readable. Cookie unlocks search and posting
   ✅ YouTube video subtitles — yt-dlp
   ✅ Bilibili search & video detail — bili-cli (subtitles via OpenCLI)
   ✅ RSS/Atom feeds — feedparser
@@ -208,8 +221,9 @@ $ agent-reach doctor
   ⬜ Web semantic search — sign up at exa.ai for free key
 
 🔧 Configurable:
+  ⚠️  Twitter/X — doctor checks only that explicit credentials exist; direct CLI still needs its environment variables
   ⬜ Reddit posts and comments — needs login: rdt-cli after `rdt login`, or OpenCLI browser session
-  ⬜ XiaoHongShu notes — desktop: OpenCLI (browser session); server: xiaohongshu-mcp (QR)
+  ⬜ XiaoHongShu notes — OpenCLI needs an existing user-controlled session; otherwise use Cookie-Editor with MCP/legacy tools
   ⬜ Facebook / Instagram — desktop: OpenCLI browser session
 
 Status: 6/9 channels available
@@ -252,7 +266,7 @@ Each channel file **actually probes** its candidate backends in order (not just 
 ### Current Tool Choices
 
 | Scenario | Primary | Fallback | Why |
-|----------|---------|----------|-----|
+| ---------- | --------- | ---------- | ----- |
 | Read web pages | [Jina Reader](https://github.com/jina-ai/reader) | — | Free, no API key needed |
 | Read tweets | [twitter-cli](https://github.com/public-clis/twitter-cli) | [OpenCLI](https://github.com/jackwener/opencli) | Reliable search in real-world tests; OpenCLI falls back on your browser session |
 | Reddit | [OpenCLI](https://github.com/jackwener/opencli) (desktop) | [rdt-cli](https://github.com/public-clis/rdt-cli) | Anonymous endpoints blocked, official API gated — logged-in sessions are the only route left |
@@ -264,7 +278,7 @@ Each channel file **actually probes** its candidate backends in order (not just 
 | GitHub | [gh CLI](https://cli.github.com) | — | Official tool, full API after auth |
 | Read RSS | [feedparser](https://github.com/kurtmckee/feedparser) | — | Python ecosystem standard |
 | Linux.do | [linuxdo-reader](https://github.com/kadaliao/linuxdo-reader) | RSS/JSON ▸ Playwright browser fallback | Upstream CLI owns fetching, caching, and completeness markers; agents treat forum output as untrusted input |
-| XiaoHongShu | [OpenCLI](https://github.com/jackwener/opencli) (desktop) | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) (server) ▸ xhs-cli | The xhs-cli author moved to OpenCLI (24K stars); browser sessions mean zero friction |
+| XiaoHongShu | [OpenCLI](https://github.com/jackwener/opencli) (desktop) | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) (server) ▸ xhs-cli | OpenCLI uses only an existing user-controlled session; other backends use a manual Cookie-Editor export |
 | LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | Jina Reader | MCP server, browser automation |
 | Xiaoyuzhou Podcast | `transcribe.sh` | — | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 
@@ -278,7 +292,7 @@ Each channel file **actually probes** its candidate backends in order (not just 
 
 ## Contact
 
-- 📧 **Email:** pnt01@foxmail.com
+- 📧 **Email:** <pnt01@foxmail.com>
 - 🐦 **Twitter/X:** [@Neo_Reidlab](https://x.com/Neo_Reidlab)
 
 For collaboration or questions, add me on WeChat — I'll invite you to the community group:

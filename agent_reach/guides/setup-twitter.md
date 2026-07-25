@@ -25,24 +25,43 @@ which twitter && echo "installed" || echo "not installed"
 pipx install twitter-cli
 ```
 
-3. 测试是否配置好：
+3. 确认命令已安装（此时不做认证请求）：
 
 ```bash
-twitter search "test" -n 1
+twitter --help
 ```
 
 ## 获取 Cookie（Cookie-Editor 方式，推荐）
 
 1. 安装 [Cookie-Editor](https://cookie-editor.com/) 浏览器扩展
 2. 登录 x.com
-3. 点击 Cookie-Editor 图标 → Export → 复制全部
+3. 点击 Cookie-Editor 图标 → Export → Header String
 4. 运行配置命令：
 
 ```bash
-agent-reach configure twitter-cookies "粘贴的 cookie JSON"
+agent-reach configure twitter-cookies "粘贴的 Header String"
 ```
 
-这会自动提取 `auth_token` 和 `ct0`，并写入环境变量。
+这会提取 `auth_token` 和 `ct0`，安全保存到
+`~/.agent-reach/config.yaml`，供 `agent-reach doctor` 检查显式凭据是否齐全。
+`doctor` 不会执行 `twitter status`，不会实时验证账号是否可用，也不会修改当前 Shell。
+
+默认只写 `~/.agent-reach/config.yaml`。只有用户明确同意复制凭据并显式增加
+`--sync-legacy-twitter` 时，才会额外写入：
+
+- `~/.config/xfetch/session.json`
+- `~/.config/bird/credentials.env`
+
+```bash
+agent-reach configure twitter-cookies "粘贴的 Header String" --sync-legacy-twitter
+```
+
+`agent-reach uninstall` 只会提醒这些 legacy 副本，不会自动删除。需要清理时，
+先让用户确认，再手工删除上述两个文件。
+
+`twitter` 是独立的上游命令，不会读取 Agent Reach 的配置文件。直接运行
+`twitter status/search/read/...` 时，必须按下节在当前 Shell 或子进程环境中
+显式设置 `TWITTER_AUTH_TOKEN` 和 `TWITTER_CT0`。不要依赖自动读取浏览器 Cookie。
 
 ## 手动设置 Cookie
 
@@ -53,8 +72,8 @@ agent-reach configure twitter-cookies "粘贴的 cookie JSON"
 2. 设置环境变量：
 
 ```bash
-export AUTH_TOKEN="你的auth_token"
-export CT0="你的ct0"
+export TWITTER_AUTH_TOKEN="你的auth_token"
+export TWITTER_CT0="你的ct0"
 ```
 
 3. 测试：

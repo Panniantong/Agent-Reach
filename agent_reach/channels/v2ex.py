@@ -4,6 +4,9 @@
 import json
 import urllib.request
 from typing import Any
+
+from agent_reach.utils.text import scrub_url_credentials
+
 from .base import Channel
 
 _UA = "agent-reach/1.0"
@@ -28,9 +31,9 @@ class V2EXChannel(Channel):
     # ------------------------------------------------------------------ #
 
     def can_handle(self, url: str) -> bool:
-        from urllib.parse import urlparse
-        d = urlparse(url).netloc.lower()
-        return "v2ex.com" in d
+        from agent_reach.utils.url import host_matches
+
+        return host_matches(url, "v2ex.com")
 
     # ------------------------------------------------------------------ #
     # Health check
@@ -45,7 +48,10 @@ class V2EXChannel(Channel):
             return "ok", "公开 API 可用（热门主题、节点浏览、主题详情、用户信息）"
         except Exception as e:
             self.active_backend = None
-            return "warn", f"V2EX API 连接失败（可能需要代理）：{e}"
+            return (
+                "warn",
+                f"V2EX API 连接失败（可能需要代理）：{scrub_url_credentials(e)}",
+            )
 
     # ------------------------------------------------------------------ #
     # Data-fetching methods

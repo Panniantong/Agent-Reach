@@ -30,13 +30,30 @@ class TestCLI:
         assert exc_info.value.code == 0
 
     def test_doctor_runs(self, capsys):
-        with patch("sys.argv", ["agent-reach", "doctor"]):
+        with patch(
+            "agent_reach.doctor.check_all",
+            return_value={
+                "web": {
+                    "status": "ok",
+                    "name": "网页",
+                    "message": "可用",
+                    "tier": 0,
+                    "backends": ["Jina Reader"],
+                    "active_backend": "Jina Reader",
+                }
+            },
+        ), patch(
+            "agent_reach.doctor.format_report",
+            return_value="Agent Reach\n✅ 网页可用",
+        ), patch("sys.argv", ["agent-reach", "doctor"]):
             main()
         captured = capsys.readouterr()
         assert "Agent Reach" in captured.out
         assert "✅" in captured.out
 
-    def test_doctor_preserves_existing_skill_install(self, monkeypatch, tmp_path, capsys):
+    def test_doctor_is_read_only_and_never_installs_skill(
+        self, monkeypatch, tmp_path, capsys
+    ):
         skill_dir = tmp_path / ".agents" / "skills" / "agent-reach"
         skill_dir.mkdir(parents=True)
         skill_file = skill_dir / "SKILL.md"
@@ -53,12 +70,22 @@ class TestCLI:
         monkeypatch.setattr(Config, "CONFIG_FILE", config_dir / "config.yaml")
         monkeypatch.setattr("agent_reach.doctor.check_all", lambda config: {})
         monkeypatch.setattr("agent_reach.doctor.format_report", lambda results: "report")
+        install_calls = []
+        monkeypatch.setattr(
+            cli,
+            "_install_skill",
+            lambda *args, **kwargs: install_calls.append((args, kwargs)),
+        )
 
         cli._cmd_doctor(Namespace(json=False))
 
         assert skill_file.read_text(encoding="utf-8") == custom_content
+        assert install_calls == []
+        assert not config_dir.exists()
         out = capsys.readouterr().out
-        assert "preserving existing files" in out
+        assert "report" in out
+        assert "Skill installed" not in out
+        assert "preserving existing files" not in out
         assert f"Skill installed for Agent: {skill_dir}" not in out
 
     def test_transcribe_command_prints_text(self, capsys):
@@ -87,6 +114,35 @@ class TestCLI:
         )
         assert auth_token == "token123"
         assert ct0 == "ct0abc"
+
+    def test_twitter_config_does_not_run_unsafe_verification_or_mutate_env(
+        self, monkeypatch, capsys
+    ):
+        monkeypatch.setenv("TWITTER_AUTH_TOKEN", "shell-auth")
+        monkeypatch.setenv("TWITTER_CT0", "shell-ct0")
+        monkeypatch.setattr(shutil, "which", lambda name: "/bin/twitter")
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: pytest.fail(
+                "configure must not execute twitter status"
+            ),
+        )
+
+        cli._cmd_configure(
+            Namespace(
+                from_browser=None,
+                key="twitter-cookies",
+                value=["saved-auth", "saved-ct0"],
+                sync_legacy_twitter=False,
+            )
+        )
+
+        output = capsys.readouterr().out
+        assert "未实时验证" in output
+        assert "不会执行 `twitter status`" in output
+        assert cli.os.environ["TWITTER_AUTH_TOKEN"] == "shell-auth"
+        assert cli.os.environ["TWITTER_CT0"] == "shell-ct0"
 
     def test_install_rdt_cli_prefers_github_source(self, monkeypatch, capsys):
         state = {"rdt_installed": False}
