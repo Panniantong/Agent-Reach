@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
 
 from agent_reach.channels.twitter import TwitterChannel
 
@@ -26,6 +26,30 @@ def test_check_twitter_cli_found_and_auth_ok():
     assert status == "ok"
     assert "twitter-cli" in message
     assert "完整可用" in message
+    assert channel.active_backend == "twitter-cli"
+
+
+def test_client_transaction_failure_marks_search_degraded():
+    """认证正常但 ClientTransaction 初始化失败 → 不得误报搜索完整可用。"""
+    channel = TwitterChannel()
+    with patch(
+        "shutil.which",
+        side_effect=lambda name: "/usr/local/bin/twitter" if name == "twitter" else None,
+    ), patch(
+        "subprocess.run",
+        return_value=_cp(
+            stdout="ok: true\nusername: testuser\n",
+            stderr=(
+                "WARNING twitter_cli.client: Failed to init ClientTransaction: "
+                "'NoneType' object has no attribute 'group'\n"
+            ),
+            returncode=0,
+        ),
+    ):
+        status, message = channel.check()
+    assert status == "warn"
+    assert "搜索初始化失败" in message
+    assert "HTTP 404" in message
     assert channel.active_backend == "twitter-cli"
 
 

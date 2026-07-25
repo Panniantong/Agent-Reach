@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Twitter/X — check if twitter-cli or bird CLI is available."""
 
-from .base import Channel
 from agent_reach.probe import probe_command
+
+from .base import Channel
 
 
 class TwitterChannel(Channel):
@@ -75,6 +76,12 @@ class TwitterChannel(Channel):
 
         output = probe.output
         if "ok: true" in output:
+            if "failed to init clienttransaction" in output.lower():
+                return "warn", (
+                    "twitter-cli 已认证，读取、时间线和用户查询可用；"
+                    "但搜索初始化失败，SearchTimeline 当前会返回 HTTP 404。"
+                    "优先改用 OpenCLI（复用浏览器登录态），或升级 twitter-cli 后重试"
+                )
             return "ok", (
                 "twitter-cli 完整可用（搜索、读推文、时间线、长文/Article、"
                 "用户查询、Thread）"

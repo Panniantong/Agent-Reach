@@ -97,9 +97,11 @@ twitter likes
 ### search 失败时的重试链（按序执行，成功即停）
 
 1. 直接重试一次（偶发失败常见）：`twitter search "query" -n 10`
-2. 升级后再试：`pipx upgrade twitter-cli && twitter search "query" -n 10`
+2. 按实际安装器升级后再试：`uv tool upgrade twitter-cli || pipx upgrade twitter-cli`，然后重新执行搜索
 3. 换 OpenCLI 备选（桌面，复用浏览器登录态）：`opencli twitter search "query" -f yaml`
-4. 都不行就改用 `twitter feed` / `twitter user-posts @somebody` 等稳定命令绕路
+4. 若环境有已登录 X 的浏览器控制工具，打开
+   `https://x.com/search?q=URL_ENCODED_QUERY&src=typed_query&f=live` 读取结果
+5. 都不行就改用 `twitter feed` / `twitter user-posts @somebody` 等稳定命令绕路
 
 ### 重要注意事项
 
@@ -110,6 +112,8 @@ twitter likes
 > **IP 风控**: 不要在 VPS/数据中心 IP 上频繁调用，尤其是 followers/following，有封号风险。使用住宅代理或本地环境。
 >
 > **OpenCLI 备选**: 桌面装了 OpenCLI 的话，`opencli twitter search/article/user-posts -f yaml` 全套可用（浏览器登录态，无需 cookie 环境变量）。
+>
+> **doctor 判定**: `twitter status` 可能在认证正常时仍输出 `Failed to init ClientTransaction`。这代表读取类命令可用、但搜索会返回 HTTP 404；`agent-reach doctor` 会把它标为降级，并继续寻找 OpenCLI 等可用后端。
 >
 > **输出格式**: 建议用 `--yaml` 或 `--json` 获得结构化输出，对 AI agent 更友好。
 
