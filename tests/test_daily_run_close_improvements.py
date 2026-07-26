@@ -12,15 +12,17 @@ from agent_reach.daily_run.settings import load_settings
 
 def test_expected_scan_slots_count():
     slots = expected_scan_slots()
-    assert len(slots) == 15
+    assert len(slots) == 16
     assert slots[0]["scan_id"] == "S1"
-    assert slots[0]["time"] == "08:00"
+    assert slots[0]["time"] == "07:00"
     assert slots[1]["scan_id"] == "S2"
-    assert slots[1]["time"] == "08:30"
+    assert slots[1]["time"] == "08:00"
     assert slots[2]["scan_id"] == "S3"
-    assert slots[2]["time"] == "09:00"
+    assert slots[2]["time"] == "08:30"
     assert slots[3]["scan_id"] == "S4"
-    assert slots[3]["time"] == "09:30"
+    assert slots[3]["time"] == "09:00"
+    assert slots[4]["scan_id"] == "S5"
+    assert slots[4]["time"] == "09:30"
 
 
 def test_render_improvements_empty_when_enabled():
@@ -70,8 +72,9 @@ def test_generate_mss_and_schedule_improvements():
         "recommendations": ["维持观望"],
     }
     scans = [
-        {"scan_id": "S1", "as_of": "2026-07-08T23:00:00+00:00", "mss_final": 48, "source": "morning"},
-        {"scan_id": "S2", "as_of": "2026-07-08T00:00:00+00:00", "mss_final": 46},
+        {"scan_id": "S1", "as_of": "2026-07-08T22:00:00+00:00", "mss_final": 47},
+        {"scan_id": "S2", "as_of": "2026-07-08T23:00:00+00:00", "mss_final": 48, "source": "morning"},
+        {"scan_id": "S3", "as_of": "2026-07-08T00:00:00+00:00", "mss_final": 46},
     ]
     curve = {"trend": "震荡走弱", "prediction_hit": False, "deviation": "尾盘偏低"}
 
