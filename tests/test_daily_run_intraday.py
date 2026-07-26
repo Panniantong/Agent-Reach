@@ -157,7 +157,9 @@ class TestIntradayWorkflow:
         state_path = tmp_path / "intraday.json"
         reset_state(state_path)
         settings = load_settings()
-        for _ in range(15):
+        from agent_reach.daily_run.intraday import MAX_SCANS
+
+        for _ in range(MAX_SCANS):
             record_scan(intraday_snapshot, settings=settings, state_path=state_path)
         with pytest.raises(RuntimeError, match="扫描已达上限"):
             record_scan(intraday_snapshot, settings=settings, state_path=state_path)

@@ -16,7 +16,7 @@ from agent_reach.daily_run.run_manifest import StepTimer, save_run_manifest
 MARKER_BEGIN = "# agent-reach daily-run schedule BEGIN"
 MARKER_END = "# agent-reach daily-run schedule END"
 
-# 15 scans/day: S1 morning 08:00 + S2 08:30 + S3 09:00 + S4–S15 session 09:30–15:00
+# 15 scans/day: S1 premarket 07:00 + S2 morning 08:00 + S3 08:30 + S4 09:00 + S5–S15 session
 INTRADAY_SCAN_TIMES: list[tuple[str, str]] = [
     ("30", "8"),   # 08:30 S2
     ("0", "9"),    # 09:00 S3
@@ -33,8 +33,8 @@ INTRADAY_SCAN_TIMES: list[tuple[str, str]] = [
     ("36", "14"),  # 14:36 S14
     ("0", "15"),   # 15:00 S15
 ]
-# S1 = 08:00 morning job; S2–S15 = intraday cron slots above
-INTRADAY_MAX_SCANS = 1 + len(INTRADAY_SCAN_TIMES)
+# S1 = 07:00 premarket intraday; S2 = 08:00 morning job; S3–S15 = intraday cron slots above
+INTRADAY_MAX_SCANS = 1 + 1 + len(INTRADAY_SCAN_TIMES)
 
 
 @dataclass
@@ -77,9 +77,10 @@ def _cron_run_cmd(job: str) -> str:
 def default_entries() -> list[CronEntry]:
     """Default Asia/Shanghai trading schedule (CRON_TZ=Asia/Shanghai)."""
     entries = [
+        CronEntry("0", "7", "1-5", _cron_run_cmd("intraday"), "daily-run 盘前 S1 7:00"),
         CronEntry("0", "8", "1-5", _cron_run_cmd("morning"), "daily-run 早盘 8:00"),
     ]
-    for i, (minute, hour) in enumerate(INTRADAY_SCAN_TIMES, start=2):
+    for i, (minute, hour) in enumerate(INTRADAY_SCAN_TIMES, start=3):
         entries.append(
             CronEntry(
                 minute,
