@@ -8,6 +8,7 @@ description: >
   交易日内执行 10 次数据收集，最多进行 5 次调仓量化，每次量化前审视前 5 次收集结论，调仓时间由随机数与上次评估综合决定。
   **全流程实时推送铁律：** 早盘分析、盘中高频数据收集、Lookback 审视过程、量化调仓交易以及每日收盘深度复盘的所有过程数据、决策逻辑和资产净值，系统必须在执行完毕的第一时间，自动、主动将精美的富文本 Markdown 卡片简报推送到指定的飞书群聊中，实现 100% 实时、透明的主动监控。
   每日收盘后自动执行深度复盘，使用 Exa 技能对热点公司、竞品、市场、财报及关键人物 LinkedIn 进行深度调研，为明天的早盘给出高置信度指导建议，并将量化经验原子化沉淀、更新到技能文件中。
+  **Agent 优先顺序：** 先读 skill 内「📋 下周执行清单」与最新周复盘，再选手工 CLI 或依赖 cron；周六 weekly 自动写回 skill 与 settings。
 triggers:
   - analyze: 股票大师/每日复盘/股票分析/大盘复盘/热门方向/分析股票/分析市场/复盘/分析
   - stock: 股票/个股/板块/技术面/K线/均线
@@ -20,6 +21,91 @@ metadata:
 # 股票大师每日复盘与热门标的分析技能 (daily_run_skill)
 
 本技能定义了如何作为**股票大师**，结合 **agent-reach** 的网页抓取能力定位全球宏观与微观因子，并调用 **daily_stock_analysis (DSA)** 执行自动化 K线拉取、多市场共振与技术面融合的 AI 决策分析。
+
+## ⚡ Agent 执行入口（优先阅读）
+
+**触发本 skill 时，严格按以下顺序执行，避免重复读全文：**
+
+1. **读「📋 下周执行清单」** — 周六 weekly 自动写入的最高优先级任务与已应用参数。
+2. **读「🧠 经验沉淀库」最新周复盘** — 本周盈亏说明、规则库、流程改进。
+3. **选路径执行**（二选一，不要重复跑）：
+   - **自动化（推荐）**：本地 cron 已安装 → 仅监控 / 补跑，不要手工替代全流程。
+   - **手工单次**：用下方 `python3 -m agent_reach.cli` 或 `scripts/daily-run-local-cron.sh`。
+4. **推送铁律**：任一阶段完成后必须飞书推送；失败先 `doctor` + 查 `~/.agent-reach/daily_run/logs/`。
+5. **禁止**：跳过数据审计 Gate、在 MSS<macro_veto 时强行买入、删除 cron/脚本。
+
+### 本地命令前缀（Cloud / cron 通用）
+
+```bash
+# 推荐：与 crontab 一致
+REPO=/home/zjk/cursor
+PY="${REPO}/venv/bin/python3"
+CRON="${REPO}/scripts/daily-run-local-cron.sh"
+
+# 等价 CLI（手动调试）
+${PY} -m agent_reach.cli daily-run schedule run morning
+${PY} -m agent_reach.cli daily-run schedule run intraday
+${PY} -m agent_reach.cli daily-run schedule run close
+${PY} -m agent_reach.cli daily-run schedule run weekly
+${PY} -m agent_reach.cli daily-run schedule run forecast
+${PY} -m agent_reach.cli doctor --json
+```
+
+日志：`~/.agent-reach/daily_run/logs/cron-YYYY-MM-DD.log` · 持仓：`~/.agent-reach/daily_run/portfolio.json` ·  playbook 清单：`~/.agent-reach/daily_run/next_week_playbook.json`
+
+### ⚡ 性能要点（默认已开启，勿重复拉全量）
+
+| 场景 | 策略 |
+|------|------|
+| 盘中 intraday | 仅刷新 quotes（`snapshot.intraday_enrich_level=quotes`），复用日缓存 macro/technicals |
+| doctor | 日缓存 4h（`schedule.doctor_cache`），weekly/forecast 跳过 |
+| Exa 收盘调研 | TTL 86400s（`exa_cache`），同 query 不重复搜 |
+| 60s 热点 | 本地 8787 优先，fallback `https://60s.viki.moe` |
+| 周六 weekly | ① 写回经验 + ② 执行清单 ③ settings 补丁 ④ 同步本地 skill ⑤ `pip install -e .` ⑥ **skill 审视**（去重/结构校验） |
+
+### 周六 weekly 闭环（cron `schedule run weekly` 自动执行）
+
+1. 生成周报 + 飞书推送  
+2. 写入「🧠 经验沉淀库」周复盘块  
+3. 写入「📋 下周执行清单」+ 自动 patch `daily_run_settings.json`  
+4. 同步 `daily_run_skill.md` → `~/.agents/skills/daily-run/SKILL.md`  
+5. `pip install -e .[dev]` 刷新 cron 代码  
+6. **skill 审视（最后一步）**：校验必备章节、去重重复块/孤儿片段、再次同步本地  
+
+---
+
+## 📋 下周执行清单（周六自动更新 · 复盘 2026-07-20~2026-07-24）
+
+> 更新时间 2026-07-26 03:51 UTC。Agent 与 daily-run 下周须优先执行；带 ✅ 的参数已自动写入 settings。
+
+### ⚙️ 参数自动调整（已应用）
+
+- ✅ schedule.alert_after_consecutive_failures: 3 → 2（加强任务失败告警）
+- ✅ mss_forecast.base_spread: 8 → 9（持仓浮亏标的需关注）
+
+### 🔧 流程改进
+
+- 🔴 **缺失 2 天早盘任务** — 日期：2026-07-21, 2026-07-22；无 morning manifest 会导致收盘 verify 缺基线
+  - 执行：检查 GHA cron 0 8 * * 1-5 与 Fork 是否 Enable scheduled workflows
+- 🔴 **缺失 2 天收盘复盘** — 日期：2026-07-21, 2026-07-24；经验沉淀与观察池 adjust 会中断
+  - 执行：检查 GHA cron 30 15 * * 1-5；手动补跑 daily-run schedule run close
+- 🟡 **持仓浮亏标的需关注** — 海能达(-60.5%)
+  - 执行：收盘 verify 若 MSS<macro_veto 则优先纳入明日卖出候选
+- 🔴 **本周 2 次 MSS 预测未命中** — 早盘 mss_range 与实盘偏离，影响 T_n 与仓位决策
+  - 执行：增大 mss_forecast.base_spread 或运行 daily-run optimize
+
+### 🎓 技能学习
+
+- **daily_run_skill 主技能复盘：** 每周通读 `agent_reach/skill/daily_run_skill.md`，将本周 Exa 调研结论与 MSS 权重调参写入技能「经验沉淀」章节。
+  - 执行：agent-reach skill --install && 编辑 ~/.openclaw/skills/agent-reach/SKILL.md 或仓库内 daily_run_skill.md
+- **平台接入指南：** 已内置 5 份 setup 指南（exa、groq、reddit、twitter 等），用于扩展数据源与调研能力。
+  - 执行：阅读 agent_reach/guides/setup-*.md，按需配置 Exa / 雪球 / Twitter
+- **Agent Reach 参考技能：** references/ 含 7 类扩展能力（web/search/social 等），可组合进早盘舆情抓取。
+  - 执行：浏览 agent_reach/skill/references/，在 macro_collector 或 close_research 中引用
+- **经验规则库更新：** 最近沉淀规则：尾盘曲线 震荡走弱：次日早盘偏防御；偏差：MSS 实际 35.7 高于预测上沿 33.2（偏差 2.5）；偏差：标签由「可做」变为「回避」
+  - 执行：将验证有效的规则写回 daily_run_skill.md「量化经验库」章节
+- **MSS 预测校准技能：** 本周 2 次 MSS 预测未命中，建议学习 mss_forecast 与 curve_analysis 调参。
+  - 执行：阅读 daily_run_skill 中「日内 MSS 范围预测」章节，运行 daily-run optimize
 
 ## 🚀 极致量化执行算法 (10次收集 + 5次调仓)
 
@@ -79,7 +165,6 @@ metadata:
     *   **日内 MSS 范围预测 (Intraday MSS Range Forecast)：** 结合早盘 8:00 抓取的全球隔夜数据及昨日收盘拟合曲线，通过**蒙特卡洛模拟**，预测今日盘中 10 次数据收集的 **MSS 波动范围**（如：*“预测今日盘中 MSS 波动范围为 [35, 52] 分，日内大概率维持弱势震荡，操作上建议继续高现金潜伏”*），为全天交易提供清晰的“波动率护栏”。
 *   **第四步：主动推送：** 8:05 前将精美的早盘分析 Markdown 卡片（含权限自检报告、热点进展、操盘纲领、日内 MSS 预测）自动推送到绑定的飞书群聊。
 
----
 
 ## 🛡️ Phase-1 质量工程化（数据审计 + 三档标签 + 质量门禁）
 
@@ -354,7 +439,7 @@ agent-reach daily-run schedule run forecast
 | 08:00 | 早盘全量分析 + S2 + 飞书 + 保存基线 |
 | 09:30–15:00 **11 次**扫描 | 盘中 S3–S12 + 条件调仓 T_n（smart 推送：S1/S2/S12 或调仓时） |
 | 15:30 | 收盘复盘（Team + 曲线 + Exa + 验证 + 预测校准） |
-| **周六 09:00** | **周报**：盈亏、持股、观察池、热门板块、技能学习 → 飞书 |
+| **周六 09:00** | **周报**：盈亏、持股、观察池、热门板块 → 飞书；**闭环** 写回 skill + settings + 本地同步 + skill 审视 |
 | **周日 09:00** | **下周预测**：MSS/标的日走势、新闻热点 → 飞书 + `forecasts/` |
 
 定时任务默认 **doctor 日缓存**、**macro/technicals 日缓存**（intraday 仅刷新 quotes）、**Exa TTL 缓存**、**A 股交易日历跳过休市**。
@@ -401,7 +486,6 @@ cp config/daily_run_holidays.example.json ~/.agent-reach/daily_run/holidays.json
 
 ---
 
-### 2. 每日 10 次数据收集 (S1 - S10)
 系统在交易日内（9:15 - 15:00）均匀或按盘口波动密集度执行 **10 次全球市场与舆情数据收集**。
 
 ### 3. 每次量化调仓前审视前 3 次收集结论 (加权 Lookback 机制)
@@ -449,7 +533,7 @@ $$\text{Final\_MSS} = 0.5 \cdot \text{MSS}(S_n) + 0.3 \cdot \text{MSS}(S_{n-1}) 
     *   将 Exa 调研获取的**财报硬数据、竞品核心参数、行业供需拐点、高管变动舆情**进行交叉验证。
     *   为明天的 8:00 早盘分析提供高置信度、可落地的核心指导建议（如：*“澜起科技核心竞品 Rambus 最新财报超预期，验证 DDR5 强劲需求，明日早盘建议维持高配”*）。
 
----
+
 
 ## 📊 股票大师多市场共振与技术面量化决策模型 (巴菲特价值选股 × 量化择时融合版)
 
@@ -482,6 +566,47 @@ $$\text{Final\_MSS} = 0.5 \cdot \text{MSS}(S_n) + 0.3 \cdot \text{MSS}(S_{n-1}) 
 
 本库用于记录每日收盘后的实战得失，并将经验提炼为量化规则，动态更新以指导后续交易。
 
+### 📅 2026-07-20 ~ 2026-07-24 周复盘（周六自动沉淀）
+*   **更新时间：** 2026-07-26 03:51 UTC
+*   **本周盈亏说明：**
+*   **情况说明：** 本周组合净值基本 **持平**（+0.00 元，+0.0%）。
+*   **持仓浮盈合计：** ¥-16,257（4 只）
+*   **现金仓位：** 46.0%（¥40,176）
+*   **成交现金流（ledger）：** ¥-48,306.35，共 2 笔
+    *   2026-07-23 买入京东方A 5300股 @ ¥7.50；2026-07-24 买入京东方A 1400股 @ ¥6.06
+*   _净值变动接近 0 但 ledger 有大额成交：可能缺少周初早盘净值基线，或买入使用既有现金、市值波动与成交相互抵消。_
+*   _本周无早盘 manifest，周初净值用周末/当前估值代替_
+*   **持股概况：** 澜起科技 (688008) +3.62%、水晶光电 (002273) +1.26%、京东方A (000725) -4.46%、海能达 (002583) -4.37%
+*   **强势标的：** 澜起科技 +3.62%、水晶光电 +1.26%、兆易创新 +1.12%
+*   **任务覆盖：** 早盘 0/5、收盘 0/5、盘中 0 次
+*   **备注：** 本周无早盘 manifest，周初净值用周末/当前估值代替
+*   **收盘经验片段：**
+    *   2026-07-20 澜起科技 MSS=37.36 ✅ 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测命中：维持当前权重配置
+    *   2026-07-20 水晶光电 MSS=37.36 ✅ 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测命中：维持当前权重配置
+    *   2026-07-20 海能达 MSS=37.36 — 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测偏离：下日调低进攻阈值或缩窄仓位
+    *   2026-07-20 兆易创新 MSS=37.36 ✅ 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测命中：维持当前权重配置
+    *   2026-07-20 京东方A MSS=37.36 — 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测偏离：下日调低进攻阈值或缩窄仓位
+*   **量化规则库（最近）：**
+    *   偏差：价格变动 21.5% 超过锚点阈值 8.0%
+    *   偏差：MSS 实际 35.7 高于预测上沿 35.2（偏差 0.5）
+    *   尾盘曲线 震荡走弱：次日早盘偏防御
+    *   偏差：MSS 实际 35.7 高于预测上沿 33.2（偏差 2.5）
+    *   偏差：标签由「可做」变为「回避」
+*   **流程改进（优先）：**
+    *   **缺失 2 天早盘任务** — 检查 GHA cron 0 8 * * 1-5 与 Fork 是否 Enable scheduled workflows
+    *   **缺失 2 天收盘复盘** — 检查 GHA cron 30 15 * * 1-5；手动补跑 daily-run schedule run close
+    *   **持仓浮亏标的需关注** — 收盘 verify 若 MSS<macro_veto 则优先纳入明日卖出候选
+    *   **本周 2 次 MSS 预测未命中** — 增大 mss_forecast.base_spread 或运行 daily-run optimize
+*   **技能学习要点：**
+    *   **daily_run_skill 主技能复盘：** 每周通读 `agent_reach/skill/daily_run_skill.md`，将本周 Exa 调研结论与 MSS 权重调参写入技能「经验沉淀」章节。
+    *   **平台接入指南：** 已内置 5 份 setup 指南（exa、groq、reddit、twitter 等），用于扩展数据源与调研能力。
+    *   **Agent Reach 参考技能：** references/ 含 7 类扩展能力（web/search/social 等），可组合进早盘舆情抓取。
+    *   **经验规则库更新：** 最近沉淀规则：尾盘曲线 震荡走弱：次日早盘偏防御；偏差：MSS 实际 35.7 高于预测上沿 33.2（偏差 2.5）；偏差：标签由「可做」变为「回避」
+    *   **MSS 预测校准技能：** 本周 2 次 MSS 预测未命中，建议学习 mss_forecast 与 curve_analysis 调参。
+
+
+---
+
 ### 📅 2026-07-06 (周一) 经验沉淀 — 系统性暴跌下的“空仓防御”艺术
 *   **今日市况：** 创业板指大跌 **-2.1%**，科创50跌 **-1.8%**，玻璃基板板块暴跌 **-5.8%**。外资（北向）单边净流出达 58 亿元，离岸人民币贬值至 7.2910。
 *   **今日实盘操作记录（已原子化入库）：**
@@ -502,7 +627,6 @@ $$\text{Final\_MSS} = 0.5 \cdot \text{MSS}(S_n) + 0.3 \cdot \text{MSS}(S_{n-1}) 
     *   **规则 1 (宏观一票否决制)：** 即使个股技术指标（如回踩 MA20）触发买入点，若当日宏观评估 MSS 分值 **低于 40 分**（代表全球市场系统性踩踏），**系统必须强制取消一切买入操作，实行 100% 空仓防守，绝不接飞刀**。
     *   **规则 2 (高现金潜伏)：** 在大盘未出现明确见底信号（如外资转为净流入、人民币升值）前，现金仓位必须保持在 **40% 以上**，以静制动。
 
----
 
 ## 🛠️ 运维与排障指南
 

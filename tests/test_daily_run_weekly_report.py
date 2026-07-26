@@ -233,6 +233,57 @@ class TestWeeklyReport:
         assert "周报" in title
         assert "+¥2,000" in title
 
+    def test_build_weekly_pnl_explanation(self):
+        from agent_reach.daily_run.weekly_report import (
+            WeeklyReport,
+            _render_pnl_lines,
+            build_weekly_pnl_explanation,
+        )
+
+        report = WeeklyReport(
+            week_start=date(2026, 7, 20),
+            week_end=date(2026, 7, 24),
+            start_total=87323.27,
+            end_total=87323.27,
+            weekly_pnl=0.0,
+            weekly_pnl_pct=0.0,
+            realized_pnl=-48306.35,
+            cash=40176.27,
+            cash_ratio=0.4601,
+            holdings=[
+                {
+                    "name": "京东方A",
+                    "code": "000725",
+                    "unrealized_pnl": -378,
+                    "week_chg": -420,
+                },
+                {
+                    "name": "澜起科技",
+                    "code": "688008",
+                    "unrealized_pnl": -2221,
+                    "week_chg": 850,
+                },
+            ],
+            trades=[{"at": "2026-07-24", "actions": [{"side": "buy", "name": "京东方A", "shares": 1400, "price": 6.06}]}],
+            notes=["本周无早盘 manifest，周初净值用周末/当前估值代替"],
+            daily_totals=[
+                {"date": "2026-07-23", "total": 87000, "job": "close"},
+                {"date": "2026-07-24", "total": 87323.27, "job": "close"},
+            ],
+        )
+        expl = build_weekly_pnl_explanation(report)
+        text = "\n".join(expl)
+        assert "情况说明" in text
+        assert "持平" in text
+        assert "持仓浮盈合计" in text
+        assert "现金仓位" in text
+        assert "成交现金流" in text
+        assert "京东方A" in text
+
+        rendered = "\n".join(_render_pnl_lines(report))
+        assert "情况说明" in rendered
+        assert rendered.count("本周无早盘 manifest") == 1
+
     @patch("agent_reach.daily_run.weekly_report._load_manifest")
     @patch("agent_reach.daily_run.weekly_report.runs_dir")
     def test_manifest_pnl_from_close_runs(self, mock_runs_dir, mock_load, tmp_path, snapshot, portfolio):
