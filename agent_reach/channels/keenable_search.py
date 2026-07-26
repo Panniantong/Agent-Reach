@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 """Keenable Search — check if mcporter + Keenable MCP is available."""
 
-from agent_reach.probe import probe_command
+import shutil
 
 from .base import Channel
-
-#: mcporter 是 npm 包，断链处方与默认的 pipx/uv 不同
-_MCPORTER_BROKEN_HINT = "mcporter 无法执行（node 环境损坏），重装：\n  npm install -g mcporter"
+from .mcporter import McporterConfigError, inspect_mcporter_config
 
 
 class KeenableSearchChannel(Channel):
@@ -20,21 +18,27 @@ class KeenableSearchChannel(Channel):
 
     def check(self, config=None):
         self.active_backend = None
-        probe = probe_command("mcporter", ["config", "list"], timeout=10, package="mcporter")
-        if probe.status == "missing":
+        if not shutil.which("mcporter"):
             return "off", (
                 "需要 mcporter + Keenable MCP。安装：\n"
                 "  npm install -g mcporter\n"
-                "  mcporter config add keenable https://api.keenable.ai/mcp"
+                "  mcporter config add keenable https://api.keenable.ai/mcp --scope home"
             )
-        if probe.status == "broken":
-            return "error", _MCPORTER_BROKEN_HINT
-        if not probe.ok:  # timeout / error
-            return "error", f"mcporter 执行异常：{probe.hint or probe.output or probe.status}"
-        if "keenable" in probe.output.lower():
-            self.active_backend = self.backends[0]
-            return "ok", "全网搜索 + 网页抓取可用（免费，无需 API Key）"
+        try:
+            inspection = inspect_mcporter_config()
+        except McporterConfigError as exc:
+            return "error", f"mcporter 配置检查失败：{exc}"
+        if "keenable" in inspection.server_names:
+            return "warn", (
+                "Keenable 已写入 mcporter 配置，但 Doctor 未启动远端服务做"
+                "连通验证，不能仅凭配置宣称可用。"
+            )
+        if inspection.imports_unchecked:
+            return "warn", (
+                "mcporter 本地配置未发现 Keenable；配置还启用了 editor imports，"
+                "Doctor 为避免扩大凭据读取范围没有展开，当前未验证。"
+            )
         return "off", (
             "mcporter 已装但 Keenable 未配置。运行：\n"
-            "  mcporter config add keenable https://api.keenable.ai/mcp"
+            "  mcporter config add keenable https://api.keenable.ai/mcp --scope home"
         )

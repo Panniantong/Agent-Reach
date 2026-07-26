@@ -1643,6 +1643,99 @@ class TestExaSearchChannel:
         assert ch.active_backend is None
 
 
+class TestKeenableSearchChannel:
+    def test_mcporter_is_never_executed(self, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: pytest.fail(
+                "Doctor must not execute mcporter"
+            ),
+        )
+        from agent_reach.channels.keenable_search import KeenableSearchChannel
+        ch = KeenableSearchChannel()
+        status, msg = ch.check()
+        assert status == "off"
+        assert ch.active_backend is None
+
+    def test_configured_keenable_is_not_false_positive_active(
+        self, monkeypatch, tmp_path
+    ):
+        monkeypatch.chdir(tmp_path)
+        config_path = tmp_path / "config" / "mcporter.json"
+        config_path.parent.mkdir()
+        config_path.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "keenable": {"baseUrl": "https://mcp.example.test"}
+                    },
+                    "imports": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
+        from agent_reach.channels.keenable_search import KeenableSearchChannel
+        ch = KeenableSearchChannel()
+        status, msg = ch.check()
+        assert status == "warn"
+        assert "未启动" in msg
+        assert ch.active_backend is None
+
+    def test_config_metadata_containing_keenable_is_not_a_backend(
+        self, monkeypatch, tmp_path
+    ):
+        monkeypatch.chdir(tmp_path)
+        config_path = tmp_path / "config" / "mcporter.json"
+        config_path.parent.mkdir()
+        config_path.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "unrelated": {
+                            "baseUrl": "https://example.test/keenable-project"
+                        }
+                    },
+                    "imports": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
+        from agent_reach.channels.keenable_search import KeenableSearchChannel
+
+        ch = KeenableSearchChannel()
+        status, _ = ch.check()
+        assert status == "off"
+        assert ch.active_backend is None
+
+    def test_invalid_mcporter_json_is_reported_as_error_not_unconfigured(
+        self, monkeypatch, tmp_path
+    ):
+        monkeypatch.chdir(tmp_path)
+        config_path = tmp_path / "config" / "mcporter.json"
+        config_path.parent.mkdir()
+        config_path.write_text("not-json", encoding="utf-8")
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: pytest.fail(
+                "Doctor must not execute mcporter"
+            ),
+        )
+        from agent_reach.channels.keenable_search import KeenableSearchChannel
+
+        ch = KeenableSearchChannel()
+        status, message = ch.check()
+        assert status == "error"
+        assert "JSON" in message
+        assert ch.active_backend is None
+
+
 class TestXiaoyuzhouChannel:
     def test_reports_error_with_reinstall_hint_when_ffmpeg_broken(self, monkeypatch):
         """ffmpeg which 命中但 exec 失败（pip 假 ffmpeg 断链）→ error + 重装处方。"""
