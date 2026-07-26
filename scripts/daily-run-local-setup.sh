@@ -62,6 +62,7 @@ fi
 
 chmod +x "${REPO_ROOT}/scripts/daily-run-local-cron.sh"
 chmod +x "${REPO_ROOT}/scripts/60s-local-setup.sh"
+chmod +x "${REPO_ROOT}/scripts/60s-reboot-start.sh"
 
 export PATH="${HOME}/.local/node/bin:${PATH}"
 

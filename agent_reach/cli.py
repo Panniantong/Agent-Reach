@@ -245,7 +245,10 @@ def main():
                                   help=argparse.SUPPRESS)  # backward compat → skip-deploy
     p_dr_hot_install.add_argument("--no-pull", action="store_true",
                                   help="Skip git pull / docker pull before run")
-    p_dr_hot_sub.add_parser("status", help="Show 60s deploy / reachability status")
+    p_dr_hot_install.add_argument("--no-reboot-cron", action="store_true",
+                                  help="Do not install @reboot crontab auto-start")
+    p_dr_hot_sub.add_parser("install-reboot", help="Install @reboot crontab for 60s auto-start")
+    p_dr_hot_sub.add_parser("print-reboot-cron", help="Print @reboot crontab block")
     p_dr_hot_stop = p_dr_hot_sub.add_parser("stop", help="Stop local 60s (native and/or docker)")
     p_dr_hot_stop.add_argument("--remove", action="store_true",
                                help="Remove vendor dir (native) or container (docker)")
@@ -1857,7 +1860,13 @@ def _cmd_daily_run(args):
     if args.daily_action == "hot-news":
         import json as _json
 
-        from agent_reach.daily_run.hot_news_deploy import install_60s_local, status_60s, stop_60s
+        from agent_reach.daily_run.hot_news_deploy import (
+            install_60s_local,
+            install_reboot_crontab,
+            render_reboot_crontab_block,
+            status_60s,
+            stop_60s,
+        )
 
         action = args.hot_news_action
         if action == "install":
@@ -1867,6 +1876,7 @@ def _cmd_daily_run(args):
                 pull=not args.no_pull,
                 force=args.force,
                 skip_deploy=skip_deploy,
+                install_reboot_cron=not args.no_reboot_cron,
             )
             print(_json.dumps(result, ensure_ascii=False, indent=2))
             if result.get("ok"):
@@ -1875,9 +1885,27 @@ def _cmd_daily_run(args):
                     print(f"   Web 面板: {result['web_url']}  （8787 为 API JSON，请打开 Web 面板阅读）")
                 if result.get("settings_path"):
                     print(f"   settings: {result['settings_path']}")
+                if result.get("reboot_cron_installed"):
+                    print("   @reboot 自启: 已安装（重启后自动拉起 60s）")
+                elif result.get("reboot_cron_message"):
+                    print(f"   @reboot 自启: 未安装（{result['reboot_cron_message']}）")
             else:
                 print(f"\n⚠️ {result.get('message', '60s install incomplete')}")
                 sys.exit(1 if not result.get("active_base_url") else 0)
+            return
+
+        if action == "install-reboot":
+            try:
+                install_reboot_crontab()
+            except RuntimeError as exc:
+                print(f"⚠️ {exc}")
+                sys.exit(1)
+            print("✅ @reboot 自启已安装（重启后约 30s 自动拉起 60s + Web 面板）")
+            print(render_reboot_crontab_block())
+            return
+
+        if action == "print-reboot-cron":
+            print(render_reboot_crontab_block())
             return
 
         if action == "status":

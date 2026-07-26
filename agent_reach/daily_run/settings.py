@@ -80,3 +80,17 @@ def _read_json(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"Invalid settings file: {path}")
     return deepcopy(data)
+
+
+def save_user_settings(data: dict[str, Any], *, path: Path | None = None) -> Path:
+    """Persist daily-run settings to ~/.agent-reach/daily_run_settings.json."""
+    target = path or _USER_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    validate_settings(data)
+    target.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    clear_settings_cache()
+    return target
+
+
+def user_settings_path() -> Path:
+    return _USER_PATH

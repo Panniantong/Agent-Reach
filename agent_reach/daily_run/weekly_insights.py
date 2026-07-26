@@ -451,15 +451,16 @@ def generate_weekly_improvements(
         )
 
     min_cash = float(thresholds.get("min_cash_ratio", 0.4))
-    items.append(
-        InsightItem(
-            "workflow",
-            "low",
-            "周报 → 技能闭环",
-            "每周末将本周改进意见与技能学习条目合并写入 daily_run_skill.md",
-            action="git commit 技能更新；可选 agent-reach skill --install 同步到 OpenClaw",
+    if cfg.get("skill_writeback", True) is False:
+        items.append(
+            InsightItem(
+                "workflow",
+                "low",
+                "周报 → 技能闭环",
+                "skill_writeback 已关闭，周六周报不会写入技能文件",
+                action="在 weekly_report 中设置 skill_writeback: true",
+            )
         )
-    )
 
     max_items = int(cfg.get("max_improvement_items", 12))
     return items[:max_items]

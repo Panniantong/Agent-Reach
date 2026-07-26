@@ -532,6 +532,24 @@ def run_weekly(
     report = generate_weekly_report(snapshot, cfg, portfolio=portfolio)
     digest_path = save_weekly_digest(report.to_dict())
     steps.append("digest")
+
+    from agent_reach.daily_run.skill_improvements_apply import apply_weekly_skill_closure
+
+    skill_writeback = apply_weekly_skill_closure(report.to_dict(), cfg)
+    if skill_writeback.get("skipped"):
+        steps.append("skill_writeback_skipped")
+    else:
+        steps.append("skill_writeback")
+        if skill_writeback.get("synced_skills"):
+            steps.append(f"skill_sync_{len(skill_writeback['synced_skills'])}")
+        if skill_writeback.get("applied_config"):
+            steps.append(f"settings_applied_{len(skill_writeback['applied_config'])}")
+        audit = skill_writeback.get("skill_audit") or {}
+        if audit and audit.get("ok") is not False:
+            steps.append("skill_audit")
+            if audit.get("fixes"):
+                steps.append(f"skill_audit_fixes_{len(audit['fixes'])}")
+
     md = render_weekly_markdown(report)
     steps.append("render")
 
@@ -564,6 +582,7 @@ def run_weekly(
         "steps": steps,
         "report": report.to_dict(),
         "digest_path": str(digest_path),
+        "skill_writeback": skill_writeback,
         "markdown": md,
         "feishu": feishu_result,
     }

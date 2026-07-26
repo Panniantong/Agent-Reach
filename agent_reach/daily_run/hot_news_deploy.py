@@ -493,10 +493,115 @@ def wait_healthy(*, timeout: int = 60, poll_interval: float = 2.0) -> tuple[bool
     return False, f"60s API not reachable at {LOCAL_BASE_URL} within {timeout}s"
 
 
-def _attach_portal(result: dict[str, Any], *, force: bool = False) -> None:
+REBOOT_MARKER_BEGIN = "# agent-reach 60s reboot BEGIN"
+REBOOT_MARKER_END = "# agent-reach 60s reboot END"
+REBOOT_SLEEP_SECONDS = 30
+
+
+def reboot_start_script() -> Path:
+    """Resolve scripts/60s-reboot-start.sh from repo or installed package."""
+    candidates = [
+        Path(__file__).resolve().parents[2] / "scripts" / "60s-reboot-start.sh",
+    ]
+    try:
+        import importlib.util
+
+        spec = importlib.util.find_spec("agent_reach")
+        if spec and spec.origin:
+            candidates.append(Path(spec.origin).resolve().parent.parent / "scripts" / "60s-reboot-start.sh")
+    except Exception:
+        pass
+    for path in candidates:
+        if path.is_file():
+            return path
+    return candidates[0]
+
+
+def render_reboot_crontab_block(*, sleep_seconds: int = REBOOT_SLEEP_SECONDS) -> str:
+    script = reboot_start_script()
+    lines = [
+        REBOOT_MARKER_BEGIN,
+        "SHELL=/bin/bash",
+        "# log: ~/.agent-reach/daily_run/logs/60s-reboot-YYYY-MM-DD.log",
+    ]
+    if script.is_file():
+        lines.append(f"# wrapper: {script}")
+        lines.append(
+            f"@reboot sleep {sleep_seconds} && {script}  # agent-reach 60s auto-start on boot"
+        )
+    else:
+        lines.append(f"# missing wrapper script: {script}")
+    lines.append(REBOOT_MARKER_END)
+    return "\n".join(lines) + "\n"
+
+
+def _merge_crontab_block(existing: str, block: str, marker_begin: str, marker_end: str) -> str:
+    if marker_begin in existing:
+        before = existing.split(marker_begin)[0].rstrip()
+        after_parts = existing.split(marker_end)
+        after = after_parts[1].lstrip("\n") if len(after_parts) > 1 else ""
+        new_crontab = before
+        if new_crontab:
+            new_crontab += "\n"
+        new_crontab += block
+        if after.strip():
+            new_crontab += after
+        return new_crontab
+    return existing.rstrip() + "\n\n" + block if existing.strip() else block
+
+
+def reboot_cron_installed() -> bool:
+    crontab_bin = shutil.which("crontab")
+    if not crontab_bin:
+        return False
+    try:
+        existing = subprocess.check_output([crontab_bin, "-l"], stderr=subprocess.DEVNULL).decode()
+    except subprocess.CalledProcessError:
+        return False
+    return REBOOT_MARKER_BEGIN in existing
+
+
+def install_reboot_crontab(*, dry_run: bool = False) -> str:
+    """Install @reboot crontab entry to auto-start 60s after login/reboot."""
+    block = render_reboot_crontab_block()
+    if dry_run:
+        return block
+
+    script = reboot_start_script()
+    if script.is_file():
+        script.chmod(script.stat().st_mode | 0o111)
+
+    crontab_bin = shutil.which("crontab")
+    if not crontab_bin:
+        fallback = Path.home() / ".agent-reach" / "daily_run" / "60s-reboot-crontab.txt"
+        fallback.parent.mkdir(parents=True, exist_ok=True)
+        fallback.write_text(block, encoding="utf-8")
+        raise RuntimeError(
+            f"系统未安装 crontab。已将 @reboot 配置写入 {fallback}，请手动安装"
+        )
+
+    existing = ""
+    try:
+        existing = subprocess.check_output([crontab_bin, "-l"], stderr=subprocess.DEVNULL).decode()
+    except subprocess.CalledProcessError:
+        existing = ""
+
+    new_crontab = _merge_crontab_block(existing, block, REBOOT_MARKER_BEGIN, REBOOT_MARKER_END)
+    proc = subprocess.run(
+        [crontab_bin, "-"],
+        input=new_crontab.encode(),
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.decode() or "crontab install failed")
+    return new_crontab
+
+
+def _attach_portal(result: dict[str, Any]) -> None:
     from agent_reach.daily_run.hot_news_portal import PORTAL_PORT, portal_running, start_portal
 
-    ok, msg = start_portal(api_base=LOCAL_BASE_URL, force=force)
+    ok, msg = start_portal(api_base=LOCAL_BASE_URL, force=True)
     result["portal_running"] = portal_running()
     result["web_url"] = f"http://127.0.0.1:{PORTAL_PORT}"
     if ok:
@@ -525,7 +630,7 @@ def _install_native(result: dict[str, Any], *, force: bool, wait_timeout: int) -
     result["ok"] = healthy or bool(result["active_base_url"])
     result["message"] = health_msg if healthy else f"started but health check failed: {health_msg}"
     if result.get("reachable"):
-        _attach_portal(result, force=force)
+        _attach_portal(result)
     return result
 
 
@@ -554,7 +659,7 @@ def _install_docker(result: dict[str, Any], *, force: bool, pull: bool, wait_tim
     result["ok"] = healthy or bool(result["active_base_url"])
     result["message"] = health_msg if healthy else f"deployed but health check failed: {health_msg}"
     if result.get("reachable"):
-        _attach_portal(result, force=force)
+        _attach_portal(result)
     return result
 
 
@@ -564,6 +669,7 @@ def install_60s_local(
     pull: bool = True,
     force: bool = False,
     skip_deploy: bool = False,
+    install_reboot_cron: bool = True,
     wait_timeout: int = 90,
 ) -> dict[str, Any]:
     """Deploy local 60s (native Node by default) and merge user hot_news settings."""
@@ -595,7 +701,7 @@ def install_60s_local(
         result["active_base_url"] = base
         result["ok"] = bool(base)
         result["message"] = "deploy skipped; using existing endpoint or public fallback"
-        return result
+        return _finalize_install_result(result, install_reboot_cron=install_reboot_cron)
 
     if resolve_local_base_url([LOCAL_BASE_URL], timeout=3) == LOCAL_BASE_URL and not force:
         result["reachable"] = True
@@ -604,25 +710,34 @@ def install_60s_local(
         result["native_running"] = native_process_running()
         result["container_running"] = container_running()
         result["message"] = f"local 60s already healthy at {LOCAL_BASE_URL}"
-        _attach_portal(result, force=force)
+        _attach_portal(result)
         return result
 
+        _attach_portal(result)
+        return _finalize_install_result(result, install_reboot_cron=install_reboot_cron)
+
     if mode == "native":
-        return _install_native(result, force=force, wait_timeout=wait_timeout)
+        return _finalize_install_result(
+            _install_native(result, force=force, wait_timeout=wait_timeout),
+            install_reboot_cron=install_reboot_cron,
+        )
 
     if mode == "docker":
-        return _install_docker(result, force=force, pull=pull, wait_timeout=wait_timeout)
+        return _finalize_install_result(
+            _install_docker(result, force=force, pull=pull, wait_timeout=wait_timeout),
+            install_reboot_cron=install_reboot_cron,
+        )
 
     # auto: native → docker → public fallback
     native_result = _install_native(result, force=force, wait_timeout=wait_timeout)
     if native_result.get("ok") and native_result.get("reachable"):
         native_result["deploy_mode"] = "auto"
-        return native_result
+        return _finalize_install_result(native_result, install_reboot_cron=install_reboot_cron)
 
     docker_result = _install_docker(result, force=force, pull=pull, wait_timeout=wait_timeout)
     docker_result["deploy_mode"] = "auto"
     if docker_result.get("ok"):
-        return docker_result
+        return _finalize_install_result(docker_result, install_reboot_cron=install_reboot_cron)
 
     base = resolve_local_base_url([LOCAL_BASE_URL, "https://60s.viki.moe"])
     docker_result["active_base_url"] = base
@@ -632,7 +747,22 @@ def install_60s_local(
         if base
         else "native/docker deploy failed and public fallback unreachable"
     )
-    return docker_result
+    return _finalize_install_result(docker_result, install_reboot_cron=install_reboot_cron)
+
+
+def _finalize_install_result(result: dict[str, Any], *, install_reboot_cron: bool) -> dict[str, Any]:
+    if install_reboot_cron and result.get("ok"):
+        try:
+            install_reboot_crontab()
+            result["reboot_cron"] = True
+            result["reboot_cron_installed"] = True
+        except Exception as exc:
+            result["reboot_cron"] = False
+            result["reboot_cron_installed"] = reboot_cron_installed()
+            result["reboot_cron_message"] = str(exc)
+    else:
+        result["reboot_cron_installed"] = reboot_cron_installed()
+    return result
 
 
 def status_60s() -> dict[str, Any]:
@@ -670,4 +800,6 @@ def status_60s() -> dict[str, Any]:
         "base_urls": base_urls,
         "platforms": hot.get("platforms"),
         "note": "Open web_url for readable dashboard; local_base_url root returns API JSON by design.",
+        "reboot_cron_installed": reboot_cron_installed(),
+        "reboot_crontab_block": render_reboot_crontab_block().strip(),
     }

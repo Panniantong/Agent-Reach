@@ -9,11 +9,21 @@ from unittest.mock import MagicMock, patch
 from agent_reach.daily_run.hot_news_deploy import (
     CONTAINER_NAME,
     LOCAL_BASE_URL,
+    REBOOT_MARKER_BEGIN,
     install_60s_local,
     merge_user_hot_news_settings,
+    render_reboot_crontab_block,
     status_60s,
     stop_60s,
 )
+
+
+class TestRebootCron:
+    def test_render_reboot_crontab_block(self):
+        block = render_reboot_crontab_block()
+        assert REBOOT_MARKER_BEGIN in block
+        assert "@reboot" in block
+        assert "60s-reboot-start.sh" in block
 
 
 class TestMergeSettings:
@@ -102,6 +112,7 @@ class TestStatusAndStop:
                 "agent_reach.daily_run.hot_news_deploy.resolve_local_base_url",
                 return_value=LOCAL_BASE_URL,
             ),
+            patch("agent_reach.daily_run.hot_news_portal.portal_running", return_value=True),
         ):
             st = status_60s()
         assert st["local_reachable"] is True
@@ -115,6 +126,7 @@ class TestStatusAndStop:
             patch("agent_reach.daily_run.hot_news_deploy.process_alive", return_value=True),
             patch("agent_reach.daily_run.hot_news_deploy.container_exists", return_value=False),
             patch("agent_reach.daily_run.hot_news_deploy.stop_native", return_value=(True, "stopped native 60s")),
+            patch("agent_reach.daily_run.hot_news_portal.stop_portal", return_value=(True, "stopped portal")),
         ):
             ok, msg = stop_60s(mode="native")
         assert ok is True
@@ -125,6 +137,7 @@ class TestStatusAndStop:
             patch("agent_reach.daily_run.hot_news_deploy.native_process_running", return_value=False),
             patch("agent_reach.daily_run.hot_news_deploy.container_exists", return_value=True),
             patch("agent_reach.daily_run.hot_news_deploy.stop_container", return_value=(True, f"stopped {CONTAINER_NAME}")),
+            patch("agent_reach.daily_run.hot_news_portal.stop_portal", return_value=(True, "stopped portal")),
         ):
             ok, msg = stop_60s(mode="docker")
         assert ok is True

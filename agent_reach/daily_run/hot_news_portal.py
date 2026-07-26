@@ -11,8 +11,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 PORTAL_PORT = 8786
+PORTAL_HOST = os.environ.get("AGENT_REACH_PORTAL_HOST", "0.0.0.0")
 API_BASE_DEFAULT = "http://127.0.0.1:8787"
 
 
@@ -95,15 +97,15 @@ def _portal_html(api_base: str) -> str:
 
     <div class="card links">
       <h2>API 快捷入口</h2>
-      <a href="{api_base}/v2/60s?encoding=text" target="_blank">今日要闻（纯文本）</a>
-      <a href="{api_base}/v2/60s?encoding=markdown" target="_blank">今日要闻（Markdown）</a>
-      <a href="{api_base}/v2/weibo?encoding=json" target="_blank">微博 JSON</a>
+      <a href="/v2/60s?encoding=text" target="_blank">今日要闻（纯文本）</a>
+      <a href="/v2/60s?encoding=markdown" target="_blank">今日要闻（Markdown）</a>
+      <a href="/v2/weibo?encoding=json" target="_blank">微博 JSON</a>
       <a href="{api_base}/" target="_blank">API 元数据（JSON）</a>
       <a href="https://docs.60s-api.viki.moe" target="_blank">官方文档</a>
     </div>
   </div>
   <script>
-    const API = {json.dumps(api_base)};
+    const API = "";
 
     async function fetchJson(path) {{
       const res = await fetch(`${{API}}${{path}}`);
@@ -181,6 +183,27 @@ class _PortalHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
         return
 
+    def _proxy_api(self) -> None:
+        target = self.api_base.rstrip("/") + self.path
+        try:
+            req = Request(target, headers={"User-Agent": "agent-reach-portal/1.0"})
+            with urlopen(req, timeout=30) as resp:
+                body = resp.read()
+                self.send_response(resp.status)
+                content_type = resp.headers.get("Content-Type")
+                if content_type:
+                    self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+        except Exception as exc:
+            message = str(exc).encode("utf-8", errors="replace")
+            self.send_response(502)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(message)))
+            self.end_headers()
+            self.wfile.write(message)
+
     def do_GET(self) -> None:  # noqa: N802
         if self.path in ("/", "/index.html"):
             body = _portal_html(self.api_base).encode("utf-8")
@@ -197,6 +220,9 @@ class _PortalHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+            return
+        if self.path.startswith("/v2/"):
+            self._proxy_api()
             return
         self.send_error(404)
 
@@ -223,12 +249,18 @@ def read_portal_pid() -> Optional[int]:
         return None
 
 
+def _portal_url(port: int = PORTAL_PORT) -> str:
+    if PORTAL_HOST in ("0.0.0.0", "::"):
+        return f"http://127.0.0.1:{port} (LAN: http://<本机IP>:{port})"
+    return f"http://{PORTAL_HOST}:{port}"
+
+
 def start_portal(*, api_base: str = API_BASE_DEFAULT, force: bool = False) -> tuple[bool, str]:
     import subprocess
     import sys
 
     if portal_running() and not force:
-        return True, f"portal already running (pid {read_portal_pid()}) on http://127.0.0.1:{PORTAL_PORT}"
+        return True, f"portal already running (pid {read_portal_pid()}) on {_portal_url()}"
 
     if force:
         stop_portal()
@@ -244,6 +276,8 @@ def start_portal(*, api_base: str = API_BASE_DEFAULT, force: bool = False) -> tu
         "serve",
         "--api-base",
         api_base.rstrip("/"),
+        "--host",
+        PORTAL_HOST,
         "--port",
         str(PORTAL_PORT),
     ]
@@ -256,14 +290,14 @@ def start_portal(*, api_base: str = API_BASE_DEFAULT, force: bool = False) -> tu
                 start_new_session=True,
             )
         portal_pid_file().write_text(str(proc.pid) + "\n", encoding="utf-8")
-        return True, f"portal running at http://127.0.0.1:{PORTAL_PORT}"
+        return True, f"portal running at {_portal_url()}"
     except (OSError, subprocess.SubprocessError) as exc:
         return False, str(exc)
 
 
-def run_portal_server(*, api_base: str, port: int = PORTAL_PORT) -> None:
+def run_portal_server(*, api_base: str, host: str = PORTAL_HOST, port: int = PORTAL_PORT) -> None:
     handler = type("Handler", (_PortalHandler,), {"api_base": api_base.rstrip("/")})
-    server = ThreadingHTTPServer(("127.0.0.1", port), handler)
+    server = ThreadingHTTPServer((host, port), handler)
     server.serve_forever(poll_interval=0.5)
 
 
@@ -285,10 +319,11 @@ def _cli() -> None:
     parser = argparse.ArgumentParser(description="60s web portal")
     parser.add_argument("action", choices=["serve"])
     parser.add_argument("--api-base", default=API_BASE_DEFAULT)
+    parser.add_argument("--host", default=PORTAL_HOST)
     parser.add_argument("--port", type=int, default=PORTAL_PORT)
     args = parser.parse_args()
     if args.action == "serve":
-        run_portal_server(api_base=args.api_base, port=args.port)
+        run_portal_server(api_base=args.api_base, host=args.host, port=args.port)
 
 
 if __name__ == "__main__":

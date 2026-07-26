@@ -37,6 +37,9 @@ class WeeklyReport:
     skill_research: list[dict[str, Any]] = field(default_factory=list)
     process_improvements: list[dict[str, Any]] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    cash: Optional[float] = None
+    cash_ratio: Optional[float] = None
+    daily_totals: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -59,6 +62,9 @@ class WeeklyReport:
             "skill_research": self.skill_research,
             "process_improvements": self.process_improvements,
             "notes": self.notes,
+            "cash": self.cash,
+            "cash_ratio": self.cash_ratio,
+            "daily_totals": self.daily_totals,
         }
 
 
@@ -614,6 +620,17 @@ def generate_weekly_report(
         start_total = end_total
         notes.append("本周无早盘 manifest，周初净值用周末/当前估值代替")
 
+    daily_totals: list[dict[str, Any]] = []
+    for day, total in sorted(morning_totals, key=lambda x: x[0]):
+        daily_totals.append({"date": day, "total": total, "job": "morning"})
+    for day, total in sorted(close_totals, key=lambda x: x[0]):
+        daily_totals.append({"date": day, "total": total, "job": "close"})
+
+    cash_raw = pf.get("cash")
+    cash = float(cash_raw) if cash_raw is not None else None
+    ratio_raw = pf.get("cash_ratio")
+    cash_ratio = float(ratio_raw) if ratio_raw is not None else None
+
     weekly_pnl: Optional[float] = None
     weekly_pnl_pct: Optional[float] = None
     if start_total is not None and end_total is not None:
@@ -681,6 +698,9 @@ def generate_weekly_report(
         skill_research=skill_research,
         process_improvements=[i.to_dict() for i in process_items],
         notes=notes,
+        cash=cash,
+        cash_ratio=cash_ratio,
+        daily_totals=daily_totals,
     )
 
 
@@ -703,6 +723,117 @@ def _period_header_lines(report: WeeklyReport, *, continuation: bool = False) ->
     return [f"**📅 周期：** {ws} ~ {we}", ""]
 
 
+def _summarize_week_trades(trades: list[dict[str, Any]], *, limit: int = 3) -> str:
+    parts: list[str] = []
+    for entry in trades[-limit:]:
+        date_s = str(entry.get("at") or "")[:10]
+        for action in entry.get("actions") or []:
+            side = "买入" if action.get("side") == "buy" else "卖出"
+            name = action.get("name") or action.get("code") or "?"
+            shares = action.get("shares")
+            price = action.get("price")
+            if shares and price:
+                parts.append(f"{date_s} {side}{name} {shares}股 @ ¥{float(price):.2f}")
+            elif shares:
+                parts.append(f"{date_s} {side}{name} {shares}股")
+            else:
+                amount = action.get("amount")
+                if amount:
+                    parts.append(f"{date_s} {side}{name} ¥{float(amount):,.0f}")
+    return "；".join(parts)
+
+
+def _weekly_report_data(report: WeeklyReport | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(report, WeeklyReport):
+        return report.to_dict()
+    return report
+
+
+def build_weekly_pnl_explanation(report: WeeklyReport | dict[str, Any]) -> list[str]:
+    """Narrative breakdown of weekly P&L for Saturday review cards and skill writeback."""
+    data = _weekly_report_data(report)
+    lines: list[str] = []
+
+    pnl = data.get("weekly_pnl")
+    pct = data.get("weekly_pnl_pct")
+    holdings = data.get("holdings") or []
+    trades = data.get("trades") or []
+    realized = float(data.get("realized_pnl") or 0)
+    notes = data.get("notes") or []
+    daily_totals = data.get("daily_totals") or []
+
+    if pnl is None:
+        lines.append("- **情况说明：** 缺少完整净值轨迹，以下以当前持仓与 ledger 估算。")
+    else:
+        pnl_f = float(pnl)
+        pct_f = float(pct) if pct is not None else 0.0
+        if pnl_f > 0 and pct_f >= 1:
+            verdict = f"本周组合盈利 **{pct_f:+.1f}%**（+¥{pnl_f:,.2f}）"
+        elif pnl_f < 0 and pct_f <= -1:
+            verdict = f"本周组合回撤 **{pct_f:.1f}%**（¥{pnl_f:,.2f}）"
+        else:
+            verdict = f"本周组合净值基本 **持平**（{pnl_f:+,.2f} 元，{pct_f:+.1f}%）"
+        lines.append(f"- **情况说明：** {verdict}。")
+
+    close_totals = sorted(
+        [row for row in daily_totals if row.get("job") == "close" and row.get("total") is not None],
+        key=lambda x: str(x.get("date") or ""),
+    )
+    if len(close_totals) >= 2:
+        first, last = close_totals[0], close_totals[-1]
+        lines.append(
+            "- **收盘净值轨迹：** "
+            f"{first['date']} ¥{float(first['total']):,.2f} → "
+            f"{last['date']} ¥{float(last['total']):,.2f}"
+        )
+    elif close_totals:
+        row = close_totals[-1]
+        lines.append(f"- **最近收盘净值：** {row['date']} ¥{float(row['total']):,.2f}")
+
+    if holdings:
+        total_unrealized = sum(float(h.get("unrealized_pnl") or 0) for h in holdings)
+        lines.append(f"- **持仓浮盈合计：** ¥{total_unrealized:+,.0f}（{len(holdings)} 只）")
+        week_rows = [h for h in holdings if h.get("week_chg") is not None]
+        if week_rows:
+            week_chg_total = sum(float(h["week_chg"]) for h in week_rows)
+            lines.append(
+                "- **持股周度市值变动：** "
+                f"¥{week_chg_total:+,.2f}（按周初价估算，不含新开仓成本口径）"
+            )
+            top = sorted(week_rows, key=lambda x: abs(float(x["week_chg"])), reverse=True)[:3]
+            contrib = "、".join(
+                f"{h.get('name') or h.get('code')} {float(h['week_chg']):+,.0f}元" for h in top
+            )
+            lines.append(f"- **周内贡献前列：** {contrib}")
+
+    cash = data.get("cash")
+    cash_ratio = data.get("cash_ratio")
+    if cash is not None and cash_ratio is not None:
+        lines.append(f"- **现金仓位：** {float(cash_ratio):.1%}（¥{float(cash):,.0f}）")
+
+    if trades:
+        sign = "+" if realized >= 0 else ""
+        lines.append(
+            f"- **成交现金流（ledger）：** {sign}¥{realized:,.2f}，共 {len(trades)} 笔"
+        )
+        trade_summary = _summarize_week_trades(trades)
+        if trade_summary:
+            lines.append(f"  - {trade_summary}")
+
+    if pnl is not None and abs(float(pnl)) < 1 and trades and abs(realized) > 1000:
+        lines.append(
+            "- _净值变动接近 0 但 ledger 有大额成交：可能缺少周初早盘净值基线，"
+            "或买入使用既有现金、市值波动与成交相互抵消。_"
+        )
+
+    for note in notes:
+        if "无早盘 manifest" in note or "周初净值" in note:
+            lines.append(f"- _{note}_")
+            break
+
+    return lines
+
+
 def _render_pnl_lines(report: WeeklyReport) -> list[str]:
     lines = ["## 💰 本周盈亏"]
     if report.weekly_pnl is not None:
@@ -720,8 +851,10 @@ def _render_pnl_lines(report: WeeklyReport) -> list[str]:
         lines.append(f"- **本周成交净额（ledger）：** {sign}¥{report.realized_pnl:,.2f}")
     if report.trades:
         lines.append(f"- 成交笔数：**{len(report.trades)}**")
+    lines.extend(build_weekly_pnl_explanation(report))
     for note in report.notes:
-        lines.append(f"- _{note}_")
+        if not any(note in line for line in lines):
+            lines.append(f"- _{note}_")
     lines.append("")
     return lines
 
