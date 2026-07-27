@@ -23,6 +23,18 @@ class TestSkillCommand(unittest.TestCase):
         self.assertTrue(default_skill.strip())
         self.assertTrue(english_skill.strip())
 
+    def test_exa_reference_uses_default_registered_tools_only(self):
+        """Agent instructions must not call Exa tools disabled by default."""
+        search_reference = (
+            importlib.resources.files("agent_reach")
+            .joinpath("skill", "references", "search.md")
+            .read_text(encoding="utf-8")
+        )
+
+        self.assertIn("web_search_exa", search_reference)
+        self.assertNotIn("exa.get_code_context_exa", search_reference)
+        self.assertNotIn("get_code_context_exa(", search_reference)
+
     def test_install_skill_creates_skill_md(self):
         """_install_skill should create SKILL.md in the first available skill dir."""
         with tempfile.TemporaryDirectory() as tmpdir:
