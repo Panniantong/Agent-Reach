@@ -2,22 +2,108 @@
 """V2EX — public API channel for topics, nodes, users, and replies."""
 
 import json
+import shutil
+import ssl
+import subprocess
 import urllib.request
 from typing import Any
 
+from agent_reach.utils.process import utf8_subprocess_env
 from agent_reach.utils.text import scrub_url_credentials
 
 from .base import Channel
 
 _UA = "agent-reach/1.0"
 _TIMEOUT = 10
+_MAX_RESPONSE_BYTES = 1024 * 1024
+
+
+def _get_json_with_urllib(url: str) -> Any:
+    """Fetch JSON with Python's standard HTTP stack."""
+    req = urllib.request.Request(url, headers={"User-Agent": _UA})
+    with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
+        raw = resp.read(_MAX_RESPONSE_BYTES + 1)
+    if len(raw) > _MAX_RESPONSE_BYTES:
+        raise ValueError("V2EX API response exceeds the 1 MiB safety limit")
+    return json.loads(raw.decode("utf-8"))
+
+
+def _is_unexpected_tls_eof(error: BaseException) -> bool:
+    """Return whether an exception chain contains the retryable TLS EOF."""
+    pending: list[BaseException] = [error]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        text = str(current).casefold()
+        if (
+            "unexpected_eof_while_reading" in text
+            or "eof occurred in violation of protocol" in text
+        ):
+            return True
+        for nested in (
+            getattr(current, "reason", None),
+            current.__cause__,
+            current.__context__,
+        ):
+            if isinstance(nested, BaseException):
+                pending.append(nested)
+    return False
+
+
+def _get_json_with_curl(url: str) -> Any:
+    """Fetch bounded JSON with the OS curl TLS stack."""
+    curl = shutil.which("curl")
+    if not curl:
+        raise RuntimeError("curl is unavailable for the V2EX TLS fallback")
+
+    command = [
+        curl,
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--location",
+        "--connect-timeout",
+        "5",
+        "--max-time",
+        str(_TIMEOUT),
+        "--max-filesize",
+        str(_MAX_RESPONSE_BYTES),
+        "--header",
+        f"User-Agent: {_UA}",
+        "--url",
+        url,
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=_TIMEOUT + 2,
+            env=utf8_subprocess_env(),
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError("curl could not complete the V2EX TLS fallback") from exc
+    if result.returncode != 0:
+        raise RuntimeError("curl could not complete the V2EX TLS fallback")
+    if len(result.stdout.encode("utf-8")) > _MAX_RESPONSE_BYTES:
+        raise ValueError("V2EX API response exceeds the 1 MiB safety limit")
+    return json.loads(result.stdout)
 
 
 def _get_json(url: str) -> Any:
-    """Fetch *url* and return parsed JSON. Raises on HTTP/network errors."""
-    req = urllib.request.Request(url, headers={"User-Agent": _UA})
-    with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    """Fetch JSON, retrying only Python's known TLS EOF via native curl."""
+    try:
+        return _get_json_with_urllib(url)
+    except Exception as exc:
+        if isinstance(exc, ssl.SSLCertVerificationError):
+            raise
+        if not _is_unexpected_tls_eof(exc):
+            raise
+        return _get_json_with_curl(url)
 
 
 class V2EXChannel(Channel):

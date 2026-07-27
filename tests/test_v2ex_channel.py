@@ -11,11 +11,16 @@ channel coverage after rss (#360), github (#361), web (#363),
 reddit (#364) and xueqiu (#365).
 """
 
+import json
+import ssl
+import subprocess
 from unittest.mock import patch
+from urllib.error import URLError
+
+import pytest
 
 from agent_reach.channels import v2ex as v2
 from agent_reach.channels.v2ex import V2EXChannel
-
 
 # --- can_handle ---
 
@@ -45,6 +50,70 @@ def test_check_warn_on_exception_clears_backend():
     assert status == "warn"
     assert "连接失败" in message
     assert ch.active_backend is None
+
+
+def test_get_json_retries_unexpected_tls_eof_with_bounded_curl():
+    payload = [{"id": 1}]
+    tls_error = URLError(
+        ssl.SSLError(
+            "[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol"
+        )
+    )
+
+    with patch.object(v2, "_get_json_with_urllib", side_effect=tls_error), patch.object(
+        v2.shutil, "which", return_value="C:/Windows/System32/curl.exe"
+    ), patch.object(
+        v2.subprocess,
+        "run",
+        return_value=subprocess.CompletedProcess(
+            ["curl"], 0, json.dumps(payload), ""
+        ),
+    ) as run:
+        assert v2._get_json("https://www.v2ex.com/api/topics/hot.json") == payload
+
+    command = run.call_args.args[0]
+    assert command[0] == "C:/Windows/System32/curl.exe"
+    assert "--fail" in command
+    assert "--max-time" in command
+    assert "--max-filesize" in command
+    assert command[-2:] == [
+        "--url",
+        "https://www.v2ex.com/api/topics/hot.json",
+    ]
+    assert run.call_args.kwargs["timeout"] == v2._TIMEOUT + 2
+
+
+def test_get_json_does_not_hide_certificate_verification_failures():
+    certificate_error = ssl.SSLCertVerificationError(
+        "certificate verify failed"
+    )
+
+    with patch.object(
+        v2, "_get_json_with_urllib", side_effect=certificate_error
+    ), patch.object(v2.subprocess, "run") as run:
+        with pytest.raises(ssl.SSLCertVerificationError):
+            v2._get_json("https://www.v2ex.com/api/topics/hot.json")
+
+    run.assert_not_called()
+
+
+def test_check_is_healthy_when_native_curl_recovers_tls_eof():
+    ch = V2EXChannel()
+    tls_error = ssl.SSLError(
+        "[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol"
+    )
+
+    with patch.object(v2, "_get_json_with_urllib", side_effect=tls_error), patch.object(
+        v2.shutil, "which", return_value="/usr/bin/curl"
+    ), patch.object(
+        v2.subprocess,
+        "run",
+        return_value=subprocess.CompletedProcess(["curl"], 0, "[]", ""),
+    ):
+        status, _message = ch.check()
+
+    assert status == "ok"
+    assert ch.active_backend == ch.backends[0]
 
 
 # --- get_hot_topics / get_node_topics ---
