@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Install local power-on/off crontab (Asia/Shanghai).
 #
-# Schedule:
-#   Mon–Fri: 06:40 boot (rtcwake) · 11:40 off → 12:40 boot · 16:00 off → next boot
-#   Sat/Sun: 08:40 boot (rtcwake) · 12:00 off → next boot
+# Schedule (boot via rtcwake at prior shutdown):
+#   Mon–Fri: 06:40 on · 12:00 off → 12:40 on · 00:00 off → next on
+#   Sat/Sun: 08:00 on · 00:00 off → next on
 #
 # Also run once: sudo bash scripts/install-power-schedule-sudo.sh
 set -euo pipefail
@@ -21,10 +21,8 @@ SHELL=/bin/bash
 CRON_TZ=Asia/Shanghai
 # log: ~/.agent-reach/daily_run/logs/power-schedule-YYYY-MM-DD.log
 # script: ${SCRIPT}
-40 11 * * 1-5 ${SCRIPT} lunch  # 11:40 off → wake 12:40
-0 16 * * 1-5 ${SCRIPT} weekday_pm  # 16:00 off → wake next 06:40 (Fri→Sat 08:40)
-0 12 * * 6 ${SCRIPT} weekend_noon  # Sat 12:00 off → wake Sun 08:40
-0 12 * * 0 ${SCRIPT} weekend_noon  # Sun 12:00 off → wake Mon 06:40
+0 12 * * 1-5 ${SCRIPT} lunch  # 12:00 off → wake 12:40
+0 0 * * * ${SCRIPT} midnight  # 00:00 off → wake 06:40 (Mon–Fri) or 08:00 (Sat/Sun)
 ${MARKER_END}
 EOF
 )
@@ -53,9 +51,9 @@ new_crontab="${new_crontab}${BLOCK}"
 printf '%s\n' "$new_crontab" | crontab -
 
 echo "✅ Power schedule crontab installed (Asia/Shanghai)"
-echo "   Mon–Fri: 11:40 off→12:40 on · 16:00 off→next morning on"
-echo "   Sat/Sun: 12:00 off→next session on"
-echo "   Boot times use rtcwake at shutdown (06:40 / 08:40 / 12:40)"
+echo "   Mon–Fri: 06:40 on · 12:00 off→12:40 on · 00:00 off→next 06:40 (Fri→Sat 08:00)"
+echo "   Sat/Sun: 08:00 on · 00:00 off→next 08:00 (Sun→Mon 06:40)"
+echo "   Boot times use rtcwake at shutdown"
 echo
 echo "⚠️  Run once if not done: sudo bash ${REPO_ROOT}/scripts/install-power-schedule-sudo.sh"
 echo "⚠️  KVM/VM: if rtcwake does not wake the guest, configure host VM autostart at those times"
