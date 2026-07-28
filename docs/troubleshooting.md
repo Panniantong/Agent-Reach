@@ -9,7 +9,7 @@
 **解决方案：** 在 Chrome 里登录 xueqiu.com，然后运行：
 
 ```bash
-agent-reach configure --from-browser chrome
+agent-reach configure --from-browser chrome --platform xueqiu
 ```
 
 再次运行 `agent-reach doctor` 确认恢复 ✅。Cookie 过期后重新运行即可。
@@ -20,13 +20,18 @@ agent-reach configure --from-browser chrome
 
 **症状：** `twitter search` 或其他命令返回错误
 
-**原因：** twitter-cli 需要 AUTH_TOKEN 和 CT0 环境变量才能访问 Twitter API。如果你的网络环境需要代理才能访问 x.com，需要配置代理。
+**原因：** twitter-cli 需要 `TWITTER_AUTH_TOKEN` 和 `TWITTER_CT0`
+环境变量才能访问 Twitter API。`agent-reach configure twitter-cookies`
+保存的值只供 doctor 检查配置是否齐全；doctor 不执行上游认证，也不会设置当前
+Shell。如果你的网络环境需要代理才能访问 x.com，还需要配置代理。
 
 **解决方案：**
 
 ### 方案 1：设置环境变量代理
 
 ```bash
+export TWITTER_AUTH_TOKEN="..."
+export TWITTER_CT0="..."
 export HTTP_PROXY="http://user:pass@host:port"
 export HTTPS_PROXY="http://user:pass@host:port"
 twitter search "test" -n 1
@@ -56,6 +61,7 @@ mcporter call 'exa.web_search_exa(query: "site:x.com 搜索词", numResults: 5)'
 twitter check
 ```
 
-> 如果返回 "Missing credentials"，需要设置 AUTH_TOKEN 和 CT0 环境变量。
+> 如果返回 "Missing credentials"，需要在运行该命令的进程环境中设置
+> `TWITTER_AUTH_TOKEN` 和 `TWITTER_CT0`。
 >
 > **Fallback：** 如果你已经安装了 bird CLI（`npm install -g @steipete/bird`），它也能正常工作。Agent Reach 会自动检测已安装的工具。

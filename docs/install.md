@@ -96,11 +96,11 @@ After installing the basics, **ask the user** which additional channels they nee
 >
 > 还有这些可选渠道，你需要哪些？
 >
-> - 🌟 **OpenCLI**（桌面推荐）— 一次安装，小红书/Reddit/Facebook/Instagram/B站字幕/Twitter 备选全解锁（复用浏览器登录态，零配置；只需在 Chrome 商店点一次"添加扩展"）
+> - 🌟 **OpenCLI**（桌面推荐）— 一次安装即可提供 Reddit/Facebook/Instagram/B站字幕/Twitter 备选，并作为小红书桌面后端；小红书只使用用户已有且明确控制的 Chrome 会话
 > - 🐦 **Twitter/X** — 搜推文、看时间线（需要登录 Cookie）
 > - 📈 **雪球** — 股票行情、热门帖子（需要登录 Cookie）
 > - 🎙️ **小宇宙播客** — 音频转文字（需要免费 Groq Key）
-> - 📕 **小红书** — 搜索、阅读、评论（桌面走 OpenCLI；服务器用 xiaohongshu-mcp 扫码）
+> - 📕 **小红书** — 搜索、阅读、评论（OpenCLI 用已有会话；MCP/存量工具用 Cookie-Editor）
 > - 📖 **Reddit** — 搜索和阅读帖子（必须登录态：桌面 OpenCLI 或 rdt-cli + Cookie）
 > - 📘 **Facebook** — 搜索、主页、Feed、群组列表（桌面走 OpenCLI，复用 Chrome 登录态）
 > - 📷 **Instagram** — 用户搜索、Profile、用户最近帖子、Explore（桌面走 OpenCLI，复用 Chrome 登录态）
@@ -143,13 +143,23 @@ Some channels need credentials only the user can provide. Based on the doctor ou
 > 3. 点击插件 → Export → Header String
 > 4. 把导出的字符串发给 Agent
 >
-> **本地电脑用户**也可以用 `agent-reach configure --from-browser chrome` 一键自动提取（支持 Twitter + 小红书 + 雪球）。OpenCLI 平台（Reddit、小红书桌面后端、Facebook、Instagram）优先复用 Chrome 登录态，不需要把 Cookie 发给 Agent。
+> Twitter 只接受用户通过 Cookie-Editor 明确导出的内容。Agent Reach 不替用户执行小红书登录，也不读取小红书浏览器 Cookie；小红书 OpenCLI 只使用用户已有且明确控制的 Chrome 会话。没有现成会话时，改用 Cookie-Editor 导出后配置 xiaohongshu-mcp / 存量工具。雪球、Bilibili 可按平台显式导入，例如 `agent-reach configure --from-browser chrome --platform xueqiu`；命令不会扫描或保存其他平台。
 
 **Twitter search & posting:**
 > "To unlock Twitter search, I need your Twitter cookies. Install the Cookie-Editor Chrome extension, go to x.com/twitter.com, click the extension → Export → Header String, and paste it to me."
 
 ```bash
 agent-reach configure twitter-cookies "PASTED_STRING"
+```
+
+这会把 `twitter_auth_token` 和 `twitter_ct0` 保存给 Agent Reach 自己的
+`doctor` 配置检查。`doctor` 不会实时执行上游 `twitter status`，也不会修改
+当前 Shell。直接运行 `twitter search/read/...` 前，必须在该进程环境中显式设置：
+
+```bash
+export TWITTER_AUTH_TOKEN="..."
+export TWITTER_CT0="..."
+twitter search "query" -n 10
 ```
 
 > **代理说明（中国大陆等需要翻墙的网络环境）：**
@@ -179,8 +189,20 @@ rdt login   # 自动提取浏览器 Cookie；服务器无浏览器时按 doctor 
 
 **XiaoHongShu / 小红书（多后端，按环境选）:**
 
+> **认证边界：** Agent Reach 不替用户执行小红书登录，也不读取浏览器
+> Cookie。OpenCLI 只使用用户已经存在且明确控制的 Chrome 会话；
+> `agent-reach configure xhs-cookies` 不会把 Cookie 注入 OpenCLI 或 Chrome。
+> 如果没有现成会话，不要自动登录；改用 Cookie-Editor 手工导出后配置
+> xiaohongshu-mcp 或存量工具：
+>
+> ```bash
+> agent-reach configure xhs-cookies "key1=val1; key2=val2; ..."
+> ```
+>
+> 该显式命令会保存/导入用户提供的 xiaohongshu.com 同域 Cookie 集；请先确认
+> Cookie 名称和范围。非 xiaohongshu.com 域 Cookie 会被忽略。
+>
 > **桌面电脑（推荐 OpenCLI）：**
-> "小红书走 OpenCLI——复用你浏览器里的登录态，平时刷过小红书就直接能用，零配置。"
 
 ```bash
 agent-reach install --channels opencli
@@ -191,17 +213,19 @@ agent-reach install --channels opencli
 > 2. 点「添加至 Chrome」
 > 3. 运行 `opencli doctor` 验证（显示 Extension: connected 即成功）
 >
+> AUTH_REQUIRED 且用户没有现成会话时，不要替用户自动登录；改走下面的
+> xiaohongshu-mcp / 存量工具 Cookie-Editor 路线。
+>
 > **服务器 / 无桌面环境（xiaohongshu-mcp）：**
 > 1. 从 https://github.com/xpzouying/xiaohongshu-mcp/releases 下载对应平台 binary 到 `~/.agent-reach/tools/`
 > 2. 启动服务（首次运行会自动下载约 150MB 无头浏览器，耐心等完成）
-> 3. 让用户扫码登录（agent 调 `get_login_qrcode` 工具取二维码）
-> 4. 接入：`mcporter config add xiaohongshu http://localhost:18060/mcp`
+> 3. 按上面的 Cookie-Editor 流程手工导入 Cookie
+> 4. 接入：`mcporter config add xiaohongshu http://localhost:18060/mcp --scope home`
 > 5. 调用时务必带 `--timeout 120000`
 >
-> **存量用户（xhs-cli）：** 已装好的 xhs-cli 继续作为备选后端工作（上游 2026-03 起停更，不推荐新装）。`xhs login` 自动提取浏览器 Cookie；失败时用 Cookie-Editor 导出后：
-> ```bash
-> agent-reach configure xhs-cookies "key1=val1; key2=val2; ..."
-> ```
+> **存量用户（xhs-cli）：** 已装好的 xhs-cli 继续作为备选后端工作
+> （上游 2026-03 起停更，不推荐新装）；认证仍使用上面的 Cookie-Editor
+> 手工导出流程。
 
 **Facebook / Instagram（桌面 OpenCLI）:**
 > 这两个平台走 OpenCLI：复用用户自己的 Chrome 登录态，不保存账号密码，不走 Meta Graph API 审批流。服务器/无桌面环境不推荐支持。
@@ -229,10 +253,10 @@ agent-reach install --channels facebook,instagram
 > "雪球需要登录后的 Cookie。请先在 Chrome 里登录 xueqiu.com，然后运行："
 
 ```bash
-agent-reach configure --from-browser chrome
+agent-reach configure --from-browser chrome --platform xueqiu
 ```
 
-> Cookie 会随其他平台一起自动提取。
+> 只会读取并保存雪球需要的最小 Cookie；不会顺带读取其他平台。
 
 **小宇宙播客 / Xiaoyuzhou Podcast (Groq Whisper):**
 > "小宇宙播客转文字已默认安装，只需要一个免费的 Groq API Key。"
@@ -297,7 +321,7 @@ pip install linkedin-scraper-mcp
 > **登录后启动 MCP 服务：**
 > ```bash
 > linkedin-scraper-mcp --transport streamable-http --port 8001
-> mcporter config add linkedin http://localhost:8001/mcp
+> mcporter config add linkedin http://localhost:8001/mcp --scope home
 > ```
 >
 > 详见 https://github.com/stickerdaniel/linkedin-mcp-server
@@ -337,7 +361,7 @@ If the user wants a different agent to handle it, let them choose.
 | `agent-reach doctor` | Show channel status |
 | `agent-reach watch` | Quick health + update check (for scheduled tasks) |
 | `agent-reach check-update` | Check for new versions |
-| `agent-reach configure twitter-cookies "..."` | Unlock Twitter search + posting |
+| `agent-reach configure twitter-cookies "..."` | 保存 Twitter Cookie 供 doctor 检查；直接调用仍需显式环境变量 |
 | `agent-reach configure proxy URL` | 保存代理地址（Agent 访问 Reddit/Twitter 等受限网络时读取它设置 HTTP_PROXY/HTTPS_PROXY，不是自动解锁开关） |
 | `agent-reach configure groq-key gsk_xxx` | Unlock Xiaoyuzhou podcast transcription |
 
@@ -345,7 +369,7 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 
 | Platform | Upstream Tool | Example |
 |----------|--------------|---------|
-| Twitter/X | `twitter`（备选 `opencli`） | `twitter search "query" -n 10` |
+| Twitter/X | `twitter`（备选 `opencli`） | 设置 `TWITTER_AUTH_TOKEN` / `TWITTER_CT0` 后运行 `twitter search "query" -n 10` |
 | YouTube | `yt-dlp` | `yt-dlp --dump-json URL` |
 | Bilibili | `bili`（字幕走 `opencli`） | `bili search "query" --type video` / `opencli bilibili subtitle BVxxx` |
 | Reddit | `opencli`（备选 `rdt`） | `opencli reddit search "query" -f yaml` / `rdt read POST_ID` |

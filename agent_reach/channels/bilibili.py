@@ -39,9 +39,9 @@ class BilibiliChannel(Channel):
     tier = 1
 
     def can_handle(self, url: str) -> bool:
-        from urllib.parse import urlparse
-        d = urlparse(url).netloc.lower()
-        return "bilibili.com" in d or "b23.tv" in d
+        from agent_reach.utils.url import host_matches
+
+        return host_matches(url, "bilibili.com", "b23.tv")
 
     def check(self, config=None):
         """Probe candidates in order; first fully-usable backend wins."""
@@ -65,7 +65,7 @@ class BilibiliChannel(Channel):
         for wanted in ("ok", "warn"):
             for backend, status, message in findings:
                 if status == wanted:
-                    self.active_backend = backend
+                    self.active_backend = backend if status == "ok" else None
                     if broken_notes:
                         message += "\n[备选后端异常] " + "；".join(broken_notes)
                     return status, message
@@ -103,9 +103,9 @@ class BilibiliChannel(Channel):
         if st.broken:
             return "error", st.hint
         if st.ready:
-            return "ok", (
-                "OpenCLI 可用（复用浏览器登录态）。用法："
-                "opencli bilibili search/video/subtitle/ranking -f yaml"
+            return "warn", (
+                "OpenCLI 桥接已连接，但 Bilibili 页面、登录态和实际命令"
+                "未实时验证；Doctor 不执行平台命令，因此当前不标记为可用。"
             )
         return "warn", st.hint
 

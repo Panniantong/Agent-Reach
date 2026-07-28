@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Shared channel helper for OpenCLI browser-session-only platforms."""
 
-from urllib.parse import urlparse
+from agent_reach.utils.url import host_matches
 
 from .base import Channel
 
@@ -22,8 +22,7 @@ class OpenCLISiteChannel(Channel):
     tier = 1
 
     def can_handle(self, url: str) -> bool:
-        domain = urlparse(url).netloc.lower()
-        return any(domain == d or domain.endswith(f".{d}") for d in self.domains)
+        return host_matches(url, *self.domains)
 
     def check(self, config=None):
         from agent_reach.backends import opencli_status
@@ -39,10 +38,10 @@ class OpenCLISiteChannel(Channel):
         if st.broken:
             return "error", st.hint
 
-        self.active_backend = "OpenCLI"
         if st.ready:
-            return "ok", (
-                f"OpenCLI 可用（复用浏览器登录态）。用法：{self.usage}。"
-                f"若提示登录，请先在 Chrome 里登录 {self.login_hint}"
+            return "warn", (
+                f"OpenCLI 桥接已连接，但 {self.description} 的登录态和实际命令"
+                "未实时验证；Doctor 不执行平台命令，因此当前不标记为可用。"
+                f"需要时请先在 Chrome 里登录 {self.login_hint}"
             )
         return "warn", st.hint

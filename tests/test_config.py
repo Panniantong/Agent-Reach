@@ -3,7 +3,7 @@
 
 import pytest
 
-from agent_reach.config import Config
+from agent_reach.config import Config, ConfigReadOnlyError, ConfigSecurityError
 
 
 @pytest.fixture
@@ -14,10 +14,20 @@ def tmp_config(tmp_path):
 
 
 class TestConfig:
-    def test_init_creates_dir(self, tmp_path):
+    def test_init_is_read_only_on_disk_until_first_save(self, tmp_path):
         config_file = tmp_path / "subdir" / "config.yaml"
         Config(config_path=config_file)
-        assert config_file.parent.exists()
+        assert not config_file.parent.exists()
+
+    def test_read_only_config_never_creates_or_changes_files(self, tmp_path):
+        config_file = tmp_path / "subdir" / "config.yaml"
+        config = Config(config_path=config_file, read_only=True)
+
+        assert config.get("missing") is None
+        assert not config_file.parent.exists()
+        with pytest.raises(ConfigReadOnlyError):
+            config.set("secret", "value")
+        assert not config_file.parent.exists()
 
     def test_set_and_get(self, tmp_config):
         tmp_config.set("test_key", "test_value")
@@ -125,7 +135,8 @@ class TestConfig:
         import sys
 
         config_file = tmp_path / "private" / "config.yaml"
-        Config(config_path=config_file)
+        config = Config(config_path=config_file)
+        config.set("key", "value")
 
         if sys.platform != "win32":
             mode = config_file.parent.stat().st_mode
@@ -133,3 +144,117 @@ class TestConfig:
             assert not (mode & stat.S_IXGRP), "group execute should not be set"
             assert not (mode & stat.S_IROTH), "other read should not be set"
             assert not (mode & stat.S_IXOTH), "other execute should not be set"
+
+    def test_load_refuses_symlink_config_path(self, tmp_path):
+        victim = tmp_path / "victim.yaml"
+        victim.write_text("secret: victim-data\n", encoding="utf-8")
+        config_file = tmp_path / "config.yaml"
+        try:
+            config_file.symlink_to(victim)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlinks not supported on this platform")
+
+        with pytest.raises(ConfigSecurityError, match="符号链接"):
+            Config(config_path=config_file)
+        assert victim.read_text(encoding="utf-8") == "secret: victim-data\n"
+
+    def test_save_refuses_symlink_inserted_after_load(self, tmp_path):
+        victim = tmp_path / "victim.yaml"
+        victim.write_text("secret: victim-data\n", encoding="utf-8")
+        config_file = tmp_path / "config.yaml"
+        config = Config(config_path=config_file)
+        try:
+            config_file.symlink_to(victim)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlinks not supported on this platform")
+
+        with pytest.raises(ConfigSecurityError, match="符号链接"):
+            config.set("secret", "new-data")
+
+        assert config_file.is_symlink()
+        assert victim.read_text(encoding="utf-8") == "secret: victim-data\n"
+
+    def test_config_directory_symlink_is_rejected(self, tmp_path):
+        real_dir = tmp_path / "real"
+        real_dir.mkdir()
+        linked_dir = tmp_path / "linked"
+        try:
+            linked_dir.symlink_to(real_dir, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlinks not supported on this platform")
+
+        with pytest.raises(ConfigSecurityError, match="配置目录"):
+            Config(config_path=linked_dir / "config.yaml")
+        assert list(real_dir.iterdir()) == []
+
+    def test_config_ancestor_symlink_is_rejected(self, tmp_path):
+        real_dir = tmp_path / "real"
+        real_dir.mkdir()
+        linked_root = tmp_path / "linked-root"
+        try:
+            linked_root.symlink_to(real_dir, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlinks not supported on this platform")
+
+        with pytest.raises(ConfigSecurityError, match="符号链接"):
+            Config(config_path=linked_root / "nested" / "config.yaml")
+
+    def test_config_load_refuses_non_regular_file(self, tmp_path):
+        import os
+
+        if not hasattr(os, "mkfifo"):
+            pytest.skip("FIFOs are not supported on this platform")
+        config_file = tmp_path / "config.yaml"
+        os.mkfifo(config_file)
+
+        with pytest.raises(ConfigSecurityError, match="常规文件"):
+            Config(config_path=config_file)
+
+    def test_config_load_is_bounded(self, tmp_path, monkeypatch):
+        import agent_reach.config as config_module
+
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("secret: too-long\n", encoding="utf-8")
+        monkeypatch.setattr(config_module, "_MAX_CONFIG_BYTES", 4)
+
+        with pytest.raises(ConfigSecurityError, match="大小上限"):
+            Config(config_path=config_file)
+
+    def test_save_preserves_previous_file_on_serialization_failure(
+        self, tmp_path, monkeypatch
+    ):
+        config_file = tmp_path / "config.yaml"
+        config = Config(config_path=config_file)
+        config.set("keep_key", "keep_value")
+        previous = config_file.read_bytes()
+
+        def fail_dump(*args, **kwargs):
+            raise RuntimeError("simulated write failure")
+
+        monkeypatch.setattr("agent_reach.config.yaml.safe_dump", fail_dump)
+        with pytest.raises(RuntimeError, match="simulated"):
+            config.set("new_key", "new_value")
+
+        assert config_file.read_bytes() == previous
+        assert config.get("new_key") is None
+        assert list(tmp_path.glob(".config.yaml.*.tmp")) == []
+
+    def test_atomic_temp_file_is_created_next_to_custom_config_path(
+        self, tmp_path, monkeypatch
+    ):
+        import tempfile
+
+        config_file = tmp_path / "custom" / "nested" / "settings.yaml"
+        config = Config(config_path=config_file)
+        observed = {}
+        real_mkstemp = tempfile.mkstemp
+
+        def spy_mkstemp(*args, **kwargs):
+            observed["dir"] = kwargs.get("dir")
+            return real_mkstemp(*args, **kwargs)
+
+        monkeypatch.setattr("agent_reach.config.tempfile.mkstemp", spy_mkstemp)
+        config.set("key", "value")
+
+        assert observed["dir"] == str(config_file.parent)
+        assert config_file.read_text(encoding="utf-8") == "key: value\n"

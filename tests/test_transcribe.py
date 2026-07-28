@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for agent_reach.transcribe — provider routing, fallback, and errors."""
 
+import subprocess
 from pathlib import Path
 from typing import List
 
@@ -27,6 +28,12 @@ def chunk_file(tmp_path):
     p = tmp_path / "chunk.m4a"
     p.write_bytes(b"\x00fake-m4a-bytes")
     return p
+
+
+@pytest.fixture
+def bounded_audio_duration(monkeypatch):
+    """Treat synthetic fixture bytes as a short valid audio stream."""
+    monkeypatch.setattr(tr, "_probe_audio_duration", lambda _path: 60.0)
 
 
 class FakeResponse:
@@ -161,7 +168,120 @@ class TestFallback:
 
 
 class TestOrchestrator:
-    def test_local_file_skips_yt_dlp(self, monkeypatch, fake_config, tmp_path, chunk_file):
+    def test_rejects_overlong_audio_before_compression(
+        self, monkeypatch, fake_config, chunk_file
+    ):
+        fake_config.set("groq_api_key", "gsk_test")
+        events = []
+
+        def fake_run(cmd, **_kwargs):
+            events.append(cmd[0])
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout=str(tr.MAX_AUDIO_SECONDS + 1),
+                stderr="",
+            )
+
+        monkeypatch.setattr(tr, "_require", lambda _binary: None)
+        monkeypatch.setattr(tr.subprocess, "run", fake_run)
+        monkeypatch.setattr(
+            tr,
+            "compress_audio",
+            lambda *_args: (_ for _ in ()).throw(
+                AssertionError("overlong audio must fail before compression")
+            ),
+        )
+
+        with pytest.raises(tr.TranscribeError, match="duration.*limit"):
+            tr.transcribe(str(chunk_file), config=fake_config)
+
+        assert events == ["ffprobe"]
+
+    def test_duration_probe_timeout_fails_before_compression(
+        self, monkeypatch, fake_config, chunk_file
+    ):
+        fake_config.set("groq_api_key", "gsk_test")
+        observed = {}
+
+        def timeout_probe(cmd, **_kwargs):
+            observed["timeout"] = _kwargs.get("timeout")
+            raise subprocess.TimeoutExpired(
+                cmd,
+                timeout=tr.FFPROBE_TIMEOUT_SECONDS,
+            )
+
+        monkeypatch.setattr(tr, "_require", lambda _binary: None)
+        monkeypatch.setattr(tr.subprocess, "run", timeout_probe)
+        monkeypatch.setattr(
+            tr,
+            "compress_audio",
+            lambda *_args: (_ for _ in ()).throw(
+                AssertionError("timed-out probe must fail before compression")
+            ),
+        )
+
+        with pytest.raises(
+            tr.TranscribeError,
+            match=r"ffprobe timed out.*30s",
+        ):
+            tr.transcribe(str(chunk_file), config=fake_config)
+
+        assert observed["timeout"] == tr.FFPROBE_TIMEOUT_SECONDS
+
+    def test_unparseable_duration_fails_before_compression(
+        self, monkeypatch, fake_config, chunk_file
+    ):
+        fake_config.set("groq_api_key", "gsk_test")
+        monkeypatch.setattr(tr, "_require", lambda _binary: None)
+        monkeypatch.setattr(
+            tr.subprocess,
+            "run",
+            lambda cmd, **_kwargs: subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="N/A\n",
+                stderr="",
+            ),
+        )
+        monkeypatch.setattr(
+            tr,
+            "compress_audio",
+            lambda *_args: (_ for _ in ()).throw(
+                AssertionError("invalid duration must fail before compression")
+            ),
+        )
+
+        with pytest.raises(
+            tr.TranscribeError,
+            match=r"ffprobe could not parse.*duration",
+        ):
+            tr.transcribe(str(chunk_file), config=fake_config)
+
+    def test_rejects_oversized_source_before_compression(
+        self, monkeypatch, fake_config, chunk_file
+    ):
+        fake_config.set("groq_api_key", "gsk_test")
+        monkeypatch.setattr(tr, "MAX_SOURCE_BYTES", 4)
+        monkeypatch.setattr(
+            tr,
+            "compress_audio",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                AssertionError("oversized source must fail before ffmpeg")
+            ),
+        )
+
+        with pytest.raises(tr.TranscribeError, match="source.*limit"):
+            tr.transcribe(str(chunk_file), config=fake_config)
+
+    def test_local_file_skips_yt_dlp(
+        self,
+        monkeypatch,
+        fake_config,
+        tmp_path,
+        chunk_file,
+        bounded_audio_duration,
+    ):
         fake_config.set("groq_api_key", "gsk_test")
 
         def boom_download(*a, **k):
@@ -190,7 +310,12 @@ class TestOrchestrator:
         assert text == "transcript text"
 
     def test_chunks_concatenated_with_newlines(
-        self, monkeypatch, fake_config, tmp_path, chunk_file
+        self,
+        monkeypatch,
+        fake_config,
+        tmp_path,
+        chunk_file,
+        bounded_audio_duration,
     ):
         fake_config.set("groq_api_key", "gsk_test")
         # Force the "needs chunking" path by writing a file above the size limit.
@@ -217,6 +342,72 @@ class TestOrchestrator:
         )
         assert text == "part one\npart two"
 
+    def test_rejects_too_many_chunks_before_any_provider_call(
+        self,
+        monkeypatch,
+        fake_config,
+        tmp_path,
+        chunk_file,
+        bounded_audio_duration,
+    ):
+        fake_config.set("groq_api_key", "gsk_test")
+        monkeypatch.setattr(tr, "SIZE_LIMIT_BYTES", 1)
+        compressed = tmp_path / "compressed.m4a"
+        compressed.write_bytes(b"xx")
+        monkeypatch.setattr(tr, "compress_audio", lambda *_args: compressed)
+
+        chunks = []
+        for index in range(tr.MAX_CHUNKS + 1):
+            chunk = tmp_path / f"chunk_{index:03d}.m4a"
+            chunk.write_bytes(b"x")
+            chunks.append(chunk)
+        monkeypatch.setattr(tr, "chunk_audio", lambda *_args: chunks)
+
+        provider_calls = []
+        monkeypatch.setattr(
+            tr,
+            "_transcribe_with_fallback",
+            lambda *_args: provider_calls.append("called") or "text",
+        )
+
+        with pytest.raises(tr.TranscribeError, match="chunks.*limit"):
+            tr.transcribe(str(chunk_file), out_dir=tmp_path / "work", config=fake_config)
+
+        assert provider_calls == []
+
+    def test_rejects_excessive_total_chunk_bytes_before_provider_calls(
+        self,
+        monkeypatch,
+        fake_config,
+        tmp_path,
+        chunk_file,
+        bounded_audio_duration,
+    ):
+        fake_config.set("groq_api_key", "gsk_test")
+        monkeypatch.setattr(tr, "SIZE_LIMIT_BYTES", 10)
+        monkeypatch.setattr(tr, "MAX_TOTAL_CHUNK_BYTES", 5)
+        compressed = tmp_path / "compressed.m4a"
+        compressed.write_bytes(b"x" * 11)
+        monkeypatch.setattr(tr, "compress_audio", lambda *_args: compressed)
+
+        first = tmp_path / "chunk_000.m4a"
+        second = tmp_path / "chunk_001.m4a"
+        first.write_bytes(b"aaa")
+        second.write_bytes(b"bbb")
+        monkeypatch.setattr(tr, "chunk_audio", lambda *_args: [first, second])
+
+        provider_calls = []
+        monkeypatch.setattr(
+            tr,
+            "_transcribe_with_fallback",
+            lambda *_args: provider_calls.append("called") or "text",
+        )
+
+        with pytest.raises(tr.TranscribeError, match="total.*limit"):
+            tr.transcribe(str(chunk_file), out_dir=tmp_path / "work", config=fake_config)
+
+        assert provider_calls == []
+
     def test_no_provider_configured_fails_fast(self, fake_config, chunk_file):
         with pytest.raises(tr.NoProviderConfigured):
             tr.transcribe(str(chunk_file), config=fake_config)
@@ -225,7 +416,13 @@ class TestOrchestrator:
         with pytest.raises(tr.TranscribeError, match="unknown provider"):
             tr.transcribe(str(chunk_file), provider="azure", config=fake_config)
 
-    def test_auto_temp_dir_is_cleaned_up(self, monkeypatch, fake_config, tmp_path):
+    def test_auto_temp_dir_is_cleaned_up(
+        self,
+        monkeypatch,
+        fake_config,
+        tmp_path,
+        bounded_audio_duration,
+    ):
         fake_config.set("groq_api_key", "gsk_test")
         created_work_dirs = []
 
@@ -269,7 +466,13 @@ class TestOrchestrator:
         assert created_work_dirs
         assert not created_work_dirs[0].exists()
 
-    def test_explicit_out_dir_is_preserved(self, monkeypatch, fake_config, tmp_path):
+    def test_explicit_out_dir_is_preserved(
+        self,
+        monkeypatch,
+        fake_config,
+        tmp_path,
+        bounded_audio_duration,
+    ):
         fake_config.set("groq_api_key", "gsk_test")
         work = tmp_path / "caller-owned"
 
@@ -298,6 +501,20 @@ class TestOrchestrator:
 
 
 class TestDownloadAudioSafety:
+    def test_rejects_download_that_exceeds_limit(
+        self, monkeypatch, tmp_path
+    ):
+        monkeypatch.setattr(tr, "_require", lambda _binary: None)
+        monkeypatch.setattr(tr, "MAX_SOURCE_BYTES", 4)
+
+        def fake_run(_cmd, timeout=600):
+            (tmp_path / "source.m4a").write_bytes(b"audio")
+
+        monkeypatch.setattr(tr, "_run", fake_run)
+
+        with pytest.raises(tr.TranscribeError, match="downloaded source.*limit"):
+            tr.download_audio("https://example.com/watch?v=123", tmp_path)
+
     def test_rejects_private_network_url_before_yt_dlp(self, monkeypatch, tmp_path):
         monkeypatch.setattr(tr, "_require", lambda binary: None)
 
@@ -323,8 +540,11 @@ class TestDownloadAudioSafety:
 
         assert audio == tmp_path / "source.m4a"
         assert "--" in captured["cmd"]
+        assert "--no-playlist" in captured["cmd"]
         marker_index = captured["cmd"].index("--")
         assert captured["cmd"][marker_index + 1] == "https://example.com/watch?v=123"
+        max_size_index = captured["cmd"].index("--max-filesize")
+        assert captured["cmd"][max_size_index + 1] == str(tr.MAX_SOURCE_BYTES)
 
     def test_preserves_bare_public_urls_supported_by_yt_dlp(self, monkeypatch, tmp_path):
         monkeypatch.setattr(tr, "_require", lambda binary: None)
@@ -362,6 +582,61 @@ class TestDownloadAudioSafety:
         tr.download_audio("https://youtu.be/abc123", tmp_path)
 
         assert captured["cmd"][-1] == "https://youtu.be/abc123"
+
+
+class TestMediaGenerationBudget:
+    def test_compression_has_hard_duration_cap(
+        self, monkeypatch, tmp_path, chunk_file
+    ):
+        captured = {}
+
+        def fake_run(cmd, timeout=600):
+            captured["cmd"] = cmd
+            (tmp_path / "compressed.m4a").write_bytes(b"compressed")
+
+        monkeypatch.setattr(tr, "_require", lambda _binary: None)
+        monkeypatch.setattr(tr, "_run", fake_run)
+
+        tr.compress_audio(chunk_file, tmp_path)
+
+        duration_index = captured["cmd"].index("-t")
+        assert captured["cmd"][duration_index + 1] == str(tr.MAX_AUDIO_SECONDS)
+
+    def test_chunk_generation_has_hard_duration_cap(
+        self, monkeypatch, tmp_path, chunk_file
+    ):
+        captured = {}
+
+        def fake_run(cmd, timeout=600):
+            captured["cmd"] = cmd
+            (tmp_path / "chunk_000.m4a").write_bytes(b"chunk")
+
+        monkeypatch.setattr(tr, "_require", lambda _binary: None)
+        monkeypatch.setattr(tr, "_run", fake_run)
+
+        tr.chunk_audio(chunk_file, tmp_path)
+
+        duration_index = captured["cmd"].index("-t")
+        assert captured["cmd"][duration_index + 1] == str(tr.MAX_AUDIO_SECONDS)
+
+    def test_chunk_generation_rejects_segment_size_that_can_exceed_budget(
+        self, monkeypatch, tmp_path, chunk_file
+    ):
+        monkeypatch.setattr(tr, "_require", lambda _binary: None)
+        monkeypatch.setattr(
+            tr,
+            "_run",
+            lambda *_args, **_kwargs: pytest.fail(
+                "unsafe chunk budget must fail before ffmpeg"
+            ),
+        )
+
+        with pytest.raises(tr.TranscribeError, match=r"chunk.*limit.*24"):
+            tr.chunk_audio(
+                chunk_file,
+                tmp_path,
+                segment_seconds=tr.CHUNK_SECONDS - 1,
+            )
 
 
 # --- YouTubeChannel integration --------------------------------------- #

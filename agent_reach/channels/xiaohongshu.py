@@ -4,19 +4,30 @@
 Backend order encodes the recommendation, and probing order makes the
 environment split automatic: OpenCLI needs a desktop Chrome so it simply
 never probes alive on a server, where xiaohongshu-mcp (self-contained
-headless browser) takes over. xhs-cli (upstream unmaintained since
+headless browser) takes over after an explicit Cookie-Editor import.
+xhs-cli (upstream unmaintained since
 2026-03) keeps working for existing installs as the last candidate.
 """
 
+import json
+import shutil
+import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
-from agent_reach.probe import probe_command
+from agent_reach.utils.paths import (
+    PrivatePathError,
+    read_small_text_no_follow,
+)
 
 from .base import Channel
+from .mcporter import McporterConfigError, inspect_mcporter_config
 
 _MCP_ENDPOINT = "http://localhost:18060/mcp"
 _MCP_INSTALL_URL = "https://github.com/xpzouying/xiaohongshu-mcp"
+_XHS_COOKIE_TTL_SECONDS = 7 * 86400
+_MAX_XHS_COOKIE_BYTES = 1024 * 1024
 
 
 def _mcp_service_reachable(timeout: int = 3) -> bool:
@@ -153,9 +164,9 @@ class XiaoHongShuChannel(Channel):
     tier = 1
 
     def can_handle(self, url: str) -> bool:
-        from urllib.parse import urlparse
-        d = urlparse(url).netloc.lower()
-        return "xiaohongshu.com" in d or "xhslink.com" in d
+        from agent_reach.utils.url import host_matches
+
+        return host_matches(url, "xiaohongshu.com", "xhslink.com")
 
     def check(self, config=None):
         """Probe candidates in order; first fully-usable backend wins.
@@ -181,7 +192,7 @@ class XiaoHongShuChannel(Channel):
         for wanted in ("ok", "warn"):
             for backend, status, message in findings:
                 if status == wanted:
-                    self.active_backend = backend
+                    self.active_backend = backend if status == "ok" else None
                     return status, message
 
         if findings:  # only broken candidates left
@@ -191,7 +202,9 @@ class XiaoHongShuChannel(Channel):
             "未安装任何小红书后端。推荐：\n"
             "  桌面：agent-reach install --channels opencli\n"
             "       （复用 Chrome 登录态，刷过小红书即零配置可用）\n"
-            f"  服务器：xiaohongshu-mcp（自带无头浏览器+扫码登录）：{_MCP_INSTALL_URL}"
+            f"  服务器：xiaohongshu-mcp：{_MCP_INSTALL_URL}\n"
+            "       登录只使用 Cookie-Editor 明确导出：\n"
+            "       agent-reach configure xhs-cookies '<Cookie-Editor export>'"
         )
 
     def _check_opencli(self):
@@ -204,9 +217,9 @@ class XiaoHongShuChannel(Channel):
         if st.broken:
             return "error", st.hint
         if st.ready:
-            return "ok", (
-                "OpenCLI 可用（复用浏览器登录态）。用法："
-                "opencli xiaohongshu search/note/comments/feed -f yaml"
+            return "warn", (
+                "OpenCLI 桥接已连接，但小红书登录态和实际命令未实时验证；"
+                "Doctor 不执行平台命令，因此当前不标记为可用。"
             )
         return "warn", st.hint
 
@@ -214,45 +227,79 @@ class XiaoHongShuChannel(Channel):
         """xiaohongshu-mcp candidate. None = service not running."""
         if not _mcp_service_reachable():
             return None
-        mcporter = probe_command(
-            "mcporter", ["config", "list"], timeout=10, package="mcporter"
-        )
-        if mcporter.ok and "xiaohongshu" in mcporter.output:
-            return "ok", (
-                "xiaohongshu-mcp 服务运行中"
-                "（mcporter call 'xiaohongshu.search_feeds(keyword: \"...\")'）。"
-                "若未登录，让 agent 调 get_login_qrcode 扫码"
+        if not shutil.which("mcporter"):
+            return "warn", (
+                "xiaohongshu-mcp 服务可达，但 mcporter 未安装，Doctor 未接入"
+                "该服务。先安装：npm install -g mcporter"
+            )
+        try:
+            inspection = inspect_mcporter_config()
+        except McporterConfigError as exc:
+            return "error", f"mcporter 配置检查失败：{exc}"
+        if "xiaohongshu" in inspection.server_names:
+            return "warn", (
+                "xiaohongshu-mcp 服务可达且已接入 mcporter，但 Doctor "
+                "未验证登录态，不能据此宣称笔记功能可用。若未登录，用 "
+                "Cookie-Editor 导出后运行 agent-reach configure xhs-cookies"
+            )
+        if inspection.imports_unchecked:
+            return "warn", (
+                "xiaohongshu-mcp 服务可达；mcporter 本地配置未发现"
+                " xiaohongshu，且 editor imports 未展开，Doctor 当前未验证接入。"
             )
         return "warn", (
             "xiaohongshu-mcp 服务在跑但 mcporter 未接入。运行：\n"
-            f"  mcporter config add xiaohongshu {_MCP_ENDPOINT}"
+            f"  mcporter config add xiaohongshu {_MCP_ENDPOINT} --scope home"
         )
 
     def _check_xhs_cli(self):
-        """Legacy xhs-cli candidate. None = not installed."""
-        probe = probe_command(
-            "xhs", ["status"], timeout=10, package="xiaohongshu-cli"
-        )
-        if probe.status == "missing":
+        """Inspect saved xhs-cli cookies without invoking browser extraction."""
+        if not shutil.which("xhs"):
             return None
-        if probe.status == "broken":
-            return "error", "xhs 命令存在但无法执行\n" + probe.hint
-        if probe.status == "timeout":
-            return "warn", "xhs-cli 已安装但状态检测超时\n" + probe.hint
-
-        # 进程是活的（执行成功或运行后非零退出）——按输出内容分类
-        if probe.ok and "ok: true" in probe.output:
-            return "ok", (
-                "xhs-cli 可用（搜索、阅读、评论、热门；上游 2026-03 起停更，"
-                "桌面用户建议迁移到 OpenCLI）"
+        cookie_path = Path.home() / ".xiaohongshu-cli" / "cookies.json"
+        try:
+            payload = read_small_text_no_follow(
+                cookie_path,
+                max_bytes=_MAX_XHS_COOKIE_BYTES,
             )
-        if "not_authenticated" in probe.output or "expired" in probe.output:
+        except PrivatePathError as exc:
             return "warn", (
-                "xhs-cli 已安装但未登录。运行：\n"
-                "  xhs login\n"
-                "（自动从浏览器提取 Cookie，或扫码登录）"
+                f"xhs-cli 已安装，但 cookies.json 无法安全读取：{exc}。"
+            )
+        except OSError:
+            return "warn", (
+                "xhs-cli 已安装，但 cookies.json 无法安全读取；"
+                "Doctor 未执行会自动提取浏览器 Cookie 的 `xhs status`。"
+            )
+        if payload is None:
+            return self._xhs_cookie_hint()
+        try:
+            data = json.loads(payload)
+        except (UnicodeError, json.JSONDecodeError, ValueError):
+            return "warn", (
+                "xhs-cli 已安装，但保存的 cookies.json 无法安全解析；"
+                "Doctor 未执行会自动提取浏览器 Cookie 的 `xhs status`。"
+            )
+        if not isinstance(data, dict) or not data.get("a1"):
+            return self._xhs_cookie_hint()
+        saved_at = data.get("saved_at")
+        if isinstance(saved_at, (int, float)) and (
+            time.time() - saved_at > _XHS_COOKIE_TTL_SECONDS
+        ):
+            return "warn", (
+                "xhs-cli 已安装，保存的 Cookie 已超过 7 天；Doctor 不会让"
+                "上游自动读取浏览器或刷新文件，请用 Cookie-Editor 明确更新。"
             )
         return "warn", (
-            "xhs-cli 已安装但状态异常。运行：\n"
-            "  xhs -v status 查看详细信息"
+            "xhs-cli 已安装并检测到显式保存的 Cookie；Doctor 为避免上游"
+            "自动读取浏览器或改写 Cookie，不执行 `xhs status`，未实时验证。"
+        )
+
+    @staticmethod
+    def _xhs_cookie_hint():
+        return "warn", (
+            "xhs-cli 已安装但没有可用的显式 Cookie。不要运行会自动读取"
+            "浏览器的 `xhs login/status`；请迁移到 xiaohongshu-mcp，"
+            "再用 Cookie-Editor 导出并运行 "
+            "agent-reach configure xhs-cookies。"
         )

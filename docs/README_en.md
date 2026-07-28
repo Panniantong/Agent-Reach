@@ -73,7 +73,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 |----------|-------------|:-----:|-------|
 | 🌐 **Web** | Read | Zero config | Any URL → clean Markdown ([Jina Reader](https://github.com/jina-ai/reader) ⭐9.8K) |
 | 🐦 **Twitter/X** | Read · Search | Cookie | Cookie unlocks search, timeline, tweet reading, articles ([twitter-cli](https://github.com/public-clis/twitter-cli)) |
-| 📕 **XiaoHongShu** | Read · Search · Comments | OpenCLI / MCP | Desktop: [OpenCLI](https://github.com/jackwener/opencli) (reuses browser session); Server: [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) (QR login); legacy xhs-cli still works |
+| 📕 **XiaoHongShu** | Read · Search · Comments | OpenCLI / MCP | OpenCLI uses only an existing user-controlled Chrome session; MCP/legacy tools use a manual Cookie-Editor export |
 | 📘 **Facebook** | Search · Profiles · Feed · Groups list | OpenCLI | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
 | 📷 **Instagram** | User search · Profiles · Recent posts · Explore | OpenCLI | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
 | 💼 **LinkedIn** | Jina Reader (public pages) | Full profiles, companies, job search | Tell your Agent "help me set up LinkedIn" |
@@ -156,7 +156,7 @@ No configuration needed — just tell your Agent:
 - "Read this link" → `curl https://r.jina.ai/URL` for any web page
 - "What's this GitHub repo about?" → `gh repo view owner/repo`
 - "What does this video cover?" → `yt-dlp --dump-json URL` for subtitles
-- "Read this tweet" → `twitter tweet URL`
+- "Read this tweet" → set `TWITTER_AUTH_TOKEN` / `TWITTER_CT0`, then run `twitter tweet URL`
 - "Subscribe to this RSS" → `feedparser` to parse feeds
 - "Search GitHub for LLM frameworks" → `gh search repos "LLM framework"`
 
@@ -176,7 +176,17 @@ Don't use it? Don't configure it. Every step is optional.
 
 ### 🍪 Cookies — Free, 2 minutes
 
-Tell your Agent "help me configure Twitter cookies" — it'll guide you through exporting from your browser. Local computers can auto-import.
+Tell your Agent "help me configure Twitter cookies" — it'll guide you through a
+manual Cookie-Editor export. Agent Reach saves the values for `doctor` to check
+whether credentials are present; `doctor` does not run `twitter status`.
+Direct `twitter` commands still require `TWITTER_AUTH_TOKEN` and `TWITTER_CT0`
+in their process environment.
+
+For XiaoHongShu, Agent Reach never logs the user in or reads browser cookies.
+OpenCLI may use only an existing Chrome session explicitly controlled by the
+user. If none exists, do not automate login; use a manual Cookie-Editor export
+with xiaohongshu-mcp or a legacy tool. `agent-reach configure xhs-cookies`
+does not inject cookies into OpenCLI or Chrome.
 
 ### 🌐 Proxy — $1/month, restricted networks only
 
@@ -196,7 +206,6 @@ $ agent-reach doctor
 
 ✅ Ready to use:
   ✅ GitHub repos and code — public repos readable and searchable
-  ✅ Twitter/X tweets — readable. Cookie unlocks search and posting
   ✅ YouTube video subtitles — yt-dlp
   ✅ Bilibili search & video detail — bili-cli (subtitles via OpenCLI)
   ✅ RSS/Atom feeds — feedparser
@@ -206,8 +215,9 @@ $ agent-reach doctor
   ⬜ Web semantic search — sign up at exa.ai for free key
 
 🔧 Configurable:
+  ⚠️  Twitter/X — doctor checks only that explicit credentials exist; direct CLI still needs its environment variables
   ⬜ Reddit posts and comments — needs login: rdt-cli after `rdt login`, or OpenCLI browser session
-  ⬜ XiaoHongShu notes — desktop: OpenCLI (browser session); server: xiaohongshu-mcp (QR)
+  ⬜ XiaoHongShu notes — OpenCLI needs an existing user-controlled session; otherwise use Cookie-Editor with MCP/legacy tools
   ⬜ Facebook / Instagram — desktop: OpenCLI browser session
 
 Status: 6/9 channels available
@@ -260,7 +270,7 @@ Each channel file **actually probes** its candidate backends in order (not just 
 | Search the web | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | — | AI semantic search, MCP integration, no API key |
 | GitHub | [gh CLI](https://cli.github.com) | — | Official tool, full API after auth |
 | Read RSS | [feedparser](https://github.com/kurtmckee/feedparser) | — | Python ecosystem standard |
-| XiaoHongShu | [OpenCLI](https://github.com/jackwener/opencli) (desktop) | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) (server) ▸ xhs-cli | The xhs-cli author moved to OpenCLI (24K stars); browser sessions mean zero friction |
+| XiaoHongShu | [OpenCLI](https://github.com/jackwener/opencli) (desktop) | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) (server) ▸ xhs-cli | OpenCLI uses only an existing user-controlled session; other backends use a manual Cookie-Editor export |
 | LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | Jina Reader | MCP server, browser automation |
 | Xiaoyuzhou Podcast | `transcribe.sh` | — | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 
@@ -294,6 +304,8 @@ For collaboration or questions, add me on WeChat — I'll invite you to the comm
 [Ark Agent Plan model subscription](https://dis.chatdesks.cn/chatdesk/hsyqAgent-Reach.html) — integrates ByteDance's in-house SOTA models, including Doubao-Seed, Doubao-Seedance, Doubao-Seedream, and more, covering multimodal tasks across text, code, images, and video. It now supports MiniMax-M3, DeepSeek-V4 series, GLM-5.2, Doubao-Seed-2.0 series, Kimi-K2.6, and more, with no tool restrictions. Upgrade to a full-modal model suite and Harness in one step, with deep support for Agent frameworks and AI coding tools. One subscription lets you switch to the right AI engine for each task.
 
 [OpenClaw on Tencent Cloud](https://www.tencentcloud.com/act/pro/intl-openclaw?referral_code=G76Y819A&lang=en&pg=) — One-click OpenClaw on Tencent Cloud: chat to connect Agent Reach & unlock internet power.
+
+[Agent Skills Hub](https://agentskillshub.top/) — Find Claude skills & MCP servers without guessing what's safe. Every one of 133,000+ entries is security-graded, quality-scored, and refreshed every 8 hours.
 
 [AtomGit mirror](https://atomgit.com/qq_51337814/Agent-Reach) — Synchronized AtomGit mirror for Agent Reach.
 
