@@ -1199,46 +1199,42 @@ class TestGitHubChannel:
 
 
 class TestLinkedInChannel:
-    def test_reports_error_with_reinstall_hint_when_broken(self, monkeypatch):
-        """mcporter which 命中但 exec 失败 → error + npm 重装处方。"""
-        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
+    """LinkedIn moved from linkedin-scraper-mcp to the OpenCLI browser session."""
 
-        def fake_run(cmd, **kwargs):
-            raise FileNotFoundError(cmd[0])
-
-        monkeypatch.setattr(subprocess, "run", fake_run)
+    def test_can_handle_common_urls(self):
         from agent_reach.channels.linkedin import LinkedInChannel
         ch = LinkedInChannel()
-        status, msg = ch.check()
-        assert status == "error"
-        assert "npm install -g mcporter" in msg
-        assert ch.active_backend is None
+        assert ch.can_handle("https://www.linkedin.com/in/someone/")
+        assert ch.can_handle("https://linkedin.com/jobs/view/123/")
+        assert not ch.can_handle("https://facebook.com/someone")
 
-    def test_active_backend_set_when_linkedin_configured(self, monkeypatch):
-        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
-
-        def fake_run(cmd, **kwargs):
-            return subprocess.CompletedProcess(cmd, 0, "linkedin  http://localhost:3000/mcp", "")
-
-        monkeypatch.setattr(subprocess, "run", fake_run)
+    def test_opencli_ready_reports_ok(self, monkeypatch):
+        monkeypatch.setattr(
+            "agent_reach.backends.opencli_status",
+            lambda: OpenCLIStatus(
+                installed=True,
+                extension_connected=True,
+                version="1.8.5",
+            ),
+        )
         from agent_reach.channels.linkedin import LinkedInChannel
         ch = LinkedInChannel()
         status, msg = ch.check()
         assert status == "ok"
-        assert ch.active_backend == "linkedin-scraper-mcp"
+        assert ch.active_backend == "OpenCLI"
+        assert "linkedin.com" in msg
 
-    def test_off_without_backend_when_linkedin_not_configured(self, monkeypatch):
-        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
-
-        def fake_run(cmd, **kwargs):
-            return subprocess.CompletedProcess(cmd, 0, "exa  https://mcp.exa.ai/mcp", "")
-
-        monkeypatch.setattr(subprocess, "run", fake_run)
+    def test_opencli_missing_reports_off(self, monkeypatch):
+        monkeypatch.setattr(
+            "agent_reach.backends.opencli_status",
+            lambda: OpenCLIStatus(installed=False),
+        )
         from agent_reach.channels.linkedin import LinkedInChannel
         ch = LinkedInChannel()
         status, msg = ch.check()
         assert status == "off"
         assert ch.active_backend is None
+        assert "agent-reach install --channels opencli" in msg
 
 
 class TestExaSearchChannel:

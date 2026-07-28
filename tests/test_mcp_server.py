@@ -71,6 +71,18 @@ def test_tiktok_is_a_declared_platform():
     assert "tiktok" in SEARCH_PLATFORMS
 
 
+def test_search_linkedin_routes_to_job_search():
+    cmd, _ = build_search_command("linkedin", "python developer", 10)
+    assert cmd == ["opencli", "linkedin", "search", "python developer",
+                   "--limit", "10", "-f", "yaml"]
+
+
+def test_search_linkedin_never_uses_people_search():
+    # people-search burns LinkedIn's monthly Commercial Use Limit.
+    cmd, _ = build_search_command("linkedin", "anything", 5)
+    assert "people-search" not in cmd
+
+
 def test_search_xiaohongshu_uses_opencli():
     cmd, _ = build_search_command("xiaohongshu", "旅行", 5)
     assert cmd[:3] == ["opencli", "xiaohongshu", "search"]
@@ -197,6 +209,28 @@ def test_extract_tiktok_username():
         "https://www.tiktok.com/@user/video/7123") is None
     assert _extract_tiktok_username("https://www.tiktok.com/explore") is None
     assert _extract_tiktok_username("https://www.tiktok.com/") is None
+
+
+def test_read_linkedin_job_routes_to_job_detail():
+    url = "https://www.linkedin.com/jobs/view/4123456789/"
+    platform, cmd, _ = build_read_command(url)
+    assert platform == "linkedin"
+    assert cmd == ["opencli", "linkedin", "job-detail", url, "-f", "yaml"]
+
+
+def test_read_linkedin_profile_routes_to_profile_read():
+    url = "https://www.linkedin.com/in/someone/"
+    platform, cmd, _ = build_read_command(url)
+    assert platform == "linkedin"
+    assert cmd == ["opencli", "linkedin", "profile-read", "--profile-url", url,
+                   "-f", "yaml"]
+
+
+def test_read_linkedin_company_falls_back_to_jina():
+    platform, cmd, _ = build_read_command(
+        "https://www.linkedin.com/company/anthropic/")
+    assert platform == "web"
+    assert cmd[0] == "curl"
 
 
 def test_extract_bilibili_bvid():

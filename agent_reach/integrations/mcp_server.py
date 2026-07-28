@@ -40,8 +40,8 @@ except ImportError:
 # Platforms exposed by the `search` tool. Commands mirror SKILL.md —
 # zero-config first, login-required platforms surface doctor hints on failure.
 SEARCH_PLATFORMS = (
-    "web", "twitter", "reddit", "instagram", "tiktok", "xiaohongshu",
-    "bilibili", "github", "youtube",
+    "web", "twitter", "reddit", "instagram", "tiktok", "linkedin",
+    "xiaohongshu", "bilibili", "github", "youtube",
 )
 
 _DEFAULT_TIMEOUT = 60
@@ -82,6 +82,12 @@ def build_search_command(platform: str, query: str, limit: int = 5) -> Tuple[Lis
         return (["opencli", "instagram", "search", query, "-f", "yaml"], _DEFAULT_TIMEOUT)
     if platform == "tiktok":
         return (["opencli", "tiktok", "search", query, "--limit", str(limit),
+                 "-f", "yaml"], _DEFAULT_TIMEOUT)
+    if platform == "linkedin":
+        # OpenCLI's `linkedin search` is a JOB search. People search lives in
+        # `people-search` and burns LinkedIn's monthly Commercial Use Limit,
+        # so it is deliberately not reachable from this tool.
+        return (["opencli", "linkedin", "search", query, "--limit", str(limit),
                  "-f", "yaml"], _DEFAULT_TIMEOUT)
     if platform == "xiaohongshu":
         return (["opencli", "xiaohongshu", "search", query, "-f", "yaml"], _DEFAULT_TIMEOUT)
@@ -155,6 +161,23 @@ def _extract_tiktok_username(url: str) -> Optional[str]:
     return username or None
 
 
+def _linkedin_read_argv(url: str) -> Optional[List[str]]:
+    """Pick the OpenCLI linkedin read command for a URL, or None for Jina.
+
+    /jobs/view/<id>/ → job-detail; /in/<handle>/ → profile-read. Feed posts,
+    company pages and everything else have no read command upstream.
+    """
+    parts = [p for p in urlparse(url).path.split("/") if p]
+    if not parts:
+        return None
+    if parts[0] == "jobs" and "view" in parts:
+        return ["opencli", "linkedin", "job-detail", url, "-f", "yaml"]
+    if parts[0] == "in" and len(parts) > 1:
+        return ["opencli", "linkedin", "profile-read", "--profile-url", url,
+                "-f", "yaml"]
+    return None
+
+
 def _extract_bilibili_bvid(url: str) -> Optional[str]:
     for part in url.split("/"):
         cleaned = part.split("?")[0]
@@ -187,6 +210,10 @@ def build_read_command(url: str) -> Tuple[str, List[str], int]:
         if username:
             return (platform, ["opencli", "tiktok", "profile", username, "-f", "yaml"],
                     _DEFAULT_TIMEOUT)
+    if platform == "linkedin":
+        argv = _linkedin_read_argv(url)
+        if argv:
+            return (platform, argv, _DEFAULT_TIMEOUT)
     if platform == "xiaohongshu":
         return (platform, ["opencli", "xiaohongshu", "note", url, "-f", "yaml"],
                 _DEFAULT_TIMEOUT)
@@ -284,10 +311,11 @@ def create_server():
                  description=(
                      "Search a platform via Agent Reach's upstream tools. "
                      f"Platforms: {', '.join(SEARCH_PLATFORMS)}. "
-                     "'web' is semantic full-web search (Exa). Login-required "
+                     "'web' is semantic full-web search (Exa). 'linkedin' "
+                     "searches JOBS, not people or posts. Login-required "
                      "platforms (twitter, reddit, instagram, tiktok, "
-                     "xiaohongshu) reuse your browser session — check "
-                     "get_status if they fail."
+                     "linkedin, xiaohongshu) reuse your browser session — "
+                     "check get_status if they fail."
                  ),
                  inputSchema={
                      "type": "object",
@@ -303,9 +331,10 @@ def create_server():
             Tool(name="read",
                  description=(
                      "Read a URL via Agent Reach. Auto-routes: tweets, reddit "
-                     "posts, Instagram/TikTok profiles, xiaohongshu notes, "
-                     "bilibili/youtube videos go to their platform CLI; any "
-                     "other URL is fetched as clean text via Jina Reader."
+                     "posts, Instagram/TikTok profiles, LinkedIn profiles and "
+                     "job pages, xiaohongshu notes, bilibili/youtube videos go "
+                     "to their platform CLI; any other URL is fetched as clean "
+                     "text via Jina Reader."
                  ),
                  inputSchema={
                      "type": "object",

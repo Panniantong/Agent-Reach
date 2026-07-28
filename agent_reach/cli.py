@@ -203,18 +203,19 @@ def _cmd_install(args):
         "instagram":   _install_opencli_deps,
         "tiktok":      _install_opencli_deps,
         "bilibili":    _install_bili_deps,
+        "linkedin":    _install_opencli_deps,
         "opencli":     _install_opencli_deps,  # cross-channel backend, desktop only
         # xueqiu: cookie-only, no install step
-        # linkedin: manual setup, no auto-install
     }
-    OPENCLI_ONLY_CHANNELS = {"opencli", "facebook", "instagram", "tiktok"}
+    OPENCLI_ONLY_CHANNELS = {"opencli", "facebook", "instagram", "tiktok",
+                             "linkedin"}
     COOKIE_CHANNELS = {"twitter", "xueqiu", "bilibili"}
 
     requested_channels = set()
     if args.channels:
         raw = [c.strip().lower() for c in args.channels.split(",") if c.strip()]
         if "all" in raw:
-            requested_channels = set(CHANNEL_INSTALLERS.keys()) | {"xueqiu", "linkedin"}
+            requested_channels = set(CHANNEL_INSTALLERS.keys()) | {"xueqiu"}
         else:
             requested_channels = set(raw)
 
