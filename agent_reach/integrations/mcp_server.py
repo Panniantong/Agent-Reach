@@ -40,8 +40,8 @@ except ImportError:
 # Platforms exposed by the `search` tool. Commands mirror SKILL.md —
 # zero-config first, login-required platforms surface doctor hints on failure.
 SEARCH_PLATFORMS = (
-    "web", "twitter", "reddit", "instagram", "xiaohongshu", "bilibili",
-    "github", "youtube",
+    "web", "twitter", "reddit", "instagram", "tiktok", "xiaohongshu",
+    "bilibili", "github", "youtube",
 )
 
 _DEFAULT_TIMEOUT = 60
@@ -80,6 +80,9 @@ def build_search_command(platform: str, query: str, limit: int = 5) -> Tuple[Lis
         return (["opencli", "reddit", "search", query, "-f", "yaml"], _DEFAULT_TIMEOUT)
     if platform == "instagram":
         return (["opencli", "instagram", "search", query, "-f", "yaml"], _DEFAULT_TIMEOUT)
+    if platform == "tiktok":
+        return (["opencli", "tiktok", "search", query, "--limit", str(limit),
+                 "-f", "yaml"], _DEFAULT_TIMEOUT)
     if platform == "xiaohongshu":
         return (["opencli", "xiaohongshu", "search", query, "-f", "yaml"], _DEFAULT_TIMEOUT)
     if platform == "bilibili":
@@ -137,6 +140,21 @@ def _extract_instagram_username(url: str) -> Optional[str]:
     return first
 
 
+def _extract_tiktok_username(url: str) -> Optional[str]:
+    """Return the username for a TikTok profile URL, else None.
+
+    Video permalinks (/@user/video/<id>) return None: OpenCLI's tiktok
+    adapter reads profiles and user video lists, not single videos.
+    """
+    parts = [p for p in urlparse(url).path.split("/") if p]
+    if not parts or not parts[0].startswith("@"):
+        return None
+    if len(parts) > 1:  # /@user/video/<id>, /@user/live, …
+        return None
+    username = parts[0][1:].split("?")[0]
+    return username or None
+
+
 def _extract_bilibili_bvid(url: str) -> Optional[str]:
     for part in url.split("/"):
         cleaned = part.split("?")[0]
@@ -163,6 +181,11 @@ def build_read_command(url: str) -> Tuple[str, List[str], int]:
         username = _extract_instagram_username(url)
         if username:
             return (platform, ["opencli", "instagram", "profile", username, "-f", "yaml"],
+                    _DEFAULT_TIMEOUT)
+    if platform == "tiktok":
+        username = _extract_tiktok_username(url)
+        if username:
+            return (platform, ["opencli", "tiktok", "profile", username, "-f", "yaml"],
                     _DEFAULT_TIMEOUT)
     if platform == "xiaohongshu":
         return (platform, ["opencli", "xiaohongshu", "note", url, "-f", "yaml"],
@@ -262,8 +285,9 @@ def create_server():
                      "Search a platform via Agent Reach's upstream tools. "
                      f"Platforms: {', '.join(SEARCH_PLATFORMS)}. "
                      "'web' is semantic full-web search (Exa). Login-required "
-                     "platforms (twitter, reddit, instagram, xiaohongshu) reuse "
-                     "your browser session — check get_status if they fail."
+                     "platforms (twitter, reddit, instagram, tiktok, "
+                     "xiaohongshu) reuse your browser session — check "
+                     "get_status if they fail."
                  ),
                  inputSchema={
                      "type": "object",
@@ -279,7 +303,7 @@ def create_server():
             Tool(name="read",
                  description=(
                      "Read a URL via Agent Reach. Auto-routes: tweets, reddit "
-                     "posts, Instagram profiles, xiaohongshu notes, "
+                     "posts, Instagram/TikTok profiles, xiaohongshu notes, "
                      "bilibili/youtube videos go to their platform CLI; any "
                      "other URL is fetched as clean text via Jina Reader."
                  ),

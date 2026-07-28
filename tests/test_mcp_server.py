@@ -17,6 +17,7 @@ from agent_reach.integrations.mcp_server import (
     _extract_bilibili_bvid,
     _extract_instagram_username,
     _extract_reddit_post_id,
+    _extract_tiktok_username,
     _trim_youtube_json,
     build_read_command,
     build_search_command,
@@ -58,6 +59,16 @@ def test_search_instagram_uses_opencli():
 
 def test_instagram_is_a_declared_platform():
     assert "instagram" in SEARCH_PLATFORMS
+
+
+def test_search_tiktok_uses_opencli_with_limit():
+    cmd, _ = build_search_command("tiktok", "film photography", 8)
+    assert cmd == ["opencli", "tiktok", "search", "film photography",
+                   "--limit", "8", "-f", "yaml"]
+
+
+def test_tiktok_is_a_declared_platform():
+    assert "tiktok" in SEARCH_PLATFORMS
 
 
 def test_search_xiaohongshu_uses_opencli():
@@ -157,6 +168,35 @@ def test_extract_instagram_username():
     assert _extract_instagram_username(
         "https://www.instagram.com/reel/Cabc123/") is None
     assert _extract_instagram_username("https://www.instagram.com/") is None
+
+
+def test_detect_platform_tiktok():
+    assert detect_platform("https://www.tiktok.com/@someone") == "tiktok"
+
+
+def test_read_tiktok_profile_routes_to_opencli():
+    platform, cmd, _ = build_read_command("https://www.tiktok.com/@someone")
+    assert platform == "tiktok"
+    assert cmd == ["opencli", "tiktok", "profile", "someone", "-f", "yaml"]
+
+
+def test_read_tiktok_video_falls_back_to_jina():
+    # OpenCLI's tiktok adapter has no single-video read command.
+    platform, cmd, _ = build_read_command(
+        "https://www.tiktok.com/@someone/video/7123456789")
+    assert platform == "web"
+    assert cmd[0] == "curl"
+
+
+def test_extract_tiktok_username():
+    assert _extract_tiktok_username(
+        "https://www.tiktok.com/@clipfeedtv") == "clipfeedtv"
+    assert _extract_tiktok_username(
+        "https://www.tiktok.com/@clipfeedtv/") == "clipfeedtv"
+    assert _extract_tiktok_username(
+        "https://www.tiktok.com/@user/video/7123") is None
+    assert _extract_tiktok_username("https://www.tiktok.com/explore") is None
+    assert _extract_tiktok_username("https://www.tiktok.com/") is None
 
 
 def test_extract_bilibili_bvid():
