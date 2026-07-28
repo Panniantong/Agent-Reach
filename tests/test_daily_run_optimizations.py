@@ -73,11 +73,11 @@ class TestVerdictFusion:
 
 class TestScheduleEntries:
     def test_fifteen_intraday_scans(self):
-        assert len(INTRADAY_SCAN_TIMES) == 14
-        assert INTRADAY_MAX_SCANS == 16
+        assert len(INTRADAY_SCAN_TIMES) == 13
+        assert INTRADAY_MAX_SCANS == 15
 
     def test_default_entries_count(self):
-        assert len(default_entries()) == 19  # premarket + morning + 14 scans + close + weekly + forecast
+        assert len(default_entries()) == 18  # premarket + morning + 13 scans + close + weekly + forecast
 
 
 class TestMacroCollector:

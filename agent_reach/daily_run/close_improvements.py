@@ -382,7 +382,7 @@ def _improve_schedule(
             "schedule",
             "medium",
             f"今日完成 S1–S{n}，尚有 {missing} 次空档",
-            "可在波动放大日手动补跑 intraday；或确认 08:30–15:00 cron 是否全部触发",
+            "可在波动放大日手动补跑 intraday；或确认 09:00–15:00 cron 是否全部触发",
         )
 
     # Timing drift: compare actual vs expected for completed scans (match by scan_id)
