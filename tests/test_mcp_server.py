@@ -15,6 +15,7 @@ from agent_reach.integrations.mcp_server import (
     SEARCH_PLATFORMS,
     _clip,
     _extract_bilibili_bvid,
+    _extract_instagram_username,
     _extract_reddit_post_id,
     _trim_youtube_json,
     build_read_command,
@@ -47,6 +48,16 @@ def test_search_twitter():
 def test_search_reddit_uses_opencli():
     cmd, _ = build_search_command("reddit", "faceless tiktok", 5)
     assert cmd[:3] == ["opencli", "reddit", "search"]
+
+
+def test_search_instagram_uses_opencli():
+    cmd, _ = build_search_command("instagram", "street photography", 5)
+    assert cmd == ["opencli", "instagram", "search", "street photography",
+                   "-f", "yaml"]
+
+
+def test_instagram_is_a_declared_platform():
+    assert "instagram" in SEARCH_PLATFORMS
 
 
 def test_search_xiaohongshu_uses_opencli():
@@ -117,6 +128,35 @@ def test_extract_reddit_post_id():
     url = "https://www.reddit.com/r/NewTubers/comments/1abc2d3/some_title/"
     assert _extract_reddit_post_id(url) == "1abc2d3"
     assert _extract_reddit_post_id("https://www.reddit.com/r/NewTubers/") is None
+
+
+def test_detect_platform_instagram():
+    assert detect_platform("https://www.instagram.com/clipfeedtv") == "instagram"
+
+
+def test_read_instagram_profile_routes_to_opencli():
+    platform, cmd, _ = build_read_command("https://www.instagram.com/clipfeedtv/")
+    assert platform == "instagram"
+    assert cmd == ["opencli", "instagram", "profile", "clipfeedtv", "-f", "yaml"]
+
+
+def test_read_instagram_post_falls_back_to_jina():
+    # OpenCLI reads profiles, not permalinks — posts must not be mis-routed.
+    platform, cmd, _ = build_read_command("https://www.instagram.com/p/Cabc123/")
+    assert platform == "web"
+    assert cmd[0] == "curl"
+
+
+def test_extract_instagram_username():
+    assert _extract_instagram_username(
+        "https://www.instagram.com/clipfeedtv/") == "clipfeedtv"
+    assert _extract_instagram_username(
+        "https://instagram.com/clipfeedtv") == "clipfeedtv"
+    assert _extract_instagram_username(
+        "https://www.instagram.com/p/Cabc123/") is None
+    assert _extract_instagram_username(
+        "https://www.instagram.com/reel/Cabc123/") is None
+    assert _extract_instagram_username("https://www.instagram.com/") is None
 
 
 def test_extract_bilibili_bvid():

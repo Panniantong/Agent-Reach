@@ -23,6 +23,7 @@ import json
 import subprocess
 import sys
 from typing import List, Optional, Tuple
+from urllib.parse import urlparse
 
 from agent_reach.channels import ALL_CHANNELS
 from agent_reach.config import Config
@@ -39,7 +40,8 @@ except ImportError:
 # Platforms exposed by the `search` tool. Commands mirror SKILL.md —
 # zero-config first, login-required platforms surface doctor hints on failure.
 SEARCH_PLATFORMS = (
-    "web", "twitter", "reddit", "xiaohongshu", "bilibili", "github", "youtube",
+    "web", "twitter", "reddit", "instagram", "xiaohongshu", "bilibili",
+    "github", "youtube",
 )
 
 _DEFAULT_TIMEOUT = 60
@@ -76,6 +78,8 @@ def build_search_command(platform: str, query: str, limit: int = 5) -> Tuple[Lis
         return (["twitter", "search", query, "-n", str(limit)], _DEFAULT_TIMEOUT)
     if platform == "reddit":
         return (["opencli", "reddit", "search", query, "-f", "yaml"], _DEFAULT_TIMEOUT)
+    if platform == "instagram":
+        return (["opencli", "instagram", "search", query, "-f", "yaml"], _DEFAULT_TIMEOUT)
     if platform == "xiaohongshu":
         return (["opencli", "xiaohongshu", "search", query, "-f", "yaml"], _DEFAULT_TIMEOUT)
     if platform == "bilibili":
@@ -112,6 +116,27 @@ def _extract_reddit_post_id(url: str) -> Optional[str]:
     return None
 
 
+#: Instagram URL path prefixes that are not profiles (posts, reels, etc.).
+_IG_NON_PROFILE_PATHS = {
+    "p", "reel", "reels", "tv", "stories", "explore", "accounts", "direct",
+}
+
+
+def _extract_instagram_username(url: str) -> Optional[str]:
+    """Return the username for an Instagram profile URL, else None.
+
+    Post/reel/story URLs return None so they fall through to Jina Reader —
+    OpenCLI's instagram command reads profiles and user posts, not permalinks.
+    """
+    path = urlparse(url).path.strip("/")
+    if not path:
+        return None
+    first = path.split("/")[0].split("?")[0]
+    if not first or first.lower() in _IG_NON_PROFILE_PATHS:
+        return None
+    return first
+
+
 def _extract_bilibili_bvid(url: str) -> Optional[str]:
     for part in url.split("/"):
         cleaned = part.split("?")[0]
@@ -133,6 +158,11 @@ def build_read_command(url: str) -> Tuple[str, List[str], int]:
         post_id = _extract_reddit_post_id(url)
         if post_id:
             return (platform, ["opencli", "reddit", "read", post_id, "-f", "yaml"],
+                    _DEFAULT_TIMEOUT)
+    if platform == "instagram":
+        username = _extract_instagram_username(url)
+        if username:
+            return (platform, ["opencli", "instagram", "profile", username, "-f", "yaml"],
                     _DEFAULT_TIMEOUT)
     if platform == "xiaohongshu":
         return (platform, ["opencli", "xiaohongshu", "note", url, "-f", "yaml"],
@@ -232,8 +262,8 @@ def create_server():
                      "Search a platform via Agent Reach's upstream tools. "
                      f"Platforms: {', '.join(SEARCH_PLATFORMS)}. "
                      "'web' is semantic full-web search (Exa). Login-required "
-                     "platforms (twitter, reddit, xiaohongshu) need cookies "
-                     "configured — check get_status if they fail."
+                     "platforms (twitter, reddit, instagram, xiaohongshu) reuse "
+                     "your browser session — check get_status if they fail."
                  ),
                  inputSchema={
                      "type": "object",
@@ -249,9 +279,9 @@ def create_server():
             Tool(name="read",
                  description=(
                      "Read a URL via Agent Reach. Auto-routes: tweets, reddit "
-                     "posts, xiaohongshu notes, bilibili/youtube videos go to "
-                     "their platform CLI; any other URL is fetched as clean "
-                     "text via Jina Reader."
+                     "posts, Instagram profiles, xiaohongshu notes, "
+                     "bilibili/youtube videos go to their platform CLI; any "
+                     "other URL is fetched as clean text via Jina Reader."
                  ),
                  inputSchema={
                      "type": "object",
