@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import gc
 import time
 from typing import Any, Optional
 
@@ -157,8 +158,10 @@ def run_intraday_for_symbols(
 
     cfg = settings or load_settings()
     pf = load_portfolio()
-    targets = symbols or resolve_target_symbols(pf, cfg)
+    targets = symbols or resolve_target_symbols(pf, cfg, workflow="intraday")
     merge_push = _should_merge_push(cfg)
+    sched = cfg.get("schedule") or {}
+    gc_between = sched.get("intraday_gc_between_symbols", True) is not False
     symbol_results: list[dict[str, Any]] = []
     scan_bodies: list[tuple[str, str]] = []
     scan_id: Optional[str] = None
@@ -216,6 +219,9 @@ def run_intraday_for_symbols(
             )
         except Exception as exc:
             errors.append(f"{code}: {exc}")
+        finally:
+            if gc_between:
+                gc.collect()
 
     if errors and not symbol_results:
         raise RuntimeError(errors[0])

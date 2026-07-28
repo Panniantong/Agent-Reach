@@ -241,6 +241,8 @@
   "schedule": {
     "executor": "local_cron",
     "symbols_mode": "all",
+    "intraday_symbols_mode": "holdings",
+    "intraday_gc_between_symbols": true,
     "symbol_push_mode": "merge_by_category",
     "symbol_push_interval_seconds": 0.5,
     "intraday_trade_enabled": true,

@@ -40,6 +40,18 @@ class TestTargetSymbols:
         cfg = {**cfg, "schedule": {**(cfg.get("schedule") or {}), "symbols_mode": "all"}}
         assert len(resolve_target_symbols(PORTFOLIO, cfg)) == 4
 
+    def test_resolve_intraday_symbols_mode_override(self):
+        cfg = load_settings()
+        cfg = {
+            **cfg,
+            "schedule": {
+                **(cfg.get("schedule") or {}),
+                "symbols_mode": "all",
+                "intraday_symbols_mode": "holdings",
+            },
+        }
+        assert resolve_target_symbols(PORTFOLIO, cfg, workflow="intraday") == ["688008", "002273"]
+        assert len(resolve_target_symbols(PORTFOLIO, cfg)) == 4
 
 class TestPerSymbolSnapshot:
     def test_build_snapshot_uses_symbol_name_for_premarket(self):

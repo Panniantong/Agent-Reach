@@ -90,10 +90,17 @@ def list_target_symbols(
 def resolve_target_symbols(
     portfolio: dict[str, Any],
     settings: dict[str, Any],
+    *,
+    workflow: str | None = None,
 ) -> list[str]:
     """Resolve which symbols to run for morning/close/intraday jobs."""
     sched = settings.get("schedule") or {}
-    mode = str(sched.get("symbols_mode", "primary")).lower()
+    if workflow == "intraday":
+        mode = str(
+            sched.get("intraday_symbols_mode") or sched.get("symbols_mode", "primary")
+        ).lower()
+    else:
+        mode = str(sched.get("symbols_mode", "primary")).lower()
     if mode == "primary":
         code = portfolio.get("primary_code")
         if not code and portfolio.get("holdings"):
