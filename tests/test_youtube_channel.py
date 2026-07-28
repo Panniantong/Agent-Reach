@@ -4,18 +4,19 @@
 YouTube's readiness is layered: yt-dlp must probe alive (missing / broken /
 unrunnable are distinct), a JS runtime is mandatory (deno works out of the
 box, Node needs an explicit ``--js-runtimes`` config), and transcription
-readiness (whisper provider + ffmpeg) is surfaced for ``doctor`` without
+readiness (whisper provider + ffmpeg/ffprobe) is surfaced for ``doctor`` without
 gating the backend. These tests stub ``probe_command`` / ``shutil.which``
 so every branch runs offline. Follow-up to #331 — extends dedicated
 channel coverage after rss (#360), github (#361), web (#363),
 reddit (#364), xueqiu (#365) and v2ex (#366).
 """
 
+from pathlib import Path
 from unittest.mock import Mock, patch
 
-from agent_reach.probe import ProbeResult
 from agent_reach.channels import youtube as yt
 from agent_reach.channels.youtube import YouTubeChannel, _has_js_runtime_config
+from agent_reach.probe import ProbeResult
 
 
 def _which(*present):
@@ -56,10 +57,13 @@ def test_has_js_runtime_config_false_when_flag_absent(tmp_path):
     assert _has_js_runtime_config(cfg) is False
 
 
-def test_has_js_runtime_config_swallows_oserror():
-    bad = Mock()
-    bad.exists.return_value = True
-    with patch.object(yt, "read_utf8_text", side_effect=OSError("denied")):
+def test_has_js_runtime_config_swallows_oserror(tmp_path):
+    bad = tmp_path / "config"
+    with patch.object(
+        yt,
+        "read_small_text_no_follow",
+        side_effect=OSError("denied"),
+    ):
         assert _has_js_runtime_config(bad) is False
 
 
@@ -70,6 +74,7 @@ def test_check_off_when_ytdlp_missing():
     with patch.object(yt, "probe_command", return_value=ProbeResult("missing")):
         status, message = ch.check()
     assert status == "off"
+    assert "yt-dlp[default]" in message
     assert ch.active_backend is None
 
 
@@ -79,6 +84,7 @@ def test_check_error_when_ytdlp_broken():
         status, message = ch.check()
     assert status == "error"
     assert "relink venv" in message
+    assert "yt-dlp[default]" in message
     assert ch.active_backend is None
 
 
@@ -112,6 +118,69 @@ def test_check_warn_when_node_only_and_config_missing_flag():
     assert ch.active_backend == "yt-dlp"
 
 
+def test_check_tells_user_to_upgrade_when_ytdlp_predates_js_runtimes():
+    ch = YouTubeChannel()
+    probe = ProbeResult("ok", output="2025.10.22")
+    with patch.object(yt, "probe_command", return_value=probe), \
+         patch("shutil.which", side_effect=_which("node")), \
+         patch.object(yt, "_has_js_runtime_config", return_value=False):
+        status, message = ch.check()
+
+    assert status == "warn"
+    assert "升级" in message
+    assert "--js-runtimes" not in message
+    assert ch.active_backend == "yt-dlp"
+
+
+def test_check_does_not_prescribe_unverified_flag_when_version_is_unknown():
+    ch = YouTubeChannel()
+    probe = ProbeResult("ok", output="dev-build")
+    with patch.object(yt, "probe_command", return_value=probe), \
+         patch("shutil.which", side_effect=_which("node")), \
+         patch.object(yt, "_has_js_runtime_config", return_value=False):
+        status, message = ch.check()
+
+    assert status == "warn"
+    assert "无法确认" in message
+    assert "升级" in message
+    assert "yt-dlp[default]" in message
+    assert "--js-runtimes" not in message
+    assert ch.active_backend == "yt-dlp"
+
+
+def test_check_prescribes_js_runtimes_from_first_supported_stable_release():
+    ch = YouTubeChannel()
+    probe = ProbeResult("ok", output="2025.11.12")
+    with patch.object(yt, "probe_command", return_value=probe), \
+         patch("shutil.which", side_effect=_which("node")), \
+         patch.object(yt, "_has_js_runtime_config", return_value=False):
+        status, message = ch.check()
+
+    assert status == "warn"
+    assert "--js-runtimes node" in message
+    assert ch.active_backend == "yt-dlp"
+
+
+def test_constraints_pin_ytdlp_to_current_stable_release():
+    constraints = Path(__file__).parents[1] / "constraints.txt"
+    pin = next(
+        line
+        for line in constraints.read_text(encoding="utf-8").splitlines()
+        if line.startswith("yt-dlp==")
+    )
+
+    assert pin == "yt-dlp==2026.07.04"
+
+
+def test_project_installs_official_ytdlp_default_dependencies():
+    root = Path(__file__).parents[1]
+    pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
+    constraints = (root / "constraints.txt").read_text(encoding="utf-8")
+
+    assert '"yt-dlp[default]>=2026.07.04"' in pyproject
+    assert "yt-dlp-ejs==0.8.0" in constraints
+
+
 def test_check_ok_with_deno():
     ch = YouTubeChannel()
     with patch.object(yt, "probe_command", return_value=ProbeResult("ok")), \
@@ -129,7 +198,7 @@ def test_check_ok_reports_transcription_when_provider_and_ffmpeg_present():
     cfg = Mock()
     cfg.is_configured = lambda key: key == "groq_whisper"
     with patch.object(yt, "probe_command", return_value=ProbeResult("ok")), \
-         patch("shutil.which", side_effect=_which("deno", "ffmpeg")):
+         patch("shutil.which", side_effect=_which("deno", "ffmpeg", "ffprobe")):
         status, message = ch.check(config=cfg)
     assert status == "ok"
     assert "groq" in message
@@ -145,3 +214,15 @@ def test_check_ok_flags_missing_ffmpeg_for_transcription():
         status, message = ch.check(config=cfg)
     assert status == "ok"
     assert "ffmpeg" in message
+
+
+def test_check_ok_flags_missing_ffprobe_for_transcription():
+    ch = YouTubeChannel()
+    cfg = Mock()
+    cfg.is_configured = lambda key: key == "openai_whisper"
+    with patch.object(yt, "probe_command", return_value=ProbeResult("ok")), \
+         patch("shutil.which", side_effect=_which("deno", "ffmpeg")):
+        status, message = ch.check(config=cfg)
+    assert status == "ok"
+    assert "ffprobe" in message
+    assert "可转写音频" not in message

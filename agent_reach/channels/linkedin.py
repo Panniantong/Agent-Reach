@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
-"""LinkedIn — OpenCLI backend using the user's logged-in Chrome session."""
+"""LinkedIn — OpenCLI backend using the user's logged-in Chrome session.
+
+Replaces the previous linkedin-scraper-mcp backend, which required a
+separately installed localhost MCP server. OpenCLI reuses the browser
+session that is already there. Health reporting stays deliberately
+conservative: OpenCLISiteChannel.check() never claims "ok" from the
+bridge alone, because Doctor does not execute platform commands.
+"""
 
 from ._opencli_site import OpenCLISiteChannel
 

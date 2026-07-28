@@ -56,7 +56,7 @@ exception: OpenCLI on desktop, see below).
 which twitter >/dev/null 2>&1 && { pipx upgrade twitter-cli 2>/dev/null || uv tool upgrade twitter-cli 2>/dev/null; }
 which bili    >/dev/null 2>&1 && { pipx upgrade bilibili-cli 2>/dev/null || uv tool upgrade bilibili-cli 2>/dev/null; }
 which xhs     >/dev/null 2>&1 && { pipx upgrade xiaohongshu-cli 2>/dev/null || uv tool upgrade xiaohongshu-cli 2>/dev/null; }
-which yt-dlp  >/dev/null 2>&1 && { pipx upgrade yt-dlp 2>/dev/null || uv tool upgrade yt-dlp 2>/dev/null || pip install -U yt-dlp 2>/dev/null; }
+which yt-dlp  >/dev/null 2>&1 && { pipx install --force 'yt-dlp[default]' 2>/dev/null || uv tool install --force 'yt-dlp[default]' 2>/dev/null || python -m pip install -U 'yt-dlp[default]' 2>/dev/null; }
 
 # rdt-cli is pinned to a git source (PyPI lags upstream) — same pin as the code's _RDT_GIT_SOURCE
 which rdt >/dev/null 2>&1 && pipx install --force 'git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66' 2>/dev/null
@@ -67,10 +67,13 @@ which opencli  >/dev/null 2>&1 && npm update -g @jackwener/opencli 2>/dev/null
 ```
 
 **Desktop users without OpenCLI**: since v1.5.0 OpenCLI is the preferred
-backend for 小红书/Reddit (and adds B站 subtitles) by riding the user's
-browser session. Offer it once:
+backend for 小红书/Reddit (and adds B站 subtitles). Offer it once. For
+小红书, OpenCLI may use only an existing Chrome session explicitly controlled
+by the user. The update must never log the user in or read browser cookies:
 
-> "这次更新引入了 OpenCLI 后端（复用你的浏览器登录态，小红书/Reddit 零配置）。要装吗？装完只需你在 Chrome 商店点一次『添加扩展』。"
+> "这次更新引入了 OpenCLI 后端。要装吗？装完只需你在 Chrome 商店点一次
+> 『添加扩展』。小红书 OpenCLI 只使用你已有的 Chrome 会话；如果没有现成
+> 会话，我不会自动登录，会改用 Cookie-Editor 配置 MCP / 存量工具。"
 
 If yes: `agent-reach install --channels opencli` and guide them through the
 extension click. If no, everything keeps working on existing backends.
@@ -110,8 +113,8 @@ Tell the user:
 1. What version they're on now (`agent-reach version`)
 2. How many channels are available, and which backend each multi-backend
    platform is using (from doctor)
-3. Anything that needs their action (e.g. Chrome extension click, `xhs login`,
-   QR scan for xiaohongshu-mcp on servers)
+3. Anything that needs their action (e.g. a Chrome extension click, or a
+   manual Cookie-Editor export when XiaoHongShu uses MCP / a legacy tool)
 4. What changed in this update (release notes shown by `check-update`)
 
 Done.

@@ -14,6 +14,7 @@ Designed to be importable from channels (e.g. YouTubeChannel.transcribe).
 from __future__ import annotations
 
 import ipaddress
+import math
 import shutil
 import subprocess
 import tempfile
@@ -28,6 +29,11 @@ from agent_reach.config import Config
 # Whisper API limit is 25MB; leave headroom for multipart overhead.
 SIZE_LIMIT_BYTES = 24 * 1024 * 1024
 CHUNK_SECONDS = 600  # 10 min — small enough that boundary cuts rarely lose meaning
+MAX_SOURCE_BYTES = 512 * 1024 * 1024
+MAX_CHUNKS = 24  # 4 hours at the standard 10-minute segment size
+MAX_TOTAL_CHUNK_BYTES = 96 * 1024 * 1024
+MAX_AUDIO_SECONDS = MAX_CHUNKS * CHUNK_SECONDS
+FFPROBE_TIMEOUT_SECONDS = 30
 
 PROVIDERS = {
     "groq": {
@@ -64,6 +70,77 @@ _BLOCKED_HOSTS = {
 def _require(binary: str) -> None:
     if not shutil.which(binary):
         raise MissingDependency(f"{binary} not found in PATH")
+
+
+def _require_size_at_most(path: Path, limit: int, label: str) -> int:
+    """Return file size or fail before expensive downstream processing."""
+    size = path.stat().st_size
+    if size > limit:
+        limit_mib = limit / (1024 * 1024)
+        raise TranscribeError(f"{label} exceeds safety limit of {limit_mib:g} MiB")
+    return size
+
+
+def _probe_audio_duration(path: Path) -> float:
+    """Return duration in seconds or fail closed before media generation."""
+    _require("ffprobe")
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        "-i",
+        str(path),
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=FFPROBE_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        raise TranscribeError(
+            "ffprobe timed out while reading audio duration "
+            f"after {FFPROBE_TIMEOUT_SECONDS}s"
+        ) from None
+    except OSError as exc:
+        raise TranscribeError(
+            f"ffprobe could not read audio duration: {exc}"
+        ) from exc
+
+    if proc.returncode != 0:
+        detail = proc.stderr.strip()[:300] or "unknown ffprobe error"
+        raise TranscribeError(
+            f"ffprobe failed while reading audio duration: {detail}"
+        )
+
+    raw_duration = proc.stdout.strip()
+    try:
+        duration = float(raw_duration)
+    except (TypeError, ValueError):
+        raise TranscribeError(
+            "ffprobe could not parse a valid audio duration"
+        ) from None
+    if not math.isfinite(duration) or duration <= 0:
+        raise TranscribeError(
+            "ffprobe could not parse a valid positive audio duration"
+        )
+    return duration
+
+
+def _require_duration_within_budget(path: Path) -> float:
+    """Reject audio that cannot fit within the bounded chunk budget."""
+    duration = _probe_audio_duration(path)
+    if duration > MAX_AUDIO_SECONDS:
+        max_minutes = MAX_AUDIO_SECONDS // 60
+        raise TranscribeError(
+            f"audio duration exceeds safety limit of {max_minutes} minutes"
+        )
+    return duration
 
 
 def _run(cmd: List[str], timeout: int = 600) -> None:
@@ -135,6 +212,9 @@ def download_audio(url: str, out_dir: Path) -> Path:
             "m4a",
             "--audio-quality",
             "0",
+            "--no-playlist",
+            "--max-filesize",
+            str(MAX_SOURCE_BYTES),
             "-o",
             str(template),
             "--",
@@ -144,8 +224,13 @@ def download_audio(url: str, out_dir: Path) -> Path:
     )
     files = sorted(out_dir.glob("source.*"))
     if not files:
-        raise TranscribeError("yt-dlp produced no output file")
-    return files[0]
+        limit_mib = MAX_SOURCE_BYTES // (1024 * 1024)
+        raise TranscribeError(
+            f"yt-dlp produced no output file (source may exceed {limit_mib} MiB limit)"
+        )
+    audio = files[0]
+    _require_size_at_most(audio, MAX_SOURCE_BYTES, "downloaded source")
+    return audio
 
 
 def compress_audio(src: Path, out_dir: Path) -> Path:
@@ -160,6 +245,8 @@ def compress_audio(src: Path, out_dir: Path) -> Path:
             "-y",
             "-i",
             str(src),
+            "-t",
+            str(MAX_AUDIO_SECONDS),
             "-vn",
             "-ac",
             "1",
@@ -175,6 +262,17 @@ def compress_audio(src: Path, out_dir: Path) -> Path:
 
 def chunk_audio(src: Path, out_dir: Path, segment_seconds: int = CHUNK_SECONDS) -> List[Path]:
     """Split src into segments. Re-encodes each segment so cuts align to keyframes."""
+    if segment_seconds <= 0:
+        raise TranscribeError("chunk segment duration must be positive")
+    possible_chunks = (
+        MAX_AUDIO_SECONDS + segment_seconds - 1
+    ) // segment_seconds
+    if possible_chunks > MAX_CHUNKS:
+        raise TranscribeError(
+            f"chunk generation safety limit is {MAX_CHUNKS}; "
+            f"segment duration {segment_seconds}s could create "
+            f"{possible_chunks} chunks"
+        )
     _require("ffmpeg")
     pattern = out_dir / "chunk_%03d.m4a"
     _run(
@@ -185,6 +283,8 @@ def chunk_audio(src: Path, out_dir: Path, segment_seconds: int = CHUNK_SECONDS) 
             "-y",
             "-i",
             str(src),
+            "-t",
+            str(MAX_AUDIO_SECONDS),
             "-f",
             "segment",
             "-segment_time",
@@ -290,11 +390,31 @@ def _transcribe_in_dir(source: str, order: List[str], cfg: Config, work_dir: Pat
     else:
         audio = download_audio(source, work_dir)
 
+    _require_size_at_most(audio, MAX_SOURCE_BYTES, "source")
+    _require_duration_within_budget(audio)
     compressed = compress_audio(audio, work_dir)
     if compressed.stat().st_size <= SIZE_LIMIT_BYTES:
         chunks = [compressed]
     else:
         chunks = chunk_audio(compressed, work_dir)
+
+    if len(chunks) > MAX_CHUNKS:
+        max_minutes = MAX_CHUNKS * CHUNK_SECONDS // 60
+        raise TranscribeError(
+            f"audio produced {len(chunks)} chunks; safety limit is "
+            f"{MAX_CHUNKS} (~{max_minutes} minutes)"
+        )
+    chunk_sizes = [
+        _require_size_at_most(chunk, SIZE_LIMIT_BYTES, f"chunk {chunk.name}")
+        for chunk in chunks
+    ]
+    total_chunk_bytes = sum(chunk_sizes)
+    if total_chunk_bytes > MAX_TOTAL_CHUNK_BYTES:
+        limit_mib = MAX_TOTAL_CHUNK_BYTES / (1024 * 1024)
+        raise TranscribeError(
+            f"audio chunks total {total_chunk_bytes} bytes; "
+            f"safety limit is {limit_mib:g} MiB"
+        )
 
     pieces: List[str] = []
     for chunk in chunks:

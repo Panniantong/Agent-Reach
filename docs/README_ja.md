@@ -63,7 +63,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 |-----------------|------|:----------:|------|
 | 🌐 **Web** | 閲覧 | 設定不要 | 任意のURL → クリーンなMarkdown（[Jina Reader](https://github.com/jina-ai/reader) ⭐9.8K） |
 | 🐦 **Twitter/X** | 閲覧・検索 | 設定不要 / Cookie | 単一ツイートはすぐに閲覧可能。Cookieで検索、タイムライン、投稿が解放（[twitter-cli](https://github.com/public-clis/twitter-cli)） |
-| 📕 **小紅書** | 閲覧・検索・**投稿・コメント・いいね** | Cookie | `pipx install xiaohongshu-cli` + `xhs login`（[xhs-cli](https://github.com/jackwener/xiaohongshu-cli)） |
+| 📕 **小紅書** | 閲覧・検索・コメント | OpenCLI / Cookie | OpenCLI はユーザー管理の既存 Chrome セッションだけを使用。MCP/旧ツールは Cookie-Editor を使用 |
 | 🎵 **抖音** | 動画解析・ウォーターマークなしダウンロード | mcporter | [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server)、ログイン不要 |
 | 💼 **LinkedIn** | Jina Reader（公開ページ） | プロフィール、企業、求人検索 | エージェントに「LinkedInの設定を手伝って」と伝えてください |
 | 💬 **WeChat記事** | 検索 + 閲覧 | 設定不要 | WeChat公式アカウント記事の検索+閲覧（完全Markdown）（[Exa](https://exa.ai) + [Camoufox](https://github.com/daijro/camoufox)（オプション）） |
@@ -74,7 +74,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 🔍 **Web検索** | 検索 | 自動設定 | インストール時に自動設定、無料、APIキー不要（[Exa](https://exa.ai)、[mcporter](https://github.com/nicepkg/mcporter)経由） |
 | 📦 **GitHub** | 閲覧・検索 | 設定不要 | [gh CLI](https://cli.github.com) 搭載。公開リポジトリはすぐ使える。`gh auth login`でFork、Issue、PRが解放 |
 | 📺 **YouTube** | 閲覧・**検索** | 設定不要 | 字幕 + 1800以上の動画サイトでの検索（[yt-dlp](https://github.com/yt-dlp/yt-dlp) ⭐148K） |
-| 📺 **Bilibili** | 閲覧・**検索** | 設定不要 / プロキシ | 動画情報 + 字幕 + 検索。ローカルはそのまま動作、サーバーはプロキシが必要（[yt-dlp](https://github.com/yt-dlp/yt-dlp)） |
+| 📺 **Bilibili** | 閲覧・**検索** | 設定不要 | [bili-cli](https://github.com/public-clis/bilibili-cli) で検索・動画情報（ログイン不要）、字幕は OpenCLI。yt-dlp は Bilibili の 412 制限により使用しません |
 | 📡 **RSS** | 閲覧 | 設定不要 | 任意のRSS/Atomフィード（[feedparser](https://github.com/kurtmckee/feedparser) ⭐2.3K） |
 | 📖 **Reddit** | 検索・閲覧 | Cookie | 2024年以降認証が必要 — インストール後 `rdt login` を実行（[rdt-cli](https://github.com/public-clis/rdt-cli)） |
 
@@ -127,7 +127,7 @@ Skillインストール後、エージェントは`agent-reach` CLIが利用可�
 - 「このリンクを読んで」→ `curl https://r.jina.ai/URL` で任意のWebページ
 - 「このGitHubリポジトリは何？」→ `gh repo view owner/repo`
 - 「この動画の内容は？」→ `yt-dlp --dump-json URL` で字幕取得
-- 「このツイートを読んで」→ `twitter tweet URL`
+- 「このツイートを読んで」→ `TWITTER_AUTH_TOKEN` / `TWITTER_CT0` を設定してから `twitter tweet URL`
 - 「このRSSを購読して」→ `feedparser` でフィード解析
 - 「GitHubでLLMフレームワークを検索して」→ `gh search repos "LLM framework"`
 
@@ -141,11 +141,15 @@ Skillインストール後、エージェントは`agent-reach` CLIが利用可�
 
 ### 🍪 Cookie — 無料、2分
 
-エージェントに「Twitterのクッキーの設定を手伝って」と伝えてください — ブラウザからのエクスポート手順を案内してくれます。ローカルPCなら自動インポートも可能です。
+エージェントに「Twitterのクッキーの設定を手伝って」と伝えてください —
+Cookie-Editor による手動エクスポートを案内します。保存した値は
+`agent-reach doctor` が設定の有無を確認するためだけに使われ、doctor は
+`twitter status` を実行しません。上流の `twitter` コマンドには
+`TWITTER_AUTH_TOKEN` と `TWITTER_CT0` を明示的に設定してください。
 
 ### 🌐 プロキシ — 月額$1、サーバーのみ
 
-RedditとBilibiliはサーバーIPをブロックします。プロキシを取得し（[Webshare](https://webshare.io) 推奨、月額$1）、アドレスをエージェントに伝えてください。
+通常はプロキシ不要です。ネットワーク上で Reddit/Twitter が遮断されている場合のみ、プロキシを設定してください。Bilibili は bili-cli を使用します。
 
 > ローカルPCではプロキシは不要です。Reddit検索はプロキシなしでもrdt-cliで無料で動作します。
 
@@ -161,9 +165,8 @@ $ agent-reach doctor
 
 ✅ 利用可能:
   ✅ GitHubリポジトリとコード — 公開リポジトリの閲覧・検索可能
-  ✅ Twitter/Xツイート — 閲覧可能。Cookieで検索・投稿が解放
   ✅ YouTube動画字幕 — yt-dlp
-  ⚠️  Bilibili動画情報 — サーバーIPがブロックされる可能性あり、プロキシを設定してください
+  ✅ Bilibili検索・動画情報 — bili-cli（字幕は OpenCLI）
   ✅ RSS/Atomフィード — feedparser
   ✅ Webページ（任意のURL） — Jina Reader API
 
@@ -171,8 +174,9 @@ $ agent-reach doctor
   ⬜ Webセマンティック検索 — exa.aiで無料キーを取得
 
 🔧 設定可能:
+  ⚠️  Twitter/X — doctor は明示的な認証情報の有無だけを確認。上流CLIには環境変数が必要
   ✅ Reddit投稿とコメント — rdt-cliで検索+閲覧（無料、プロキシ不要）
-  ⬜ 小紅書ノート — Cookieが必要。ブラウザからエクスポート
+  ⬜ 小紅書ノート — OpenCLI は既存セッションのみ。それ以外は Cookie-Editor で MCP/旧ツールを設定
 
 ステータス: 9チャンネル中6チャンネルが利用可能
 ```
@@ -199,9 +203,9 @@ channels/
 ├── twitter.py      → twitter-cli      ← 公式APIなどに差し替え可能…
 ├── youtube.py      → yt-dlp          ← YouTube API、Whisperなどに差し替え可能…
 ├── github.py       → gh CLI          ← REST API、PyGithubなどに差し替え可能…
-├── bilibili.py     → yt-dlp          ← bilibili-apiなどに差し替え可能…
-├── reddit.py       → rdt-cli          ← 検索+閲覧、Cookie認証が必要
-├── xiaohongshu.py  → xhs-cli          ← 他のXHSツールに差し替え可能…
+├── bilibili.py     → bili-cli ▸ OpenCLI ▸ 検索 API（yt-dlp は 412 制限により退役）
+├── reddit.py       → OpenCLI ▸ rdt-cli（ログイン状態が必要）
+├── xiaohongshu.py  → OpenCLI ▸ xiaohongshu-mcp ▸ xhs-cli
 ├── douyin.py       → mcporter MCP    ← 他の抖音ツールに差し替え可能…
 ├── linkedin.py     → linkedin-mcp    ← LinkedIn APIに差し替え可能…
 ├── rss.py          → feedparser      ← atomaなどに差し替え可能…
@@ -217,11 +221,12 @@ channels/
 |----------|--------|------|
 | Webページ閲覧 | [Jina Reader](https://github.com/jina-ai/reader) | ⭐9.8K、無料、APIキー不要 |
 | ツイート閲覧 | [twitter-cli](https://github.com/public-clis/twitter-cli) | 2.1K Star、Cookie認証、検索/閲覧/タイムライン/長文 |
-| 動画字幕 + 検索 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | ⭐148K、YouTube + Bilibili + 1800サイト |
+| YouTube 字幕 + 検索 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | YouTube と対応動画サイト向け（Bilibili には使用しません） |
+| Bilibili | [bili-cli](https://github.com/public-clis/bilibili-cli) ▸ OpenCLI ▸ 検索 API | yt-dlp は 412 制限で退役。bili-cli はログイン不要で検索・閲覧可能 |
 | Web検索 | [Exa](https://exa.ai)（[mcporter](https://github.com/nicepkg/mcporter)経由） | AIセマンティック検索、MCP統合、APIキー不要 |
 | GitHub | [gh CLI](https://cli.github.com) | 公式ツール、認証後フルAPI |
 | RSS閲覧 | [feedparser](https://github.com/kurtmckee/feedparser) | Pythonエコシステムの標準、⭐2.3K |
-| 小紅書 | [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) | 1.5K Star、pipxインストール、検索/閲覧/コメント/投稿 |
+| 小紅書 | [OpenCLI](https://github.com/jackwener/opencli)（デスクトップ）▸ [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)（サーバー）▸ xhs-cli | OpenCLI は既存のユーザー管理セッションのみ使用。その他は Cookie-Editor で手動設定 |
 | 抖音 | [douyin-mcp-server](https://github.com/yzfly/douyin-mcp-server) | MCPサーバー、ログイン不要、動画解析 + ウォーターマークなしダウンロード |
 | LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | ⭐900+、MCPサーバー、ブラウザ自動化 |
 | WeChat記事 | [Exa](https://exa.ai)（検索+閲覧）+ [Camoufox](https://github.com/daijro/camoufox)（オプション） | ゼロ設定で検索+全文閲覧、Camoufoxでオプション強化 |
@@ -249,7 +254,7 @@ channels/
 <details>
 <summary><strong>Twitter/X APIに課金せずにAIエージェントで検索するには？</strong></summary>
 
-Agent Reach は [twitter-cli](https://github.com/public-clis/twitter-cli) をCookie認証で使用します — 完全無料、Twitter APIのサブスクリプションは不要です。`pipx install twitter-cli` でインストール後、Cookie-Editor Chrome拡張機能でTwitterのCookieをエクスポートし、`agent-reach configure twitter-cookies "your_cookies"` を実行すれば、`twitter search "query" -n 10` でエージェントが検索できるようになります。
+Agent Reach は [twitter-cli](https://github.com/public-clis/twitter-cli) をCookie認証で使用します。Cookie-Editor で手動エクスポートし、`agent-reach configure twitter-cookies "your_cookies"` で Agent Reach に保存します。これは doctor の設定確認用であり、doctor は上流の認証をリアルタイム検証しません。`twitter search "query" -n 10` を直接実行するプロセスには `TWITTER_AUTH_TOKEN` と `TWITTER_CT0` を明示的に渡してください。
 </details>
 
 <details>
@@ -273,7 +278,7 @@ Agent Reach は [rdt-cli](https://github.com/public-clis/rdt-cli) でRedditに�
 <details>
 <summary><strong>Agent Reach は無料？APIのコストは？</strong></summary>
 
-100%無料でオープンソース。すべてのバックエンド（twitter-cli、rdt-cli、xhs-cli、yt-dlp、Jina Reader、Exa）は有料APIキーが不要な無料ツールです。唯一のオプションコストは、サーバーからBilibiliにアクセスする場合のレジデンシャルプロキシ（月額約$1）です。
+100%無料でオープンソース。すべてのバックエンド（twitter-cli、rdt-cli、OpenCLI、bili-cli、yt-dlp、Jina Reader、Exa）は有料APIキーが不要な無料ツールです。ネットワーク上で特定サイトが遮断されている場合のみ、プロキシ費用が発生することがあります。
 </details>
 
 <details>
@@ -285,7 +290,7 @@ Agent Reach はtwitter-cliを使用し、Cookie認証でTwitterにアクセス�
 <details>
 <summary><strong>小紅書のコンテンツをプログラムで読むには？</strong></summary>
 
-`pipx install xiaohongshu-cli` でインストール後、`xhs login`（ブラウザからCookieを自動抽出）。エージェントは `xhs search "query"` でノートを検索、`xhs read NOTE_ID` で詳細を閲覧、`xhs comments NOTE_ID` でコメントを表示できます。Dockerは不要です。
+Agent Reach は小紅書へのログインを代行せず、ブラウザ Cookie も読み取りません。OpenCLI はユーザーが既に所有・管理している Chrome セッションだけを使用します。既存セッションがない場合は自動ログインせず、Cookie-Editor で手動エクスポートして xiaohongshu-mcp または旧ツールを設定してください。`agent-reach configure xhs-cookies` は OpenCLI / Chrome に Cookie を注入しません。
 </details>
 
 <details>

@@ -1,8 +1,34 @@
 # -*- coding: utf-8 -*-
 """Twitter/X — check if twitter-cli or bird CLI is available."""
 
+import os
+import shutil
+
+from agent_reach.utils.url import host_matches
+
 from .base import Channel
-from agent_reach.probe import probe_command
+
+
+def twitter_cli_child_env(config=None) -> dict[str, str]:
+    """Return saved credentials missing from the current process environment.
+
+    The returned mapping is meant for a single child process.  Existing shell
+    variables remain authoritative and ``os.environ`` is never mutated.
+    """
+    if config is None:
+        return {}
+
+    child_env = {}
+    for env_name, config_key in (
+        ("TWITTER_AUTH_TOKEN", "twitter_auth_token"),
+        ("TWITTER_CT0", "twitter_ct0"),
+    ):
+        if env_name in os.environ:
+            continue
+        value = config.get(config_key)
+        if value:
+            child_env[env_name] = str(value)
+    return child_env
 
 
 class TwitterChannel(Channel):
@@ -12,9 +38,7 @@ class TwitterChannel(Channel):
     tier = 1
 
     def can_handle(self, url: str) -> bool:
-        from urllib.parse import urlparse
-        d = urlparse(url).netloc.lower()
-        return "x.com" in d or "twitter.com" in d
+        return host_matches(url, "x.com", "twitter.com")
 
     def check(self, config=None):
         """Probe candidates in order; first fully-usable backend wins.
@@ -28,7 +52,7 @@ class TwitterChannel(Channel):
 
         for backend in self.ordered_backends(config):
             if backend == "twitter-cli":
-                result = self._check_twitter_cli()
+                result = self._check_twitter_cli(config)
             elif backend == "OpenCLI":
                 result = self._check_opencli()
             elif backend == "bird CLI (legacy)":
@@ -43,7 +67,7 @@ class TwitterChannel(Channel):
         for wanted in ("ok", "warn"):
             for backend, status, message in findings:
                 if status == wanted:
-                    self.active_backend = backend
+                    self.active_backend = backend if status == "ok" else None
                     return status, message
 
         if findings:  # 只剩 broken/timeout 候选
@@ -56,39 +80,33 @@ class TwitterChannel(Channel):
             "  uv tool install twitter-cli"
         )
 
-    def _check_twitter_cli(self):
-        """探测 twitter-cli。返回 None 表示未安装，否则返回 (status, message)。
+    def _check_twitter_cli(self, config=None):
+        """Inspect explicit credentials without starting twitter-cli.
 
-        `twitter status` 才是健康信号：已登录时输出 "ok: true"，
-        未登录时以非零退出码输出 "not_authenticated"——工具本身是活的，
-        所以 probe 的 error 状态也要看 output 内容再分类。
+        Upstream ``twitter status`` automatically reads browser cookies when
+        credentials are missing *or invalid*. Doctor cannot disable that
+        fallback, so executing it would violate the Cookie-Editor-only policy.
         """
-        probe = probe_command(
-            "twitter", ["status"], timeout=15, retries=1, package="twitter-cli"
-        )
-        if probe.status == "missing":
+        if not shutil.which("twitter"):
             return None
-        if probe.status == "broken":
-            return "error", "twitter-cli 命令存在但无法执行。\n" + probe.hint
-        if probe.status == "timeout":
-            return "error", "twitter-cli 健康检查超时（已重试 1 次）。\n" + probe.hint
 
-        output = probe.output
-        if "ok: true" in output:
-            return "ok", (
-                "twitter-cli 完整可用（搜索、读推文、时间线、长文/Article、"
-                "用户查询、Thread）"
-            )
-        if "not_authenticated" in output:
+        child_env = twitter_cli_child_env(config)
+        auth_token = os.environ.get("TWITTER_AUTH_TOKEN") or child_env.get(
+            "TWITTER_AUTH_TOKEN"
+        )
+        ct0 = os.environ.get("TWITTER_CT0") or child_env.get("TWITTER_CT0")
+        if auth_token and ct0:
             return "warn", (
-                "twitter-cli 已安装但未认证。设置方式：\n"
-                "  export TWITTER_AUTH_TOKEN=\"xxx\"\n"
-                "  export TWITTER_CT0=\"yyy\"\n"
-                "或确保已在浏览器中登录 x.com"
+                "twitter-cli 已安装，且 Cookie-Editor 凭据已配置；"
+                "Doctor 不会执行 `twitter status`，因为上游在验证失败时会"
+                "自动读取浏览器 Cookie。请在你明确同意时手动验证。"
             )
         return "warn", (
-            "twitter-cli 已安装但认证检查失败。运行：\n"
-            "  twitter -v status 查看详细信息"
+            "twitter-cli 已安装但没有完整的显式凭据。请用 Cookie-Editor "
+            "从 x.com 导出后运行：\n"
+            "  agent-reach configure twitter-cookies "
+            "'<Cookie-Editor Header String>'\n"
+            "Doctor 不会自动读取浏览器 Cookie。"
         )
 
     def _check_opencli(self):
@@ -101,45 +119,25 @@ class TwitterChannel(Channel):
         if st.broken:
             return "error", st.hint
         if st.ready:
-            return "ok", (
-                "OpenCLI 可用（复用浏览器登录态）。用法："
-                "opencli twitter search/article/user-posts -f yaml"
+            return "warn", (
+                "OpenCLI 桥接已连接，但 Twitter/X 登录态和实际命令未实时验证；"
+                "Doctor 不执行平台命令，因此当前不标记为可用。"
             )
         return "warn", st.hint
 
     def _check_bird(self):
-        """探测 bird/birdx（legacy 回退）。返回 None 表示均未安装，否则返回 (status, message)。"""
-        last_failure = None
+        """Inspect legacy bird credentials without launching browser fallback."""
         for cmd in ("bird", "birdx"):
-            probe = probe_command(
-                cmd, ["check"], timeout=15, retries=1, package="@steipete/bird"
-            )
-            if probe.status == "missing":
+            if not shutil.which(cmd):
                 continue
-            if probe.status == "broken":
-                last_failure = (
-                    "error",
-                    f"{cmd} 命令存在但无法执行（bird 是 npm 包，可用 "
-                    "npm install -g @steipete/bird 重装）。\n" + probe.hint,
-                )
-                continue  # bird 坏了再试 birdx
-            if probe.status == "timeout":
-                last_failure = (
-                    "error",
-                    f"{cmd} 健康检查超时（已重试 1 次）。\n" + probe.hint,
-                )
-                continue
-
-            output = probe.output
-            if probe.ok:
-                return "ok", "bird CLI 可用（读取、搜索推文，含长文/X Article）"
-            if "Missing credentials" in output or "missing" in output.lower():
-                return "warn", (
-                    "bird CLI 已安装但未配置认证。设置环境变量：\n"
-                    "  export AUTH_TOKEN=\"xxx\"\n"
-                    "  export CT0=\"yyy\""
+            if os.environ.get("AUTH_TOKEN") and os.environ.get("CT0"):
+                return (
+                    "warn",
+                    f"{cmd} 已安装且显式环境凭据存在；Doctor 为避免上游"
+                    "浏览器 Cookie 回退，不执行 `check`，未实时验证。",
                 )
             return "warn", (
-                "bird CLI 已安装但认证检查失败。"
+                f"{cmd} 已安装但未检测到显式 AUTH_TOKEN/CT0；"
+                "仅使用 Cookie-Editor 手动导出的凭据。"
             )
-        return last_failure
+        return None

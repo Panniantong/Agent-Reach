@@ -56,12 +56,12 @@ def _inject_cookie_string(cookie_str: str) -> None:
         _cookie_jar.set_cookie(cookie)
 
 
-def _load_cookies_from_config() -> bool:
+def _load_cookies_from_config(config=None) -> bool:
     """Try to load Xueqiu cookies from agent-reach config file (xueqiu_cookie key)."""
     try:
         from ..config import Config
 
-        cfg = Config()
+        cfg = config if config is not None else Config(read_only=True)
         cookie_str = cfg.get("xueqiu_cookie")
         if not cookie_str:
             return False
@@ -71,53 +71,18 @@ def _load_cookies_from_config() -> bool:
         return False
 
 
-def _load_cookies_from_browser() -> bool:
-    """Try to silently load Xueqiu cookies from the local Chrome browser.
-
-    Only succeeds when browser_cookie3 is installed AND the user is logged in
-    (xq_a_token present).  Failures are silently ignored so that agents without
-    a local browser keep working.
-    """
-    try:
-        try:
-            import rookiepy
-            cookies = rookiepy.chrome([".xueqiu.com"])
-            if not any(c.get("name") == "xq_a_token" for c in cookies):
-                return False
-            for c in cookies:
-                name = c.get("name")
-                value = c.get("value")
-                if name and value is not None:
-                    _inject_cookie_string(f"{name}={value}")
-            return True
-        except ImportError:
-            import browser_cookie3
-            cookies = list(browser_cookie3.chrome(domain_name=".xueqiu.com"))
-            if not any(c.name == "xq_a_token" for c in cookies):
-                return False
-            for c in cookies:
-                _cookie_jar.set_cookie(c)
-            return True
-    except Exception:
-        return False
-
-
-def _ensure_cookies() -> None:
-    """Populate session cookies using the best available source.
+def _ensure_cookies(config=None) -> None:
+    """Populate session cookies without touching browser credential stores.
 
     Priority order:
     1. Saved cookie string in ~/.agent-reach/config.yaml  (set by configure --from-browser)
-    2. Live Chrome browser cookies via rookiepy/browser_cookie3 (if installed + logged in)
-    3. Homepage visit fallback                             (only yields anti-DDoS acw_tc,
-                                                           not enough for stock APIs)
+    2. Homepage visit fallback (only yields public session cookies and may not
+       be sufficient when Xueqiu requires a logged-in session)
     """
     global _cookies_initialized
     if _cookies_initialized:
         return
-    if _load_cookies_from_config():
-        _cookies_initialized = True
-        return
-    if _load_cookies_from_browser():
+    if _load_cookies_from_config(config):
         _cookies_initialized = True
         return
     # Fallback: visit homepage to pick up acw_tc anti-DDoS cookie.
@@ -128,9 +93,9 @@ def _ensure_cookies() -> None:
     _cookies_initialized = True
 
 
-def _get_json(url: str) -> Any:
+def _get_json(url: str, config=None) -> Any:
     """Fetch *url* with Xueqiu session cookies and return parsed JSON."""
-    _ensure_cookies()
+    _ensure_cookies(config)
     req = urllib.request.Request(
         url, headers={"User-Agent": _UA, "Referer": _REFERER}
     )
@@ -157,8 +122,9 @@ class XueqiuChannel(Channel):
     # ------------------------------------------------------------------ #
 
     def can_handle(self, url: str) -> bool:
-        d = urllib.parse.urlparse(url).netloc.lower()
-        return "xueqiu.com" in d
+        from agent_reach.utils.url import host_matches
+
+        return host_matches(url, "xueqiu.com")
 
     # ------------------------------------------------------------------ #
     # Health check
@@ -168,17 +134,24 @@ class XueqiuChannel(Channel):
         self.active_backend = None
         try:
             data = _get_json(
-                "https://stock.xueqiu.com/v5/stock/batch/quote.json?symbol=SH000001"
+                "https://stock.xueqiu.com/v5/stock/quote.json"
+                "?symbol=SH601138&extend=detail",
+                config,
             )
-            items = (data.get("data") or {}).get("items") or []
-            if items:
+            quote = (data.get("data") or {}).get("quote") or {}
+            if quote:
                 self.active_backend = self.backends[0]
                 return "ok", "公开 API 可用（行情、搜索、热帖、热股）"
             return "warn", "API 响应异常（返回数据为空）"
         except Exception as e:
+            from agent_reach.utils.text import scrub_url_credentials
+
+            detail = scrub_url_credentials(e).rstrip(": ")
             return "warn", (
-                f"Xueqiu API 连接失败：{e}。"
-                "请先登录雪球后运行：agent-reach configure --from-browser chrome"
+                f"Xueqiu API 连接失败：{detail}。"
+                "如需登录 Cookie，请运行：agent-reach configure "
+                "--from-browser chrome --platform xueqiu；"
+                "doctor 不会自动读取浏览器 Cookie。"
             )
 
     # ------------------------------------------------------------------ #
@@ -193,13 +166,15 @@ class XueqiuChannel(Channel):
 
         Returns a dict with keys:
           symbol, name, current, percent, chg, high, low, open, last_close,
-          volume, amount, market_capital, turnover_rate, pe_ttm, timestamp
+          volume, amount, market_capital, turnover_rate, pe_ttm, pe_forecast,
+          pb, eps, timestamp
         """
+        encoded_symbol = urllib.parse.quote(symbol, safe="")
         data = _get_json(
-            f"https://stock.xueqiu.com/v5/stock/batch/quote.json?symbol={symbol}"
+            "https://stock.xueqiu.com/v5/stock/quote.json"
+            f"?symbol={encoded_symbol}&extend=detail"
         )
-        items = (data.get("data") or {}).get("items") or []
-        q = (items[0].get("quote") or {}) if items else {}
+        q = (data.get("data") or {}).get("quote") or {}
         return {
             "symbol": q.get("symbol", symbol),
             "name": q.get("name", ""),
@@ -215,6 +190,9 @@ class XueqiuChannel(Channel):
             "market_capital": q.get("market_capital"),
             "turnover_rate": q.get("turnover_rate"),
             "pe_ttm": q.get("pe_ttm"),
+            "pe_forecast": q.get("pe_forecast"),
+            "pb": q.get("pb"),
+            "eps": q.get("eps"),
             "timestamp": q.get("timestamp"),
         }
 
