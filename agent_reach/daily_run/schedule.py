@@ -16,9 +16,8 @@ from agent_reach.daily_run.run_manifest import StepTimer, save_run_manifest
 MARKER_BEGIN = "# agent-reach daily-run schedule BEGIN"
 MARKER_END = "# agent-reach daily-run schedule END"
 
-# 15 scans/day: S1 premarket 07:00 + S2 morning 08:00 + S3 08:30 + S4 09:00 + S5–S15 session
+# 15 scans/day: S1 premarket 07:00 + S2 morning 08:00 + S3 09:00 + S4–S15 session (no 08:30 slot)
 INTRADAY_SCAN_TIMES: list[tuple[str, str]] = [
-    ("30", "8"),   # 08:30 S2
     ("0", "9"),    # 09:00 S3
     ("30", "9"),   # 09:30 S4
     ("54", "9"),   # 09:54 S5
