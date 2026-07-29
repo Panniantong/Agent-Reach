@@ -252,6 +252,9 @@ def run_close(
             enriched,
             baseline,
             trades=intraday_trades,
+            intraday_trades=intraday_trades,
+            watchlist_adjust=watchlist_adjust,
+            settings=cfg,
         )
         portfolio_md = render_close_portfolio_markdown(portfolio_summary_obj)
 

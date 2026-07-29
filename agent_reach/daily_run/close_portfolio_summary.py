@@ -45,6 +45,9 @@ class ClosePortfolioSummary:
     sector_weights: list[dict[str, Any]] = field(default_factory=list)
     realized_pnl: float = 0.0
     trades: list[dict[str, Any]] = field(default_factory=list)
+    intraday_trades: list[dict[str, Any]] = field(default_factory=list)
+    watchlist_changes: list[dict[str, Any]] = field(default_factory=list)
+    watchlist_min_size: int = 5
     notes: list[str] = field(default_factory=list)
     reason_lines: list[str] = field(default_factory=list)
 
@@ -74,6 +77,9 @@ class ClosePortfolioSummary:
             "sector_weights": self.sector_weights,
             "realized_pnl": self.realized_pnl,
             "trades": self.trades,
+            "intraday_trades": self.intraday_trades,
+            "watchlist_changes": self.watchlist_changes,
+            "watchlist_min_size": self.watchlist_min_size,
             "notes": self.notes,
             "reason_lines": self.reason_lines,
         }
@@ -105,6 +111,8 @@ def _holdings_map(portfolio: dict[str, Any]) -> dict[str, int]:
 def _describe_position_change(morning_pf: dict[str, Any], close_pf: dict[str, Any]) -> str:
     morning = _holdings_map(morning_pf)
     close = _holdings_map(close_pf)
+    if not morning:
+        return "基线无持仓快照，跳过结构对比"
     added = sorted(set(close) - set(morning))
     removed = sorted(set(morning) - set(close))
     changed = sorted(
@@ -120,6 +128,87 @@ def _describe_position_change(morning_pf: dict[str, Any], close_pf: dict[str, An
     if not parts:
         return "持仓结构未变"
     return "，".join(parts)
+
+
+def _watchlist_changes_from_adjust(watchlist_adjust: Optional[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not watchlist_adjust:
+        return []
+    return list(watchlist_adjust.get("changes") or [])
+
+
+def _format_ledger_trade_lines(trades: list[dict[str, Any]]) -> list[str]:
+    lines: list[str] = []
+    for entry in trades:
+        at = str(entry.get("at") or "")[:10]
+        decision = entry.get("decision_action")
+        for action in entry.get("actions") or []:
+            side = "买入" if action.get("side") == "buy" else "卖出"
+            name = action.get("name") or action.get("code") or "?"
+            code = action.get("code") or "?"
+            shares = action.get("shares")
+            price = action.get("price")
+            amount = action.get("amount")
+            commission = float(action.get("commission") or 0)
+            reason = str(action.get("reasoning") or "").strip()
+            if shares and price:
+                detail = f"{side} **{name}** ({code}) {shares}股 @ ¥{float(price):.2f}"
+            else:
+                detail = f"{side} **{name}** ({code})"
+            if amount is not None:
+                detail += f" · ¥{float(amount):,.0f}"
+            if commission:
+                detail += f"（费 ¥{commission:.2f}）"
+            if at:
+                detail = f"{at} {detail}"
+            if decision and decision not in ("hold", "skip"):
+                detail += f" · 信号 **{decision}**"
+            if reason:
+                detail += f" — {reason}"
+            lines.append(f"- {detail}")
+    return lines
+
+
+def _format_intraday_trade_lines(trades: list[dict[str, Any]]) -> list[str]:
+    lines: list[str] = []
+    for entry in trades:
+        action = entry.get("action")
+        if action in (None, "hold", "skip"):
+            continue
+        name = entry.get("name") or entry.get("code") or "?"
+        code = entry.get("code") or "?"
+        side = "买入" if action == "buy" else "卖出" if action == "sell" else str(action)
+        reason = str(entry.get("reasoning") or entry.get("portfolio_message") or "").strip()
+        shares = entry.get("shares")
+        price = entry.get("price")
+        line = f"- {side} **{name}** ({code})"
+        if shares and price:
+            line += f" {shares}股 @ ¥{float(price):.2f}"
+        if reason:
+            line += f" — {reason}"
+        elif entry.get("lookback_mss") is not None:
+            line += f" — Lookback MSS {entry.get('lookback_mss')}"
+        if not entry.get("portfolio_applied", True):
+            line += "（未落账）"
+        lines.append(line)
+        for act in entry.get("portfolio_actions") or []:
+            sub = _format_ledger_trade_lines([{"at": entry.get("as_of"), "actions": [act]}])
+            lines.extend(sub)
+    return lines
+
+
+def _holding_line(h: dict[str, Any]) -> str:
+    name = h.get("name") or h.get("code")
+    code = h.get("code")
+    parts = [f"**{name}** ({code})"]
+    if h.get("change_pct") is not None:
+        parts.append(f"今日 {float(h['change_pct']):+.2f}%")
+    if h.get("week_chg") is not None:
+        parts.append(f"日内 {float(h['week_chg']):+,.0f}元")
+    if h.get("unrealized_pnl") is not None:
+        parts.append(f"浮盈 {float(h['unrealized_pnl']):+,.0f}元")
+    if h.get("weight_pct") is not None:
+        parts.append(f"权重 {float(h['weight_pct']):.1f}%")
+    return "- " + " · ".join(parts)
 
 
 def _attach_weights(holdings: list[dict[str, Any]], end_total: Optional[float]) -> list[dict[str, Any]]:
@@ -189,10 +278,10 @@ def _build_reason_lines(data: dict[str, Any]) -> list[str]:
     if trades and abs(realized) > 0.01:
         sign = "+" if realized >= 0 else ""
         lines.append(f"今日成交 **{len(trades)}** 笔，ledger 净额 {sign}¥{realized:,.0f}。")
-    elif position_change != "持仓结构未变":
+    elif position_change not in ("持仓结构未变", "基线无持仓快照，跳过结构对比"):
         lines.append(f"持仓变化：**{position_change}**。")
     else:
-        lines.append("今日**无调仓成交**，以持仓波动为主。")
+        lines.append("今日**无 ledger 成交**，以持仓波动为主。")
 
     if cash_ratio is not None:
         cr = float(cash_ratio)
@@ -213,10 +302,16 @@ def build_close_portfolio_summary(
     baseline: dict[str, Any],
     *,
     trades: Optional[list[dict[str, Any]]] = None,
+    intraday_trades: Optional[list[dict[str, Any]]] = None,
+    watchlist_adjust: Optional[dict[str, Any]] = None,
+    settings: Optional[dict[str, Any]] = None,
     as_of: Optional[date] = None,
 ) -> ClosePortfolioSummary:
     """Build end-of-day portfolio summary from close snapshot vs morning baseline."""
+    from agent_reach.daily_run.watchlist_manager import watchlist_min_size
+
     day = as_of or today_shanghai()
+    wl_min = watchlist_min_size(settings or {})
     enriched = build_enriched_symbols(current)
     close_pf = portfolio_from_snapshot(current)
     morning_pf = _morning_portfolio(baseline)
@@ -270,6 +365,8 @@ def build_close_portfolio_summary(
 
     ledger_trades = _load_trade_ledger_range(day, day)
     realized = _compute_realized_pnl(ledger_trades)
+    intraday_list = list(intraday_trades or [])
+    wl_changes = _watchlist_changes_from_adjust(watchlist_adjust)
 
     cash = close_pf.get("cash")
     cash_ratio = close_pf.get("cash_ratio")
@@ -310,6 +407,9 @@ def build_close_portfolio_summary(
         sector_weights=[],
         realized_pnl=realized,
         trades=ledger_trades or list(trades or []),
+        intraday_trades=intraday_list,
+        watchlist_changes=wl_changes,
+        watchlist_min_size=wl_min,
         notes=notes,
     )
     summary.reason_lines = _build_reason_lines(summary.to_dict())
@@ -317,9 +417,9 @@ def build_close_portfolio_summary(
 
 
 def render_close_portfolio_markdown(summary: ClosePortfolioSummary | dict[str, Any]) -> str:
-    """Concise portfolio-level close summary (no per-symbol breakdown)."""
+    """Portfolio close summary: overview + per-stock P&L + trades + watchlist."""
     data = summary.to_dict() if isinstance(summary, ClosePortfolioSummary) else summary
-    lines: list[str] = ["## 💰 当日盈亏"]
+    lines: list[str] = ["## 💰 组合盈亏"]
 
     if data.get("daily_pnl") is not None:
         pnl = float(data["daily_pnl"])
@@ -341,32 +441,68 @@ def render_close_portfolio_markdown(summary: ClosePortfolioSummary | dict[str, A
     else:
         lines.append("- 暂无完整净值数据")
 
+    stock_ratio = data.get("stock_ratio")
+    cash_ratio = data.get("cash_ratio")
+    if stock_ratio is not None and cash_ratio is not None:
+        lines.append(
+            f"- 仓位：股票 **{float(stock_ratio):.1%}** / 现金 **{float(cash_ratio):.1%}**"
+        )
     if data.get("realized_pnl") and abs(float(data["realized_pnl"])) > 0.01:
         realized = float(data["realized_pnl"])
         sign = "+" if realized >= 0 else ""
-        lines.append(f"- 成交净额 {sign}¥{realized:,.0f}（{len(data.get('trades') or [])} 笔）")
+        lines.append(f"- 成交净额 {sign}¥{realized:,.0f}")
 
     lines.append("")
-    lines.append("## 📊 持仓与现金")
-    hc = int(data.get("holdings_count") or 0)
-    wc = int(data.get("watchlist_count") or 0)
-    stock_ratio = data.get("stock_ratio")
-    cash_ratio = data.get("cash_ratio")
-    ratio_s = ""
-    if stock_ratio is not None and cash_ratio is not None:
-        ratio_s = f" · 股票 **{float(stock_ratio):.1%}** / 现金 **{float(cash_ratio):.1%}**"
-    lines.append(f"- 持仓 **{hc}** 只 / 观察池 **{wc}** 只{ratio_s}")
+    lines.append("## 📈 个股盈亏")
+    holdings = data.get("holdings") or []
+    if holdings:
+        for h in holdings:
+            lines.append(_holding_line(h))
+    else:
+        lines.append("- 当前无持仓")
 
-    if data.get("stock_mv") is not None and data.get("cash") is not None:
-        lines.append(
-            f"- 股票市值 ¥{float(data['stock_mv']):,.0f} · 现金 ¥{float(data['cash']):,.0f}"
-        )
-    if data.get("max_weight_pct") is not None:
-        lines.append(f"- 最大单票权重 **{float(data['max_weight_pct']):.1f}%**")
+    lines.append("")
+    lines.append("## 🔄 成交记录")
+    trade_lines = _format_ledger_trade_lines(data.get("trades") or [])
+    intraday_lines = _format_intraday_trade_lines(data.get("intraday_trades") or [])
+    seen = set(trade_lines)
+    merged_trades = trade_lines + [ln for ln in intraday_lines if ln not in seen]
+    if merged_trades:
+        lines.extend(merged_trades)
+    else:
+        lines.append("- 今日无成交")
 
-    pos_change = data.get("position_change")
-    if pos_change:
-        lines.append(f"- 持仓变化：**{pos_change}**")
+    wl_min = int(data.get("watchlist_min_size") or 5)
+    watchlist = data.get("watchlist") or []
+    wl_changes = data.get("watchlist_changes") or []
+    add_reasons = {
+        _normalize_code(str(c.get("code", ""))): str(c.get("reason") or "")
+        for c in wl_changes
+        if c.get("action") == "add" and c.get("code")
+    }
+    fill_adds = [c for c in wl_changes if c.get("action") == "add"]
+
+    lines.append("")
+    lines.append(f"## 👀 观察池（{len(watchlist)} 只，下限 {wl_min}）")
+    if len(watchlist) < wl_min:
+        lines.append(f"- ⚠️ 观察池不足 {wl_min} 只（当前 {len(watchlist)}），候选池已无可补标的")
+    elif fill_adds:
+        lines.append(f"- 本次补足 **{len(fill_adds)}** 只至下限 {wl_min}")
+
+    if watchlist:
+        for w in watchlist:
+            code = _normalize_code(str(w.get("code", "")))
+            name = w.get("name") or code
+            chg_s = ""
+            if w.get("change_pct") is not None:
+                chg_s = f" · 今日 {float(w['change_pct']):+.2f}%"
+            reason = add_reasons.get(code, "")
+            if reason:
+                lines.append(f"- **{name}** ({code}){chg_s} — {reason}")
+            else:
+                lines.append(f"- **{name}** ({code}){chg_s}")
+    else:
+        lines.append("- 观察池为空")
 
     lines.append("")
     lines.append("## 📝 原因摘要")

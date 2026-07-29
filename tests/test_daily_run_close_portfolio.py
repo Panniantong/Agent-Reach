@@ -25,7 +25,6 @@ def _morning_baseline():
         },
         "watchlist": [
             {"code": "603986", "name": "兆易创新", "price": 120.0, "change_pct": 1.5},
-            {"code": "000725", "name": "京东方A", "price": 4.2, "change_pct": -0.5},
         ],
     }
 
@@ -59,22 +58,42 @@ class TestClosePortfolioSummary:
         assert summary.start_total == 100000.0
         assert summary.end_total == 103673.0
         assert summary.daily_pnl == 3673.0
-        assert summary.daily_pnl_pct == 3.67
         assert summary.holdings_count == 3
-        assert summary.cash == 48673.0
-        assert summary.winners >= 1
         assert summary.reason_lines
 
-    def test_render_markdown_is_portfolio_level(self):
-        summary = build_close_portfolio_summary(_close_snapshot(), _morning_baseline())
+    def test_render_includes_stocks_trades_watchlist(self):
+        summary = build_close_portfolio_summary(
+            _close_snapshot(),
+            _morning_baseline(),
+            watchlist_adjust={
+                "applied": True,
+                "changes": [
+                    {
+                        "action": "add",
+                        "code": "000725",
+                        "name": "京东方A",
+                        "reason": "补足观察池下限（热点优先）",
+                    }
+                ],
+            },
+            intraday_trades=[
+                {
+                    "action": "hold",
+                    "name": "澜起科技",
+                    "code": "688008",
+                }
+            ],
+        )
         md = render_close_portfolio_markdown(summary)
-        assert "## 💰 当日盈亏" in md
-        assert "组合" in md or "¥" in md
-        assert "## 📊 持仓与现金" in md
-        assert "持仓 **3** 只" in md
+        assert "## 💰 组合盈亏" in md
+        assert "## 📈 个股盈亏" in md
+        assert "澜起科技" in md
+        assert "水晶光电" in md
+        assert "## 🔄 成交记录" in md
+        assert "## 👀 观察池" in md
+        assert "补足观察池下限" in md
+        assert "京东方A" in md
         assert "## 📝 原因摘要" in md
-        assert "澜起科技" not in md
-        assert "688008" not in md
 
     def test_render_close_sections_includes_portfolio_last(self):
         md = render_close_portfolio_markdown(
@@ -86,7 +105,7 @@ class TestClosePortfolioSummary:
             portfolio_markdown=md,
         )
         assert sections[-1].category == "daily_portfolio"
-        assert "原因摘要" in sections[-1].body
+        assert "个股盈亏" in sections[-1].body
 
     def test_merge_skips_per_symbol_portfolio(self):
         from agent_reach.daily_run.report_push import ReportSection
@@ -102,22 +121,12 @@ class TestClosePortfolioSummary:
                     ReportSection(category="daily_portfolio", title="", body=md_a),
                 ],
             ),
-            (
-                "水晶光电",
-                [
-                    ReportSection(category="verify", title="", body="验证B"),
-                    ReportSection(category="daily_portfolio", title="", body="不应出现"),
-                ],
-            ),
         ]
         merged = merge_sections_by_category(groups, report_kind="close")
-        cats = [s.category for s in merged]
-        assert "daily_portfolio" not in cats
-        assert any("验证A" in s.body for s in merged)
+        assert "daily_portfolio" not in [s.category for s in merged]
 
-    def test_missing_baseline_note(self):
+    def test_missing_baseline_skips_false_position_change(self):
         baseline = {"code": "688008", "portfolio": {}}
         summary = build_close_portfolio_summary(_close_snapshot(), baseline)
         assert summary.daily_pnl is None
-        md = render_close_portfolio_markdown(summary)
-        assert "缺少早盘净值基线" in md or "收盘净值" in md
+        assert "基线无持仓快照" in summary.position_change

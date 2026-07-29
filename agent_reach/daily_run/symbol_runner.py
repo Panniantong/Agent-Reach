@@ -343,17 +343,45 @@ def run_close_for_symbols(
             build_close_portfolio_summary,
             render_close_portfolio_markdown,
         )
+        from agent_reach.daily_run.snapshot_builder import save_portfolio
+        from agent_reach.daily_run.symbols import sync_snapshot_portfolio
+        from agent_reach.daily_run.watchlist_manager import (
+            adjust_watchlist,
+            collect_intraday_sold_codes,
+            is_watchlist_adjust_enabled,
+        )
 
         try:
             morning_bl = load_morning_baseline()
         except FileNotFoundError:
             morning_bl = load_morning_baseline(code=targets[0])
         primary_snap = symbol_results[0]["result"]["snapshot"]
+        verify_dict = symbol_results[0]["result"].get("verify") or {}
+
+        pf_work = load_portfolio()
+        wl_result = None
+        if is_watchlist_adjust_enabled(cfg):
+            wl_result = adjust_watchlist(
+                pf_work,
+                primary_snap,
+                cfg,
+                "close",
+                verify=verify_dict,
+                sold_codes=collect_intraday_sold_codes(cfg),
+            )
+            if wl_result.applied:
+                pf_work = wl_result.portfolio
+                save_portfolio(pf_work)
+                sync_snapshot_portfolio(primary_snap, pf_work)
+
         portfolio_md = render_close_portfolio_markdown(
             build_close_portfolio_summary(
                 primary_snap,
                 morning_bl,
                 trades=shared_state.trades,
+                intraday_trades=shared_state.trades,
+                watchlist_adjust=wl_result.to_dict() if wl_result else None,
+                settings=cfg,
             )
         )
         if portfolio_md.strip():
