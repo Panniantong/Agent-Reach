@@ -34,6 +34,96 @@ def _default_baseline_path() -> Path:
     return Path.home() / ".agent-reach" / "daily_run" / "last_morning.json"
 
 
+def _holdings_baseline_snapshot(holdings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    from agent_reach.daily_run.snapshot_builder import _normalize_code
+
+    out: list[dict[str, Any]] = []
+    for h in holdings:
+        code = _normalize_code(str(h.get("code", "")))
+        if not code:
+            continue
+        row: dict[str, Any] = {
+            "code": code,
+            "name": h.get("name") or code,
+        }
+        for key in (
+            "shares",
+            "cost",
+            "price",
+            "change_pct",
+            "market_value",
+            "unrealized_pnl",
+            "quote_source",
+        ):
+            if h.get(key) is not None:
+                row[key] = h[key]
+        shares = row.get("shares")
+        price = row.get("price")
+        if shares is not None and price is not None and row.get("market_value") is None:
+            row["market_value"] = round(int(shares) * float(price), 2)
+        out.append(row)
+    return out
+
+
+def _merge_holdings_for_baseline(
+    snap_holdings: list[dict[str, Any]],
+    cfg_holdings: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    from agent_reach.daily_run.snapshot_builder import _normalize_code
+
+    by_code: dict[str, dict[str, Any]] = {}
+    for h in cfg_holdings:
+        code = _normalize_code(str(h.get("code", "")))
+        if code:
+            by_code[code] = dict(h)
+    for h in snap_holdings:
+        code = _normalize_code(str(h.get("code", "")))
+        if code:
+            by_code[code] = {**by_code.get(code, {}), **h}
+    return list(by_code.values())
+
+
+def enrich_morning_baseline(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Ensure morning baseline carries portfolio total and a holdings snapshot."""
+    from agent_reach.daily_run.portfolio_manager import _recalc_totals
+    from agent_reach.daily_run.snapshot_builder import load_portfolio
+    from agent_reach.daily_run.symbols import build_enriched_symbols
+
+    baseline = dict(snapshot)
+    pf_block = dict(baseline.get("portfolio") or {})
+    pf_cfg = load_portfolio()
+
+    snap_holdings = list(pf_block.get("holdings") or baseline.get("holdings") or [])
+    cfg_holdings = list(pf_cfg.get("holdings") or [])
+    merged = _merge_holdings_for_baseline(snap_holdings, cfg_holdings)
+    holdings = _holdings_baseline_snapshot(merged)
+
+    pf_work: dict[str, Any] = {
+        "total": pf_block.get("total") if pf_block.get("total") is not None else pf_cfg.get("total"),
+        "cash": pf_block.get("cash") if pf_block.get("cash") is not None else pf_cfg.get("cash"),
+        "cash_ratio": (
+            pf_block.get("cash_ratio")
+            if pf_block.get("cash_ratio") is not None
+            else pf_cfg.get("cash_ratio")
+        ),
+        "holdings": holdings,
+    }
+    if holdings:
+        _recalc_totals(pf_work, build_enriched_symbols(baseline))
+    baseline["portfolio"] = pf_work
+
+    if baseline.get("watchlist") is None:
+        watchlist = pf_cfg.get("watchlist") or []
+        if watchlist:
+            baseline["watchlist"] = [dict(w) for w in watchlist]
+
+    baseline.setdefault(
+        "baseline_saved_at",
+        baseline.get("as_of") or datetime.now(timezone.utc).isoformat(),
+    )
+    return baseline
+
+
 def _attach_intraday_scans(snapshot: dict[str, Any], *, code: Optional[str] = None) -> dict[str, Any]:
     """Merge today's intraday scans into close snapshot (source of truth)."""
     from agent_reach.daily_run.intraday import load_state
@@ -444,24 +534,25 @@ def save_morning_baseline(
     from agent_reach.daily_run.snapshot_builder import _normalize_code
 
     norm = _normalize_code(str(code or snapshot.get("code") or ""))
+    record = enrich_morning_baseline(snapshot)
     written: Optional[Path] = None
     if norm and norm != "MARKET":
         out = morning_baseline_path(norm)
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        out.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         written = out
 
     pc = _normalize_code(str(primary_code)) if primary_code else None
     if path is not None or (pc and norm == pc):
         legacy = path or _default_baseline_path()
         legacy.parent.mkdir(parents=True, exist_ok=True)
-        legacy.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        legacy.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return legacy
     if written:
         return written
     out = path or _default_baseline_path()
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    out.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return out
 
 

@@ -9,6 +9,7 @@ import pytest
 
 from agent_reach.daily_run.settings import load_settings
 from agent_reach.daily_run.workflows import (
+    enrich_morning_baseline,
     prepare_close_run,
     run_close,
     run_morning,
@@ -99,10 +100,57 @@ class TestCloseWorkflow:
         assert "portfolio_markdown" in result
         assert "个股盈亏" in result["portfolio_markdown"]
 
-    def test_save_baseline(self, morning_snapshot, tmp_path):
-        path = save_morning_baseline(morning_snapshot, path=tmp_path / "morning.json")
+    def test_save_baseline(self, morning_snapshot, tmp_path, monkeypatch):
+        pf = {
+            "total": 100000.0,
+            "cash": 61000.0,
+            "cash_ratio": 0.61,
+            "holdings": [
+                {
+                    "code": "688008",
+                    "name": "澜起科技",
+                    "shares": 100,
+                    "cost": 255.87,
+                    "price": 255.87,
+                }
+            ],
+        }
+        monkeypatch.setattr(
+            "agent_reach.daily_run.snapshot_builder.load_portfolio",
+            lambda path=None: pf,
+        )
+        snap = {
+            **morning_snapshot,
+            "portfolio": dict(pf),
+        }
+        path = save_morning_baseline(snap, path=tmp_path / "morning.json")
         loaded = json.loads(path.read_text(encoding="utf-8"))
         assert loaded["code"] == "688008"
+        assert loaded["portfolio"]["total"] == pytest.approx(86587.0)
+        assert len(loaded["portfolio"]["holdings"]) == 1
+        assert loaded["portfolio"]["holdings"][0]["code"] == "688008"
+        assert loaded["portfolio"]["holdings"][0]["shares"] == 100
+
+    def test_enrich_baseline_from_portfolio_config(self, morning_snapshot, monkeypatch):
+        pf = {
+            "total": 87323.27,
+            "cash": 40176.27,
+            "cash_ratio": 0.4601,
+            "holdings": [
+                {"code": "688008", "name": "澜起科技", "shares": 100, "cost": 255.87, "price": 225.5},
+                {"code": "000725", "name": "京东方A", "shares": 1400, "cost": 6.06, "price": 5.71},
+            ],
+            "watchlist": [{"code": "300308", "name": "中际旭创"}],
+        }
+        monkeypatch.setattr(
+            "agent_reach.daily_run.snapshot_builder.load_portfolio",
+            lambda path=None: pf,
+        )
+        enriched = enrich_morning_baseline({"code": "688008", "price": 225.5})
+        assert enriched["portfolio"]["total"] == pytest.approx(70720.27)
+        assert len(enriched["portfolio"]["holdings"]) == 2
+        assert enriched["portfolio"]["holdings"][0]["market_value"] is not None
+        assert enriched["watchlist"][0]["code"] == "300308"
 
     @patch("agent_reach.daily_run.workflows.run_exa_research", return_value=[])
     @patch("agent_reach.daily_run.workflows._push_markdown", return_value={"code": 0, "data": {}})

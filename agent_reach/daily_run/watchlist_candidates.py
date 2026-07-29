@@ -81,6 +81,16 @@ def _match_pool_key(sector: str, pools: dict[str, Any]) -> Optional[str]:
     return None
 
 
+def _weekly_candidate_limits(wl_cfg: dict[str, Any]) -> tuple[int, int, int]:
+    """Return (sector_limit, min_candidates, max_candidates); sector cap is 10."""
+    sector_limit = min(int(wl_cfg.get("weekly_hot_sector_limit", 10)), 10)
+    min_candidates = int(wl_cfg.get("weekly_candidates_min", 5))
+    max_candidates = int(wl_cfg.get("weekly_candidates_max", 10))
+    if max_candidates < min_candidates:
+        max_candidates = min_candidates
+    return sector_limit, min_candidates, max_candidates
+
+
 def _rank_hot_sectors(report: dict[str, Any] | Any) -> list[tuple[str, float, str]]:
     data = report.to_dict() if hasattr(report, "to_dict") else report
     scores: dict[str, tuple[float, str]] = {}
@@ -132,9 +142,7 @@ def build_weekly_watchlist_candidates(
     data = report.to_dict() if hasattr(report, "to_dict") else report
     week_end = str(data.get("week_end") or today_shanghai().isoformat())
     pools = dict(wl_cfg.get("sector_pools") or {})
-    max_add = int(wl_cfg.get("weekly_candidates_max", 6))
-    sector_limit = int(wl_cfg.get("weekly_hot_sector_limit", 3))
-    per_sector = max(1, max_add // max(sector_limit, 1))
+    sector_limit, min_candidates, max_candidates = _weekly_candidate_limits(wl_cfg)
 
     static_codes = {
         _normalize_code(str(c.get("code", "")))
@@ -148,35 +156,39 @@ def build_weekly_watchlist_candidates(
     }
     skip_codes = static_codes | held_codes
 
-    ranked_sectors = _rank_hot_sectors(data)[:sector_limit]
+    ranked_sectors: list[tuple[str, float, str]] = []
+    for sector, score, sector_reason in _rank_hot_sectors(data):
+        if _match_pool_key(sector, pools):
+            ranked_sectors.append((sector, score, sector_reason))
+        if len(ranked_sectors) >= sector_limit:
+            break
+
     chosen: list[dict[str, Any]] = []
     chosen_codes: set[str] = set()
     sector_names: list[str] = []
 
-    for sector, _score, sector_reason in ranked_sectors:
-        sector_names.append(sector)
-        pool_key = _match_pool_key(sector, pools)
-        pool_rows = list(pools.get(pool_key or "", []) or [])
-        added = 0
+    def _add_from_pool(sector: str, sector_reason: str, pool_rows: list[dict[str, Any]]) -> None:
+        if sector not in sector_names:
+            sector_names.append(sector)
         for row in pool_rows:
-            if len(chosen) >= max_add:
-                break
+            if len(chosen) >= max_candidates:
+                return
             code = _normalize_code(str(row.get("code", "")))
             if not code or code in skip_codes or code in chosen_codes:
                 continue
             reason = f"本周热点板块：{sector}（{sector_reason}）"
             chosen.append(_candidate_dict(row, reason=reason))
             chosen_codes.add(code)
-            added += 1
-            if added >= per_sector:
-                break
 
-        if len(chosen) >= max_add:
+    for sector, _score, sector_reason in ranked_sectors:
+        pool_key = _match_pool_key(sector, pools)
+        _add_from_pool(sector, sector_reason, list(pools.get(pool_key or "", []) or []))
+        if len(chosen) >= max_candidates:
             break
 
-    if len(chosen) < max_add:
+    if len(chosen) < min_candidates:
         for item in data.get("hot_sectors") or []:
-            if len(chosen) >= max_add:
+            if len(chosen) >= max_candidates:
                 break
             code = _normalize_code(str(item.get("code", "")))
             if not code or code in skip_codes or code in chosen_codes:
@@ -201,12 +213,20 @@ def build_weekly_watchlist_candidates(
 
     if not chosen:
         msg = "本周无新增板块候选（热点未匹配 sector_pools 或候选已满）"
+    elif len(chosen) < min_candidates:
+        msg = (
+            f"本周热点板块 {', '.join(sector_names)} → 候选 {len(chosen)} 只"
+            f"（未达下限 {min_candidates}）"
+        )
     else:
-        msg = f"本周热点板块 {', '.join(sector_names[:sector_limit])} → 新增候选 {len(chosen)} 只"
+        msg = (
+            f"本周热点板块 {', '.join(sector_names)} → 新增候选 {len(chosen)} 只"
+            f"（按热度顺序，≥{min_candidates}）"
+        )
 
     return WeeklyCandidateUpdate(
         week_end=week_end[:10],
-        sectors=sector_names[:sector_limit],
+        sectors=sector_names,
         candidates=chosen,
         message=msg,
     )

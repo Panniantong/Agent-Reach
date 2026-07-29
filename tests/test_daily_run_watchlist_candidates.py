@@ -7,6 +7,7 @@ import pytest
 
 from agent_reach.daily_run.settings import load_settings
 from agent_reach.daily_run.watchlist_candidates import (
+    _weekly_candidate_limits,
     build_weekly_watchlist_candidates,
     effective_watchlist_candidates,
     save_weekly_candidates,
@@ -20,15 +21,23 @@ def settings():
     cfg = load_settings()
     cfg.setdefault("watchlist", {})
     cfg["watchlist"]["weekly_candidates_enabled"] = True
-    cfg["watchlist"]["weekly_candidates_max"] = 4
-    cfg["watchlist"]["weekly_hot_sector_limit"] = 2
+    cfg["watchlist"]["weekly_candidates_min"] = 5
+    cfg["watchlist"]["weekly_candidates_max"] = 10
+    cfg["watchlist"]["weekly_hot_sector_limit"] = 10
     cfg["watchlist"]["sector_pools"] = {
         "半导体": [
             {"code": "688008", "name": "澜起科技", "keywords": ["澜起", "半导体"]},
             {"code": "688981", "name": "中芯国际", "keywords": ["中芯", "半导体"]},
+            {"code": "688012", "name": "中微公司", "keywords": ["中微", "半导体"]},
         ],
         "光通信": [
             {"code": "300308", "name": "中际旭创", "keywords": ["中际", "光模块"]},
+            {"code": "300502", "name": "新易盛", "keywords": ["新易盛", "光模块"]},
+            {"code": "300394", "name": "天孚通信", "keywords": ["天孚", "光通信"]},
+        ],
+        "面板": [
+            {"code": "000725", "name": "京东方A", "keywords": ["京东方", "面板"]},
+            {"code": "000100", "name": "TCL科技", "keywords": ["TCL", "面板"]},
         ],
     }
     cfg["watchlist"]["candidates"] = [
@@ -111,3 +120,16 @@ class TestWatchlistCandidates:
         codes = {c["code"] for c in update.candidates}
         assert "688008" not in codes
         assert "603986" not in codes
+
+    def test_at_least_min_from_ranked_sectors(self, settings):
+        update = build_weekly_watchlist_candidates(_weekly_report(), settings)
+        assert len(update.candidates) >= 5
+        assert update.sectors[0] == "光通信"
+        reasons = [c["reason"] for c in update.candidates]
+        assert any("光通信" in r for r in reasons[:3])
+        assert "≥5" in update.message or "候选 5" in update.message or "新增候选" in update.message
+
+    def test_sector_limit_capped_at_ten(self, settings):
+        settings["watchlist"]["weekly_hot_sector_limit"] = 99
+        sector_limit, _, _ = _weekly_candidate_limits(settings["watchlist"])
+        assert sector_limit == 10
