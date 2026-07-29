@@ -299,3 +299,30 @@ opencli instagram saved --limit 20 -f yaml
 ```
 
 > 要求 Chrome 打开且装了 OpenCLI 扩展，并已登录 instagram.com。`instagram search` 是用户搜索；读帖子需要先确定 username，再用 `instagram user USERNAME`。若出现 429 / login required，先让用户在 Chrome 里重新登录并降低频率。
+
+---
+
+## Substack（多后端，无需登录）
+
+发现/搜索 Newsletter 与文章。先跑 `agent-reach doctor --json` 看 substack 的 `active_backend`。
+
+### 后端 A：OpenCLI（桌面首选，公开命令）
+
+```bash
+# 搜索文章和 Newsletter（公开命令，无需登录 Substack）
+opencli substack search "query" -f yaml
+
+# 指定 Newsletter 的最新文章
+opencli substack publication lenny -f yaml
+```
+
+> 要求 Chrome 打开且装了 OpenCLI 扩展，但**不需要**登录 substack.com（search/publication 都是 [public] 命令）。登录态的 `feed` 命令不在本渠道范围内。
+
+### 后端 B：Exa（零配置降级）
+
+```bash
+# 近似语义搜索（无浏览器时的降级路径）
+mcporter call 'exa.web_search_exa(query: "query site:substack.com", numResults: 5)'
+```
+
+> Exa 是近似搜索：发现类查询效果好，但 `publication` 式的精确归档读取会降级。读单篇文章正文用通用网页渠道：`curl -s "https://r.jina.ai/文章URL"`。自定义域名的 Newsletter（如 stratechery.com）不匹配本渠道，直接走 web 渠道。

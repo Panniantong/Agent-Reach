@@ -117,7 +117,7 @@ agent-reach install --env=auto --channels=facebook,instagram    # Example: deskt
 agent-reach install --env=auto --channels=all              # User wants everything
 ```
 
-Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `facebook`, `instagram`, `bilibili`, `linkedin`, `all`
+Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `facebook`, `instagram`, `substack`, `bilibili`, `linkedin`, `all`
 
 ### Step 3: Fix what's broken
 
