@@ -81,6 +81,7 @@ def main():
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
     p_conf.add_argument("key", nargs="?", default=None,
                         choices=["proxy", "github-token", "groq-key", "openai-key",
+                                 "minimax-key",
                                  "twitter-cookies", "youtube-cookies",
                                  "xhs-cookies"],
                         help="What to configure (omit if using --from-browser)")
@@ -1320,6 +1321,11 @@ def _cmd_configure(args):
     elif args.key == "openai-key":
         config.set("openai_api_key", value)
         print(f"✅ OpenAI key configured!")
+
+    elif args.key == "minimax-key":
+        config.set("minimax_api_key", value)
+        print("✅ MiniMax key configured! Use it for transcript polishing with "
+              "POLISH_PROVIDER=minimax (model MiniMax-M3 or MiniMax-M2.7).")
 
 
 def _cmd_transcribe(args):

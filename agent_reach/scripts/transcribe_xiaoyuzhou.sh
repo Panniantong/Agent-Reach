@@ -1,10 +1,17 @@
 #!/bin/bash
 # 小宇宙播客转文字脚本
 # 用法: bash transcribe.sh [--polish] <小宇宙链接> [输出文件路径]
-# 环境变量: GROQ_API_KEY (必须)
+# 环境变量: GROQ_API_KEY (必须, Whisper 转录)
 #
-# --polish: 转录后调用 Groq Llama 3.3 70B 给文稿补中文标点+合理分段
+# --polish: 转录后用 OpenAI 兼容的 chat 模型给文稿补中文标点+合理分段
 #           （Whisper 对中文标点支持较弱，开启后阅读体验显著更好）
+#
+# 可选润色配置 (覆盖默认 Groq Llama 3.3 70B):
+#   POLISH_PROVIDER   groq (默认) | minimax
+#   POLISH_MODEL       模型 id (如 MiniMax-M3、MiniMax-M2.7)
+#   MINIMAX_REGION     global_en (默认, https://api.minimax.io) | cn_zh (https://api.minimaxi.com)
+#   MINIMAX_BASE_URL   自定义 OpenAI 兼容根 (覆盖 MINIMAX_REGION)
+#   MINIMAX_API_KEY    MiniMax API key (或 agent-reach configure minimax-key)
 
 set -e
 
@@ -160,78 +167,24 @@ for i in $(seq 0 $((NUM_CHUNKS - 1))); do
     echo "✅ ($CHARS 字)"
 done
 
-# Step 6.5 (可选): 用 Llama 3.3 70B 给文稿补标点+分段
+# Step 6.5 (可选): 用 OpenAI 兼容 chat 模型给文稿补标点+分段
+# 默认 groq (Llama 3.3 70B)；设 POLISH_PROVIDER=minimax 用 MiniMax-M3/M2.7
 if [ "$POLISH" = "1" ]; then
-    echo "✨ 正在润色（Llama 3.3 70B 加标点+分段）..."
+    POLISH_PROVIDER="${POLISH_PROVIDER:-groq}"
+    if [ "$POLISH_PROVIDER" = "minimax" ]; then
+        POLISH_MODEL_DEFAULT="MiniMax-M3"
+    else
+        POLISH_MODEL_DEFAULT="llama-3.3-70b-versatile"
+    fi
+    POLISH_LABEL="$POLISH_PROVIDER/${POLISH_MODEL:-$POLISH_MODEL_DEFAULT}"
+    echo "✨ 正在润色（$POLISH_LABEL 加标点+分段）..."
+    # agent_reach.polish 解析 POLISH_PROVIDER / POLISH_MODEL /
+    # MINIMAX_REGION / MINIMAX_BASE_URL / MINIMAX_API_KEY / GROQ_API_KEY
+    # (环境变量优先，其次 ~/.agent-reach/config.yaml)。
+    export GROQ_API_KEY
     for i in $(seq 0 $((NUM_CHUNKS - 1))); do
         echo -n "   段 $((i+1))/$NUM_CHUNKS... "
-        IN_FILE="$TMPDIR/transcript_${i}.txt" \
-        OUT_FILE="$TMPDIR/polished_${i}.txt" \
-        GROQ_API_KEY="$GROQ_API_KEY" \
-        python3 <<'PY'
-import json, os, sys, urllib.request, urllib.error
-
-KEY = os.environ["GROQ_API_KEY"]
-IN = os.environ["IN_FILE"]
-OUT = os.environ["OUT_FILE"]
-
-MODEL = "llama-3.3-70b-versatile"
-MAX_DEPTH = 3
-PROMPT_TMPL = (
-    "以下是一段中文普通话播客的语音转写片段，由于 Whisper 对中文标点支持较弱，"
-    "整段几乎没有标点。请你**只做一件事**：在合适位置补充中文标点（，。！？：；），"
-    "可以适度分段。\n\n"
-    "**严格要求**：\n"
-    "- 不得修改、删除、增加任何汉字或英文/数字\n"
-    "- 不得改写、润色、总结\n"
-    "- 不得添加任何解释、前言、后记\n"
-    "- 直接输出加好标点+合理分段后的全文\n\n"
-    "原文：\n{}"
-)
-
-def call_groq(text):
-    body = json.dumps({
-        "model": MODEL,
-        "temperature": 0.2,
-        "max_completion_tokens": 8192,
-        "messages": [{"role": "user", "content": PROMPT_TMPL.format(text)}],
-    }).encode()
-    req = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
-        data=body,
-        headers={
-            "Authorization": f"Bearer {KEY}",
-            "Content-Type": "application/json",
-            "User-Agent": "agent-reach-xiaoyuzhou/1.0",
-        },
-    )
-    with urllib.request.urlopen(req, timeout=180) as r:
-        resp = json.load(r)
-    return (
-        resp["choices"][0]["message"]["content"].strip(),
-        resp["choices"][0].get("finish_reason"),
-    )
-
-def polish(text, depth=0):
-    try:
-        out, fr = call_groq(text)
-    except urllib.error.HTTPError as e:
-        sys.stderr.write(f"polish HTTP {e.code}: {e.read().decode(errors='replace')[:200]}\n")
-        return text  # fallback to raw
-    except Exception as e:
-        sys.stderr.write(f"polish error: {e}\n")
-        return text
-    if fr != "length" or depth >= MAX_DEPTH:
-        return out
-    # 输出被截断：从中点切两半递归处理
-    mid = len(text) // 2
-    return polish(text[:mid], depth + 1) + polish(text[mid:], depth + 1)
-
-content = open(IN, encoding="utf-8").read().strip()
-result = polish(content)
-open(OUT, "w", encoding="utf-8").write(result + "\n")
-print(f"✅ ({len(result)} 字)")
-PY
+        python3 -m agent_reach.polish "$TMPDIR/transcript_${i}.txt" "$TMPDIR/polished_${i}.txt"
     done
 fi
 
@@ -245,7 +198,7 @@ echo "📄 正在合并文字稿..."
     echo "时长: ${DURATION_MIN}分${DURATION_SEC}秒"
     echo "转录时间: $(date '+%Y-%m-%d %H:%M')"
     if [ "$POLISH" = "1" ]; then
-        echo "润色: Groq Llama 3.3 70B"
+        echo "润色: $POLISH_LABEL"
     fi
     echo ""
     echo "---"

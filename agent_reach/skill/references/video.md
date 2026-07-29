@@ -99,16 +99,26 @@ curl -s -b /tmp/bili_ck.txt -A "$UA" -e "https://www.bilibili.com/" \
 ### 转录单集播客（可选 --polish 增强标点）
 
 ```bash
-# 输出 Markdown 文件到 /tmp/。--polish 让 Llama 3.3 70B 给文稿补中文标点+合理分段
+# 输出 Markdown 文件到 /tmp/。--polish 用 OpenAI 兼容的 chat 模型给文稿补中文标点+合理分段
 ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh --polish "https://www.xiaoyuzhoufm.com/episode/EPISODE_ID"
 ```
 
-> 转写 prompt 已要求 Whisper 输出中文标点；若标点效果仍不理想，可加 `--polish` 用 Groq 上免费的 Llama 3.3 70B 补标点+合理分段（9 分钟播客约多 ~7 秒）。每次转写多一轮 LLM 调用，按需使用。
+> 转写 prompt 已要求 Whisper 输出中文标点；若标点效果仍不理想，可加 `--polish` 让一个 OpenAI 兼容的 chat 模型补标点+合理分段（9 分钟播客约多 ~7 秒）。每次转写多一轮 LLM 调用，按需使用。
+>
+> 润色后端可配置（默认 Groq 的 Llama 3.3 70B）。改用 MiniMax：
+>
+> ```bash
+> agent-reach configure minimax-key YOUR_MINIMAX_KEY
+> POLISH_PROVIDER=minimax POLISH_MODEL=MiniMax-M3 \
+>   ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh --polish "URL"
+> ```
+>
+> MiniMax 走 OpenAI 兼容的全球（`https://api.minimax.io`）和中国（`https://api.minimaxi.com`）端点，支持 `MiniMax-M3` 与 `MiniMax-M2.7`；用 `MINIMAX_REGION=cn_zh` 切到中国端点，或用 `MINIMAX_BASE_URL` 自定义根地址。
 
 ### 前置要求
 
 1. **ffmpeg**: `brew install ffmpeg`
-2. **Groq API Key** (免费): https://console.groq.com/keys
+2. **Groq API Key** (免费, Whisper 转写): https://console.groq.com/keys
 3. **配置 Key**: `agent-reach configure groq-key YOUR_KEY`
 4. **首次运行**: `agent-reach install --env=auto` 安装工具
 
