@@ -96,6 +96,7 @@ def test_legacy_xfetch_sync_refuses_oversized_existing_session(
     tmp_path, monkeypatch
 ):
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     session_path = tmp_path / ".config" / "xfetch" / "session.json"
     session_path.parent.mkdir(parents=True)
     previous = json.dumps({"untrusted": "x" * (1024 * 1024)})
@@ -125,6 +126,7 @@ def test_xhs_cookie_editor_json_ignores_non_xhs_domains(
     tmp_path, monkeypatch, capsys
 ):
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.setattr("shutil.which", lambda name: None)
     exported = [
         {

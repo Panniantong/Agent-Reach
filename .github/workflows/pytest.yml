@@ -29,6 +29,26 @@ jobs:
         run: |
           pytest -q
 
+  windows-test:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package and test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -c constraints.txt -e .[dev]
+
+      - name: Run tests
+        run: |
+          pytest -q
+
   # Editable installs (-e) never exercise wheel packaging, so a broken wheel
   # can pass tests and still fail every real `pip install` from source.
   # This job builds the actual wheel and installs it into a clean venv.

@@ -98,12 +98,12 @@ def test_check_rdt_unparseable_credential_is_warn(isolated_home):
     assert "无法安全解析" in message
 
 
-def test_check_rdt_refuses_symlink_credential(isolated_home):
+def test_check_rdt_refuses_symlink_credential(isolated_home, symlink_or_skip):
     victim = isolated_home / "victim.json"
     victim.write_text('{"secret": "do-not-read"}', encoding="utf-8")
     path = isolated_home / ".config" / "rdt-cli" / "credential.json"
     path.parent.mkdir(parents=True)
-    path.symlink_to(victim)
+    symlink_or_skip(path, victim)
     with patch("shutil.which", return_value="/usr/local/bin/rdt"):
         status, message = RedditChannel()._check_rdt()
 
@@ -111,7 +111,7 @@ def test_check_rdt_refuses_symlink_credential(isolated_home):
     assert "符号链接" in message
 
 
-def test_check_rdt_refuses_ancestor_symlink(isolated_home):
+def test_check_rdt_refuses_ancestor_symlink(isolated_home, symlink_or_skip):
     victim_dir = isolated_home / "victim-config"
     credential_path = victim_dir / "rdt-cli" / "credential.json"
     credential_path.parent.mkdir(parents=True)
@@ -119,7 +119,8 @@ def test_check_rdt_refuses_ancestor_symlink(isolated_home):
         '{"cookies": {"reddit_session": "do-not-read"}}',
         encoding="utf-8",
     )
-    (isolated_home / ".config").symlink_to(
+    symlink_or_skip(
+        isolated_home / ".config",
         victim_dir,
         target_is_directory=True,
     )

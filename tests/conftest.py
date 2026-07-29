@@ -6,6 +6,20 @@ import pytest
 from agent_reach.config import Config
 
 
+@pytest.fixture
+def symlink_or_skip():
+    """Create a symlink or skip when the host has no symlink privilege."""
+
+    def create(link, target, *, target_is_directory=False):
+        try:
+            link.symlink_to(target, target_is_directory=target_is_directory)
+        except (NotImplementedError, OSError) as exc:
+            pytest.skip(f"symlink creation is unavailable: {exc}")
+        return link
+
+    return create
+
+
 @pytest.fixture(autouse=True)
 def isolated_home(tmp_path, monkeypatch):
     """Redirect every common home/config root before each test runs."""

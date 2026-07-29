@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 """Behavior tests for cross-platform path and remediation helpers."""
 
+import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
 
 from agent_reach.utils import paths
 
@@ -17,8 +20,11 @@ def test_posix_ytdlp_fix_is_single_line_executable_and_idempotent(
     command = paths.render_ytdlp_fix_command()
 
     assert "\n" not in command
-    subprocess.run(["/bin/sh", "-c", command], check=True)
-    subprocess.run(["/bin/sh", "-c", command], check=True)
+    shell = shutil.which("sh")
+    if shell is None:
+        pytest.skip("requires a POSIX-compatible sh executable")
+    subprocess.run([shell, "-c", command], check=True)
+    subprocess.run([shell, "-c", command], check=True)
 
     config = tmp_path / ".config" / "yt-dlp" / "config"
     assert config.read_text(encoding="utf-8") == "--js-runtimes node\n"

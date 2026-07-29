@@ -936,7 +936,7 @@ class TestXiaoHongShuChannel:
         assert ch.active_backend is None
 
     def test_saved_cli_cookie_refuses_ancestor_symlink(
-        self, monkeypatch, isolated_home
+        self, monkeypatch, isolated_home, symlink_or_skip
     ):
         self._isolate(monkeypatch)
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/xhs")
@@ -946,7 +946,8 @@ class TestXiaoHongShuChannel:
             json.dumps({"a1": "do-not-read"}),
             encoding="utf-8",
         )
-        (isolated_home / ".xiaohongshu-cli").symlink_to(
+        symlink_or_skip(
+            isolated_home / ".xiaohongshu-cli",
             victim_dir,
             target_is_directory=True,
         )
@@ -1414,7 +1415,7 @@ class TestGitHubChannel:
         assert "super-secret-token" not in message
 
     def test_hosts_metadata_refuses_ancestor_symlink(
-        self, monkeypatch, isolated_home
+        self, monkeypatch, isolated_home, symlink_or_skip
     ):
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/gh")
         monkeypatch.delenv("GH_TOKEN", raising=False)
@@ -1426,7 +1427,8 @@ class TestGitHubChannel:
             "github.com:\n  oauth_token: do-not-read\n",
             encoding="utf-8",
         )
-        (isolated_home / ".config").symlink_to(
+        symlink_or_skip(
+            isolated_home / ".config",
             real_config,
             target_is_directory=True,
         )

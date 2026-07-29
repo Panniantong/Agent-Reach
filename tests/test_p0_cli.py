@@ -505,7 +505,6 @@ def test_system_install_uses_ytdlp_first_user_config(
 
     import agent_reach.utils.paths as paths
 
-    monkeypatch.setattr(paths.sys, "platform", "darwin")
     monkeypatch.setattr(paths.Path, "home", classmethod(lambda cls: tmp_path))
     monkeypatch.delenv("XDG_CONFIG_HOME")
     monkeypatch.setattr(
@@ -852,8 +851,9 @@ def test_uninstall_warns_about_opt_in_legacy_credential_copies(
     cli._cmd_uninstall(Namespace(dry_run=True, keep_config=False))
 
     output = capsys.readouterr().out
-    assert str(xfetch) in output
-    assert str(bird) in output
+    normalized_output = output.replace("\\", "/")
+    assert xfetch.as_posix() in normalized_output
+    assert bird.as_posix() in normalized_output
     assert "不会自动删除" in output
     assert xfetch.exists()
     assert bird.exists()
