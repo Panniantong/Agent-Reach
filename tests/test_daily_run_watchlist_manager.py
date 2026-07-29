@@ -124,7 +124,7 @@ class TestWatchlistPolicy:
 
     def test_close_trims_watchlist_to_total_cap(self, portfolio, snapshot, settings):
         settings.setdefault("portfolio", {})
-        settings["portfolio"]["max_holdings"] = 3
+        settings["portfolio"]["max_total_symbols"] = 3
         portfolio["watchlist"] = [
             {"code": "603986", "name": "兆易创新"},
             {"code": "002273", "name": "水晶光电"},
