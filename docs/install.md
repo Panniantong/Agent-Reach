@@ -106,6 +106,7 @@ After installing the basics, **ask the user** which additional channels they nee
 > - 📷 **Instagram** — 用户搜索、Profile、用户最近帖子、Explore（桌面走 OpenCLI，复用 Chrome 登录态）
 > - 📺 **B站完整版** — 热门、排行、搜索、视频详情（bili-cli，无需登录）
 > - 💼 **LinkedIn** — Profile、职位搜索
+> - 🔎 **Indeed** - 通过 JobSpy MCP 搜索职位，公开职位页可用 Jina Reader
 >
 > 告诉我你要哪些，比如"帮我装小红书和 Twitter"、"帮我装 Facebook 和 Instagram"。或者说"全部装"。
 
@@ -117,7 +118,7 @@ agent-reach install --env=auto --channels=facebook,instagram    # Example: deskt
 agent-reach install --env=auto --channels=all              # User wants everything
 ```
 
-Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `facebook`, `instagram`, `bilibili`, `linkedin`, `all`
+Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `facebook`, `instagram`, `bilibili`, `linkedin`, `indeed`, `all`
 
 ### Step 3: Fix what's broken
 
@@ -287,44 +288,30 @@ agent-reach configure groq-key gsk_xxxxx
 > - 转录质量高（Whisper large-v3），但不区分说话人
 > - 2 小时以上的播客建议分批处理
 
-**LinkedIn (可选 — linkedin-scraper-mcp):**
-> "LinkedIn 基本内容可通过 Jina Reader 读取。完整功能（Profile 详情、职位搜索）需要 linkedin-scraper-mcp。"
+**LinkedIn (可选，mcp-server-linkedin):**
+> "LinkedIn 基本内容可通过 Jina Reader 读取。完整功能需要 mcp-server-linkedin。"
 
 ```bash
-pip install linkedin-scraper-mcp
+uvx 'mcp-server-linkedin==4.20.0' --login --no-headless --no-auto-import --login-timeout 0
 ```
 
-> **登录方式（需要浏览器界面）：**
+> 登录、2FA 和安全挑战必须由用户在隔离的浏览器窗口中手动完成。不要自动导入常用浏览器 Cookie。登录状态保存在 `~/.linkedin-mcp/profile/`。
 >
-> linkedin-scraper-mcp 使用 Chromium 浏览器登录，需要你能看到浏览器窗口。
->
-> - **本地电脑（有桌面）：** 直接运行：
->   ```bash
->   linkedin-scraper-mcp --login --no-headless
->   ```
->   浏览器会弹出来，手动登录 LinkedIn 即可。
->
-> - **服务器（无 UI）：** 需要通过 VNC 远程桌面操作：
->   ```bash
->   # 1. 服务器上安装并启动 VNC（如已有可跳过）
->   apt install -y tigervnc-standalone-server
->   vncserver :1 -geometry 1280x720
->   
->   # 2. 用 VNC 客户端连接 服务器IP:5901
->   
->   # 3. 在 VNC 桌面的终端里运行：
->   export DISPLAY=:1
->   linkedin-scraper-mcp --login --no-headless
->   ```
->   在 VNC 里看到浏览器后手动登录。登录成功后 session 会保存到 `~/.linkedin-mcp/profile/`。
->
-> **登录后启动 MCP 服务：**
+> **Hermes 原生配置：**
 > ```bash
-> linkedin-scraper-mcp --transport streamable-http --port 8001
-> mcporter config add linkedin http://localhost:8001/mcp --scope home
+> hermes mcp add linkedin --command uvx --args 'mcp-server-linkedin==4.20.0' --no-auto-import
 > ```
 >
+> **mcporter 配置：** 启动同一服务器的 Streamable HTTP transport，再以 `linkedin` 为名称注册。Doctor 只读取配置，不会启动服务器或验证登录状态。
+>
 > 详见 https://github.com/stickerdaniel/linkedin-mcp-server
+
+**Indeed (可选，JobSpy MCP):**
+> "结构化 Indeed 搜索需要基于 JobSpy 的 MCP 服务器。单个公开职位页可尝试 Jina Reader。"
+>
+> 配置任意基于 https://github.com/speedyapply/JobSpy 的 MCP 服务器，并在 Hermes 或 mcporter 中将服务器命名为 `jobspy` 或 `indeed`。Doctor 只检测这些明确的 server name，不会扫描 endpoint、描述或编辑器导入。
+>
+> Indeed 官方 MCP beta 当前只支持 Claude Connector，并未提供通用 Hermes endpoint，因此不要尝试复用或绕过其私有认证流程。
 
 ### Step 4: Final check
 
@@ -380,7 +367,8 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 | Exa Search | `mcporter` | `mcporter call 'exa.web_search_exa(...)'` |
 | 小红书 | `opencli`（服务器 `mcporter`） | `opencli xiaohongshu search "query" -f yaml` |
 | 小宇宙播客 | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
-| LinkedIn | `mcporter` | `mcporter call 'linkedin.get_person_profile(...)'` |
+| LinkedIn | `mcp-server-linkedin` | native MCP tool or `mcporter call 'linkedin.get_person_profile(...)'` |
+| Indeed | JobSpy MCP | `mcporter call 'jobspy.search_jobs(site_names: "indeed", ...)'` |
 | RSS | `feedparser` | `python3 -c "import feedparser; ..."` |
 
 > 多后端平台以 `agent-reach doctor --json` 的 `active_backend` 为准。

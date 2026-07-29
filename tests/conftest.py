@@ -17,6 +17,7 @@ def isolated_home(tmp_path, monkeypatch):
     monkeypatch.setenv("APPDATA", str(home / "AppData" / "Roaming"))
     monkeypatch.setenv("LOCALAPPDATA", str(home / "AppData" / "Local"))
     monkeypatch.delenv("OPENCLAW_HOME", raising=False)
+    monkeypatch.delenv("HERMES_HOME", raising=False)
 
     config_dir = home / ".agent-reach"
     monkeypatch.setattr(Config, "CONFIG_DIR", config_dir)

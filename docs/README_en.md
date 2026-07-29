@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  The most reliable access path for each platform — chosen, installed, and health-checked for you. Backends come and go; you won't notice.
+  The most reliable access path for each platform, chosen and checked at the strongest safe level. Some browser-session MCP channels report configuration only until you verify them live.
 </p>
 
 <p align="center">
@@ -77,6 +77,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 📘 **Facebook** | Search · Profiles · Feed · Groups list | OpenCLI | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
 | 📷 **Instagram** | User search · Profiles · Recent posts · Explore | OpenCLI | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
 | 💼 **LinkedIn** | Jina Reader (public pages) | Full profiles, companies, job search | Tell your Agent "help me set up LinkedIn" |
+| 🔎 **Indeed** | Jina Reader (public pages) | Structured job search through JobSpy MCP | Tell your Agent "help me set up Indeed" |
 | 💻 **V2EX** | Hot topics · Node topics · Topic detail + replies · User profile | Zero config | Public JSON API, no auth required. Great for tech community content |
 | 📈 **Xueqiu (雪球)** | Stock quotes · Search · Hot posts · Hot stocks | Browser cookie | Tell your Agent "help me set up Xueqiu" |
 | 🎙️ **Xiaoyuzhou Podcast** | Transcription | Free API key | Podcast audio → full text transcript via Groq Whisper (free) |
@@ -229,9 +230,9 @@ Status: 6/9 channels available
 
 **Agent Reach is a capability layer, not yet another tool.**
 
-It sits one level above any specific implementation — it handles **selection, installation, health checks, and routing**, not the reading itself. Reading is done by your Agent calling upstream tools directly; there is no wrapper layer.
+It sits one level above any specific implementation. It handles **selection, installation, diagnostics, and routing**, not the reading itself. Reading is done by your Agent calling upstream tools directly; there is no wrapper layer.
 
-Every time you spin up a new Agent, you spend time finding tools, installing deps, and debugging configs — what reads Twitter? How do you log into Reddit? What replaces a discontinued XiaoHongShu CLI? Every time, you re-do the same work. Agent Reach does one simple thing: **the most reliable access path for each platform, chosen, installed, and health-checked for you. Access paths come and go (in March 2026 a batch of single-platform CLIs went unmaintained — we re-routed), so you don't have to care.**
+Every time you spin up a new Agent, you spend time finding tools, installing deps, and debugging configs. What reads Twitter? How do you log into Reddit? What replaces a discontinued XiaoHongShu CLI? Every time, you re-do the same work. Agent Reach does one simple thing: **it selects and configures the strongest available access path, then reports exactly how strongly that path was checked. Access paths come and go, so routing can change without rewriting the Agent.**
 
 ### 🔌 Every platform = an ordered backend list (primary + fallbacks)
 
@@ -249,12 +250,13 @@ channels/
 ├── instagram.py    → OpenCLI (desktop browser session)
 ├── xiaohongshu.py  → OpenCLI ▸ xiaohongshu-mcp ▸ xhs-cli
 ├── linkedin.py     → linkedin-mcp ▸ Jina Reader
+├── indeed.py       → JobSpy MCP ▸ Jina Reader
 ├── rss.py          → feedparser
 ├── exa_search.py   → Exa via mcporter
 └── __init__.py     → Channel registry (for doctor checks)
 ```
 
-Each channel file **actually probes** its candidate backends in order (not just checking that a command exists) — the first fully working one becomes the active backend, and broken ones come with a fix prescription. The actual reading and searching is done by the Agent calling the upstream tools directly.
+Each channel checks candidate backends at the strongest safe level available. Command and API backends may be probed live. Browser-session MCP channels inspect only explicit configuration and return `warn`; that does not prove connectivity, authentication, tool availability, or server identity. A backend becomes active only when its channel performs a real usability probe. Reading and searching are done by the Agent calling upstream tools directly.
 
 ### Current Tool Choices
 
@@ -271,7 +273,8 @@ Each channel file **actually probes** its candidate backends in order (not just 
 | GitHub | [gh CLI](https://cli.github.com) | — | Official tool, full API after auth |
 | Read RSS | [feedparser](https://github.com/kurtmckee/feedparser) | — | Python ecosystem standard |
 | XiaoHongShu | [OpenCLI](https://github.com/jackwener/opencli) (desktop) | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) (server) ▸ xhs-cli | OpenCLI uses only an existing user-controlled session; other backends use a manual Cookie-Editor export |
-| LinkedIn | [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server) | Jina Reader | MCP server, browser automation |
+| LinkedIn | [mcp-server-linkedin](https://github.com/stickerdaniel/linkedin-mcp-server) | Jina Reader | MCP server, isolated browser profile |
+| Indeed | [JobSpy](https://github.com/speedyapply/JobSpy) through an MCP adapter | Jina Reader | Structured search through an explicitly configured `jobspy` or `indeed` server |
 | Xiaoyuzhou Podcast | `transcribe.sh` | — | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 
 > 📌 These are the *current* choices, re-verified regularly on real machines. When a path dies we switch to the next — `agent-reach doctor` always tells you which one is active.
@@ -280,7 +283,7 @@ Each channel file **actually probes** its candidate backends in order (not just 
 
 ## Credits
 
-[twitter-cli](https://github.com/public-clis/twitter-cli) · [rdt-cli](https://github.com/public-clis/rdt-cli) · [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) · [bili-cli](https://github.com/public-clis/bilibili-cli) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [Jina Reader](https://github.com/jina-ai/reader) · [Exa](https://exa.ai) · [mcporter](https://github.com/nicobailon/mcporter) · [feedparser](https://github.com/kurtmckee/feedparser) · [linkedin-scraper-mcp](https://github.com/stickerdaniel/linkedin-mcp-server)
+[twitter-cli](https://github.com/public-clis/twitter-cli) · [rdt-cli](https://github.com/public-clis/rdt-cli) · [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) · [bili-cli](https://github.com/public-clis/bilibili-cli) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [Jina Reader](https://github.com/jina-ai/reader) · [Exa](https://exa.ai) · [mcporter](https://github.com/nicobailon/mcporter) · [feedparser](https://github.com/kurtmckee/feedparser) · [mcp-server-linkedin](https://github.com/stickerdaniel/linkedin-mcp-server) · [JobSpy](https://github.com/speedyapply/JobSpy)
 
 ## Contact
 

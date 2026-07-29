@@ -75,7 +75,7 @@ def main():
     p_install.add_argument("--channels", default="",
                            help="Comma-separated optional channels to install "
                                 "(twitter,xiaoyuzhou,xueqiu,xiaohongshu,"
-                                "reddit,facebook,instagram,bilibili,linkedin,all)")
+                                "reddit,facebook,instagram,bilibili,linkedin,indeed,all)")
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
@@ -227,9 +227,9 @@ def _cmd_install(args):
         "bilibili":    _install_bili_deps,
         "opencli":     _install_opencli_deps,  # cross-channel backend, desktop only
         # xueqiu: cookie-only, no install step
-        # linkedin: manual setup, no auto-install
+        # linkedin/indeed: manual MCP setup, no auto-install
     }
-    supported_channels = set(CHANNEL_INSTALLERS) | {"xueqiu", "linkedin"}
+    supported_channels = set(CHANNEL_INSTALLERS) | {"xueqiu", "linkedin", "indeed"}
     raw_channels = [
         channel.strip().lower()
         for channel in args.channels.split(",")
