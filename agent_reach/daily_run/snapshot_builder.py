@@ -210,6 +210,9 @@ def enrich_holding(
         for k in _TECHNICAL_KEYS:
             if quote.get(k) is not None and out.get(k) is None:
                 out[k] = quote[k]
+        for k in ("sector", "industry"):
+            if quote.get(k) and not out.get(k):
+                out[k] = quote[k]
         if with_technicals:
             enriched = _attach_technicals(quote, code)
             for k in _TECHNICAL_KEYS:
@@ -330,6 +333,19 @@ def build_snapshot(
         _enrich_row(w, with_technicals=enrich_level == "full")
         for w in watchlist
     ]
+
+    from agent_reach.daily_run.sector_classifier import attach_sectors_to_rows
+
+    holdings = attach_sectors_to_rows(holdings, settings=cfg, quote_map=quote_map)
+    watchlist = attach_sectors_to_rows(watchlist, settings=cfg, quote_map=quote_map)
+    for code, quote in quote_map.items():
+        if quote.get("sector") or quote.get("industry"):
+            continue
+        from agent_reach.daily_run.sector_classifier import attach_sector
+
+        patched = attach_sector({"code": code, "name": quote.get("name")}, settings=cfg, quote=quote)
+        if patched.get("sector"):
+            quote_map[code] = {**quote, "sector": patched["sector"], "industry": patched["sector"]}
 
     if enrich_level == "full":
         for c in dict.fromkeys(all_codes):

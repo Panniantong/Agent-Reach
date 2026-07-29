@@ -98,6 +98,13 @@ def _rank_hot_sectors(report: dict[str, Any] | Any) -> list[tuple[str, float, st
     for item in data.get("hot_sectors") or []:
         sector = str(item.get("sector") or "综合")
         if sector in ("综合", "未分类"):
+            from agent_reach.daily_run.sector_classifier import lookup_sector
+
+            sector = lookup_sector(
+                str(item.get("code") or ""),
+                str(item.get("name") or ""),
+            )
+        if sector in ("综合", "未分类"):
             continue
         chg = float(item.get("change_pct") or 0)
         name = item.get("name") or item.get("code") or "?"

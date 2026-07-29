@@ -15,7 +15,10 @@ def copy_portfolio(portfolio: dict[str, Any]) -> dict[str, Any]:
     return pf
 
 
-def build_enriched_symbols(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def build_enriched_symbols(
+    snapshot: dict[str, Any],
+    settings: dict[str, Any] | None = None,
+) -> dict[str, dict[str, Any]]:
     """Merge holdings + watchlist + primary code from snapshot into one map."""
     out: dict[str, dict[str, Any]] = {}
     for h in (snapshot.get("portfolio") or {}).get("holdings") or []:
@@ -31,8 +34,21 @@ def build_enriched_symbols(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]
         c = _normalize_code(str(code))
         out[c] = {
             **out.get(c, {}),
-            **{k: snapshot[k] for k in ("price", "name", "change_pct", "ma20") if k in snapshot},
+            **{k: snapshot[k] for k in ("price", "name", "change_pct", "ma20", "sector", "industry") if k in snapshot},
         }
+
+    cfg = settings
+    if cfg is None:
+        try:
+            from agent_reach.daily_run.settings import load_settings
+
+            cfg = load_settings()
+        except Exception:
+            cfg = None
+    if cfg:
+        from agent_reach.daily_run.sector_classifier import enrich_symbol_map_sectors
+
+        out = enrich_symbol_map_sectors(out, cfg)
     return out
 
 

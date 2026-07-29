@@ -68,7 +68,15 @@ def fetch_quotes_batch(codes: list[str], *, ttl: int = 60) -> dict[str, dict[str
         if item is None:
             continue
         price = float(item["最新价"])
-        out[symbol] = {
+        industry = None
+        for col in item.index:
+            label = str(col)
+            if "行业" in label or label in ("板块", "所属板块"):
+                val = item.get(col)
+                if val is not None and str(val).strip():
+                    industry = str(val).strip()
+                    break
+        row_out: dict[str, Any] = {
             "code": symbol,
             "name": str(item.get("名称", symbol)),
             "price": price,
@@ -77,6 +85,10 @@ def fetch_quotes_batch(codes: list[str], *, ttl: int = 60) -> dict[str, dict[str
             "turnover": float(item.get("成交额", 0) or 0),
             "source": "akshare_spot_em",
         }
+        if industry:
+            row_out["industry"] = industry
+            row_out["sector"] = industry
+        out[symbol] = row_out
     return out
 
 
