@@ -73,8 +73,9 @@ def max_total_symbols(settings: dict[str, Any]) -> int:
 
 
 def max_holdings(settings: dict[str, Any]) -> int:
-    """Alias of max_total_symbols (legacy key: portfolio.max_holdings)."""
-    return max_total_symbols(settings)
+    """Max distinct held symbols (portfolio.max_holdings)."""
+    pf = portfolio_settings(settings)
+    return int(pf.get("max_holdings", 10))
 
 
 def unique_symbol_codes(portfolio: dict[str, Any]) -> set[str]:

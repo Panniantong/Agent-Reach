@@ -40,6 +40,14 @@ class TestPriorCloseReference:
             "agent_reach.daily_run.prior_close.today_shanghai",
             lambda: date(2026, 7, 17),
         )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.prior_close.prev_trading_day",
+            lambda *args, **kwargs: date(2026, 7, 17),
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.prior_close.runs_dir",
+            lambda: tmp_path / "runs",
+        )
 
         snap = {
             "code": "688008",

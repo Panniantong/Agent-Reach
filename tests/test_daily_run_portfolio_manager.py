@@ -66,12 +66,14 @@ class TestPortfolioConfig:
 
         s = load_settings(_DEFAULT_PATH)
         assert max_holdings(s) == 10
-        assert max_total_symbols(s) == 10
+        assert max_total_symbols(s) == 15
         assert is_auto_adjust_enabled(s) is True
 
     def test_unique_symbol_count(self, portfolio):
+        from agent_reach.daily_run.settings import _DEFAULT_PATH
+
         assert unique_symbol_count(portfolio) == 4
-        assert watchlist_capacity(load_settings(), portfolio) == 8
+        assert watchlist_capacity(load_settings(_DEFAULT_PATH), portfolio) == 13
 
 
 class TestApplyAutoAdjust:
