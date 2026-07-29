@@ -183,7 +183,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 ```
 channels/
 ├── web.py          → Jina Reader
-├── twitter.py      → twitter-cli ▸ OpenCLI ▸ bird
+├── twitter.py      → twitter-cli ▸ OpenCLI ▸ Xquik API（可选）▸ bird
 ├── youtube.py      → yt-dlp
 ├── github.py       → gh CLI
 ├── bilibili.py     → bili-cli ▸ OpenCLI ▸ 搜索 API（yt-dlp 已被 B站风控封死，退役）

@@ -66,6 +66,11 @@ class TestConfig:
         tmp_config.set("exa_api_key", "test-key")
         assert tmp_config.is_configured("exa_search")
 
+    def test_xquik_feature_uses_dedicated_api_key(self, tmp_config):
+        assert not tmp_config.is_configured("twitter_xquik")
+        tmp_config.set("xquik_api_key", "xq-test-key")
+        assert tmp_config.is_configured("twitter_xquik")
+
     def test_get_configured_features(self, tmp_config):
         features = tmp_config.get_configured_features()
         assert isinstance(features, dict)
@@ -87,6 +92,7 @@ class TestConfig:
             "bilibili_sessdata": "bili-session-secret",
             "bilibili_csrf": "bili-csrf-secret",
             "twitter_auth_token": "twitter-auth-secret",
+            "xquik_api_key": "xquik-api-secret",
         }
         for key, value in secrets.items():
             tmp_config.set(key, value)

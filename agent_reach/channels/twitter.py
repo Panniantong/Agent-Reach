@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Twitter/X — check if twitter-cli or bird CLI is available."""
+"""Twitter/X: inspect configured read backends without triggering cookie access."""
 
 import os
 import shutil
@@ -34,7 +34,7 @@ def twitter_cli_child_env(config=None) -> dict[str, str]:
 class TwitterChannel(Channel):
     name = "twitter"
     description = "Twitter/X 推文"
-    backends = ["twitter-cli", "OpenCLI", "bird CLI (legacy)"]
+    backends = ["twitter-cli", "OpenCLI", "Xquik API", "bird CLI (legacy)"]
     tier = 1
 
     def can_handle(self, url: str) -> bool:
@@ -55,6 +55,8 @@ class TwitterChannel(Channel):
                 result = self._check_twitter_cli(config)
             elif backend == "OpenCLI":
                 result = self._check_opencli()
+            elif backend == "Xquik API":
+                result = self._check_xquik_api(config)
             elif backend == "bird CLI (legacy)":
                 result = self._check_bird()
             else:
@@ -78,6 +80,17 @@ class TwitterChannel(Channel):
             "  pipx install twitter-cli\n"
             "或：\n"
             "  uv tool install twitter-cli"
+        )
+
+    def _check_xquik_api(self, config=None):
+        """Report explicit Xquik configuration without sending the API key."""
+        key = config.get("xquik_api_key") if config else None
+        key = key or os.environ.get("XQUIK_API_KEY")
+        if not key:
+            return None
+        return "warn", (
+            "Xquik API 密钥已配置；Doctor 不会发送或验证密钥。"
+            "请按 setup-twitter.md 中的只读示例手动验证。"
         )
 
     def _check_twitter_cli(self, config=None):

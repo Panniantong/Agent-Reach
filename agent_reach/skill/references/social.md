@@ -126,12 +126,63 @@ twitter likes
 3. 换 OpenCLI 备选（桌面，复用浏览器登录态）：`opencli twitter search "query" -f yaml`
 4. 都不行就改用 `twitter feed` / `twitter user-posts @somebody` 等稳定命令绕路
 
+### 可选的 Xquik 只读后端
+
+用户显式提供 `XQUIK_API_KEY` 时，可以直接调用 Xquik 搜索或读取。
+Agent Reach 没有包装层，保存到配置文件的 key 不会自动导出到 Shell。
+
+```bash
+# 搜索公开推文
+curl --silent --show-error --fail-with-body --max-time 30 --get \
+  "https://xquik.com/api/v1/x/tweets/search" \
+  -H "x-api-key: $XQUIK_API_KEY" \
+  -H "xquik-api-contract: 2026-04-29" \
+  --data-urlencode "q=agent research" \
+  --data "limit=10"
+
+# 读取单条公开推文
+curl --silent --show-error --fail-with-body --max-time 30 \
+  "https://xquik.com/api/v1/x/tweets/TWEET_ID" \
+  -H "x-api-key: $XQUIK_API_KEY" \
+  -H "xquik-api-contract: 2026-04-29"
+
+# 读取用户资料
+curl --silent --show-error --fail-with-body --max-time 30 \
+  "https://xquik.com/api/v1/x/users/USERNAME" \
+  -H "x-api-key: $XQUIK_API_KEY" \
+  -H "xquik-api-contract: 2026-04-29"
+
+# 读取用户最近的推文
+curl --silent --show-error --fail-with-body --max-time 30 --get \
+  "https://xquik.com/api/v1/x/users/USERNAME/tweets" \
+  -H "x-api-key: $XQUIK_API_KEY" \
+  -H "xquik-api-contract: 2026-04-29" \
+  --data "limit=20"
+
+# 读取 X Article
+curl --silent --show-error --fail-with-body --max-time 30 \
+  "https://xquik.com/api/v1/x/articles/TWEET_ID" \
+  -H "x-api-key: $XQUIK_API_KEY" \
+  -H "xquik-api-contract: 2026-04-29"
+```
+
+只使用以上公开读取端点。不要把 key 写进日志或回复。`doctor` 只确认
+key 是否存在，不会发送或验证。分页时，把 `next_cursor` 作为下一次
+请求的 `cursor` 参数。配额以 Xquik dashboard 为准。
+
+Xquik is an independent third-party service. Not affiliated with X Corp.
+"Twitter" and "X" are trademarks of X Corp.
+
 ### 重要注意事项
 
 > **安装**: `pipx install twitter-cli`（确保 v0.8.5+）
 >
 > **认证**: 只用 Cookie-Editor 手工导出，再显式设置环境变量
 > `TWITTER_AUTH_TOKEN` + `TWITTER_CT0`；不要依赖自动浏览器读取。
+>
+> **Windows**: Chrome 127+ 和新版 Edge 的应用绑定加密可能导致
+> `Unable to get key for cookie decryption`。不要重试自动读取；
+> 使用 Cookie-Editor 手工导出。
 >
 > **IP 风控**: 不要在 VPS/数据中心 IP 上频繁调用，尤其是 followers/following，有封号风险。使用住宅代理或本地环境。
 >

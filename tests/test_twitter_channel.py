@@ -111,11 +111,54 @@ def test_bird_without_explicit_env_is_warn(monkeypatch):
 
 def test_nothing_installed_returns_install_hint():
     channel = TwitterChannel()
-    with patch("shutil.which", return_value=None):
+    with patch("shutil.which", return_value=None), patch.object(
+        TwitterChannel,
+        "_check_xquik_api",
+        return_value=None,
+    ):
         status, message = channel.check()
 
     assert status == "warn"
     assert "twitter-cli" in message
+    assert channel.active_backend is None
+
+
+def test_xquik_env_key_is_reported_without_validation(monkeypatch):
+    monkeypatch.setenv("XQUIK_API_KEY", "xq_secret_value")
+    channel = TwitterChannel()
+
+    status, message = channel._check_xquik_api()
+
+    assert status == "warn"
+    assert "不会发送或验证" in message
+    assert "xq_secret_value" not in message
+
+
+def test_xquik_config_key_is_routed_without_claiming_active_backend(
+    monkeypatch,
+):
+    monkeypatch.delenv("XQUIK_API_KEY", raising=False)
+    config = {"xquik_api_key": "xq_configured_value"}
+    channel = TwitterChannel()
+
+    with patch.object(
+        TwitterChannel,
+        "_check_twitter_cli",
+        return_value=None,
+    ), patch.object(
+        TwitterChannel,
+        "_check_opencli",
+        return_value=None,
+    ), patch.object(
+        TwitterChannel,
+        "_check_bird",
+        return_value=None,
+    ):
+        status, message = channel.check(config)
+
+    assert status == "warn"
+    assert "Xquik API" in message
+    assert "xq_configured_value" not in message
     assert channel.active_backend is None
 
 
@@ -145,6 +188,10 @@ def test_verified_backend_result_wins_over_unverified_twitter_cli():
         TwitterChannel,
         "_check_opencli",
         return_value=("ok", "OpenCLI 可用"),
+    ), patch.object(
+        TwitterChannel,
+        "_check_xquik_api",
+        return_value=("warn", "Xquik API 未验证"),
     ), patch.object(TwitterChannel, "_check_bird", return_value=None):
         status, message = channel.check()
 
@@ -163,6 +210,10 @@ def test_all_warn_returns_first_warning_without_active_backend():
         TwitterChannel,
         "_check_opencli",
         return_value=("warn", "扩展未连接"),
+    ), patch.object(
+        TwitterChannel,
+        "_check_xquik_api",
+        return_value=("warn", "Xquik API 未验证"),
     ), patch.object(TwitterChannel, "_check_bird", return_value=None):
         status, message = channel.check()
 

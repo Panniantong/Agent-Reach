@@ -240,7 +240,7 @@ Switching access paths means reordering the list, not rewriting code. `agent-rea
 ```
 channels/
 ├── web.py          → Jina Reader
-├── twitter.py      → twitter-cli ▸ OpenCLI ▸ bird
+├── twitter.py      → twitter-cli ▸ OpenCLI ▸ Xquik API (optional) ▸ bird
 ├── youtube.py      → yt-dlp
 ├── github.py       → gh CLI
 ├── bilibili.py     → bili-cli ▸ OpenCLI ▸ search API (yt-dlp retired, 412-blocked)

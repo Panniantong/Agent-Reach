@@ -727,6 +727,30 @@ def test_configure_missing_value_exits_one(monkeypatch, capsys):
     assert "Missing value for github-token" in capsys.readouterr().out
 
 
+def test_xquik_key_configuration_never_echoes_secret(
+    monkeypatch,
+    capsys,
+):
+    """The dedicated CLI path stores the key without printing or validating it."""
+    import agent_reach.config as config_module
+
+    config = _MemoryConfig()
+    monkeypatch.setattr(config_module, "Config", lambda: config)
+    monkeypatch.setattr(cli, "_configure_logging", lambda _verbose=False: None)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["agent-reach", "configure", "xquik-key", "xq_secret_value"],
+    )
+
+    cli.main()
+
+    output = capsys.readouterr().out
+    assert config.get("xquik_api_key") == "xq_secret_value"
+    assert "Xquik API key configured" in output
+    assert "xq_secret_value" not in output
+
+
 def test_twitter_cookie_parse_failure_exits_one(monkeypatch, capsys):
     """Malformed Twitter cookie input must not produce a successful CLI status."""
     import agent_reach.config as config_module

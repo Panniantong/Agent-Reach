@@ -80,7 +80,7 @@ def main():
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
     p_conf.add_argument("key", nargs="?", default=None,
-                        choices=["proxy", "github-token", "groq-key", "openai-key",
+                        choices=["proxy", "github-token", "groq-key", "openai-key", "xquik-key",
                                  "twitter-cookies", "youtube-cookies",
                                  "xhs-cookies"],
                         help="What to configure (omit if using --from-browser)")
@@ -1320,6 +1320,10 @@ def _cmd_configure(args):
     elif args.key == "openai-key":
         config.set("openai_api_key", value)
         print(f"✅ OpenAI key configured!")
+
+    elif args.key == "xquik-key":
+        config.set("xquik_api_key", value)
+        print("✅ Xquik API key configured. Doctor will not send or validate it.")
 
 
 def _cmd_transcribe(args):
