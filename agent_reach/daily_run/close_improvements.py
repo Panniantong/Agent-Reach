@@ -322,12 +322,21 @@ def _improve_watchlist(
             f"观察池非持仓标的已达 {len(wl_only)}/{wl_capacity}（合计上限 {max_t}）",
             "新增候选需先移出弱势标的；可在 watchlist.candidates 中控制质量",
         )
-    elif len(wl_only) < 2 and len(held) + len(wl_only) < max_t:
+    wl_min = int(watchlist_cfg.get("min_size", 5))
+    wl_max = int(watchlist_cfg.get("max_size", 10))
+    if len(wl_only) < wl_min:
         out.add(
             "watchlist",
-            "low",
-            "观察池标的过少",
-            "收盘 Exa 调研后可手动补充 candidates，或在复盘阶段纳入行业龙头",
+            "medium",
+            f"观察池仅 {len(wl_only)} 只，低于下限 {wl_min}",
+            "收盘 adjust_watchlist 应补足候选；检查 watchlist.candidates 与热点匹配",
+        )
+    elif len(wl_only) > wl_max:
+        out.add(
+            "watchlist",
+            "medium",
+            f"观察池 {len(wl_only)} 只超出上限 {wl_max}",
+            "收盘复盘应按评分 trim 至 max_size",
         )
 
     weak = [w for w in watchlist if (w.get("change_pct") or 0) <= -5]

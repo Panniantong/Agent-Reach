@@ -268,6 +268,7 @@
   "portfolio": {
     "auto_adjust_enabled": true,
     "max_holdings": 10,
+    "max_total_symbols": 15,
     "mode": "paper",
     "min_deploy_cash": 1000,
     "add_sold_to_watchlist": true
@@ -276,7 +277,22 @@
   "watchlist": {
     "auto_adjust_enabled": true,
     "adjust_phases": ["morning", "close"],
-    "candidates": []
+    "min_size": 5,
+    "max_size": 10,
+    "close_reorder_by_performance": true,
+    "hot_topic_adjust_enabled": true,
+    "hot_topic_remove_change_pct": -2.0,
+    "hot_topic_fetch_if_missing": true,
+    "candidates": [
+      {"code": "603986", "name": "兆易创新", "keywords": ["兆易", "存储", "芯片", "DDR", "半导体"]},
+      {"code": "000725", "name": "京东方A", "keywords": ["京东方", "面板", "OLED", "显示"]},
+      {"code": "002415", "name": "海康威视", "keywords": ["海康", "安防", "AI"]},
+      {"code": "600584", "name": "长电科技", "keywords": ["长电", "封测", "芯片"]},
+      {"code": "688012", "name": "中微公司", "keywords": ["中微", "半导体", "设备"]},
+      {"code": "300308", "name": "中际旭创", "keywords": ["中际", "光模块", "CPO", "AI"]},
+      {"code": "601138", "name": "工业富联", "keywords": ["工业富联", "AI", "服务器"]},
+      {"code": "688981", "name": "中芯国际", "keywords": ["中芯", "晶圆", "半导体"]}
+    ]
   },
 
   "close_improvements": {

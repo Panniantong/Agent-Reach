@@ -52,6 +52,9 @@ def settings():
     s = load_settings()
     s.setdefault("watchlist", {})
     s["watchlist"]["auto_adjust_enabled"] = True
+    s["watchlist"]["min_size"] = 0
+    s["watchlist"]["hot_topic_adjust_enabled"] = False
+    s["watchlist"]["hot_topic_fetch_if_missing"] = False
     return s
 
 
@@ -187,3 +190,54 @@ class TestWatchlistPolicy:
         md = render_watchlist_adjust_markdown(result)
         assert "观察池" in md
         assert "688008" in md or "澜起" in md
+
+    def test_close_reorders_by_change_pct(self, portfolio, snapshot, settings):
+        settings["watchlist"]["close_reorder_by_performance"] = True
+        settings["watchlist"]["min_size"] = 0
+        snapshot["watchlist"] = [
+            {"code": "603986", "name": "兆易创新", "change_pct": -2.71},
+            {"code": "002273", "name": "水晶光电", "change_pct": 1.5},
+        ]
+        portfolio["watchlist"] = [
+            {"code": "603986", "name": "兆易创新"},
+            {"code": "002273", "name": "水晶光电"},
+        ]
+        result = adjust_watchlist(portfolio, snapshot, settings, "close")
+        codes = [w["code"] for w in result.portfolio["watchlist"]]
+        assert codes[0] == "002273"
+
+    def test_close_fills_to_min_size(self, portfolio, snapshot, settings):
+        settings["watchlist"]["min_size"] = 5
+        settings["watchlist"]["max_size"] = 10
+        settings["watchlist"]["candidates"] = [
+            {"code": "000725", "name": "京东方A", "keywords": ["京东方"]},
+            {"code": "002415", "name": "海康威视", "keywords": ["海康"]},
+            {"code": "600584", "name": "长电科技", "keywords": ["长电"]},
+            {"code": "688012", "name": "中微公司", "keywords": ["中微"]},
+        ]
+        portfolio["watchlist"] = [{"code": "603986", "name": "兆易创新"}]
+        result = adjust_watchlist(portfolio, snapshot, settings, "close")
+        assert len(result.portfolio["watchlist"]) >= 5
+
+    def test_close_hot_topic_add_and_remove(self, portfolio, snapshot, settings):
+        settings["watchlist"]["min_size"] = 0
+        settings["watchlist"]["hot_topic_adjust_enabled"] = True
+        settings["watchlist"]["hot_topic_fetch_if_missing"] = False
+        settings["watchlist"]["candidates"] = [
+            {"code": "000725", "name": "京东方A", "keywords": ["京东方", "面板"]},
+        ]
+        snapshot["hot_topics_matched"] = [{"title": "面板产业链涨价，京东方受益"}]
+        snapshot["watchlist"] = [
+            {"code": "603986", "name": "兆易创新", "change_pct": -4.0},
+            {"code": "002273", "name": "水晶光电", "change_pct": -6.23},
+        ]
+        portfolio["watchlist"] = [
+            {"code": "603986", "name": "兆易创新"},
+            {"code": "002273", "name": "水晶光电"},
+        ]
+        result = adjust_watchlist(portfolio, snapshot, settings, "close")
+        codes = {w["code"] for w in result.portfolio["watchlist"]}
+        assert "000725" in codes
+        assert "603986" not in codes or any(
+            c.action == "remove" and c.code == "603986" for c in result.changes
+        )
