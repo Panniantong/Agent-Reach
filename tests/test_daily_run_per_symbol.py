@@ -53,6 +53,38 @@ class TestTargetSymbols:
         assert resolve_target_symbols(PORTFOLIO, cfg, workflow="intraday") == ["688008", "002273"]
         assert len(resolve_target_symbols(PORTFOLIO, cfg)) == 4
 
+    def test_resolve_intraday_all_includes_watchlist(self):
+        cfg = load_settings()
+        cfg = {
+            **cfg,
+            "schedule": {
+                **(cfg.get("schedule") or {}),
+                "intraday_symbols_mode": "all",
+            },
+        }
+        assert resolve_target_symbols(PORTFOLIO, cfg, workflow="intraday") == [
+            "688008",
+            "002273",
+            "603986",
+            "000725",
+        ]
+
+    def test_resolve_intraday_holdings_watchlist_alias(self):
+        cfg = load_settings()
+        cfg = {
+            **cfg,
+            "schedule": {
+                **(cfg.get("schedule") or {}),
+                "intraday_symbols_mode": "holdings+watchlist",
+            },
+        }
+        assert resolve_target_symbols(PORTFOLIO, cfg, workflow="intraday") == [
+            "688008",
+            "002273",
+            "603986",
+            "000725",
+        ]
+
 class TestPerSymbolSnapshot:
     def test_build_snapshot_uses_symbol_name_for_premarket(self):
         snap = build_snapshot(PORTFOLIO, report_type="premarket", primary_code="002273", enrich=False)

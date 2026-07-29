@@ -93,12 +93,23 @@ def resolve_target_symbols(
     *,
     workflow: str | None = None,
 ) -> list[str]:
-    """Resolve which symbols to run for morning/close/intraday jobs."""
+    """Resolve which symbols to run for morning/close/intraday jobs.
+
+    intraday_symbols_mode (when workflow=intraday):
+      - all / holdings+watchlist: 持仓 + 观察池（去重）
+      - holdings: 仅持仓
+      - watchlist: 仅观察池
+      - primary: 主标的
+    Falls back to schedule.symbols_mode when intraday_symbols_mode is unset.
+    """
     sched = settings.get("schedule") or {}
     if workflow == "intraday":
         mode = str(
             sched.get("intraday_symbols_mode") or sched.get("symbols_mode", "primary")
         ).lower()
+        # Shorthand: scan holdings + 观察池 (same as mode=all, excludes duplicate codes)
+        if mode in ("holdings+watchlist", "holdings_watchlist"):
+            mode = "all"
     else:
         mode = str(sched.get("symbols_mode", "primary")).lower()
     if mode == "primary":
