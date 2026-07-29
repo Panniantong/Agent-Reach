@@ -557,6 +557,12 @@ def run_weekly(
     digest_path = save_weekly_digest(report.to_dict())
     steps.append("digest")
 
+    from agent_reach.daily_run.watchlist_candidates import update_candidates_from_weekly
+
+    wl_candidates = update_candidates_from_weekly(report, cfg)
+    report.watchlist_candidates_update = wl_candidates
+    steps.append("watchlist_candidates")
+
     from agent_reach.daily_run.skill_improvements_apply import apply_weekly_skill_closure
 
     skill_writeback = apply_weekly_skill_closure(report.to_dict(), cfg)
@@ -606,6 +612,7 @@ def run_weekly(
         "steps": steps,
         "report": report.to_dict(),
         "digest_path": str(digest_path),
+        "watchlist_candidates": wl_candidates,
         "skill_writeback": skill_writeback,
         "markdown": md,
         "feishu": feishu_result,

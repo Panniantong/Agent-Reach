@@ -13,6 +13,7 @@ from agent_reach.daily_run.portfolio_manager import (
 )
 from agent_reach.daily_run.symbols import build_enriched_symbols, copy_portfolio
 from agent_reach.daily_run.snapshot_builder import _normalize_code
+from agent_reach.daily_run.watchlist_candidates import effective_watchlist_candidates
 
 WatchlistPhase = Literal["morning", "close"]
 
@@ -445,7 +446,7 @@ def _add_candidates(
     hot_titles: Optional[list[str]] = None,
 ) -> None:
     titles = hot_titles if hot_titles is not None else _hot_titles_for_adjust(snapshot, pf, settings)
-    candidates = list(watchlist_settings(settings).get("candidates") or [])
+    candidates = effective_watchlist_candidates(settings)
     if prefer_hot:
         hot_cands = [
             c
@@ -476,9 +477,9 @@ def _add_candidates(
             continue
         name = str(cand.get("name") or code)
         pf.setdefault("watchlist", []).append({"code": code, "name": name})
-        hit_reason = reason
+        hit_reason = str(cand.get("reason") or reason)
         if prefer_hot and _matches_hot_topics(_candidate_keywords(cand), titles):
-            hit_reason = "市场热点匹配，收盘纳入观察池"
+            hit_reason = str(cand.get("reason") or "市场热点匹配，收盘纳入观察池")
         changes.append(WatchlistChange("add", code, name, hit_reason))
 
 

@@ -36,6 +36,7 @@ class WeeklyReport:
     skill_learning: list[dict[str, Any]] = field(default_factory=list)
     skill_research: list[dict[str, Any]] = field(default_factory=list)
     process_improvements: list[dict[str, Any]] = field(default_factory=list)
+    watchlist_candidates_update: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     cash: Optional[float] = None
     cash_ratio: Optional[float] = None
@@ -61,6 +62,7 @@ class WeeklyReport:
             "skill_learning": self.skill_learning,
             "skill_research": self.skill_research,
             "process_improvements": self.process_improvements,
+            "watchlist_candidates_update": self.watchlist_candidates_update,
             "notes": self.notes,
             "cash": self.cash,
             "cash_ratio": self.cash_ratio,
@@ -1006,6 +1008,12 @@ def render_weekly_sections(report: WeeklyReport) -> list[WeeklySection]:
     sections.append(WeeklySection("盈亏·持仓", _join_section_lines(portfolio_lines)))
 
     market_lines = _period_header_lines(report, continuation=True) + _render_market_lines(report)
+    wl_update = report.watchlist_candidates_update or {}
+    if wl_update.get("candidates") or wl_update.get("message"):
+        from agent_reach.daily_run.watchlist_candidates import render_weekly_candidates_markdown
+
+        market_lines.append("")
+        market_lines.append(render_weekly_candidates_markdown(wl_update))
     sections.append(WeeklySection("板块·热点", _join_section_lines(market_lines)))
 
     track_body = _render_mss_lines(report) + _render_experience_lines(report)
