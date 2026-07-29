@@ -239,6 +239,18 @@ def run_close(
 
     verify_md = render_verify_markdown(verify)
 
+    from agent_reach.daily_run.close_portfolio_summary import (
+        build_close_portfolio_summary,
+        render_close_portfolio_markdown,
+    )
+
+    portfolio_summary = build_close_portfolio_summary(
+        enriched,
+        baseline,
+        trades=intraday_trades,
+    )
+    portfolio_md = render_close_portfolio_markdown(portfolio_summary)
+
     from agent_reach.daily_run.auditor import run_data_audit
 
     audit = run_data_audit(enriched, cfg)
@@ -253,7 +265,9 @@ def run_close(
         verify_md = audit_block + ("\n\n---\n\n" + verify_md if verify_md else "")
 
     md = "\n\n---\n\n".join(
-        p for p in [team_md, curve_md, research_md, *extra_parts, exp_md, verify_md] if p
+        p
+        for p in [team_md, curve_md, research_md, *extra_parts, exp_md, verify_md, portfolio_md]
+        if p
     )
 
     feishu_result = None
@@ -272,6 +286,7 @@ def run_close(
             research_markdown=research_md or "",
             experience_markdown=exp_md or "",
             verify_markdown=verify_md,
+            portfolio_markdown=portfolio_md,
         )
         feishu_result = push_report_sections(
             sections,
@@ -296,6 +311,8 @@ def run_close(
         "research_markdown": research_md,
         "experience_markdown": exp_md,
         "verify_markdown": verify_md,
+        "portfolio_markdown": portfolio_md,
+        "portfolio_summary": portfolio_summary.to_dict(),
         "research": research_results,
         "experience_path": str(exp_path),
         "feishu": feishu_result,

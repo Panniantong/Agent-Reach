@@ -96,6 +96,8 @@ class TestCloseWorkflow:
         result = run_close(current, baseline, settings=load_settings(), push=False)
         assert "verify" in result
         assert "Markdown" in result["markdown"] or "验证摘要" in result["markdown"]
+        assert "portfolio_markdown" in result
+        assert "当日盈亏" in result["portfolio_markdown"]
 
     def test_save_baseline(self, morning_snapshot, tmp_path):
         path = save_morning_baseline(morning_snapshot, path=tmp_path / "morning.json")

@@ -23,6 +23,7 @@ _CATEGORY_LABELS: dict[str, str] = {
     "research": "Exa 调研",
     "experience": "经验沉淀",
     "verify": "验证结论",
+    "daily_portfolio": "盈亏·持仓",
     "weekly_portfolio": "盈亏·持仓",
     "weekly_market": "板块·热点",
     "weekly_track": "MSS·经验",
@@ -114,6 +115,7 @@ def render_close_sections(
     research_markdown: str = "",
     experience_markdown: str = "",
     verify_markdown: str = "",
+    portfolio_markdown: str = "",
 ) -> list[ReportSection]:
     label = verify_name or "大盘"
     sections: list[ReportSection] = []
@@ -127,6 +129,10 @@ def render_close_sections(
         sections.append(ReportSection(category="experience", title="", body=experience_markdown.strip()))
     if verify_markdown.strip():
         sections.append(ReportSection(category="verify", title="", body=verify_markdown.strip()))
+    if portfolio_markdown.strip():
+        sections.append(
+            ReportSection(category="daily_portfolio", title="", body=portfolio_markdown.strip())
+        )
     total = len(sections)
     for i, sec in enumerate(sections, start=1):
         sec.title = section_title(
@@ -366,6 +372,7 @@ def close_sections_from_run(run_result: dict[str, Any], *, verify_name: str) -> 
         research_markdown=run_result.get("research_markdown") or "",
         experience_markdown=run_result.get("experience_markdown") or "",
         verify_markdown=run_result.get("verify_markdown") or "",
+        portfolio_markdown=run_result.get("portfolio_markdown") or "",
     )
 
 
