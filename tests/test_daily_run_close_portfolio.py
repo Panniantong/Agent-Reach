@@ -5,7 +5,7 @@ from agent_reach.daily_run.close_portfolio_summary import (
     build_close_portfolio_summary,
     render_close_portfolio_markdown,
 )
-from agent_reach.daily_run.report_push import render_close_sections
+from agent_reach.daily_run.report_push import merge_sections_by_category, render_close_sections
 
 
 def _morning_baseline():
@@ -60,19 +60,21 @@ class TestClosePortfolioSummary:
         assert summary.end_total == 103673.0
         assert summary.daily_pnl == 3673.0
         assert summary.daily_pnl_pct == 3.67
-        assert len(summary.holdings) == 3
+        assert summary.holdings_count == 3
         assert summary.cash == 48673.0
+        assert summary.winners >= 1
+        assert summary.reason_lines
 
-    def test_render_markdown_sections(self):
+    def test_render_markdown_is_portfolio_level(self):
         summary = build_close_portfolio_summary(_close_snapshot(), _morning_baseline())
         md = render_close_portfolio_markdown(summary)
         assert "## 💰 当日盈亏" in md
-        assert "组合净值变动" in md
-        assert "## 📊 持仓分布" in md
-        assert "权重" in md
-        assert "## 💵 现金" in md
-        assert "## 📝 盈亏归因" in md
-        assert "澜起科技" in md
+        assert "组合" in md or "¥" in md
+        assert "## 📊 持仓与现金" in md
+        assert "持仓 **3** 只" in md
+        assert "## 📝 原因摘要" in md
+        assert "澜起科技" not in md
+        assert "688008" not in md
 
     def test_render_close_sections_includes_portfolio_last(self):
         md = render_close_portfolio_markdown(
@@ -84,11 +86,38 @@ class TestClosePortfolioSummary:
             portfolio_markdown=md,
         )
         assert sections[-1].category == "daily_portfolio"
-        assert "当日盈亏" in sections[-1].body
+        assert "原因摘要" in sections[-1].body
+
+    def test_merge_skips_per_symbol_portfolio(self):
+        from agent_reach.daily_run.report_push import ReportSection
+
+        md_a = render_close_portfolio_markdown(
+            build_close_portfolio_summary(_close_snapshot(), _morning_baseline())
+        )
+        groups = [
+            (
+                "澜起科技",
+                [
+                    ReportSection(category="verify", title="", body="验证A"),
+                    ReportSection(category="daily_portfolio", title="", body=md_a),
+                ],
+            ),
+            (
+                "水晶光电",
+                [
+                    ReportSection(category="verify", title="", body="验证B"),
+                    ReportSection(category="daily_portfolio", title="", body="不应出现"),
+                ],
+            ),
+        ]
+        merged = merge_sections_by_category(groups, report_kind="close")
+        cats = [s.category for s in merged]
+        assert "daily_portfolio" not in cats
+        assert any("验证A" in s.body for s in merged)
 
     def test_missing_baseline_note(self):
         baseline = {"code": "688008", "portfolio": {}}
         summary = build_close_portfolio_summary(_close_snapshot(), baseline)
         assert summary.daily_pnl is None
         md = render_close_portfolio_markdown(summary)
-        assert "缺少早盘净值基线" in md or "暂无完整净值" in md
+        assert "缺少早盘净值基线" in md or "收盘净值" in md

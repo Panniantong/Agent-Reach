@@ -264,8 +264,10 @@ def run_close_for_symbols(
 ) -> dict[str, Any]:
     from agent_reach.daily_run.intraday import load_state
     from agent_reach.daily_run.report_push import (
+        ReportSection,
         close_sections_from_run,
         merge_sections_by_category,
+        merged_category_title,
         push_report_sections,
         split_push_enabled,
     )
@@ -280,6 +282,7 @@ def run_close_for_symbols(
     section_groups: list[tuple[str, list]] = []
     expert_snapshots: list[tuple[str, str, dict[str, Any]]] = []
     errors: list[str] = []
+    shared_state = load_state()
 
     for code in targets:
         name = symbol_display_name(pf, code)
@@ -302,6 +305,8 @@ def run_close_for_symbols(
                 settings=cfg,
                 push=push and not merge_push,
                 config=config,
+                intraday_trades=state.trades,
+                portfolio_summary=not merge_push,
             )
             if merge_push:
                 section_groups.append(
@@ -334,6 +339,36 @@ def run_close_for_symbols(
             expert_snapshots=expert_snapshots or None,
             decision_entries=None,
         )
+        from agent_reach.daily_run.close_portfolio_summary import (
+            build_close_portfolio_summary,
+            render_close_portfolio_markdown,
+        )
+
+        try:
+            morning_bl = load_morning_baseline()
+        except FileNotFoundError:
+            morning_bl = load_morning_baseline(code=targets[0])
+        primary_snap = symbol_results[0]["result"]["snapshot"]
+        portfolio_md = render_close_portfolio_markdown(
+            build_close_portfolio_summary(
+                primary_snap,
+                morning_bl,
+                trades=shared_state.trades,
+            )
+        )
+        if portfolio_md.strip():
+            merged.append(
+                ReportSection(category="daily_portfolio", title="", body=portfolio_md.strip())
+            )
+            total = len(merged)
+            for i, sec in enumerate(merged, start=1):
+                sec.title = merged_category_title(
+                    report_kind="close",
+                    category=sec.category,
+                    index=i,
+                    total=total,
+                    symbol_count=1 if sec.category == "daily_portfolio" else len(targets),
+                )
         feishu_result = push_report_sections(
             merged,
             settings=cfg,

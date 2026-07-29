@@ -158,6 +158,7 @@ def run_close(
     watchlist_adjust: Optional[dict[str, Any]] = None,
     code_review: Optional[dict[str, Any]] = None,
     verify_dict: Optional[dict[str, Any]] = None,
+    portfolio_summary: bool = True,
 ) -> dict[str, Any]:
     """Close workflow: Team-First experts → verify baseline vs current → Feishu push."""
     cfg = settings or load_settings()
@@ -239,17 +240,20 @@ def run_close(
 
     verify_md = render_verify_markdown(verify)
 
-    from agent_reach.daily_run.close_portfolio_summary import (
-        build_close_portfolio_summary,
-        render_close_portfolio_markdown,
-    )
+    portfolio_md = ""
+    portfolio_summary_obj = None
+    if portfolio_summary:
+        from agent_reach.daily_run.close_portfolio_summary import (
+            build_close_portfolio_summary,
+            render_close_portfolio_markdown,
+        )
 
-    portfolio_summary = build_close_portfolio_summary(
-        enriched,
-        baseline,
-        trades=intraday_trades,
-    )
-    portfolio_md = render_close_portfolio_markdown(portfolio_summary)
+        portfolio_summary_obj = build_close_portfolio_summary(
+            enriched,
+            baseline,
+            trades=intraday_trades,
+        )
+        portfolio_md = render_close_portfolio_markdown(portfolio_summary_obj)
 
     from agent_reach.daily_run.auditor import run_data_audit
 
@@ -312,7 +316,7 @@ def run_close(
         "experience_markdown": exp_md,
         "verify_markdown": verify_md,
         "portfolio_markdown": portfolio_md,
-        "portfolio_summary": portfolio_summary.to_dict(),
+        "portfolio_summary": portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
         "research": research_results,
         "experience_path": str(exp_path),
         "feishu": feishu_result,

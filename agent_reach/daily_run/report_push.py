@@ -315,6 +315,8 @@ def merge_sections_by_category(
                 continue
             if sec.category == "experts":
                 continue
+            if sec.category == "daily_portfolio":
+                continue
             if sec.category not in buckets:
                 order.append(sec.category)
                 buckets[sec.category] = []
