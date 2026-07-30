@@ -136,6 +136,28 @@ def _watchlist_changes_from_adjust(watchlist_adjust: Optional[dict[str, Any]]) -
     return list(watchlist_adjust.get("changes") or [])
 
 
+def _macro_avoid_watchlist_trim(wl_changes: list[dict[str, Any]]) -> bool:
+    return any(
+        c.get("action") == "remove" and "宏观回避" in str(c.get("reason") or "")
+        for c in wl_changes
+    )
+
+
+def _watchlist_shortfall_line(
+    watchlist_count: int,
+    wl_min: int,
+    wl_changes: list[dict[str, Any]],
+) -> str:
+    if watchlist_count >= wl_min:
+        return ""
+    if _macro_avoid_watchlist_trim(wl_changes):
+        return (
+            f"- ⚠️ 验证结论 **回避**，观察池收缩至 {watchlist_count} 只"
+            f"（低于下限 {wl_min}；候选池仍有候补，宏观风控优先保留 Top {watchlist_count}）"
+        )
+    return f"- ⚠️ 观察池不足 {wl_min} 只（当前 {watchlist_count}），候选池已无可补标的"
+
+
 def _format_ledger_trade_lines(trades: list[dict[str, Any]]) -> list[str]:
     lines: list[str] = []
     for entry in trades:
@@ -282,6 +304,14 @@ def _build_reason_lines(data: dict[str, Any]) -> list[str]:
         lines.append(f"持仓变化：**{position_change}**。")
     else:
         lines.append("今日**无 ledger 成交**，以持仓波动为主。")
+
+    wl_changes = data.get("watchlist_changes") or []
+    wl_min = int(data.get("watchlist_min_size") or 5)
+    watchlist_count = int(data.get("watchlist_count") or 0)
+    if watchlist_count < wl_min and _macro_avoid_watchlist_trim(wl_changes):
+        lines.append(
+            f"验证结论 **回避**，观察池收缩至 {watchlist_count} 只（低于下限 {wl_min}）。"
+        )
 
     if cash_ratio is not None:
         cr = float(cash_ratio)
@@ -484,8 +514,9 @@ def render_close_portfolio_markdown(summary: ClosePortfolioSummary | dict[str, A
 
     lines.append("")
     lines.append(f"## 👀 观察池（{len(watchlist)} 只，下限 {wl_min}）")
-    if len(watchlist) < wl_min:
-        lines.append(f"- ⚠️ 观察池不足 {wl_min} 只（当前 {len(watchlist)}），候选池已无可补标的")
+    shortfall = _watchlist_shortfall_line(len(watchlist), wl_min, wl_changes)
+    if shortfall:
+        lines.append(shortfall)
     elif fill_adds:
         lines.append(f"- 本次补足 **{len(fill_adds)}** 只至下限 {wl_min}")
 

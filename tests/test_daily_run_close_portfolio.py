@@ -95,6 +95,40 @@ class TestClosePortfolioSummary:
         assert "京东方A" in md
         assert "## 📝 原因摘要" in md
 
+    def test_render_macro_avoid_watchlist_shortfall_message(self):
+        close = dict(_close_snapshot())
+        close["watchlist"] = [
+            {"code": "603986", "name": "兆易创新", "price": 122.0, "change_pct": 1.7},
+            {"code": "002415", "name": "海康威视", "price": 35.0, "change_pct": -1.0},
+            {"code": "601138", "name": "工业富联", "price": 57.0, "change_pct": -0.5},
+        ]
+        summary = build_close_portfolio_summary(
+            close,
+            _morning_baseline(),
+            watchlist_adjust={
+                "applied": True,
+                "changes": [
+                    {
+                        "action": "add",
+                        "code": "601138",
+                        "name": "工业富联",
+                        "reason": "市场热点匹配，收盘纳入观察池",
+                    },
+                    {
+                        "action": "remove",
+                        "code": "300502",
+                        "name": "新易盛",
+                        "reason": "宏观回避，收缩观察池",
+                    },
+                ],
+            },
+        )
+        md = render_close_portfolio_markdown(summary)
+        assert "验证结论 **回避**" in md
+        assert "候选池仍有候补" in md
+        assert "候选池已无可补标的" not in md
+        assert any("验证结论 **回避**" in line for line in summary.reason_lines)
+
     def test_render_close_sections_includes_portfolio_last(self):
         md = render_close_portfolio_markdown(
             build_close_portfolio_summary(_close_snapshot(), _morning_baseline())
