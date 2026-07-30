@@ -518,7 +518,7 @@ def render_close_portfolio_markdown(summary: ClosePortfolioSummary | dict[str, A
     if shortfall:
         lines.append(shortfall)
     elif fill_adds:
-        lines.append(f"- 本次补足 **{len(fill_adds)}** 只至下限 {wl_min}")
+        lines.append(f"- 本次按最新热点刷新，新增 **{len(fill_adds)}** 只观察标的")
 
     if watchlist:
         for w in watchlist:
@@ -527,11 +527,13 @@ def render_close_portfolio_markdown(summary: ClosePortfolioSummary | dict[str, A
             chg_s = ""
             if w.get("change_pct") is not None:
                 chg_s = f" · 今日 {float(w['change_pct']):+.2f}%"
-            reason = add_reasons.get(code, "")
+            sector = w.get("sector")
+            sector_s = f" · **{sector}**" if sector else ""
+            reason = str(w.get("reason") or add_reasons.get(code, "")).strip()
             if reason:
-                lines.append(f"- **{name}** ({code}){chg_s} — {reason}")
+                lines.append(f"- **{name}** ({code}){sector_s}{chg_s} — {reason}")
             else:
-                lines.append(f"- **{name}** ({code}){chg_s}")
+                lines.append(f"- **{name}** ({code}){sector_s}{chg_s}")
     else:
         lines.append("- 观察池为空")
 

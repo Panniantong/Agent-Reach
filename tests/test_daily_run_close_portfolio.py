@@ -91,16 +91,37 @@ class TestClosePortfolioSummary:
         assert "水晶光电" in md
         assert "## 🔄 成交记录" in md
         assert "## 👀 观察池" in md
-        assert "补足观察池下限" in md
+        assert "补足观察池下限" in md or "sector_pool" in md or "热点" in md
         assert "京东方A" in md
         assert "## 📝 原因摘要" in md
 
     def test_render_macro_avoid_watchlist_shortfall_message(self):
         close = dict(_close_snapshot())
         close["watchlist"] = [
-            {"code": "603986", "name": "兆易创新", "price": 122.0, "change_pct": 1.7},
-            {"code": "002415", "name": "海康威视", "price": 35.0, "change_pct": -1.0},
-            {"code": "601138", "name": "工业富联", "price": 57.0, "change_pct": -0.5},
+            {
+                "code": "603986",
+                "name": "兆易创新",
+                "price": 122.0,
+                "change_pct": 1.7,
+                "sector": "存储",
+                "reason": "最新热点匹配 · sector_pool·存储，收盘纳入观察池",
+            },
+            {
+                "code": "002415",
+                "name": "海康威视",
+                "price": 35.0,
+                "change_pct": -1.0,
+                "sector": "安防",
+                "reason": "本周热点板块：安防（板块均涨 +1.0%）",
+            },
+            {
+                "code": "601138",
+                "name": "工业富联",
+                "price": 57.0,
+                "change_pct": -0.5,
+                "sector": "AI算力",
+                "reason": "最新热点匹配 · sector_pool·AI算力，收盘纳入观察池",
+            },
         ]
         summary = build_close_portfolio_summary(
             close,
@@ -127,6 +148,8 @@ class TestClosePortfolioSummary:
         assert "验证结论 **回避**" in md
         assert "候选池仍有候补" in md
         assert "候选池已无可补标的" not in md
+        assert "**存储**" in md or "**AI算力**" in md
+        assert "sector_pool" in md
         assert any("验证结论 **回避**" in line for line in summary.reason_lines)
 
     def test_render_close_sections_includes_portfolio_last(self):

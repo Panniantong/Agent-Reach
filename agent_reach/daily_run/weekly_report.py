@@ -364,6 +364,8 @@ def _watchlist_rows(portfolio: dict[str, Any], enriched: dict[str, dict[str, Any
                 "price": row.get("price"),
                 "change_pct": row.get("change_pct"),
                 "sector": row.get("sector") or row.get("industry"),
+                "reason": row.get("reason"),
+                "source": row.get("source"),
             }
         )
     rows.sort(

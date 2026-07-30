@@ -26,6 +26,7 @@ class WatchlistChange:
     code: str
     name: str
     reason: str
+    sector: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -33,6 +34,7 @@ class WatchlistChange:
             "code": self.code,
             "name": self.name,
             "reason": self.reason,
+            "sector": self.sector,
         }
 
 
@@ -127,8 +129,17 @@ def adjust_watchlist(
             if unique_symbol_count(pf) >= max_total_symbols(settings):
                 break
             name = str(item.get("name") or code)
-            pf.setdefault("watchlist", []).append({"code": code, "name": name})
-            changes.append(WatchlistChange("add", code, name, "盘中卖出，收盘复盘回收入观察池"))
+            pf.setdefault("watchlist", []).append(
+                {
+                    "code": code,
+                    "name": name,
+                    "source": "sold_recycle",
+                    "reason": "盘中卖出，收盘复盘回收入观察池",
+                }
+            )
+            changes.append(
+                WatchlistChange("add", code, name, "盘中卖出，收盘复盘回收入观察池")
+            )
 
     # Remove: already held, missing quote, or weak momentum
     kept: list[dict[str, Any]] = []
@@ -157,7 +168,7 @@ def adjust_watchlist(
     pf["watchlist"] = kept
 
     if phase == "close" and wl_cfg.get("hot_topic_adjust_enabled", True):
-        _apply_close_hot_topic_adjust(
+        _refresh_close_watchlist_from_hot_topics(
             pf,
             snapshot,
             settings,
@@ -248,7 +259,8 @@ def render_watchlist_adjust_markdown(result: WatchlistAdjustResult) -> str:
             lines.append(f"- 重排观察池 — {c.reason}")
             continue
         verb = "纳入" if c.action == "add" else "移出"
-        lines.append(f"- {verb} **{c.name}** ({c.code}) — {c.reason}")
+        sector_s = f" · {c.sector}" if c.sector else ""
+        lines.append(f"- {verb} **{c.name}** ({c.code}){sector_s} — {c.reason}")
     return "\n".join(lines)
 
 
@@ -359,18 +371,95 @@ def _matches_hot_topics(keywords: list[str], hot_titles: list[str]) -> bool:
     return False
 
 
-def _symbol_hot_keywords(row: dict[str, Any]) -> list[str]:
-    name = str(row.get("name") or "").strip()
-    keys: list[str] = []
-    if name:
-        keys.extend([name, name[:4]])
-    code = str(row.get("code") or "").strip()
-    if code:
-        keys.append(code)
-    return keys
+def _sector_for_candidate(cand: dict[str, Any], settings: dict[str, Any]) -> str:
+    from agent_reach.daily_run.sector_classifier import lookup_sector
+
+    code = _normalize_code(str(cand.get("code", "")))
+    name = str(cand.get("name") or code)
+    sector = lookup_sector(code, name, settings=settings)
+    if sector not in ("", "未分类", "综合"):
+        return sector
+
+    pools = watchlist_settings(settings).get("sector_pools") or {}
+    for pool_name, rows in pools.items():
+        if any(_normalize_code(str(row.get("code", ""))) == code for row in rows or []):
+            return str(pool_name)
+    return "综合"
 
 
-def _apply_close_hot_topic_adjust(
+def _selection_reason_for_candidate(
+    cand: dict[str, Any],
+    *,
+    sector: str,
+    hot_titles: list[str],
+    default_reason: str,
+) -> str:
+    if cand.get("reason"):
+        return str(cand["reason"])
+    if _matches_hot_topics(_candidate_keywords(cand), hot_titles):
+        return f"最新热点匹配 · sector_pool·{sector}，收盘纳入观察池"
+    return f"sector_pool·{sector} — {default_reason}"
+
+
+def _watchlist_entry_from_candidate(
+    cand: dict[str, Any],
+    *,
+    settings: dict[str, Any],
+    hot_titles: list[str],
+    default_reason: str,
+) -> dict[str, Any]:
+    code = _normalize_code(str(cand.get("code", "")))
+    name = str(cand.get("name") or code)
+    sector = _sector_for_candidate(cand, settings)
+    reason = _selection_reason_for_candidate(
+        cand,
+        sector=sector,
+        hot_titles=hot_titles,
+        default_reason=default_reason,
+    )
+    return {
+        "code": code,
+        "name": name,
+        "sector": sector,
+        "reason": reason,
+        "source": str(cand.get("source") or "sector_pool"),
+    }
+
+
+def _enrich_watchlist_entry(row: dict[str, Any], settings: dict[str, Any]) -> dict[str, Any]:
+    code = _normalize_code(str(row.get("code", "")))
+    cand = {"code": code, "name": row.get("name"), "keywords": row.get("keywords") or []}
+    sector = str(row.get("sector") or _sector_for_candidate(cand, settings))
+    out = dict(row)
+    out["code"] = code
+    out["sector"] = sector
+    if not out.get("reason"):
+        out["reason"] = f"sector_pool·{sector}"
+    return out
+
+
+def _rank_candidates_for_close_refresh(
+    settings: dict[str, Any],
+    hot_titles: list[str],
+) -> list[dict[str, Any]]:
+    from agent_reach.daily_run.watchlist_candidates import (
+        effective_watchlist_candidates,
+        load_weekly_candidates,
+    )
+
+    candidates = effective_watchlist_candidates(settings)
+    weekly = load_weekly_candidates() or {}
+    sector_order = {s: i for i, s in enumerate(weekly.get("sectors") or [])}
+
+    def sort_key(cand: dict[str, Any]) -> tuple[int, int, str]:
+        sector = _sector_for_candidate(cand, settings)
+        hot_rank = 0 if _matches_hot_topics(_candidate_keywords(cand), hot_titles) else 1
+        return (hot_rank, sector_order.get(sector, 999), _normalize_code(str(cand.get("code", ""))))
+
+    return sorted(candidates, key=sort_key)
+
+
+def _refresh_close_watchlist_from_hot_topics(
     pf: dict[str, Any],
     snapshot: dict[str, Any],
     settings: dict[str, Any],
@@ -380,55 +469,40 @@ def _apply_close_hot_topic_adjust(
     held_codes: set[str],
     base_mss: float,
 ) -> None:
-    wl_cfg = watchlist_settings(settings)
+    """Rebuild watchlist each close from latest hot topics + sector_pools."""
     hot_titles = _hot_titles_for_adjust(snapshot, pf, settings)
-    remove_floor = float(wl_cfg.get("hot_topic_remove_change_pct", -2.0))
-
-    kept: list[dict[str, Any]] = []
+    preserved: list[dict[str, Any]] = []
     for w in pf.get("watchlist") or []:
         code = _normalize_code(str(w.get("code", "")))
-        if code in held_codes:
+        if not code or code in held_codes:
             continue
-        row = {**w, **enriched.get(code, {})}
-        if _matches_hot_topics(_symbol_hot_keywords(row), hot_titles):
-            kept.append(dict(w))
+        if w.get("source") == "sold_recycle":
+            preserved.append(_enrich_watchlist_entry(w, settings))
             continue
-        chg = row.get("change_pct")
-        score = _symbol_score(row, base_mss=base_mss)
-        if chg is not None and float(chg) < remove_floor:
-            changes.append(
-                WatchlistChange(
-                    "remove",
-                    code,
-                    str(w.get("name", code)),
-                    f"无热点关联且跌幅 {float(chg):.1f}%",
-                )
+        changes.append(
+            WatchlistChange(
+                "remove",
+                code,
+                str(w.get("name", code)),
+                "收盘按最新热点刷新，移出观察池",
+                sector=str(w.get("sector") or ""),
             )
-            continue
-        if score < base_mss - 8:
-            changes.append(
-                WatchlistChange(
-                    "remove",
-                    code,
-                    str(w.get("name", code)),
-                    "无热点关联且相对大盘走弱",
-                )
-            )
-            continue
-        kept.append(dict(w))
-    pf["watchlist"] = kept
+        )
 
+    pf["watchlist"] = preserved
+    ranked = _rank_candidates_for_close_refresh(settings, hot_titles)
     _add_candidates(
         pf,
         settings,
         held_codes,
         changes,
-        reason="热点匹配，收盘纳入观察池",
+        reason="收盘热点刷新",
         prefer_hot=True,
         snapshot=snapshot,
         enriched=enriched,
         base_mss=base_mss,
         hot_titles=hot_titles,
+        candidate_order=ranked,
     )
 
 
@@ -444,26 +518,30 @@ def _add_candidates(
     enriched: dict[str, dict[str, Any]],
     base_mss: float,
     hot_titles: Optional[list[str]] = None,
+    candidate_order: Optional[list[dict[str, Any]]] = None,
 ) -> None:
     titles = hot_titles if hot_titles is not None else _hot_titles_for_adjust(snapshot, pf, settings)
-    candidates = effective_watchlist_candidates(settings)
-    if prefer_hot:
-        hot_cands = [
-            c
-            for c in candidates
-            if _matches_hot_topics(_candidate_keywords(c), titles)
-        ]
-        other_cands = [c for c in candidates if c not in hot_cands]
-        candidates = hot_cands + other_cands
+    if candidate_order is not None:
+        candidates = list(candidate_order)
     else:
-        candidates = sorted(
-            candidates,
-            key=lambda c: _symbol_score(
-                enriched.get(_normalize_code(str(c.get("code", ""))), {}),
-                base_mss=base_mss,
-            ),
-            reverse=True,
-        )
+        candidates = effective_watchlist_candidates(settings)
+        if prefer_hot:
+            hot_cands = [
+                c
+                for c in candidates
+                if _matches_hot_topics(_candidate_keywords(c), titles)
+            ]
+            other_cands = [c for c in candidates if c not in hot_cands]
+            candidates = hot_cands + other_cands
+        else:
+            candidates = sorted(
+                candidates,
+                key=lambda c: _symbol_score(
+                    enriched.get(_normalize_code(str(c.get("code", ""))), {}),
+                    base_mss=base_mss,
+                ),
+                reverse=True,
+            )
 
     for cand in candidates:
         code = _normalize_code(str(cand.get("code", "")))
@@ -475,12 +553,22 @@ def _add_candidates(
             break
         if prefer_hot and not _matches_hot_topics(_candidate_keywords(cand), titles):
             continue
-        name = str(cand.get("name") or code)
-        pf.setdefault("watchlist", []).append({"code": code, "name": name})
-        hit_reason = str(cand.get("reason") or reason)
-        if prefer_hot and _matches_hot_topics(_candidate_keywords(cand), titles):
-            hit_reason = str(cand.get("reason") or "市场热点匹配，收盘纳入观察池")
-        changes.append(WatchlistChange("add", code, name, hit_reason))
+        entry = _watchlist_entry_from_candidate(
+            cand,
+            settings=settings,
+            hot_titles=titles,
+            default_reason=reason,
+        )
+        pf.setdefault("watchlist", []).append(entry)
+        changes.append(
+            WatchlistChange(
+                "add",
+                code,
+                entry["name"],
+                entry["reason"],
+                sector=entry["sector"],
+            )
+        )
 
 
 def _fill_watchlist_to_min(

@@ -219,13 +219,16 @@ class TestWatchlistPolicy:
         result = adjust_watchlist(portfolio, snapshot, settings, "close")
         assert len(result.portfolio["watchlist"]) >= 5
 
-    def test_close_hot_topic_add_and_remove(self, portfolio, snapshot, settings):
+    def test_close_hot_topic_refresh_adds_sector_pool_match(self, portfolio, snapshot, settings):
         settings["watchlist"]["min_size"] = 0
         settings["watchlist"]["hot_topic_adjust_enabled"] = True
         settings["watchlist"]["hot_topic_fetch_if_missing"] = False
         settings["watchlist"]["candidates"] = [
             {"code": "000725", "name": "京东方A", "keywords": ["京东方", "面板"]},
         ]
+        settings["watchlist"]["sector_pools"] = {
+            "面板": [{"code": "000725", "name": "京东方A", "keywords": ["京东方", "面板"]}],
+        }
         snapshot["hot_topics_matched"] = [{"title": "面板产业链涨价，京东方受益"}]
         snapshot["watchlist"] = [
             {"code": "603986", "name": "兆易创新", "change_pct": -4.0},
@@ -238,6 +241,9 @@ class TestWatchlistPolicy:
         result = adjust_watchlist(portfolio, snapshot, settings, "close")
         codes = {w["code"] for w in result.portfolio["watchlist"]}
         assert "000725" in codes
-        assert "603986" not in codes or any(
-            c.action == "remove" and c.code == "603986" for c in result.changes
-        )
+        entry = next(w for w in result.portfolio["watchlist"] if w["code"] == "000725")
+        assert entry.get("sector") == "面板"
+        assert entry.get("reason")
+        assert "sector_pool" in entry["reason"] or "热点" in entry["reason"]
+        assert any(c.action == "remove" and "刷新" in c.reason for c in result.changes)
+        assert "603986" not in codes
