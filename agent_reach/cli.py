@@ -9,10 +9,10 @@ Usage:
     agent-reach setup
 """
 
-import sys
 import argparse
 import json
 import os
+import sys
 import time
 
 from agent_reach import __version__
@@ -141,6 +141,52 @@ def main():
     # ── watch ──
     sub.add_parser("watch", help="Quick health check + update check (for scheduled tasks)")
 
+    # ── career ──
+    p_career = sub.add_parser(
+        "career",
+        help="Search LinkedIn and Indeed jobs, print JSON to stdout",
+    )
+    p_career.add_argument(
+        "--query",
+        action="append",
+        default=None,
+        help="Job title query; repeat for multi-term runs (max 20)",
+    )
+    p_career.add_argument(
+        "--source",
+        default="linkedin,indeed",
+        help="Comma-separated source list: linkedin,indeed (default: linkedin,indeed)",
+    )
+    p_career.add_argument(
+        "--location-filter",
+        default="any_denmark",
+        choices=list(__import__("agent_reach.career", fromlist=["LOCATION_FILTERS"]).LOCATION_FILTERS),
+        help="Geographic scope applied to results",
+    )
+    p_career.add_argument(
+        "--hours-old",
+        type=int,
+        default=168,
+        help="Maximum posting age in hours (default: 168 = 7 days)",
+    )
+    p_career.add_argument(
+        "--results-wanted",
+        type=int,
+        default=10,
+        help="Per-source result cap (1-25, default: 10)",
+    )
+    p_career.add_argument(
+        "--term-limit",
+        type=int,
+        default=3,
+        help="Maximum number of queries per run (1-20, default: 3)",
+    )
+    p_career.add_argument(
+        "--json-out",
+        default=None,
+        help="Write the report JSON to this file in addition to stdout",
+    )
+
     # ── version ──
     sub.add_parser("version", help="Show version")
 
@@ -181,7 +227,9 @@ def main():
         print(f"Agent Reach v{__version__}")
         sys.exit(0)
 
-    if args.command == "doctor":
+    if args.command == "career":
+        _cmd_career(args)
+    elif args.command == "doctor":
         _cmd_doctor(args)
     elif args.command == "check-update":
         _cmd_check_update()
@@ -277,9 +325,9 @@ def _cmd_install(args):
         env = _detect_environment()
 
     if env == "server":
-        print(f"Environment: Server/VPS (auto-detected)")
+        print("Environment: Server/VPS (auto-detected)")
     else:
-        print(f"Environment: Local computer (auto-detected)")
+        print("Environment: Local computer (auto-detected)")
 
     server_skipped_opencli_channels = set()
     if env == "server" and requested_channels:
@@ -295,7 +343,7 @@ def _cmd_install(args):
         else:
             config.set("proxy", args.proxy)
             config.set("bilibili_proxy", args.proxy)  # legacy key
-            print(f"✅ 代理已保存（Agent 访问受限网络时使用）")
+            print("✅ 代理已保存（Agent 访问受限网络时使用）")
 
     # ── Install core system dependencies (lightweight, always) ──
     print()
@@ -412,9 +460,9 @@ def _cmd_install(args):
 
 def _install_skill(force: bool = True):
     """Install Agent Reach as an agent skill (OpenClaw / Claude Code / .agents)."""
+    import importlib.resources
     import os
     import shutil
-    import importlib.resources
 
     def _is_english_locale(value: str) -> bool:
         normalized = value.strip().lower()
@@ -589,9 +637,9 @@ def _cmd_format(args):
 
 def _install_system_deps():
     """Install system-level dependencies: gh CLI, Node.js (for mcporter)."""
+    import platform
     import shutil
     import subprocess
-    import platform
     import tempfile
 
     print("Checking system dependencies...")
@@ -776,6 +824,7 @@ def _install_system_deps():
 def _install_xiaoyuzhou_deps():
     """Install Xiaoyuzhou podcast transcription script."""
     import shutil
+
     from agent_reach.config import Config
 
     config = Config()
@@ -1311,15 +1360,15 @@ def _cmd_configure(args):
 
     elif args.key == "github-token":
         config.set("github_token", value)
-        print(f"✅ GitHub token configured!")
+        print("✅ GitHub token configured!")
 
     elif args.key == "groq-key":
         config.set("groq_api_key", value)
-        print(f"✅ Groq key configured!")
+        print("✅ Groq key configured!")
 
     elif args.key == "openai-key":
         config.set("openai_api_key", value)
-        print(f"✅ OpenAI key configured!")
+        print("✅ OpenAI key configured!")
 
 
 def _cmd_transcribe(args):
@@ -1738,6 +1787,73 @@ def _cmd_uninstall(args):
     print("  npm uninstall -g undici")
 
 
+def _cmd_career(args):
+    """Run the cross-source career collector and emit JSON."""
+
+    from agent_reach.career import (
+        SUPPORTED_SOURCES,
+        CareerOptions,
+        collect_career_jobs,
+        format_career_json,
+    )
+
+    raw_sources = {
+        source.strip().lower()
+        for source in args.source.split(",")
+        if source.strip()
+    }
+    unsupported = raw_sources - SUPPORTED_SOURCES
+    if unsupported:
+        raise SystemExit(
+            "Unsupported sources: " + ", ".join(sorted(unsupported))
+        )
+    if not 1 <= args.term_limit <= 20:
+        raise SystemExit("--term-limit must be between 1 and 20")
+    if not 1 <= args.results_wanted <= 25:
+        raise SystemExit("--results-wanted must be between 1 and 25")
+
+    queries = [q.strip() for q in (args.query or []) if q.strip()]
+    if not queries:
+        queries = ["IT Operations"]
+    for query in queries:
+        options = CareerOptions(
+            query=query,
+            location_filter=args.location_filter,
+            hours_old=args.hours_old,
+            results_wanted=args.results_wanted,
+            term_limit=args.term_limit,
+        )
+        collected, errors = collect_career_jobs(
+            options,
+            sources=raw_sources,
+            return_errors=True,
+        )
+        collected = list(collected)
+        report = format_career_json(
+            collected=collected,
+            options=options,
+            now_iso=_career_now_iso(),
+            mode="dry_run",
+            errors=errors,
+        )
+        text = json.dumps(report, ensure_ascii=False, indent=2)
+        print(text)
+        if args.json_out:
+            from pathlib import Path
+
+            from agent_reach.utils.paths import atomic_write_private_text
+
+            output_path = Path(args.json_out)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_private_text(output_path, text + "\n")
+
+
+def _career_now_iso():
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).isoformat()
+
+
 def _cmd_doctor(args=None):
     from agent_reach.config import Config
     from agent_reach.doctor import check_all, format_report
@@ -1826,7 +1942,7 @@ def _cmd_setup():
     print("  获取: https://github.com/settings/tokens (无需任何权限)")
     current = config.get("github_token")
     if current:
-        print(f"  当前状态: ✅ 已配置")
+        print("  当前状态: ✅ 已配置")
     else:
         key = input("  GITHUB_TOKEN (回车跳过): ").strip()
         if key:
@@ -1847,7 +1963,7 @@ def _cmd_setup():
     print("  免费额度，注册: https://console.groq.com")
     current = config.get("groq_api_key")
     if current:
-        print(f"  当前状态: ✅ 已配置")
+        print("  当前状态: ✅ 已配置")
     else:
         key = input("  GROQ_API_KEY (回车跳过): ").strip()
         if key:
@@ -2014,7 +2130,7 @@ def _cmd_check_update():
             print()
             print(_UPDATE_INSTRUCTIONS)
             return "update_available"
-        print(f"✅ 已是最新版本")
+        print("✅ 已是最新版本")
         return "up_to_date"
 
     release_err = _classify_github_response_error(resp)
@@ -2051,9 +2167,9 @@ def _cmd_watch():
 
     Only outputs problems. If everything is fine, outputs a single line.
     """
+    from agent_reach import __version__
     from agent_reach.config import Config
     from agent_reach.doctor import check_all
-    from agent_reach import __version__
 
     config = Config(read_only=True)
     issues = []
@@ -2092,8 +2208,8 @@ def _cmd_watch():
         print(f"Agent Reach: 全部正常 ({ok}/{total} 渠道可用，v{__version__} 已是最新)")
         return
 
-    print(f"Agent Reach 监控报告")
-    print(f"=" * 40)
+    print("Agent Reach 监控报告")
+    print("=" * 40)
     print(f"版本: v{__version__}  |  渠道: {ok}/{total}")
 
     if issues:
