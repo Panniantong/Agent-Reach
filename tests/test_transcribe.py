@@ -674,3 +674,49 @@ class TestConfigOpenAIWhisper:
         assert not fake_config.is_configured("openai_whisper")
         fake_config.set("openai_api_key", "sk-test")
         assert fake_config.is_configured("openai_whisper")
+
+
+# --- Subprocess output decoding ---------------------------------------- #
+
+
+class TestSubprocessDecoding:
+    """yt-dlp and ffmpeg emit UTF-8 regardless of the platform locale.
+
+    Without an explicit encoding, text=True decodes with the locale codec, which
+    is gbk on a Chinese Windows system. Decoding fails inside the reader thread,
+    so subprocess.run returns with stdout/stderr set to None and the caller hits
+    AttributeError on .strip() instead of the intended TranscribeError.
+    """
+
+    CJK_BYTES = "中文标题".encode("utf-8")
+
+    def _decoding_run(self, returncode: int):
+        """subprocess.run that decodes CJK output the way the real call does."""
+
+        def fake_run(cmd, **kwargs):
+            encoding = kwargs.get("encoding") or "gbk"
+            errors = kwargs.get("errors") or "strict"
+            text = self.CJK_BYTES.decode(encoding, errors)
+            return subprocess.CompletedProcess(cmd, returncode, text, text)
+
+        return fake_run
+
+    def test_run_reports_a_failure_with_cjk_output(self, monkeypatch):
+        monkeypatch.setattr(tr.subprocess, "run", self._decoding_run(1))
+        with pytest.raises(tr.TranscribeError) as exc:
+            tr._run(["yt-dlp", "https://example.com/v"], timeout=5)
+        assert "yt-dlp" in str(exc.value)
+
+    def test_run_succeeds_with_cjk_output(self, monkeypatch):
+        monkeypatch.setattr(tr.subprocess, "run", self._decoding_run(0))
+        tr._run(["yt-dlp", "https://example.com/v"], timeout=5)
+
+    def test_probe_duration_reports_a_failure_with_cjk_output(self, monkeypatch, tmp_path):
+        # _require raises MissingDependency, a TranscribeError subclass, when
+        # ffprobe is absent. Without stubbing it the test passes on a machine
+        # that has no ffprobe without ever reaching subprocess.run.
+        monkeypatch.setattr(tr, "_require", lambda _binary: None)
+        monkeypatch.setattr(tr.subprocess, "run", self._decoding_run(1))
+        with pytest.raises(tr.TranscribeError) as exc:
+            tr._probe_audio_duration(tmp_path / "a.m4a")
+        assert "duration" in str(exc.value)
