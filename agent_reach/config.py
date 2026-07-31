@@ -18,6 +18,7 @@ from agent_reach.utils.paths import (
     ensure_no_symlink_path,
     make_private_dir,
     read_small_text_no_follow,
+    user_home,
 )
 
 _MAX_CONFIG_BYTES = 1024 * 1024
@@ -98,7 +99,7 @@ def _atomic_write_yaml(target: Path, data: dict) -> None:
 class Config:
     """Manages Agent Reach configuration."""
 
-    CONFIG_DIR = Path.home() / ".agent-reach"
+    CONFIG_DIR = user_home() / ".agent-reach"
     CONFIG_FILE = CONFIG_DIR / "config.yaml"
 
     # Feature → required config keys

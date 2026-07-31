@@ -12,11 +12,11 @@ logged-in session: OpenCLI reuses the browser's, rdt-cli imports cookies.
 import json
 import shutil
 import time
-from pathlib import Path
 
 from agent_reach.utils.paths import (
     PrivatePathError,
     read_small_text_no_follow,
+    user_home,
 )
 
 from .base import Channel
@@ -92,7 +92,7 @@ class RedditChannel(Channel):
         if not shutil.which("rdt"):
             return None
 
-        credential_path = Path.home() / ".config" / "rdt-cli" / "credential.json"
+        credential_path = user_home() / ".config" / "rdt-cli" / "credential.json"
         try:
             payload = read_small_text_no_follow(
                 credential_path,

@@ -14,11 +14,11 @@ import shutil
 import time
 import urllib.error
 import urllib.request
-from pathlib import Path
 
 from agent_reach.utils.paths import (
     PrivatePathError,
     read_small_text_no_follow,
+    user_home,
 )
 
 from .base import Channel
@@ -256,7 +256,7 @@ class XiaoHongShuChannel(Channel):
         """Inspect saved xhs-cli cookies without invoking browser extraction."""
         if not shutil.which("xhs"):
             return None
-        cookie_path = Path.home() / ".xiaohongshu-cli" / "cookies.json"
+        cookie_path = user_home() / ".xiaohongshu-cli" / "cookies.json"
         try:
             payload = read_small_text_no_follow(
                 cookie_path,

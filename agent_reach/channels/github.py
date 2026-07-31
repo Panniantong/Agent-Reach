@@ -12,6 +12,7 @@ from agent_reach.probe import probe_command
 from agent_reach.utils.paths import (
     PrivatePathError,
     read_small_text_no_follow,
+    user_home,
 )
 
 from .base import Channel
@@ -45,7 +46,7 @@ def _gh_hosts_path() -> Path:
         if app_data:
             return Path(app_data) / "GitHub CLI" / "hosts.yml"
 
-    return Path.home() / ".config" / "gh" / "hosts.yml"
+    return user_home() / ".config" / "gh" / "hosts.yml"
 
 
 def _saved_github_host_configured() -> bool:

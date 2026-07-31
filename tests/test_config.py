@@ -4,6 +4,7 @@
 import pytest
 
 from agent_reach.config import Config, ConfigReadOnlyError, ConfigSecurityError
+from agent_reach.utils import paths
 
 
 @pytest.fixture
@@ -144,6 +145,34 @@ class TestConfig:
             assert not (mode & stat.S_IXGRP), "group execute should not be set"
             assert not (mode & stat.S_IROTH), "other read should not be set"
             assert not (mode & stat.S_IXOTH), "other execute should not be set"
+
+    def test_config_dir_under_symlinked_home_initializes_and_saves(
+        self, tmp_path, monkeypatch
+    ):
+        """Regression: a symlinked ``$HOME`` used to abort every command with
+        ConfigSecurityError. The default CONFIG_DIR resolves the home prefix,
+        so Config now initializes and persists there normally."""
+        real_home = tmp_path / "real-home"
+        real_home.mkdir(mode=0o700)
+        linked_home = tmp_path / "linked-home"
+        try:
+            linked_home.symlink_to(real_home, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlinks not supported on this platform")
+
+        monkeypatch.setattr(
+            paths.Path, "home", classmethod(lambda cls: linked_home)
+        )
+        from agent_reach.utils.paths import user_home
+
+        config_file = user_home() / ".agent-reach" / "config.yaml"
+        assert not config_file.is_relative_to(linked_home)
+
+        config = Config(config_path=config_file)
+        config.set("key", "value")
+
+        assert config.get("key") == "value"
+        assert config_file.is_relative_to(real_home)
 
     def test_load_refuses_symlink_config_path(self, tmp_path):
         victim = tmp_path / "victim.yaml"

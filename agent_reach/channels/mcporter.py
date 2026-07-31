@@ -10,6 +10,7 @@ from pathlib import Path
 from agent_reach.utils.paths import (
     PrivatePathError,
     read_small_text_no_follow,
+    user_home,
 )
 
 _MAX_CONFIG_BYTES = 1024 * 1024
@@ -94,7 +95,7 @@ def _select_config_layers(
         return [(Path(os.path.abspath(os.fspath(expanded))), "explicit")]
 
     layers = []
-    home_base = Path.home() / ".mcporter"
+    home_base = user_home() / ".mcporter"
     for name in ("mcporter.json", "mcporter.jsonc"):
         candidate = home_base / name
         if os.path.lexists(candidate):

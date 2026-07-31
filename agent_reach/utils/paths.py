@@ -30,6 +30,26 @@ def ensure_no_symlink_path(path: str | Path, label: str = "路径") -> Path:
     return target
 
 
+def user_home() -> Path:
+    """Return the home directory with any symlinked prefix resolved.
+
+    ``Path.home()`` returns ``$HOME`` verbatim. When ``$HOME`` itself is a
+    symlink — a relocated ``/home`` pointing at a larger disk, an NFS-mounted
+    home, or a container bind-mount — every agent-reach-owned path built
+    beneath it (``~/.agent-reach``, ``~/.config/...``) would traverse that link
+    and be rejected by :func:`ensure_no_symlink_path`, even though the link is
+    supplied by the system/administrator rather than an attacker.
+
+    Resolving only the home *prefix* keeps the guard meaningful: the paths
+    agent-reach creates under the returned directory (``.agent-reach``,
+    ``config.yaml``, cookie/credential files) are still checked for symlinks
+    component-by-component, so a link planted *inside* the home directory is
+    still refused. An attacker who could rewrite a root-owned ``$HOME`` symlink
+    already holds higher privileges, so resolving it yields no safety loss.
+    """
+    return Path(os.path.realpath(Path.home()))
+
+
 def make_private_dir(path: str | Path) -> Path:
     """Create a directory restricted to the current user where supported."""
     target = ensure_no_symlink_path(path, "私密目录")
@@ -175,7 +195,7 @@ def get_ytdlp_config_dir() -> Path:
     """
 
     xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
-    config_home = Path(xdg_config_home) if xdg_config_home else Path.home() / ".config"
+    config_home = Path(xdg_config_home) if xdg_config_home else user_home() / ".config"
     return config_home / "yt-dlp"
 
 
