@@ -68,6 +68,24 @@ metadata:
 | 网页/文章/RSS | web | [references/web.md](references/web.md) |
 | YouTube/B站/播客字幕 | video | [references/video.md](references/video.md) |
 
+## 回退策略：链接阅读
+
+用户发送链接时，按以下优先级处理：
+
+1. **WebSearch 还有额度** → 正常搜索 / 阅读
+2. **WebSearch 已用完** → 默认启动 **Agent 子代理直接读文章**，不报错、不卡住
+
+子代理根据链接类型自动路由到对应读取工具：
+
+| 链接类型 | 读取工具 |
+|---------|---------|
+| 通用网页 | Jina Reader (`curl -s https://r.jina.ai/URL`) |
+| 需要格式 / 图片 | web-reader MCP (`web-reader.webReader`) |
+| GitHub | `gh` CLI / zread MCP |
+| 视频 / 播客 | yt-dlp 字幕（见 [references/video.md](references/video.md)） |
+
+**关键**：Agent 负责选工具 + 读全文 + 返回摘要，主对话不阻塞。
+
 ## 零配置快速命令
 
 ```bash
