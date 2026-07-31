@@ -282,6 +282,28 @@ def _iso_offset_seconds(value, seconds: int):
     return (value + timedelta(seconds=seconds)).isoformat()
 
 
+TITLE_SYNONYMS = {
+    "it": {
+        "cyber",
+        "infosec",
+        "security",
+        "infrastructure",
+        "platform",
+        "workplace",
+        "servicedesk",
+        "service-desk",
+        "helpdesk",
+    },
+    "cyber": {"it", "security", "infosec"},
+    "security": {"it", "cyber", "infosec"},
+    "info": {"it", "data"},
+    "data": {"data-platform", "it", "platform"},
+    "support": {"helpdesk", "service-desk", "servicedesk", "workplace"},
+    "operations": {"ops", "drift", "infrastructure", "platform"},
+    "drift": {"operations", "ops", "it"},
+}
+
+
 def title_matches(title: str, query: str) -> bool:
     tokens = {
         token
@@ -300,7 +322,16 @@ def title_matches(title: str, query: str) -> bool:
         required = len(query_tokens)
     else:
         required = (2 * len(query_tokens) + 2) // 3
-    return overlap >= required
+    if overlap >= required:
+        return True
+    # Try synonym credits for missing query tokens so that domain-specific
+    # aliases (it <-> cyber, info <-> data) still match real jobs without
+    # lowering the threshold for unrelated titles.
+    matched = set(query_tokens & tokens)
+    for qtoken in query_tokens - matched:
+        if any(syn in tokens for syn in TITLE_SYNONYMS.get(qtoken, ())):
+            matched.add(qtoken)
+    return len(matched) >= required
 
 
 def location_passes(

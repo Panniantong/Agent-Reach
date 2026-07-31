@@ -109,6 +109,22 @@ def test_title_matches_rejects_broad_operations_false_positive():
     )
 
 
+def test_title_matches_it_security_includes_cyber_security_synonym():
+    assert title_matches(
+        "Senior Specialist, Enterprise Cyber Security", "IT Security"
+    )
+
+
+def test_title_matches_it_support_includes_internal_support_synonym():
+    # ``IT Support`` -> tokens {it, support}. Title has ``support`` directly
+    # and ``workplace`` matches the synonym entry for ``it``. Synonym credit
+    # covers the missing ``it`` token so the title passes.
+    assert title_matches(
+        "Internal Support Engineer - Workplace Services",
+        "IT Support",
+    )
+
+
 def test_location_passes_cph_accepts_only_copenhagen_postcodes():
     rules = {"include": (r"\bcopenhagen\b", r"\bkøbenhavn\b"), "exclude": ()}
 
