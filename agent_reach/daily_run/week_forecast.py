@@ -11,6 +11,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agent_reach.daily_run.mss_forecast import forecast_mss_range
+from agent_reach.daily_run.kronos_predictor import (
+    blend_symbol_days_with_kronos,
+    is_kronos_enabled,
+    kronos_cfg,
+    predict_symbol_paths,
+)
 from agent_reach.daily_run.snapshot_builder import _normalize_code
 from agent_reach.daily_run.symbols import build_enriched_symbols
 from agent_reach.daily_run.trade_calendar import is_trading_day, today_shanghai
@@ -328,6 +334,7 @@ class WeekForecast:
     news_research: list[dict[str, Any]]
     calibration_used: dict[str, Any]
     notes: list[str] = field(default_factory=list)
+    kronos_paths: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -337,6 +344,7 @@ class WeekForecast:
             "week_end": self.week_end.isoformat(),
             "trading_days": self.trading_days,
             "symbols": self.symbols,
+            "kronos_paths": self.kronos_paths,
             "mss_daily": self.mss_daily,
             "news_events": self.news_events,
             "news_research": self.news_research,
@@ -378,25 +386,58 @@ def generate_week_forecast(
         notes.append("下周无交易日（节假日），预测仅作参考")
 
     symbols: dict[str, Any] = {}
+    kronos_paths: dict[str, Any] = {}
     held_codes: set[str] = set()
+    k_cfg = kronos_cfg(settings)
+    use_kronos = is_kronos_enabled(settings) and bool(trading_days)
+    blend_w = float(k_cfg.get("week_forecast_blend_weight", 0.35))
+
     for h in pf.get("holdings") or []:
         code = _normalize_code(str(h.get("code", "")))
         if not code:
             continue
         held_codes.add(code)
         row = {**dict(h), **enriched.get(code, {})}
-        symbols[code] = _predict_symbol_days(
+        entry = _predict_symbol_days(
             code, row, "holding", trading_days, calibration, settings
         )
+        if use_kronos:
+            kronos = predict_symbol_paths(
+                code,
+                trading_days,
+                base_price=row.get("price"),
+                settings=settings,
+            )
+            if kronos:
+                kronos_paths[code] = kronos
+                entry = blend_symbol_days_with_kronos(entry, kronos, blend_weight=blend_w)
+        symbols[code] = entry
 
     for w in pf.get("watchlist") or []:
         code = _normalize_code(str(w.get("code", "")))
         if not code or code in held_codes:
             continue
         row = {**dict(w), **enriched.get(code, {})}
-        symbols[code] = _predict_symbol_days(
+        entry = _predict_symbol_days(
             code, row, "watchlist", trading_days, calibration, settings
         )
+        if use_kronos:
+            kronos = predict_symbol_paths(
+                code,
+                trading_days,
+                base_price=row.get("price"),
+                settings=settings,
+            )
+            if kronos:
+                kronos_paths[code] = kronos
+                entry = blend_symbol_days_with_kronos(entry, kronos, blend_weight=blend_w)
+        symbols[code] = entry
+
+    if kronos_paths:
+        ok = sum(1 for v in kronos_paths.values() if v.get("available"))
+        notes.append(f"Kronos 路径预测 {ok}/{len(kronos_paths)} 只")
+    elif use_kronos:
+        notes.append("Kronos 已启用但未产出路径（依赖或 repo_path 未就绪）")
 
     mss_daily = _predict_mss_daily(snapshot, trading_days, settings, calibration)
 
@@ -434,6 +475,7 @@ def generate_week_forecast(
         week_end=week_end,
         trading_days=[d.isoformat() for d in trading_days],
         symbols=symbols,
+        kronos_paths=kronos_paths,
         mss_daily=mss_daily,
         news_events=news_events,
         news_research=news_research,
@@ -501,7 +543,21 @@ def _render_symbols_section(data: dict[str, Any]) -> str:
             d_label = dir_cn.get(day.get("direction"), "→震荡")
             conf = day.get("confidence")
             conf_s = f" 置信 {conf:.0%}" if conf is not None else ""
-            lines.append(f"- **{ds} {wd}** {d_label} 预期 {lo:+.1f}% ~ {hi:+.1f}%{conf_s}")
+            k_note = ""
+            if day.get("kronos_change_pct") is not None:
+                k_note = f" · Kronos {float(day['kronos_change_pct']):+.1f}%"
+            lines.append(f"- **{ds} {wd}** {d_label} 预期 {lo:+.1f}% ~ {hi:+.1f}%{conf_s}{k_note}")
+        kronos = sym.get("kronos") or {}
+        if kronos.get("available"):
+            cum = kronos.get("cum_change_pct")
+            band = kronos.get("confidence_band") or []
+            dir_nd = kronos.get("direction_nd", "flat")
+            k_dir = dir_cn.get(dir_nd, "→震荡")
+            band_s = f"[{band[0]:+.1f}%, {band[1]:+.1f}%]" if len(band) == 2 else ""
+            lines.append(
+                f"_Kronos {k_dir} 累计 {cum:+.1f}% {band_s} "
+                f"(sample={kronos.get('sample_count', 1)})_"
+            )
         lines.append("")
     return "\n".join(lines).strip()
 

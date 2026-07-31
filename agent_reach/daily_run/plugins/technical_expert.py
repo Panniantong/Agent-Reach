@@ -78,13 +78,72 @@ class TechnicalExpert(ExpertPlugin):
                 score -= 5
                 notes.append(f"量比 {vol:.2f} 偏弱")
 
+        score, kronos_notes = _apply_kronos_adjustment(
+            snap, score, price, ma20, context.settings
+        )
+        notes.extend(kronos_notes)
+
         score = max(0.0, min(100.0, score))
         return PluginResult(
             name=self.name,
             score=round(score, 1),
             summary="；".join(notes) or f"技术评分 {score:.0f}",
-            details={"price": price, "ma20": ma20, "position_20d": pos, "volume_ratio": vol},
+            details={
+                "price": price,
+                "ma20": ma20,
+                "position_20d": pos,
+                "volume_ratio": vol,
+                "kronos": snap.get("kronos"),
+            },
         )
+
+
+def _apply_kronos_adjustment(
+    snap: dict[str, Any],
+    score: float,
+    price: Optional[float],
+    ma20: Optional[float],
+    settings: dict[str, Any],
+) -> tuple[float, list[str]]:
+    """Blend Kronos 5-day direction; cap influence per FaceCat-Kronos skill (≤15 pts)."""
+    from agent_reach.daily_run.kronos_predictor import kronos_cfg
+
+    cfg = kronos_cfg(settings)
+    if not cfg.get("enabled", False):
+        return score, []
+
+    kronos = snap.get("kronos") or {}
+    if not kronos.get("available"):
+        return score, []
+
+    max_delta = float(cfg.get("technical_max_score_delta", 12))
+    notes: list[str] = []
+    direction = str(kronos.get("direction_nd") or "flat")
+    cum = kronos.get("cum_change_pct")
+
+    if price is not None and ma20 is not None:
+        ma_bull = price > ma20
+        if direction == "down" and ma_bull:
+            score -= max_delta
+            notes.append(f"Kronos {cum:+.1f}% 看跌 vs MA20 多头")
+        elif direction == "up" and not ma_bull:
+            score += max_delta * 0.6
+            notes.append(f"Kronos {cum:+.1f}% 看涨 vs MA20 空头")
+        elif direction == "up" and ma_bull:
+            score += max_delta * 0.4
+            notes.append(f"Kronos 共振看涨 {cum:+.1f}%")
+        elif direction == "down" and not ma_bull:
+            score -= max_delta * 0.4
+            notes.append(f"Kronos 共振看跌 {cum:+.1f}%")
+    elif cum is not None:
+        if float(cum) > 1.5:
+            score += max_delta * 0.3
+            notes.append(f"Kronos 5日 +{cum:.1f}%")
+        elif float(cum) < -1.5:
+            score -= max_delta * 0.3
+            notes.append(f"Kronos 5日 {cum:.1f}%")
+
+    return score, notes
 
 
 def _f(value: Any) -> Optional[float]:

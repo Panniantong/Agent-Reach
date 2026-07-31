@@ -481,6 +481,22 @@ def _improve_forecast(
     for note in notes[:2]:
         out.add("mss", "low", "预测校准", str(note))
 
+    kronos_notes = forecast_review.get("kronos_review") or {}
+    if kronos_notes.get("divergence_count", 0) >= 2:
+        out.add(
+            "mss",
+            "medium",
+            f"Kronos 与 MC 路径分歧 {kronos_notes['divergence_count']} 只",
+            "可下调 kronos.week_forecast_blend_weight 或增大 inference_sample_count",
+        )
+    if kronos_notes.get("mean_error_pct") is not None and abs(float(kronos_notes["mean_error_pct"])) > 1.5:
+        out.add(
+            "mss",
+            "low",
+            f"Kronos 日偏差 {float(kronos_notes['mean_error_pct']):+.2f}%",
+            "参考 FaceCat 回测模式调 inference_T / top_p",
+        )
+
 
 def _scan_beijing_time(as_of: Any) -> Optional[str]:
     if not as_of:

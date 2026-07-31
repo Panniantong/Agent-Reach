@@ -55,6 +55,7 @@ class ForecastDayReview:
     calibration_before: dict[str, Any] = field(default_factory=dict)
     calibration_after: dict[str, Any] = field(default_factory=dict)
     optimization_notes: list[str] = field(default_factory=list)
+    kronos_review: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -69,6 +70,7 @@ class ForecastDayReview:
             "calibration_before": self.calibration_before,
             "calibration_after": self.calibration_after,
             "optimization_notes": self.optimization_notes,
+            "kronos_review": self.kronos_review,
         }
 
 
@@ -83,6 +85,8 @@ def _actual_direction(chg: float) -> str:
 def _symbol_hit(
     predicted: dict[str, Any],
     actual_chg: float,
+    *,
+    kronos_day: Optional[dict[str, Any]] = None,
 ) -> tuple[bool, float]:
     lo, hi = predicted.get("change_pct_range") or [0, 0]
     lo, hi = float(lo), float(hi)
@@ -92,7 +96,16 @@ def _symbol_hit(
     dir_hit = pred_dir == act_dir or (pred_dir == "flat" and abs(actual_chg) <= 1.0)
     expected = float(predicted.get("expected_change_pct") or (lo + hi) / 2)
     error = actual_chg - expected
-    return in_range or dir_hit, round(error, 2)
+    kronos_hit = None
+    if kronos_day and kronos_day.get("change_pct") is not None:
+        k_chg = float(kronos_day["change_pct"])
+        k_dir = kronos_day.get("direction") or _actual_direction(k_chg)
+        kronos_hit = k_dir == act_dir or abs(actual_chg - k_chg) <= max(1.5, abs(k_chg) * 0.5)
+    hit = in_range or dir_hit
+    if kronos_hit is True and not hit:
+        hit = True
+        error = actual_chg - float(kronos_day.get("change_pct", expected))
+    return hit, round(error, 2)
 
 
 def evaluate_day_forecast(
@@ -116,8 +129,10 @@ def evaluate_day_forecast(
         actual_f = float(actual) if actual is not None else None
         hit = False
         error = None
+        kronos_block = (forecast.get("kronos_paths") or {}).get(code) or sym.get("kronos") or {}
+        k_day = (kronos_block.get("days") or {}).get(ds) if kronos_block.get("available") else None
         if actual_f is not None:
-            hit, error = _symbol_hit(day_pred, actual_f)
+            hit, error = _symbol_hit(day_pred, actual_f, kronos_day=k_day)
         evals.append(
             SymbolEval(
                 code=code,
@@ -264,13 +279,58 @@ def review_active_forecast(
             mss_actual = verify_mss
 
     review = evaluate_day_forecast(forecast, snapshot, d, mss_actual=mss_actual)
+    review.kronos_review = _kronos_review_summary(forecast, review)
     cal = optimize_calibration(review, review.calibration_before, cfg)
     save_calibration(cal)
 
     updated = apply_review_to_forecast(forecast, review)
+    if review.kronos_review:
+        updated["last_kronos_review"] = review.kronos_review
     save_forecast(updated)
 
+    review.optimization_notes = list(review.optimization_notes) + _kronos_calibration_notes(
+        review.kronos_review
+    )
     return review
+
+
+def _kronos_review_summary(
+    forecast: dict[str, Any],
+    review: ForecastDayReview,
+) -> dict[str, Any]:
+    ds = review.date
+    paths = forecast.get("kronos_paths") or {}
+    if not paths:
+        return {}
+
+    errors: list[float] = []
+    divergences = 0
+    for ev in review.symbol_evals:
+        block = paths.get(ev.code) or {}
+        if not block.get("available"):
+            continue
+        k_day = (block.get("days") or {}).get(ds)
+        if not k_day or ev.actual_change_pct is None:
+            continue
+        k_chg = float(k_day.get("change_pct") or 0)
+        errors.append(float(ev.actual_change_pct) - k_chg)
+        if k_day.get("direction") and k_day["direction"] != ev.predicted_direction:
+            divergences += 1
+
+    out: dict[str, Any] = {"divergence_count": divergences}
+    if errors:
+        out["mean_error_pct"] = round(sum(errors) / len(errors), 2)
+    return out
+
+
+def _kronos_calibration_notes(kronos_review: Optional[dict[str, Any]]) -> list[str]:
+    if not kronos_review:
+        return []
+    notes: list[str] = []
+    err = kronos_review.get("mean_error_pct")
+    if err is not None and abs(float(err)) > 1.0:
+        notes.append(f"Kronos 收盘偏差 {float(err):+.2f}% → 可微调 vol_scale")
+    return notes
 
 
 def render_forecast_review_markdown(review: ForecastDayReview) -> str:

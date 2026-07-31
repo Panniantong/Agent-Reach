@@ -261,8 +261,14 @@ def run_close(
         use_team = team_first_enabled(cfg, workflow="close")
     else:
         use_team = bool(team_first) and experts_enabled(cfg, workflow="close")
+
+    from agent_reach.daily_run.kronos_predictor import attach_kronos_to_snapshot, is_kronos_enabled
+
+    if is_kronos_enabled(cfg):
+        enriched = attach_kronos_to_snapshot(dict(current), settings=cfg)
+
     if use_team:
-        enriched = run_team_first(current, cfg, names=plugin_names)
+        enriched = run_team_first(enriched, cfg, names=plugin_names)
         team_md = render_team_markdown(enriched)
 
     if verify_dict is not None:
@@ -323,10 +329,57 @@ def run_close(
         if cr_md:
             extra_parts.append(cr_md)
 
+    forecast_review = None
+    forecast_review_md = ""
+    improvements_md = ""
+    try:
+        from agent_reach.daily_run.week_forecast_tracker import (
+            render_forecast_review_markdown,
+            review_active_forecast,
+        )
+
+        mss_for_review = enriched.get("mss_final")
+        if mss_for_review is None:
+            mss_for_review = verify_dict.get("current_mss")
+        forecast_review = review_active_forecast(
+            enriched,
+            settings=cfg,
+            mss_actual=mss_for_review,
+        )
+        if forecast_review:
+            forecast_review_md = render_forecast_review_markdown(forecast_review)
+    except Exception:
+        pass
+
     exp_path = append_experience_entry(
-        enriched, verify_dict, curve=curve, research=research_results, settings=cfg
+        enriched,
+        verify_dict,
+        curve=curve,
+        research=research_results,
+        settings=cfg,
+        forecast_review=forecast_review.to_dict() if forecast_review else None,
     )
     exp_md = render_experience_markdown(limit=3) or ""
+
+    if cfg.get("close_improvements", {}).get("enabled", True):
+        from agent_reach.daily_run.close_improvements import (
+            generate_close_improvements,
+            render_improvements_markdown,
+        )
+
+        curve_payload = curve.to_dict() if hasattr(curve, "to_dict") else curve
+        improvements = generate_close_improvements(
+            baseline=baseline,
+            current=enriched,
+            verify=verify_dict,
+            settings=cfg,
+            curve=curve_payload,
+            scans=enriched.get("intraday_scans"),
+            trades=intraday_trades,
+            watchlist_adjust=watchlist_adjust,
+            forecast_review=forecast_review.to_dict() if forecast_review else None,
+        )
+        improvements_md = render_improvements_markdown(improvements) or ""
 
     verify_md = render_verify_markdown(verify)
 
@@ -363,7 +416,17 @@ def run_close(
 
     md = "\n\n---\n\n".join(
         p
-        for p in [team_md, curve_md, research_md, *extra_parts, exp_md, verify_md, portfolio_md]
+        for p in [
+            team_md,
+            curve_md,
+            research_md,
+            *extra_parts,
+            forecast_review_md,
+            improvements_md,
+            exp_md,
+            verify_md,
+            portfolio_md,
+        ]
         if p
     )
 
@@ -414,6 +477,7 @@ def run_close(
         "experience_path": str(exp_path),
         "feishu": feishu_result,
         "close_baseline_path": str(close_baseline_path) if close_baseline_path else None,
+        "forecast_review": forecast_review.to_dict() if forecast_review else None,
         "audit": {
             "passed": audit.passed,
             "issues": audit.issues,

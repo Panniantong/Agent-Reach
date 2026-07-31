@@ -41,6 +41,15 @@ dependencies = [
 browser = ["playwright>=1.40"]
 cookies = ["browser-cookie3>=0.19"]
 daily-run = ["akshare>=1.12"]
+daily-run-kronos = [
+    "akshare>=1.12",
+    "pandas>=2.0",
+    "torch>=2.0",
+    "safetensors>=0.4",
+    "huggingface_hub>=0.20",
+    "einops>=0.7",
+    "tqdm>=4.66",
+]
 all = ["playwright>=1.40", "mcp[cli]>=1.0", "browser-cookie3>=0.19", "akshare>=1.12"]
 dev = [
     "pytest>=8.0",

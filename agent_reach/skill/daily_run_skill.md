@@ -8,7 +8,7 @@ description: >
   交易日内执行 10 次数据收集，最多进行 5 次调仓量化，每次量化前审视前 5 次收集结论，调仓时间由随机数与上次评估综合决定。
   **全流程实时推送铁律：** 早盘分析、盘中高频数据收集、Lookback 审视过程、量化调仓交易以及每日收盘深度复盘的所有过程数据、决策逻辑和资产净值，系统必须在执行完毕的第一时间，自动、主动将精美的富文本 Markdown 卡片简报推送到指定的飞书群聊中，实现 100% 实时、透明的主动监控。
   每日收盘后自动执行深度复盘，使用 Exa 技能对热点公司、竞品、市场、财报及关键人物 LinkedIn 进行深度调研，为明天的早盘给出高置信度指导建议，并将量化经验原子化沉淀、更新到技能文件中。
-  **Agent 优先顺序：** 先读 skill 内「📋 下周执行清单」与最新周复盘，再选手工 CLI 或依赖 cron；周六 weekly 自动写回 skill 与 settings。
+  **Agent 优先顺序：** 先读 skill 内「📋 下周执行清单」与最新周复盘，再选手工 CLI 或依赖 cron；周日 forecast 可参考 Phase-2.5 FaceCat-Kronos K 线预测借鉴。
 triggers:
   - analyze: 股票大师/每日复盘/股票分析/大盘复盘/热门方向/分析股票/分析市场/复盘/分析
   - stock: 股票/个股/板块/技术面/K线/均线
@@ -61,7 +61,7 @@ ${PY} -m agent_reach.cli doctor --json
 | doctor | 日缓存 4h（`schedule.doctor_cache`），weekly/forecast 跳过 |
 | Exa 收盘调研 | TTL 86400s（`exa_cache`），同 query 不重复搜 |
 | 60s 热点 | 本地 8787 优先，fallback `https://60s.viki.moe` |
-| 周六 weekly | ① 写回经验 + ② 执行清单 ③ settings 补丁 ④ 同步本地 skill ⑤ `pip install -e .` ⑥ **skill 审视**（去重/结构校验） |
+| 周六 weekly | ① 写回经验 + ② 执行清单 ③ settings 补丁 ④ 同步本地 skill ⑤ `pip install -e .` ⑥ **skill 审视**（去重/结构校验/**FaceCat-Kronos 借鉴点**） |
 
 ### 周六 weekly 闭环（cron `schedule run weekly` 自动执行）
 
@@ -252,6 +252,91 @@ agent-reach daily-run backtest -i config/daily_run_history.example.json
 ```
 
 示例 history 格式：`[{ "date", "mss", "price", "return" }, ...]`
+
+---
+
+## 🔮 Phase-2.5 Kronos K 线预测借鉴（[FaceCat-Kronos](https://github.com/zjk1984/FaceCat-Kronos)）
+
+> 花卷猫量化团队基于清华 **Kronos** 开源框架的 K 线预测 + 回测 GUI。daily-run 不直接依赖其 UI，但借鉴其**预测—验证—调参**闭环，增强周日预测与收盘校准。
+
+### 核心能力摘要
+
+| FaceCat-Kronos | 说明 |
+|----------------|------|
+| **Kronos 模型** | Transformer + BSQuantizer，对 OHLCV+amount 做多步自回归预测，输出「虚拟 K 线」 |
+| **预测 / 回测双模式** | 同一界面切换：虚线 K 线 vs 历史真值，直观量化预测偏差 |
+| **采样参数** | `T`（温度）、`top_p`（核采样）、`sample_count` 控制路径发散 vs 稳健 |
+| **多周期面板** | 分时 / 日 / 周 / 月 K 线联动，适配不同 holding 周期 |
+| **Qlib 微调回测** | 滑动窗口 `lookback + predict_window`，TopkDropout 组合 + 最小持仓 `hold_thresh` |
+
+默认模型（HuggingFace）：`NeoQuasar/Kronos-Tokenizer-base` + `NeoQuasar/Kronos-small`（`max_context=512`）。
+
+### 与 daily-run 模块映射（已借鉴 / 待落地）
+
+| FaceCat-Kronos 概念 | daily-run 对应 | 状态 |
+|---------------------|----------------|------|
+| 预测 vs 真值回测 | `daily-run verify` + `week_forecast_tracker.review_active_forecast()` | ✅ 已有 MSS/价格命中率 |
+| 多路径采样 `sample_count≥5` | `mss_forecast` 蒙特卡洛 + `week_forecast.calibration` | 🟡 可增 Kronos 收盘价置信带 |
+| `lookback=90` / `pred=10` 滑动窗 | 周日 `week_forecast` 5 日路径 | 🟡 待接 Kronos OHLCV 输入 |
+| 实例归一化 + `clip=5` | `data_audit` 价格锚点 8% + AKShare enrich | ✅ 思路一致 |
+| `hold_thresh=5` 最小持仓 | 持股生命周期 3 交易日禁卖 | ✅ 已对齐风控哲学 |
+| 时间特征 weekday/month | intraday S1–S12 时段权重 | 🟡 可写入 `mss_weights` 时段因子 |
+| Qlib `open_cost=0.001` | 滑点摩擦 0.15%+0.1% 惩罚 | ✅ 已覆盖 |
+| 预测界面虚 K 线 | 飞书「个股路径」卡片 | 🟡 可选附 Kronos 方向箭头 |
+
+### 推荐推理参数（finetune/config 默认值，供 Agent 调参参考）
+
+```json
+{
+  "kronos": {
+    "lookback_window": 90,
+    "predict_window": 10,
+    "max_context": 512,
+    "inference_T": 0.6,
+    "inference_top_p": 0.9,
+    "inference_sample_count": 5,
+    "feature_list": ["open", "high", "low", "close", "vol", "amt"],
+    "clip": 5.0
+  }
+}
+```
+
+- **保守**（贴近现价）：`T=0.4`，`top_p=0.95`，`sample_count=3`
+- **探索**（宽幅情景）：`T=1.0`，`top_p=0.9`，`sample_count=10`（FaceCat 示例默认值）
+
+### Agent 执行指引
+
+1. **周日 forecast**：对持仓 + 观察池各拉 ≥90 根日 K（AKShare / 雪球），可选跑 Kronos 得 5–10 日虚拟路径；与 `week_forecast` 蒙特卡洛路径**交叉验证**，偏差大时在飞书标注「Kronos 分歧」。
+2. **收盘 verify**：将 Kronos 预测收盘价 vs 实盘写入 `forecast_review.optimization_notes`（同 FaceCat 回测模式）。
+3. **technical 专家**：若 Kronos 5 日累计方向与 MA20 趋势相反 → 标签上限「观察」，不强行「可做」。
+4. **CPU 环境**：无 CUDA 时用仓库内 `examples/cpu_prediction_example.py`；模型离线放 `model/` 或 `facecat/model/`。
+
+```bash
+# 本地试跑（无需 FaceCat GUI）
+git clone --depth 1 https://github.com/zjk1984/FaceCat-Kronos /tmp/FaceCat-Kronos
+cd /tmp/FaceCat-Kronos && pip install -r requirements.txt safetensors
+cd examples && python3 cpu_prediction_example.py   # 或 cpu_prediction_wo_vol_examples.py
+```
+
+### 集成路线图（weekly skill 审视时更新）
+
+- [x] `week_forecast` 增加 `kronos_paths` 字段（每标的 OHLC 预测 + 置信区间）— `kronos_predictor.py` + `generate_week_forecast`
+- [x] 收盘 `review_active_forecast` + `close_improvements` 读取 Kronos 偏差 — `week_forecast_tracker._kronos_review_summary`
+- [x] `technical` 插件接入 Kronos 方向评分 — `technical_expert._apply_kronos_adjustment`（默认 ≤12 分）
+
+**启用方式：**
+
+```bash
+# 1. 安装 Kronos 依赖 + 克隆 FaceCat-Kronos
+pip install 'agent-reach[daily-run-kronos]'
+git clone --depth 1 https://github.com/zjk1984/FaceCat-Kronos ~/.agent-reach/vendor/FaceCat-Kronos
+
+# 2. 开启 settings（或 ~/.agent-reach/daily_run_settings.json）
+#    "kronos": { "enabled": true, "repo_path": "~/.agent-reach/vendor/FaceCat-Kronos" }
+
+# 3. 周日 forecast 自动混合 Kronos 路径；收盘 technical 专家自动读取 snapshot.kronos
+python3 -m agent_reach.cli daily-run schedule run forecast
+```
 
 ---
 

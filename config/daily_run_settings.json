@@ -134,6 +134,28 @@
     "max_vol_scale": 1.6
   },
 
+  "kronos": {
+    "enabled": false,
+    "repo_path": "~/.agent-reach/vendor/FaceCat-Kronos",
+    "tokenizer_model": "NeoQuasar/Kronos-Tokenizer-base",
+    "predictor_model": "NeoQuasar/Kronos-small",
+    "lookback_window": 90,
+    "predict_window": 10,
+    "max_context": 512,
+    "clip": 5.0,
+    "inference_T": 0.6,
+    "inference_top_p": 0.9,
+    "inference_top_k": 0,
+    "inference_sample_count": 5,
+    "week_forecast_blend_weight": 0.35,
+    "technical_max_score_delta": 12,
+    "attach_to_snapshot": true,
+    "attach_predict_days": 5,
+    "local_files_only": false,
+    "verbose": false,
+    "log_errors": true
+  },
+
   "findskills": {
     "enabled": true,
     "result_limit": 3,
