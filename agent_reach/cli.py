@@ -1553,11 +1553,19 @@ def _configure_xhs_cookies(value) -> bool:
         # Restart container so it reloads cookies from disk
         print("  Restarting container to reload cookies...", end=" ", flush=True)
         try:
-            subprocess.run(
+            # subprocess.run does not raise on a non-zero exit, so the result has
+            # to be checked; the cookies are on disk but unread until the restart
+            # actually happens.
+            restart = subprocess.run(
                 [docker, "restart", container_name],
                 capture_output=True, encoding="utf-8", timeout=30,
             )
-            print("done")
+            if restart.returncode != 0:
+                detail = (restart.stderr or "").strip()[:200] or f"exit {restart.returncode}"
+                print(f"\n  [!] Could not restart container: {detail}")
+                print(f"  Restart manually: docker restart {container_name}")
+            else:
+                print("done")
         except Exception as e:
             print(f"\n  [!] Could not restart container: {e}")
             print(f"  Restart manually: docker restart {container_name}")

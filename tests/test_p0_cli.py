@@ -901,3 +901,55 @@ def test_uninstall_preserves_mcporter_entries_without_agent_reach_provenance(
     output = capsys.readouterr().out
     assert not any("remove" in call for call in calls)
     assert "来源无法证明" in output
+
+
+def test_xhs_docker_cookie_restart_failure_is_reported(monkeypatch, capsys):
+    """A failed container restart must not be reported as done.
+
+    The cookies are already on disk at this point, but the container only reads
+    them on restart, so claiming success leaves the user with stale cookies and
+    no reason to look here.
+    """
+
+    def fake_which(name):
+        return "/usr/bin/docker" if name == "docker" else None
+
+    def fake_run(args, **_kwargs):
+        if args[1] == "ps":
+            return _docker_result(args, stdout="xiaohongshu-mcp\n")
+        if args[1:3] == ["exec", "xiaohongshu-mcp"]:
+            return _docker_result(args, stdout="/app/data/cookies.json\n")
+        if args[1] == "restart":
+            return _docker_result(args, returncode=1, stderr="no such container")
+        return _docker_result(args)
+
+    monkeypatch.setattr("shutil.which", fake_which)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    cli._configure_xhs_cookies("web_session=xhs_secret")
+
+    output = capsys.readouterr().out
+    assert "Could not restart container" in output
+    assert "no such container" in output
+    assert "Restart manually" in output
+
+
+def test_xhs_docker_cookie_restart_success_still_reports_done(monkeypatch, capsys):
+    def fake_which(name):
+        return "/usr/bin/docker" if name == "docker" else None
+
+    def fake_run(args, **_kwargs):
+        if args[1] == "ps":
+            return _docker_result(args, stdout="xiaohongshu-mcp\n")
+        if args[1:3] == ["exec", "xiaohongshu-mcp"]:
+            return _docker_result(args, stdout="/app/data/cookies.json\n")
+        return _docker_result(args)
+
+    monkeypatch.setattr("shutil.which", fake_which)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    cli._configure_xhs_cookies("web_session=xhs_secret")
+
+    output = capsys.readouterr().out
+    assert "done" in output
+    assert "Could not restart container" not in output
