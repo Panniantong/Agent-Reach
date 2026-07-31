@@ -10,6 +10,7 @@ or any other ingest destination).
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 
@@ -429,3 +430,125 @@ def test_collect_career_jobs_enforces_term_limit_range():
             sources={"linkedin"},
             now_iso="2026-07-31T06:22:16+00:00",
         )
+
+
+def test_indeed_from_payload_keeps_job_key_and_posted_at():
+    from agent_reach import career_io
+
+    raw = {
+        "title": "Senior IT Security Specialist",
+        "company": "Ballerup Kommune",
+        "job_url": "https://dk.indeed.com/viewjob?jk=abc123",
+        "location": "Ballerup, Capital Region of Denmark, DK",
+        "description": "Long enough description so the record survives.",
+        "job_type": "fulltime",
+        "date_posted": "2026-07-31",
+    }
+
+    job = career_io._indeed_from_payload(raw, now_iso="2026-07-31T06:22:16+00:00")
+
+    assert job is not None
+    assert job.source == "indeed"
+    assert job.external_id == "abc123"
+    assert "jk=abc123" in job.url
+    assert job.title == "Senior IT Security Specialist"
+    assert job.company == "Ballerup Kommune"
+    assert job.location.startswith("Ballerup")
+    assert job.posted_at == "2026-07-31T00:00:00+00:00"
+    assert job.job_type == "full_time"
+
+
+def test_indeed_from_payload_drops_jobs_without_job_key():
+    from agent_reach import career_io
+
+    assert (
+        career_io._indeed_from_payload(
+            {"title": "x", "company": "y", "job_url": "https://example.com/no-key"},
+            now_iso="2026-07-31T06:22:16+00:00",
+        )
+        is None
+    )
+
+
+def test_indeed_async_does_not_redirect_stdout_breaking_the_json_rpc_pipe(monkeypatch):
+    """Regression test: prior version redirected sys.stdout globally which
+    broke the stdio_client JSON-RPC pipe, returning empty payloads."""
+
+    from agent_reach import career_io
+
+    captured: dict[str, Any] = {}
+
+    class FakeSession:
+        def __init__(self):
+            self.calls = 0
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def initialize(self):
+            pass
+
+        async def call_tool(self, name, arguments):
+            self.calls += 1
+            captured["name"] = name
+            captured["arguments"] = arguments
+            from types import SimpleNamespace
+
+            return SimpleNamespace(
+                isError=False,
+                structuredContent={
+                    "source": "indeed",
+                    "query": arguments["search_term"],
+                    "jobs": [
+                        {
+                            "title": "Senior IT Security Specialist",
+                            "company": "Ballerup Kommune",
+                            "job_url": "https://dk.indeed.com/viewjob?jk=zzz",
+                            "location": "Ballerup, Capital Region of Denmark, DK",
+                            "date_posted": "2026-07-31",
+                        }
+                    ],
+                },
+                content=[],
+            )
+
+    class FakeStdioClient:
+        async def __aenter__(self):
+            return (object(), object())
+
+        async def __aexit__(self, *args):
+            return None
+
+    def fake_stdio_client(_params):
+        return FakeStdioClient()
+
+    options = CareerOptions(
+        query="IT Security",
+        location_filter="cph",
+        hours_old=168,
+        results_wanted=3,
+    )
+
+    import mcp as _mcp_pkg
+
+    monkeypatch.setattr(_mcp_pkg, "StdioServerParameters", lambda **kw: kw)
+    monkeypatch.setattr(_mcp_pkg.client.stdio, "stdio_client", fake_stdio_client)
+
+    def fake_session_factory(*args, **kwargs):
+        return FakeSession()
+
+    monkeypatch.setattr(_mcp_pkg, "ClientSession", fake_session_factory)
+
+    import asyncio
+
+    jobs = asyncio.run(career_io._indeed_async(options, now_iso="2026-07-31T06:22:16+00:00"))
+
+    assert captured["name"] == "search_jobs"
+    assert captured["arguments"]["search_term"] == "IT Security"
+    assert captured["arguments"]["location"] == "Copenhagen"
+    assert len(jobs) == 1
+    assert jobs[0].source == "indeed"
+    assert jobs[0].external_id == "zzz"

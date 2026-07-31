@@ -109,6 +109,16 @@ class CareerCollectedJob(dict):
         value = self.get("description")
         return str(value) if value else None
 
+    @property
+    def job_type(self) -> str | None:
+        value = self.get("job_type")
+        return str(value) if value else None
+
+    @property
+    def salary_range(self) -> str | None:
+        value = self.get("salary_range")
+        return str(value) if value else None
+
 
 def LinkedInJob(**kwargs):  # pragma: no cover - thin alias for readability
     kwargs.setdefault("source", "linkedin")

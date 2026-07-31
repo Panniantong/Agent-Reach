@@ -17,7 +17,6 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -193,6 +192,19 @@ def _indeed_from_payload(job: dict, *, now_iso: str) -> CareerCollectedJob | Non
             "parttime": "part_time",
         }
         job_data["job_type"] = aliases.get(job_type, job_type)
+    salary_min = job.get("min_amount")
+    salary_max = job.get("max_amount")
+    currency = str(job.get("currency") or "").strip()
+    if salary_min or salary_max:
+        parts = []
+        if salary_min:
+            parts.append(str(salary_min))
+        if salary_max:
+            parts.append(str(salary_max))
+        range_str = "-".join(parts)
+        if currency:
+            range_str = f"{range_str} {currency}"
+        job_data["salary_range"] = range_str
     return job_data
 
 
@@ -212,7 +224,6 @@ async def _linkedin_async(options: CareerOptions, *, now_iso: str) -> list[Caree
         },
     }
     jobs: list[CareerCollectedJob] = []
-    stdout_devnull = open(os.devnull, "w")
     stderr_devnull = open(os.devnull, "w")
     try:
         from mcp import StdioServerParameters
@@ -221,13 +232,10 @@ async def _linkedin_async(options: CareerOptions, *, now_iso: str) -> list[Caree
             args=params["args"],
             env=params["env"],
         )
-        # Replace both streams at the Python interpreter level so any Rich
-        # banners emitted by the LinkedIn MCP server before/after startup
-        # never reach the JSON-RPC write pipe.
-        original_stdout, original_stderr = sys.stdout, sys.stderr
-        sys.stdout = stdout_devnull
-        sys.stderr = stderr_devnull
-        try:
+        # Redirect ONLY stderr to dev/null: stdout is the JSON-RPC pipe and
+        # must remain open. FastMCP prints its banner to stderr, so this
+        # is sufficient for visual silence without breaking the protocol.
+        with contextlib.redirect_stderr(stderr_devnull):
             async with stdio_client(params_obj) as (read, write):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
@@ -253,10 +261,7 @@ async def _linkedin_async(options: CareerOptions, *, now_iso: str) -> list[Caree
                         )
                         if job is not None:
                             jobs.append(job)
-        finally:
-            sys.stdout, sys.stderr = original_stdout, original_stderr
     finally:
-        stdout_devnull.close()
         stderr_devnull.close()
     return jobs
 
@@ -276,13 +281,11 @@ async def _indeed_async(
         env={**os.environ, **JOBSPY_SERVER_PARAMS.get("env", {})},
     )
     jobs: list[CareerCollectedJob] = []
-    stdout_devnull = open(os.devnull, "w")
     stderr_devnull = open(os.devnull, "w")
     try:
-        original_stdout, original_stderr = sys.stdout, sys.stderr
-        sys.stdout = stdout_devnull
-        sys.stderr = stderr_devnull
-        try:
+        # Redirect ONLY stderr to dev/null so FastMCP banners are silenced
+        # without breaking the JSON-RPC pipe.
+        with contextlib.redirect_stderr(stderr_devnull):
             async with stdio_client(params_obj) as (read, write):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
@@ -290,7 +293,7 @@ async def _indeed_async(
                         "search_jobs",
                         {
                             "search_term": options.query,
-                            "location": "Denmark",
+                            "location": "Copenhagen",
                             "country_indeed": "Denmark",
                             "results_wanted": options.results_wanted,
                             "hours_old": options.hours_old,
@@ -301,10 +304,7 @@ async def _indeed_async(
                         job = _indeed_from_payload(raw_job, now_iso=now_iso)
                         if job is not None:
                             jobs.append(job)
-        finally:
-            sys.stdout, sys.stderr = original_stdout, original_stderr
     finally:
-        stdout_devnull.close()
         stderr_devnull.close()
     return jobs
 
