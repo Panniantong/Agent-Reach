@@ -1837,7 +1837,7 @@ def _cmd_career(args):
             errors=errors,
         )
         text = json.dumps(report, ensure_ascii=False, indent=2)
-        print(text)
+        print(text, flush=True)
         if args.json_out:
             from pathlib import Path
 
