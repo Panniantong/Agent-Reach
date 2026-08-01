@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -25,6 +26,7 @@ class WeeklyReport:
     weekly_pnl: Optional[float]
     weekly_pnl_pct: Optional[float]
     realized_pnl: float
+    trade_cash_flow: float = 0.0
     holdings: list[dict[str, Any]] = field(default_factory=list)
     watchlist: list[dict[str, Any]] = field(default_factory=list)
     hot_sectors: list[dict[str, Any]] = field(default_factory=list)
@@ -51,6 +53,7 @@ class WeeklyReport:
             "weekly_pnl": self.weekly_pnl,
             "weekly_pnl_pct": self.weekly_pnl_pct,
             "realized_pnl": self.realized_pnl,
+            "trade_cash_flow": self.trade_cash_flow,
             "holdings": self.holdings,
             "watchlist": self.watchlist,
             "hot_sectors": self.hot_sectors,
@@ -115,24 +118,108 @@ def _load_manifest(path: Path) -> Optional[dict[str, Any]]:
         return None
 
 
-def _portfolio_total_from_manifest(record: dict[str, Any]) -> Optional[float]:
-    payload = record.get("payload") or {}
-    for key in ("result",):
-        block = payload.get(key) or {}
-        snap = block.get("snapshot") or {}
-        pf = snap.get("portfolio") or {}
-        total = pf.get("total")
-        if total is not None:
-            return float(total)
-    return None
-
-
 def _snapshot_from_manifest(record: dict[str, Any]) -> Optional[dict[str, Any]]:
     payload = record.get("payload") or {}
     result = payload.get("result") or {}
     snap = result.get("snapshot")
     if isinstance(snap, dict):
         return snap
+    symbol_results = payload.get("symbol_results") or []
+    for sr in reversed(symbol_results):
+        snap = (sr.get("result") or {}).get("snapshot")
+        if isinstance(snap, dict):
+            return snap
+    return None
+
+
+def _portfolio_summary_from_manifest(record: dict[str, Any]) -> Optional[dict[str, Any]]:
+    payload = record.get("payload") or {}
+    result = payload.get("result") or {}
+    ps = result.get("portfolio_summary")
+    if isinstance(ps, dict):
+        return ps
+    for sr in payload.get("symbol_results") or []:
+        ps = (sr.get("result") or {}).get("portfolio_summary")
+        if isinstance(ps, dict):
+            return ps
+    return None
+
+
+def _merged_enriched_from_manifest(
+    record: dict[str, Any],
+) -> tuple[Optional[dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Base snapshot plus merged live prices from all per-symbol runs in one manifest."""
+    payload = record.get("payload") or {}
+    symbol_results = payload.get("symbol_results") or []
+    if symbol_results:
+        base = dict((symbol_results[-1].get("result") or {}).get("snapshot") or {})
+        if not base:
+            return None, {}
+        enriched = build_enriched_symbols(base)
+        for sr in symbol_results:
+            snap = (sr.get("result") or {}).get("snapshot") or {}
+            code = _normalize_code(str(snap.get("code") or sr.get("code") or ""))
+            if code and snap.get("price") is not None:
+                enriched.setdefault(code, {})["price"] = float(snap["price"])
+        return base, enriched
+    snap = _snapshot_from_manifest(record)
+    if snap:
+        return snap, build_enriched_symbols(snap)
+    return None, {}
+
+
+def _recalc_total_from_enriched(
+    portfolio: dict[str, Any],
+    enriched: dict[str, dict[str, Any]],
+) -> float:
+    """Mark-to-market total using live enriched prices (not cost basis on holdings)."""
+    cash = float(portfolio.get("cash") or 0)
+    mv = 0.0
+    for h in portfolio.get("holdings") or []:
+        code = _normalize_code(str(h.get("code", "")))
+        row = enriched.get(code) or {}
+        price = row.get("price")
+        if price is None:
+            price = h.get("price") or h.get("cost") or 0
+        mv += int(h.get("shares") or 0) * float(price)
+    return round(cash + mv, 2)
+
+
+def _portfolio_total_from_manifest(record: dict[str, Any]) -> Optional[float]:
+    ps = _portfolio_summary_from_manifest(record)
+    if ps and ps.get("end_total") is not None:
+        return float(ps["end_total"])
+
+    snap, enriched = _merged_enriched_from_manifest(record)
+    if not snap:
+        return None
+
+    pf = dict(snap.get("portfolio") or {})
+    if pf.get("holdings") or pf.get("cash") is not None:
+        return _recalc_total_from_enriched(pf, enriched)
+
+    total = pf.get("total")
+    if total is not None:
+        return float(total)
+    if ps and ps.get("start_total") is not None:
+        return float(ps["start_total"])
+    return None
+
+
+def _load_prior_close_total(before: date, *, max_days: int = 10) -> Optional[float]:
+    """Most recent close manifest total strictly before `before`."""
+    for offset in range(1, max_days + 1):
+        day = before - timedelta(days=offset)
+        day_records = sorted(
+            _load_week_manifests(day, day),
+            key=_manifest_sort_key,
+        )
+        for record in reversed(day_records):
+            if record.get("job") != "close":
+                continue
+            total = _portfolio_total_from_manifest(record)
+            if total is not None:
+                return total
     return None
 
 
@@ -161,15 +248,23 @@ def _week_start_prices_from_manifests(
     for record in morning:
         day = str(record.get("_run_date") or "")
         if day and day >= ws:
-            snap = _snapshot_from_manifest(record)
-            if snap:
-                prices = _prices_from_snapshot(snap)
-                if prices:
-                    return prices
+            _, enriched = _merged_enriched_from_manifest(record)
+            prices = {
+                code: float(row["price"])
+                for code, row in enriched.items()
+                if row.get("price") is not None
+            }
+            if prices:
+                return prices
     if morning:
-        snap = _snapshot_from_manifest(morning[0])
-        if snap:
-            return _prices_from_snapshot(snap)
+        _, enriched = _merged_enriched_from_manifest(morning[0])
+        prices = {
+            code: float(row["price"])
+            for code, row in enriched.items()
+            if row.get("price") is not None
+        }
+        if prices:
+            return prices
     return {}
 
 
@@ -286,8 +381,8 @@ def _load_trade_ledger_range(start: date, end: date) -> list[dict[str, Any]]:
     return entries
 
 
-def _compute_realized_pnl(trades: list[dict[str, Any]]) -> float:
-    """Approximate realized PnL from ledger buy/sell actions (sell proceeds − buy cost)."""
+def _compute_trade_cash_flow(trades: list[dict[str, Any]]) -> float:
+    """Net cash flow from ledger (sell proceeds − buy costs − commissions)."""
     pnl = 0.0
     for entry in trades:
         for action in entry.get("actions") or []:
@@ -298,6 +393,73 @@ def _compute_realized_pnl(trades: list[dict[str, Any]]) -> float:
                 pnl += amount - commission
             elif side == "buy":
                 pnl -= amount + commission
+    return round(pnl, 2)
+
+
+def _compute_realized_pnl(trades: list[dict[str, Any]]) -> float:
+    """FIFO realized P&L on sell actions (buys alone do not count as loss)."""
+    lots: dict[str, deque[tuple[int, float]]] = {}
+    pnl = 0.0
+
+    def _apply_buy(action: dict[str, Any]) -> None:
+        shares = int(action.get("shares") or 0)
+        amount = float(action.get("amount") or 0)
+        commission = float(action.get("commission") or 0)
+        if shares <= 0:
+            return
+        code = _normalize_code(str(action.get("code") or "__unknown__"))
+        cost_per = (amount + commission) / shares
+        lots.setdefault(code, deque()).append((shares, cost_per))
+
+    def _apply_sell(action: dict[str, Any]) -> None:
+        shares = int(action.get("shares") or 0)
+        amount = float(action.get("amount") or 0)
+        commission = float(action.get("commission") or 0)
+        if shares <= 0:
+            return
+        code = _normalize_code(str(action.get("code") or "__unknown__"))
+        proceeds_per = (amount - commission) / shares
+        remaining = shares
+        queue = lots.setdefault(code, deque())
+        while remaining > 0 and queue:
+            lot_shares, lot_cost = queue[0]
+            take = min(remaining, lot_shares)
+            pnl += take * (proceeds_per - lot_cost)
+            remaining -= take
+            if take >= lot_shares:
+                queue.popleft()
+            else:
+                queue[0] = (lot_shares - take, lot_cost)
+        if remaining > 0:
+            fallback_cost = float(action.get("price") or 0)
+            if fallback_cost > 0:
+                pnl += remaining * (proceeds_per - fallback_cost)
+
+    for entry in trades:
+        actions = list(entry.get("actions") or [])
+        if (
+            actions
+            and any(a.get("side") == "buy" for a in actions)
+            and any(a.get("side") == "sell" for a in actions)
+            and all(int(a.get("shares") or 0) <= 0 for a in actions)
+        ):
+            pnl += _compute_trade_cash_flow([entry])
+            continue
+        orphan_sells: list[dict[str, Any]] = []
+        for action in actions:
+            side = action.get("side")
+            if side == "buy":
+                _apply_buy(action)
+            elif side == "sell":
+                if int(action.get("shares") or 0) > 0:
+                    orphan_sells.append(action)
+                else:
+                    amount = float(action.get("amount") or 0)
+                    commission = float(action.get("commission") or 0)
+                    pnl += amount - commission
+        for action in orphan_sells:
+            _apply_sell(action)
+
     return round(pnl, 2)
 
 
@@ -592,6 +754,7 @@ def generate_weekly_report(
 
     enriched = build_enriched_symbols(snap_for_symbols)
     trades = _load_trade_ledger_range(week_start, week_end)
+    trade_cash_flow = _compute_trade_cash_flow(trades)
     realized = _compute_realized_pnl(trades)
 
     start_total: Optional[float] = None
@@ -604,9 +767,11 @@ def generate_weekly_report(
         job = record.get("job")
         day = record.get("_run_date", "")
         total = _portfolio_total_from_manifest(record)
-        if job == "morning" and total is not None:
+        if total is None:
+            continue
+        if job == "morning":
             morning_totals.append((day, total))
-        if job == "close" and total is not None:
+        elif job == "close":
             close_totals.append((day, total))
 
     mss_summary = build_mss_trajectory(manifests, week_start, week_end)
@@ -614,15 +779,25 @@ def generate_weekly_report(
     if morning_totals:
         morning_totals.sort(key=lambda x: x[0])
         start_total = morning_totals[0][1]
+    elif close_totals:
+        close_totals.sort(key=lambda x: x[0])
+        start_total = close_totals[0][1]
+        notes.append("本周无早盘 manifest，周初净值取本周首个收盘 manifest")
+    else:
+        prior_close = _load_prior_close_total(week_start)
+        if prior_close is not None:
+            start_total = prior_close
+            notes.append("本周 manifest 缺少周初净值，取上周最近收盘")
+
     if close_totals:
         close_totals.sort(key=lambda x: x[0])
         end_total = close_totals[-1][1]
 
     if end_total is None:
-        end_total = float(pf.get("total") or 0) or None
-    if start_total is None and end_total is not None:
-        start_total = end_total
-        notes.append("本周无早盘 manifest，周初净值用周末/当前估值代替")
+        end_total = _recalc_total_from_enriched(pf, enriched) or None
+
+    if start_total is None:
+        notes.append("缺少周初净值基线，无法计算周度组合盈亏")
 
     daily_totals: list[dict[str, Any]] = []
     for day, total in sorted(morning_totals, key=lambda x: x[0]):
@@ -690,6 +865,7 @@ def generate_weekly_report(
         weekly_pnl=weekly_pnl,
         weekly_pnl_pct=weekly_pnl_pct,
         realized_pnl=realized,
+        trade_cash_flow=trade_cash_flow,
         holdings=holdings,
         watchlist=watchlist,
         hot_sectors=hot_sectors,
@@ -763,6 +939,7 @@ def build_weekly_pnl_explanation(report: WeeklyReport | dict[str, Any]) -> list[
     holdings = data.get("holdings") or []
     trades = data.get("trades") or []
     realized = float(data.get("realized_pnl") or 0)
+    trade_cash_flow = float(data.get("trade_cash_flow") if data.get("trade_cash_flow") is not None else realized)
     notes = data.get("notes") or []
     daily_totals = data.get("daily_totals") or []
 
@@ -816,22 +993,30 @@ def build_weekly_pnl_explanation(report: WeeklyReport | dict[str, Any]) -> list[
         lines.append(f"- **现金仓位：** {float(cash_ratio):.1%}（¥{float(cash):,.0f}）")
 
     if trades:
-        sign = "+" if realized >= 0 else ""
+        sign = "+" if trade_cash_flow >= 0 else ""
         lines.append(
-            f"- **成交现金流（ledger）：** {sign}¥{realized:,.2f}，共 {len(trades)} 笔"
+            f"- **成交现金流（ledger）：** {sign}¥{trade_cash_flow:,.2f}，共 {len(trades)} 笔"
         )
+        if abs(realized) > 0.01:
+            rsign = "+" if realized >= 0 else ""
+            lines.append(f"- **已实现盈亏（FIFO）：** {rsign}¥{realized:,.2f}")
         trade_summary = _summarize_week_trades(trades)
         if trade_summary:
             lines.append(f"  - {trade_summary}")
 
-    if pnl is not None and abs(float(pnl)) < 1 and trades and abs(realized) > 1000:
+    if (
+        pnl is not None
+        and abs(float(pnl)) < 1
+        and trades
+        and abs(trade_cash_flow) > 1000
+    ):
         lines.append(
-            "- _净值变动接近 0 但 ledger 有大额成交：可能缺少周初早盘净值基线，"
+            "- _净值变动接近 0 但 ledger 有大额成交：可能缺少周初净值基线，"
             "或买入使用既有现金、市值波动与成交相互抵消。_"
         )
 
     for note in notes:
-        if "无早盘 manifest" in note or "周初净值" in note:
+        if "无早盘 manifest" in note or "周初净值" in note or "缺少周初" in note:
             lines.append(f"- _{note}_")
             break
 
@@ -850,9 +1035,12 @@ def _render_pnl_lines(report: WeeklyReport) -> list[str]:
             lines.append(f"- 周初 ¥{report.start_total:,.2f} → 周末 ¥{report.end_total:,.2f}")
     else:
         lines.append("- 暂无完整净值数据（需本周 daily-run manifest）")
-    if report.realized_pnl:
+    if report.trades and abs(report.trade_cash_flow) > 0.01:
+        sign = "+" if report.trade_cash_flow >= 0 else ""
+        lines.append(f"- **本周成交现金流（ledger）：** {sign}¥{report.trade_cash_flow:,.2f}")
+    if report.realized_pnl and abs(report.realized_pnl) > 0.01:
         sign = "+" if report.realized_pnl >= 0 else ""
-        lines.append(f"- **本周成交净额（ledger）：** {sign}¥{report.realized_pnl:,.2f}")
+        lines.append(f"- **本周已实现盈亏（FIFO）：** {sign}¥{report.realized_pnl:,.2f}")
     if report.trades:
         lines.append(f"- 成交笔数：**{len(report.trades)}**")
     lines.extend(build_weekly_pnl_explanation(report))

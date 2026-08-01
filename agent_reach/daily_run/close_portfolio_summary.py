@@ -11,7 +11,7 @@ from agent_reach.daily_run.snapshot_builder import _normalize_code
 from agent_reach.daily_run.symbols import build_enriched_symbols, portfolio_from_snapshot
 from agent_reach.daily_run.trade_calendar import today_shanghai
 from agent_reach.daily_run.weekly_report import (
-    _compute_realized_pnl,
+    _compute_trade_cash_flow,
     _holding_pnl_rows,
     _load_trade_ledger_range,
     _prices_from_snapshot,
@@ -394,7 +394,7 @@ def build_close_portfolio_summary(
             max_weight = max(max_weight or 0.0, float(weight))
 
     ledger_trades = _load_trade_ledger_range(day, day)
-    realized = _compute_realized_pnl(ledger_trades)
+    realized = _compute_trade_cash_flow(ledger_trades)
     intraday_list = list(intraday_trades or [])
     wl_changes = _watchlist_changes_from_adjust(watchlist_adjust)
 

@@ -9,6 +9,7 @@ import pytest
 
 from agent_reach.daily_run.weekly_report import (
     _compute_realized_pnl,
+    _compute_trade_cash_flow,
     build_mss_trajectory,
     generate_weekly_report,
     render_weekly_markdown,
@@ -164,6 +165,17 @@ class TestMssTrajectory:
 
 
 class TestWeeklyReport:
+    def test_compute_trade_cash_flow(self):
+        trades = [
+            {
+                "actions": [
+                    {"side": "buy", "amount": 10000, "commission": 15},
+                    {"side": "sell", "amount": 10500, "commission": 16},
+                ]
+            }
+        ]
+        assert _compute_trade_cash_flow(trades) == 469.0
+
     def test_compute_realized_pnl(self):
         trades = [
             {
@@ -174,6 +186,23 @@ class TestWeeklyReport:
             }
         ]
         assert _compute_realized_pnl(trades) == 469.0
+
+    def test_compute_realized_pnl_buy_only_is_zero(self):
+        trades = [
+            {
+                "actions": [
+                    {
+                        "side": "buy",
+                        "code": "000725",
+                        "shares": 5300,
+                        "amount": 39750.0,
+                        "commission": 59.62,
+                    }
+                ]
+            }
+        ]
+        assert _compute_realized_pnl(trades) == 0.0
+        assert _compute_trade_cash_flow(trades) == -39809.62
 
     @patch("agent_reach.daily_run.weekly_report.run_sector_research", return_value=[])
     @patch("agent_reach.daily_run.weekly_report._load_week_manifests", return_value=[])
@@ -186,7 +215,7 @@ class TestWeeklyReport:
             portfolio=portfolio,
         )
         assert report.week_start == date(2026, 7, 6)
-        assert report.end_total == 100000
+        assert report.end_total == 75000
         assert len(report.holdings) == 2
         assert len(report.watchlist) == 1
         assert "澜起科技" in render_weekly_markdown(report)
@@ -247,7 +276,8 @@ class TestWeeklyReport:
             end_total=87323.27,
             weekly_pnl=0.0,
             weekly_pnl_pct=0.0,
-            realized_pnl=-48306.35,
+            realized_pnl=0.0,
+            trade_cash_flow=-48306.35,
             cash=40176.27,
             cash_ratio=0.4601,
             holdings=[
@@ -265,7 +295,7 @@ class TestWeeklyReport:
                 },
             ],
             trades=[{"at": "2026-07-24", "actions": [{"side": "buy", "name": "京东方A", "shares": 1400, "price": 6.06}]}],
-            notes=["本周无早盘 manifest，周初净值用周末/当前估值代替"],
+            notes=["缺少周初净值基线，无法计算周度组合盈亏"],
             daily_totals=[
                 {"date": "2026-07-23", "total": 87000, "job": "close"},
                 {"date": "2026-07-24", "total": 87323.27, "job": "close"},
@@ -282,7 +312,95 @@ class TestWeeklyReport:
 
         rendered = "\n".join(_render_pnl_lines(report))
         assert "情况说明" in rendered
-        assert rendered.count("本周无早盘 manifest") == 1
+        assert "缺少周初净值基线" in rendered
+
+    @patch("agent_reach.daily_run.weekly_report._load_manifest")
+    @patch("agent_reach.daily_run.weekly_report.runs_dir")
+    def test_manifest_pnl_from_symbol_runner_morning(self, mock_runs_dir, mock_load, tmp_path, snapshot, portfolio):
+        day_dir = tmp_path / "2026-07-06"
+        day_dir.mkdir()
+        end_dir = tmp_path / "2026-07-10"
+        end_dir.mkdir()
+        mock_runs_dir.return_value = tmp_path
+
+        morning_manifest = {
+            "job": "morning",
+            "payload": {
+                "symbol_results": [
+                    {
+                        "code": "688008",
+                        "result": {
+                            "snapshot": {
+                                "code": "688008",
+                                "price": 250.0,
+                                "portfolio": {"total": 98000, "cash": 40000, "holdings": portfolio["holdings"]},
+                            }
+                        },
+                    },
+                    {
+                        "code": "002273",
+                        "result": {
+                            "snapshot": {
+                                "code": "002273",
+                                "price": 30.0,
+                                "portfolio": {"total": 98000, "cash": 40000, "holdings": portfolio["holdings"]},
+                            }
+                        },
+                    },
+                ]
+            },
+        }
+        close_manifest = {
+            "job": "close",
+            "payload": {
+                "symbol_results": [
+                    {
+                        "code": "688008",
+                        "result": {
+                            "snapshot": {
+                                "code": "688008",
+                                "price": 260.0,
+                                "portfolio": {"total": 100500, "cash": 40000, "holdings": portfolio["holdings"]},
+                            }
+                        },
+                    },
+                    {
+                        "code": "002273",
+                        "result": {
+                            "snapshot": {
+                                "code": "002273",
+                                "price": 30.0,
+                                "portfolio": {"total": 100500, "cash": 40000, "holdings": portfolio["holdings"]},
+                            }
+                        },
+                    },
+                ]
+            },
+        }
+
+        def _load_side_effect(path):
+            if "morning" in path.name:
+                return morning_manifest
+            if "close" in path.name:
+                return close_manifest
+            return None
+
+        (day_dir / "morning_080000.json").write_text("{}", encoding="utf-8")
+        (end_dir / "close_153000.json").write_text("{}", encoding="utf-8")
+        mock_load.side_effect = _load_side_effect
+
+        with patch("agent_reach.daily_run.weekly_report.run_sector_research", return_value=[]):
+            with patch("agent_reach.daily_run.weekly_report._load_trade_ledger_range", return_value=[]):
+                report = generate_weekly_report(
+                    snapshot,
+                    {"weekly_report": {"exa_sector_research": False}},
+                    as_of=date(2026, 7, 11),
+                    portfolio=portfolio,
+                )
+
+        assert report.start_total == 74000
+        assert report.end_total == 75000
+        assert report.weekly_pnl == 1000
 
     @patch("agent_reach.daily_run.weekly_report._load_manifest")
     @patch("agent_reach.daily_run.weekly_report.runs_dir")
