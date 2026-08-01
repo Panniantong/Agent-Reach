@@ -27,6 +27,12 @@ class WeeklyReport:
     weekly_pnl_pct: Optional[float]
     realized_pnl: float
     trade_cash_flow: float = 0.0
+    start_cash: Optional[float] = None
+    end_cash: Optional[float] = None
+    start_stock_mv: Optional[float] = None
+    end_stock_mv: Optional[float] = None
+    stock_pnl: Optional[float] = None
+    cash_pnl: Optional[float] = None
     holdings: list[dict[str, Any]] = field(default_factory=list)
     watchlist: list[dict[str, Any]] = field(default_factory=list)
     hot_sectors: list[dict[str, Any]] = field(default_factory=list)
@@ -54,6 +60,12 @@ class WeeklyReport:
             "weekly_pnl_pct": self.weekly_pnl_pct,
             "realized_pnl": self.realized_pnl,
             "trade_cash_flow": self.trade_cash_flow,
+            "start_cash": self.start_cash,
+            "end_cash": self.end_cash,
+            "start_stock_mv": self.start_stock_mv,
+            "end_stock_mv": self.end_stock_mv,
+            "stock_pnl": self.stock_pnl,
+            "cash_pnl": self.cash_pnl,
             "holdings": self.holdings,
             "watchlist": self.watchlist,
             "hot_sectors": self.hot_sectors,
@@ -174,6 +186,13 @@ def _recalc_total_from_enriched(
 ) -> float:
     """Mark-to-market total using live enriched prices (not cost basis on holdings)."""
     cash = float(portfolio.get("cash") or 0)
+    return round(cash + _stock_mv_from_enriched(portfolio, enriched), 2)
+
+
+def _stock_mv_from_enriched(
+    portfolio: dict[str, Any],
+    enriched: dict[str, dict[str, Any]],
+) -> float:
     mv = 0.0
     for h in portfolio.get("holdings") or []:
         code = _normalize_code(str(h.get("code", "")))
@@ -182,7 +201,77 @@ def _recalc_total_from_enriched(
         if price is None:
             price = h.get("price") or h.get("cost") or 0
         mv += int(h.get("shares") or 0) * float(price)
-    return round(cash + mv, 2)
+    return round(mv, 2)
+
+
+def _portfolio_parts_from_manifest(
+    record: dict[str, Any],
+) -> tuple[Optional[float], Optional[float]]:
+    """Return (cash, stock_market_value) from a run manifest."""
+    ps = _portfolio_summary_from_manifest(record)
+    if ps:
+        cash = ps.get("cash")
+        stock_mv = ps.get("stock_mv")
+        if cash is not None and stock_mv is not None:
+            return float(cash), float(stock_mv)
+
+    snap, enriched = _merged_enriched_from_manifest(record)
+    if not snap:
+        return None, None
+
+    pf = dict(snap.get("portfolio") or {})
+    if not pf.get("holdings") and pf.get("cash") is None:
+        return None, None
+
+    cash = float(pf.get("cash") or 0)
+    return cash, _stock_mv_from_enriched(pf, enriched)
+
+
+def _start_manifest_record(
+    manifests: list[dict[str, Any]],
+    morning_totals: list[tuple[str, float]],
+    close_totals: list[tuple[str, float]],
+    week_start: date,
+) -> Optional[dict[str, Any]]:
+    if morning_totals:
+        day = morning_totals[0][0]
+        rows = sorted(
+            [m for m in manifests if m.get("_run_date") == day and m.get("job") == "morning"],
+            key=_manifest_sort_key,
+        )
+        if rows:
+            return rows[0]
+    if close_totals:
+        day = close_totals[0][0]
+        rows = sorted(
+            [m for m in manifests if m.get("_run_date") == day and m.get("job") == "close"],
+            key=_manifest_sort_key,
+        )
+        if rows:
+            return rows[0]
+    for offset in range(1, 11):
+        day = week_start - timedelta(days=offset)
+        rows = sorted(
+            [m for m in _load_week_manifests(day, day) if m.get("job") == "close"],
+            key=_manifest_sort_key,
+        )
+        if rows:
+            return rows[-1]
+    return None
+
+
+def _end_manifest_record(
+    manifests: list[dict[str, Any]],
+    close_totals: list[tuple[str, float]],
+) -> Optional[dict[str, Any]]:
+    if not close_totals:
+        return None
+    day = close_totals[-1][0]
+    rows = sorted(
+        [m for m in manifests if m.get("_run_date") == day and m.get("job") == "close"],
+        key=_manifest_sort_key,
+    )
+    return rows[-1] if rows else None
 
 
 def _portfolio_total_from_manifest(record: dict[str, Any]) -> Optional[float]:
@@ -817,6 +906,28 @@ def generate_weekly_report(
         if start_total:
             weekly_pnl_pct = round(weekly_pnl / start_total * 100, 2)
 
+    start_cash: Optional[float] = None
+    end_cash: Optional[float] = None
+    start_stock_mv: Optional[float] = None
+    end_stock_mv: Optional[float] = None
+    stock_pnl: Optional[float] = None
+    cash_pnl: Optional[float] = None
+
+    start_record = _start_manifest_record(manifests, morning_totals, close_totals, week_start)
+    end_record = _end_manifest_record(manifests, close_totals)
+    if start_record:
+        start_cash, start_stock_mv = _portfolio_parts_from_manifest(start_record)
+    if end_record:
+        end_cash, end_stock_mv = _portfolio_parts_from_manifest(end_record)
+    elif cash is not None:
+        end_cash = cash
+        end_stock_mv = _stock_mv_from_enriched(pf, enriched)
+
+    if start_stock_mv is not None and end_stock_mv is not None:
+        stock_pnl = round(end_stock_mv - start_stock_mv, 2)
+    if start_cash is not None and end_cash is not None:
+        cash_pnl = round(end_cash - start_cash, 2)
+
     week_start_prices = _week_start_prices_from_manifests(manifests, week_start)
     if not week_start_prices and morning_totals:
         notes.append("本周无早盘报价 manifest，持股周涨跌仅显示当日数据")
@@ -866,6 +977,12 @@ def generate_weekly_report(
         weekly_pnl_pct=weekly_pnl_pct,
         realized_pnl=realized,
         trade_cash_flow=trade_cash_flow,
+        start_cash=start_cash,
+        end_cash=end_cash,
+        start_stock_mv=start_stock_mv,
+        end_stock_mv=end_stock_mv,
+        stock_pnl=stock_pnl,
+        cash_pnl=cash_pnl,
         holdings=holdings,
         watchlist=watchlist,
         hot_sectors=hot_sectors,
@@ -929,6 +1046,51 @@ def _weekly_report_data(report: WeeklyReport | dict[str, Any]) -> dict[str, Any]
     return report
 
 
+def build_weekly_pnl_attribution_lines(report: WeeklyReport | dict[str, Any]) -> list[str]:
+    """Stock vs cash decomposition of weekly portfolio change."""
+    data = _weekly_report_data(report)
+    lines: list[str] = []
+
+    stock_pnl = data.get("stock_pnl")
+    cash_pnl = data.get("cash_pnl")
+    start_stock_mv = data.get("start_stock_mv")
+    end_stock_mv = data.get("end_stock_mv")
+    start_cash = data.get("start_cash")
+    end_cash = data.get("end_cash")
+
+    if stock_pnl is None and cash_pnl is None:
+        return lines
+
+    parts: list[str] = []
+    if stock_pnl is not None:
+        sign = "+" if float(stock_pnl) >= 0 else ""
+        parts.append(f"股票市值 {sign}¥{float(stock_pnl):,.2f}")
+    if cash_pnl is not None:
+        sign = "+" if float(cash_pnl) >= 0 else ""
+        parts.append(f"持有现金 {sign}¥{float(cash_pnl):,.2f}")
+    if parts:
+        lines.append("- **盈亏分解：** " + " · ".join(parts))
+
+    if start_stock_mv is not None and end_stock_mv is not None:
+        stock_pct = None
+        if float(start_stock_mv) > 0 and stock_pnl is not None:
+            stock_pct = round(float(stock_pnl) / float(start_stock_mv) * 100, 2)
+        pct_s = f"（{stock_pct:+.2f}%）" if stock_pct is not None else ""
+        lines.append(
+            f"- **股票市值：** ¥{float(start_stock_mv):,.2f} → ¥{float(end_stock_mv):,.2f}{pct_s}"
+        )
+    if start_cash is not None and end_cash is not None:
+        cash_pct = None
+        if float(start_cash) > 0 and cash_pnl is not None:
+            cash_pct = round(float(cash_pnl) / float(start_cash) * 100, 2)
+        pct_s = f"（{cash_pct:+.2f}%）" if cash_pct is not None else ""
+        lines.append(
+            f"- **持有现金：** ¥{float(start_cash):,.2f} → ¥{float(end_cash):,.2f}{pct_s}"
+        )
+
+    return lines
+
+
 def build_weekly_pnl_explanation(report: WeeklyReport | dict[str, Any]) -> list[str]:
     """Narrative breakdown of weekly P&L for Saturday review cards and skill writeback."""
     data = _weekly_report_data(report)
@@ -955,6 +1117,8 @@ def build_weekly_pnl_explanation(report: WeeklyReport | dict[str, Any]) -> list[
         else:
             verdict = f"本周组合净值基本 **持平**（{pnl_f:+,.2f} 元，{pct_f:+.1f}%）"
         lines.append(f"- **情况说明：** {verdict}。")
+
+    lines.extend(build_weekly_pnl_attribution_lines(data))
 
     close_totals = sorted(
         [row for row in daily_totals if row.get("job") == "close" and row.get("total") is not None],

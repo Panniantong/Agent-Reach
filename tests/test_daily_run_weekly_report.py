@@ -262,6 +262,34 @@ class TestWeeklyReport:
         assert "周报" in title
         assert "+¥2,000" in title
 
+    def test_build_weekly_pnl_attribution(self):
+        from agent_reach.daily_run.weekly_report import (
+            WeeklyReport,
+            build_weekly_pnl_attribution_lines,
+        )
+
+        report = WeeklyReport(
+            week_start=date(2026, 7, 27),
+            week_end=date(2026, 7, 31),
+            start_total=84402.27,
+            end_total=84197.27,
+            weekly_pnl=-205.0,
+            weekly_pnl_pct=-0.24,
+            realized_pnl=0.0,
+            trade_cash_flow=-199048.1,
+            start_cash=44000.0,
+            end_cash=40176.27,
+            start_stock_mv=40402.27,
+            end_stock_mv=44021.0,
+            stock_pnl=3618.73,
+            cash_pnl=-3823.73,
+        )
+        text = "\n".join(build_weekly_pnl_attribution_lines(report))
+        assert "盈亏分解" in text
+        assert "股票市值" in text
+        assert "持有现金" in text
+        assert "44,402.27" in text or "44,021" in text
+
     def test_build_weekly_pnl_explanation(self):
         from agent_reach.daily_run.weekly_report import (
             WeeklyReport,
