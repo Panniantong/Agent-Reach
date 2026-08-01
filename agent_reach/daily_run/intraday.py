@@ -272,6 +272,11 @@ def should_evaluate_trade(
     if len(st.trades) >= MAX_TRADES:
         return False
 
+    from agent_reach.daily_run.portfolio_manager import global_trades_today
+
+    if global_trades_today() >= MAX_TRADES:
+        return False
+
     trend = detect_mss_trend(st.scans)
     if trend in ("turning_up", "turning_down", "rising", "falling"):
         return True
@@ -289,7 +294,9 @@ def apply_paper_trade(
         ApplyResult,
         append_trade_ledger,
         apply_auto_adjust,
+        global_trades_today,
         is_auto_adjust_enabled,
+        register_applied_trade,
     )
     from agent_reach.daily_run.snapshot_builder import load_portfolio, save_portfolio
     from agent_reach.daily_run.symbols import sync_snapshot_portfolio
@@ -320,6 +327,13 @@ def apply_paper_trade(
 
     result = apply_auto_adjust(pf, decision, snap, cfg, allow_watchlist_changes=False)
     if result.applied:
+        if not register_applied_trade(result.actions):
+            pf_now = load_portfolio()
+            return ApplyResult(
+                applied=False,
+                portfolio=pf_now,
+                message="重复成交已忽略（同日相同指令）",
+            )
         save_portfolio(result.portfolio)
         sync_snapshot_portfolio(snap, result.portfolio)
         append_trade_ledger(
@@ -346,8 +360,12 @@ def evaluate_trade(
     cfg = settings or load_settings()
     st = state or load_state(state_path)
 
+    from agent_reach.daily_run.portfolio_manager import global_trades_today
+
     if len(st.trades) >= MAX_TRADES:
         raise RuntimeError(f"今日调仓已达上限 {MAX_TRADES} 次（T1-T{MAX_TRADES}）")
+    if global_trades_today() >= MAX_TRADES:
+        raise RuntimeError(f"今日全组合调仓已达上限 {MAX_TRADES} 次")
     if not st.scans:
         raise RuntimeError("尚无扫描记录，请先运行 daily-run intraday scan")
 

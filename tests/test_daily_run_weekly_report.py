@@ -290,6 +290,29 @@ class TestWeeklyReport:
         assert "持有现金" in text
         assert "44,402.27" in text or "44,021" in text
 
+    def test_load_trade_ledger_range_dedupes(self, tmp_path, monkeypatch):
+        from agent_reach.daily_run.weekly_report import _load_trade_ledger_range
+
+        ledger = tmp_path / "trade_ledger.jsonl"
+        dup = {
+            "at": "2026-07-29T13:44:18+00:00",
+            "actions": [
+                {
+                    "side": "buy",
+                    "code": "000725",
+                    "shares": 5300,
+                    "price": 7.5,
+                    "amount": 39750.0,
+                    "commission": 59.62,
+                }
+            ],
+        }
+        ledger.write_text("\n".join(json.dumps(dup, ensure_ascii=False) for _ in range(3)) + "\n", encoding="utf-8")
+        monkeypatch.setattr("agent_reach.daily_run.weekly_report.default_ledger_path", lambda: ledger)
+
+        rows = _load_trade_ledger_range(date(2026, 7, 27), date(2026, 7, 31))
+        assert len(rows) == 1
+
     def test_build_weekly_pnl_explanation(self):
         from agent_reach.daily_run.weekly_report import (
             WeeklyReport,

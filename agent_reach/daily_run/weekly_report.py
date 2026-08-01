@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agent_reach.daily_run.portfolio_manager import default_ledger_path
+from agent_reach.daily_run.portfolio_manager import dedupe_trade_ledger_entries
 from agent_reach.daily_run.run_manifest import runs_dir
 from agent_reach.daily_run.snapshot_builder import _normalize_code
 from agent_reach.daily_run.symbols import build_enriched_symbols
@@ -467,7 +468,23 @@ def _load_trade_ledger_range(start: date, end: date) -> list[dict[str, Any]]:
         if not _date_in_range(at, start, end):
             continue
         entries.append(entry)
-    return entries
+    return dedupe_trade_ledger_entries(entries)
+
+
+def _holdings_shares_map(portfolio: dict[str, Any]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for h in portfolio.get("holdings") or []:
+        code = _normalize_code(str(h.get("code", "")))
+        if code:
+            out[code] = int(h.get("shares") or 0)
+    return out
+
+
+def _holdings_shares_from_manifest(record: dict[str, Any]) -> dict[str, int]:
+    snap, _ = _merged_enriched_from_manifest(record)
+    if not snap:
+        return {}
+    return _holdings_shares_map(snap.get("portfolio") or {})
 
 
 def _compute_trade_cash_flow(trades: list[dict[str, Any]]) -> float:
@@ -923,10 +940,43 @@ def generate_weekly_report(
         end_cash = cash
         end_stock_mv = _stock_mv_from_enriched(pf, enriched)
 
-    if start_stock_mv is not None and end_stock_mv is not None:
-        stock_pnl = round(end_stock_mv - start_stock_mv, 2)
+    start_shares = (
+        _holdings_shares_from_manifest(start_record)
+        if start_record
+        else _holdings_shares_map(pf)
+    )
+    end_shares = _holdings_shares_map(pf)
+    holdings_changed = start_shares != end_shares
+
+    manifest_cash_pnl: Optional[float] = None
     if start_cash is not None and end_cash is not None:
+        manifest_cash_pnl = round(end_cash - start_cash, 2)
+
+    if (
+        not holdings_changed
+        and manifest_cash_pnl is not None
+        and abs(manifest_cash_pnl) < 0.01
+    ):
+        cash_pnl = 0.0
+        if trades:
+            notes.append("ledger 有成交记录但本周持仓/现金未变，盈亏分解不含成交流水")
+    elif holdings_changed and trades and start_cash is not None:
+        cash_pnl = trade_cash_flow
+        end_cash = round(start_cash + cash_pnl, 2)
+        notes.append("现金变动按 ledger 成交重算（本周持仓已变化）")
+    elif manifest_cash_pnl is not None:
+        cash_pnl = manifest_cash_pnl
+    elif start_cash is not None and end_cash is not None:
         cash_pnl = round(end_cash - start_cash, 2)
+
+    if weekly_pnl is not None and cash_pnl is not None:
+        stock_pnl = round(weekly_pnl - cash_pnl, 2)
+        if start_total is not None and start_cash is not None:
+            start_stock_mv = round(start_total - start_cash, 2)
+        if end_total is not None and end_cash is not None:
+            end_stock_mv = round(end_total - end_cash, 2)
+    elif start_stock_mv is not None and end_stock_mv is not None:
+        stock_pnl = round(end_stock_mv - start_stock_mv, 2)
 
     week_start_prices = _week_start_prices_from_manifests(manifests, week_start)
     if not week_start_prices and morning_totals:
@@ -1159,7 +1209,7 @@ def build_weekly_pnl_explanation(report: WeeklyReport | dict[str, Any]) -> list[
     if trades:
         sign = "+" if trade_cash_flow >= 0 else ""
         lines.append(
-            f"- **成交现金流（ledger）：** {sign}¥{trade_cash_flow:,.2f}，共 {len(trades)} 笔"
+            f"- **成交现金流（ledger，去重后）：** {sign}¥{trade_cash_flow:,.2f}，共 {len(trades)} 笔"
         )
         if abs(realized) > 0.01:
             rsign = "+" if realized >= 0 else ""
@@ -1201,7 +1251,7 @@ def _render_pnl_lines(report: WeeklyReport) -> list[str]:
         lines.append("- 暂无完整净值数据（需本周 daily-run manifest）")
     if report.trades and abs(report.trade_cash_flow) > 0.01:
         sign = "+" if report.trade_cash_flow >= 0 else ""
-        lines.append(f"- **本周成交现金流（ledger）：** {sign}¥{report.trade_cash_flow:,.2f}")
+        lines.append(f"- **本周成交现金流（ledger，去重后）：** {sign}¥{report.trade_cash_flow:,.2f}")
     if report.realized_pnl and abs(report.realized_pnl) > 0.01:
         sign = "+" if report.realized_pnl >= 0 else ""
         lines.append(f"- **本周已实现盈亏（FIFO）：** {sign}¥{report.realized_pnl:,.2f}")

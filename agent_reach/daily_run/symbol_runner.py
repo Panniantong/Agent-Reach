@@ -168,6 +168,7 @@ def run_intraday_for_symbols(
     errors: list[str] = []
 
     for code in targets:
+        pf = load_portfolio()
         name = symbol_display_name(pf, code)
         state_path = default_state_path(code)
         state = load_state(state_path)
@@ -285,6 +286,7 @@ def run_close_for_symbols(
     shared_state = load_state()
 
     for code in targets:
+        pf = load_portfolio()
         name = symbol_display_name(pf, code)
         try:
             baseline = load_morning_baseline(code=code)

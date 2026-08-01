@@ -215,3 +215,66 @@ class TestIncrementDays:
     def test_increment(self, portfolio):
         updated = increment_holding_days(portfolio)
         assert updated["holdings"][0]["days_held"] == 6
+
+
+class TestTradeLedgerDedup:
+    def test_dedupe_trade_ledger_entries(self):
+        from agent_reach.daily_run.portfolio_manager import dedupe_trade_ledger_entries
+
+        entries = [
+            {
+                "at": "2026-07-29T13:44:18+00:00",
+                "actions": [
+                    {
+                        "side": "buy",
+                        "code": "000725",
+                        "shares": 5300,
+                        "price": 7.5,
+                        "amount": 39750.0,
+                    }
+                ],
+            },
+            {
+                "at": "2026-07-29T14:10:24+00:00",
+                "actions": [
+                    {
+                        "side": "buy",
+                        "code": "000725",
+                        "shares": 5300,
+                        "price": 7.5,
+                        "amount": 39750.0,
+                    }
+                ],
+            },
+        ]
+        assert len(dedupe_trade_ledger_entries(entries)) == 1
+
+    def test_register_applied_trade_blocks_duplicate(self, tmp_path, monkeypatch):
+        from agent_reach.daily_run.portfolio_manager import (
+            TradeAction,
+            load_daily_trade_state,
+            register_applied_trade,
+        )
+
+        state_path = tmp_path / "daily_trade_state.json"
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager.daily_trade_state_path",
+            lambda: state_path,
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager._today_str",
+            lambda: "2026-07-31",
+        )
+        action = TradeAction(
+            side="buy",
+            code="000725",
+            name="京东方A",
+            shares=5300,
+            price=7.5,
+            amount=39750.0,
+            commission=59.62,
+            reasoning="test",
+        )
+        assert register_applied_trade([action]) is True
+        assert register_applied_trade([action]) is False
+        assert len(load_daily_trade_state()["fingerprints"]) == 1

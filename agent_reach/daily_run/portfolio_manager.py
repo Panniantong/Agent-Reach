@@ -11,6 +11,7 @@ from typing import Any, Optional
 
 from agent_reach.daily_run.snapshot_builder import _normalize_code
 from agent_reach.daily_run.symbols import build_enriched_symbols, copy_portfolio
+from agent_reach.daily_run.trade_calendar import today_shanghai
 
 
 @dataclass
@@ -54,6 +55,102 @@ class ApplyResult:
 
 def default_ledger_path() -> Path:
     return Path.home() / ".agent-reach" / "daily_run" / "trade_ledger.jsonl"
+
+
+def daily_trade_state_path() -> Path:
+    return Path.home() / ".agent-reach" / "daily_run" / "daily_trade_state.json"
+
+
+def _today_str() -> str:
+    return today_shanghai().isoformat()
+
+
+def _actions_fingerprint(actions: list[TradeAction]) -> str:
+    parts: list[str] = []
+    for action in actions:
+        parts.append(
+            "|".join(
+                [
+                    str(action.side),
+                    _normalize_code(str(action.code)),
+                    str(int(action.shares)),
+                    f"{float(action.price):.4f}",
+                    f"{float(action.amount):.2f}",
+                ]
+            )
+        )
+    return "||".join(sorted(parts))
+
+
+def ledger_entry_fingerprint(entry: dict[str, Any]) -> str:
+    day = str(entry.get("at") or "")[:10]
+    parts: list[str] = []
+    for action in entry.get("actions") or []:
+        parts.append(
+            "|".join(
+                [
+                    str(action.get("side") or ""),
+                    _normalize_code(str(action.get("code") or "")),
+                    str(int(action.get("shares") or 0)),
+                    f"{float(action.get('price') or 0):.4f}",
+                    f"{float(action.get('amount') or 0):.2f}",
+                ]
+            )
+        )
+    return f"{day}::" + "||".join(sorted(parts))
+
+
+def dedupe_trade_ledger_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop repeated ledger rows (same day + same action payload)."""
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for entry in entries:
+        fp = ledger_entry_fingerprint(entry)
+        if fp in seen:
+            continue
+        seen.add(fp)
+        out.append(entry)
+    return out
+
+
+def load_daily_trade_state() -> dict[str, Any]:
+    path = daily_trade_state_path()
+    if not path.exists():
+        return {"date": _today_str(), "fingerprints": []}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {"date": _today_str(), "fingerprints": []}
+    if data.get("date") != _today_str():
+        return {"date": _today_str(), "fingerprints": []}
+    data.setdefault("fingerprints", [])
+    return data
+
+
+def save_daily_trade_state(state: dict[str, Any]) -> None:
+    path = daily_trade_state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def global_trades_today() -> int:
+    return len(load_daily_trade_state().get("fingerprints") or [])
+
+
+def register_applied_trade(actions: list[TradeAction]) -> bool:
+    """Record a successful paper trade for today. Returns False if duplicate."""
+    if not actions:
+        return False
+    fp = _actions_fingerprint(actions)
+    state = load_daily_trade_state()
+    fingerprints = list(state.get("fingerprints") or [])
+    if fp in fingerprints:
+        return False
+    fingerprints.append(fp)
+    state["date"] = _today_str()
+    state["fingerprints"] = fingerprints
+    save_daily_trade_state(state)
+    return True
 
 
 def portfolio_settings(settings: dict[str, Any]) -> dict[str, Any]:
