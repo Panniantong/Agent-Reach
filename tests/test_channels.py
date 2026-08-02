@@ -1549,6 +1549,30 @@ class TestLinkedInChannel:
         assert status == "off"
         assert ch.active_backend is None
 
+    def test_cwd_named_linkedin_is_not_false_positive(
+        self, monkeypatch, tmp_path
+    ):
+        """Regression: CWD path containing 'linkedin' must not flip doctor to ok.
+
+        See https://github.com/Panniantong/Agent-Reach/issues/508
+        """
+        bad_dir = tmp_path / "linkedin-pipeline"
+        bad_dir.mkdir()
+        monkeypatch.chdir(bad_dir)
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: pytest.fail(
+                "Doctor must not execute mcporter"
+            ),
+        )
+        from agent_reach.channels.linkedin import LinkedInChannel
+        ch = LinkedInChannel()
+        status, msg = ch.check()
+        assert status == "off"
+        assert ch.active_backend is None
+
 
 class TestExaSearchChannel:
     def test_mcporter_is_never_executed(self, monkeypatch, tmp_path):
@@ -1616,6 +1640,31 @@ class TestExaSearchChannel:
 
         ch = ExaSearchChannel()
         status, _ = ch.check()
+        assert status == "off"
+        assert ch.active_backend is None
+
+    def test_cwd_named_example_is_not_false_positive(
+        self, monkeypatch, tmp_path
+    ):
+        """Regression: CWD path containing 'exa' as substring must not flip doctor to ok.
+
+        'example' is an extremely common directory name that contains 'exa'.
+        See https://github.com/Panniantong/Agent-Reach/issues/508
+        """
+        bad_dir = tmp_path / "example-project"
+        bad_dir.mkdir()
+        monkeypatch.chdir(bad_dir)
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: pytest.fail(
+                "Doctor must not execute mcporter"
+            ),
+        )
+        from agent_reach.channels.exa_search import ExaSearchChannel
+        ch = ExaSearchChannel()
+        status, msg = ch.check()
         assert status == "off"
         assert ch.active_backend is None
 
