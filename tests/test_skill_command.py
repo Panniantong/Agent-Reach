@@ -3,8 +3,10 @@
 
 import importlib.resources
 import os
+import re
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from agent_reach.cli import _install_skill, _uninstall_skill
@@ -22,6 +24,22 @@ class TestSkillCommand(unittest.TestCase):
 
         self.assertTrue(default_skill.strip())
         self.assertTrue(english_skill.strip())
+
+    def test_mcporter_examples_use_shell_safe_named_arguments(self):
+        """Packaged guidance must avoid function-call syntax that breaks in PowerShell."""
+        repo_root = Path(__file__).resolve().parents[1]
+        markdown_files = [
+            *(repo_root / "agent_reach" / "skill").rglob("*.md"),
+            *(repo_root / "agent_reach" / "guides").rglob("*.md"),
+            repo_root / "docs" / "install.md",
+            repo_root / "docs" / "troubleshooting.md",
+        ]
+        function_call = re.compile(r"mcporter call\s+['\"][^'\"\r\n]+\(")
+
+        for markdown_file in markdown_files:
+            with self.subTest(markdown_file=markdown_file):
+                content = markdown_file.read_text(encoding="utf-8")
+                self.assertNotRegex(content, function_call)
 
     def test_install_skill_creates_skill_md(self):
         """_install_skill should create SKILL.md in the first available skill dir."""

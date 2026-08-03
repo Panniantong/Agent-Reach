@@ -23,7 +23,7 @@ mcporter config add exa https://mcp.exa.ai/mcp --scope home
 ### 3. 验证
 ```bash
 agent-reach doctor | grep "Search"
-mcporter call 'exa.web_search_exa(query: "test", numResults: 1)'
+mcporter call exa.web_search_exa query="test" numResults=1
 ```
 
 ## 需要用户手动做的步骤

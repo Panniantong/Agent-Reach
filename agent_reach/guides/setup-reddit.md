@@ -48,7 +48,7 @@ rdt read POST_ID
 如果你已经配置了 Exa（通过 mcporter），也可以通过 Exa 搜索 Reddit 内容：
 
 ```bash
-mcporter call 'exa.web_search_exa(query: "python best practices", numResults: 5, includeDomains: ["reddit.com"])'
+mcporter call exa.web_search_exa query="site:reddit.com python best practices" numResults=5
 ```
 
 rdt-cli 是当前推荐方案，无需额外配置即可使用。

@@ -60,7 +60,7 @@ these platforms — do not invent your own approach.**
 
 ```bash
 # Exa web search
-mcporter call 'exa.web_search_exa(query: "query", numResults: 5)'
+mcporter call exa.web_search_exa query="query" numResults=5
 
 # Read any web page
 curl -s "https://r.jina.ai/URL"

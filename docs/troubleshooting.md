@@ -52,7 +52,7 @@ proxychains twitter search "test" -n 1
 twitter-cli 不可用时，可以直接用 Exa 搜索 Twitter 内容：
 
 ```bash
-mcporter call 'exa.web_search_exa(query: "site:x.com 搜索词", numResults: 5)'
+mcporter call exa.web_search_exa query="site:x.com 搜索词" numResults=5
 ```
 
 ### 方案 4：检查认证
