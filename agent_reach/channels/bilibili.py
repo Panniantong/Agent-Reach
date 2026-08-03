@@ -22,10 +22,17 @@ _SEARCH_API = "https://api.bilibili.com/x/web-interface/search/all/v2?keyword=te
 
 
 def _search_api_ok() -> bool:
-    """Return True if Bilibili search API responds with code 0."""
+    """Return True if Bilibili search API responds with code 0.
+
+    Bypasses HTTP_PROXY/HTTPS_PROXY because bilibili is a domestic
+    Chinese site that should be accessed directly.  Routing it through
+    an outbound proxy configured for Reddit/Twitter would cause a false
+    negative in doctor.
+    """
     req = urllib.request.Request(_SEARCH_API, headers={"User-Agent": _UA})
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
+        with opener.open(req, timeout=_TIMEOUT) as resp:
             data = json.loads(resp.read())
             return data.get("code") == 0
     except Exception:
