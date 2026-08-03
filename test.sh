@@ -18,7 +18,7 @@ source "$TEST_DIR/venv/bin/activate"
 
 # ── 2. 安装 ──
 echo "📥 从 GitHub 安装..."
-pip install -q https://github.com/Panniantong/agent-reach/archive/main.zip 2>&1 | tail -1
+pip install -q https://github.com/Panniantong/agent-reach/archive/v1.5.0.zip 2>&1 | tail -1
 echo ""
 
 # ── 3. 自动配置 ──

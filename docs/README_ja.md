@@ -84,6 +84,8 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 
 ## クイックスタート
 
+> ⚠️ **インストール元に注意:** Agent Reach は PyPI では配布していません。下記の固定済み GitHub アーカイブからインストールしてください。`pip install agent-reach` は実行しないでください。PyPI の同名パッケージはこのプロジェクトとは無関係です。
+
 以下をAIエージェント（Claude Code、OpenClaw、Cursor等）にコピーしてください：
 
 ```
@@ -101,7 +103,7 @@ Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/m
 <summary>手動インストール</summary>
 
 ```bash
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install https://github.com/Panniantong/agent-reach/archive/v1.5.0.zip
 agent-reach install --env=auto
 ```
 </details>
@@ -272,7 +274,7 @@ Agent Reach は [rdt-cli](https://github.com/public-clis/rdt-cli) でRedditに�
 <details>
 <summary><strong>Agent Reach は Claude Code / Cursor / Windsurf / OpenClaw で動作する？</strong></summary>
 
-はい！Agent Reach はインストーラー + 設定ツールです。シェルコマンドを実行できるあらゆるAIコーディングエージェントで使用できます — Claude Code、Cursor、Windsurf、OpenClaw、Codex等。`pip install agent-reach` を実行し、`agent-reach install` を実行するだけで、エージェントはすぐに上流ツールを使い始められます。
+はい！Agent Reach はインストーラー + 設定ツールです。シェルコマンドを実行できるあらゆるAIコーディングエージェントで使用できます — Claude Code、Cursor、Windsurf、OpenClaw、Codex等。上記の固定済み GitHub アーカイブからインストールし、`agent-reach install` を実行するだけで、エージェントはすぐに上流ツールを使い始められます。
 </details>
 
 <details>

@@ -45,6 +45,8 @@ these platforms — do not invent your own approach.**
    https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md".
    Never interrupt the current task to update; never nag about the same version twice.
 
+> **Install source boundary:** Agent Reach is not distributed on PyPI. For install/update guidance, use the pinned GitHub archive (`v1.5.0`); never run `pip install agent-reach`, because the same-name PyPI package is unrelated.
+
 ## Routing table
 
 | User intent | Category | Details |

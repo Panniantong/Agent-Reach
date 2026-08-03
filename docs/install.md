@@ -48,16 +48,18 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 
 ### Step 1: Install the basics
 
+> ⚠️ **Install source:** Agent Reach is not published on PyPI. Do not run `pip install agent-reach`; the PyPI package with that name is unrelated. The commands below install the pinned `v1.5.0` GitHub archive.
+
 ```bash
 # 推荐：pipx（最省心）
-pipx install https://github.com/Panniantong/agent-reach/archive/main.zip
+pipx install https://github.com/Panniantong/agent-reach/archive/v1.5.0.zip
 agent-reach install --env=auto
 
 # 如果你的 Python 来自 Homebrew / 遇到 PEP 668（externally-managed-environment）
 # 用虚拟环境安装：
 python3 -m venv ~/.agent-reach-venv
 source ~/.agent-reach-venv/bin/activate
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install https://github.com/Panniantong/agent-reach/archive/v1.5.0.zip
 agent-reach install --env=auto
 ```
 
@@ -70,7 +72,7 @@ agent-reach install --env=auto
 > ```powershell
 > py -3 -m venv $env:USERPROFILE\.agent-reach-venv
 > $env:USERPROFILE\.agent-reach-venv\Scripts\Activate.ps1
-> python -m pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+> python -m pip install https://github.com/Panniantong/agent-reach/archive/v1.5.0.zip
 > agent-reach install --env=auto
 > ```
 

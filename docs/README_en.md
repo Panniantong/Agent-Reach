@@ -93,6 +93,8 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 
 ## Quick Start
 
+> ⚠️ **Install source:** Agent Reach is not distributed on PyPI. Use the pinned GitHub archive in the manual-install snippet below; do not run `pip install agent-reach`, which installs an unrelated project with the same name.
+
 > ⚠️ **OpenClaw users: enable `exec` permission first**
 >
 > Agent Reach relies on the Agent running shell commands (`pip install`, `mcporter`, `twitter`, etc.). If your OpenClaw uses the default `messaging` tool profile, the Agent won't be able to run them. **Enable `exec` before installing:**
@@ -125,7 +127,7 @@ The Agent auto-installs, detects your environment, and tells you what's ready.
 <summary>Manual install</summary>
 
 ```bash
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install https://github.com/Panniantong/agent-reach/archive/v1.5.0.zip
 agent-reach install --env=auto
 ```
 </details>

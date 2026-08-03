@@ -36,13 +36,15 @@ If it says "已是最新版本", skip to Step 4 (verify). Otherwise continue.
 
 ### Step 2: Update Agent Reach package
 
+> ⚠️ Agent Reach is not installed from the PyPI name `agent-reach`. Use the pinned GitHub archive below; that PyPI name currently belongs to an unrelated project.
+
 ```bash
-pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install --upgrade https://github.com/Panniantong/agent-reach/archive/v1.5.0.zip
 ```
 
 > If pip complains about `externally-managed-environment` (PEP 668), the user
 > originally installed via pipx or a venv — use the matching command:
-> `pipx install --force https://github.com/Panniantong/agent-reach/archive/main.zip`
+> `pipx install --force https://github.com/Panniantong/agent-reach/archive/v1.5.0.zip`
 > or activate `~/.agent-reach-venv` first.
 
 ### Step 3: Refresh upstream tools

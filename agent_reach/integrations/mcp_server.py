@@ -28,7 +28,11 @@ except ImportError:
 
 def create_server():
     if not HAS_MCP:
-        print("MCP not installed. Install: pip install agent-reach[mcp]", file=sys.stderr)
+        print(
+            "MCP not installed. Install its dependency: "
+            'python -m pip install "mcp[cli]>=1.0"',
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     server = Server("agent-reach")

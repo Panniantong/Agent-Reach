@@ -84,6 +84,8 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 
 ## 빠른 시작
 
+> ⚠️ **설치 출처 주의:** Agent Reach는 PyPI에 배포되지 않습니다. 아래의 고정된 GitHub 아카이브에서 설치하세요. `pip install agent-reach`를 실행하지 마세요. PyPI의 같은 이름 패키지는 이 프로젝트와 무관합니다.
+
 이 명령을 AI 에이전트(Claude Code, OpenClaw, Cursor 등)에 입력하세요:
 
 ```
@@ -101,7 +103,7 @@ Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/m
 <summary>수동 설치</summary>
 
 ```bash
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install https://github.com/Panniantong/agent-reach/archive/v1.5.0.zip
 agent-reach install --env=auto
 ```
 </details>
@@ -273,7 +275,7 @@ Agent Reach는 Reddit을 위해 [rdt-cli](https://github.com/public-clis/rdt-cli
 <details>
 <summary><strong>Agent Reach는 Claude Code / Cursor / Windsurf / OpenClaw와 호환되나요?</strong></summary>
 
-네! Agent Reach는 설치 + 설정 도구입니다. Shell 명령을 실행할 수 있는 모든 AI 코딩 에이전트가 사용할 수 있습니다 — Claude Code, Cursor, Windsurf, OpenClaw, Codex 등. `pip install agent-reach`만 실행하고 `agent-reach install`을 실행하면, 에이전트가 즉시 업스트림 도구 사용을 시작할 수 있습니다.
+네! Agent Reach는 설치 + 설정 도구입니다. Shell 명령을 실행할 수 있는 모든 AI 코딩 에이전트가 사용할 수 있습니다 — Claude Code, Cursor, Windsurf, OpenClaw, Codex 등. 위의 고정된 GitHub 아카이브에서 설치한 뒤 `agent-reach install`을 실행하면, 에이전트가 즉시 업스트림 도구 사용을 시작할 수 있습니다.
 </details>
 
 <details>

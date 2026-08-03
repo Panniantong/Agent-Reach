@@ -57,6 +57,8 @@ metadata:
    https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md」。
    不要中断当前任务去更新，也不要重复提醒同一个版本。
 
+> **安装来源注意：** Agent Reach 不发布到 PyPI。安装/更新时只能使用固定版本的 GitHub archive（当前为 `v1.5.0`）；不要运行 `pip install agent-reach`，PyPI 同名包不是本项目。
+
 ## 路由表
 
 | 用户意图 | 分类 | 详细文档 |
