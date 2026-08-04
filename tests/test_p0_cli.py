@@ -901,3 +901,211 @@ def test_uninstall_preserves_mcporter_entries_without_agent_reach_provenance(
     output = capsys.readouterr().out
     assert not any("remove" in call for call in calls)
     assert "来源无法证明" in output
+
+
+# ── apt source safety ───────────────────────────────
+#
+# Writing /etc/apt/sources.list.d/github-cli.list while its `signed-by` keyring
+# is missing breaks `apt-get update` for the whole machine, not just for Agent
+# Reach — and the breakage surfaces long after the installer exits. These tests
+# pin every path that must leave apt exactly as it was found.
+
+
+@pytest.fixture
+def apt_paths(monkeypatch, tmp_path):
+    """Redirect the privileged apt paths and grant fake root."""
+    keyring = tmp_path / "keyrings" / "githubcli-archive-keyring.gpg"
+    listfile = tmp_path / "sources.list.d" / "github-cli.list"
+    monkeypatch.setattr(cli, "_GH_KEYRING_PATH", str(keyring))
+    monkeypatch.setattr(cli, "_GH_APT_LIST_PATH", str(listfile))
+    monkeypatch.setattr(cli.os, "geteuid", lambda: 0, raising=False)
+    monkeypatch.setattr(
+        "shutil.which",
+        lambda name: "/usr/bin/apt-get" if name == "apt-get" else None,
+    )
+    return keyring, listfile
+
+
+def test_gh_apt_source_not_written_when_keyring_download_fails(
+    apt_paths, monkeypatch, capsys
+):
+    """A failed keyring fetch must not leave a source referencing it."""
+    keyring, listfile = apt_paths
+
+    def fake_run(args, **_kwargs):
+        if args[0] == "dpkg":
+            return _docker_result(args, stdout="amd64\n")
+        if args[0] == "curl":
+            return _docker_result(args, returncode=22)  # curl -f on HTTP error
+        pytest.fail(f"apt must not run after a failed keyring download: {args}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert cli._install_gh_apt() is False
+    assert not listfile.exists()
+    assert not keyring.exists()
+    assert "apt sources left untouched" in capsys.readouterr().out
+
+
+def test_gh_apt_source_not_written_when_keyring_download_is_empty(
+    apt_paths, monkeypatch
+):
+    """A zero-byte keyring is a failed download even when curl exits 0."""
+    keyring, listfile = apt_paths
+
+    def fake_run(args, **_kwargs):
+        if args[0] == "dpkg":
+            return _docker_result(args, stdout="amd64\n")
+        if args[0] == "curl":
+            target = Path(args[args.index("-o") + 1])
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(b"")
+            return _docker_result(args)
+        pytest.fail(f"apt must not run for an empty keyring: {args}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert cli._install_gh_apt() is False
+    assert not listfile.exists()
+
+
+def test_gh_apt_source_rolled_back_when_update_fails(apt_paths, monkeypatch):
+    """If our new source breaks `apt-get update`, we remove it again."""
+    keyring, listfile = apt_paths
+
+    def fake_run(args, **_kwargs):
+        if args[0] == "dpkg":
+            return _docker_result(args, stdout="amd64\n")
+        if args[0] == "curl":
+            target = Path(args[args.index("-o") + 1])
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(b"keyring-bytes")
+            return _docker_result(args)
+        if args[:2] == ["apt-get", "update"]:
+            return _docker_result(args, returncode=100)
+        pytest.fail(f"install must not run after a failed update: {args}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert cli._install_gh_apt() is False
+    assert not listfile.exists()
+    assert keyring.read_bytes() == b"keyring-bytes"
+
+
+def test_gh_apt_keyring_download_failure_preserves_existing_keyring(
+    apt_paths, monkeypatch
+):
+    """A retry that fails must not truncate a keyring from an earlier install."""
+    keyring, listfile = apt_paths
+    keyring.parent.mkdir(parents=True)
+    keyring.write_bytes(b"already-working")
+
+    def fake_run(args, **_kwargs):
+        if args[0] == "dpkg":
+            return _docker_result(args, stdout="amd64\n")
+        if args[0] == "curl":
+            return _docker_result(args, returncode=6)
+        pytest.fail(f"apt must not run after a failed download: {args}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert cli._install_gh_apt() is False
+    assert keyring.read_bytes() == b"already-working"
+    assert not listfile.exists()
+
+
+def test_gh_apt_install_writes_source_only_on_the_happy_path(
+    apt_paths, monkeypatch
+):
+    """With every step succeeding, the source names the keyring we fetched."""
+    keyring, listfile = apt_paths
+
+    def fake_run(args, **_kwargs):
+        if args[0] == "dpkg":
+            return _docker_result(args, stdout="arm64\n")
+        if args[0] == "curl":
+            target = Path(args[args.index("-o") + 1])
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(b"keyring-bytes")
+        return _docker_result(args)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert cli._install_gh_apt() is True
+    contents = listfile.read_text(encoding="utf-8")
+    assert f"arch=arm64 signed-by={keyring}" in contents
+    assert keyring.exists()
+
+
+def test_gh_apt_install_refuses_without_root(apt_paths, monkeypatch, capsys):
+    """A non-root run must say so instead of failing generically in /etc."""
+    keyring, listfile = apt_paths
+    monkeypatch.setattr(cli.os, "geteuid", lambda: 1000, raising=False)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *a, **k: pytest.fail("no system command may run without root"),
+    )
+
+    assert cli._install_gh_apt() is False
+    assert not listfile.exists()
+    assert "needs root" in capsys.readouterr().out
+
+
+def test_gh_apt_install_skipped_on_non_apt_system(monkeypatch, capsys):
+    """Fedora/Arch must not get an /etc/apt source written for them."""
+    monkeypatch.setattr("shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *a, **k: pytest.fail("no command may run without apt-get"),
+    )
+
+    assert cli._install_gh_apt() is False
+    assert "not an apt-based system" in capsys.readouterr().out
+
+
+def test_nodesource_script_removed_even_when_it_fails(monkeypatch, capsys):
+    """The downloaded setup script must never leak into the temp dir."""
+    script_paths = []
+    monkeypatch.setattr(cli.os, "geteuid", lambda: 0, raising=False)
+    monkeypatch.setattr(
+        "shutil.which",
+        lambda name: "/usr/bin/apt-get" if name == "apt-get" else None,
+    )
+
+    def fake_run(args, **_kwargs):
+        if args[0] == "curl":
+            target = Path(args[args.index("-o") + 1])
+            target.write_text("#!/bin/bash\nexit 1\n", encoding="utf-8")
+            script_paths.append(target)
+            return _docker_result(args)
+        if args[0] == "bash":
+            return _docker_result(args, returncode=1)
+        pytest.fail(f"apt must not run after a failed setup script: {args}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert cli._install_node_apt() is False
+    assert script_paths and not script_paths[0].exists()
+    assert "apt sources unchanged" in capsys.readouterr().out
+
+
+def test_nodesource_empty_script_is_not_treated_as_success(monkeypatch, capsys):
+    """bash exits 0 on an empty file — that must not count as setup succeeding."""
+    monkeypatch.setattr(cli.os, "geteuid", lambda: 0, raising=False)
+    monkeypatch.setattr(
+        "shutil.which",
+        lambda name: "/usr/bin/apt-get" if name == "apt-get" else None,
+    )
+
+    def fake_run(args, **_kwargs):
+        if args[0] == "curl":
+            Path(args[args.index("-o") + 1]).write_bytes(b"")
+            return _docker_result(args)
+        pytest.fail(f"nothing may run for an empty setup script: {args}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert cli._install_node_apt() is False
+    assert "Could not download the NodeSource setup script" in capsys.readouterr().out

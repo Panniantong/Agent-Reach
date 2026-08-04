@@ -9,16 +9,20 @@ Usage:
     agent-reach setup
 """
 
-import sys
 import argparse
 import json
 import os
+import sys
 import time
 
 from agent_reach import __version__
 
 # Pinned to the 0.4.2 state — PyPI still only has 0.4.1 (upstream issue #10).
 _RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66"
+
+# Module-level so tests can redirect them instead of touching the real system.
+_GH_KEYRING_PATH = "/usr/share/keyrings/githubcli-archive-keyring.gpg"
+_GH_APT_LIST_PATH = "/etc/apt/sources.list.d/github-cli.list"
 
 
 def _ensure_utf8_console():
@@ -277,9 +281,9 @@ def _cmd_install(args):
         env = _detect_environment()
 
     if env == "server":
-        print(f"Environment: Server/VPS (auto-detected)")
+        print("Environment: Server/VPS (auto-detected)")
     else:
-        print(f"Environment: Local computer (auto-detected)")
+        print("Environment: Local computer (auto-detected)")
 
     server_skipped_opencli_channels = set()
     if env == "server" and requested_channels:
@@ -295,7 +299,7 @@ def _cmd_install(args):
         else:
             config.set("proxy", args.proxy)
             config.set("bilibili_proxy", args.proxy)  # legacy key
-            print(f"✅ 代理已保存（Agent 访问受限网络时使用）")
+            print("✅ 代理已保存（Agent 访问受限网络时使用）")
 
     # ── Install core system dependencies (lightweight, always) ──
     print()
@@ -412,9 +416,9 @@ def _cmd_install(args):
 
 def _install_skill(force: bool = True):
     """Install Agent Reach as an agent skill (OpenClaw / Claude Code / .agents)."""
+    import importlib.resources
     import os
     import shutil
-    import importlib.resources
 
     def _is_english_locale(value: str) -> bool:
         normalized = value.strip().lower()
@@ -587,12 +591,163 @@ def _cmd_format(args):
         print(json.dumps(cleaned, ensure_ascii=False, indent=2))
 
 
-def _install_system_deps():
-    """Install system-level dependencies: gh CLI, Node.js (for mcporter)."""
+def _run_checked(cmd, *, timeout, **kwargs) -> bool:
+    """Run a command and report whether it actually succeeded.
+
+    Installer steps chain: an apt source naming a keyring that the previous
+    step failed to fetch breaks `apt-get update` for the whole machine, not
+    just for Agent Reach, and the breakage surfaces long after this installer
+    exits. Every step therefore has to prove it exited cleanly before the next
+    one is allowed to run.
+    """
+    import subprocess
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, timeout=timeout, **kwargs)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
+def _can_modify_system(action: str) -> bool:
+    """Return whether this process may make privileged system-wide changes.
+
+    Writing to /etc and running apt-get needs root. Without this check a
+    non-root run turns every step into a PermissionError that the caller
+    reports as a generic "install failed", hiding the one thing the user
+    needs to know.
+    """
+    geteuid = getattr(os, "geteuid", None)
+    if geteuid is None:  # Windows has no euid; nothing here targets it anyway
+        return True
+    if geteuid() == 0:
+        return True
+    print(f"  -- Skipping {action}: needs root. Re-run with sudo, or install manually.")
+    return False
+
+
+def _install_gh_apt() -> bool:
+    """Set up the official GitHub apt source and install gh.
+
+    Returns False leaving apt as it found it. The keyring is fetched to a
+    sibling temp file and renamed into place, so a failed download can never
+    truncate a working keyring; the source list is written only once that
+    keyring exists, and is rolled back if `apt-get update` then fails.
+    """
     import shutil
     import subprocess
-    import platform
+
+    if not shutil.which("apt-get"):
+        print("  [!]  gh CLI not found and this is not an apt-based system. Install: https://cli.github.com")
+        return False
+    if not _can_modify_system("gh CLI apt install"):
+        return False
+
+    keyring_path = _GH_KEYRING_PATH
+    list_path = _GH_APT_LIST_PATH
+    keyring_tmp = keyring_path + ".agent-reach.tmp"
+
+    try:
+        arch_result = subprocess.run(
+            ["dpkg", "--print-architecture"],
+            capture_output=True, encoding="utf-8", errors="replace", timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    arch = (arch_result.stdout or "").strip() or "amd64"
+
+    try:
+        os.makedirs(os.path.dirname(keyring_path), mode=0o755, exist_ok=True)
+        downloaded = _run_checked(
+            ["curl", "-fsSL",
+             "https://cli.github.com/packages/githubcli-archive-keyring.gpg",
+             "-o", keyring_tmp],
+            timeout=60,
+        )
+        if not downloaded or os.path.getsize(keyring_tmp) == 0:
+            print("  -- Could not download the GitHub apt keyring; apt sources left untouched")
+            return False
+        os.chmod(keyring_tmp, 0o644)
+        os.replace(keyring_tmp, keyring_path)
+    except OSError:
+        print("  -- Could not install the GitHub apt keyring; apt sources left untouched")
+        return False
+    finally:
+        try:
+            os.unlink(keyring_tmp)
+        except OSError:
+            pass
+
+    # Only now that the keyring is really on disk may anything reference it.
+    created_list = not os.path.exists(list_path)
+    repo_line = (
+        f"deb [arch={arch} signed-by={keyring_path}] "
+        "https://cli.github.com/packages stable main\n"
+    )
+    try:
+        os.makedirs(os.path.dirname(list_path), mode=0o755, exist_ok=True)
+        with open(list_path, "w", encoding="utf-8") as f:
+            f.write(repo_line)
+    except OSError:
+        print("  -- Could not write the GitHub apt source")
+        return False
+
+    if not _run_checked(["apt-get", "update", "-qq"], timeout=120):
+        print("  -- `apt-get update` failed; removing the source Agent Reach just added")
+        if created_list:
+            try:
+                os.unlink(list_path)
+            except OSError:
+                pass
+        return False
+
+    return _run_checked(["apt-get", "install", "-y", "-qq", "gh"], timeout=120)
+
+
+def _install_node_apt() -> bool:
+    """Install Node.js via the NodeSource setup script, verifying each step."""
+    import shutil
     import tempfile
+
+    if not shutil.which("apt-get"):
+        print("  [!]  Node.js not found and this is not an apt-based system. Install: https://nodejs.org")
+        return False
+    if not _can_modify_system("Node.js apt install"):
+        return False
+
+    script_path = None
+    try:
+        fd, script_path = tempfile.mkstemp(suffix=".sh")
+        os.close(fd)
+        downloaded = _run_checked(
+            ["curl", "-fsSL", "https://deb.nodesource.com/setup_22.x", "-o", script_path],
+            timeout=60,
+        )
+        # An unchecked curl leaves an empty file that bash exits 0 on, which
+        # would read as "setup succeeded" right before apt-get finds no package.
+        if not downloaded or os.path.getsize(script_path) == 0:
+            print("  -- Could not download the NodeSource setup script")
+            return False
+        if not _run_checked(["bash", script_path], timeout=180):
+            print("  -- NodeSource setup failed; apt sources unchanged by Agent Reach")
+            return False
+    except OSError:
+        return False
+    finally:
+        if script_path:
+            try:
+                os.unlink(script_path)
+            except OSError:
+                pass
+
+    return _run_checked(["apt-get", "install", "-y", "-qq", "nodejs"], timeout=180)
+
+
+def _install_system_deps():
+    """Install system-level dependencies: gh CLI, Node.js (for mcporter)."""
+    import platform
+    import shutil
+    import subprocess
 
     print("Checking system dependencies...")
 
@@ -603,31 +758,9 @@ def _install_system_deps():
         print("  Installing gh CLI...")
         os_type = platform.system().lower()
         if os_type == "linux":
-            try:
-                # Official GitHub apt source setup without invoking a shell.
-                keyring_path = "/usr/share/keyrings/githubcli-archive-keyring.gpg"
-                list_path = "/etc/apt/sources.list.d/github-cli.list"
-                arch = subprocess.run(
-                    ["dpkg", "--print-architecture"],
-                    capture_output=True, encoding="utf-8", errors="replace", timeout=10,
-                ).stdout.strip() or "amd64"
-                subprocess.run(
-                    ["curl", "-fsSL", "https://cli.github.com/packages/githubcli-archive-keyring.gpg", "-o", keyring_path],
-                    capture_output=True, timeout=60,
-                )
-                repo_line = (
-                    f"deb [arch={arch} signed-by={keyring_path}] "
-                    "https://cli.github.com/packages stable main\n"
-                )
-                with open(list_path, "w", encoding="utf-8") as f:
-                    f.write(repo_line)
-                subprocess.run(["apt-get", "update", "-qq"], capture_output=True, timeout=60)
-                subprocess.run(["apt-get", "install", "-y", "-qq", "gh"], capture_output=True, timeout=60)
-                if shutil.which("gh"):
-                    print("  ✅ gh CLI installed")
-                else:
-                    print("  [!]  gh CLI install failed. You can try: snap install gh, or download from https://github.com/cli/cli/releases")
-            except Exception:
+            if _install_gh_apt() and shutil.which("gh"):
+                print("  ✅ gh CLI installed")
+            else:
                 print("  [!]  gh CLI install failed. You can try: snap install gh, or download from https://github.com/cli/cli/releases")
         elif os_type == "darwin":
             if shutil.which("brew"):
@@ -649,31 +782,9 @@ def _install_system_deps():
         print("  ✅ Node.js already installed")
     else:
         print("  Installing Node.js...")
-        try:
-            # Use NodeSource setup script without invoking a shell pipeline.
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".sh") as tf:
-                script_path = tf.name
-            subprocess.run(
-                ["curl", "-fsSL", "https://deb.nodesource.com/setup_22.x", "-o", script_path],
-                capture_output=True, timeout=60,
-            )
-            subprocess.run(
-                ["bash", script_path],
-                capture_output=True, timeout=120,
-            )
-            try:
-                os.unlink(script_path)
-            except Exception:
-                pass
-            subprocess.run(
-                ["apt-get", "install", "-y", "-qq", "nodejs"],
-                capture_output=True, timeout=120,
-            )
-            if shutil.which("node"):
-                print("  ✅ Node.js installed")
-            else:
-                print("  [!]  Node.js install failed. Try: apt install nodejs npm, or nvm install 22, or download from https://nodejs.org")
-        except Exception:
+        if _install_node_apt() and shutil.which("node"):
+            print("  ✅ Node.js installed")
+        else:
             print("  [!]  Node.js install failed. Try: apt install nodejs npm, or nvm install 22, or download from https://nodejs.org")
 
     # ── undici (proxy support for Node.js fetch) ──
@@ -776,6 +887,7 @@ def _install_system_deps():
 def _install_xiaoyuzhou_deps():
     """Install Xiaoyuzhou podcast transcription script."""
     import shutil
+
     from agent_reach.config import Config
 
     config = Config()
@@ -1311,15 +1423,15 @@ def _cmd_configure(args):
 
     elif args.key == "github-token":
         config.set("github_token", value)
-        print(f"✅ GitHub token configured!")
+        print("✅ GitHub token configured!")
 
     elif args.key == "groq-key":
         config.set("groq_api_key", value)
-        print(f"✅ Groq key configured!")
+        print("✅ Groq key configured!")
 
     elif args.key == "openai-key":
         config.set("openai_api_key", value)
-        print(f"✅ OpenAI key configured!")
+        print("✅ OpenAI key configured!")
 
 
 def _cmd_transcribe(args):
@@ -1826,7 +1938,7 @@ def _cmd_setup():
     print("  获取: https://github.com/settings/tokens (无需任何权限)")
     current = config.get("github_token")
     if current:
-        print(f"  当前状态: ✅ 已配置")
+        print("  当前状态: ✅ 已配置")
     else:
         key = input("  GITHUB_TOKEN (回车跳过): ").strip()
         if key:
@@ -1847,7 +1959,7 @@ def _cmd_setup():
     print("  免费额度，注册: https://console.groq.com")
     current = config.get("groq_api_key")
     if current:
-        print(f"  当前状态: ✅ 已配置")
+        print("  当前状态: ✅ 已配置")
     else:
         key = input("  GROQ_API_KEY (回车跳过): ").strip()
         if key:
@@ -1978,10 +2090,10 @@ def _is_newer_version(remote: str, local: str) -> bool:
         except ValueError:
             return None
 
-    r, l = parse(remote), parse(local)
-    if r is None or l is None:
+    remote_parts, local_parts = parse(remote), parse(local)
+    if remote_parts is None or local_parts is None:
         return remote != local  # unparseable — fall back to old behavior
-    return r > l
+    return remote_parts > local_parts
 
 
 def _cmd_check_update():
@@ -2014,7 +2126,7 @@ def _cmd_check_update():
             print()
             print(_UPDATE_INSTRUCTIONS)
             return "update_available"
-        print(f"✅ 已是最新版本")
+        print("✅ 已是最新版本")
         return "up_to_date"
 
     release_err = _classify_github_response_error(resp)
@@ -2051,9 +2163,9 @@ def _cmd_watch():
 
     Only outputs problems. If everything is fine, outputs a single line.
     """
+    from agent_reach import __version__
     from agent_reach.config import Config
     from agent_reach.doctor import check_all
-    from agent_reach import __version__
 
     config = Config(read_only=True)
     issues = []
@@ -2092,8 +2204,8 @@ def _cmd_watch():
         print(f"Agent Reach: 全部正常 ({ok}/{total} 渠道可用，v{__version__} 已是最新)")
         return
 
-    print(f"Agent Reach 监控报告")
-    print(f"=" * 40)
+    print("Agent Reach 监控报告")
+    print("=" * 40)
     print(f"版本: v{__version__}  |  渠道: {ok}/{total}")
 
     if issues:
