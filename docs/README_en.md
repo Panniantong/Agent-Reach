@@ -10,6 +10,7 @@
 
 <p align="center">
   <a href="https://trendshift.io/repositories/24387"><img src="https://trendshift.io/api/badge/repositories/24387" alt="Trendshift GitHub Trending #1 Repository of the Day"></a>
+  <a href="https://star-history.com/#Panniantong/Agent-Reach&Date"><img src="https://api.star-history.com/badge?repo=Panniantong/Agent-Reach" alt="Star History Rank" width="196" height="55"></a>
 </p>
 
 <p align="center">
@@ -23,6 +24,28 @@
 </p>
 
 > **No token or crypto affiliation:** Agent Reach has no official token, coin, investment product, fee-claim program, wallet connection, or Solana/Pump.fun project. Any crypto project using the Agent Reach name, GitHub URL, or author identity is not affiliated with this repository. Do not connect a wallet or claim fees based on messages, posts, or links that say otherwise.
+
+---
+
+## ❤️ Sponsors
+
+> [Want to appear here?](mailto:pnt01@foxmail.com)
+
+<details open>
+<summary>Click to collapse</summary>
+
+<table>
+<tr>
+<td width="180" align="center"><a href="https://www.browseract.com/?co-from=Agent&amp;redirect=https://github.com/browser-act/skills/tree/main"><img src="assets/sponsors/browseract.svg" alt="BrowserAct" width="150"></a></td>
+<td>Thanks to BrowserAct for supporting this project! BrowserAct is built for dynamic pages, filters, pagination, detail pages, and multi-step navigation. Describe the data you need and it explores and tests the site in a real browser, generates a reliable reusable data-collection Bot, and returns structured results. It also provides 30+ prebuilt platform skills for agents including Claude Code, OpenClaw, and Cursor.</td>
+</tr>
+<tr>
+<td width="180" align="center"><a href="https://www.tencentcloud.com/act/pro/intl-openclaw?referral_code=G76Y819A&amp;lang=en&amp;pg="><img src="assets/sponsors/tencent-cloud.svg" alt="OpenClaw on Tencent Cloud" width="150"></a></td>
+<td>Thanks to Tencent Cloud OpenClaw for supporting this project! Deploy OpenClaw on Tencent Cloud Lighthouse in seconds, connect Agent Reach through chat, and add internet access to your OpenClaw setup.</td>
+</tr>
+</table>
+
+</details>
 
 ---
 
@@ -164,12 +187,6 @@ No configuration needed — just tell your Agent:
 
 ---
 
-## Capability Boundary: Reading Content vs Operating Web Pages
-
-Some tasks go beyond "reading": operating logged-in web pages, submitting forms, isolating multiple accounts, running parallel browser sessions, or handing off high-friction steps in automation flows such as login, verification, and risk-control prompts. For these "hands-on" browser actions, Agent Reach can be paired with browser automation tools like [BrowserAct](https://www.browseract.com/?co-from=Agent&redirect=https://github.com/browser-act/skills/tree/main) — 30+ prebuilt platform skills, supporting mainstream Agents such as Claude Code, OpenClaw, and Cursor.
-
----
-
 ## Unlock on Demand
 
 Don't use it? Don't configure it. Every step is optional.
@@ -300,10 +317,6 @@ For collaboration or questions, add me on WeChat — I'll invite you to the comm
 [MIT](../LICENSE)
 
 ## Friends
-
-[Ark Agent Plan model subscription](https://dis.chatdesks.cn/chatdesk/hsyqAgent-Reach.html) — integrates ByteDance's in-house SOTA models, including Doubao-Seed, Doubao-Seedance, Doubao-Seedream, and more, covering multimodal tasks across text, code, images, and video. It now supports MiniMax-M3, DeepSeek-V4 series, GLM-5.2, Doubao-Seed-2.0 series, Kimi-K2.6, and more, with no tool restrictions. Upgrade to a full-modal model suite and Harness in one step, with deep support for Agent frameworks and AI coding tools. One subscription lets you switch to the right AI engine for each task.
-
-[OpenClaw on Tencent Cloud](https://www.tencentcloud.com/act/pro/intl-openclaw?referral_code=G76Y819A&lang=en&pg=) — One-click OpenClaw on Tencent Cloud: chat to connect Agent Reach & unlock internet power.
 
 [Agent Skills Hub](https://agentskillshub.top/) — Find Claude skills & MCP servers without guessing what's safe. Every one of 133,000+ entries is security-graded, quality-scored, and refreshed every 8 hours.
 

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Reach README 赞助与友链区域调整</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --text: #20242c;
+      --muted: #626a78;
+      --line: #dfe3ea;
+      --accent: #d64f70;
+      --accent-soft: #fff0f4;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14161b;
+        --card: #1d2027;
+        --text: #f2f3f5;
+        --muted: #aeb4bf;
+        --line: #343944;
+        --accent-soft: #351f28;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { max-width: 920px; margin: 48px auto; padding: 0 24px 64px; }
+    header, section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 28px 32px;
+      margin-bottom: 18px;
+    }
+    h1, h2 { line-height: 1.25; margin-top: 0; }
+    h1 { font-size: 30px; margin-bottom: 8px; }
+    h2 { font-size: 20px; }
+    p:last-child { margin-bottom: 0; }
+    .eyebrow { color: var(--accent); font-weight: 700; letter-spacing: .05em; }
+    .muted { color: var(--muted); }
+    .flow { display: grid; gap: 10px; }
+    .step {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid var(--line); padding: 12px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 14px; }
+    code { background: var(--accent-soft); border-radius: 5px; padding: 2px 6px; }
+    ul { padding-left: 22px; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">README DESIGN · 2026-08-04</div>
+    <h1>赞助与友链区域调整</h1>
+    <p class="muted">把商业合作集中到 README 顶部，同时保留生态友链的真实身份，避免正文中出现孤立广告。</p>
+  </header>
+
+  <section>
+    <h2>目标与边界</h2>
+    <ul>
+      <li>让赞助内容在顶部清晰可见，但不影响项目核心介绍。</li>
+      <li>BrowserAct 与腾讯云 OpenClaw 使用统一的左右两列赞助条目。</li>
+      <li>Agent Skills Hub 与 AtomGit 镜像保留在 README 最后的「友情链接」。</li>
+      <li>方舟 Agent Plan 从 README 中删除。</li>
+      <li>不改产品能力、安装流程、Python 代码或上游项目。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>页面结构</h2>
+    <div class="flow">
+      <div class="step">项目标题、简介、徽章、语言与页面导航</div>
+      <div class="step"><strong>❤️ 赞助商</strong>：默认展开的折叠区，展示 BrowserAct 与腾讯云 OpenClaw</div>
+      <div class="step">为什么需要 Agent Reach、平台能力、安装与设计理念等正文</div>
+      <div class="step"><strong>友情链接</strong>：Agent Skills Hub 与 AtomGit 镜像</div>
+      <div class="step">Star History</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>赞助区呈现</h2>
+    <table>
+      <thead><tr><th>元素</th><th>约定</th></tr></thead>
+      <tbody>
+        <tr><td>位置</td><td>顶部导航之后、第一段产品正文之前。</td></tr>
+        <tr><td>容器</td><td>使用 <code>&lt;details open&gt;</code>，允许折叠但默认展示。</td></tr>
+        <tr><td>布局</td><td>所有合作方统一使用 HTML 表格；左侧固定宽度小图，右侧为项目说明和链接。</td></tr>
+        <tr><td>素材</td><td>仅使用合作方官方 Logo，保存到 <code>docs/assets/sponsors/</code>。</td></tr>
+        <tr><td>文案</td><td>沿用现有事实，不新增未经确认的优惠、承诺或夸张表述。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>文件范围与验证</h2>
+    <ul>
+      <li>同步修改 <code>README.md</code> 与 <code>docs/README_en.md</code>。</li>
+      <li>删除中部 BrowserAct 独立段落，确保全文不再重复。</li>
+      <li>检查图片路径、链接、HTML 标签闭合和中英文内容对应关系。</li>
+      <li>通过文本扫描确认方舟 Agent Plan 已移除，四个保留项目各自只出现在预定区域。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>提交记录</h2>
+    <p>提交信息只描述本项目自身变化：<code>docs(readme): reorganize partner section</code>。不在提交、分支或 README 中记录外部版式参考来源。</p>
+  </section>
+</main>
+</body>
+</html>
