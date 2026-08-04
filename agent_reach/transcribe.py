@@ -16,6 +16,7 @@ from __future__ import annotations
 import ipaddress
 import math
 import shutil
+import socket
 import subprocess
 import tempfile
 from pathlib import Path
@@ -159,10 +160,30 @@ def _run(cmd: List[str], timeout: int = 600) -> None:
         )
 
 
-def _is_private_ip(value: str) -> bool:
+def _literal_ip(host: str):
+    """Return the address a literal host denotes, or None for a real hostname.
+
+    ``ipaddress`` only accepts the canonical dotted-quad form, but the C
+    resolver behind yt-dlp accepts the whole ``inet_aton`` grammar: ``127.1``,
+    ``2130706433``, ``0x7f000001`` and ``0177.0.0.1`` all reach 127.0.0.1, and
+    ``0xA9FEA9FE`` reaches the cloud metadata endpoint. Parsing with the same
+    grammar keeps those shorthands from slipping past the private-address
+    check. This is literal parsing only — no name is resolved here.
+    """
     try:
-        ip = ipaddress.ip_address(value)
+        return ipaddress.ip_address(host)
     except ValueError:
+        pass
+    try:
+        packed = socket.inet_aton(host)
+    except OSError:
+        return None
+    return ipaddress.IPv4Address(packed)
+
+
+def _is_private_ip(value: str) -> bool:
+    ip = _literal_ip(value)
+    if ip is None:
         return False
     return any(
         (

@@ -583,6 +583,80 @@ class TestDownloadAudioSafety:
 
         assert captured["cmd"][-1] == "https://youtu.be/abc123"
 
+    # The C resolver behind yt-dlp accepts the full inet_aton grammar, so a
+    # canonical dotted-quad check alone lets loopback and the cloud metadata
+    # endpoint through under a different spelling.
+    @pytest.mark.parametrize(
+        ("url", "reaches"),
+        [
+            ("http://127.1/a.mp3", "127.0.0.1"),
+            ("http://127.0.1/a.mp3", "127.0.0.1"),
+            ("http://2130706433/a.mp3", "127.0.0.1"),
+            ("http://0x7f000001/a.mp3", "127.0.0.1"),
+            ("http://0177.0.0.1/a.mp3", "127.0.0.1"),
+            ("http://017700000001/a.mp3", "127.0.0.1"),
+            ("http://0/a.mp3", "0.0.0.0"),
+            ("http://192.168.1/a.mp3", "192.168.0.1"),
+            ("http://2852039166/a.mp3", "169.254.169.254"),
+            ("http://0xA9FEA9FE/a.mp3", "169.254.169.254"),
+        ],
+    )
+    def test_rejects_shorthand_ipv4_spellings_of_internal_hosts(
+        self, monkeypatch, tmp_path, url, reaches
+    ):
+        monkeypatch.setattr(tr, "_require", lambda binary: None)
+
+        def should_not_run(*args, **kwargs):
+            raise AssertionError(f"yt-dlp must not run for a URL reaching {reaches}")
+
+        monkeypatch.setattr(tr, "_run", should_not_run)
+
+        with pytest.raises(tr.TranscribeError, match="private|internal|SSRF"):
+            tr.download_audio(url, tmp_path)
+
+    def test_shorthand_ipv4_check_stays_dns_free(self, monkeypatch, tmp_path):
+        import socket as socket_module
+
+        monkeypatch.setattr(tr, "_require", lambda binary: None)
+        monkeypatch.setattr(
+            socket_module,
+            "getaddrinfo",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                AssertionError("literal IP parsing must not resolve names")
+            ),
+        )
+
+        def should_not_run(*args, **kwargs):
+            raise AssertionError("yt-dlp must not run for private/internal URLs")
+
+        monkeypatch.setattr(tr, "_run", should_not_run)
+
+        with pytest.raises(tr.TranscribeError, match="private|internal|SSRF"):
+            tr.download_audio("http://2130706433/a.mp3", tmp_path)
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://1.1.1.1/a.mp3",
+            "https://8.8.8.8/a.mp3",
+            # Octal dotted-quad that denotes a public address, not loopback.
+            "http://010.010.010.010/a.mp3",
+        ],
+    )
+    def test_allows_public_literal_addresses(self, monkeypatch, tmp_path, url):
+        monkeypatch.setattr(tr, "_require", lambda binary: None)
+        captured = {}
+
+        def fake_run(cmd, timeout=600):
+            captured["cmd"] = cmd
+            (tmp_path / "source.m4a").write_bytes(b"audio")
+
+        monkeypatch.setattr(tr, "_run", fake_run)
+
+        tr.download_audio(url, tmp_path)
+
+        assert captured["cmd"][-1] == url
+
 
 class TestMediaGenerationBudget:
     def test_compression_has_hard_duration_cap(
