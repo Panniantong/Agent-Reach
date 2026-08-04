@@ -1872,6 +1872,8 @@ def _cmd_uninstall(args):
 
 
 def _cmd_doctor(args=None):
+    from rich import print as rich_print
+
     from agent_reach.config import Config
     from agent_reach.doctor import check_all, format_report
 
@@ -1882,15 +1884,7 @@ def _cmd_doctor(args=None):
         print(json.dumps(results, ensure_ascii=False, indent=2))
         return
 
-    report = format_report(results)
-    try:
-        from rich import print as rich_print
-    except ImportError:
-        # rich is a hard dependency, so this only guards a broken install:
-        # show the report with its markup intact rather than not at all.
-        print(report)
-    else:
-        rich_print(report)
+    rich_print(format_report(results))
 
 
 def _cmd_setup():
