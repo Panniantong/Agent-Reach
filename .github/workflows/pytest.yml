@@ -5,10 +5,8 @@ on:
   pull_request:
 
 jobs:
-  # ruff is configured in pyproject.toml but was never enforced, so violations
-  # accumulated silently. This job keeps that config honest. mypy is also
-  # configured and currently reports one error (cli.py `rprint = print`); add a
-  # step here once that is resolved.
+  # ruff and mypy are configured in pyproject.toml but nothing ran them, so
+  # violations accumulated silently. This job keeps that config honest.
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -28,6 +26,10 @@ jobs:
       - name: Ruff
         run: |
           ruff check .
+
+      - name: Mypy
+        run: |
+          mypy agent_reach
 
   test:
     runs-on: ubuntu-latest
