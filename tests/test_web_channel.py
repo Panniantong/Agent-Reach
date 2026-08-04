@@ -10,7 +10,7 @@ completing dedicated coverage for the channels that still lacked it.
 
 from unittest.mock import MagicMock, patch
 
-from agent_reach.channels.web import WebChannel, _UA
+from agent_reach.channels.web import _UA, WebChannel
 
 
 def _resp(body=b"# Example\nfull text\n"):

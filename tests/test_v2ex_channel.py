@@ -16,7 +16,6 @@ from unittest.mock import patch
 from agent_reach.channels import v2ex as v2
 from agent_reach.channels.v2ex import V2EXChannel
 
-
 # --- can_handle ---
 
 def test_can_handle_matches_v2ex_hosts():
