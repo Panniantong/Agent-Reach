@@ -704,6 +704,22 @@ def _install_gh_apt() -> bool:
     return _run_checked(["apt-get", "install", "-y", "-qq", "gh"], timeout=120)
 
 
+def _install_brew_formula(formula: str) -> bool:
+    """Install one Homebrew formula, reporting whether it actually succeeded.
+
+    No privilege check here: Homebrew refuses to run as root by design, so the
+    apt paths' root requirement would be exactly backwards. The timeout is
+    generous because a first `brew install` may update the formula index or
+    build from source before it installs anything.
+    """
+    import shutil
+
+    brew = shutil.which("brew")
+    if not brew:
+        return False
+    return _run_checked([brew, "install", formula], timeout=600)
+
+
 def _install_node_apt() -> bool:
     """Install Node.js via the NodeSource setup script, verifying each step."""
     import shutil
@@ -750,30 +766,25 @@ def _install_system_deps():
     import subprocess
 
     print("Checking system dependencies...")
+    os_type = platform.system().lower()
 
     # ── gh CLI ──
     if shutil.which("gh"):
         print("  ✅ gh CLI already installed")
     else:
         print("  Installing gh CLI...")
-        os_type = platform.system().lower()
         if os_type == "linux":
             if _install_gh_apt() and shutil.which("gh"):
                 print("  ✅ gh CLI installed")
             else:
                 print("  [!]  gh CLI install failed. You can try: snap install gh, or download from https://github.com/cli/cli/releases")
         elif os_type == "darwin":
-            if shutil.which("brew"):
-                try:
-                    subprocess.run(["brew", "install", "gh"], capture_output=True, timeout=120)
-                    if shutil.which("gh"):
-                        print("  ✅ gh CLI installed")
-                    else:
-                        print("  [!]  gh CLI install failed. Try: brew install gh")
-                except Exception:
-                    print("  [!]  gh CLI install failed. Try: brew install gh")
-            else:
+            if not shutil.which("brew"):
                 print("  [!]  gh CLI not found. Install: https://cli.github.com")
+            elif _install_brew_formula("gh") and shutil.which("gh"):
+                print("  ✅ gh CLI installed")
+            else:
+                print("  [!]  gh CLI install failed. Try: brew install gh")
         else:
             print("  [!]  gh CLI not found. Install: https://cli.github.com")
 
@@ -782,10 +793,20 @@ def _install_system_deps():
         print("  ✅ Node.js already installed")
     else:
         print("  Installing Node.js...")
-        if _install_node_apt() and shutil.which("node"):
-            print("  ✅ Node.js installed")
+        if os_type == "linux":
+            if _install_node_apt() and shutil.which("node"):
+                print("  ✅ Node.js installed")
+            else:
+                print("  [!]  Node.js install failed. Try: apt install nodejs npm, or nvm install 22, or download from https://nodejs.org")
+        elif os_type == "darwin":
+            if not shutil.which("brew"):
+                print("  [!]  Node.js not found. Try: nvm install 22, or download from https://nodejs.org")
+            elif _install_brew_formula("node") and shutil.which("node"):
+                print("  ✅ Node.js installed")
+            else:
+                print("  [!]  Node.js install failed. Try: brew install node, or nvm install 22, or download from https://nodejs.org")
         else:
-            print("  [!]  Node.js install failed. Try: apt install nodejs npm, or nvm install 22, or download from https://nodejs.org")
+            print("  [!]  Node.js not found. Install: https://nodejs.org")
 
     # ── undici (proxy support for Node.js fetch) ──
     npm_cmd = shutil.which("npm")

@@ -1109,3 +1109,133 @@ def test_nodesource_empty_script_is_not_treated_as_success(monkeypatch, capsys):
 
     assert cli._install_node_apt() is False
     assert "Could not download the NodeSource setup script" in capsys.readouterr().out
+
+
+# ── Homebrew paths ──────────────────────────────────
+#
+# `brew install` exit codes were ignored the same way apt's were, so a failed
+# formula install printed the success line. macOS also has no apt, so the
+# Node.js branch must never reach the NodeSource/apt-get path.
+
+
+def _darwin_which(available):
+    """shutil.which stub: only names in *available* resolve."""
+    return lambda name: f"/opt/homebrew/bin/{name}" if name in available else None
+
+
+def test_brew_formula_install_reports_failure(monkeypatch):
+    """A non-zero brew exit is a failure, not a success."""
+    monkeypatch.setattr("shutil.which", _darwin_which({"brew"}))
+    monkeypatch.setattr(
+        subprocess, "run", lambda args, **k: _docker_result(args, returncode=1)
+    )
+
+    assert cli._install_brew_formula("gh") is False
+
+
+def test_brew_formula_install_reports_timeout(monkeypatch):
+    """A brew install that hangs past the timeout is a failure, not a crash."""
+    monkeypatch.setattr("shutil.which", _darwin_which({"brew"}))
+
+    def fake_run(args, **kwargs):
+        raise subprocess.TimeoutExpired(args, kwargs.get("timeout", 0))
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert cli._install_brew_formula("gh") is False
+
+
+def test_brew_formula_install_without_brew(monkeypatch):
+    """No brew means no install attempt at all."""
+    monkeypatch.setattr("shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *a, **k: pytest.fail("nothing may run without brew"),
+    )
+
+    assert cli._install_brew_formula("gh") is False
+
+
+def test_brew_formula_install_happy_path(monkeypatch):
+    """The formula name is passed through to brew verbatim."""
+    calls = []
+    monkeypatch.setattr("shutil.which", _darwin_which({"brew"}))
+
+    def fake_run(args, **_kwargs):
+        calls.append(args)
+        return _docker_result(args)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert cli._install_brew_formula("node") is True
+    assert calls == [["/opt/homebrew/bin/brew", "install", "node"]]
+
+
+def test_darwin_gh_install_failure_is_not_reported_as_success(
+    monkeypatch, capsys
+):
+    """A failed `brew install gh` must not print the success line."""
+    import platform
+
+    monkeypatch.setattr(platform, "system", lambda: "Darwin")
+    monkeypatch.setattr("shutil.which", _darwin_which({"brew", "node", "npm"}))
+
+    def fake_run(args, **_kwargs):
+        if args[1:2] == ["install"] and args[0].endswith("brew"):
+            return _docker_result(args, returncode=1)
+        return _docker_result(
+            args, stdout="/opt/homebrew/lib\n" if args[1:3] == ["root", "-g"] else ""
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    cli._install_system_deps()
+
+    out = capsys.readouterr().out
+    assert "gh CLI install failed" in out
+    assert "✅ gh CLI installed" not in out
+
+
+def test_darwin_node_install_never_touches_apt(monkeypatch, capsys):
+    """macOS has no apt — the Node.js branch must go through brew only."""
+    import platform
+
+    calls = []
+    monkeypatch.setattr(platform, "system", lambda: "Darwin")
+    monkeypatch.setattr("shutil.which", _darwin_which({"brew", "gh"}))
+
+    def fake_run(args, **_kwargs):
+        calls.append(args)
+        return _docker_result(args, returncode=1)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    cli._install_system_deps()
+
+    programs = {Path(call[0]).name for call in calls}
+    assert not programs & {"apt-get", "curl", "bash", "dpkg"}
+    assert ["/opt/homebrew/bin/brew", "install", "node"] in calls
+    out = capsys.readouterr().out
+    assert "apt install nodejs" not in out
+    assert "brew install node" in out
+
+
+def test_darwin_without_brew_gives_macos_advice(monkeypatch, capsys):
+    """Missing brew must not fall through to apt-flavoured instructions."""
+    import platform
+
+    monkeypatch.setattr(platform, "system", lambda: "Darwin")
+    monkeypatch.setattr("shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *a, **k: pytest.fail("no installer may run without brew"),
+    )
+
+    cli._install_system_deps()
+
+    out = capsys.readouterr().out
+    assert "apt install nodejs" not in out
+    assert "nvm install 22" in out
+    assert "https://cli.github.com" in out
