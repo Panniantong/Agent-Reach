@@ -12,6 +12,9 @@ reddit (#364) and xueqiu (#365).
 """
 
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
+
+import pytest
 
 from agent_reach.channels import v2ex as v2
 from agent_reach.channels.v2ex import V2EXChannel
@@ -153,3 +156,115 @@ def test_search_returns_guidance_without_network():
     assert len(results) == 1
     assert "error" in results[0]
     assert "python" in results[0]["error"]
+
+
+# --- query-string encoding ---
+#
+# Node names, usernames and topic ids reach these methods from agents and from
+# parsed URLs. Interpolated raw, "&" adds a parameter, "#" drops the rest of
+# the query into a never-sent fragment, "+" decodes server-side as a space, and
+# non-ASCII raises UnicodeEncodeError out of urllib instead of a channel error.
+
+_HOSTILE_VALUES = [
+    "python&page=99",   # would inject a duplicate page parameter
+    "foo#bar",          # would truncate the query into a fragment
+    "c++",              # would decode server-side as "c  "
+    "hello world",      # raw space in a URL
+    "Python 开发",       # would raise UnicodeEncodeError in urllib
+]
+
+
+def _captured_urls(call):
+    seen = []
+
+    def fake_get_json(url):
+        seen.append(url)
+        raise _StopFetch
+
+    with patch.object(v2, "_get_json", fake_get_json):
+        try:
+            call()
+        except _StopFetch:
+            pass
+    return seen
+
+
+class _StopFetch(Exception):
+    """Abort a channel method once the URL has been captured."""
+
+
+@pytest.mark.parametrize("value", _HOSTILE_VALUES)
+def test_get_node_topics_percent_encodes_node_name(value):
+    ch = V2EXChannel()
+    url = _captured_urls(lambda: ch.get_node_topics(value))[0]
+    parts = urlsplit(url)
+    query = parse_qs(parts.query)
+
+    assert parts.netloc == "www.v2ex.com"
+    assert parts.fragment == ""
+    assert query["node_name"] == [value]
+    assert query["page"] == ["1"]
+
+
+@pytest.mark.parametrize("value", _HOSTILE_VALUES)
+def test_get_user_percent_encodes_username(value):
+    ch = V2EXChannel()
+    url = _captured_urls(lambda: ch.get_user(value))[0]
+    parts = urlsplit(url)
+
+    assert parts.fragment == ""
+    assert parse_qs(parts.query)["username"] == [value]
+
+
+def test_get_topic_percent_encodes_ids_in_both_requests():
+    ch = V2EXChannel()
+    # Typed as int, but nothing enforces it — a stray "#" must not truncate.
+    urls = _captured_urls(lambda: ch.get_topic("1#"))
+
+    topic_query = parse_qs(urlsplit(urls[0]).query)
+    assert urlsplit(urls[0]).fragment == ""
+    assert topic_query["id"] == ["1#"]
+
+
+def test_get_topic_replies_request_keeps_page_parameter():
+    ch = V2EXChannel()
+    seen = []
+
+    def fake_get_json(url):
+        seen.append(url)
+        return [] if len(seen) > 1 else [{"id": 1}]
+
+    with patch.object(v2, "_get_json", fake_get_json):
+        ch.get_topic("1#")
+
+    replies_parts = urlsplit(seen[1])
+    replies_query = parse_qs(replies_parts.query)
+    assert replies_parts.fragment == ""
+    assert replies_query["topic_id"] == ["1#"]
+    assert replies_query["page"] == ["1"]
+
+
+def test_get_topic_accepts_plain_int_unchanged():
+    ch = V2EXChannel()
+    url = _captured_urls(lambda: ch.get_topic(123))[0]
+    assert parse_qs(urlsplit(url).query)["id"] == ["123"]
+
+
+def test_search_advisory_url_is_encoded():
+    ch = V2EXChannel()
+    with patch.object(v2, "_get_json", side_effect=AssertionError("must not hit network")):
+        message = ch.search("rust & go")[0]["error"]
+
+    assert "?q=rust+%26+go" in message
+    assert "?q=rust & go" not in message
+
+
+def test_fallback_display_urls_are_encoded():
+    ch = V2EXChannel()
+    with patch.object(v2, "_get_json", return_value={}):
+        user_url = ch.get_user("a b/c")["url"]
+    with patch.object(v2, "_get_json", return_value={}):
+        topic_url = ch.get_topic("9 9")["url"]
+
+    assert user_url == "https://www.v2ex.com/member/a%20b%2Fc"
+    assert topic_url == "https://www.v2ex.com/t/9%209"
