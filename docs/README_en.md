@@ -36,8 +36,8 @@
 
 <table>
 <tr>
-<td width="180" align="center"><a href="https://www.browseract.com/?co-from=Agent&amp;redirect=https://github.com/browser-act/skills/tree/main"><img src="assets/sponsors/browseract.svg" alt="BrowserAct" width="150"></a></td>
-<td>Thanks to BrowserAct for supporting this project! BrowserAct is built for dynamic pages, filters, pagination, detail pages, and multi-step navigation. Describe the data you need and it explores and tests the site in a real browser, generates a reliable reusable data-collection Bot, and returns structured results. It also provides 30+ prebuilt platform skills for agents including Claude Code, OpenClaw, and Cursor.</td>
+<td width="180" align="center"><a href="https://www.browseract.ai/Agent"><img src="assets/sponsors/browseract.png" alt="BrowserAct" width="150"></a></td>
+<td><a href="https://www.browseract.ai/Agent">BrowserAct</a> extracts any data you need from complex websites such as Amazon, LinkedIn, X, and Google Maps. Simply describe your extraction request in natural language, and its Agent will explore and test page flows in a real browser, generate a reliable reusable data-collection Bot, and return structured results. There is no need to build a scraper or write code. Built-in stealth browsing, CAPTCHA handling, and high-quality residential proxies help make complex web data extraction more reliable. New users receive 1,000 credits upon registration. <a href="https://www.browseract.ai/Agent">Try it free now</a>.</td>
 </tr>
 <tr>
 <td width="180" align="center"><a href="https://www.tencentcloud.com/act/pro/intl-openclaw?referral_code=G76Y819A&amp;lang=en&amp;pg="><img src="assets/sponsors/tencent-cloud.svg" alt="OpenClaw on Tencent Cloud" width="150"></a></td>
