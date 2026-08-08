@@ -41,6 +41,17 @@ for e in feedparser.parse('FEED_URL').entries[:5]:
 
 **适用场景**: 订阅博客、新闻源、播客等 RSS feed。
 
+### 从站点根 URL 发现 feed
+
+```python
+from agent_reach.channels.rss import RSSChannel
+
+for feed in RSSChannel().discover_feeds("https://example.com"):
+    print(feed["url"], feed.get("title"), feed.get("type"))
+```
+
+会解析首页的 `<link rel="alternate">`，再探测常见路径（`/feed`、`/rss`、`/atom.xml` 等），用 feedparser 校验后去重返回。不覆盖 robots.txt / 外部 registry / 定时重扫——由调用方按需调度。
+
 ## 选择指南
 
 | 场景 | 推荐工具 |
@@ -48,3 +59,4 @@ for e in feedparser.parse('FEED_URL').entries[:5]:
 | 通用网页 | Jina Reader (`curl r.jina.ai`) |
 | 需要图片/格式控制 | web-reader MCP |
 | RSS 订阅 | feedparser |
+| 从站点根发现 feed | `RSSChannel.discover_feeds` |
