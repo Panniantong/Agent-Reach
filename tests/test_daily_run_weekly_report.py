@@ -540,11 +540,12 @@ class TestWeeklyReport:
             "agent_reach.daily_run.weekly_report._load_manifest",
             return_value=morning_manifest,
         ):
-            prices = _week_start_prices_from_manifests(
+            prices, note = _week_start_prices_from_manifests(
                 [{"job": "morning", "_run_date": "2026-07-06", **morning_manifest}],
                 date(2026, 7, 6),
             )
         assert prices.get("688008") == 250.0
+        assert note is None
 
         with patch("agent_reach.daily_run.weekly_report._load_week_manifests") as mock_m:
             mock_m.return_value = [
@@ -562,6 +563,50 @@ class TestWeeklyReport:
                 )
         holding = report.holdings[0]
         assert holding.get("week_chg_pct") is not None
+        assert "本周盈亏" in render_weekly_markdown(report)
+
+    def test_week_start_prices_fallback_prior_close(self, tmp_path, monkeypatch, portfolio):
+        from agent_reach.daily_run.weekly_report import _week_start_prices_from_manifests
+
+        monkeypatch.setattr("agent_reach.daily_run.weekly_report.runs_dir", lambda: tmp_path)
+        fri_dir = tmp_path / "2026-07-31"
+        fri_dir.mkdir()
+        close_manifest = {
+            "job": "close",
+            "payload": {
+                "symbol_results": [
+                    {
+                        "code": "688008",
+                        "result": {
+                            "snapshot": {
+                                "code": "688008",
+                                "price": 200.0,
+                                "portfolio": portfolio,
+                            }
+                        },
+                    },
+                    {
+                        "code": "002273",
+                        "result": {
+                            "snapshot": {
+                                "code": "002273",
+                                "price": 25.0,
+                                "portfolio": portfolio,
+                            }
+                        },
+                    },
+                ]
+            },
+        }
+        (fri_dir / "close_153000.json").write_text("{}", encoding="utf-8")
+        with patch(
+            "agent_reach.daily_run.weekly_report._load_manifest",
+            return_value=close_manifest,
+        ):
+            prices, note = _week_start_prices_from_manifests([], date(2026, 8, 3))
+        assert prices.get("688008") == 200.0
+        assert note is not None
+        assert "2026-07-31" in note
 
 
 class TestScheduleWeekly:
