@@ -539,7 +539,13 @@ def _install_skill(force: bool = True):
             return None
 
     # Install into every known skill root that already exists.
+    hermes_home = os.environ.get("HERMES_HOME", "~/.hermes")
+    hermes_skills = os.path.join(
+        os.path.expanduser(os.path.expandvars(hermes_home)),
+        "skills",
+    )
     skill_dirs = [
+        (hermes_skills, "Hermes"),
         (os.path.expanduser("~/.agents/skills"), "Agent"),
         (os.path.expanduser("~/.config/opencode/skills"), "OpenCode"),
         (os.path.expanduser("~/.openclaw/skills"), "OpenClaw"),
@@ -589,7 +595,14 @@ def _uninstall_skill():
     """Remove SKILL.md from all known agent skill directories."""
     import shutil
 
+    hermes_home = os.environ.get("HERMES_HOME", "~/.hermes")
+    hermes_skill = os.path.join(
+        os.path.expanduser(os.path.expandvars(hermes_home)),
+        "skills",
+        "agent-reach",
+    )
     skill_dirs = [
+        (hermes_skill, "Hermes"),
         ("~/.config/opencode/skills/agent-reach", "OpenCode"),
         ("~/.openclaw/skills/agent-reach", "OpenClaw"),
         ("~/.claude/skills/agent-reach", "Claude Code"),
@@ -1880,7 +1893,14 @@ def _cmd_uninstall(args):
         print("      若确认不再被 xfetch/bird 使用，请手动删除。")
 
     # ── 2. Skill files ──
+    hermes_home = os.environ.get("HERMES_HOME", "~/.hermes")
+    hermes_skill = os.path.join(
+        os.path.expanduser(os.path.expandvars(hermes_home)),
+        "skills",
+        "agent-reach",
+    )
     skill_dirs = [
+        (hermes_skill, "Hermes"),
         ("~/.config/opencode/skills/agent-reach", "OpenCode"),
         ("~/.openclaw/skills/agent-reach", "OpenClaw"),
         ("~/.claude/skills/agent-reach", "Claude Code"),

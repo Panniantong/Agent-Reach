@@ -26,6 +26,14 @@ class TestSkillCommand(unittest.TestCase):
         self.assertTrue(default_skill.strip())
         self.assertTrue(english_skill.strip())
 
+    def test_skill_frontmatter_does_not_advertise_glob_support_files(self):
+        """Direct skill installers can only fetch concrete referenced files."""
+        skill_dir = importlib.resources.files("agent_reach").joinpath("skill")
+
+        for resource_name in ("SKILL.md", "SKILL_en.md"):
+            content = skill_dir.joinpath(resource_name).read_text(encoding="utf-8")
+            self.assertNotIn("references/*.md", content, resource_name)
+
     def test_exa_reference_uses_default_registered_tools_only(self):
         """Agent instructions must not call Exa tools disabled by default."""
         search_reference = (

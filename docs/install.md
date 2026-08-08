@@ -42,7 +42,7 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 | Config & tokens | `~/.agent-reach/` | `~/.agent-reach/config.json` |
 | Upstream tool repos | `~/.agent-reach/tools/` | `~/.agent-reach/tools/xiaoyuzhou/` |
 | Temporary files | `/tmp/` | `/tmp/yt-dlp-output/` |
-| Skills | `~/.openclaw/skills/agent-reach/` | SKILL.md |
+| Skills | Client skill root, e.g. `$HERMES_HOME/skills/agent-reach/` | SKILL.md |
 
 **Why?** If you clone repos or create files in the workspace, it pollutes the user's project directory and can break their agent over time. Keep the workspace clean.
 
@@ -81,6 +81,20 @@ agent-reach install --env=auto --system
 The default command checks core infrastructure (gh CLI, Node.js, mcporter, Exa search, yt-dlp config) without changing the host. With explicit `--system` approval it installs/configures the missing pieces and activates these zero-config channels:
 
 - Web (Jina Reader), YouTube, GitHub, RSS, Exa Search, V2EX, Bilibili (basic)
+
+#### Hermes Agent skill registration
+
+Register the packaged skill after installing the CLI:
+
+```bash
+agent-reach skill --install
+```
+
+When `HERMES_HOME` is set, Agent Reach installs into that active Hermes profile's
+`$HERMES_HOME/skills/agent-reach/` directory. Otherwise it uses
+`~/.hermes/skills/agent-reach/` when that skill root already exists. This keeps
+profile-specific Hermes installations isolated instead of writing into a
+different profile.
 
 > 💡 **macOS / Homebrew Python 提示 `externally-managed-environment`？**
 > 这是 PEP 668 保护，不是 Agent Reach 本身的问题。优先用 `pipx install ...`，或先创建 `venv` 再安装。
