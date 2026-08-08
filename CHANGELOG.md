@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## Unreleased
+
+### ✨ Features / 新功能
+
+- **Substack channel:** zero-config support for `*.substack.com` publications via public RSS (`list_posts`) and JSON API (`get_post`). Doctor probes a real feed; custom domains stay on the web channel (#583).
+
+---
+
 ## [1.3.1] - 2026-03-27
 
 ### 🐛 Bug Fixes / 修复
