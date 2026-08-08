@@ -41,6 +41,22 @@ for e in feedparser.parse('FEED_URL').entries[:5]:
 
 **适用场景**: 订阅博客、新闻源、播客等 RSS feed。
 
+## Substack (公开 RSS / JSON API)
+
+```python
+from agent_reach.channels.substack import SubstackChannel
+
+ch = SubstackChannel()
+for post in ch.list_posts("platformer", limit=5):
+    print(f"{post['title']} — {post['url']}")
+
+# 单篇（不绕过付费墙；付费文可能只有元数据）
+detail = ch.get_post("platformer", "some-slug")
+print(detail["title"], detail.get("audience"))
+```
+
+**适用场景**: `*.substack.com` 出版物列表与公开文章。自定义域名出版物仍走通用网页通道。
+
 ## 选择指南
 
 | 场景 | 推荐工具 |
@@ -48,3 +64,4 @@ for e in feedparser.parse('FEED_URL').entries[:5]:
 | 通用网页 | Jina Reader (`curl r.jina.ai`) |
 | 需要图片/格式控制 | web-reader MCP |
 | RSS 订阅 | feedparser |
+| Substack 出版物 | `SubstackChannel` |
