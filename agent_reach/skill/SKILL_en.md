@@ -46,6 +46,28 @@ these platforms — do not invent your own approach.**
    https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md".
    Never interrupt the current task to update; never nag about the same version twice.
 
+## Research loop (for open-ended questions)
+
+Do not turn a broad request into one oversized search query. Use this bounded loop:
+
+1. **Define the deliverable**: restate the question, freshness requirement, geography,
+   and decision criteria. Ask only when a missing constraint would materially change the result.
+2. **Plan evidence, not tools**: split the question into 2–5 answerable subquestions, then
+   choose the smallest useful platform set. Prefer primary/official sources for facts and use
+   social sources for sentiment or lived experience—not as substitutes for factual evidence.
+3. **Retrieve in parallel, then inspect**: run independent searches together when possible.
+   Open the strongest results; search snippets alone are discovery evidence, not final evidence.
+4. **Keep an evidence ledger**: for every conclusion retain the source URL, publication date
+   (when available), what it supports, and any conflict. Deduplicate syndicated or copied items
+   so repeated text does not masquerade as independent confirmation.
+5. **Close gaps deliberately**: issue one targeted follow-up query for unsupported, stale, or
+   conflicting claims. Never invent missing content or silently switch to a weaker source.
+6. **Stop when sufficient**: finish when each material claim has direct support and another
+   search is unlikely to change the answer. Report platform/auth failures and the resulting
+   coverage gap instead of looping indefinitely.
+7. **Synthesize with provenance**: separate verified facts, source-reported opinions, and your
+   own inference; cite the source beside the claim and state uncertainty or disagreement.
+
 ## Routing table
 
 | User intent | Category | Details |
