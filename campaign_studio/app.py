@@ -6,21 +6,32 @@ calls remain here on the trusted server boundary.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import os
 from pathlib import Path
 from typing import Literal
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from openai import OpenAI
+from openai import AsyncOpenAI
 from pydantic import BaseModel, Field, field_validator
 
 ROOT = Path(__file__).parent
-TEXT_MODEL = os.getenv("OPENAI_TEXT_MODEL", "gpt-5.4-mini")
-IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-1.5")
-IMAGE_COUNT = min(max(int(os.getenv("CAMPAIGN_IMAGE_COUNT", "2")), 1), 3)
+load_dotenv(ROOT / ".env")
+TEXT_MODEL = os.getenv("OPENAI_TEXT_MODEL", "gpt-5.5")
+IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2")
+
+
+def _image_count() -> int:
+    """Read and safely clamp an operator-controlled setting."""
+    try:
+        configured = int(os.getenv("CAMPAIGN_IMAGE_COUNT", "2"))
+    except ValueError:
+        configured = 2
+    return min(max(configured, 1), 3)
 
 
 class Brief(BaseModel):
@@ -81,8 +92,8 @@ def _concept_schema() -> dict:
     return schema
 
 
-def generate_concept(client: OpenAI, brief: Brief) -> Concept:
-    response = client.responses.create(
+async def generate_concept(client: AsyncOpenAI, brief: Brief) -> Concept:
+    response = await client.responses.create(
         model=TEXT_MODEL,
         instructions=(
             "You are a senior integrated creative director. Turn the supplied brief into one "
@@ -105,8 +116,8 @@ def generate_concept(client: OpenAI, brief: Brief) -> Concept:
     return Concept.model_validate_json(response.output_text)
 
 
-def generate_image(client: OpenAI, prompt: str) -> str:
-    response = client.responses.create(
+async def generate_image(client: AsyncOpenAI, prompt: str) -> str:
+    response = await client.responses.create(
         model=TEXT_MODEL,
         input=(
             "Create a polished campaign key visual from this art direction. Do not render words, "
@@ -130,13 +141,16 @@ def generate_image(client: OpenAI, prompt: str) -> str:
 
 
 @app.post("/api/campaigns", response_model=CampaignResponse)
-def create_campaign(brief: Brief) -> CampaignResponse:
+async def create_campaign(brief: Brief) -> CampaignResponse:
     if not os.getenv("OPENAI_API_KEY"):
         raise HTTPException(503, "OPENAI_API_KEY is not configured on the server.")
     try:
-        client = OpenAI()
-        concept = generate_concept(client, brief)
-        images = [generate_image(client, prompt) for prompt in concept.image_prompts[:IMAGE_COUNT]]
+        client = AsyncOpenAI()
+        concept = await generate_concept(client, brief)
+        # Independent visual studies run concurrently to avoid multiplying request latency.
+        images = await asyncio.gather(
+            *(generate_image(client, prompt) for prompt in concept.image_prompts[:_image_count()])
+        )
         return CampaignResponse(**concept.model_dump(), images=images)
     except HTTPException:
         raise

@@ -17,21 +17,22 @@ The browser sends only brief fields to this app's API. `OPENAI_API_KEY`, model s
 Python 3.10+ is required.
 
 ```bash
-cd campaign_studio
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
+pip install -r campaign_studio/requirements.txt
+cp campaign_studio/.env.example campaign_studio/.env
 # Replace the placeholder with a server-side key, or export it in your shell:
 export OPENAI_API_KEY="sk-..."
 uvicorn campaign_studio.app:app --reload --port 8000
 ```
 
-Run the final command from the repository root, then open <http://localhost:8000>. Do not commit `.env` files or expose the key through a `VITE_`, `NEXT_PUBLIC_`, or similar browser-visible variable.
+Run these commands from the repository root, then open <http://localhost:8000>. The server loads `campaign_studio/.env` for local development. Do not commit `.env` files or expose the key through a `VITE_`, `NEXT_PUBLIC_`, or similar browser-visible variable.
 
 ## Current OpenAI implementation
 
-Both stages use `client.responses.create(...)`—never legacy Completions or Chat Completions. The strategy stage requests strict JSON Schema output. Each visual is created through the Responses API `image_generation` tool. Defaults are `gpt-5.4-mini` for orchestration/text and `gpt-image-1.5` for images, based on the current model catalog; verify availability for your project in the [OpenAI model guide](https://developers.openai.com/api/docs/models) before deployment.
+Both stages use `client.responses.create(...)`—never legacy Completions, Chat Completions, or a browser-side SDK. The strategy stage requests strict JSON Schema output. Visuals are created concurrently through the Responses API `image_generation` tool. Defaults are `gpt-5.5` for orchestration/text and `gpt-image-2` for images, based on the bundled current-model guidance available during implementation; verify model availability for your project in the [OpenAI model guide](https://developers.openai.com/api/docs/models) before deployment.
+
+This is intentionally a request/response workflow. Realtime agents and ephemeral browser keys are appropriate for low-latency voice experiences, but add an unnecessary client credential surface here and are not substitutes for the Responses API campaign pipeline.
 
 ### Adjusting the system later
 

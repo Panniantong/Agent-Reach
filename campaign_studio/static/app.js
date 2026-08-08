@@ -1,7 +1,123 @@
-const form=document.querySelector('#brief-form'),empty=document.querySelector('#empty'),loading=document.querySelector('#loading'),errorBox=document.querySelector('#error'),results=document.querySelector('#results'),submit=form.querySelector('.generate'),copyAll=document.querySelector('#copy-all');
-const escapeHtml=(value)=>String(value).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-const setView=(view)=>{[empty,loading,errorBox,results].forEach(el=>el.hidden=el!==view);copyAll.hidden=view!==results};
-const payload=()=>({campaign_brief:document.querySelector('#campaign_brief').value,audience:document.querySelector('#audience').value,product:document.querySelector('#product').value,tone:document.querySelector('#tone').value,channels:[...document.querySelectorAll('#channels input:checked')].map(el=>el.value)});
-function render(data){results.innerHTML=`<p class="result-label">THE BIG IDEA</p><h3>${escapeHtml(data.concept_name)}</h3><p class="concept">${escapeHtml(data.concept)}</p><div class="strategy"><strong>Strategic thought</strong><br>${escapeHtml(data.strategic_thought)}</div><section class="result-section"><p class="result-label">COPY ROUTES / 03</p>${data.variants.map((v,i)=>`<div class="variant"><small>Route 0${i+1} · ${escapeHtml(v.label)}</small><h4>${escapeHtml(v.headline)}</h4><p>${escapeHtml(v.body)}</p></div>`).join('')}</section><section class="result-section"><p class="result-label">KEY VISUAL STUDIES / ${String(data.images.length).padStart(2,'0')}</p><div class="visual-grid">${data.images.map((src,i)=>`<figure class="visual"><img src="${src}" alt="Generated visual study ${i+1}"><figcaption>STUDY 0${i+1} · AI-GENERATED</figcaption></figure>`).join('')}</div><div class="prompt-list">${data.image_prompts.map((p,i)=>`<details><summary>Image prompt 0${i+1}</summary><p>${escapeHtml(p)}</p></details>`).join('')}</div></section><section class="result-section"><p class="result-label">LAUNCH CHECKLIST</p><ol class="checklist">${data.checklist.map(item=>`<li>${escapeHtml(item)}</li>`).join('')}</ol></section>`;setView(results)}
-async function generate(){if(!form.reportValidity())return;if(!payload().channels.length){document.querySelector('#error-copy').textContent='Choose at least one channel.';setView(errorBox);return}setView(loading);submit.disabled=true;const messages=['Finding the sharpest strategic thread…','Writing distinct copy routes…','Art directing your visual world…','Rendering campaign studies…'];let i=0;const ticker=setInterval(()=>document.querySelector('#loading-copy').textContent=messages[++i%messages.length],2200);try{const response=await fetch('/api/campaigns',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())});const data=await response.json();if(!response.ok)throw new Error(data.detail||'Campaign generation failed.');render(data)}catch(error){document.querySelector('#error-copy').textContent=error.message;setView(errorBox)}finally{clearInterval(ticker);submit.disabled=false}}
-form.addEventListener('submit',event=>{event.preventDefault();generate()});document.querySelector('#retry').addEventListener('click',generate);document.querySelector('#reset').addEventListener('click',()=>{form.reset();setView(empty);scrollTo({top:0,behavior:'smooth'})});document.querySelector('#campaign_brief').addEventListener('input',event=>document.querySelector('#brief-count').textContent=`${event.target.value.length} / 1,500`);copyAll.addEventListener('click',async()=>{await navigator.clipboard.writeText(results.innerText);copyAll.textContent='Copied';setTimeout(()=>copyAll.textContent='Copy all',1200)});
+const form = document.querySelector("#brief-form"),
+  empty = document.querySelector("#empty"),
+  loading = document.querySelector("#loading"),
+  errorBox = document.querySelector("#error"),
+  results = document.querySelector("#results"),
+  submit = form.querySelector(".generate"),
+  copyAll = document.querySelector("#copy-all");
+const example = {
+  campaign_brief:
+    "Introduce the evolution of AI as a three-wave story—from narrow predictive systems, through broadly reusable generative models, to agentic AI that can reason, use tools, and act. Make the shift feel practical rather than abstract.",
+  audience:
+    "Business and technology leaders evaluating their next AI investment",
+  product:
+    "An enterprise AI platform that combines foundation models, governed tools, and real-time multimodal agents",
+  tone: "Bold",
+  channels: ["Social", "Email", "Web"],
+};
+const escapeHtml = (value) =>
+  String(value).replace(
+    /[&<>'"]/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[
+        c
+      ],
+  );
+const setView = (view) => {
+  [empty, loading, errorBox, results].forEach(
+    (el) => (el.hidden = el !== view),
+  );
+  copyAll.hidden = view !== results;
+};
+const payload = () => ({
+  campaign_brief: document.querySelector("#campaign_brief").value,
+  audience: document.querySelector("#audience").value,
+  product: document.querySelector("#product").value,
+  tone: document.querySelector("#tone").value,
+  channels: [...document.querySelectorAll("#channels input:checked")].map(
+    (el) => el.value,
+  ),
+});
+function render(data) {
+  results.innerHTML = `<p class="result-label">THE BIG IDEA</p><h3>${escapeHtml(data.concept_name)}</h3><p class="concept">${escapeHtml(data.concept)}</p><div class="strategy"><strong>Strategic thought</strong><br>${escapeHtml(data.strategic_thought)}</div><section class="result-section"><p class="result-label">COPY ROUTES / 03</p>${data.variants.map((v, i) => `<div class="variant"><small>Route 0${i + 1} · ${escapeHtml(v.label)}</small><h4>${escapeHtml(v.headline)}</h4><p>${escapeHtml(v.body)}</p></div>`).join("")}</section><section class="result-section"><p class="result-label">KEY VISUAL STUDIES / ${String(data.images.length).padStart(2, "0")}</p><div class="visual-grid">${data.images.map((src, i) => `<figure class="visual"><img src="${src}" alt="Generated visual study ${i + 1}"><figcaption>STUDY 0${i + 1} · AI-GENERATED</figcaption></figure>`).join("")}</div><div class="prompt-list">${data.image_prompts.map((p, i) => `<details><summary>Image prompt 0${i + 1}</summary><p>${escapeHtml(p)}</p></details>`).join("")}</div></section><section class="result-section"><p class="result-label">LAUNCH CHECKLIST</p><ol class="checklist">${data.checklist.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol></section>`;
+  setView(results);
+}
+async function generate() {
+  if (!form.reportValidity()) return;
+  if (!payload().channels.length) {
+    document.querySelector("#error-copy").textContent =
+      "Choose at least one channel.";
+    setView(errorBox);
+    return;
+  }
+  setView(loading);
+  submit.disabled = true;
+  const messages = [
+    "Finding the sharpest strategic thread…",
+    "Writing distinct copy routes…",
+    "Art directing your visual world…",
+    "Rendering campaign studies…",
+  ];
+  let i = 0;
+  const ticker = setInterval(
+    () =>
+      (document.querySelector("#loading-copy").textContent =
+        messages[++i % messages.length]),
+    2200,
+  );
+  try {
+    const response = await fetch("/api/campaigns", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload()),
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Campaign generation failed.");
+    render(data);
+  } catch (error) {
+    document.querySelector("#error-copy").textContent = error.message;
+    setView(errorBox);
+  } finally {
+    clearInterval(ticker);
+    submit.disabled = false;
+  }
+}
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  generate();
+});
+document.querySelector("#retry").addEventListener("click", generate);
+document.querySelector("#reset").addEventListener("click", () => {
+  form.reset();
+  setView(empty);
+  scrollTo({ top: 0, behavior: "smooth" });
+});
+document
+  .querySelector("#campaign_brief")
+  .addEventListener(
+    "input",
+    (event) =>
+      (document.querySelector("#brief-count").textContent =
+        `${event.target.value.length} / 1,500`),
+  );
+copyAll.addEventListener("click", async () => {
+  await navigator.clipboard.writeText(results.innerText);
+  copyAll.textContent = "Copied";
+  setTimeout(() => (copyAll.textContent = "Copy all"), 1200);
+});
+
+document.querySelector("#load-example").addEventListener("click", () => {
+  document.querySelector("#campaign_brief").value = example.campaign_brief;
+  document.querySelector("#audience").value = example.audience;
+  document.querySelector("#product").value = example.product;
+  document.querySelector("#tone").value = example.tone;
+  document
+    .querySelectorAll("#channels input")
+    .forEach(
+      (input) => (input.checked = example.channels.includes(input.value)),
+    );
+  document.querySelector("#brief-count").textContent =
+    `${example.campaign_brief.length} / 1,500`;
+  document.querySelector("#campaign_brief").focus();
+});

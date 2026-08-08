@@ -2,7 +2,7 @@
 
 from fastapi.testclient import TestClient
 
-from campaign_studio.app import app
+from campaign_studio.app import _image_count, app
 
 client = TestClient(app)
 
@@ -31,3 +31,12 @@ def test_missing_server_key_is_safe(monkeypatch) -> None:
     )
     assert response.status_code == 503
     assert response.json() == {"detail": "OPENAI_API_KEY is not configured on the server."}
+
+
+def test_image_count_is_safe_and_clamped(monkeypatch) -> None:
+    monkeypatch.setenv("CAMPAIGN_IMAGE_COUNT", "not-a-number")
+    assert _image_count() == 2
+    monkeypatch.setenv("CAMPAIGN_IMAGE_COUNT", "99")
+    assert _image_count() == 3
+    monkeypatch.setenv("CAMPAIGN_IMAGE_COUNT", "0")
+    assert _image_count() == 1
