@@ -60,6 +60,7 @@ def test_install_docs_explain_profile_safe_hermes_registration():
 
     assert "Hermes Agent" in install_doc
     assert "HERMES_HOME" in install_doc
+    assert "absolute" in install_doc
     assert "agent-reach skill --install" in install_doc
 
 
@@ -80,8 +81,8 @@ def test_install_skill_discovers_opencode_global_directory(tmp_path: Path):
 
 def test_install_skill_discovers_active_hermes_profile(tmp_path: Path):
     hermes_home = tmp_path / "profiles" / "research"
+    hermes_home.mkdir(parents=True)
     skill_parent = hermes_home / "skills"
-    skill_parent.mkdir(parents=True)
 
     with patch(
         "agent_reach.cli.os.path.expanduser",
@@ -96,6 +97,26 @@ def test_install_skill_discovers_active_hermes_profile(tmp_path: Path):
     installed = skill_parent / "agent-reach" / "SKILL.md"
     assert installed.is_file()
     assert "Agent Reach" in installed.read_text(encoding="utf-8")
+
+
+def test_install_skill_skips_unusable_hermes_skills_child(tmp_path: Path):
+    hermes_home = tmp_path / "profiles" / "research"
+    hermes_home.mkdir(parents=True)
+    (hermes_home / "skills").write_text("not a directory", encoding="utf-8")
+    fallback_parent = tmp_path / ".agents" / "skills"
+    fallback_parent.mkdir(parents=True)
+
+    with patch(
+        "agent_reach.cli.os.path.expanduser",
+        side_effect=lambda value: value.replace("~", os.fspath(tmp_path)),
+    ), patch.dict(
+        os.environ,
+        {"HERMES_HOME": os.fspath(hermes_home)},
+        clear=True,
+    ):
+        _install_skill()
+
+    assert (fallback_parent / "agent-reach" / "SKILL.md").is_file()
 
 
 def test_uninstall_skill_removes_opencode_global_directory(tmp_path: Path):
@@ -129,6 +150,33 @@ def test_uninstall_skill_removes_active_hermes_profile(tmp_path: Path):
         _uninstall_skill()
 
     assert not installed.exists()
+
+
+@pytest.mark.parametrize("hermes_home", ["", "   ", "relative-profile"])
+def test_uninstall_skill_ignores_unsafe_hermes_home_values(
+    tmp_path: Path, hermes_home: str, monkeypatch: pytest.MonkeyPatch
+):
+    project_skill = tmp_path / "skills" / "agent-reach"
+    project_skill.mkdir(parents=True)
+    (project_skill / "SKILL.md").write_text("keep", encoding="utf-8")
+
+    default_skill = tmp_path / ".hermes" / "skills" / "agent-reach"
+    default_skill.mkdir(parents=True)
+    (default_skill / "SKILL.md").write_text("remove", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    with patch(
+        "agent_reach.cli.os.path.expanduser",
+        side_effect=lambda value: value.replace("~", os.fspath(tmp_path)),
+    ), patch.dict(
+        os.environ,
+        {"HERMES_HOME": hermes_home},
+        clear=True,
+    ):
+        _uninstall_skill()
+
+    assert project_skill.is_dir()
+    assert not default_skill.exists()
 
 
 def test_full_uninstall_includes_opencode_directory(
@@ -173,3 +221,29 @@ def test_full_uninstall_includes_active_hermes_profile(
     output = capsys.readouterr().out
     assert f"Would remove Hermes skill: {installed}" in output
     assert installed.is_dir()
+
+
+@pytest.mark.parametrize("hermes_home", ["", "   ", "relative-profile"])
+def test_full_uninstall_ignores_unsafe_hermes_home_values(
+    tmp_path: Path, hermes_home: str, monkeypatch: pytest.MonkeyPatch
+):
+    project_skill = tmp_path / "skills" / "agent-reach"
+    project_skill.mkdir(parents=True)
+    default_skill = tmp_path / ".hermes" / "skills" / "agent-reach"
+    default_skill.mkdir(parents=True)
+
+    monkeypatch.chdir(tmp_path)
+    with patch(
+        "agent_reach.cli.os.path.expanduser",
+        side_effect=lambda value: value.replace("~", os.fspath(tmp_path)),
+    ), patch.dict(
+        os.environ,
+        {"HERMES_HOME": hermes_home},
+        clear=True,
+    ), patch("agent_reach.utils.paths.home_dir", return_value=tmp_path), patch(
+        "shutil.which", return_value=None
+    ):
+        _cmd_uninstall(SimpleNamespace(dry_run=False, keep_config=True))
+
+    assert project_skill.is_dir()
+    assert not default_skill.exists()

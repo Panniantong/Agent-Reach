@@ -466,6 +466,16 @@ def _cmd_install(args):
         print("Dry run complete. No changes were made.")
 
 
+def _resolve_hermes_home() -> tuple[str, bool]:
+    """Return a safe Hermes home and whether it was explicitly selected."""
+    raw = os.environ.get("HERMES_HOME", "").strip()
+    if raw:
+        expanded = os.path.expanduser(os.path.expandvars(raw))
+        if os.path.isabs(expanded):
+            return expanded, True
+    return os.path.expanduser("~/.hermes"), False
+
+
 def _install_skill(force: bool = True):
     """Install Agent Reach as an agent skill for supported agent clients."""
     import importlib.resources
@@ -538,12 +548,16 @@ def _install_skill(force: bool = True):
             print(f"  Warning: Could not install skill: {e}")
             return None
 
-    # Install into every known skill root that already exists.
-    hermes_home = os.environ.get("HERMES_HOME", "~/.hermes")
-    hermes_skills = os.path.join(
-        os.path.expanduser(os.path.expandvars(hermes_home)),
-        "skills",
-    )
+    # Install into every known skill root that already exists. An explicitly
+    # selected Hermes profile may not have created its skills directory yet,
+    # so create that child directory only when the profile home itself exists.
+    hermes_home, explicit_hermes_home = _resolve_hermes_home()
+    hermes_skills = os.path.join(hermes_home, "skills")
+    if explicit_hermes_home and os.path.isdir(hermes_home):
+        try:
+            os.makedirs(hermes_skills, exist_ok=True)
+        except OSError as exc:
+            print(f"  Warning: Could not prepare Hermes skill directory: {exc}")
     skill_dirs = [
         (hermes_skills, "Hermes"),
         (os.path.expanduser("~/.agents/skills"), "Agent"),
@@ -595,12 +609,8 @@ def _uninstall_skill():
     """Remove SKILL.md from all known agent skill directories."""
     import shutil
 
-    hermes_home = os.environ.get("HERMES_HOME", "~/.hermes")
-    hermes_skill = os.path.join(
-        os.path.expanduser(os.path.expandvars(hermes_home)),
-        "skills",
-        "agent-reach",
-    )
+    hermes_home, _ = _resolve_hermes_home()
+    hermes_skill = os.path.join(hermes_home, "skills", "agent-reach")
     skill_dirs = [
         (hermes_skill, "Hermes"),
         ("~/.config/opencode/skills/agent-reach", "OpenCode"),
@@ -1893,12 +1903,8 @@ def _cmd_uninstall(args):
         print("      若确认不再被 xfetch/bird 使用，请手动删除。")
 
     # ── 2. Skill files ──
-    hermes_home = os.environ.get("HERMES_HOME", "~/.hermes")
-    hermes_skill = os.path.join(
-        os.path.expanduser(os.path.expandvars(hermes_home)),
-        "skills",
-        "agent-reach",
-    )
+    hermes_home, _ = _resolve_hermes_home()
+    hermes_skill = os.path.join(hermes_home, "skills", "agent-reach")
     skill_dirs = [
         (hermes_skill, "Hermes"),
         ("~/.config/opencode/skills/agent-reach", "OpenCode"),
