@@ -377,6 +377,32 @@ def _week_start_prices_from_manifests(
     return {}, None
 
 
+def _week_end_prices_from_manifests(
+    manifests: list[dict[str, Any]],
+    week_end: date,
+) -> tuple[dict[str, float], Optional[str]]:
+    """Last close prices on/before week_end from week manifests."""
+    we = week_end.isoformat()
+    close_rows = sorted(
+        [m for m in manifests if m.get("job") == "close"],
+        key=lambda m: str(m.get("_run_date") or ""),
+    )
+    candidates = [
+        r
+        for r in close_rows
+        if (day := str(r.get("_run_date") or "")) and day <= we
+    ]
+    if candidates:
+        prices = _prices_from_manifest_record(candidates[-1])
+        if prices:
+            day = str(candidates[-1].get("_run_date") or "")
+            note = None
+            if day != we:
+                note = f"持股周末收盘价取自 {day} 收盘 manifest"
+            return prices, note
+    return {}, None
+
+
 def _mss_from_manifest(record: dict[str, Any]) -> Optional[float]:
     payload = record.get("payload") or {}
     result = payload.get("result") or {}
@@ -592,7 +618,9 @@ def _holding_pnl_rows(
     portfolio: dict[str, Any],
     enriched: dict[str, dict[str, Any]],
     week_start_prices: dict[str, float],
+    week_end_prices: Optional[dict[str, float]] = None,
 ) -> list[dict[str, Any]]:
+    end_prices = week_end_prices or {}
     rows: list[dict[str, Any]] = []
     for h in portfolio.get("holdings") or []:
         code = _normalize_code(str(h.get("code", "")))
@@ -602,7 +630,9 @@ def _holding_pnl_rows(
         row = enriched.get(code, {})
         price = row.get("price") or h.get("price") or cost
         price = float(price)
-        mv = round(shares * price, 2)
+        week_end = end_prices.get(code)
+        week_end_price = float(week_end) if week_end else price
+        mv = round(shares * week_end_price, 2)
         cost_basis = round(shares * cost, 2)
         unrealized = round(mv - cost_basis, 2)
         unrealized_pct = round(unrealized / cost_basis * 100, 2) if cost_basis else None
@@ -611,14 +641,15 @@ def _holding_pnl_rows(
         week_chg = None
         week_chg_pct = None
         if week_start_price and week_start_price > 0:
-            week_chg = round((price - week_start_price) * shares, 2)
-            week_chg_pct = round((price - week_start_price) / week_start_price * 100, 2)
+            week_chg = round((week_end_price - week_start_price) * shares, 2)
+            week_chg_pct = round((week_end_price - week_start_price) / week_start_price * 100, 2)
         rows.append(
             {
                 "code": code,
                 "name": name,
                 "shares": shares,
                 "price": price,
+                "week_end_price": week_end_price,
                 "cost": cost,
                 "market_value": mv,
                 "unrealized_pnl": unrealized,
@@ -1005,7 +1036,13 @@ def generate_weekly_report(
     elif not week_start_prices and morning_totals:
         notes.append("本周无早盘报价 manifest，持股本周盈亏仅显示当日数据")
 
-    holdings = _holding_pnl_rows(pf, enriched, week_start_prices)
+    week_end_prices, week_end_price_note = _week_end_prices_from_manifests(manifests, week_end)
+    if week_end_price_note:
+        notes.append(week_end_price_note)
+    elif not week_end_prices:
+        notes.append("本周无收盘 manifest，持股周末收盘价取当前报价")
+
+    holdings = _holding_pnl_rows(pf, enriched, week_start_prices, week_end_prices)
     watchlist = _watchlist_rows(pf, enriched)
     hot_sectors = _identify_hot_sectors(enriched)
     sector_groups = _group_by_sector(enriched)
@@ -1305,12 +1342,14 @@ def _render_holdings_lines(report: WeeklyReport) -> list[str]:
                 week_s = f" **本周盈亏 ¥{wc:+,.0f}{pct_s}**"
             chg = h.get("change_pct")
             chg_s = f" · 今日 {float(chg):+.2f}%" if chg is not None else ""
+            end_px = float(h.get("week_end_price") or h.get("price") or 0)
+            price_s = f" · 周末收盘 ¥{end_px:.2f}"
             start_s = ""
             if h.get("week_start_price") is not None:
                 start_s = f" · 周初 ¥{float(h['week_start_price']):.2f}"
             lines.append(
                 f"- **{h['name']}** ({h['code']}) {h['shares']}股 "
-                f"@ ¥{h['price']:.2f} 市值 ¥{h['market_value']:,.0f}{week_s}{start_s}{chg_s}"
+                f"市值 ¥{h['market_value']:,.0f}{price_s}{start_s}{week_s}{chg_s}"
             )
     else:
         lines.append("- 当前无持仓")

@@ -608,6 +608,111 @@ class TestWeeklyReport:
         assert note is not None
         assert "2026-07-31" in note
 
+    def test_week_end_prices_from_last_close_manifest(self, tmp_path, monkeypatch, portfolio):
+        from agent_reach.daily_run.weekly_report import _week_end_prices_from_manifests
+
+        close_manifest = {
+            "job": "close",
+            "payload": {
+                "symbol_results": [
+                    {
+                        "code": "688008",
+                        "result": {
+                            "snapshot": {
+                                "code": "688008",
+                                "price": 88.5,
+                                "portfolio": portfolio,
+                            }
+                        },
+                    },
+                ]
+            },
+        }
+        manifests = [
+            {"job": "close", "_run_date": "2026-08-05", **close_manifest},
+            {
+                "job": "close",
+                "_run_date": "2026-08-07",
+                "payload": {
+                    "symbol_results": [
+                        {
+                            "code": "688008",
+                            "result": {
+                                "snapshot": {
+                                    "code": "688008",
+                                    "price": 92.0,
+                                    "portfolio": portfolio,
+                                }
+                            },
+                        },
+                    ]
+                },
+            },
+        ]
+        prices, note = _week_end_prices_from_manifests(manifests, date(2026, 8, 7))
+        assert prices.get("688008") == 92.0
+        assert note is None
+
+    @patch("agent_reach.daily_run.weekly_report.run_sector_research", return_value=[])
+    @patch("agent_reach.daily_run.weekly_report._load_trade_ledger_range", return_value=[])
+    def test_holdings_show_weekend_close_price(
+        self, mock_ledger, mock_exa, snapshot, portfolio, tmp_path, monkeypatch
+    ):
+        from agent_reach.daily_run.weekly_report import generate_weekly_report, render_weekly_markdown
+
+        monkeypatch.setattr("agent_reach.daily_run.weekly_report.runs_dir", lambda: tmp_path)
+        week_morning = {
+            "job": "morning",
+            "_run_date": "2026-08-04",
+            "payload": {
+                "result": {
+                    "snapshot": {
+                        "code": "688008",
+                        "price": 80.0,
+                        "portfolio": portfolio,
+                        "holdings": portfolio["holdings"],
+                    }
+                }
+            },
+        }
+        week_close = {
+            "job": "close",
+            "_run_date": "2026-08-07",
+            "payload": {
+                "symbol_results": [
+                    {
+                        "code": "688008",
+                        "result": {
+                            "snapshot": {
+                                "code": "688008",
+                                "price": 85.0,
+                                "portfolio": portfolio,
+                                "holdings": portfolio["holdings"],
+                            }
+                        },
+                    },
+                ]
+            },
+        }
+
+        with patch(
+            "agent_reach.daily_run.weekly_report._load_week_manifests",
+            return_value=[week_morning, week_close],
+        ):
+            report = generate_weekly_report(
+                snapshot,
+                {"weekly_report": {"exa_sector_research": False}},
+                as_of=date(2026, 8, 8),
+                portfolio=portfolio,
+            )
+
+        holding = next(h for h in report.holdings if h["code"] == "688008")
+        assert holding["week_end_price"] == 85.0
+        assert holding["week_start_price"] == 80.0
+        md = render_weekly_markdown(report)
+        assert "周末收盘 ¥85.00" in md
+        assert "周初 ¥80.00" in md
+
 
 class TestScheduleWeekly:
     @patch("agent_reach.daily_run.workflows.run_weekly")
