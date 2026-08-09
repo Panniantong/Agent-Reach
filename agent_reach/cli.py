@@ -146,6 +146,17 @@ def main():
                                help="Install SKILL.md to agent skill directories")
     p_skill_group.add_argument("--uninstall", action="store_true",
                                help="Remove SKILL.md from agent skill directories")
+    p_skill.add_argument(
+        "--target",
+        choices=["all", "hermes"],
+        default="all",
+        help="Limit registration to one client (default: all detected clients)",
+    )
+    p_skill.add_argument(
+        "--force",
+        action="store_true",
+        help="Replace an existing skill installation instead of preserving it",
+    )
 
     # ── format ──
     p_format = sub.add_parser("format", help="Clean and format platform API output")
@@ -472,11 +483,11 @@ def _resolve_hermes_home() -> tuple[str, bool]:
     if raw:
         expanded = os.path.expanduser(os.path.expandvars(raw))
         if os.path.isabs(expanded):
-            return expanded, True
-    return os.path.expanduser("~/.hermes"), False
+            return os.path.realpath(expanded), True
+    return os.path.realpath(os.path.expanduser("~/.hermes")), False
 
 
-def _install_skill(force: bool = True):
+def _install_skill(force: bool = True, target_client: str = "all"):
     """Install Agent Reach as an agent skill for supported agent clients."""
     import importlib.resources
     import os
@@ -497,35 +508,56 @@ def _install_skill(force: bool = True):
             return "SKILL_en.md"
         return "SKILL.md"
 
-    def _read_skill_markdown(skill_pkg):
-        resource_name = _skill_resource_name()
+    def _read_skill_markdown(skill_pkg, resource_name: str | None = None):
+        selected_resource = resource_name or _skill_resource_name()
         try:
-            return skill_pkg.joinpath(resource_name).read_text(encoding="utf-8")
+            return skill_pkg.joinpath(selected_resource).read_text(encoding="utf-8")
         except FileNotFoundError:
+            if resource_name is not None:
+                raise
             return skill_pkg.joinpath("SKILL.md").read_text(encoding="utf-8")
 
-    def _copy_skill_dir(target: str) -> str | None:
+    def _skill_package():
+        try:
+            return importlib.resources.files("agent_reach").joinpath("skill")
+        except Exception:
+            from pathlib import Path
+            return Path(__file__).resolve().parent / "skill"
+
+    def _preflight_skill_resource(resource_name: str) -> bool:
+        """Read the guarded skill and references before any filesystem mutation."""
+        try:
+            skill_pkg = _skill_package()
+            _read_skill_markdown(skill_pkg, resource_name)
+            for ref_file in skill_pkg.joinpath("references").iterdir():
+                name = getattr(ref_file, "name", str(ref_file).rsplit("/", 1)[-1])
+                if name.endswith(".md"):
+                    ref_file.read_text(encoding="utf-8")
+            return True
+        except Exception as exc:
+            print(f"  Warning: Could not load guarded Hermes skill: {exc}")
+            return False
+
+    def _copy_skill_dir(target: str, resource_name: str | None = None) -> str | None:
         """Copy entire skill directory (locale-specific SKILL.md + references/)."""
         try:
-            if not force and os.path.exists(os.path.join(target, "SKILL.md")):
+            if not force and os.path.lexists(target):
                 return "preserved"
+
+            # Resolve and read the packaged resource before mutating an
+            # existing installation. The guarded Hermes resource fails closed.
+            skill_pkg = _skill_package()
+            skill_md = _read_skill_markdown(skill_pkg, resource_name)
 
             # Clear existing installation. A symlinked skill dir (dotfiles
             # setups) breaks shutil.rmtree — unlink the link itself instead.
             if os.path.islink(target):
                 os.unlink(target)
-            elif os.path.exists(target):
+            elif os.path.isdir(target):
                 shutil.rmtree(target)
+            elif os.path.lexists(target):
+                os.unlink(target)
             os.makedirs(target, exist_ok=True)
-
-            # Get skill directory from package (with fallback for editable installs)
-            try:
-                skill_pkg = importlib.resources.files("agent_reach").joinpath("skill")
-                skill_md = _read_skill_markdown(skill_pkg)
-            except Exception:
-                from pathlib import Path
-                skill_pkg = Path(__file__).resolve().parent / "skill"
-                skill_md = _read_skill_markdown(skill_pkg)
 
             # Copy SKILL.md using the selected locale file
             with open(os.path.join(target, "SKILL.md"), "w", encoding="utf-8") as f:
@@ -548,37 +580,69 @@ def _install_skill(force: bool = True):
             print(f"  Warning: Could not install skill: {e}")
             return None
 
-    # Install into every known skill root that already exists. An explicitly
-    # selected Hermes profile may not have created its skills directory yet,
-    # so create that child directory only when the profile home itself exists.
-    hermes_home, explicit_hermes_home = _resolve_hermes_home()
+    if target_client not in {"all", "hermes"}:
+        raise ValueError(f"Unsupported skill target: {target_client}")
+
+    # Load the guarded resource and every bundled reference before creating
+    # profile directories or replacing an existing installation.
+    hermes_resource_available = _preflight_skill_resource("SKILL_hermes.md")
+    if target_client == "hermes" and not hermes_resource_available:
+        return False
+
+    # An explicitly selected Hermes profile may not have created its skills
+    # directory yet. Create only that child when the profile itself exists.
+    hermes_home, _ = _resolve_hermes_home()
     hermes_skills = os.path.join(hermes_home, "skills")
-    if explicit_hermes_home and os.path.isdir(hermes_home):
+    hermes_skills_available = hermes_resource_available
+    if os.path.islink(hermes_skills):
+        hermes_skills_available = False
+        print("  Warning: Refusing symlinked Hermes skill directory")
+        if target_client == "hermes":
+            return False
+    elif hermes_skills_available and os.path.isdir(hermes_home):
         try:
             os.makedirs(hermes_skills, exist_ok=True)
         except OSError as exc:
+            hermes_skills_available = False
             print(f"  Warning: Could not prepare Hermes skill directory: {exc}")
-    skill_dirs = [
-        (hermes_skills, "Hermes"),
-        (os.path.expanduser("~/.agents/skills"), "Agent"),
-        (os.path.expanduser("~/.config/opencode/skills"), "OpenCode"),
-        (os.path.expanduser("~/.openclaw/skills"), "OpenClaw"),
-        (os.path.expanduser("~/.claude/skills"), "Claude Code"),
-    ]
+            if target_client == "hermes":
+                return False
 
-    # Insert OPENCLAW_HOME path at the beginning if environment variable is set
-    openclaw_home = os.environ.get("OPENCLAW_HOME")
-    if openclaw_home:
-        skill_dirs.insert(
-            0,
-            (os.path.join(openclaw_home, ".openclaw", "skills"), "OpenClaw"),
+    skill_dirs: list[tuple[str, str, str | None]]
+    if target_client == "hermes":
+        skill_dirs = [(hermes_skills, "Hermes", "SKILL_hermes.md")]
+    else:
+        skill_dirs = []
+        if hermes_skills_available:
+            skill_dirs.append((hermes_skills, "Hermes", "SKILL_hermes.md"))
+        skill_dirs.extend(
+            [
+                (os.path.expanduser("~/.agents/skills"), "Agent", None),
+                (os.path.expanduser("~/.config/opencode/skills"), "OpenCode", None),
+                (os.path.expanduser("~/.openclaw/skills"), "OpenClaw", None),
+                (os.path.expanduser("~/.claude/skills"), "Claude Code", None),
+            ]
         )
 
+        openclaw_home = os.environ.get("OPENCLAW_HOME")
+        if openclaw_home:
+            skill_dirs.insert(
+                0,
+                (
+                    os.path.join(openclaw_home, ".openclaw", "skills"),
+                    "OpenClaw",
+                    None,
+                ),
+            )
+
     installed = False
-    for skill_dir, platform_name in skill_dirs:
+    for skill_dir, platform_name, resource_name in skill_dirs:
+        if platform_name == "Hermes" and os.path.islink(hermes_skills):
+            print("  Warning: Refusing symlinked Hermes skill directory")
+            continue
         if os.path.isdir(skill_dir):
             target = os.path.join(skill_dir, "agent-reach")
-            status = _copy_skill_dir(target)
+            status = _copy_skill_dir(target, resource_name)
             if status:
                 if status == "preserved":
                     print(f"Skill already installed for {platform_name}, preserving existing files: {target}")
@@ -586,13 +650,18 @@ def _install_skill(force: bool = True):
                     print(f"Skill installed for {platform_name}: {target}")
                 installed = True
 
+    if not installed and target_client == "hermes":
+        print("  -- Could not install Hermes skill: profile skill directory not found")
+        return False
+
     if not installed:
-        # No known skill directory found — create for .agents by default
+        # No known skill directory found — create for .agents by default.
         target = os.path.expanduser("~/.agents/skills/agent-reach")
         os.makedirs(os.path.dirname(target), exist_ok=True)
         status = _copy_skill_dir(target)
         if status == "preserved":
             print(f"Skill already installed, preserving existing files: {target}")
+            installed = True
         elif status == "installed":
             print(f"Skill installed: {target}")
             installed = True
@@ -605,53 +674,102 @@ def _install_skill(force: bool = True):
     return installed
 
 
-def _uninstall_skill():
-    """Remove SKILL.md from all known agent skill directories."""
+def _uninstall_skill(target_client: str = "all") -> bool:
+    """Remove Agent Reach from known agent skill directories."""
     import shutil
 
-    hermes_home, _ = _resolve_hermes_home()
-    hermes_skill = os.path.join(hermes_home, "skills", "agent-reach")
-    skill_dirs = [
-        (hermes_skill, "Hermes"),
-        ("~/.config/opencode/skills/agent-reach", "OpenCode"),
-        ("~/.openclaw/skills/agent-reach", "OpenClaw"),
-        ("~/.claude/skills/agent-reach", "Claude Code"),
-        ("~/.agents/skills/agent-reach", "Agent"),
-    ]
+    if target_client not in {"all", "hermes"}:
+        raise ValueError(f"Unsupported skill target: {target_client}")
 
-    # Also check OPENCLAW_HOME
-    openclaw_home = os.environ.get("OPENCLAW_HOME")
-    if openclaw_home:
-        skill_dirs.insert(
-            0,
-            (os.path.join(openclaw_home, ".openclaw", "skills", "agent-reach"), "OpenClaw"),
-        )
+    hermes_home, _ = _resolve_hermes_home()
+    hermes_skills = os.path.join(hermes_home, "skills")
+    hermes_legacy_parent = os.path.join(hermes_skills, "social-media")
+    hermes_refused = False
+    hermes_targets = [
+        (os.path.join(hermes_skills, "agent-reach"), "Hermes"),
+        (
+            os.path.join(hermes_legacy_parent, "agent-reach"),
+            "Hermes legacy pilot",
+        ),
+    ]
+    if os.path.islink(hermes_skills):
+        print("  Warning: Refusing symlinked Hermes skill directory")
+        hermes_targets = []
+        hermes_refused = True
+    elif os.path.islink(hermes_legacy_parent):
+        print("  Warning: Refusing symlinked Hermes legacy skill directory")
+        hermes_targets = hermes_targets[:1]
+        hermes_refused = True
+    if target_client == "hermes":
+        skill_dirs = hermes_targets
+    else:
+        skill_dirs = [
+            *hermes_targets,
+            ("~/.config/opencode/skills/agent-reach", "OpenCode"),
+            ("~/.openclaw/skills/agent-reach", "OpenClaw"),
+            ("~/.claude/skills/agent-reach", "Claude Code"),
+            ("~/.agents/skills/agent-reach", "Agent"),
+        ]
+
+        openclaw_home = os.environ.get("OPENCLAW_HOME")
+        if openclaw_home:
+            skill_dirs.insert(
+                0,
+                (
+                    os.path.join(
+                        openclaw_home, ".openclaw", "skills", "agent-reach"
+                    ),
+                    "OpenClaw",
+                ),
+            )
 
     removed = False
+    failed = hermes_refused
     for skill_path_template, platform_name in skill_dirs:
+        root_refused = platform_name.startswith("Hermes") and os.path.islink(
+            hermes_skills
+        )
+        legacy_refused = (
+            platform_name == "Hermes legacy pilot"
+            and os.path.islink(hermes_legacy_parent)
+        )
+        if root_refused or legacy_refused:
+            print("  Warning: Refusing symlinked Hermes skill directory")
+            failed = True
+            continue
         skill_path = os.path.expanduser(skill_path_template)
-        if os.path.isdir(skill_path):
+        if os.path.lexists(skill_path):
             try:
                 if os.path.islink(skill_path):
                     os.unlink(skill_path)
-                else:
+                elif os.path.isdir(skill_path):
                     shutil.rmtree(skill_path)
+                else:
+                    os.unlink(skill_path)
                 print(f"  Removed {platform_name} skill: {skill_path}")
                 removed = True
             except Exception as e:
                 print(f"  Could not remove {skill_path}: {e}")
+                failed = True
 
-    if not removed:
+    if not removed and not failed:
         print("  No skill installations found.")
+    return not failed
 
 
 def _cmd_skill(args):
     """Manage agent skill registration."""
+    target_client = getattr(args, "target", "all")
+    force = getattr(args, "force", False)
     if args.install:
-        if not _install_skill():
+        if not _install_skill(force=force, target_client=target_client):
             raise SystemExit(1)
     elif args.uninstall:
-        _uninstall_skill()
+        if force:
+            print("  --force is only valid with --install")
+            raise SystemExit(2)
+        if not _uninstall_skill(target_client=target_client):
+            raise SystemExit(1)
 
 
 def _cmd_format(args):
@@ -1904,26 +2022,48 @@ def _cmd_uninstall(args):
 
     # ── 2. Skill files ──
     hermes_home, _ = _resolve_hermes_home()
-    hermes_skill = os.path.join(hermes_home, "skills", "agent-reach")
+    hermes_skills = os.path.join(hermes_home, "skills")
+    hermes_legacy_parent = os.path.join(hermes_skills, "social-media")
+    hermes_skill = os.path.join(hermes_skills, "agent-reach")
+    hermes_legacy_skill = os.path.join(hermes_legacy_parent, "agent-reach")
     skill_dirs = [
-        (hermes_skill, "Hermes"),
         ("~/.config/opencode/skills/agent-reach", "OpenCode"),
         ("~/.openclaw/skills/agent-reach", "OpenClaw"),
         ("~/.claude/skills/agent-reach", "Claude Code"),
         ("~/.agents/skills/agent-reach", "Agent"),
     ]
+    if os.path.islink(hermes_skills):
+        print("  Warning: Refusing symlinked Hermes skill directory")
+    else:
+        skill_dirs.insert(0, (hermes_skill, "Hermes"))
+        if os.path.islink(hermes_legacy_parent):
+            print("  Warning: Refusing symlinked Hermes legacy skill directory")
+        else:
+            skill_dirs.insert(1, (hermes_legacy_skill, "Hermes legacy pilot"))
 
     for skill_path_template, platform_name in skill_dirs:
+        root_refused = platform_name.startswith("Hermes") and os.path.islink(
+            hermes_skills
+        )
+        legacy_refused = (
+            platform_name == "Hermes legacy pilot"
+            and os.path.islink(hermes_legacy_parent)
+        )
+        if root_refused or legacy_refused:
+            print("  Warning: Refusing symlinked Hermes skill directory")
+            continue
         skill_path = os.path.expanduser(skill_path_template)
-        if os.path.isdir(skill_path):
+        if os.path.lexists(skill_path):
             if dry_run:
                 print(f"[dry-run] Would remove {platform_name} skill: {skill_path}")
             else:
                 try:
                     if os.path.islink(skill_path):
                         os.unlink(skill_path)
-                    else:
+                    elif os.path.isdir(skill_path):
                         shutil.rmtree(skill_path)
+                    else:
+                        os.unlink(skill_path)
                     print(f"  Removed {platform_name} skill: {skill_path}")
                     removed_any = True
                 except Exception as e:
@@ -1987,7 +2127,11 @@ def _cmd_uninstall(args):
 
     print()
     print("Optional: remove the Agent Reach Python package itself:")
-    print("  pip uninstall agent-reach")
+    if shutil.which("uv"):
+        print("  uv tool uninstall agent-reach  # uv tool installation")
+    print("  pip uninstall agent-reach       # pip environment")
+    if shutil.which("pipx"):
+        print("  pipx uninstall agent-reach      # pipx installation")
     print()
     print("Optional: remove tools installed by Agent Reach:")
     print("  npm uninstall -g mcporter")

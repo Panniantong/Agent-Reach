@@ -26,6 +26,18 @@ class TestSkillCommand(unittest.TestCase):
         self.assertTrue(default_skill.strip())
         self.assertTrue(english_skill.strip())
 
+    def test_skill_resources_include_guarded_hermes_variant(self):
+        skill_dir = importlib.resources.files("agent_reach").joinpath("skill")
+
+        hermes_skill = skill_dir.joinpath("SKILL_hermes.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("read-only research on unsupported social sites", hermes_skill)
+        self.assertIn("Do not use for", hermes_skill)
+        self.assertIn("agent-reach install --system", hermes_skill)
+        self.assertNotIn("MUST USE", hermes_skill)
+
     def test_skill_frontmatter_does_not_advertise_glob_support_files(self):
         """Direct skill installers can only fetch concrete referenced files."""
         skill_dir = importlib.resources.files("agent_reach").joinpath("skill")

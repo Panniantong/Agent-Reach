@@ -84,18 +84,29 @@ The default command checks core infrastructure (gh CLI, Node.js, mcporter, Exa s
 
 #### Hermes Agent skill registration
 
-Register the packaged skill after installing the CLI:
+Register only the guarded Hermes skill after installing the CLI:
 
 ```bash
-agent-reach skill --install
+agent-reach skill --install --target hermes
 ```
+
+This target-specific command installs the public/read-only Hermes variant and
+does not write to `.agents`, OpenCode, OpenClaw, or Claude skill roots. Existing
+Hermes files are preserved unless `--force` is supplied explicitly.
 
 When `HERMES_HOME` is set to an absolute path for an existing profile home,
 Agent Reach installs into that profile's `$HERMES_HOME/skills/agent-reach/`
-directory and creates the `skills/` child if needed. Empty or relative values
-are treated as unset. Otherwise it uses `~/.hermes/skills/agent-reach/` when
-that skill root already exists. This keeps profile-specific Hermes
-installations isolated instead of writing into a different profile.
+directory and creates only the `skills/` child if needed. Empty or relative
+values are treated as unset. Otherwise it uses `~/.hermes/skills/agent-reach/`
+when that skill root already exists. A missing or unusable target, a symlinked
+`skills/` root, or a missing guarded Hermes resource fails closed instead of
+falling back to another agent client or the unrestricted generic skill.
+
+Remove the Hermes registration with:
+
+```bash
+agent-reach skill --uninstall --target hermes
+```
 
 > 💡 **macOS / Homebrew Python 提示 `externally-managed-environment`？**
 > 这是 PEP 668 保护，不是 Agent Reach 本身的问题。优先用 `pipx install ...`，或先创建 `venv` 再安装。
