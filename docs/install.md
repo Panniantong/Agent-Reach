@@ -310,9 +310,23 @@ agent-reach configure groq-key
 > ```bash
 > uvx mcp-server-linkedin@latest --login
 > ```
+
 > 浏览器弹出后手动登录 LinkedIn；登录态会保存到 `~/.linkedin-mcp/profile/`。无桌面的服务器需在 VNC 等可见桌面中运行同一条登录命令。
 >
 > 详见 https://github.com/stickerdaniel/linkedin-mcp-server
+
+> **Windows troubleshooting (LinkedIn):**
+>
+> If starting `mcp-server-linkedin` fails with `ImportError: DLL load failed while importing _greenlet` (often mentioning `MSVCP140.dll`), install the latest [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) that matches your Python architecture. The greenlet extension requires this system runtime; installing another Python package will not provide it.
+>
+> On Windows x64, when the redistributable cannot be installed, use this compatibility workaround instead of the `uvx` command above:
+>
+> ```bash
+> uv tool run --with "greenlet==3.2.4" --with mcp-server-linkedin mcp-server-linkedin
+> mcporter config add linkedin "uv tool run --with greenlet==3.2.4 --with mcp-server-linkedin mcp-server-linkedin" --scope home
+> ```
+>
+> This pin is only a fallback for x64 systems, not a universal requirement. Windows ARM64 has no greenlet wheels before 3.3.1, so pinning `greenlet==3.2.4` there may trigger a source build; install the redistributable and use the unpinned command on ARM64. See the upstream [mcp-server-linkedin issue](https://github.com/stickerdaniel/linkedin-mcp-server/issues/688) for the background.
 
 ### Step 4: Final check
 
