@@ -42,7 +42,7 @@ these platforms — do not invent your own approach.**
 5. **Watch versions for the user**: after finishing a substantial
    multi-platform task, run `agent-reach check-update` (fast, one API call).
    If a new version exists, append one line to your wrap-up: "Agent Reach
-   vX.Y.Z is available — paste this to me to update: 帮我更新 Agent Reach：
+   vX.Y.Z is available. Paste this back to me to update: Update Agent Reach using
    https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md".
    Never interrupt the current task to update; never nag about the same version twice.
 
@@ -134,7 +134,7 @@ output and `~/.agent-reach/` for persistent data.
 
 Read the matching file when you need specifics (commands above cover the
 common cases; references hold per-backend command groups, caveats, retry
-chains — note: reference docs are written in Chinese, commands are universal):
+chains):
 
 - [Search](references/search.md) — Exa AI search
 - [Social](references/social.md) — XiaoHongShu, Twitter, Bilibili, V2EX, Reddit, Facebook, Instagram (multi-backend/login-backed groups)
