@@ -1,6 +1,6 @@
 # 社交媒体 & 社区
 
-小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram。
+小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram、TikTok。
 
 ## 小红书 / XiaoHongShu（多后端）
 
@@ -299,3 +299,31 @@ opencli instagram saved --limit 20 -f yaml
 ```
 
 > 要求 Chrome 打开且装了 OpenCLI 扩展，并已登录 instagram.com。`instagram search` 是用户搜索；读帖子需要先确定 username，再用 `instagram user USERNAME`。若出现 429 / login required，先让用户在 Chrome 里重新登录并降低频率。
+
+## TikTok（OpenCLI，必须桌面 Chrome）
+
+TikTok 走 OpenCLI，复用用户 Chrome 里的 tiktok.com 会话。先跑
+`agent-reach doctor --json` 确认 `tiktok` channel 已注册；Doctor 不执行平台命令，
+因此即使 OpenCLI 桥接已连接也会保持 `active_backend: null`。只有任务确实需要
+TikTok 时，才执行下面的只读命令并以非空结果验收。
+
+```bash
+# 搜索公开视频
+opencli tiktok search "query" --limit 10 -f yaml
+
+# 用户 Profile
+opencli tiktok profile --username USERNAME -f yaml
+
+# 指定用户最近公开视频
+opencli tiktok user USERNAME --limit 20 -f yaml
+
+# Explore 公开视频
+opencli tiktok explore --limit 20 -f yaml
+
+# 当前登录账号自己的 TikTok Studio 视频和指标
+opencli tiktok creator-videos --limit 20 -f yaml
+```
+
+> 要求 Chrome 打开、安装 OpenCLI 扩展，并由用户自己登录 tiktok.com。
+> `creator-videos` 读取的是当前登录账号自己的 TikTok Studio 数据，不是任意创作者的
+> 私有指标。此 skill 只使用只读命令；不要调用 `comment`、`follow`、`like` 等写操作。

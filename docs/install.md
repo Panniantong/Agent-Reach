@@ -102,7 +102,7 @@ After installing the basics, **ask the user** which additional channels they nee
 >
 > 还有这些可选渠道，你需要哪些？
 >
-> - 🌟 **OpenCLI**（桌面推荐）— 一次安装即可提供 Reddit/Facebook/Instagram/B站字幕/Twitter 备选，并作为小红书桌面后端；小红书只使用用户已有且明确控制的 Chrome 会话
+> - 🌟 **OpenCLI**（桌面推荐）— 一次安装即可提供 Reddit/Facebook/Instagram/TikTok/B站字幕/Twitter 备选，并作为小红书桌面后端；小红书只使用用户已有且明确控制的 Chrome 会话
 > - 🐦 **Twitter/X** — 搜推文、看时间线（需要登录 Cookie）
 > - 📈 **雪球** — 股票行情、热门帖子（需要登录 Cookie）
 > - 🎙️ **小宇宙播客** — 音频转文字（需要免费 Groq Key）
@@ -110,6 +110,7 @@ After installing the basics, **ask the user** which additional channels they nee
 > - 📖 **Reddit** — 搜索和阅读帖子（必须登录态：桌面 OpenCLI 或 rdt-cli + Cookie）
 > - 📘 **Facebook** — 搜索、主页、Feed、群组列表（桌面走 OpenCLI，复用 Chrome 登录态）
 > - 📷 **Instagram** — 用户搜索、Profile、用户最近帖子、Explore（桌面走 OpenCLI，复用 Chrome 登录态）
+> - 🎵 **TikTok** — 用户、搜索、公开视频、当前账号创作者指标（桌面走 OpenCLI，复用 Chrome 登录态）
 > - 📺 **B站完整版** — 热门、排行、搜索、视频详情（bili-cli，无需登录）
 > - 💼 **LinkedIn** — Profile、职位搜索
 >
@@ -119,11 +120,11 @@ Based on the user's choice, run:
 
 ```bash
 agent-reach install --env=auto --system --channels=opencli,xiaohongshu   # Desktop user chose XHS
-agent-reach install --env=auto --system --channels=facebook,instagram    # Desktop Meta channels
+agent-reach install --env=auto --system --channels=facebook,instagram,tiktok  # Desktop OpenCLI channels
 agent-reach install --env=auto --system --channels=all                   # User approved everything
 ```
 
-Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `facebook`, `instagram`, `bilibili`, `linkedin`, `all`
+Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `facebook`, `instagram`, `tiktok`, `bilibili`, `linkedin`, `all`
 
 ### Step 3: Fix what's broken
 
@@ -137,7 +138,7 @@ Only ask the user when you genuinely need their input (credentials, permissions,
 
 Some channels need credentials only the user can provide. Based on the doctor output, ask for what's missing:
 
-> 🔒 **Security tip:** For platforms that need cookies or browser sessions (Twitter, XiaoHongShu, Reddit, Facebook, Instagram), we recommend using a **dedicated/secondary account** rather than your main account. Cookie/browser-session auth carries two risks:
+> 🔒 **Security tip:** For platforms that need cookies or browser sessions (Twitter, XiaoHongShu, Reddit, Facebook, Instagram, TikTok), we recommend using a **dedicated/secondary account** rather than your main account. Cookie/browser-session auth carries two risks:
 > 1. **Account ban** — platforms may detect non-browser API calls and restrict or ban the account
 > 2. **Credential exposure** — cookies grant full account access; using a secondary account limits the blast radius if credentials are ever compromised
 
@@ -255,6 +256,28 @@ agent-reach install --system --channels facebook,instagram
 >
 > Facebook Groups 当前只承诺读取用户登录后可见的群组列表/最近动态，不承诺任意群帖子和评论 API。Instagram 的 search 是用户搜索，不是全站帖子关键词搜索；若提示 429/登录错误，先让用户在 Chrome 里重新登录并降低频率。
 
+**TikTok（桌面 OpenCLI）:**
+> TikTok 走 OpenCLI，复用用户自己的 Chrome 登录态。服务器/无桌面环境不推荐支持。
+
+```bash
+agent-reach install --system --channels tiktok
+```
+
+> 装完后：
+> 1. 确认 Chrome 已安装 OpenCLI 扩展并通过 `opencli doctor`
+> 2. 由用户自己在 Chrome 里登录 tiktok.com
+> 3. Agent 只调用只读命令：
+>    ```bash
+>    opencli tiktok search "query" --limit 10 -f yaml
+>    opencli tiktok profile --username USERNAME -f yaml
+>    opencli tiktok user USERNAME --limit 20 -f yaml
+>    opencli tiktok explore --limit 20 -f yaml
+>    opencli tiktok creator-videos --limit 20 -f yaml
+>    ```
+>
+> `creator-videos` 只读取当前登录账号自己的 TikTok Studio 视频和指标。不要调用
+> `comment`、`follow`、`like` 等写操作。
+
 **雪球 / Xueqiu (股票行情 + 热门帖子):**
 > "雪球需要登录后的 Cookie。请先在 Chrome 里登录 xueqiu.com，然后运行："
 
@@ -364,6 +387,7 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 | Reddit | `opencli`（备选 `rdt`） | `opencli reddit search "query" -f yaml` / `rdt read POST_ID` |
 | Facebook | `opencli` | `opencli facebook search "query" -f yaml` |
 | Instagram | `opencli` | `opencli instagram user nasa -f yaml` |
+| TikTok | `opencli` | `opencli tiktok search "query" -f yaml` |
 | GitHub | `gh` | `gh search repos "query"` |
 | Web | `curl` + Jina | `curl -s "https://r.jina.ai/URL"` |
 | Exa Search | `mcporter` | `mcporter call exa.web_search_exa query="..." numResults=5` |

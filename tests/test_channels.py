@@ -13,6 +13,7 @@ from agent_reach.channels import get_all_channels, get_channel
 from agent_reach.channels.bilibili import BilibiliChannel
 from agent_reach.channels.facebook import FacebookChannel
 from agent_reach.channels.instagram import InstagramChannel
+from agent_reach.channels.tiktok import TikTokChannel
 from agent_reach.channels.v2ex import V2EXChannel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
 from agent_reach.channels.xueqiu import XueqiuChannel
@@ -35,10 +36,19 @@ class TestChannelRegistry:
         assert "twitter" in names
         assert "facebook" in names
         assert "instagram" in names
+        assert "tiktok" in names
         assert "v2ex" in names
 
 
 class TestOpenCLISiteChannels:
+    def test_tiktok_can_handle_common_urls(self):
+        ch = TikTokChannel()
+        assert ch.can_handle("https://www.tiktok.com/@openai/video/1234567890")
+        assert ch.can_handle("https://m.tiktok.com/@openai/video/1234567890")
+        assert ch.can_handle("https://vt.tiktok.com/ZS1234567/")
+        assert not ch.can_handle("https://tiktok.com.evil.example/@openai/video/1234567890")
+        assert not ch.can_handle("https://instagram.com/openai")
+
     def test_facebook_can_handle_common_urls(self):
         ch = FacebookChannel()
         assert ch.can_handle("https://www.facebook.com/zuck")
