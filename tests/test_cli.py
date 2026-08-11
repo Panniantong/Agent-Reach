@@ -256,7 +256,7 @@ class TestCLI:
             ["C:/Tools/npm.CMD", "install", "-g", backends.OPENCLI_PACKAGE]
         ]
 
-    def test_install_facebook_instagram_routes_to_opencli_once(self, monkeypatch, capsys):
+    def test_install_opencli_site_channels_route_to_opencli_once(self, monkeypatch, capsys):
         calls = []
 
         monkeypatch.setattr(cli, "_detect_environment", lambda: "local")
@@ -286,7 +286,7 @@ class TestCLI:
                 system=True,
                 safe=False,
                 dry_run=False,
-                channels="facebook,instagram,opencli",
+                channels="facebook,instagram,tiktok,opencli",
             )
         )
 
@@ -303,14 +303,14 @@ class TestCLI:
                 system=True,
                 safe=False,
                 dry_run=True,
-                channels="facebook,instagram,opencli,bilibili",
+                channels="facebook,instagram,tiktok,opencli,bilibili",
             )
         )
 
         out = capsys.readouterr().out
-        assert "服务器环境跳过：facebook, instagram, opencli" in out
+        assert "服务器环境跳过：facebook, instagram, opencli, tiktok" in out
         assert "[dry-run] Would install optional channels: bilibili" in out
-        assert "facebook, instagram, opencli, bilibili" not in out
+        assert "facebook, instagram, opencli, tiktok, bilibili" not in out
 
 
 class TestCheckUpdateRetry:
