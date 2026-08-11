@@ -15,6 +15,7 @@ not just file existence.
 
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from typing import Mapping, Optional, Sequence
 
@@ -22,6 +23,35 @@ from agent_reach.utils.process import utf8_subprocess_env
 
 #: Exit codes shells use for "found but not executable" / "not found".
 _BROKEN_EXIT_CODES = (126, 127)
+
+#: Default time-to-live for a cached probe result, in seconds.
+_DEFAULT_PROBE_TTL_SECONDS = 10.0
+
+#: Process-wide probe cache: key -> (expires_at, ProbeResult).
+#: Channels and doctor share this cache so repeated `agent-reach doctor`
+#: runs within the TTL window reuse fresh results instead of re-executing
+#: every upstream CLI. `clear_probe_cache()` forces a full re-probe.
+_PROBE_CACHE: dict = {}
+
+
+def clear_probe_cache() -> None:
+    """Drop all cached probe results (used by `doctor --refresh`)."""
+    _PROBE_CACHE.clear()
+
+
+def _cache_get(key: tuple) -> Optional["ProbeResult"]:
+    entry = _PROBE_CACHE.get(key)
+    if entry is None:
+        return None
+    expires_at, result = entry
+    if time.monotonic() >= expires_at:
+        _PROBE_CACHE.pop(key, None)
+        return None
+    return result
+
+
+def _cache_put(key: tuple, result: "ProbeResult", ttl: float) -> None:
+    _PROBE_CACHE[key] = (time.monotonic() + ttl, result)
 
 
 @dataclass
@@ -52,6 +82,8 @@ def probe_command(
     package: Optional[str] = None,
     env: Optional[Mapping[str, str]] = None,
     remove_env: Sequence[str] = (),
+    use_cache: bool = True,
+    ttl: float = _DEFAULT_PROBE_TTL_SECONDS,
 ) -> ProbeResult:
     """Actually execute `cmd *args` and classify the result.
 
@@ -63,21 +95,35 @@ def probe_command(
              (defaults to cmd).
     env: values added only to the probed child process.
     remove_env: inherited variables removed only from the child process.
+    use_cache: reuse a probe result from within the TTL window. This keeps
+               repeated `doctor` runs cheap; pass use_cache=False (or call
+               clear_probe_cache()) for a guaranteed-fresh probe.
+    ttl: cache lifetime in seconds. Defaults to a short window so a stale
+         backend can never survive long inside a single process.
     """
     path = shutil.which(cmd)
     if not path:
         return ProbeResult("missing")
 
+    cache_key = (path, tuple(args), timeout, tuple(sorted(env.items())) if env else ())
+    if use_cache:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
+
     last: Optional[ProbeResult] = None
     for _ in range(retries + 1):
         last = _run_once(path, args, timeout, package or cmd, env, remove_env)
         if last.ok:
-            return last
+            break
         # missing/broken won't heal between retries — only transient
         # failures (timeout/error) are worth a second attempt
         if last.status in ("missing", "broken"):
-            return last
+            break
     assert last is not None  # retries + 1 always executes at least once
+
+    if use_cache:
+        _cache_put(cache_key, last, ttl)
     return last
 
 

@@ -131,6 +131,9 @@ def main():
     p_doctor = sub.add_parser("doctor", help="Check platform availability")
     p_doctor.add_argument("--json", action="store_true",
                           help="Output machine-readable JSON instead of the text report")
+    p_doctor.add_argument("--refresh", action="store_true",
+                          help="Force a fresh probe of every backend instead of reusing "
+                               "cached results from the last few seconds")
 
     # ── uninstall ──
     p_uninstall = sub.add_parser("uninstall", help="Remove all Agent Reach config, tokens, and skill files")
@@ -1497,6 +1500,7 @@ def _cmd_configure(args):
                 "  凭据未实时验证：不会执行 `twitter status`，因为上游在"
                 "验证失败时会自动读取浏览器 Cookie。"
             )
+            _warn_cookie_ban_risk("Twitter/X")
             if not shutil.which("twitter"):
                 print(
                     "  [!] twitter-cli 未安装。运行：pipx install twitter-cli"
@@ -1522,6 +1526,7 @@ def _cmd_configure(args):
     elif args.key == "xhs-cookies":
         if not _configure_xhs_cookies(value):
             raise SystemExit(1)
+        _warn_cookie_ban_risk("小红书 (Xiaohongshu)")
 
     elif args.key == "github-token":
         config.set("github_token", value)
@@ -1534,6 +1539,27 @@ def _cmd_configure(args):
     elif args.key == "openai-key":
         config.set("openai_api_key", value)
         print("✅ OpenAI key configured!")
+
+
+_COOKIE_BAN_RISK_WARNING = (
+    "⚠️  封号风险提醒：通过脚本/API 调用 cookie 登录的平台，"
+    "存在被平台检测并封号的风险。"
+    "请务必使用专用小号（throwaway account），不要使用主账号。"
+)
+
+
+def _warn_cookie_ban_risk(platform: str) -> None:
+    """Print the account-ban risk warning after configuring a cookie channel.
+
+    The README documents this risk; the CLI should say it at the exact
+    moment a credential is saved, not just in prose. `platform` names the
+    configured platform so the warning reads as targeted advice.
+    """
+    print()
+    print(_COOKIE_BAN_RISK_WARNING)
+    print(f"  (configured: {platform})")
+    print("  Cookie 等同完整登录权限；凭据泄露时用小号可限制影响范围。")
+    print()
 
 
 def _cmd_transcribe(args):
@@ -1972,6 +1998,10 @@ def _cmd_uninstall(args):
 def _cmd_doctor(args=None):
     from agent_reach.config import Config
     from agent_reach.doctor import check_all, format_report
+    from agent_reach.probe import clear_probe_cache
+
+    if args is not None and getattr(args, "refresh", False):
+        clear_probe_cache()
     config = Config(read_only=True)
     results = check_all(config)
 
