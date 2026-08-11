@@ -170,15 +170,11 @@ class TestSkillCommand(unittest.TestCase):
             # The important test is that the function runs without error
 
     def test_uninstall_skill_removes_dir(self):
-        """_uninstall_skill should remove skill directories."""
+        """_uninstall_skill should remove skill directories it installed."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create a fake skill installation
-            skill_path = os.path.join(tmpdir, ".openclaw", "skills", "agent-reach")
-            os.makedirs(skill_path)
-            with open(os.path.join(skill_path, "SKILL.md"), "w", encoding="utf-8") as f:
-                f.write("test")
-
-            self.assertTrue(os.path.exists(skill_path))
+            skill_parent = os.path.join(tmpdir, ".openclaw", "skills")
+            skill_path = os.path.join(skill_parent, "agent-reach")
+            os.makedirs(skill_parent)
 
             with patch(
                 "agent_reach.cli.os.path.expanduser",
@@ -187,7 +183,9 @@ class TestSkillCommand(unittest.TestCase):
                 env = os.environ.copy()
                 env.pop("OPENCLAW_HOME", None)
                 with patch.dict(os.environ, env, clear=True):
-                    _uninstall_skill()
+                    self.assertTrue(_install_skill(force=True))
+                    self.assertTrue(os.path.exists(skill_path))
+                    self.assertTrue(_uninstall_skill())
 
             self.assertFalse(os.path.exists(skill_path))
 

@@ -97,10 +97,17 @@ Hermes files are preserved unless `--force` is supplied explicitly.
 When `HERMES_HOME` is set to an absolute path for an existing profile home,
 Agent Reach installs into that profile's `$HERMES_HOME/skills/agent-reach/`
 directory and creates only the `skills/` child if needed. Empty or relative
-values are treated as unset. Otherwise it uses `~/.hermes/skills/agent-reach/`
-when that skill root already exists. A missing or unusable target, a symlinked
-`skills/` root, or a missing guarded Hermes resource fails closed instead of
-falling back to another agent client or the unrestricted generic skill.
+values are treated as unset. Otherwise it creates `~/.hermes/skills/` as needed
+and installs into `~/.hermes/skills/agent-reach/`. A missing or unusable explicit
+target, a symlinked `skills/` root, or a missing guarded Hermes resource fails
+closed instead of falling back to another agent client or the unrestricted
+generic skill.
+
+Every installation carries an Agent Reach ownership manifest containing hashes
+for the managed files. Updates are staged in a sibling temporary directory and
+published only after the full replacement is ready. Uninstall removes only
+manifest-owned, unmodified files and preserves unrelated additions; unmarked or
+locally modified trees are refused and must be reviewed manually.
 
 Remove the Hermes registration with:
 
