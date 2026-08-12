@@ -42,7 +42,7 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 | Config & tokens | `~/.agent-reach/` | `~/.agent-reach/config.json` |
 | Upstream tool repos | `~/.agent-reach/tools/` | `~/.agent-reach/tools/xiaoyuzhou/` |
 | Temporary files | `/tmp/` | `/tmp/yt-dlp-output/` |
-| Skills | `~/.openclaw/skills/agent-reach/` | SKILL.md |
+| Skills | Client skill root, e.g. `$HERMES_HOME/skills/agent-reach/` | SKILL.md |
 
 **Why?** If you clone repos or create files in the workspace, it pollutes the user's project directory and can break their agent over time. Keep the workspace clean.
 
@@ -81,6 +81,39 @@ agent-reach install --env=auto --system
 The default command checks core infrastructure (gh CLI, Node.js, mcporter, Exa search, yt-dlp config) without changing the host. With explicit `--system` approval it installs/configures the missing pieces and activates these zero-config channels:
 
 - Web (Jina Reader), YouTube, GitHub, RSS, Exa Search, V2EX, Bilibili (basic)
+
+#### Hermes Agent skill registration
+
+Register only the guarded Hermes skill after installing the CLI:
+
+```bash
+agent-reach skill --install --target hermes
+```
+
+This target-specific command installs the public/read-only Hermes variant and
+does not write to `.agents`, OpenCode, OpenClaw, or Claude skill roots. Existing
+Hermes files are preserved unless `--force` is supplied explicitly.
+
+When `HERMES_HOME` is set to an absolute path for an existing profile home,
+Agent Reach installs into that profile's `$HERMES_HOME/skills/agent-reach/`
+directory and creates only the `skills/` child if needed. Empty or relative
+values are treated as unset. Otherwise it creates `~/.hermes/skills/` as needed
+and installs into `~/.hermes/skills/agent-reach/`. A missing or unusable explicit
+target, a symlinked `skills/` root, or a missing guarded Hermes resource fails
+closed instead of falling back to another agent client or the unrestricted
+generic skill.
+
+Every installation carries an Agent Reach ownership manifest containing hashes
+for the managed files. Updates are staged in a sibling temporary directory and
+published only after the full replacement is ready. Uninstall removes only
+manifest-owned, unmodified files and preserves unrelated additions; unmarked or
+locally modified trees are refused and must be reviewed manually.
+
+Remove the Hermes registration with:
+
+```bash
+agent-reach skill --uninstall --target hermes
+```
 
 > 💡 **macOS / Homebrew Python 提示 `externally-managed-environment`？**
 > 这是 PEP 668 保护，不是 Agent Reach 本身的问题。优先用 `pipx install ...`，或先创建 `venv` 再安装。

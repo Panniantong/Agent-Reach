@@ -451,7 +451,7 @@ def test_safe_install_with_proxy_makes_no_persistent_writes(
     monkeypatch.setattr(
         cli,
         "_install_skill",
-        lambda: skill_calls.append("installed"),
+        lambda *args, **kwargs: skill_calls.append("installed"),
     )
 
     cli._cmd_install(
@@ -534,7 +534,7 @@ def test_install_system_flag_explicitly_enables_writes(
     monkeypatch.setattr(
         cli,
         "_install_skill",
-        lambda: calls.append("skill"),
+        lambda *args, **kwargs: calls.append("skill"),
     )
     monkeypatch.setattr("agent_reach.doctor.check_all", lambda _config: {})
     monkeypatch.setattr(
@@ -561,7 +561,7 @@ def test_install_system_exits_nonzero_when_core_steps_fail(
     monkeypatch.setattr(cli, "_configure_logging", lambda _verbose=False: None)
     monkeypatch.setattr(cli, "_install_system_deps", lambda: False)
     monkeypatch.setattr(cli, "_install_mcporter", lambda: False)
-    monkeypatch.setattr(cli, "_install_skill", lambda: None)
+    monkeypatch.setattr(cli, "_install_skill", lambda *args, **kwargs: None)
     monkeypatch.setattr("agent_reach.doctor.check_all", lambda _config: {})
     monkeypatch.setattr(
         "agent_reach.doctor.format_report",
@@ -589,7 +589,7 @@ def test_install_system_exits_nonzero_when_requested_channel_fails(
     monkeypatch.setattr(cli, "_install_system_deps", lambda: True)
     monkeypatch.setattr(cli, "_install_mcporter", lambda: True)
     monkeypatch.setattr(cli, "_install_opencli_deps", lambda: False)
-    monkeypatch.setattr(cli, "_install_skill", lambda: True)
+    monkeypatch.setattr(cli, "_install_skill", lambda *args, **kwargs: True)
     monkeypatch.setattr("agent_reach.doctor.check_all", lambda _config: {})
     monkeypatch.setattr(
         "agent_reach.doctor.format_report",
@@ -621,7 +621,7 @@ def test_install_system_exits_nonzero_when_skill_install_fails(
     monkeypatch.setattr(cli, "_configure_logging", lambda _verbose=False: None)
     monkeypatch.setattr(cli, "_install_system_deps", lambda: True)
     monkeypatch.setattr(cli, "_install_mcporter", lambda: True)
-    monkeypatch.setattr(cli, "_install_skill", lambda: False)
+    monkeypatch.setattr(cli, "_install_skill", lambda *args, **kwargs: False)
     monkeypatch.setattr("agent_reach.doctor.check_all", lambda _config: {})
     monkeypatch.setattr(
         "agent_reach.doctor.format_report",
