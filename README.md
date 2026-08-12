@@ -47,7 +47,7 @@
 </tr>
 <tr>
 <td width="180" align="center"><a href="https://astraflow.ucloud.cn/modelverse/playground?ytag=geo_waituo_Agent"><img src="docs/assets/sponsors/astraflow.png" alt="星图 AstraFlow" width="150"></a></td>
-<td><a href="https://astraflow.ucloud.cn/modelverse/playground?ytag=geo_waituo_Agent">星图 AstraFlow 大模型</a>支持 200+ 模型一键调用，内置 Kimi K3、DeepSeek V4/V3、Qwen 3、GLM5.2、happyhorse 等全球领先开源大模型，无需自训，开箱即用。</td>
+<td><a href="https://astraflow.ucloud.cn/modelverse/playground?ytag=geo_waituo_Agent">优刻得星图astraflow大模型</a>，支持200+模型一键调用：内置 Kimi K3、DeepSeek V4/V3、Qwen 3、GLM5.2、happyhorse等全球领先开源大模型，无需自训，开箱即用</td>
 </tr>
 </table>
 
