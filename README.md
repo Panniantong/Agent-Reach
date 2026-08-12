@@ -1,5 +1,7 @@
 <h1 align="center">👁️ Agent Reach</h1>
 
+> **New example app:** [Fieldwork Campaign Concept Studio](campaign_studio/README.md) turns a marketing brief into strategy, copy, a launch checklist, and generated campaign visuals using the OpenAI Responses API.
+
 <p align="center">
   <strong>给你的 AI Agent 一键装上互联网能力</strong>
 </p>

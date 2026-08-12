@@ -26,6 +26,24 @@ class TestSkillCommand(unittest.TestCase):
         self.assertTrue(default_skill.strip())
         self.assertTrue(english_skill.strip())
 
+    def test_skill_locales_include_bounded_research_protocol(self):
+        """Research agents should plan evidence, stop, and preserve provenance."""
+        skill_dir = importlib.resources.files("agent_reach").joinpath("skill")
+        expected = {
+            "SKILL.md": ("调研闭环", "证据账本", "满足即停止", "搜索摘要只用于发现来源"),
+            "SKILL_en.md": (
+                "Research loop",
+                "evidence ledger",
+                "Stop when sufficient",
+                "search snippets alone are discovery evidence",
+            ),
+        }
+
+        for resource_name, requirements in expected.items():
+            content = skill_dir.joinpath(resource_name).read_text(encoding="utf-8")
+            for requirement in requirements:
+                self.assertIn(requirement, content, resource_name)
+
     def test_exa_reference_uses_default_registered_tools_only(self):
         """Agent instructions must not call Exa tools disabled by default."""
         search_reference = (
