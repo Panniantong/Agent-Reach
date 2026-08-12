@@ -466,26 +466,50 @@ def _cmd_install(args):
         print("Dry run complete. No changes were made.")
 
 
+def _is_english_locale(value: str) -> bool:
+    normalized = value.strip().lower()
+    return normalized.startswith("en") or normalized.startswith("english")
+
+
+def _prefers_english() -> bool:
+    """True when any locale variable asks for English skill content."""
+    locale_candidates = (
+        os.environ.get("AGENT_REACH_LANG", ""),
+        os.environ.get("LC_ALL", ""),
+        os.environ.get("LC_MESSAGES", ""),
+        os.environ.get("LANG", ""),
+    )
+    return any(_is_english_locale(candidate) for candidate in locale_candidates)
+
+
+def _skill_resource_name() -> str:
+    """Packaged SKILL markdown matching the requested locale."""
+    return "SKILL_en.md" if _prefers_english() else "SKILL.md"
+
+
+def _skill_references_dirname() -> str:
+    """Package directory holding the locale-matched references."""
+    return "references_en" if _prefers_english() else "references"
+
+
 def _install_skill(force: bool = True):
     """Install Agent Reach as an agent skill for supported agent clients."""
     import importlib.resources
     import os
     import shutil
 
-    def _is_english_locale(value: str) -> bool:
-        normalized = value.strip().lower()
-        return normalized.startswith("en") or normalized.startswith("english")
-
-    def _skill_resource_name() -> str:
-        locale_candidates = (
-            os.environ.get("AGENT_REACH_LANG", ""),
-            os.environ.get("LC_ALL", ""),
-            os.environ.get("LC_MESSAGES", ""),
-            os.environ.get("LANG", ""),
-        )
-        if any(_is_english_locale(candidate) for candidate in locale_candidates):
-            return "SKILL_en.md"
-        return "SKILL.md"
+    def _references_pkg(skill_pkg):
+        """Locale-matched references dir, falling back to the default set."""
+        default = skill_pkg.joinpath("references")
+        if not _prefers_english():
+            return default
+        english = skill_pkg.joinpath(_skill_references_dirname())
+        try:
+            if any(entry.name.endswith(".md") for entry in english.iterdir()):
+                return english
+        except (FileNotFoundError, NotADirectoryError):
+            pass
+        return default
 
     def _read_skill_markdown(skill_pkg):
         resource_name = _skill_resource_name()
@@ -521,8 +545,8 @@ def _install_skill(force: bool = True):
             with open(os.path.join(target, "SKILL.md"), "w", encoding="utf-8") as f:
                 f.write(skill_md)
 
-            # Copy references/ directory
-            refs_pkg = skill_pkg.joinpath("references")
+            # Copy references/ directory (locale-matched source, fixed target name)
+            refs_pkg = _references_pkg(skill_pkg)
             refs_target = os.path.join(target, "references")
             os.makedirs(refs_target, exist_ok=True)
 
