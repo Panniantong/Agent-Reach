@@ -146,6 +146,8 @@ def main():
                                help="Install SKILL.md to agent skill directories")
     p_skill_group.add_argument("--uninstall", action="store_true",
                                help="Remove SKILL.md from agent skill directories")
+    p_skill.add_argument("--force", action="store_true",
+                         help="Overwrite an existing SKILL.md (default: preserve user-modified files)")
 
     # ── format ──
     p_format = sub.add_parser("format", help="Clean and format platform API output")
@@ -466,7 +468,7 @@ def _cmd_install(args):
         print("Dry run complete. No changes were made.")
 
 
-def _install_skill(force: bool = True):
+def _install_skill(force: bool = False):
     """Install Agent Reach as an agent skill for supported agent clients."""
     import importlib.resources
     import os
@@ -625,7 +627,7 @@ def _uninstall_skill():
 def _cmd_skill(args):
     """Manage agent skill registration."""
     if args.install:
-        if not _install_skill():
+        if not _install_skill(force=args.force):
             raise SystemExit(1)
     elif args.uninstall:
         _uninstall_skill()
