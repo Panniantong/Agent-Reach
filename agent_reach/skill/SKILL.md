@@ -110,7 +110,14 @@ opencli instagram user USERNAME -f yaml        # 读指定用户最近帖子
 ```bash
 # 检查可用 channel 与每个平台当前激活的后端
 agent-reach doctor --json
+
+# 拿到一条 URL 但不确定归哪个平台/该跑什么命令时（纯元数据，不触网、不写盘）
+agent-reach route --json "URL"
 ```
+
+`route` 返回该 URL 的 channel、按优先级排好的 backends、以及可直接执行的命令；
+某些平台按 id/关键词读取（B站/Reddit/V2EX），此时 `commands` 为空，按返回的
+`reference` 去读对应文档。
 
 ## OpenCLI 适配器发现
 

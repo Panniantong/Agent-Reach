@@ -37,6 +37,8 @@ class BilibiliChannel(Channel):
     description = "B站视频、字幕和搜索"
     backends = ["bili-cli", "OpenCLI", "B站搜索 API"]
     tier = 1
+    reference = "social"
+    # bili/opencli take a BV id, not a URL — see references/social.md.
 
     def can_handle(self, url: str) -> bool:
         from agent_reach.utils.url import host_matches

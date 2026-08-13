@@ -132,6 +132,13 @@ def main():
     p_doctor.add_argument("--json", action="store_true",
                           help="Output machine-readable JSON instead of the text report")
 
+    # ── route ──
+    p_route = sub.add_parser(
+        "route", help="Show which channel and command handle a URL")
+    p_route.add_argument("url", help="The URL to route")
+    p_route.add_argument("--json", action="store_true",
+                         help="Output machine-readable JSON instead of the text report")
+
     # ── uninstall ──
     p_uninstall = sub.add_parser("uninstall", help="Remove all Agent Reach config, tokens, and skill files")
     p_uninstall.add_argument("--dry-run", action="store_true",
@@ -228,6 +235,8 @@ def main():
 
     if args.command == "doctor":
         _cmd_doctor(args)
+    elif args.command == "route":
+        _cmd_route(args)
     elif args.command == "check-update":
         _cmd_check_update()
     elif args.command == "watch":
@@ -1986,6 +1995,65 @@ def _cmd_doctor(args=None):
         print(report)
     else:
         rich_print(report)
+
+
+def _cmd_route(args):
+    """Answer 'I have this URL — which platform, which command?' in one call.
+
+    Pure metadata: no upstream process is spawned and no config is written, so
+    this stays fast enough for an agent to call per URL. Run `doctor` when the
+    question is which backend is live right now.
+    """
+    from agent_reach.channels import get_channel_for_url
+    from agent_reach.config import Config
+
+    try:
+        channel = get_channel_for_url(args.url)
+    except ValueError as exc:
+        print(f"[X] {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    config = Config(read_only=True)
+    commands = channel.commands_for_url(args.url, config)
+    reference = (
+        f"agent_reach/skill/references/{channel.reference}.md"
+        if channel.reference else ""
+    )
+
+    if getattr(args, "json", False):
+        print(json.dumps({
+            "url": args.url,
+            "channel": channel.name,
+            "description": channel.description,
+            "tier": channel.tier,
+            "backends": channel.ordered_backends(config),
+            "commands": [
+                {"backend": backend, "command": command}
+                for backend, command in commands
+            ],
+            "usage": getattr(channel, "usage", ""),
+            "reference": reference,
+        }, ensure_ascii=False, indent=2))
+        return
+
+    print(f"URL      : {args.url}")
+    print(f"渠道     : {channel.name} — {channel.description}")
+    print(f"后端顺序 : {'、'.join(channel.ordered_backends(config)) or '内置'}")
+    if commands:
+        print("命令     :")
+        for backend, command in commands:
+            print(f"  [{backend}] {command}")
+    else:
+        # Every backend here reads by id/keyword rather than URL; sending the
+        # agent to the reference doc beats printing a command that won't run.
+        usage = getattr(channel, "usage", "")
+        if usage:
+            print(f"命令     : {usage}")
+        else:
+            print("命令     : 该渠道按 id/关键词读取，不接受整条 URL")
+    if reference:
+        print(f"参考文档 : {reference}")
+    print("提示     : 运行 `agent-reach doctor --json` 查看当前实际生效的后端")
 
 
 def _cmd_setup():

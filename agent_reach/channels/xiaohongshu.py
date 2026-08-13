@@ -162,6 +162,11 @@ class XiaoHongShuChannel(Channel):
     description = "小红书笔记"
     backends = ["OpenCLI", "xiaohongshu-mcp", "xhs-cli (xiaohongshu-cli)"]
     tier = 1
+    reference = "social"
+    url_commands = {
+        "OpenCLI": 'opencli xiaohongshu note "{url}" -f yaml',
+        "xhs-cli (xiaohongshu-cli)": 'xhs read "{url}"',
+    }
 
     def can_handle(self, url: str) -> bool:
         from agent_reach.utils.url import host_matches

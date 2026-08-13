@@ -12,6 +12,7 @@ class ExaSearchChannel(Channel):
     description = "全网语义搜索"
     backends = ["Exa via mcporter"]
     tier = 0
+    reference = "search"
 
     def can_handle(self, url: str) -> bool:
         return False  # Search-only channel

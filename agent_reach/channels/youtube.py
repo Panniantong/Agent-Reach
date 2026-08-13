@@ -41,6 +41,13 @@ class YouTubeChannel(Channel):
     description = "YouTube 视频和字幕"
     backends = ["yt-dlp"]
     tier = 0
+    reference = "video"
+    url_commands = {
+        "yt-dlp": (
+            'yt-dlp --write-sub --write-auto-sub --skip-download '
+            '-o "/tmp/%(id)s" "{url}"'
+        )
+    }
 
     def can_handle(self, url: str) -> bool:
         from agent_reach.utils.url import host_matches
