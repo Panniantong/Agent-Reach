@@ -114,6 +114,120 @@ class TestDoctor:
         assert "可选渠道可以解锁" in plain
 
 
+class TestConcurrentChecks:
+    """check_all fans channels out; slow backends must not serialize."""
+
+    def test_checks_run_concurrently(self, tmp_config, monkeypatch):
+        import threading
+
+        started = threading.Barrier(3, timeout=10)
+
+        class _BarrierChannel(_StubChannel):
+            def check(self, config=None):
+                # Deadlocks (and fails the test) unless all three run at once.
+                started.wait()
+                return self._status, self._message
+
+        monkeypatch.setattr(
+            doctor,
+            "get_all_channels",
+            lambda: [
+                _BarrierChannel(f"ch{i}", f"渠道{i}", 0, "ok", "可用", ["b"])
+                for i in range(3)
+            ],
+        )
+
+        results = doctor.check_all(tmp_config)
+
+        assert [r["status"] for r in results.values()] == ["ok"] * 3
+
+    def test_result_order_follows_registry_not_completion(self, tmp_config, monkeypatch):
+        import time
+
+        class _SlowChannel(_StubChannel):
+            def check(self, config=None):
+                time.sleep(0.05)  # finishes last, must still be reported first
+                return self._status, self._message
+
+        monkeypatch.setattr(
+            doctor,
+            "get_all_channels",
+            lambda: [
+                _SlowChannel("slow", "慢渠道", 0, "ok", "可用", ["b"]),
+                _StubChannel("fast", "快渠道", 0, "ok", "可用", ["b"]),
+            ],
+        )
+
+        assert list(doctor.check_all(tmp_config)) == ["slow", "fast"]
+
+    def test_each_channel_is_checked_exactly_once(self, tmp_config, monkeypatch):
+        calls = []
+
+        class _CountingChannel(_StubChannel):
+            def check(self, config=None):
+                calls.append(self.name)
+                return self._status, self._message
+
+        monkeypatch.setattr(
+            doctor,
+            "get_all_channels",
+            lambda: [
+                _CountingChannel(f"ch{i}", f"渠道{i}", 0, "ok", "可用", ["b"])
+                for i in range(5)
+            ],
+        )
+
+        doctor.check_all(tmp_config)
+
+        assert sorted(calls) == [f"ch{i}" for i in range(5)]
+
+    def test_one_crashing_channel_does_not_abort_the_others(self, tmp_config, monkeypatch):
+        class _ExplodingChannel(_StubChannel):
+            def check(self, config=None):
+                raise RuntimeError("boom")
+
+        monkeypatch.setattr(
+            doctor,
+            "get_all_channels",
+            lambda: [
+                _ExplodingChannel("boom", "爆炸渠道", 0, "ok", "", ["b"]),
+                _StubChannel("web", "网页", 0, "ok", "可用", ["b"]),
+            ],
+        )
+
+        results = doctor.check_all(tmp_config)
+
+        assert results["boom"]["status"] == "error"
+        assert results["web"]["status"] == "ok"
+
+    def test_empty_registry_returns_empty_dict(self, tmp_config, monkeypatch):
+        # ThreadPoolExecutor(max_workers=0) raises; the empty case short-circuits.
+        monkeypatch.setattr(doctor, "get_all_channels", lambda: [])
+        assert doctor.check_all(tmp_config) == {}
+
+    def test_worker_count_is_capped(self, tmp_config, monkeypatch):
+        seen = {}
+        real_pool = doctor.ThreadPoolExecutor
+
+        def spy(*args, **kwargs):
+            seen["workers"] = kwargs.get("max_workers")
+            return real_pool(*args, **kwargs)
+
+        monkeypatch.setattr(doctor, "ThreadPoolExecutor", spy)
+        monkeypatch.setattr(
+            doctor,
+            "get_all_channels",
+            lambda: [
+                _StubChannel(f"ch{i}", f"渠道{i}", 0, "ok", "可用", ["b"])
+                for i in range(50)
+            ],
+        )
+
+        doctor.check_all(tmp_config)
+
+        assert seen["workers"] == doctor.MAX_CHECK_WORKERS
+
+
 def test_stale_active_backend_does_not_leak_into_errored_result(monkeypatch):
     """渠道单例上一轮的 active_backend 不得泄漏进本轮异常结果(Codex review 发现)。"""
     from agent_reach import doctor

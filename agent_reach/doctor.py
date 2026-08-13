@@ -4,45 +4,70 @@
 Each channel knows how to check itself. Doctor just collects the results.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict
 
 from rich.markup import escape
 
-from agent_reach.channels import get_all_channels
+from agent_reach.channels import Channel, get_all_channels
 from agent_reach.config import Config
 from agent_reach.utils.text import scrub_url_credentials
+
+#: Upper bound on concurrent channel checks. Each check is IO-bound (it waits
+#: on an upstream subprocess), so the cap exists to avoid spawning a dozen
+#: browsers/node processes at once on small machines, not for CPU reasons.
+MAX_CHECK_WORKERS = 8
+
+
+def _check_one(ch: Channel, config: Config) -> dict:
+    """Run one channel's check and normalize it into a result dict.
+
+    A single misbehaving channel must never take the whole report down,
+    so per-channel exceptions degrade to status="error".
+    """
+    try:
+        status, message = ch.check(config)
+        active = getattr(ch, "active_backend", None)
+    except Exception as e:  # noqa: BLE001 — doctor must survive any channel
+        # Channels are registry singletons: a stale active_backend from a
+        # previous check must not leak into an errored result.
+        status = "error"
+        message = f"体检异常：{e}"
+        active = None
+    # Doctor is the final output boundary for both expected channel
+    # messages and unexpected exceptions. Upstream probe output can echo a
+    # configured URL, so scrub every path before JSON/text rendering.
+    return {
+        "status": status,
+        "name": ch.description,
+        "message": scrub_url_credentials(message),
+        "tier": ch.tier,
+        "backends": ch.backends,
+        "active_backend": active,
+    }
 
 
 def check_all(config: Config) -> Dict[str, dict]:
     """Check all channels and return status dict.
 
-    A single misbehaving channel must never take the whole report down,
-    so per-channel exceptions degrade to status="error".
+    Checks run concurrently. Every channel probes its upstream CLI with a
+    multi-second timeout, so a serial sweep costs the SUM of all probes — one
+    slow or timing-out backend delays every channel behind it. Each channel is
+    still visited exactly once by exactly one worker, so `check()` keeps its
+    single-threaded contract with respect to its own `active_backend`.
+
+    Result order follows the registry, not completion order, so the report
+    stays stable between runs.
     """
-    results = {}
-    for ch in get_all_channels():
-        try:
-            status, message = ch.check(config)
-            active = getattr(ch, "active_backend", None)
-        except Exception as e:  # noqa: BLE001 — doctor must survive any channel
-            # Channels are registry singletons: a stale active_backend from a
-            # previous check must not leak into an errored result.
-            status = "error"
-            message = f"体检异常：{e}"
-            active = None
-        # Doctor is the final output boundary for both expected channel
-        # messages and unexpected exceptions. Upstream probe output can echo a
-        # configured URL, so scrub every path before JSON/text rendering.
-        message = scrub_url_credentials(message)
-        results[ch.name] = {
-            "status": status,
-            "name": ch.description,
-            "message": message,
-            "tier": ch.tier,
-            "backends": ch.backends,
-            "active_backend": active,
-        }
-    return results
+    channels = get_all_channels()
+    if not channels:
+        return {}
+
+    workers = min(len(channels), MAX_CHECK_WORKERS)
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="doctor") as pool:
+        outcomes = list(pool.map(lambda ch: _check_one(ch, config), channels))
+
+    return {ch.name: outcome for ch, outcome in zip(channels, outcomes)}
 
 
 def _name_msg(r: dict, escape) -> str:
