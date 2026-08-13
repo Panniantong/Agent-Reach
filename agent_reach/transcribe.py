@@ -168,6 +168,8 @@ def _run(cmd: List[str], timeout: int = 600) -> None:
         )
     except subprocess.TimeoutExpired:
         raise TranscribeError(f"{cmd[0]} timed out after {timeout}s")
+    except OSError as exc:
+        raise TranscribeError(f"failed to start {cmd[0]}") from exc
     if proc.returncode != 0:
         raise TranscribeError(
             f"{cmd[0]} failed (exit {proc.returncode}): {proc.stderr.strip()[:300]}"
