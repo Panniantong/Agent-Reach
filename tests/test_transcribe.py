@@ -858,6 +858,35 @@ class TestSubprocessDecoding:
         with pytest.raises(tr.TranscribeError, match="duration"):
             tr._probe_audio_duration(tmp_path / "audio.m4a")
 
+    @pytest.mark.parametrize(
+        "launch_error",
+        [
+            FileNotFoundError("missing executable"),
+            PermissionError("access denied"),
+        ],
+        ids=["not-found", "permission"],
+    )
+    def test_run_wraps_launch_errors_without_command_details(
+        self,
+        monkeypatch,
+        launch_error,
+    ):
+        sentinel_argument = "https://example.test/private-value"
+
+        def fail_to_start(_cmd, **_kwargs):
+            raise launch_error
+
+        monkeypatch.setattr(tr.subprocess, "run", fail_to_start)
+
+        with pytest.raises(tr.TranscribeError) as exc_info:
+            tr._run(["yt-dlp", sentinel_argument], timeout=5)
+
+        message = str(exc_info.value)
+        assert message == "failed to start yt-dlp"
+        assert sentinel_argument not in message
+        assert str(launch_error) not in message
+        assert exc_info.value.__cause__ is launch_error
+
 
 # --- YouTubeChannel integration --------------------------------------- #
 
