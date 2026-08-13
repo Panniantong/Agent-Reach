@@ -1357,3 +1357,62 @@ def test_uninstall_preserves_mcporter_entries_without_agent_reach_provenance(
     output = capsys.readouterr().out
     assert not any("remove" in call for call in calls)
     assert "来源无法证明" in output
+
+
+def test_uninstall_mcporter_cleanup_uses_resolved_command(
+    isolated_home, monkeypatch, capsys
+):
+    """Windows npm installs mcporter.cmd; argv0 must be the resolved path."""
+    calls = []
+    resolved = "/fake/bin/mcporter"
+
+    monkeypatch.setattr(
+        "shutil.which",
+        lambda name: resolved if name == "mcporter" else None,
+    )
+
+    def fake_run(args, **_kwargs):
+        calls.append(args)
+        return _docker_result(args, stdout=json.dumps({"servers": []}))
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    cli._cmd_uninstall(Namespace(dry_run=False, keep_config=True))
+
+    assert calls, "expected a mcporter config query"
+    assert all(call[0] != "mcporter" for call in calls)
+    assert calls[0][0] == resolved
+
+
+def test_setup_exa_uses_resolved_mcporter_command(monkeypatch, capsys):
+    """Both the Exa config check and config add must use the resolved path."""
+    import getpass
+    import shutil as shutil_module
+
+    import agent_reach.config as config_module
+
+    resolved = "/fake/bin/mcporter"
+    calls = []
+    config = _MemoryConfig()
+    config.config_path = Path("/tmp/agent-reach-test-config.yaml")
+
+    monkeypatch.setattr(config_module, "Config", lambda: config)
+    monkeypatch.setattr(
+        shutil_module,
+        "which",
+        lambda name: resolved if name == "mcporter" else None,
+    )
+    monkeypatch.setattr(getpass, "getpass", lambda _prompt: "")
+    monkeypatch.setattr("builtins.input", lambda _prompt="": "y")
+
+    def fake_run(args, **_kwargs):
+        calls.append(args)
+        return _docker_result(args, stdout=json.dumps({"servers": []}))
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    cli._cmd_setup()
+
+    assert calls, "expected mcporter subprocess calls"
+    assert all(call[0] != "mcporter" for call in calls)
+    assert any(call[0] == resolved for call in calls)
