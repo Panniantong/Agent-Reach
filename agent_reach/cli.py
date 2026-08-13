@@ -2190,14 +2190,49 @@ def _github_get_with_retry(url, timeout=10, retries=3, sleeper=time.sleep):
     return None, "unknown", retries
 
 
+def _detect_install_method() -> str:
+    """Detect how agent-reach was installed: 'pipx', 'venv', or 'pip'.
+
+    Returns 'pipx' when pipx manages the agent-reach app, 'venv' when the
+    running interpreter lives inside a virtual environment, and 'pip'
+    otherwise. Matters for update instructions: `pip install` is a silent
+    no-op for pipx installs (it updates user/system site-packages, not the
+    pipx venv the executable points at) — see issue #610.
+    """
+    import shutil
+    import subprocess
+
+    pipx = shutil.which("pipx")
+    if pipx:
+        try:
+            out = subprocess.run(
+                [pipx, "list"], capture_output=True, text=True, timeout=30
+            ).stdout
+        except Exception:
+            out = ""
+        if "agent-reach" in out:
+            return "pipx"
+
+    if getattr(sys, "base_prefix", None) != getattr(sys, "prefix", None):
+        return "venv"
+    return "pip"
+
+
 #: Full update = package + upstream tools + skill. The one-liner walks an
-#: agent through all three (docs/update.md); bare pip only updates the package.
-_UPDATE_INSTRUCTIONS = (
-    "更新方式（推荐，复制这句话给你的 AI Agent，会完整更新本体+上游工具+skill）：\n"
-    "  帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md\n"
-    "仅更新本体（不含上游工具和 skill）：\n"
-    "  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip"
-)
+#: agent through all three (docs/update.md); the package command below only
+#: updates the package, tailored to how it was installed.
+def _update_instructions() -> str:
+    """Return update instructions tailored to the install method (see #610)."""
+    if _detect_install_method() == "pipx":
+        pkg_cmd = "pipx upgrade agent-reach"
+    else:
+        pkg_cmd = "pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip"
+    return (
+        "更新方式（推荐，复制这句话给你的 AI Agent，会完整更新本体+上游工具+skill）：\n"
+        "  帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md\n"
+        f"仅更新本体（不含上游工具和 skill）：\n"
+        f"  {pkg_cmd}"
+    )
 
 
 def _is_newer_version(remote: str, local: str) -> bool:
@@ -2247,7 +2282,7 @@ def _cmd_check_update():
                 for line in body.strip().split("\n")[:20]:
                     print(f"  {line}")
             print()
-            print(_UPDATE_INSTRUCTIONS)
+            print(_update_instructions())
             return "update_available"
         print("✅ 已是最新版本")
         return "up_to_date"
@@ -2269,7 +2304,7 @@ def _cmd_check_update():
         date = commit.get("commit", {}).get("committer", {}).get("date", "")[:10]
         print(f"最新提交: {sha} ({date}) {msg}")
         print()
-        print(_UPDATE_INSTRUCTIONS)
+        print(_update_instructions())
         return "unknown"
 
     commit_err = _classify_github_response_error(resp2)

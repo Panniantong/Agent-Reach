@@ -412,6 +412,44 @@ class TestVersionCompare:
         assert cli._is_newer_version("1.5.0", "1.5.0-dev") is True
 
 
+class TestInstallMethodDetection:
+    """安装方式检测: pipx 装的必须用 `pipx upgrade`, 否则 pip install 静默无效(#610)。"""
+
+    def test_pipx_install_uses_pipx_upgrade(self, monkeypatch):
+        class R:
+            stdout = "package agent-reach, installed using Python 3.13\n"
+
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/pipx")
+        monkeypatch.setattr(subprocess, "run", lambda *a, **k: R())
+        assert cli._detect_install_method() == "pipx"
+
+    def test_pipx_absent_falls_back_to_pip(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda name: None)
+        monkeypatch.setattr("agent_reach.cli.sys", type("S", (), {"base_prefix": "/a", "prefix": "/a"})())
+        assert cli._detect_install_method() == "pip"
+
+    def test_venv_install_detected(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda name: None)
+        monkeypatch.setattr("agent_reach.cli.sys", type("S", (), {"base_prefix": "/usr", "prefix": "/usr/venv"})())
+        assert cli._detect_install_method() == "venv"
+
+    def test_update_instructions_pipx(self, monkeypatch):
+        class R:
+            stdout = "package agent-reach, installed using Python 3.13\n"
+
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/pipx")
+        monkeypatch.setattr(subprocess, "run", lambda *a, **k: R())
+        text = cli._update_instructions()
+        assert "pipx upgrade agent-reach" in text
+        assert "pip install --upgrade" not in text
+
+    def test_update_instructions_pip(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda name: None)
+        monkeypatch.setattr("agent_reach.cli.sys", type("S", (), {"base_prefix": "/a", "prefix": "/a"})())
+        text = cli._update_instructions()
+        assert "pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip" in text
+
+
 class TestWatchVersionCompare:
     def test_watch_does_not_prompt_downgrade(self, monkeypatch, capsys):
         """watch 与 check-update 同语义:本地领先远端 release 时不提示更新。"""
