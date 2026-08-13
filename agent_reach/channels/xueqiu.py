@@ -283,6 +283,11 @@ class XueqiuChannel(Channel):
         Returns a list of dicts with keys:
           symbol, name, current, percent, rank
         """
+        if limit < 0:
+            raise ValueError("limit must be non-negative")
+        limit = min(limit, 50)
+        if limit == 0:
+            return []
         data = _get_json(
             f"https://stock.xueqiu.com/v5/stock/hot_stock/list.json"
             f"?size={limit}&type={stock_type}"
