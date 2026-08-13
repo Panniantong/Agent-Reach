@@ -142,6 +142,8 @@ class V2EXChannel(Channel):
     description = "V2EX 节点、主题与回复"
     backends = ["V2EX API (public)"]
     tier = 0
+    reference = "social"
+    # The API keys off a topic id (/t/<id>), not the URL — see social.md.
 
     # ------------------------------------------------------------------ #
     # URL routing

@@ -32,6 +32,8 @@ class RedditChannel(Channel):
     description = "Reddit 帖子和评论"
     backends = ["OpenCLI", "rdt-cli"]
     tier = 1  # no zero-config path exists — see module docstring
+    reference = "social"
+    # Both backends read by POST_ID, not URL — see references/social.md.
 
     def can_handle(self, url: str) -> bool:
         from agent_reach.utils.url import host_matches

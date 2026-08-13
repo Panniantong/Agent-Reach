@@ -116,7 +116,15 @@ opencli instagram user USERNAME -f yaml        # recent posts from one user
 ```bash
 # Channel availability + which backend serves each platform
 agent-reach doctor --json
+
+# Given a URL, which platform is it and what should I run?
+# Pure metadata: no network calls, no subprocesses, no writes.
+agent-reach route --json "URL"
 ```
+
+`route` returns the channel, its backends in priority order, and ready-to-run
+commands. Some platforms read by id/keyword rather than URL (Bilibili, Reddit,
+V2EX); there `commands` is empty — follow the returned `reference` doc.
 
 ## Discovering OpenCLI adapters
 

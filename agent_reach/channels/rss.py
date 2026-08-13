@@ -9,6 +9,14 @@ class RSSChannel(Channel):
     description = "RSS/Atom 订阅源"
     backends = ["feedparser"]
     tier = 0
+    reference = "web"
+    url_commands = {
+        "feedparser": (
+            'python -c "import feedparser,sys;'
+            '[print(e.title, e.link) for e in feedparser.parse(sys.argv[1]).entries[:10]]"'
+            ' "{url}"'
+        )
+    }
 
     def can_handle(self, url: str) -> bool:
         return any(x in url.lower() for x in ["/feed", "/rss", ".xml", "atom"])

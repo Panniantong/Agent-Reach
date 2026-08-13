@@ -10,4 +10,5 @@ class InstagramChannel(OpenCLISiteChannel):
     site = "instagram"
     domains = ("instagram.com", "instagr.am")
     usage = "opencli instagram search/profile/user/explore -f yaml"
+    reference = "social"
     login_hint = "instagram.com"

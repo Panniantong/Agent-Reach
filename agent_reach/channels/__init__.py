@@ -55,9 +55,31 @@ def get_all_channels() -> List[Channel]:
     return ALL_CHANNELS
 
 
+def get_channel_for_url(url: str) -> Channel:
+    """Route a URL to the channel that owns it.
+
+    WebChannel.can_handle() is True for every URL, so it is skipped during
+    matching and used as the fallback — otherwise its registry position would
+    decide the answer. A channel whose can_handle() raises is skipped rather
+    than allowed to break routing for every other platform.
+    """
+    if not isinstance(url, str) or not url.strip():
+        raise ValueError("url 不能为空")
+    for ch in ALL_CHANNELS:
+        if ch.name == "web":
+            continue
+        try:
+            if ch.can_handle(url):
+                return ch
+        except Exception:  # noqa: BLE001 — one bad matcher must not break routing
+            continue
+    return get_channel("web")
+
+
 __all__ = [
     "Channel",
     "ALL_CHANNELS",
     "get_channel",
     "get_all_channels",
+    "get_channel_for_url",
 ]

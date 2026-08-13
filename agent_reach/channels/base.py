@@ -23,7 +23,7 @@ Backend routing semantics:
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 class Channel(ABC):
@@ -36,6 +36,17 @@ class Channel(ABC):
 
     #: Backend currently serving this channel; set by check(), None = unavailable.
     active_backend: Optional[str] = None
+
+    #: Skill reference doc covering this platform, e.g. "social" →
+    #: agent_reach/skill/references/social.md. Used by `agent-reach route`.
+    reference: str = ""
+
+    #: backend name → command template for reading ONE URL, `{url}` substituted.
+    #: Only backends whose upstream CLI documents accepting a URL/ID belong
+    #: here: `route` prints these verbatim for an agent to run, so an invented
+    #: flag would be worse than no entry at all. Backends absent from this map
+    #: still route correctly — the agent is sent to the reference doc instead.
+    url_commands: Dict[str, str] = {}
 
     @abstractmethod
     def can_handle(self, url: str) -> bool:
@@ -57,6 +68,19 @@ class Channel(ABC):
                     candidates.insert(0, candidates.pop(i))
                     break
         return candidates
+
+    def commands_for_url(self, url: str, config=None) -> List[Tuple[str, str]]:
+        """(backend, command) pairs for reading `url`, in probe order.
+
+        Backends without a documented URL-accepting command are skipped, so an
+        empty list means "read the reference doc", never "this URL is
+        unsupported".
+        """
+        return [
+            (backend, self.url_commands[backend].replace("{url}", url))
+            for backend in self.ordered_backends(config)
+            if backend in self.url_commands
+        ]
 
     def check(self, config=None) -> Tuple[str, str]:
         """

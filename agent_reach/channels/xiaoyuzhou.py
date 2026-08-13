@@ -14,6 +14,8 @@ class XiaoyuzhouChannel(Channel):
     description = "小宇宙播客转文字"
     backends = ["groq-whisper", "ffmpeg"]
     tier = 1
+    reference = "video"
+    url_commands = {"groq-whisper": 'agent-reach transcribe "{url}"'}
 
     def can_handle(self, url: str) -> bool:
         from agent_reach.utils.url import host_matches

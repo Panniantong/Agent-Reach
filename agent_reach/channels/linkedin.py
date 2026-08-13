@@ -25,6 +25,8 @@ class LinkedInChannel(Channel):
     description = "LinkedIn 职业社交"
     backends = ["mcp-server-linkedin", "Jina Reader"]
     tier = 2
+    reference = "career"
+    url_commands = {"Jina Reader": 'curl -s "https://r.jina.ai/{url}"'}
 
     def can_handle(self, url: str) -> bool:
         from agent_reach.utils.url import host_matches

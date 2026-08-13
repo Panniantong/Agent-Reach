@@ -36,6 +36,10 @@ class TwitterChannel(Channel):
     description = "Twitter/X 推文"
     backends = ["twitter-cli", "OpenCLI", "bird CLI (legacy)"]
     tier = 1
+    reference = "social"
+    # twitter-cli documents `tweet URL_OR_ID`; the other two backends have no
+    # documented single-URL read, so they are intentionally absent.
+    url_commands = {"twitter-cli": 'twitter tweet "{url}"'}
 
     def can_handle(self, url: str) -> bool:
         return host_matches(url, "x.com", "twitter.com")

@@ -10,4 +10,5 @@ class FacebookChannel(OpenCLISiteChannel):
     site = "facebook"
     domains = ("facebook.com", "fb.com", "fb.watch")
     usage = "opencli facebook search/profile/feed/groups -f yaml"
+    reference = "social"
     login_hint = "facebook.com"

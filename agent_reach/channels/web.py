@@ -36,6 +36,8 @@ class WebChannel(Channel):
     description = "任意网页"
     backends = ["Jina Reader"]
     tier = 0
+    reference = "web"
+    url_commands = {"Jina Reader": 'curl -s "https://r.jina.ai/{url}"'}
 
     def can_handle(self, url: str) -> bool:
         return True  # Fallback — handles any URL

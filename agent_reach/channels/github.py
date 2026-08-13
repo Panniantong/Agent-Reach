@@ -97,6 +97,8 @@ class GitHubChannel(Channel):
     description = "GitHub 仓库和代码"
     backends = ["gh CLI"]
     tier = 0
+    reference = "dev"
+    url_commands = {"gh CLI": 'gh repo view "{url}"'}
 
     def can_handle(self, url: str) -> bool:
         from agent_reach.utils.url import host_matches

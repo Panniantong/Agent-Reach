@@ -116,6 +116,7 @@ class XueqiuChannel(Channel):
     description = "雪球股票行情与社区动态"
     backends = ["Xueqiu API (需要登录 Cookie)"]
     tier = 1
+    reference = "finance"
 
     # ------------------------------------------------------------------ #
     # URL routing
