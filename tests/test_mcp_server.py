@@ -1,9 +1,34 @@
 """Security boundaries for the optional Agent Reach MCP server."""
 
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 import agent_reach.integrations.mcp_server as mcp_server
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_pyproject_declares_mcp_optional_dependency():
+    text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    optional_dependencies = text.split(
+        "[project.optional-dependencies]",
+        1,
+    )[1].split("\n[", 1)[0]
+
+    assert 'mcp = ["mcp[cli]>=1.0"]' in optional_dependencies
+
+
+def test_missing_mcp_exits_with_advertised_extra(monkeypatch, capsys):
+    monkeypatch.setattr(mcp_server, "HAS_MCP", False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        mcp_server.create_server()
+
+    assert exc_info.value.code == 1
+    assert "agent-reach[mcp]" in capsys.readouterr().err
 
 
 class _FakeServer:
