@@ -274,6 +274,8 @@ Agent Reach 在设计上重视安全：
 | 兼容安全参数 | `agent-reach install --env=auto --safe` | 与默认行为相同 |
 | 仅预览 | `agent-reach install --env=auto --dry-run` | 先看看会做什么 |
 
+> **Windows 用户注意：** Agent Reach 解析主目录时优先使用 `HOME` 环境变量，其次才是 `USERPROFILE`（与 Git Bash / MSYS 工具链保持一致）。如果你的机器把 `HOME` 设置到了其他位置，配置、Cookie 和 skill 文件会写入该位置，而不是 `C:\Users\<用户名>`。
+
 ### 🗑️ 卸载
 
 ```bash
