@@ -19,6 +19,14 @@ from agent_reach import __version__
 
 # Pinned to the 0.4.2 state — PyPI still only has 0.4.1 (upstream issue #10).
 _RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66"
+# Temporary, reproducible source while upstream boss-agent-cli PR #382 is pending.
+# Replace this one constant with the first released version containing strict CDP,
+# JobItem.lid, and job_card_browser(). Never point the installer at a moving branch.
+_BOSS_AGENT_CLI_PR_COMMIT = "affcf8485d59812324ff0e076c87f21d4df411ca"
+_BOSS_AGENT_CLI_SOURCE = (
+    "git+https://github.com/iqjiy/boss-agent-cli.git@"
+    + _BOSS_AGENT_CLI_PR_COMMIT
+)
 _MAX_CONFIGURE_VALUE_CHARS = 1024 * 1024
 _SENSITIVE_CONFIG_KEYS = {
     "proxy",
@@ -93,7 +101,7 @@ def main():
     p_install.add_argument("--channels", default="",
                            help="Comma-separated optional channels to install "
                                 "(twitter,xiaoyuzhou,xueqiu,xiaohongshu,"
-                                "reddit,facebook,instagram,bilibili,linkedin,all)")
+                                "reddit,facebook,instagram,bilibili,linkedin,boss,all)")
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
@@ -270,6 +278,7 @@ def _cmd_install(args):
         "facebook":    _install_opencli_deps,
         "instagram":   _install_opencli_deps,
         "bilibili":    _install_bili_deps,
+        "boss":        _install_boss_deps,
         "opencli":     _install_opencli_deps,  # cross-channel backend, desktop only
         # xueqiu: cookie-only, no install step
         # linkedin: manual setup, no auto-install
@@ -313,7 +322,7 @@ def _cmd_install(args):
         tools_dir = os.path.expanduser("~/.agent-reach/tools")
         os.makedirs(tools_dir, exist_ok=True)
 
-    OPENCLI_ONLY_CHANNELS = {"opencli", "facebook", "instagram"}
+    DESKTOP_ONLY_CHANNELS = {"opencli", "facebook", "instagram", "boss"}
     COOKIE_CHANNELS = {"twitter", "xueqiu", "bilibili", "xiaohongshu"}
 
     # Auto-detect environment
@@ -326,11 +335,11 @@ def _cmd_install(args):
     else:
         print("Environment: Local computer (auto-detected)")
 
-    server_skipped_opencli_channels = set()
+    server_skipped_desktop_channels = set()
     if env == "server" and requested_channels:
-        # OpenCLI rides a real desktop Chrome session — useless headless
-        server_skipped_opencli_channels = requested_channels & OPENCLI_ONLY_CHANNELS
-        requested_channels -= server_skipped_opencli_channels
+        # Browser-session channels require a real desktop Chrome.
+        server_skipped_desktop_channels = requested_channels & DESKTOP_ONLY_CHANNELS
+        requested_channels -= server_skipped_desktop_channels
 
     # Apply explicit flags
     if args.proxy:
@@ -361,10 +370,10 @@ def _cmd_install(args):
     else:
         core_install_ok = (_install_mcporter() is not False) and core_install_ok
 
-    if server_skipped_opencli_channels:
+    if server_skipped_desktop_channels:
         print()
-        print("  -- OpenCLI 需要桌面环境 + Chrome，服务器环境跳过："
-              f"{', '.join(sorted(server_skipped_opencli_channels))}")
+        print("  -- 以下渠道需要桌面环境 + Chrome，服务器环境跳过："
+              f"{', '.join(sorted(server_skipped_desktop_channels))}")
 
     # ── Install optional channels (only if --channels specified) ──
     if requested_channels and not dry_run and not safe_mode:
@@ -978,6 +987,44 @@ def _install_twitter_deps():
             except (OSError, subprocess.TimeoutExpired):
                 pass
     print("  [!]  twitter-cli install failed. Run: pipx install twitter-cli")
+    return False
+
+
+def _install_boss_deps():
+    """Install the strict-CDP boss-agent-cli build required by the Boss channel.
+
+    PR #382 is not released yet, so the source is pinned to an immutable fork
+    commit. Force-installing is intentional: PyPI 1.18.0 exposes the ``boss``
+    executable but lacks the public strict-CDP APIs required by this channel.
+    """
+    import shutil
+    import subprocess
+
+    print("Setting up Boss直聘 (boss-agent-cli strict CDP, PR #382)...")
+    for tool, args in [
+        ("pipx", ["install", "--force", _BOSS_AGENT_CLI_SOURCE]),
+        ("uv", ["tool", "install", "--force", _BOSS_AGENT_CLI_SOURCE]),
+    ]:
+        tool_cmd = shutil.which(tool)
+        if not tool_cmd:
+            continue
+        try:
+            result = subprocess.run(
+                [tool_cmd, *args],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=300,
+            )
+            if result.returncode == 0 and shutil.which("boss"):
+                print("  ✅ boss-agent-cli installed from pinned PR #382 commit")
+                print("  下一步：启动专用 Chrome，由用户手动登录 zhipin.com，再运行 agent-reach doctor")
+                return True
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+    print("  [!]  boss-agent-cli install failed. Install pipx or uv, then retry:")
+    print(f"       pipx install --force '{_BOSS_AGENT_CLI_SOURCE}'")
     return False
 
 

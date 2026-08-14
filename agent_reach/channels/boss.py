@@ -9,6 +9,7 @@
 """
 
 import json
+import platform
 import urllib.request
 
 from agent_reach.probe import probe_command
@@ -18,6 +19,37 @@ from .base import Channel
 
 _CDP_URL = "http://localhost:9222"
 _CDP_TIMEOUT = 5
+
+
+def _chrome_launch_command(system: str | None = None) -> str:
+    """Return a dedicated-profile Chrome command for the current OS."""
+    system = system or platform.system()
+    common = (
+        "--remote-debugging-address=127.0.0.1 "
+        "--remote-debugging-port=9222 "
+    )
+    url = '"https://www.zhipin.com/web/geek/job"'
+    if system == "Darwin":
+        return (
+            'open -na "Google Chrome" --args '
+            + common
+            + '--user-data-dir="$HOME/.boss-chrome-profile" '
+            + url
+        )
+    if system == "Windows":
+        return (
+            "Start-Process chrome.exe -ArgumentList "
+            "'--remote-debugging-address=127.0.0.1',"
+            "'--remote-debugging-port=9222',"
+            '"--user-data-dir=$env:USERPROFILE\\.boss-chrome-profile",'
+            "'https://www.zhipin.com/web/geek/job'"
+        )
+    return (
+        "google-chrome "
+        + common
+        + '--user-data-dir="$HOME/.boss-chrome-profile" '
+        + url
+    )
 
 
 def _cdp_json(path: str):
@@ -55,13 +87,14 @@ class BossChannel(Channel):
         probe = probe_command("boss", ["--version"], timeout=10)
         if probe.status == "missing":
             return "off", (
-                "boss-agent-cli 未安装。安装：pip install boss-agent-cli\n"
-                "（需本地 Chrome 以 --remote-debugging-port=9222 启动并登录 zhipin.com）"
+                "boss-agent-cli 未安装。请先获得用户授权，再运行：\n"
+                "  agent-reach install --system --channels=boss\n"
+                "安装后由用户在专用 Chrome 中手动登录 zhipin.com。"
             )
         if probe.status == "broken":
             return "error", (
                 "boss 命令存在但无法执行——安装已损坏。重装：\n"
-                "  pip install --force-reinstall boss-agent-cli"
+                "  agent-reach install --system --channels=boss"
             )
         if not probe.ok:
             return "warn", f"boss 命令探测失败（{probe.status}），请检查安装"
@@ -70,8 +103,9 @@ class BossChannel(Channel):
         if _cdp_json("/json/version") is None:
             return "off", (
                 "CDP 调试端口不可达。请先启动调试 Chrome：\n"
-                "  Google Chrome --remote-debugging-port=9222 --user-data-dir=~/.boss-chrome-profile\n"
-                "  然后在该窗口登录 zhipin.com"
+                f"  {_chrome_launch_command()}\n"
+                "  然后由用户在该窗口手动登录 zhipin.com。\n"
+                "仅绑定 127.0.0.1；任何能访问 9222 的进程都可完全控制这个 Chrome。"
             )
 
         # 层 3：有无可复用 BOSS 页签
@@ -86,6 +120,6 @@ class BossChannel(Channel):
 
         return "warn", (
             "CDP 链路就绪（9222 端口通 + 有可复用 zhipin 页签）。"
-            "Doctor 不实际执行搜索、不验证登录态 liveness；"
+            "Doctor 不实际执行搜索、不验证登录态 liveness 或 PR #382 API；"
             "搜索前先跑 `boss status` 确认 stoken 未过期（code 37 = TOKEN_REFRESH_FAILED）。"
         )

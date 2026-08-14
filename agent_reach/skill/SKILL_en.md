@@ -118,6 +118,13 @@ opencli instagram user USERNAME -f yaml        # recent posts from one user
 agent-reach doctor --json
 ```
 
+When the user asks “help me configure Boss Zhipin” / “帮我配 Boss直聘”, read the
+Boss section in `references/career.md`. After explicit install approval, run
+`agent-reach install --env=local --system --channels=boss`, launch the dedicated
+loopback-only Chrome profile for their OS, and pause for the user to log in
+manually. Then verify with `boss --cdp-url http://localhost:9222 login --cdp`,
+`boss status`, and `agent-reach doctor`. Do not make the user assemble CDP flags.
+
 ## Discovering OpenCLI adapters
 
 When the routing table lacks a needed platform or command, run `opencli list`,

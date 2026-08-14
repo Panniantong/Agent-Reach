@@ -30,8 +30,14 @@ curl -s "https://r.jina.ai/https://linkedin.com/in/username"
 
 ## Boss直聘
 
-> **状态**：channel 已注册，`agent-reach doctor` 会体检 CDP 链路（boss-agent-cli
-> 装没装 → 9222 端口通不通 → 有无 zhipin 页签）。
+当用户说“帮我配 Boss直聘”时，按本节完成安装、启动专用 Chrome、等待用户手动
+登录和最终验证。不要把 9222 端口等实现细节先甩给用户，也不要替用户输入账号、
+扫码或处理滑块。
+
+> **依赖状态**：所需公开 strict-CDP API 在 boss-agent-cli PR #382 中，尚未发布。
+> Agent Reach 的临时安装器锁定 fork 提交
+> `affcf8485d59812324ff0e076c87f21d4df411ca`，而不是会移动的 branch；上游发布后
+> 应把安装器切回正式版本约束。
 
 体检（无副作用，不搜索）：
 
@@ -39,29 +45,40 @@ curl -s "https://r.jina.ai/https://linkedin.com/in/username"
 agent-reach doctor          # boss 行：off = 未装或 CDP 不通；warn = 链路就绪
 ```
 
-搜索 + JD（公开 API，`browser_mode` / `job_card_browser` / `JobItem.lid`）：
+搜索 + JD 使用公开 API（`browser_mode` / `job_card_browser` / `JobItem.lid`）。
+因为 pipx/uv tool 是隔离环境，普通 `python` 不一定能 import 已安装工具；临时阶段
+用 `uv run --with` 保证脚本和锁定依赖处于同一解释器环境：
 
-```python
+```bash
+uv run --isolated --no-project \
+  --with 'git+https://github.com/iqjiy/boss-agent-cli.git@affcf8485d59812324ff0e076c87f21d4df411ca' \
+  python - <<'PY'
+from pathlib import Path
+
 from boss_agent_cli.api.client import AccountRiskError, BossClient
 from boss_agent_cli.auth.manager import AuthManager
 
+auth = AuthManager(Path.home() / ".boss-agent")
+
 # 严格 CDP 模式：跳过 Bridge、CDP 失败立即抛错、永不 headless
-client = BossClient(auth, cdp_url="http://localhost:9222", browser_mode="cdp_required")
-
-# 搜索（公开方法，返回原始 jobList 含 lid/securityId/encryptJobId）
-raw = client.search_jobs("大模型", city="深圳", job_type="实习", page=1)
-items = raw.get("zpData", {}).get("jobList", [])
-
-# 取 JD（公开 job_card_browser，强制 CDP 浏览器通道，绕过 httpx 优先）
-for item in items:
-    card = client.job_card_browser(item["securityId"], item["lid"])
-    post_desc = card.get("zpData", {}).get("jobCard", {}).get("postDescription", "")
+with BossClient(
+    auth,
+    cdp_url="http://localhost:9222",
+    browser_mode="cdp_required",
+) as boss:
+    raw = boss.search_jobs("大模型", city="深圳", page=1)
+    items = raw.get("zpData", {}).get("jobList", [])
+    for item in items:
+        card = boss.job_card_browser(item["securityId"], item["lid"])
+        post_desc = card.get("zpData", {}).get("jobCard", {}).get(
+            "postDescription", ""
+        )
+        print(item.get("jobName"), post_desc)
 
 # code 36（AccountRiskError）→ 立即停不可重试；code 9（RATE_LIMITED）→ 冷却重试；
 # code 37（TOKEN_REFRESH_FAILED）→ 重新登录
+PY
 ```
-
-> 上述接口尚未合入上游 boss-agent-cli（见 PR #382），本地开发用 fork 分支即可。
 
 ### 环境体检与恢复（抓取前必查）
 
@@ -72,20 +89,37 @@ for item in items:
    curl -s http://localhost:9222/json/version   # 有 Browser 字段 = 端口通
    ```
 
-2. **调试 Chrome 没开 / 已关**：重启专用 Chrome（登录态独立，不污染日常浏览器）：
+2. **调试 Chrome 没开 / 已关**：按系统启动专用 Chrome（登录态独立，不污染日常浏览器）：
    ```bash
-   Google Chrome --remote-debugging-port=9222 \
-     --user-data-dir=~/.boss-chrome-profile &
+   # macOS
+   open -na "Google Chrome" --args --remote-debugging-address=127.0.0.1 \
+     --remote-debugging-port=9222 --user-data-dir="$HOME/.boss-chrome-profile" \
+     "https://www.zhipin.com/web/geek/job"
+
+   # Linux
+   google-chrome --remote-debugging-address=127.0.0.1 \
+     --remote-debugging-port=9222 --user-data-dir="$HOME/.boss-chrome-profile" \
+     "https://www.zhipin.com/web/geek/job"
    ```
 
-3. **必须有一个已打开的 zhipin 页签**（否则首次搜索会因导航竞态失败）：
+   Windows PowerShell：
+   ```powershell
+   Start-Process chrome.exe -ArgumentList '--remote-debugging-address=127.0.0.1','--remote-debugging-port=9222',"--user-data-dir=$env:USERPROFILE\.boss-chrome-profile",'https://www.zhipin.com/web/geek/job'
+   ```
+
+   只绑定回环地址。任何能访问 9222 的进程都能完全控制该 Chrome；不要监听公网，
+   不使用时关闭这个专用窗口。
+
+3. **用户手动登录**：暂停并让用户在这个专用窗口登录、扫码或处理滑块。用户确认
+   完成后，保存 CDP 登录态：
    ```bash
-   curl -s -X PUT "http://localhost:9222/json/new?https://www.zhipin.com/web/geek/job"
+   boss --cdp-url http://localhost:9222 login --cdp
    ```
 
 4. **登录态是否有效**（stoken 是否过期）：
    ```bash
-   boss status          # 看 auth 状态与 stoken 新鲜度；过期则 boss login
+   boss status
+   agent-reach doctor
    ```
 
 5. **错误码处置**（搜索/取 JD 时）：

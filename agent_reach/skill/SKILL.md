@@ -88,6 +88,13 @@ Shell。直接运行 `twitter` 前，必须在子进程环境中显式提供
 用户已有且明确控制的 Chrome 会话；没有现成会话时不要自动登录，改用
 Cookie-Editor 手工导出后配置 xiaohongshu-mcp / 存量工具。
 
+Boss直聘配置触发：当用户说“帮我配 Boss直聘”时，先读取 `references/career.md`
+的 Boss 章节，然后在获得安装授权后运行
+`agent-reach install --env=local --system --channels=boss`。Agent 负责按系统启动
+只绑定 `127.0.0.1:9222` 的专用 Chrome；必须暂停让用户手动登录、扫码或处理
+滑块，用户确认后再运行 `boss --cdp-url http://localhost:9222 login --cdp`、
+`boss status` 和 `agent-reach doctor` 验收。不要让用户自己研究端口参数。
+
 ```bash
 # Twitter 搜索（twitter-cli 首选；失败重试链见 social.md）
 twitter search "query" -n 10

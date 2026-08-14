@@ -211,6 +211,68 @@ class TestCLI:
         assert commands == [["/usr/local/bin/pipx", "install", cli._RDT_GIT_SOURCE]]
         assert "✅ rdt-cli installed" in out
 
+    def test_install_boss_deps_pins_pr_commit_with_pipx(self, monkeypatch, capsys):
+        state = {"boss_installed": False}
+        commands = []
+
+        def fake_which(name):
+            if name == "boss":
+                return "/usr/local/bin/boss" if state["boss_installed"] else None
+            if name == "pipx":
+                return "/usr/local/bin/pipx"
+            return None
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            state["boss_installed"] = True
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr(shutil, "which", fake_which)
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        assert cli._install_boss_deps() is True
+
+        assert commands == [
+            [
+                "/usr/local/bin/pipx",
+                "install",
+                "--force",
+                cli._BOSS_AGENT_CLI_SOURCE,
+            ]
+        ]
+        assert cli._BOSS_AGENT_CLI_PR_COMMIT in cli._BOSS_AGENT_CLI_SOURCE
+        assert "PR #382" in capsys.readouterr().out
+
+    def test_install_boss_deps_falls_back_to_uv(self, monkeypatch):
+        state = {"boss_installed": False}
+        commands = []
+
+        def fake_which(name):
+            if name == "boss":
+                return "/usr/local/bin/boss" if state["boss_installed"] else None
+            if name == "uv":
+                return "/usr/local/bin/uv"
+            return None
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            state["boss_installed"] = True
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr(shutil, "which", fake_which)
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        assert cli._install_boss_deps() is True
+        assert commands == [
+            [
+                "/usr/local/bin/uv",
+                "tool",
+                "install",
+                "--force",
+                cli._BOSS_AGENT_CLI_SOURCE,
+            ]
+        ]
+
     def test_install_reddit_deps_routes_by_environment(self, monkeypatch):
         """桌面 → OpenCLI;服务器 → rdt-cli(钉 git 源)。"""
         calls = []
@@ -303,14 +365,14 @@ class TestCLI:
                 system=True,
                 safe=False,
                 dry_run=True,
-                channels="facebook,instagram,opencli,bilibili",
+                channels="facebook,instagram,opencli,boss,bilibili",
             )
         )
 
         out = capsys.readouterr().out
-        assert "服务器环境跳过：facebook, instagram, opencli" in out
+        assert "服务器环境跳过：boss, facebook, instagram, opencli" in out
         assert "[dry-run] Would install optional channels: bilibili" in out
-        assert "facebook, instagram, opencli, bilibili" not in out
+        assert "boss, facebook, instagram, opencli, bilibili" not in out
 
 
 class TestCheckUpdateRetry:

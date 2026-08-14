@@ -411,6 +411,45 @@ def test_install_rejects_unknown_channel_before_side_effects(
     assert "twiter" in capsys.readouterr().err
 
 
+def test_install_accepts_boss_channel_in_dry_run(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "_install_system_deps_dryrun", lambda: None)
+
+    cli._cmd_install(
+        Namespace(
+            env="local",
+            proxy="",
+            system=True,
+            safe=False,
+            dry_run=True,
+            channels="boss",
+        )
+    )
+
+    assert "Would install optional channels: boss" in capsys.readouterr().out
+
+
+def test_install_all_includes_boss_on_desktop(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "_install_system_deps_dryrun", lambda: None)
+
+    cli._cmd_install(
+        Namespace(
+            env="local",
+            proxy="",
+            system=True,
+            safe=False,
+            dry_run=True,
+            channels="all",
+        )
+    )
+
+    install_line = next(
+        line
+        for line in capsys.readouterr().out.splitlines()
+        if "Would install optional channels:" in line
+    )
+    assert "boss" in install_line
+
+
 @pytest.mark.parametrize("sync_legacy", [False, True])
 def test_manual_twitter_cookie_legacy_copies_are_opt_in(
     monkeypatch, capsys, sync_legacy

@@ -43,6 +43,7 @@ def test_check_off_when_cli_missing():
         status, message = ch.check()
     assert status == "off"
     assert "boss-agent-cli" in message
+    assert "agent-reach install --system --channels=boss" in message
     assert ch.active_backend is None
 
 
@@ -63,6 +64,21 @@ def test_check_off_when_cdp_unreachable():
     assert status == "off"
     assert "9222" in message
     assert ch.active_backend is None
+
+
+def test_chrome_launch_command_is_portable_and_loopback_only():
+    mac = boss_mod._chrome_launch_command("Darwin")
+    linux = boss_mod._chrome_launch_command("Linux")
+    windows = boss_mod._chrome_launch_command("Windows")
+
+    assert mac.startswith('open -na "Google Chrome" --args ')
+    assert linux.startswith("google-chrome ")
+    assert windows.startswith("Start-Process chrome.exe -ArgumentList ")
+    for command in (mac, linux, windows):
+        assert "--remote-debugging-address=127.0.0.1" in command
+        assert "--remote-debugging-port=9222" in command
+        assert "boss-chrome-profile" in command
+        assert "https://www.zhipin.com/web/geek/job" in command
 
 
 def test_check_warn_when_no_zhipin_page():
@@ -94,6 +110,7 @@ def test_check_warn_when_ready():
     ):
         status, message = ch.check()
     assert status == "warn"
+    assert "PR #382" in message
     assert ch.active_backend is None
 
 
