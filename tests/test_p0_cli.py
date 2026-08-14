@@ -1413,6 +1413,10 @@ def test_setup_exa_uses_resolved_mcporter_command(monkeypatch, capsys):
 
     cli._cmd_setup()
 
-    assert calls, "expected mcporter subprocess calls"
-    assert all(call[0] != "mcporter" for call in calls)
-    assert any(call[0] == resolved for call in calls)
+    # The docstring's claim is per-call: check both the config query and the
+    # config add, not just that the resolved path appears somewhere.
+    config_calls = [call for call in calls if len(call) > 1 and call[1] == "config"]
+    assert [call[2] for call in config_calls] == ["list", "add"], (
+        f"expected an Exa config query then a config add, got {config_calls}"
+    )
+    assert all(call[0] == resolved for call in config_calls)
