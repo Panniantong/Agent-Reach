@@ -6,6 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### ✨ Features / 新增
+
+#### 🎯 Boss直聘 channel
+
+- 新增 `boss` channel：经 boss-agent-cli + CDP 真 Chrome 搜岗位、取 JD 全文。
+- `check()` 三层只读探测（boss-agent-cli 装没装 → 9222 端口通不通 → 有无 zhipin 页签）。
+- 抓取走公开 API（`search_jobs` + `job_card_browser` + `browser_mode="cdp_required"`）。
+
 ## [1.3.1] - 2026-03-27
 
 ### 🐛 Bug Fixes / 修复
