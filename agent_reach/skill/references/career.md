@@ -36,7 +36,7 @@ curl -s "https://r.jina.ai/https://linkedin.com/in/username"
 
 > **依赖状态**：所需公开 strict-CDP API 在 boss-agent-cli PR #382 中，尚未发布。
 > Agent Reach 的临时安装器锁定 fork 提交
-> `affcf8485d59812324ff0e076c87f21d4df411ca`，而不是会移动的 branch；上游发布后
+> `ba0f12541079ad794eae4c3bf3fc348befd228c9`，而不是会移动的 branch；上游发布后
 > 应把安装器切回正式版本约束。
 
 体检（无副作用，不搜索）：
@@ -51,12 +51,13 @@ agent-reach doctor          # boss 行：off = 未装或 CDP 不通；warn = 链
 
 ```bash
 uv run --isolated --no-project \
-  --with 'git+https://github.com/iqjiy/boss-agent-cli.git@affcf8485d59812324ff0e076c87f21d4df411ca' \
+  --with 'git+https://github.com/iqjiy/boss-agent-cli.git@ba0f12541079ad794eae4c3bf3fc348befd228c9' \
   python - <<'PY'
 from pathlib import Path
 
-from boss_agent_cli.api.client import AccountRiskError, BossClient
+from boss_agent_cli.api.client import AccountRiskError, BossClient, EnvironmentRiskError
 from boss_agent_cli.auth.manager import AuthManager
+from boss_agent_cli.platforms.zhipin import BossPlatform
 
 auth = AuthManager(Path.home() / ".boss-agent")
 
@@ -67,6 +68,9 @@ with BossClient(
     browser_mode="cdp_required",
 ) as boss:
     raw = boss.search_jobs("大模型", city="深圳", page=1)
+    if raw.get("code") != 0:
+        code, message = BossPlatform(boss).parse_error(raw)
+        raise RuntimeError(f"{code}: {message}")
     items = raw.get("zpData", {}).get("jobList", [])
     for item in items:
         card = boss.job_card_browser(item["securityId"], item["lid"])
@@ -75,8 +79,8 @@ with BossClient(
         )
         print(item.get("jobName"), post_desc)
 
-# code 36（AccountRiskError）→ 立即停不可重试；code 9（RATE_LIMITED）→ 冷却重试；
-# code 37（TOKEN_REFRESH_FAILED）→ 重新登录
+# AccountRiskError / EnvironmentRiskError → 立即停止，不自动重试；
+# 明确 token/stoken 过期的 code 37 由 BossClient 最多刷新并重试一次。
 PY
 ```
 
@@ -107,8 +111,9 @@ PY
    Start-Process chrome.exe -ArgumentList '--remote-debugging-address=127.0.0.1','--remote-debugging-port=9222',"--user-data-dir=$env:USERPROFILE\.boss-chrome-profile",'https://www.zhipin.com/web/geek/job'
    ```
 
-   只绑定回环地址。任何能访问 9222 的进程都能完全控制该 Chrome；不要监听公网，
-   不使用时关闭这个专用窗口。
+   只绑定回环地址。任何能访问 9222 的进程都能完全控制该 Chrome；不要监听公网。
+   这个专用 profile 要长期复用，以保留稳定登录态；不要每次运行时删除或新建，
+   也不要默认切换到日常主 Chrome。不使用时关闭这个专用窗口。
 
 3. **用户手动登录**：暂停并让用户在这个专用窗口登录、扫码或处理滑块。用户确认
    完成后，保存 CDP 登录态：
@@ -125,4 +130,14 @@ PY
 5. **错误码处置**（搜索/取 JD 时）：
    - code 36（ACCOUNT_RISK）→ 立即停，手动到 BOSS 页面处理，不可自动重试；
    - code 9（RATE_LIMITED）→ 冷却后重试；
-   - code 37（TOKEN_REFRESH_FAILED）→ 重新登录 / 刷新 zhipin 页。
+   - code 37 + `环境存在异常` → `ENVIRONMENT_RISK`，立即停止，不刷新 Token、不重新登录、不自动重试；
+   - 只有文案明确表示 token/stoken 过期的 code 37 才是 `TOKEN_REFRESH_FAILED`；客户端最多自动刷新并重试一次，仍失败再重新登录。
+
+用户要求开始搜索时，Agent 必须指定严格 CDP 模式：
+
+```bash
+boss --browser-mode cdp-required --cdp-url http://localhost:9222 search "大模型" --city 广州 --page 1
+```
+
+不要无提示连续翻页。boss-agent-cli PR #383 为跨 CLI 进程的普通搜索增加持久
+5–10 秒列表预算；该 PR 合并发布前，Agent 仍应主动串行、降频调用。

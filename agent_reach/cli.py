@@ -22,7 +22,7 @@ _RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c17
 # Temporary, reproducible source while upstream boss-agent-cli PR #382 is pending.
 # Replace this one constant with the first released version containing strict CDP,
 # JobItem.lid, and job_card_browser(). Never point the installer at a moving branch.
-_BOSS_AGENT_CLI_PR_COMMIT = "affcf8485d59812324ff0e076c87f21d4df411ca"
+_BOSS_AGENT_CLI_PR_COMMIT = "ba0f12541079ad794eae4c3bf3fc348befd228c9"
 _BOSS_AGENT_CLI_SOURCE = (
     "git+https://github.com/iqjiy/boss-agent-cli.git@"
     + _BOSS_AGENT_CLI_PR_COMMIT

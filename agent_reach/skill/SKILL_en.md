@@ -124,6 +124,10 @@ Boss section in `references/career.md`. After explicit install approval, run
 loopback-only Chrome profile for their OS, and pause for the user to log in
 manually. Then verify with `boss --cdp-url http://localhost:9222 login --cdp`,
 `boss status`, and `agent-reach doctor`. Do not make the user assemble CDP flags.
+Keep reusing the dedicated Chrome profile; do not recreate it for every run or
+switch to the user's daily profile by default. Search with
+`boss --browser-mode cdp-required --cdp-url http://localhost:9222 search ...`.
+On `ENVIRONMENT_RISK`, stop without refreshing, relogging, or retrying.
 
 ## Discovering OpenCLI adapters
 

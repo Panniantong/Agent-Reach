@@ -19,6 +19,10 @@ All notable changes to this project will be documented in this file.
   上游发布后切回正式版本约束。
 - Skill 与安装指南支持“帮我配 Boss直聘”：Agent 启动仅监听回环地址的专用 Chrome，
   用户只负责手动登录，最后由 Agent 验证登录态与 CDP 链路。
+- 固定依赖更新到 PR #382 的 `ba0f125`：已登录 CDP 会话可直接复用，搜索可通过
+  `--browser-mode cdp-required` 禁止 headless 降级。
+- code 37 按原始文案分类：环境异常为 `ENVIRONMENT_RISK` 并立即停止；只有明确
+  token/stoken 过期才允许一次刷新。专用 Chrome profile 应长期复用并降低频率。
 
 ## [1.3.1] - 2026-03-27
 

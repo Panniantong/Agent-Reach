@@ -351,10 +351,12 @@ agent-reach configure groq-key
 
 > 安全边界：任何能访问调试端口 9222 的本机进程都能完全控制这个 Chrome。
 > 必须使用 `--remote-debugging-address=127.0.0.1`，不得暴露到局域网或公网；使用
-> 独立 profile，不使用时关闭专用 Chrome。Boss 不支持服务器/无桌面环境。
+> 独立 profile 并长期复用，不要每次删除或新建，也不要默认切换到日常主 Chrome；
+> 不使用时关闭专用 Chrome。Boss 不支持服务器/无桌面环境。搜索命令必须带
+> `--browser-mode cdp-required --cdp-url http://localhost:9222`。
 >
 > 临时依赖：boss-agent-cli PR #382 尚未发布，安装器锁定 fork 的不可变提交
-> `affcf8485d59812324ff0e076c87f21d4df411ca`，不跟随会移动的 branch。上游发布后，
+> `ba0f12541079ad794eae4c3bf3fc348befd228c9`，不跟随会移动的 branch。上游发布后，
 > Agent Reach 应改用包含 `browser_mode="cdp_required"`、`JobItem.lid` 和
 > `job_card_browser()` 的正式版本。
 

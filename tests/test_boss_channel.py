@@ -111,6 +111,9 @@ def test_check_warn_when_ready():
         status, message = ch.check()
     assert status == "warn"
     assert "PR #382" in message
+    assert "boss --cdp-url http://localhost:9222 login --cdp" in message
+    assert "--browser-mode cdp-required" in message
+    assert "code 37 = TOKEN_REFRESH_FAILED" not in message
     assert ch.active_backend is None
 
 

@@ -132,7 +132,11 @@ class TestSkillCommand(unittest.TestCase):
         )
         self.assertIn('browser_mode="cdp_required"', career)
         self.assertIn("job_card_browser", career)
-        self.assertIn("affcf8485d59812324ff0e076c87f21d4df411ca", career)
+        self.assertIn("ba0f12541079ad794eae4c3bf3fc348befd228c9", career)
+        self.assertIn("ENVIRONMENT_RISK", career)
+        self.assertIn("--browser-mode cdp-required", career)
+        self.assertIn("长期复用", career)
+        self.assertNotIn("code 37（TOKEN_REFRESH_FAILED）→ 重新登录", career)
         self.assertNotIn("client = BossClient(auth", career)
 
     def test_localized_readmes_use_current_linkedin_server_name(self):
