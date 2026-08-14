@@ -146,6 +146,8 @@ def main():
                                help="Install SKILL.md to agent skill directories")
     p_skill_group.add_argument("--uninstall", action="store_true",
                                help="Remove SKILL.md from agent skill directories")
+    p_skill.add_argument("--force", action="store_true",
+                         help="Overwrite an existing SKILL.md (default: preserve user-modified files)")
 
     # ── format ──
     p_format = sub.add_parser("format", help="Clean and format platform API output")
@@ -466,7 +468,7 @@ def _cmd_install(args):
         print("Dry run complete. No changes were made.")
 
 
-def _install_skill(force: bool = True):
+def _install_skill(force: bool = False):
     """Install Agent Reach as an agent skill for supported agent clients."""
     import importlib.resources
     import os
@@ -494,10 +496,45 @@ def _install_skill(force: bool = True):
         except FileNotFoundError:
             return skill_pkg.joinpath("SKILL.md").read_text(encoding="utf-8")
 
+    def _resolve_skill_pkg():
+        """Locate the packaged skill directory (fallback for editable installs)."""
+        try:
+            skill_pkg = importlib.resources.files("agent_reach").joinpath("skill")
+            _read_skill_markdown(skill_pkg)
+            return skill_pkg
+        except Exception:
+            from pathlib import Path
+            return Path(__file__).resolve().parent / "skill"
+
+    def _write_references(skill_pkg, target: str) -> None:
+        """Replace target/references/ with the packaged reference docs.
+
+        Rewritten from scratch so docs dropped upstream do not linger.
+        """
+        refs_pkg = skill_pkg.joinpath("references")
+        refs_target = os.path.join(target, "references")
+        if os.path.islink(refs_target):
+            os.unlink(refs_target)
+        elif os.path.isdir(refs_target):
+            shutil.rmtree(refs_target)
+        os.makedirs(refs_target, exist_ok=True)
+
+        for ref_file in refs_pkg.iterdir():
+            name = ref_file.name if hasattr(ref_file, 'name') else str(ref_file).split('/')[-1]
+            if name.endswith(".md"):
+                content = ref_file.read_text(encoding="utf-8") if hasattr(ref_file, 'read_text') else ref_file.read_text()
+                with open(os.path.join(refs_target, name), "w", encoding="utf-8") as f:
+                    f.write(content)
+
     def _copy_skill_dir(target: str) -> str | None:
         """Copy entire skill directory (locale-specific SKILL.md + references/)."""
         try:
+            skill_pkg = _resolve_skill_pkg()
+
+            # A customized SKILL.md is the user's; the reference docs are ours,
+            # so they still track the installed version.
             if not force and os.path.exists(os.path.join(target, "SKILL.md")):
+                _write_references(skill_pkg, target)
                 return "preserved"
 
             # Clear existing installation. A symlinked skill dir (dotfiles
@@ -508,30 +545,11 @@ def _install_skill(force: bool = True):
                 shutil.rmtree(target)
             os.makedirs(target, exist_ok=True)
 
-            # Get skill directory from package (with fallback for editable installs)
-            try:
-                skill_pkg = importlib.resources.files("agent_reach").joinpath("skill")
-                skill_md = _read_skill_markdown(skill_pkg)
-            except Exception:
-                from pathlib import Path
-                skill_pkg = Path(__file__).resolve().parent / "skill"
-                skill_md = _read_skill_markdown(skill_pkg)
-
             # Copy SKILL.md using the selected locale file
             with open(os.path.join(target, "SKILL.md"), "w", encoding="utf-8") as f:
-                f.write(skill_md)
+                f.write(_read_skill_markdown(skill_pkg))
 
-            # Copy references/ directory
-            refs_pkg = skill_pkg.joinpath("references")
-            refs_target = os.path.join(target, "references")
-            os.makedirs(refs_target, exist_ok=True)
-
-            for ref_file in refs_pkg.iterdir():
-                name = ref_file.name if hasattr(ref_file, 'name') else str(ref_file).split('/')[-1]
-                if name.endswith(".md"):
-                    content = ref_file.read_text(encoding="utf-8") if hasattr(ref_file, 'read_text') else ref_file.read_text()
-                    with open(os.path.join(refs_target, name), "w", encoding="utf-8") as f:
-                        f.write(content)
+            _write_references(skill_pkg, target)
 
             return "installed"
         except Exception as e:
@@ -561,7 +579,10 @@ def _install_skill(force: bool = True):
             status = _copy_skill_dir(target)
             if status:
                 if status == "preserved":
-                    print(f"Skill already installed for {platform_name}, preserving existing files: {target}")
+                    print(
+                        f"Skill already installed for {platform_name}: kept your SKILL.md, "
+                        f"refreshed references/ (agent-reach skill --force overwrites): {target}"
+                    )
                 else:
                     print(f"Skill installed for {platform_name}: {target}")
                 installed = True
@@ -572,7 +593,11 @@ def _install_skill(force: bool = True):
         os.makedirs(os.path.dirname(target), exist_ok=True)
         status = _copy_skill_dir(target)
         if status == "preserved":
-            print(f"Skill already installed, preserving existing files: {target}")
+            print(
+                "Skill already installed: kept your SKILL.md, refreshed references/ "
+                f"(agent-reach skill --force overwrites): {target}"
+            )
+            installed = True
         elif status == "installed":
             print(f"Skill installed: {target}")
             installed = True
@@ -625,7 +650,7 @@ def _uninstall_skill():
 def _cmd_skill(args):
     """Manage agent skill registration."""
     if args.install:
-        if not _install_skill():
+        if not _install_skill(force=args.force):
             raise SystemExit(1)
     elif args.uninstall:
         _uninstall_skill()

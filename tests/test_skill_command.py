@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """Tests for 'agent-reach skill' command and _install_skill / _uninstall_skill."""
 
+import contextlib
 import importlib.resources
+import io
 import os
 import re
 import tempfile
@@ -11,6 +13,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agent_reach.cli import _cmd_skill, _install_skill, _uninstall_skill
+
+CUSTOM_SKILL_MD = "# my customized skill\n"
 
 
 class TestSkillCommand(unittest.TestCase):
@@ -119,7 +123,7 @@ class TestSkillCommand(unittest.TestCase):
     def test_skill_install_command_exits_nonzero_when_install_fails(self):
         with patch("agent_reach.cli._install_skill", return_value=False):
             with self.assertRaises(SystemExit) as raised:
-                _cmd_skill(Namespace(install=True, uninstall=False))
+                _cmd_skill(Namespace(install=True, uninstall=False, force=False))
 
         self.assertEqual(raised.exception.code, 1)
 
@@ -192,6 +196,88 @@ class TestSkillCommand(unittest.TestCase):
             with open(target, encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("Agent Reach", content)
+
+    def _install_over_customized_skill(self, tmpdir):
+        """Plant a customized SKILL.md plus a stale reference doc, then re-install.
+
+        Returns (target_dir, stdout).
+        """
+        skill_parent = os.path.join(tmpdir, ".openclaw", "skills")
+        target = os.path.join(skill_parent, "agent-reach")
+        os.makedirs(os.path.join(target, "references"))
+        with open(os.path.join(target, "SKILL.md"), "w", encoding="utf-8") as f:
+            f.write(CUSTOM_SKILL_MD)
+        with open(
+            os.path.join(target, "references", "retired.md"), "w", encoding="utf-8"
+        ) as f:
+            f.write("# doc dropped upstream\n")
+
+        stdout = io.StringIO()
+        with patch(
+            "agent_reach.cli.os.path.expanduser",
+            side_effect=lambda p: p.replace("~", tmpdir),
+        ):
+            env = os.environ.copy()
+            env.pop("OPENCLAW_HOME", None)
+            with patch.dict(os.environ, env, clear=True):
+                with contextlib.redirect_stdout(stdout):
+                    _install_skill()
+
+        return target, stdout.getvalue()
+
+    def test_install_preserves_existing_skill_md_by_default(self):
+        """A user-customized SKILL.md must survive a re-install."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target, _ = self._install_over_customized_skill(tmpdir)
+
+            with open(os.path.join(target, "SKILL.md"), encoding="utf-8") as f:
+                self.assertEqual(f.read(), CUSTOM_SKILL_MD)
+
+    def test_install_refreshes_references_while_preserving_skill_md(self):
+        """Preserve keeps the user's SKILL.md but still ships current reference docs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target, _ = self._install_over_customized_skill(tmpdir)
+            refs = os.path.join(target, "references")
+
+            # Docs dropped upstream must not linger in a preserved install.
+            self.assertFalse(os.path.exists(os.path.join(refs, "retired.md")))
+            self.assertTrue(os.path.exists(os.path.join(refs, "search.md")))
+            packaged = (
+                importlib.resources.files("agent_reach")
+                .joinpath("skill", "references", "search.md")
+                .read_text(encoding="utf-8")
+            )
+            with open(os.path.join(refs, "search.md"), encoding="utf-8") as f:
+                self.assertEqual(f.read(), packaged)
+
+    def test_preserved_install_tells_user_how_to_overwrite(self):
+        """Silent preservation strands users on a stale SKILL.md — name --force."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            _, output = self._install_over_customized_skill(tmpdir)
+
+            self.assertIn("--force", output)
+            self.assertIn("SKILL.md", output)
+
+    def test_install_force_overwrites_existing_skill_md(self):
+        """--force restores the packaged SKILL.md."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            skill_parent = os.path.join(tmpdir, ".openclaw", "skills")
+            target = os.path.join(skill_parent, "agent-reach")
+            os.makedirs(target)
+            with open(os.path.join(target, "SKILL.md"), "w", encoding="utf-8") as f:
+                f.write("# my customized skill\n")
+
+            with patch(
+                "agent_reach.cli.os.path.expanduser",
+                side_effect=lambda p: p.replace("~", tmpdir),
+            ):
+                env = os.environ.copy()
+                env.pop("OPENCLAW_HOME", None)
+                with patch.dict(os.environ, env, clear=True):
+                    _install_skill(force=True)
+
+            with open(os.path.join(target, "SKILL.md"), encoding="utf-8") as f:
+                self.assertIn("Agent Reach", f.read())
 
     def test_install_uses_english_skill_for_english_locale(self):
         """_install_skill should install the English skill file for English locales."""
