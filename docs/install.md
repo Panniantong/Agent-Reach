@@ -42,7 +42,7 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 | Config & tokens | `~/.agent-reach/` | `~/.agent-reach/config.json` |
 | Upstream tool repos | `~/.agent-reach/tools/` | `~/.agent-reach/tools/xiaoyuzhou/` |
 | Temporary files | `/tmp/` | `/tmp/yt-dlp-output/` |
-| Skills | `~/.openclaw/skills/agent-reach/` | SKILL.md |
+| Skills | `~/.openclaw/skills/agent-reach/` | `SKILL.md` + `references/*.md` |
 
 **Why?** If you clone repos or create files in the workspace, it pollutes the user's project directory and can break their agent over time. Keep the workspace clean.
 
