@@ -49,13 +49,13 @@ pytest
 
 ## Adding New Channels
 
-Agent Reach uses a unified channel interface. To add a new platform:
+Doctor auto-discovers channels via `get_all_channels()`. Do not edit `doctor.py` to register a channel.
 
-1. Create a new file in `agent_reach/channels/`
-2. Implement the channel contract (see existing channels for examples)
-3. Add tests in `tests/test_channels.py`
-4. Update `agent_reach/doctor.py` to include the new channel
-5. Update documentation
+1. Add a class in `agent_reach/channels/<name>.py` inheriting from `Channel` (`base.py`)
+2. Instantiate it in `ALL_CHANNELS` in `agent_reach/channels/__init__.py`
+3. Implement `can_handle(url)` and `check(config)` only (`read`/`search` are not required)
+4. Add tests
+5. Update `product/CHANNELS.md` and the README platform table
 
 ## Pull Request Guidelines
 
@@ -100,8 +100,10 @@ Feel free to open an issue for questions or join discussions.
 
 ## 添加新渠道
 
-1. 在 `agent_reach/channels/` 创建新文件
-2. 实现渠道接口
-3. 添加测试
-4. 更新 doctor 检测
-5. 更新文档
+Doctor 通过 `get_all_channels()` 自动发现渠道。不要改 `doctor.py` 来注册渠道。
+
+1. 在 `agent_reach/channels/<name>.py` 新增继承 `Channel`（`base.py`）的类
+2. 在 `agent_reach/channels/__init__.py` 的 `ALL_CHANNELS` 里实例化
+3. 只实现 `can_handle(url)` 和 `check(config)`（不要求 `read`/`search`）
+4. 添加测试
+5. 更新 `product/CHANNELS.md` 和 README 平台表

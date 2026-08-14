@@ -1,7 +1,7 @@
 <h1 align="center">👁️ Agent Reach</h1>
 
 <p align="center">
-  <strong>给你的 AI Agent 一键装上互联网能力</strong>
+  <strong>本地安装器 + 体检：给 Agent 装上精选读/搜后端</strong>
 </p>
 
 <p align="center">
@@ -109,7 +109,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 | 📺 **YouTube** | 字幕提取 + 视频搜索 | — | 无需配置 |
 | 📡 **RSS** | 阅读任意 RSS/Atom 源 | — | 无需配置 |
 | 🔍 **全网搜索** | — | 全网语义搜索 | 自动配置（MCP 接入，免费无需 Key） |
-| 📦 **GitHub** | 读公开仓库 + 搜索 | 私有仓库、提 Issue/PR、Fork | 告诉 Agent「帮我登录 GitHub」 |
+| 📦 **GitHub** | 读公开仓库 + 搜索 | 私有仓库只读（`gh` 登录） | 告诉 Agent「帮我登录 GitHub」 |
 | 🐦 **Twitter/X** | 读单条推文 | 搜索推文、浏览时间线、读长文 | 告诉 Agent「帮我配 Twitter」 |
 | 📺 **B站** | 搜索 + 视频详情（bili-cli，无需登录） | 字幕（OpenCLI） | 告诉 Agent「帮我配 B站」 |
 | 📖 **Reddit** | —（没有零配置路径：匿名接口已被封） | 搜索 + 读帖子和评论 | 桌面装 OpenCLI 用浏览器登录态；或 rdt-cli + Cookie |
@@ -121,6 +121,8 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 | 📈 **雪球** | 股票行情、搜索股票、热门帖子、热门股票排行 | — | 告诉 Agent「帮我配雪球」 |
 | 🎙️ **小宇宙播客** | — | 播客音频转文字（Whisper 转录，免费 Key） | 告诉 Agent「帮我配小宇宙播客」 |
 
+> **商业核心（产品）：** GitHub、Exa、YouTube、RSS、网页/Jina。Cookie / OpenCLI 平台（Twitter、小红书、Reddit、Facebook、Instagram、雪球、LinkedIn MCP）是 power-user / burner 可选，不是默认产品。
+>
 > **不知道怎么配？不用查文档。** 直接告诉 Agent「帮我配 XXX」，它知道需要什么、会一步一步引导你。
 >
 > 🍪 Twitter 只接受用户通过 Cookie-Editor 手工导出的内容。Agent Reach 不替用户执行小红书登录，也不读取小红书浏览器 Cookie；OpenCLI 只使用用户已经存在且明确控制的 Chrome 会话。`agent-reach configure xhs-cookies` 不会把 Cookie 注入 OpenCLI / Chrome；没有现成会话时，改用 Cookie-Editor 导出后配置 xiaohongshu-mcp / 存量工具。
@@ -162,6 +164,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 > 帮我安全检查并安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
 > ```
 > 只有在你明确允许修改系统后，才使用 `agent-reach install --system`。
+> `--system` 会写入 `~/.claude/skills/`、`~/.openclaw/skills/`、`~/.config/opencode/skills/`、`~/.agents/skills/`，并可能 apt-get/brew/npm 安装 gh、nodejs/npm，以及写入 mcporter 配置。默认 `install --env=auto` 只检查，不写这些。
 
 <details>
 <summary>它会做什么？（点击展开）</summary>
@@ -196,6 +199,8 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 ## 设计理念
 
 **Agent Reach 是一个能力层（capability layer），不是又一个工具。**
+
+产品化计划见 [product/README.md](product/README.md)。
 
 它比任何具体实现高一层——负责**选型、安装、体检、路由**，不负责底层读取本身。读取由 Agent 直接调用上游工具完成，没有包装层。
 
@@ -280,7 +285,10 @@ Agent Reach 在设计上重视安全：
 agent-reach uninstall
 ```
 
-会清除：`~/.agent-reach/`（含所有 token/cookie）、各 Agent 的 skill 文件、mcporter 中的 MCP 配置。
+会清除：`~/.agent-reach/`（含所有 token/cookie）、四个 skill 根目录里的 copies
+（`~/.claude/skills/agent-reach/`、`~/.openclaw/skills/agent-reach/`、
+`~/.config/opencode/skills/agent-reach/`、`~/.agents/skills/agent-reach/`）、
+以及 mcporter 中的 MCP 配置。
 
 ```bash
 # 只预览，不实际删除

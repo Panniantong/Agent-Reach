@@ -1,7 +1,7 @@
 <h1 align="center">👁️ Agent Reach</h1>
 
 <p align="center">
-  <strong>AIエージェントにワンクリックでインターネット全体へのアクセスを</strong>
+  <strong>AIエージェント向けのローカルインストーラー＋診断：厳選した読み取り/検索バックエンド</strong>
 </p>
 
 <p align="center">
@@ -70,12 +70,14 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 📈 **雪球（Xueqiu）** | 株価・検索・人気投稿・人気銘柄 | 設定不要 | 公開APIで自動セッションCookie、ログイン不要 |
 | 🎙️ **小宇宙Podcast** | 文字起こし | 無料APIキー | Podcast音声 → Groq Whisper（無料）による完全テキスト文字起こし |
 | 🔍 **Web検索** | 検索 | 自動設定 | インストール時に自動設定、無料、APIキー不要（[Exa](https://exa.ai)、[mcporter](https://github.com/nicepkg/mcporter)経由） |
-| 📦 **GitHub** | 閲覧・検索 | 設定不要 | [gh CLI](https://cli.github.com) 搭載。公開リポジトリはすぐ使える。`gh auth login`でFork、Issue、PRが解放 |
+| 📦 **GitHub** | 閲覧・検索 | 設定不要 | [gh CLI](https://cli.github.com) 搭載。公開リポジトリはすぐ使える。`gh auth login`でプライベートリポジトリの読み取りが可能 |
 | 📺 **YouTube** | 閲覧・**検索** | 設定不要 | 字幕 + 1800以上の動画サイトでの検索（[yt-dlp](https://github.com/yt-dlp/yt-dlp) ⭐148K） |
 | 📺 **Bilibili** | 閲覧・**検索** | 設定不要 | [bili-cli](https://github.com/public-clis/bilibili-cli) で検索・動画情報（ログイン不要）、字幕は OpenCLI。yt-dlp は Bilibili の 412 制限により使用しません |
 | 📡 **RSS** | 閲覧 | 設定不要 | 任意のRSS/Atomフィード（[feedparser](https://github.com/kurtmckee/feedparser) ⭐2.3K） |
 | 📖 **Reddit** | 検索・閲覧 | Cookie | 2024年以降認証が必要 — インストール後 `rdt login` を実行（[rdt-cli](https://github.com/public-clis/rdt-cli)） |
 
+> **商用コア:** GitHub、Exa、YouTube、RSS、Web/Jina。Cookie / OpenCLI は power-user / burner の任意機能であり、デフォルト製品ではない。
+>
 > **セットアップレベル：** 設定不要 = インストールしてすぐ使える · 自動設定 = インストール時に処理 · mcporter = MCPサービスが必要 · Cookie = ブラウザからエクスポート · プロキシ = 月額$1
 
 ---

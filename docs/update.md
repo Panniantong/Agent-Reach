@@ -36,14 +36,23 @@ If it says "已是最新版本", skip to Step 4 (verify). Otherwise continue.
 
 ### Step 2: Update Agent Reach package
 
+Fetch `constraints.txt` from the **same ref** as the new zip, then upgrade with `-c`. Using old constraints against a new zip can fail.
+
 ```bash
-pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip
+curl -fsSL -o /tmp/agent-reach-constraints.txt \
+  https://raw.githubusercontent.com/Panniantong/agent-reach/main/constraints.txt
+pip install --upgrade -c /tmp/agent-reach-constraints.txt \
+  https://github.com/Panniantong/agent-reach/archive/main.zip
 ```
 
+From a git checkout, the same pin file is in the tree: `pip install --upgrade -c constraints.txt .`
+
 > If pip complains about `externally-managed-environment` (PEP 668), the user
-> originally installed via pipx or a venv — use the matching command:
-> `pipx install --force https://github.com/Panniantong/agent-reach/archive/main.zip`
-> or activate `~/.agent-reach-venv` first.
+> originally installed via pipx or a venv — activate `~/.agent-reach-venv` first,
+> then use the pinned `pip install --upgrade -c ...` recipe above.
+>
+> **pipx cannot take `-c`.** `pipx install --force https://github.com/.../main.zip`
+> is unpinned. Prefer the venv + constraints path. Do not invent a pipx wrapper.
 
 ### Step 3: Refresh upstream tools
 

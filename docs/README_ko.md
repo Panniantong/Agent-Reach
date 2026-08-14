@@ -1,7 +1,7 @@
 <h1 align="center">👁️ Agent Reach</h1>
 
 <p align="center">
-  <strong>AI 에이전트가 인터넷 전체에 접근할 수 있도록 한 번에 설정해 드립니다</strong>
+  <strong>AI 에이전트를 위한 로컬 설치기 + 진단: 엄선된 읽기/검색 백엔드</strong>
 </p>
 
 <p align="center">
@@ -70,12 +70,14 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 📈 **Xueqiu (雪球)** | 주식 시세 · 검색 · 인기 글 · 인기 종목 | 브라우저 Cookie | 에이전트에 "Xueqiu 설정 도와줘"라고 말하세요 |
 | 🎙️ **Xiaoyuzhou Podcast** | 음성 변환 | 무료 API key | Groq Whisper를 통한 팟캐스트 오디오 → 전체 텍스트 변환 (무료) |
 | 🔍 **Web Search** | 검색 | 자동 설정 | 설치 시 자동 설정, 무료, API key 불필요 ([Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter)) |
-| 📦 **GitHub** | 읽기 · 검색 | 없음 | [gh CLI](https://cli.github.com) 기반. 공개 저장소는 즉시 사용 가능. `gh auth login`으로 Fork, Issue, PR 기능 활성화 |
+| 📦 **GitHub** | 읽기 · 검색 | 없음 | [gh CLI](https://cli.github.com) 기반. 공개 저장소는 즉시 사용 가능. `gh auth login`으로 비공개 저장소 읽기 |
 | 📺 **YouTube** | 읽기 · **검색** | 없음 | 자막 + 1800+ 비디오 사이트 검색 ([yt-dlp](https://github.com/yt-dlp/yt-dlp) ⭐148K) |
 | 📺 **Bilibili** | 읽기 · **검색** | 설정 없음 | [bili-cli](https://github.com/public-clis/bilibili-cli)로 검색·비디오 정보(로그인 불필요), 자막은 OpenCLI. yt-dlp는 Bilibili의 412 차단으로 사용하지 않음 |
 | 📡 **RSS** | 읽기 | 없음 | 모든 RSS/Atom 피드 ([feedparser](https://github.com/kurtmckee/feedparser) ⭐2.3K) |
 | 📖 **Reddit** | 검색 · 읽기 | Cookie | 2024년부터 인증 필요 — 설치 후 `rdt login` 실행 ([rdt-cli](https://github.com/public-clis/rdt-cli)) |
 
+> **상업 코어:** GitHub, Exa, YouTube, RSS, Web/Jina. Cookie / OpenCLI 플랫폼은 power-user / burner 선택 사항이며 기본 제품이 아닙니다.
+>
 > **설정 단계:** 없음 = 설치 후 바로 사용 · 자동 = 설치 시 처리 · mcporter = MCP 서비스 필요 · Cookie = 브라우저에서 내보내기 · 프록시 = 월 $1
 
 ---

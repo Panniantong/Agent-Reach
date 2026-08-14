@@ -1,7 +1,7 @@
 <h1 align="center">👁️ Agent Reach</h1>
 
 <p align="center">
-  <strong>Give your AI Agent one-click access to the entire internet</strong>
+  <strong>Local-first installer + doctor for curated read/search backends</strong>
 </p>
 
 <p align="center">
@@ -103,21 +103,23 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | Platform | Capabilities | Setup | Notes |
 |----------|-------------|:-----:|-------|
 | 🌐 **Web** | Read | Zero config | Any URL → clean Markdown ([Jina Reader](https://github.com/jina-ai/reader) ⭐9.8K) |
-| 🐦 **Twitter/X** | Read · Search | Cookie | Cookie unlocks search, timeline, tweet reading, articles ([twitter-cli](https://github.com/public-clis/twitter-cli)) |
-| 📕 **XiaoHongShu** | Read · Search · Comments | OpenCLI / MCP | OpenCLI uses only an existing user-controlled Chrome session; MCP/legacy tools use a manual Cookie-Editor export |
-| 📘 **Facebook** | Search · Profiles · Feed · Groups list | OpenCLI | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
-| 📷 **Instagram** | User search · Profiles · Recent posts · Explore | OpenCLI | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
-| 💼 **LinkedIn** | Jina Reader (public pages) | Full profiles, companies, job search | Tell your Agent "help me set up LinkedIn" |
-| 💻 **V2EX** | Hot topics · Node topics · Topic detail + replies · User profile | Zero config | Public JSON API, no auth required. Great for tech community content |
-| 📈 **Xueqiu (雪球)** | Stock quotes · Search · Hot posts · Hot stocks | Browser cookie | Tell your Agent "help me set up Xueqiu" |
-| 🎙️ **Xiaoyuzhou Podcast** | Transcription | Free API key | Podcast audio → full text transcript via Groq Whisper (free) |
-| 🔍 **Web Search** | Search | Auto-configured | Auto-configured during install, free, no API key ([Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter)) |
-| 📦 **GitHub** | Read · Search | Zero config | [gh CLI](https://cli.github.com) powered. Public repos work immediately. `gh auth login` unlocks Fork, Issue, PR |
 | 📺 **YouTube** | Read · **Search** | Zero config | Subtitles + search across 1800+ video sites ([yt-dlp](https://github.com/yt-dlp/yt-dlp) ⭐148K) |
-| 📺 **Bilibili** | Read · **Search** | Zero config | Search + video detail via [bili-cli](https://github.com/public-clis/bilibili-cli) (no login needed); subtitles via [OpenCLI](https://github.com/jackwener/opencli). yt-dlp is 412-blocked by Bilibili and no longer used here |
 | 📡 **RSS** | Read | Zero config | Any RSS/Atom feed ([feedparser](https://github.com/kurtmckee/feedparser) ⭐2.3K) |
-| 📖 **Reddit** | Search · Read | OpenCLI / Cookie | No zero-config path (anonymous endpoints blocked). Desktop: [OpenCLI](https://github.com/jackwener/opencli) via browser session; or [rdt-cli](https://github.com/public-clis/rdt-cli) + cookie |
+| 🔍 **Web Search** | Search | Auto-configured | Auto-configured during install, free, no API key ([Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter)) |
+| 📦 **GitHub** | Read · Search | Zero config | [gh CLI](https://cli.github.com) powered. Public repos work immediately. `gh auth login` unlocks private-repo read |
+| 💻 **V2EX** | Hot topics · Node topics · Topic detail + replies · User profile | Zero config | Public JSON API, no auth required. Great for tech community content |
+| 📺 **Bilibili** | Read · **Search** | Zero config | Search + video detail via [bili-cli](https://github.com/public-clis/bilibili-cli) (no login needed); subtitles via [OpenCLI](https://github.com/jackwener/opencli). yt-dlp is 412-blocked by Bilibili and no longer used here |
+| 🎙️ **Xiaoyuzhou Podcast** | Transcription | Free API key | Podcast audio → full text transcript via Groq Whisper (free) |
+| 🐦 **Twitter/X** | Read · Search | Cookie (power-user / burner) | Cookie unlocks search, timeline, tweet reading, articles ([twitter-cli](https://github.com/public-clis/twitter-cli)) |
+| 📕 **XiaoHongShu** | Read · Search · Comments | OpenCLI / MCP (power-user / burner) | OpenCLI uses only an existing user-controlled Chrome session; MCP/legacy tools use a manual Cookie-Editor export |
+| 📖 **Reddit** | Search · Read | OpenCLI / Cookie (power-user / burner) | No zero-config path (anonymous endpoints blocked). Desktop: [OpenCLI](https://github.com/jackwener/opencli) via browser session; or [rdt-cli](https://github.com/public-clis/rdt-cli) + cookie |
+| 📘 **Facebook** | Search · Profiles · Feed · Groups list | OpenCLI (power-user / burner) | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
+| 📷 **Instagram** | User search · Profiles · Recent posts · Explore | OpenCLI (power-user / burner) | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
+| 💼 **LinkedIn** | Jina Reader (public pages) | Full profiles, companies, job search (MCP is power-user) | Tell your Agent "help me set up LinkedIn" |
+| 📈 **Xueqiu (雪球)** | Stock quotes · Search · Hot posts · Hot stocks | Browser cookie (power-user / burner) | Tell your Agent "help me set up Xueqiu" |
 
+> **Commercial core:** GitHub, Exa, YouTube, RSS, Web/Jina. Cookie / OpenCLI platforms are power-user / burner optional, not the default product.
+>
 > **Setup levels:** Zero config = install and go · Auto-configured = handled during install · mcporter = needs MCP service · Cookie = export from browser · Proxy = $1/month
 
 ---
@@ -151,6 +153,7 @@ The Agent installs the Python package, checks your environment, and tells you wh
 > Safely check and install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
 > ```
 > Use `agent-reach install --system` only after explicitly approving system changes.
+> `--system` copies the skill into `~/.claude/skills/`, `~/.openclaw/skills/`, `~/.config/opencode/skills/`, and `~/.agents/skills/`, and may apt-get/brew/npm install gh and nodejs/npm, plus write mcporter config. Default `install --env=auto` is check-only.
 
 <details>
 <summary>Manual install</summary>
@@ -253,6 +256,8 @@ Status: 6/9 channels available
 ## Design Philosophy
 
 **Agent Reach is a capability layer, not yet another tool.**
+
+Productization plan: [product/README.md](../product/README.md).
 
 It sits one level above any specific implementation — it handles **selection, installation, health checks, and routing**, not the reading itself. Reading is done by your Agent calling upstream tools directly; there is no wrapper layer.
 

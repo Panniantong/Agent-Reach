@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Agent Reach — Give your AI Agent eyes to see the entire internet."""
+"""Agent Reach — local-first installer, doctor, and skill for curated read/search backends."""
 
 __version__ = "1.5.0"
 __author__ = "Neo Reid"
