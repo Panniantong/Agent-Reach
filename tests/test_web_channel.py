@@ -8,6 +8,7 @@ URL before handing it to Jina Reader. Follow-up to #331 / #360 / #361,
 completing dedicated coverage for the channels that still lacked it.
 """
 
+import urllib.error
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -210,6 +211,44 @@ def test_read_does_not_reject_single_generic_antibot_terms(body):
 
     with patch("urllib.request.urlopen", return_value=_resp(body.encode("utf-8"))):
         assert channel.read("https://example.com/article") == body
+
+
+def _http_error(code):
+    return urllib.error.HTTPError(
+        "https://r.jina.ai/https://example.com", code, "refused", {}, None
+    )
+
+
+@pytest.mark.parametrize("code", [401, 403, 429])
+def test_read_explains_a_reader_side_refusal(code):
+    """A 401 from r.jina.ai means the reader refused *us*, not that the page 404'd.
+
+    check() is deliberately zero-overhead and always reports ok, so doctor's
+    green light cannot warn about this. The read path is the only place the
+    caller can learn why nothing came back.
+    """
+    channel = WebChannel()
+
+    with patch("urllib.request.urlopen", side_effect=_http_error(code)):
+        with pytest.raises(RuntimeError, match="Jina Reader") as excinfo:
+            channel.read("https://example.com/article")
+
+    assert str(code) in str(excinfo.value)
+    # The original status must stay reachable for anything logging the chain.
+    assert isinstance(excinfo.value.__cause__, urllib.error.HTTPError)
+    assert excinfo.value.__cause__.code == code
+
+
+@pytest.mark.parametrize("code", [404, 500, 502])
+def test_read_leaves_other_http_errors_untouched(code):
+    """Only reader refusals are reinterpreted; a real 404 stays a 404."""
+    channel = WebChannel()
+
+    with patch("urllib.request.urlopen", side_effect=_http_error(code)):
+        with pytest.raises(urllib.error.HTTPError) as excinfo:
+            channel.read("https://example.com/missing")
+
+    assert excinfo.value.code == code
 
 
 def test_antibot_detection_has_a_fixed_scan_window():
