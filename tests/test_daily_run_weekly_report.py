@@ -712,6 +712,9 @@ class TestWeeklyReport:
         md = render_weekly_markdown(report)
         assert "周末收盘 ¥85.00" in md
         assert "周初 ¥80.00" in md
+        assert "成本浮盈" in md
+        assert holding.get("unrealized_pnl") == -16500.0
+        assert "成本浮盈 ¥-16,500" in md
 
 
 class TestScheduleWeekly:

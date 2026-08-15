@@ -383,6 +383,35 @@ def run_close(
 
     verify_md = render_verify_markdown(verify)
 
+    market_review_md = ""
+    market_review_obj = None
+    from agent_reach.daily_run.market_review import (
+        get_or_collect_market_review,
+        market_review_enabled,
+        render_market_review_markdown,
+    )
+    from agent_reach.daily_run.redfox_collector import attach_redfox_close_markdown, redfox_enabled
+
+    if market_review_enabled(cfg):
+        market_review_obj = get_or_collect_market_review(settings=cfg)
+        if market_review_obj:
+            market_review_md = render_market_review_markdown(market_review_obj)
+            enriched["market_review"] = market_review_obj
+
+    redfox_md = ""
+    if redfox_enabled(cfg):
+        redfox_md, redfox_result = attach_redfox_close_markdown(
+            enriched,
+            market_review_obj,
+            settings=cfg,
+        )
+        if redfox_result:
+            enriched["redfox"] = redfox_result.to_dict()
+        if redfox_md:
+            market_review_md = (
+                (market_review_md + "\n\n" + redfox_md) if market_review_md else redfox_md
+            )
+
     portfolio_md = ""
     portfolio_summary_obj = None
     if portfolio_summary:
@@ -417,6 +446,7 @@ def run_close(
     md = "\n\n---\n\n".join(
         p
         for p in [
+            market_review_md,
             team_md,
             curve_md,
             research_md,
@@ -441,6 +471,7 @@ def run_close(
         cfg_obj = config or Config()
         sections = render_close_sections(
             verify_name=verify.name or verify.code or "大盘",
+            market_markdown=market_review_md,
             team_markdown=team_md,
             curve_markdown=curve_md,
             research_markdown=research_md or "",
@@ -471,6 +502,8 @@ def run_close(
         "research_markdown": research_md,
         "experience_markdown": exp_md,
         "verify_markdown": verify_md,
+        "market_review_markdown": market_review_md,
+        "market_review": market_review_obj,
         "portfolio_markdown": portfolio_md,
         "portfolio_summary": portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
         "research": research_results,

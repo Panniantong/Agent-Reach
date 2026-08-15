@@ -134,7 +134,8 @@ class TestSnapshotBuilder:
         snap = build_snapshot(portfolio, enrich=False)
         assert snap["code"] == "688008"
         assert snap.get("enrich_level") == "lite"
-        assert snap.get("price") in (None, portfolio["holdings"][0].get("cost"))
+        # lite mode still refreshes quotes (may differ from static cost)
+        assert snap.get("price") is not None
 
 
 class TestSchedule:

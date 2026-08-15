@@ -286,11 +286,11 @@ def build_snapshot(
     daily_cache = load_daily_cache() if enrich_level == "quotes" else {}
     macro_ctx: dict[str, Any] = {}
     if enrich_level == "full":
-        macro_ctx = collect_macro_context(pf, config=config, settings=cfg)
+        macro_ctx = collect_macro_context(pf, config=config, settings=cfg, workflow=report_type)
     elif daily_cache.get("macro_ctx"):
         macro_ctx = dict(daily_cache["macro_ctx"])
     else:
-        macro_ctx = collect_macro_context(pf, config=config, settings=cfg)
+        macro_ctx = collect_macro_context(pf, config=config, settings=cfg, workflow=report_type)
 
     primary_name = code_norm
     primary_price = None
@@ -444,6 +444,9 @@ def build_snapshot(
         "has_cost_fallback": has_cost_fallback,
         "quote_fetch": quote_meta,
     }
+    rf = (macro_ctx.get("macro_signals") or {}).get("redfox")
+    if isinstance(rf, dict):
+        snapshot["redfox"] = rf
 
     if primary_price is not None:
         snapshot["price"] = primary_price

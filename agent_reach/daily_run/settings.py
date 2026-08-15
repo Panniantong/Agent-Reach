@@ -36,6 +36,7 @@ def load_settings(path: Path | None = None) -> dict[str, Any]:
         return deepcopy(_settings_cache["data"])
 
     data = _read_json(active)
+    data = _merge_repo_defaults(data, active)
     validate_settings(data)
     _settings_cache["path"] = active
     _settings_cache["mtime"] = mtime
@@ -80,6 +81,22 @@ def _read_json(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"Invalid settings file: {path}")
     return deepcopy(data)
+
+
+def _merge_repo_defaults(data: dict[str, Any], active: Path) -> dict[str, Any]:
+    """Fill missing top-level blocks from repo defaults (user file wins on overlap)."""
+    if active == _DEFAULT_PATH or not _DEFAULT_PATH.exists():
+        return data
+    defaults = _read_json(_DEFAULT_PATH)
+    merged = deepcopy(defaults)
+    for key, value in data.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            block = deepcopy(merged[key])
+            block.update(value)
+            merged[key] = block
+        else:
+            merged[key] = deepcopy(value)
+    return merged
 
 
 def save_user_settings(data: dict[str, Any], *, path: Path | None = None) -> Path:

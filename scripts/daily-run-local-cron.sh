@@ -39,6 +39,15 @@ LOG_FILE="${LOG_DIR}/cron-$(date +%Y-%m-%d).log"
 
 export MCPORTER_CONFIG="${MCPORTER_CONFIG:-${REPO_ROOT}/config/mcporter.json}"
 
+# Load local secrets (Feishu, RedFox, etc.) — never commit this file
+ENV_FILE="${HOME}/.agent-reach/config.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
 if [ ! -f "${HOME}/.agent-reach/config.yaml" ]; then
   {
     echo "=== $(date -Iseconds) job=${JOB} ERROR ==="

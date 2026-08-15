@@ -8,9 +8,9 @@ description: >
   交易日内执行 10 次数据收集，最多进行 5 次调仓量化，每次量化前审视前 5 次收集结论，调仓时间由随机数与上次评估综合决定。
   **全流程实时推送铁律：** 早盘分析、盘中高频数据收集、Lookback 审视过程、量化调仓交易以及每日收盘深度复盘的所有过程数据、决策逻辑和资产净值，系统必须在执行完毕的第一时间，自动、主动将精美的富文本 Markdown 卡片简报推送到指定的飞书群聊中，实现 100% 实时、透明的主动监控。
   每日收盘后自动执行深度复盘，使用 Exa 技能对热点公司、竞品、市场、财报及关键人物 LinkedIn 进行深度调研，为明天的早盘给出高置信度指导建议，并将量化经验原子化沉淀、更新到技能文件中。
-  **Agent 优先顺序：** 先读 skill 内「📋 下周执行清单」与最新周复盘，再选手工 CLI 或依赖 cron；周日 forecast 可参考 Phase-2.5 FaceCat-Kronos K 线预测借鉴。
+  **Agent 优先顺序：** 先读 skill 内「📋 下周执行清单」与最新周复盘，再选手工 CLI 或依赖 cron；周日 forecast 参考 Phase-2.5 Kronos；收盘大盘四卡复盘参考 Phase-2.6 a-stock-review-skill；跨平台舆情/热榜/公众号大V 参考 Phase-2.7 redfox-community（可选 REDFOX_API_KEY）。
 triggers:
-  - analyze: 股票大师/每日复盘/股票分析/大盘复盘/热门方向/分析股票/分析市场/复盘/分析
+  - analyze: 股票大师/每日复盘/股票分析/大盘复盘/热门方向/分析股票/分析市场/复盘/分析/盘后分析/龙虎榜/市场情绪/涨停/炸板
   - stock: 股票/个股/板块/技术面/K线/均线
   - macro: 宏观/政策/时事/政治/大宗商品/石油/美元/汇率/舆情/美股/港股/外资/北向/南向/金龙指数/Exa/调研/竞品/财报/LinkedIn
 metadata:
@@ -61,7 +61,7 @@ ${PY} -m agent_reach.cli doctor --json
 | doctor | 日缓存 4h（`schedule.doctor_cache`），weekly/forecast 跳过 |
 | Exa 收盘调研 | TTL 86400s（`exa_cache`），同 query 不重复搜 |
 | 60s 热点 | 本地 8787 优先，fallback `https://60s.viki.moe` |
-| 周六 weekly | ① 写回经验 + ② 执行清单 ③ settings 补丁 ④ 同步本地 skill ⑤ `pip install -e .` ⑥ **skill 审视**（去重/结构校验/**FaceCat-Kronos 借鉴点**） |
+| 周六 weekly | ① 写回经验 + ② 执行清单 ③ settings 补丁 ④ 同步本地 skill ⑤ `pip install -e .` ⑥ **skill 审视**（去重/结构校验/**FaceCat-Kronos / redfox-community 借鉴点**） |
 
 ### 周六 weekly 闭环（cron `schedule run weekly` 自动执行）
 
@@ -74,19 +74,15 @@ ${PY} -m agent_reach.cli doctor --json
 
 ---
 
-## 📋 下周执行清单（周六自动更新 · 复盘 2026-07-27~2026-07-31）
+## 📋 下周执行清单（周六自动更新 · 复盘 2026-08-10~2026-08-14）
 
-> 更新时间 2026-07-29 13:56 UTC。Agent 与 daily-run 下周须优先执行；带 ✅ 的参数已自动写入 settings。
+> 更新时间 2026-08-15 01:00 UTC。Agent 与 daily-run 下周须优先执行；带 ✅ 的参数已自动写入 settings。
 
 ### 🔧 流程改进
 
-- 🔴 **缺失 3 天早盘任务** — 日期：2026-07-27, 2026-07-30, 2026-07-31；无 morning manifest 会导致收盘 verify 缺基线
-  - 执行：检查 GHA cron 0 8 * * 1-5 与 Fork 是否 Enable scheduled workflows
-- 🔴 **缺失 3 天收盘复盘** — 日期：2026-07-27, 2026-07-30, 2026-07-31；经验沉淀与观察池 adjust 会中断
-  - 执行：检查 GHA cron 30 15 * * 1-5；手动补跑 daily-run schedule run close
-- 🟡 **1 天盘中扫描偏少** — 日期 2026-07-28 等 intraday 次数 <5，Lookback MSS 可能失真
+- 🟡 **1 天盘中扫描偏少** — 日期 2026-08-12 等 intraday 次数 <5，Lookback MSS 可能失真
   - 执行：确认 GHA cache restore/save 正常；参考 PR #28 修复 intraday_state 累积
-- 🟡 **持仓浮亏标的需关注** — 海能达(-58.2%)
+- 🟡 **持仓浮亏标的需关注** — 海能达(-57.2%)
   - 执行：收盘 verify 若 MSS<macro_veto 则优先纳入明日卖出候选
 
 ## 🚀 极致量化执行算法 (10次收集 + 5次调仓)
@@ -150,7 +146,7 @@ ${PY} -m agent_reach.cli doctor --json
 
 ## 🛡️ Phase-1 质量工程化（数据审计 + 三档标签 + 质量门禁）
 
-> 借鉴 [china-stock-analyst](https://github.com/wjt0321/china-stock-analyst) 的审计/门禁思路，已落地为可执行 Python 流水线。
+> 借鉴 [zjk1984/china-stock-analyst](https://github.com/zjk1984/china-stock-analyst)（v3.1 Team-First + 插件化 + 质量门禁）的审计/门禁思路，已落地为可执行 Python 流水线。
 
 ### 外置配置
 
@@ -212,6 +208,34 @@ agent-reach daily-run push -i snapshot.json --dry-run
 
 示例 snapshot：`config/daily_run_snapshot.example.json`
 
+### 与 china-stock-analyst 对齐（Phase-1 映射）
+
+| china-stock-analyst 概念 | daily-run 落地 | 模块 |
+|--------------------------|----------------|------|
+| `run_data_auditor` 前置 | `run_data_audit()` | `auditor.py` |
+| 来源类别 quote/flow/sentiment | `data_audit.required_source_categories` | `config/daily_run_settings.json` |
+| 价格锚点 `\|现价-参考价\|≤8%` | `thresholds.max_price_deviation_pct` | `auditor.py` |
+| 结构化复核未完成 → 标签上限「观察」 | `structured_review_complete=false` | `verdict.py` |
+| 双轨评分 40/35/25 | MSS 权重 `mss_weights` + 专家分回填 | `verdict.py` / `plugins/` |
+| 三档标签 可做/观察/回避 | `verdict_labels` + `compute_verdict()` | `verdict.py` |
+| VWAP 偏离 + 量比降级 | `max_vwap_deviation_pct` + `min_volume_ratio` | `verdict.py` |
+| 报告质量门禁 | `quality_gate.required_fields` | `quality_gate.py` |
+| 证据链 | snapshot `evidence_chain` 必填 | `pipeline.py` → 飞书 |
+
+**数据源优先级（与 upstream skill 一致）：**
+
+1. **主路径**：Agent-Reach Web / 舆情 / 宏观采集（高覆盖、时效性）
+2. **结构化复核**：东方财富行情 API（`quote_fetch.sources` 首选 `eastmoney`）— 缺失时 **不阻断**，仅 `structured_review_complete=false`
+3. **兜底**：AKShare 历史 K 线 / 量比 / MA（`daily-run fetch`）
+
+**降级铁律（borrowed）：**
+
+- 缺 VWAP / 量比 / 完整技术面 → 标签上限 **观察**，置信度上限 **中**
+- `\|VWAP偏离\|≥4%` 且 `量比<1.0` → **回避**（宏观一票否决 MSS<40 同理）
+- 审计失败或 identifier 阻断 → **阻断推送** 或强制降级
+
+**风控表述：** 所有结论须附证据链；输出仅为决策支持，不得表述为自动交易指令。
+
 ---
 
 ## 🔬 Phase-2 数据增强与验证（AKShare + 报告验证 + 回测）
@@ -257,136 +281,548 @@ agent-reach daily-run backtest -i config/daily_run_history.example.json
 
 ## 🔮 Phase-2.5 Kronos K 线预测借鉴（[FaceCat-Kronos](https://github.com/zjk1984/FaceCat-Kronos)）
 
-> 花卷猫量化团队基于清华 **Kronos** 开源框架的 K 线预测 + 回测 GUI。daily-run 不直接依赖其 UI，但借鉴其**预测—验证—调参**闭环，增强周日预测与收盘校准。
+> 花卷猫量化团队基于清华 **Kronos** 的 K 线预测 + 回测 GUI。daily-run **不跑 FaceCat UI**，但已接入 `model/kronos.py` 推理链，借鉴其 **预测 → 验证 → 调参** 闭环，用于周日 forecast 与收盘 technical 校准。
 
-### 核心能力摘要
+### FaceCat-Kronos 仓库结构
 
-| FaceCat-Kronos | 说明 |
-|----------------|------|
-| **Kronos 模型** | Transformer + BSQuantizer，对 OHLCV+amount 做多步自回归预测，输出「虚拟 K 线」 |
-| **预测 / 回测双模式** | 同一界面切换：虚线 K 线 vs 历史真值，直观量化预测偏差 |
-| **采样参数** | `T`（温度）、`top_p`（核采样）、`sample_count` 控制路径发散 vs 稳健 |
-| **多周期面板** | 分时 / 日 / 周 / 月 K 线联动，适配不同 holding 周期 |
-| **Qlib 微调回测** | 滑动窗口 `lookback + predict_window`，TopkDropout 组合 + 最小持仓 `hold_thresh` |
+| 目录 | 作用 | daily-run 是否使用 |
+|------|------|-------------------|
+| `model/kronos.py` | 核心：`KronosTokenizer` + `Kronos` + `KronosPredictor` | ✅ 通过 `kronos.repo_path` 导入 |
+| `facecat/` | PySide GUI：虚 K 线、回测对比、多周期面板 | ❌ 仅借鉴交互思路 |
+| `finetune/` | Qlib 微调 + 滑动窗口 + TopkDropout 组合回测 | ❌ 仅借鉴参数默认值 |
+| `examples/` | GPU/CPU 预测示例（含 5 分钟 K 线 CSV） | 参考环境验证 |
 
-默认模型（HuggingFace）：`NeoQuasar/Kronos-Tokenizer-base` + `NeoQuasar/Kronos-small`（`max_context=512`）。
+**推理流水线（与 FaceCat 一致）：**
 
-### 与 daily-run 模块映射（已借鉴 / 待落地）
+```
+AKShare 日 K (OHLCV+amount)
+  → 窗口 z-score 归一化 + clip(±5)
+  → 时间戳特征 (weekday/month 等)
+  → Tokenizer 半量化 encode
+  → 自回归采样 s1→s2 token（sample_count 条路径取均值）
+  → decode → 反归一化 → 虚拟 K 线
+```
+
+默认 HuggingFace 模型：`NeoQuasar/Kronos-Tokenizer-base` + `NeoQuasar/Kronos-small`（`max_context=512`）。
+
+### 三套默认参数（勿混用）
+
+| 场景 | lookback | pred | T | top_p | sample_count | 说明 |
+|------|----------|------|---|-------|--------------|------|
+| **FaceCat GUI** | 50 | 5 | 1.0 | 0.9 | **1**（写死） | 快速可视化 what-if |
+| **finetune/config** | 90 | 10 | 0.6 | 0.9 | **5** | 研究/回测推荐 |
+| **daily-run** | 90 | 10 | 0.6 | 0.9 | **5** | `kronos_predictor.py` + settings |
+
+注意：FaceCat README 写「T 0–100」是误导；代码里 T 是 **0.4–1.0 浮点温度**。GUI 的 `sample_count=1` 比 finetune 更激进，**Agent 调参以 daily-run settings 为准**。
+
+### 与 daily-run 模块映射
 
 | FaceCat-Kronos 概念 | daily-run 对应 | 状态 |
 |---------------------|----------------|------|
-| 预测 vs 真值回测 | `daily-run verify` + `week_forecast_tracker.review_active_forecast()` | ✅ 已有 MSS/价格命中率 |
-| 多路径采样 `sample_count≥5` | `mss_forecast` 蒙特卡洛 + `week_forecast.calibration` | 🟡 可增 Kronos 收盘价置信带 |
-| `lookback=90` / `pred=10` 滑动窗 | 周日 `week_forecast` 5 日路径 | 🟡 待接 Kronos OHLCV 输入 |
-| 实例归一化 + `clip=5` | `data_audit` 价格锚点 8% + AKShare enrich | ✅ 思路一致 |
-| `hold_thresh=5` 最小持仓 | 持股生命周期 3 交易日禁卖 | ✅ 已对齐风控哲学 |
-| 时间特征 weekday/month | intraday S1–S12 时段权重 | 🟡 可写入 `mss_weights` 时段因子 |
-| Qlib `open_cost=0.001` | 滑点摩擦 0.15%+0.1% 惩罚 | ✅ 已覆盖 |
-| 预测界面虚 K 线 | 飞书「个股路径」卡片 | 🟡 可选附 Kronos 方向箭头 |
+| 预测 vs 真值回测 | `verify` + `week_forecast_tracker.review_active_forecast()` | ✅ MSS/价格命中率 |
+| OHLCV 日 K 输入 | `kronos_predictor.fetch_ohlcv_history()`（AKShare qfq） | ✅ 已接入 |
+| `lookback=90` / `pred=10` | 周日 `week_forecast` + 交易日历 | ✅ `predict_symbol_paths()` |
+| 多路径 `sample_count=5` | 推理内部均值；与 MC 路径 `blend` | ✅ `week_forecast_blend_weight=0.35` |
+| 实例归一化 + `clip=5` | `KronosPredictor(clip=5)` | ✅ |
+| `hold_thresh=5` 最小持仓 | 持股 3 交易日禁卖 | ✅ 风控哲学对齐 |
+| 预测界面虚 K 线 | 飞书「个股路径」+ Kronos 方向备注 | 🟡 仅 close/change_pct，非 OHLC 蜡烛图 |
+| Qlib TopkDropout 组合回测 | — | ❌ 未集成 |
+| 多周期面板（分时/周/月） | — | ❌ daily-run 仅用日 K |
+| 完整 OHLC 预测落盘 | `kronos_paths.days` 仅存 **close** | 🟡 推理有 OHLCV，输出裁剪 |
+| `confidence_band` | 预测日涨跌幅 min/max | 🟡 **非** sample 方差置信区间 |
 
-### 推荐推理参数（finetune/config 默认值，供 Agent 调参参考）
+### daily-run 两条执行路径
+
+1. **周日 forecast**（`generate_week_forecast`）
+   - 对持仓 + 观察池跑 `predict_symbol_paths(code, trading_days)`
+   - 写入 `forecast.kronos_paths[code]`，与蒙特卡洛路径 `blend_symbol_days_with_kronos()` 混合
+   - 分歧日写入 `kronos_divergence_days`，飞书可标注「Kronos 分歧」
+
+2. **每日收盘 / technical**（`workflows.run_close` → `attach_kronos_to_snapshot`）
+   - 主标的 snapshot 附加 `snapshot.kronos`
+   - `technical_expert._apply_kronos_adjustment` 最多 ±12 分（`technical_max_score_delta`）
+   - 注意：`attach_kronos_to_snapshot` 默认用**日历日** future timestamp；forecast 用**交易所交易日历**（更准确）
+
+### 输出字段（`kronos_paths` / `snapshot.kronos`）
 
 ```json
 {
-  "kronos": {
-    "lookback_window": 90,
-    "predict_window": 10,
-    "max_context": 512,
-    "inference_T": 0.6,
-    "inference_top_p": 0.9,
-    "inference_sample_count": 5,
-    "feature_list": ["open", "high", "low", "close", "vol", "amt"],
-    "clip": 5.0
+  "available": true,
+  "direction_nd": "up|down|flat",
+  "cum_change_pct": 2.5,
+  "confidence_band": [-1.2, 3.1],
+  "sample_count": 5,
+  "days": {
+    "2026-08-11": { "close": 208.5, "change_pct": 0.8, "direction": "up" }
   }
 }
 ```
 
+- **方向判定**：单日 `change_pct` > +0.3% → up，< −0.3% → down，否则 flat
+- **收盘验证命中**（`week_forecast_tracker`）：Kronos 方向与实盘一致，或 `|actual − kronos| ≤ max(1.5%, 50%·|kronos|)` 可挽救 MC 未命中
+- **校准提示**：`|mean_error_pct| > 1.0%` → 建议微调 `week_forecast.calibration.vol_scale`
+- **`confidence_band`**：预测序列日涨跌幅的 min/max，**不是** ensemble 标准差，勿当统计置信区间
+
+### 推荐 settings（完整块）
+
+```json
+{
+  "kronos": {
+    "enabled": false,
+    "repo_path": "~/.agent-reach/vendor/FaceCat-Kronos",
+    "tokenizer_model": "NeoQuasar/Kronos-Tokenizer-base",
+    "predictor_model": "NeoQuasar/Kronos-small",
+    "lookback_window": 90,
+    "predict_window": 10,
+    "max_context": 512,
+    "clip": 5.0,
+    "inference_T": 0.6,
+    "inference_top_p": 0.9,
+    "inference_top_k": 0,
+    "inference_sample_count": 5,
+    "week_forecast_blend_weight": 0.35,
+    "technical_max_score_delta": 12,
+    "attach_to_snapshot": true,
+    "attach_predict_days": 5,
+    "device": "auto",
+    "local_files_only": false,
+    "verbose": false,
+    "log_errors": true
+  }
+}
+```
+
+**调参预设：**
+
 - **保守**（贴近现价）：`T=0.4`，`top_p=0.95`，`sample_count=3`
-- **探索**（宽幅情景）：`T=1.0`，`top_p=0.9`，`sample_count=10`（FaceCat 示例默认值）
+- **探索**（宽幅情景）：`T=1.0`，`top_p=0.9`，`sample_count=5`（非 10；10 会显著拖慢周日 forecast）
 
 ### Agent 执行指引
 
-1. **周日 forecast**：对持仓 + 观察池各拉 ≥90 根日 K（AKShare / 雪球），可选跑 Kronos 得 5–10 日虚拟路径；与 `week_forecast` 蒙特卡洛路径**交叉验证**，偏差大时在飞书标注「Kronos 分歧」。
-2. **收盘 verify**：将 Kronos 预测收盘价 vs 实盘写入 `forecast_review.optimization_notes`（同 FaceCat 回测模式）。
-3. **technical 专家**：若 Kronos 5 日累计方向与 MA20 趋势相反 → 标签上限「观察」，不强行「可做」。
-4. **CPU 环境**：无 CUDA 时用仓库内 `examples/cpu_prediction_example.py`；模型离线放 `model/` 或 `facecat/model/`。
+1. **周日 forecast**：持仓 + 观察池各拉 ≥90 根日 K → Kronos 5–10 日路径 → 与 MC 交叉验证；`kronos_divergence_days` 非空时在卡片注明分歧。
+2. **收盘 verify**：`review_active_forecast` 对比 Kronos 预测 close vs 实盘，写入 `forecast_review.kronos_review` 与 `optimization_notes`。
+3. **technical 专家**：Kronos 5 日累计方向与 MA20 趋势相反 → 标签上限「观察」，不强行「可做」。
+4. **CPU / 离线**：无 CUDA 时 `device` 留 `"auto"` 或 `"cpu"`；首次运行下载 HF 权重后设 `local_files_only: true`；模型可缓存到 `~/.cache/huggingface` 或 settings 里的 `tokenizer_model` / `predictor_model` 本地路径。
+5. **仓库校验**：必须存在 `{repo_path}/model/kronos.py`（根目录 `model/`，非仅 `facecat/model/`）。
 
 ```bash
-# 本地试跑（无需 FaceCat GUI）
-git clone --depth 1 https://github.com/zjk1984/FaceCat-Kronos /tmp/FaceCat-Kronos
-cd /tmp/FaceCat-Kronos && pip install -r requirements.txt safetensors
-cd examples && python3 cpu_prediction_example.py   # 或 cpu_prediction_wo_vol_examples.py
-```
-
-### 集成路线图（weekly skill 审视时更新）
-
-- [x] `week_forecast` 增加 `kronos_paths` 字段（每标的 OHLC 预测 + 置信区间）— `kronos_predictor.py` + `generate_week_forecast`
-- [x] 收盘 `review_active_forecast` + `close_improvements` 读取 Kronos 偏差 — `week_forecast_tracker._kronos_review_summary`
-- [x] `technical` 插件接入 Kronos 方向评分 — `technical_expert._apply_kronos_adjustment`（默认 ≤12 分）
-
-**启用方式：**
-
-```bash
-# 1. 安装 Kronos 依赖 + 克隆 FaceCat-Kronos
+# 依赖 + 仓库
 pip install 'agent-reach[daily-run-kronos]'
 git clone --depth 1 https://github.com/zjk1984/FaceCat-Kronos ~/.agent-reach/vendor/FaceCat-Kronos
 
-# 2. 开启 settings（或 ~/.agent-reach/daily_run_settings.json）
-#    "kronos": { "enabled": true, "repo_path": "~/.agent-reach/vendor/FaceCat-Kronos" }
+# 环境冒烟（FaceCat 官方 CPU 示例，可选）
+cd ~/.agent-reach/vendor/FaceCat-Kronos/examples && python3 cpu_prediction_example.py
 
-# 3. 周日 forecast 自动混合 Kronos 路径；收盘 technical 专家自动读取 snapshot.kronos
+# 启用并跑周日预测
+# settings: "kronos": { "enabled": true, "repo_path": "~/.agent-reach/vendor/FaceCat-Kronos" }
 python3 -m agent_reach.cli daily-run schedule run forecast
 ```
 
+### 集成状态（weekly skill 审视时更新）
+
+**已完成：**
+
+- [x] `kronos_predictor.py` — AKShare OHLCV + `KronosPredictor.predict()`
+- [x] `week_forecast.kronos_paths` + MC blend（`blend_symbol_days_with_kronos`）
+- [x] 收盘 `review_active_forecast` + `_kronos_review_summary` / 校准 notes
+- [x] `technical_expert` Kronos 方向评分（≤12 分）
+- [x] `close_improvements` 读取 Kronos 偏差建议
+
+**待增强（FaceCat 可继续借鉴）：**
+
+- [ ] `kronos_paths.days` 持久化完整 OHLCV（供止损模拟 / 虚 K 线渲染）
+- [ ] `attach_kronos_to_snapshot` 改用交易所交易日历（与 forecast 一致）
+- [ ] 基于 `sample_count` 多路径的真实离散度 band（非 min/max 日涨跌）
+- [ ] 可选：AKShare 历史 hold-out 回测 helper（对标 FaceCat 回测模式）
+- [ ] 飞书个股路径卡片附 Kronos 方向箭头 / 简易虚 K 线摘要
+
 ---
 
-## 🧩 Phase-3 插件化专家 + Grid Search 优化
+## 📊 Phase-2.6 A股每日复盘四卡（[a-stock-review-skill](https://github.com/zjk1984/a-stock-review-skill)）
 
-### Team-First 8 专家并行（早报 / 收盘复盘默认启用）
+> 「散户复盘找机会，高手复盘改毛病。」upstream 是纯前端 + Node 零依赖代理，约 5–10 秒拉东财全市场数据，输出 **四张复盘卡片**。daily-run **不嵌入其 HTML UI**，但收盘 15:30 / 周六 weekly 已部分覆盖同类能力；缺项列入 roadmap。
 
-借鉴 [china-stock-analyst](https://github.com/wjt0321/china-stock-analyst) Team-First 架构：
+### upstream 架构
 
-| 专家 | 角色 |
-|------|------|
-| `fundamental` | 基本面大师 |
-| `technical` | 技术分析派 |
-| `quant` | 量化模型师 |
-| `risk` | 风险控制官 |
-| `macro` | 宏观策略师 |
-| `industry` | 行业研究家 |
-| `sentiment` | 消息面猎手 |
-| `identifier` | 专家鉴别 Agent |
-
-```bash
-# 早报：8 专家 full_parallel → Supervisor 仲裁 → 飞书
-agent-reach daily-run morning -i snapshot.json --save-baseline
-
-# 收盘复盘：8 专家 + 基线验证 → 飞书
-agent-reach daily-run close -i eod_snapshot.json
-
-# 列出全部专家
-agent-reach daily-run plugins list
+```
+浏览器 → node server.js (:8080) → push2.eastmoney.com / datacenter.eastmoney.com
+       ← CORS 代理 + JSONP 兜底    ← 东财公开行情 API
 ```
 
-配置：`config/daily_run_settings.json` → `team.experts` / `team.parallel`
+- **零 npm 依赖**：`server.js` 仅 `http` + `fs` + Node 18+ `fetch`
+- **存储**：复盘快照存浏览器 `localStorage`（最多 60 日），支持 vs 昨日 / vs 上周对比
+- **最佳实践**：15:30 后数据完整；须 `node server.js` 启动（直接开 HTML 可能 CORS 失败）
 
-### 专家插件（macro / technical / sentiment …）
+本地试跑（与 daily-run cron **并行**，互不冲突）：
 
 ```bash
-agent-reach daily-run plugins list
-agent-reach daily-run plugins run -i snapshot.json
-agent-reach daily-run plugins run -i snapshot.json --names macro,technical
+git clone https://github.com/zjk1984/a-stock-review-skill ~/a-stock-review-skill
+cd ~/a-stock-review-skill && node server.js
+# 浏览器 http://localhost:8080 → 选日期 →「开始复盘」
 ```
 
-插件输出 `expert_scores` 并回填 `mss_breakdown`，随后可走 evaluate/push 流水线。
+### 四卡结构与 daily-run 映射
 
-内置插件：
+| 卡片 | upstream 内容 | daily-run 对应 | 状态 |
+|------|---------------|----------------|------|
+| 🌡️ **市场情绪** | 上证/深证/创业板/科创50/沪深300 · 涨跌家数 · 涨跌停 · 炸板率 · 北向 · **情绪定级（强/中/弱）+ 建议仓位** | `market_breadth_collector` + `macro_collector` 北向/上证；MSS + `compute_verdict` | ✅ |
+| 🔥 **板块主线** | 行业/概念 Top · **单主线/双主线/多题材轮动** · 龙头 · 连板梯队 · 板块主力流 | `sector_mainline.py` + `weekly_report.hot_sectors` + `industry_expert` | ✅ |
+| 🐉 **龙虎榜 & 资金** | LHB 净买卖排行 · 资金偏好 · 个股主力流 · 涨停池 | `lhb_collector.py` + 收盘卡 `close_market` | ✅ |
+| 📈 **历史对比** | vs 昨日 / vs 上周 · 本地历史条 | `market_review.py` vs 昨日/上周 + `verify` + `experience.jsonl` | ✅ |
 
-| 插件 | 角色 | 输入 |
-|------|------|------|
-| `macro` | 宏观策略师 | fx / global / macro_summary |
-| `technical` | 技术分析派 | price / ma20 / position_20d / volume_ratio |
-| `sentiment` | 消息面猎手 | flow / sentiment / sources |
+### 情绪定级算法（可借鉴写入 MSS 宏观分）
+
+upstream `analyzeEmotion()` 综合打分 → 定级 → 仓位：
+
+| 信号 | 加分/扣分 | daily-run 近似 |
+|------|-----------|----------------|
+| 涨跌比 >2:1 | +3 | 可映射 `mss_breakdown.market_breadth` |
+| 涨跌比 1–2:1 | +1 | 中性 |
+| 涨跌比 <1:1 | -2 | MSS 宏观降分 |
+| 涨停 ≥80 / ≥40 | +2 / +1 | — |
+| 跌停 ≥50 / ≥20 | -2 / -1 | — |
+| 炸板率 >30% / >20% | -2 / -1 | 可对标 `volume_ratio` + 高位回落 |
+| 北向 >50亿 / <-50亿 | +1 / -1 | `macro_collector.northbound_flow_yi` ✅ |
+
+**定级阈值：**
+
+- 综合分 ≥4 → **强** → 建议仓位 **7–8 成**
+- 综合分 1–3 → **中** → **5 成**
+- 综合分 ≤0 → **弱** → **2–3 成**
+
+与 daily-run MSS 择时 **并存**：upstream 偏「全市场宽度 + 短线情绪」；MSS 偏「全球共振 + 持仓标的 + 巴菲特过滤」。收盘飞书卡片宜 **并列展示**（待增强）。
+
+### 板块主线判定（upstream `analyzeSectors`）
+
+| 类型 | 条件 | daily-run 借鉴点 |
+|------|------|------------------|
+| **单主线** | 最强行业涨停 ≥15 且领先第二名 ≥5 家 | weekly `hot_sectors` + Exa 深度 |
+| **双主线** | 前两名各 ≥8 涨停且差距 <5 | `watchlist_candidates` 多 sector |
+| **多题材轮动** | 其余 | 高现金 + 观察池分散 |
+
+连板梯队：upstream 按涨停股行业聚合估算；daily-run **尚无**全市场涨停池拉取。
+
+### 东财 API 清单（upstream 已验证）
+
+| 用途 | 路径 | daily-run |
+|------|------|-----------|
+| 五大指数 | `push2…/ulist.np/get` secids 000001/399001/… | `macro_collector._fetch_index_change` |
+| 全 A 涨跌统计 | `push2…/clist/get` fs=m:0+t:6,… | `market_breadth_collector` ✅ |
+| 北向 10 日 | `push2…/kamt.kline/get` | `macro_collector._fetch_northbound_flow` ✅ |
+| 行业/概念板块 | `clist/get` fs=m:90+t:2/3 | `sector_mainline.py` ✅ |
+| 板块主力流 | `clist/get` fid=f62 | 🟡 主线卡片间接覆盖 |
+| 个股主力流 Top | `clist/get` fid=f62 | ❌ |
+| 龙虎榜 | `datacenter…/RPT_DAILY_BILLRANKING` | `lhb_collector.py` ✅ |
+
+行情个股报价：daily-run `quote_fetch._fetch_eastmoney()` 与 upstream 同源 **push2** 体系。
+
+### 与收盘 / 周报工作流衔接
+
+**每日 15:30 `daily-run close`（已有）：**
+
+1. Team + MSS 曲线 + 组合 P&L + Exa 深度调研
+2. `verify` 对比早盘 MSS 预测区间
+3. `experience.jsonl` 沉淀规则
+
+**已实现（四卡落地）：**
+
+1. 收盘拉 **市场宽度快照** → `market_breadth_collector` 写入 snapshot + `market_review/{date}.json`
+2. 飞书收盘卡 **全市场复盘** 段 → 情绪定级 + 主线 + 龙虎榜（与 MSS 并列）
+3. 周六 `weekly_report` **龙虎榜周汇总 + 主线类型标签** — ✅ `redfox_weekly.summarize_week_market_reviews`
+4. 持久化 `~/.agent-reach/daily_run/market_review/{date}.json` — ✅
+
+### 集成状态
+
+**已完成：**
+
+- [x] 东财行情源 — `quote_fetch` eastmoney 首选
+- [x] 北向资金 — `macro_collector._fetch_northbound_flow`
+- [x] 上证涨跌幅 — `macro_collector._fetch_index_change`
+- [x] 板块/热点（持仓视角）— `weekly_report.hot_sectors` + Exa
+- [x] 历史对比（组合/MSS）— `verify` + `experience.jsonl`
+- [x] `market_breadth_collector.py` — 全 A 涨跌家数、涨跌停、炸板率、情绪定级
+- [x] `sector_mainline.py` — 单/双/多主线 + 连板梯队
+- [x] `lhb_collector.py` — 龙虎榜净买卖 + 资金偏好
+- [x] `market_review.py` — 编排 + `~/.agent-reach/daily_run/market_review/{date}.json` 持久化 + vs 昨日/上周
+- [x] 收盘飞书卡「全市场复盘」— `render_close_sections(close_market)` + `run_close` 按日缓存
+
+**待增强：**
+
+- [ ] 情绪定级与 MSS 宏观分自动融合（当前并列展示）
+- [ ] 全市场宽度失败时降级为 macro_collector 摘要（不阻断收盘）
+
+**参考文件（upstream）：** `SKILL.md` · `index.html`（`analyzeEmotion` / `analyzeSectors` / `analyzeLHB`）· `server.js`
+
+---
+
+## 🦊 Phase-2.7 多平台舆情与热榜（[redfox-community](https://github.com/zjk1984/redfox-community)）
+
+> upstream 收录 **112 枚** RedFox Agent Skills（`skills/<name>/SKILL.md` + 脚本），API 驱动小红书 / 抖音 / 公众号 / 微博等真实数据。daily-run **不嵌入 RedFox 脚本 UI**，但借鉴其 **跨平台舆情聚合、热榜关键词泛化、公众号大V 订阅、大V 风格蒸馏与质量审计**；免费路径已用 **60s + 雪球 + 东财**，`REDFOX_API_KEY` 为 **可选增强**。
+
+### upstream 架构
+
+```
+Agent → SKILL.md 工作流 → scripts/*.py → RedFox API (redfox.hk)
+                              ↑
+                    REDFOX_API_KEY 鉴权（`~/.agent-reach/config.env` 或 cron 自动加载）
+```
+
+- **技能目录约定**：每技能自包含 `SKILL.md` + `scripts/` + `references/`
+- **鉴权**：`export REDFOX_API_KEY=ak_…` 写入 `~/.agent-reach/config.env`（600 权限，勿提交 git）；Key 从 [红狐 Hub](https://redfox.hk/settings/api-keys?source=github) 获取
+- **与 Agent-Reach 关系**：RedFox 是 **舆情/热榜/大V 内容层**；daily-run 是 **量化编排 + MSS + 飞书推送** — 代码在 `redfox_client.py` + `redfox_collector.py`，收盘 **复用 snapshot 缓存**，不重复扣费
+
+本地浏览技能（与 cron **并行**，互不冲突）：
+
+```bash
+git clone https://github.com/zjk1984/redfox-community ~/redfox-community
+ls ~/redfox-community/skills/stock-feed ~/redfox-community/skills/trending-hub
+# 试跑（需 REDFOX_API_KEY）
+export REDFOX_API_KEY=ak_你的密钥
+python3 ~/redfox-community/skills/stock-feed/scripts/stock_feed.py --days 7 --output-format json
+python3 ~/redfox-community/skills/trending-hub/scripts/fetch_hotspot.py --source "全平台热点事件"
+```
+
+### 与 daily-run 最相关的技能映射
+
+| RedFox Skill | 核心能力 | daily-run 对应 | 状态 |
+|--------------|----------|----------------|------|
+| **stock-feed** | 17 个 A 股关键词 · XHS/DY/GZH 三平台 · 近 7 天 | `redfox_client.fetch_stock_feed` → `macro_collector.sources.redfox` | ✅ |
+| **trending-hub** | 7 平台热榜 · 关键词泛化 | `redfox_client.fetch_trending_hub` + 60s 并行 | ✅ Path B |
+| **gzh-astock-top** | 49 公众号官媒/大V · dailyPublish | `fetch_gzh_astock`（morning 查 **上一交易日**） | ✅ |
+| **stock-analysis** | 5 大V 蒸馏 · 质量审计 | close `cross_validate_emotion` + `quality_gate` | 🟡 方法论 |
+| **investor-distiller** | 七维 DNA 画像 | weekly `experience.jsonl` / skill 审视 | 🟡 方法论 |
+| **weibo-hot-search** | 微博热搜榜 | 60s `/v2/weibo` | ✅ 60s 覆盖 |
+| **weibo-realtime-search** | 微博实时关键词搜索 | — | ❌ 未集成 |
+| **weibo-comment-search** | 微博评论舆情 | — | ❌ 未集成 |
+
+### 双路径策略（免费 vs RedFox API）
+
+| 维度 | Path A 免费（cron 默认） | Path B RedFox API（`REDFOX_API_KEY`） |
+|------|--------------------------|--------------------------------------|
+| 热榜 | 60s：weibo/zhihu/douyin/baidu/bili/toutiao | trending-hub：7 平台 + 关键词泛化 + 事件去重 |
+| A 股散户舆情 | 雪球 `macro_collector._fetch_xueqiu_sentiment` | stock-feed：XHS/DY/GZH 17 词一键 + HTML 报告 |
+| 机构/大V 观点 | Exa 收盘深度调研 | gzh-astock-top：官媒/大V 当日文章 + 订阅推送 |
+| 质量门禁 | `quality_gate` + 数据审计 Gate | stock-analysis：双层审计 + 合规硬规则 + 来源标注 |
+| 成本 | 零 API 费（60s 自托管 / 公开实例） | 按 RedFox 积分扣费（如同步大V文章） |
+
+**Agent 决策**：无 `REDFOX_API_KEY` 时走 Path A，不阻断 cron；有 Key 且 `redfox.enabled=true` 时，早盘/收盘 **补充** Path B，不替换东财/AKShare 行情源。
+
+### 借鉴的设计模式
+
+**stock-feed — 跨平台舆情验证**
+
+| 平台 | 信号特征 | daily-run 借鉴点 |
+|------|----------|------------------|
+| 小红书 | 散户心得、收藏/点赞比 | 持仓 sector 关键词 → `hot_news.matched` 加权 |
+| 抖音 | 盘中速评、分享传播力 | intraday 热点突变检测 |
+| 公众号 | 深度复盘、阅读量 | 早盘 macro 段「大V 标题一行」 |
+
+- 每条叙事 **≥2 平台来源** 才写入高置信结论（对标 stock-feed 输出规则）
+- 内置 17 词：`A股,A股市场,A股大盘,涨停,涨跌,潜力股,选股,加仓,…` — 可 merge 进 `hot_news.portfolio_keywords`
+
+**trending-hub — 热榜与时间窗**
+
+| 用户意图 | 查询窗口 | daily-run 映射 |
+|----------|----------|----------------|
+| 最新热榜 | 前一完整小时 | intraday 默认 |
+| 今日热榜 | 今日 0:00 → 当前整点 | morning macro |
+| 昨日热榜 | T-1 0:00 → T 0:00 | close 对比 / weekly |
+
+- **关键词泛化**：大词（体育/科技/财经）→ 10 个扩展词；精确词不扩展 — 可 enrich `watchlist_manager` sector 别名
+- **compact 模式**：stdout 摘要 + `dataFile` 完整 JSON — 大 payload 写 `~/.agent-reach/daily_run/cache/redfox/`
+
+**stock-analysis — 质量与合规铁律**
+
+| 规则 | upstream | daily-run 已有 / 待增强 |
+|------|----------|-------------------------|
+| 禁止 LLM 编造涨跌停/资金流 | Phase 1 强制 WebSearch/东财 | ✅ `auditor` + 东财 live |
+| 关键指标 ≥2 源交叉验证 | 交易所 + 东财/同花顺 | 🟡 收盘 Exa 与东财并列 |
+| 信息丰富度 A/B/C 级 | Phase 0 偏见自查 | 可写入 `supervisor_review` prompt |
+| 质量审计 >70 准出 | `quality_audit.py` | ✅ `quality_gate.validate_report()` |
+| AI 模拟免责声明 | 强制标注 | 飞书卡片 footer |
+
+**gzh-astock-top — 早盘大V 订阅**
+
+- 红狐 **07:00** 更新昨日爆款 → cron morning **08:00** 可安全查询
+- `--dual-category`：官媒/机构 vs 个人大V 分表 — 映射 morning 卡「政策线 / 情绪线」
+- 订阅模型：`manage_subscriptions.py` + `fetch_subscribed_updates.py` — 减少 API 调用，适合固定关注列表
+
+**investor-distiller — 经验沉淀**
+
+- 七维 DNA → weekly `experience.jsonl` 规则原子化时可对照「交易体系 / 市场判断 / 热点图谱」
+- **raw 全文原则**：禁止依赖过度 clean 的 NER — 与 daily-run「数据审计 Gate 不通过则阻断买入」同构
+
+### 与工作流衔接
+
+| 阶段 | 已实现 | 模块 |
+|------|--------|------|
+| **morning** | 60s + 雪球 + RedFox gzh/stock-feed/trending | `collect_macro_context(workflow=premarket)` |
+| **intraday** | quotes + trending-hub 关键词 | `workflow=intraday` |
+| **close** | 四卡 + RedFox 交叉验证（**复用 snapshot，不二次请求**） | `attach_redfox_close_markdown` |
+| **weekly** | RedFox vs 60s diff + 四卡周汇总 | ✅ `redfox_weekly.py` |
+
+**收盘去重铁律：** `build_snapshot(close)` 已写入 `macro_signals.redfox` → `run_close` 只读缓存做 `cross_validate_emotion`，避免重复扣积分。
+
+### 默认配置（`config/daily_run_settings.json` + user override）
+
+```json
+"redfox": {
+  "enabled": false,
+  "api_key_env": "REDFOX_API_KEY",
+  "cache_ttl_seconds": 3600,
+  "timeout_seconds": 20,
+  "sentiment_boost_per_hit": 1.5,
+  "cache_dir": "~/.agent-reach/daily_run/cache/redfox",
+  "stock_feed": {
+    "enabled": true,
+    "days": 7,
+    "platforms": ["xhs", "dy", "gzh"],
+    "count_per_platform": 50,
+    "workflows": ["morning", "close"]
+  },
+  "trending_hub": {
+    "enabled": true,
+    "platforms": ["wb", "dy", "zh"],
+    "expand_keywords": true,
+    "workflows": ["morning", "intraday", "close"]
+  },
+  "gzh_astock": {
+    "enabled": true,
+    "dual_category": true,
+    "max_accounts_per_category": 5,
+    "workflows": ["morning"]
+  }
+}
+```
+
+`.env` / cron：`~/.agent-reach/config.env` 中 `REDFOX_API_KEY=ak_…`；`scripts/daily-run-local-cron.sh` 自动 source。
+
+### 集成 checklist
+
+**已完成（Path A + B 代码）：**
+
+- [x] 60s 多平台热榜 — `hot_news_collector.py`
+- [x] `redfox_client.py` / `redfox_collector.py`
+- [x] `macro_collector` → `sources.redfox` + MSS boost
+- [x] 收盘复用 snapshot + 情绪交叉验证 — `attach_redfox_close_markdown`
+- [x] user settings 缺块时 merge repo 默认 — `settings._merge_repo_defaults`
+- [x] gzh 早盘查上一交易日 · 上海时区热榜窗口
+- [x] Key 存 `~/.agent-reach/config.env`（勿提交 git）
+
+**已完成（Path B 扩展）：**
+
+- [x] weekly RedFox vs 60s 热榜 diff — `build_hot_topic_diff` + 周报「板块·热点」卡
+- [x] 本周四卡汇总（主线标签 / 情绪 / 龙虎榜累计）— `summarize_week_market_reviews`
+- [x] gzh 订阅文件 — `~/.agent-reach/daily_run/redfox/gzh_subscriptions.json`
+- [x] weibo-realtime-search — `fetch_weibo_search`（intraday/close）
+- [x] supervisor 反面检验 — `team._build_counter_thesis`（共识「可做」时）
+
+**待增强：**
+
+- [ ] gzh 订阅 CLI 管理命令（对标 upstream `manage_subscriptions.py`）
+- [ ] stock-analysis 反面检验 enrich supervisor prompt（非仅 markdown 一行）
+
+**参考文件（upstream）：** `skills/stock-feed/SKILL.md` · `skills/trending-hub/SKILL.md` · `skills/gzh-astock-top/SKILL.md` · `skills/stock-analysis/SKILL.md` · `skills/investor-distiller/SKILL.md`
+
+---
+
+## 🧩 Phase-3 插件化专家 + Grid Search 优化（[zjk1984/china-stock-analyst](https://github.com/zjk1984/china-stock-analyst)）
+
+> upstream skill 采用 **Team-First 默认并行** + **Supervisor 质量门控** + **ExpertPlugin 插件化**。daily-run 已将核心编排 Python 化，cron 工作流可直接调用，无需 Claude Agent 文件。
+
+### Team-First 固定链路
+
+```
+run_data_audit → collect/enrich snapshot
+  → 8 experts (parallel)
+  → supervisor_review → fuse_verdict_with_team
+  → quality_gate → Feishu push
+```
+
+| 步骤 | china-stock-analyst | daily-run |
+|------|---------------------|-----------|
+| 数据审计 | `run_data_auditor` | `auditor.run_data_audit()` |
+| 采集 | `collect_data` + Web/东财/AKShare | `build-snapshot` / `macro_collector` / `quote_fetch` |
+| 8 专家 | `team_router` + `agents/*.md` | `team.run_team_first()` + `plugins/*_expert.py` |
+| Supervisor | `supervisor_review` | `team.supervisor_review()` |
+| 标签融合 | 双轨评分 + 冲突仲裁 | `fuse_verdict_with_team()` |
+| 报告门禁 | `report_quality_gate.py` | `quality_gate.validate_report()` |
+| 渲染 | `generate_report.py` | `report_push.py` / 飞书卡片 |
+
+### 执行模式（lite vs full）
+
+| 模式 | 触发场景 | 专家子集 |
+|------|----------|----------|
+| `lite_parallel` | 单标的轻量分析 | 基本面 + 技术 + 量化 + 风控 + identifier |
+| `full_parallel` | 多标的对比 / 验证复盘 / 股票池 / 高意图串联 | **全部 8 位** |
+
+upstream 触发词（对比、验证、复盘、冲突、股票池、筛选、审计…）→ daily-run 对应：`morning` / `close` / `verify` / `weekly` 工作流。配置项 `team.mode` 默认 `full_parallel`。
+
+### 8 专家并行
+
+| 插件名 | 角色 | upstream Agent | 主要输入 |
+|--------|------|----------------|----------|
+| `fundamental` | 基本面大师 | `stock-fundamental-expert` | 财报口径 / 估值 |
+| `technical` | 技术分析派 | `stock-technical-expert` | price / ma20 / Kronos |
+| `quant` | 量化模型师 | `stock-quant-flow-expert` | 资金流 / 量价 |
+| `risk` | 风险控制官 | `stock-risk-expert` | 波动 / 止损 / 仓位 |
+| `macro` | 宏观策略师 | `stock-macro-expert` | fx / global / 政策 |
+| `industry` | 行业研究家 | `stock-industry-researcher` | 景气 / 竞争格局 |
+| `sentiment` | 消息面猎手 | `stock-event-hunter` | 公告 / 舆情 / 60s 热点 |
+| `identifier` | 专家鉴别 Agent | `stock-identity-auditor` | 代码-名称-价格锚点一致性 |
+
+```bash
+# 早报：8 专家 → Supervisor → 审计 → 飞书（需 team.enabled=true）
+python3 -m agent_reach.cli daily-run morning -i snapshot.json --save-baseline
+
+# 收盘：Team + 基线 verify + 组合 P&L
+python3 -m agent_reach.cli daily-run close -i eod_snapshot.json
+
+python3 -m agent_reach.cli daily-run plugins list
+python3 -m agent_reach.cli daily-run plugins run -i snapshot.json --names macro,technical,risk
+```
+
+**Supervisor 冲突仲裁（已落地）：**
+
+- 技术面 ≥ 进攻线 且 风控 < 否决线+5 → 记录冲突，倾向 **观察**
+- 宏观 vs 舆情分差 > 20 → 记录分歧
+- `identifier` 失败 → `identifier_blocked=true`，标签上限 **观察**，阻断买入
+
+共识分 = 8 专家均分；映射：`≥aggressive_entry` → 可做，`≥macro_veto` → 观察，否则回避。再与 MSS `compute_verdict()` 取 **更保守** 标签（`fuse_verdict_with_team`）。
+
+### 配置开关（`team` 块）
+
+```json
+{
+  "team": {
+    "enabled": true,
+    "parallel": true,
+    "supervisor": true,
+    "mode": "full_parallel",
+    "experts": ["fundamental", "technical", "quant", "risk", "macro", "industry", "sentiment", "identifier"],
+    "morning_team_first": true,
+    "close_team_first": true,
+    "morning_experts": true,
+    "close_experts": true,
+    "mss_experts": true
+  }
+}
+```
+
+- `team.enabled=false` 时仍可用 `mss_experts` 跑 technical/quant/risk 打分（不渲染 8 专家卡片）
+- `morning_experts` / `close_experts` 控制各工作流是否跑全专家 + 飞书专家面板
+- 用户覆盖：`~/.agent-reach/daily_run_settings.json`
+
+### 插件系统对比
+
+| upstream | daily-run |
+|----------|-----------|
+| `ExpertPlugin` / `FilterPlugin` / `TransformPlugin` | `ExpertPlugin`（8 内置） |
+| `plugins/expert/technical_indicators_plugin` | 逻辑并入 `technical_expert` |
+| `plugins/expert/fund_flow_plugin` | 逻辑并入 `quant_expert` |
+| 动态 `plugin_loader` | `plugins/loader.py` + `ThreadPoolExecutor` |
+
+插件输出：`expert_results` · `expert_scores` → 回填 `mss_breakdown` → `evaluate` / `push` 流水线。
 
 ### Grid Search 参数优化
 
@@ -401,6 +837,30 @@ agent-reach daily-run optimize -i history.json --save --push
 - 若 history 含 `fx/flow/global/sentiment` 字段，同时搜索 `mss_weights`
 
 `--save` 写入 `~/.agent-reach/daily_run_settings.json`
+
+upstream 还包含 `StrategyOptimizer` / `BacktestAttributor`（夏普寻优 + 盈亏因子归因）；daily-run 当前以 `optimize` + `backtest` CLI 覆盖 MSS 阈值与规则回测，**归因报告**尚未 1:1 移植。
+
+### 集成状态（weekly skill 审视时更新）
+
+**已完成：**
+
+- [x] `team.py` — 8 专家并行 + `supervisor_review` + 冲突检测
+- [x] `plugins/` — 8 内置 ExpertPlugin，异常降级不中断流水线
+- [x] `fuse_verdict_with_team()` — MSS 标签与 Supervisor 共识取保守合并
+- [x] `pipeline.py` — audit → experts → verdict → quality_gate 串联
+- [x] `morning` / `close` 工作流接入 Team-First（配置开关）
+- [x] 飞书专家共识卡片 `render_team_markdown()`
+
+**待增强（可继续借鉴 upstream）：**
+
+- [ ] `FilterPlugin` / `TransformPlugin` 独立扩展点
+- [ ] 东财意图路由 `news-search` / `query` / `stock-screen`（upstream `team_router.route_eastmoney_intent`）
+- [ ] Markdown 报告后置门禁 `report_quality_gate.py`（候选股表格 vs 推荐段交叉校验）
+- [ ] `BacktestAttributor` 盈亏因子分解写入收盘复盘
+- [ ] 高意图串联缓存 / 重复请求限流（upstream `intent` 块）
+- [ ] 默认 `team.enabled=true` + `morning_team_first`（当前 repo 默认 false，需用户显式开启）
+
+**参考文件（upstream）：** `SKILL.md` · `scripts/team_router.py` · `docs/agent-teams-blueprint.md` · `config/settings.json`
 
 ### 一键工作流（推荐）
 
@@ -575,6 +1035,9 @@ $$\text{Final\_MSS} = 0.5 \cdot \text{MSS}(S_n) + 0.3 \cdot \text{MSS}(S_{n-1}) 
 推送内容不仅包含交易明细，还**必须完整披露本次调仓前量化引擎的深度决策分析过程（包括前 3 次数据审视结论、MSS 评分拆解、宏观与技术面共振研判逻辑）**，让老板对每一次买卖背后的“算法大脑”了然于胸。
 
 ### 6. 每日收盘后深度复盘与 Exa 智能调研 (Post-Market Review & Exa Research)
+
+> 全市场「四卡复盘」（情绪 / 板块主线 / 龙虎榜 / 历史对比）设计见 **Phase-2.6 [a-stock-review-skill](https://github.com/zjk1984/a-stock-review-skill)**；跨平台舆情/热榜/公众号大V 见 **Phase-2.7 [redfox-community](https://github.com/zjk1984/redfox-community)**；本节侧重 **持仓组合 + MSS + Exa 深度**。
+
 每个交易日下午 15:30，系统自动触发收盘深度复盘，并调用 **Exa AI 搜索引擎** 执行全方位穿透式调研：
 *   **Exa 深度调研指令：**
     ```bash
@@ -630,102 +1093,78 @@ $$\text{Final\_MSS} = 0.5 \cdot \text{MSS}(S_n) + 0.3 \cdot \text{MSS}(S_{n-1}) 
 
 ## 🧠 股票大师实战经验沉淀库 (每日收盘更新)
 
-### 📅 ### 📅 ### 📅 ### 📅 2026-07-27 ~ 2026-07-31 周复盘（周六自动沉淀）
-*   **更新时间：** 2026-07-29 13:56 UTC
+### 📅 ### 📅 2026-08-10 ~ 2026-08-14 周复盘（周六自动沉淀）
+*   **更新时间：** 2026-08-15 01:00 UTC
 *   **本周盈亏说明：**
-*   **情况说明：** 本周组合净值基本 **持平**（+0.00 元，+0.0%）。
-*   **持仓浮盈合计：** ¥-18,845（4 只）
+*   **情况说明：** 本周组合净值基本 **持平**（-788.00 元，-0.9%）。
+*   **收盘净值轨迹：** 2026-08-10 ¥85,623.27 → 2026-08-14 ¥86,077.27
+*   **持仓浮盈合计：** ¥-17,693（4 只）
+*   **持股周度市值变动：** ¥-788.00（按周初价估算，不含新开仓成本口径）
+*   **周内贡献前列：** 京东方A -378元、澜起科技 -361元、海能达 -40元
 *   **现金仓位：** 46.0%（¥40,176）
-*   **成交现金流（ledger）：** ¥-39,809.62，共 1 笔
-    *   2026-07-29 买入京东方A 5300股 @ ¥7.50
-*   _净值变动接近 0 但 ledger 有大额成交：可能缺少周初早盘净值基线，或买入使用既有现金、市值波动与成交相互抵消。_
-*   _本周无早盘 manifest，周初净值用周末/当前估值代替_
-*   **持股概况：** 澜起科技 (688008) +0.90%、海能达 (002583) +1.50%、京东方A (000725) +2.33%、水晶光电 (002273) +0.96%
-*   **强势标的：** 中际旭创 +4.74%、京东方A +2.33%、海能达 +1.50%
+*   **持股概况：** 澜起科技 (688008) +80.00%、海能达 (002583) -107.00%、水晶光电 (002273) +245.00%、京东方A (000725) -85.00%
+*   **强势标的：** 水晶光电 +245.00%、中际旭创 +238.00%、豪威集团 +118.00%
 *   **任务覆盖：** 早盘 0/5、收盘 0/5、盘中 0 次
-*   **备注：** 本周无早盘 manifest，周初净值用周末/当前估值代替
 *   **收盘经验片段：**
-    *   2026-07-28 澜起科技 MSS=35.2 ✅ 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测命中：维持当前权重配置
-    *   2026-07-28 水晶光电 MSS=35.2 ✅ 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测命中：维持当前权重配置
-    *   2026-07-28 海能达 MSS=35.2 ✅ 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测命中：维持当前权重配置
-    *   2026-07-28 京东方A MSS=35.2 ✅ 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测命中：维持当前权重配置
-    *   2026-07-28 兆易创新 MSS=35.2 ✅ 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测命中：维持当前权重配置
+    *   2026-08-11 海康威视 MSS=30.4 ✅ 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测命中：维持当前权重配置
+    *   2026-08-11 中际旭创 MSS=30.4 ✅ 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测命中：维持当前权重配置
+    *   2026-08-12 澜起科技 MSS=29.8 ✅ 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测命中：维持当前权重配置
+    *   2026-08-12 水晶光电 MSS=29.8 ✅ 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测命中：维持当前权重配置
+    *   2026-08-12 海能达 MSS=29.8 ✅ 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测命中：维持当前权重配置
 *   **量化规则库（最近）：**
-    *   尾盘曲线 震荡走弱：次日早盘偏防御
-    *   偏差：MSS 实际 35.7 高于预测上沿 33.2（偏差 2.5）
-    *   偏差：标签由「可做」变为「回避」
-    *   偏差：MSS 实际 29.8 低于预测下沿 45.0（偏差 -15.2）
-    *   偏差：价格变动 -18.9% 超过锚点阈值 8.0%
+    *   偏差：价格变动 23.7% 超过锚点阈值 8.0%
+    *   偏差：价格变动 25.5% 超过锚点阈值 8.0%
+    *   偏差：价格变动 129.9% 超过锚点阈值 8.0%
+    *   偏差：价格变动 -17.2% 超过锚点阈值 8.0%
+    *   偏差：价格变动 9.1% 超过锚点阈值 8.0%
 *   **流程改进（优先）：**
-    *   **缺失 3 天早盘任务** — 检查 GHA cron 0 8 * * 1-5 与 Fork 是否 Enable scheduled workflows
-    *   **缺失 3 天收盘复盘** — 检查 GHA cron 30 15 * * 1-5；手动补跑 daily-run schedule run close
     *   **1 天盘中扫描偏少** — 确认 GHA cache restore/save 正常；参考 PR #28 修复 intraday_state 累积
     *   **持仓浮亏标的需关注** — 收盘 verify 若 MSS<macro_veto 则优先纳入明日卖出候选
+*   **板块调研摘要：**
+    *   光通信 板块：Title: 券商观点|通信行业点评报告：光通信配置时刻已至 · URL: https://field.10jqka.com.cn/20260805/c678687213.shtml · Published: 2026-08-05T00:00:00.000Z
+    *   半导体 板块：Title: 光大证券-电子行业周报：AI硬件修复延续，PCB材料与存储链催化密集-行业分析-迈博汇金 · URL: https://houtai.microbell.com/data/574e138cf1b9d1f8c80a3e9a44d97849.html · Published: N/A
 
 ---
 
-   1. 基础复盘：总结今日实盘得失与净值变化                                 |
-|              2. Exa 深度调研：调用 Exa AI 搜索对热点公司、竞品、市场、财报及关键人物   |
-|                 LinkedIn 进行全方位穿透，为明日早盘生成高置信度指导建议               |
-|              3. 经验沉淀：将最新量化经验原子化写入沉淀库                            |
-+-----------------------------------------------------------------------------------+
-```
+### 📅 ### 📅 ### 📅 ### 📅 ### 📅 ### 📅 ### 📅 ### 📅 ### 📅 ### 📅 ### 📅 ### 📅 ### 📅 ### 📅 ### 📅 ### 📅 2026-08-03 ~ 2026-08-07 周复盘（周六自动沉淀）
+*   **更新时间：** 2026-08-08 07:33 UTC
+*   **本周盈亏说明：**
+*   **情况说明：** 本周组合盈利 **+23.2%**（+¥19,573.00）。
+*   **盈亏分解：** 股票市值 +¥19,573.00 · 持有现金 +¥0.00
+*   **股票市值：** ¥44,021.00 → ¥63,594.00（+44.46%）
+*   **持有现金：** ¥40,176.27 → ¥40,176.27（+0.00%）
+*   **持仓浮盈合计：** ¥+0（4 只）
+*   **现金仓位：** 46.0%（¥40,176）
+*   _本周 manifest 缺少周初净值，取上周最近收盘_
+*   **持股概况：** 澜起科技 (688008) +1.12%、海能达 (002583) +1.91%、水晶光电 (002273) +0.22%、京东方A (000725)
+*   **强势标的：** 海能达 +1.91%、澜起科技 +1.12%
+*   **任务覆盖：** 早盘 0/5、收盘 0/5、盘中 0 次
+*   **备注：** 本周 manifest 缺少周初净值，取上周最近收盘
+*   **收盘经验片段：**
+    *   2026-08-03 澜起科技 MSS=29.8 — 宏观一票否决生效：维持高现金，禁止接飞刀；建议：维持高现金，取消一切买入计划
+    *   2026-08-03 水晶光电 MSS=29.8 — 宏观一票否决生效：维持高现金，禁止接飞刀；建议：维持高现金，取消一切买入计划
+    *   2026-08-03 海能达 MSS=29.8 — 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测偏离：下日调低进攻阈值或缩窄仓位
+    *   2026-08-03 京东方A MSS=29.8 ✅ 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测命中：维持当前权重配置
+    *   2026-08-03 海康威视 MSS=29.8 — 宏观一票否决生效：维持高现金，禁止接飞刀；MSS 预测偏离：下日调低进攻阈值或缩窄仓位
+*   **量化规则库（最近）：**
+    *   偏差：价格变动 -9.1% 超过锚点阈值 8.0%
+    *   偏差：价格变动 -10.0% 超过锚点阈值 8.0%
+    *   偏差：MSS 实际 29.8 低于预测下沿 30.0（偏差 -0.2）
+    *   偏差：价格变动 139.9% 超过锚点阈值 8.0%
+    *   偏差：价格变动 13.1% 超过锚点阈值 8.0%
+*   **流程改进（优先）：**
+    *   **缺失 4 天早盘任务** — 检查 GHA cron 0 8 * * 1-5 与 Fork 是否 Enable scheduled workflows
+    *   **缺失 4 天收盘复盘** — 检查 GHA cron 30 15 * * 1-5；手动补跑 daily-run schedule run close
+    *   **1 天盘中扫描偏少** — 确认 GHA cache restore/save 正常；参考 PR #28 修复 intraday_state 累积
+    *   **本周组合盈利 23.2%** — 将 rules_summary.json 中命中规则写入技能文件
+    *   **本周 4 次 MSS 预测未命中** — 增大 mss_forecast.base_spread 或运行 daily-run optimize
 
-### 1. 每日早上 8:00 早盘分析与权限自检 (Pre-Market Analysis & Auth Check)
-每个交易日早上 8:00，系统自动触发 `daily_run_skill` 执行早盘分析：
-*   **第零步：启动即时通知 (Start Notification)：**
-    *   在系统开始收集任何数据前，**第一时间向老板发送一条「早盘分析已启动」的即时消息，并给出本次分析的预估完成时间（通常为 3-5 分钟）**，让老板对进度了然于胸。
-*   **第一步：Agent-Reach 权限自检 (Auth Check)：**
-    *   在抓取数据前，系统自动运行 `agent-reach doctor --json` 检查各平台 API 连通性及登录 Cookie 是否过期。
-    *   **白名单过滤：** 自动排除小红书（避免无意义的扫码或由于服务器环境导致的报错）。
-    *   **重点自检平台：** 重点检查 Twitter、雪球、微博 等核心舆情与财经平台的 active_backend 状态。若发现 Cookie 过期或连接异常，立即在早盘简报中向老板发出「权限过期预警」，并附带更新 Cookie 的命令指南。
-*   **第二步：隔夜数据与昨日热点进展抓取：**
-    *   抓取美股隔夜收盘、中概股金龙指数（HXC）表现、新加坡 A50 期指、离岸人民币波动、隔夜原油/黄金大宗商品波动、以及最新的国内外时事政策。
-    *   **热点进展追踪：** 自动提取昨日复盘中沉淀的重点方向（如：存储芯片 Q3 涨价进展、京东方 A 玻璃基板送样最新舆情、华为韬定律 V2 产业链反馈），在 Twitter、雪球、微博上进行精准搜索，抓取最新进展资讯。
-*   **第三步：制定今日核心操盘纲领与日内 MSS 预测：**
-    *   评估今日大盘 MSS 初始分值，明确制定今日的“下一步预计操作”与“预期收益率目标”。
-    *   **日内 MSS 范围预测 (Intraday MSS Range Forecast)：** 结合早盘 8:00 抓取的全球隔夜数据及昨日收盘拟合曲线，通过**蒙特卡洛模拟**，预测今日盘中 10 次数据收集的 **MSS 波动范围**（如：*“预测今日盘中 MSS 波动范围为 [35, 52] 分，日内大概率维持弱势震荡，操作上建议继续高现金潜伏”*），为全天交易提供清晰的“波动率护栏”。
-*   **第四步：主动推送：** 8:05 前将精美的早盘分析 Markdown 卡片（含权限自检报告、热点进展、操盘纲领、日内 MSS 预测）自动推送到绑定的飞书群聊。
+---
 
+库」周复盘块  
+3. 写入「📋 下周执行清单」+ 自动 patch `daily_run_settings.json`  
+4. 同步 `daily_run_skill.md` → `~/.agents/skills/daily-run/SKILL.md`  
+5. `pip install -e .[dev]` 刷新 cron 代码  
+6. **skill 审视（最后一步）**：校验必备章节、去重重复块/孤儿片段、再次同步本地  
 
-## 🛠️ 运维与排障指南
-
-### 0. 飞书推送配置（App Bot 模式 · 当前使用）
-
-目标群：**《每天股票量化交易》**
-
-**方式 A — CLI 本地配置（推荐）：**
-```bash
-agent-reach configure feishu-app-id cli_xxxxxxxxxxxxx
-agent-reach configure feishu-app-secret xxxxxxxxxxxxxxxx
-agent-reach configure feishu-chat-id oc_xxxxxxxxxxxxx
-agent-reach notify feishu --test
-agent-reach doctor   # 通知集成应显示 ✅ 飞书消息推送
-```
-
-**方式 B — Cloud Agent Secrets（云端自动推送）：**
-在 [Cursor Dashboard → Cloud Agents → Secrets](https://cursor.com/dashboard/cloud-agents) 配置：
-- `FEISHU_APP_ID`
-- `FEISHU_APP_SECRET`
-- `FEISHU_CHAT_ID`
-
-配置后重启 Agent 任务。推送命令：
-```bash
-agent-reach notify feishu --title "标题" --text "Markdown 正文"
-```
-
-**方式 C — Webhook 群机器人（更简单，无需 chat_id）：**
-```bash
-agent-reach configure feishu-webhook-url https://open.feishu.cn/open-apis/bot/v2/hook/your_key
-agent-reach notify feishu --test
-```
-
-### 1. 提示 "LLM API Key 未配置"
-*   **原因：** Cursor Cloud Agent 运行在隔离沙箱中，新配置的 Secrets 无法在当前热会话中生效。
-*   **解决办法：** 
-    1. 确保在 [Cursor Dashboard → Cloud Agents → Secrets](https://cursor.com/dashboard/cloud-agents) 页面中配置了 `GEMINI_API_KEY` 或 `OPENAI_API_KEY`。
-    2. **重启当前 Agent 任务**，使 Secrets 环境变量成功注入。
-
-### 2. Efinance 历史 K 线接口失败 (RemoteDisconnected)
-*   **原因：** 东方财富接口对高频连续请求有随机熔断限制。
-*   **解决办法：** DSA 内部已集成多数据源自动切换。当 `EfinanceFetcher` 熔断后，系统会自动切换到 `TencentFetcher`（腾讯接口）进行兜底拉取，无需人工干预。
+---

@@ -87,7 +87,8 @@ class TestMorningWorkflow:
 
 
 class TestCloseWorkflow:
-    def test_run_close_dry(self, morning_snapshot):
+    @patch("agent_reach.daily_run.market_review.get_or_collect_market_review", return_value=None)
+    def test_run_close_dry(self, _mock_mr, morning_snapshot):
         baseline = dict(morning_snapshot)
         baseline["mss_final"] = 65
         baseline["verdict"] = "可做"
@@ -152,10 +153,11 @@ class TestCloseWorkflow:
         assert enriched["portfolio"]["holdings"][0]["market_value"] is not None
         assert enriched["watchlist"][0]["code"] == "300308"
 
+    @patch("agent_reach.daily_run.market_review.get_or_collect_market_review", return_value=None)
     @patch("agent_reach.daily_run.workflows.run_exa_research", return_value=[])
     @patch("agent_reach.daily_run.workflows._push_markdown", return_value={"code": 0, "data": {}})
     def test_run_close_includes_watchlist_and_code_review(
-        self, mock_push, mock_research, morning_snapshot
+        self, mock_push, mock_research, _mock_mr, morning_snapshot
     ):
         baseline = dict(morning_snapshot)
         baseline["mss_final"] = 65
@@ -257,9 +259,10 @@ class TestPrepareCloseRun:
         assert mock_adjust.call_args.kwargs.get("verify") is not None
         mock_save_pf.assert_not_called()
 
+    @patch("agent_reach.daily_run.market_review.get_or_collect_market_review", return_value=None)
     @patch("agent_reach.daily_run.workflows.run_exa_research", return_value=[])
     @patch("agent_reach.daily_run.workflows.verify_snapshots")
-    def test_run_close_reuses_prepared_verify(self, mock_verify, morning_snapshot):
+    def test_run_close_reuses_prepared_verify(self, mock_verify, _mock_research, _mock_mr, morning_snapshot):
         from agent_reach.daily_run.verify import VerifyResult
 
         baseline = dict(morning_snapshot)

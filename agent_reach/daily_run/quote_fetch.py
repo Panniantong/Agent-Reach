@@ -29,6 +29,73 @@ def code_to_xueqiu_symbol(code: str) -> str:
     return f"SZ{text}"
 
 
+def code_to_eastmoney_secid(code: str) -> str:
+    """Eastmoney secid: 1.{sh/sz/bj code}."""
+    text = normalize_code(code)
+    if text.startswith(("5", "6", "9")):
+        market = "1"
+    elif text.startswith(("4", "8")):
+        market = "0"
+    else:
+        market = "0"
+    return f"{market}.{text}"
+
+
+_EASTMONEY_FIELDS = "f43,f58,f169,f170"
+_EASTMONEY_UA = "Mozilla/5.0 (compatible; AgentReach/1.0)"
+_EASTMONEY_REFERER = "https://quote.eastmoney.com/"
+
+
+def _fetch_eastmoney(codes: list[str], *, max_retries: int) -> dict[str, dict[str, Any]]:
+    """Per-symbol Eastmoney push2 API — lighter than AKShare full spot table."""
+    import json
+    import ssl
+    import urllib.request
+
+    out: dict[str, dict[str, Any]] = {}
+    ctx = ssl.create_default_context()
+
+    def _fetch_one(code: str) -> Optional[dict[str, Any]]:
+        secid = code_to_eastmoney_secid(code)
+        url = (
+            "https://push2.eastmoney.com/api/qt/stock/get"
+            f"?secid={secid}&fields={_EASTMONEY_FIELDS}"
+        )
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": _EASTMONEY_UA, "Referer": _EASTMONEY_REFERER},
+        )
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        data = payload.get("data") or {}
+        raw_price = data.get("f43")
+        if raw_price is None:
+            return None
+        price = float(raw_price) / 100.0
+        change_pct = data.get("f170")
+        return {
+            "code": normalize_code(code),
+            "name": str(data.get("f58") or code),
+            "price": price,
+            "change_pct": float(change_pct) if change_pct is not None else None,
+            "reference_price": price,
+            "source": "eastmoney",
+        }
+
+    for code in codes:
+        norm = normalize_code(code)
+        try:
+            row = retry_with_backoff(
+                lambda c=code: _fetch_one(c),
+                max_retries=max_retries,
+                label=f"eastmoney_{norm}",
+            )
+        except Exception:
+            continue
+        if row and row.get("price"):
+            out[norm] = row
+    return out
+
 @dataclass
 class QuoteFetchResult:
     quotes: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -103,7 +170,7 @@ def fetch_quotes_map(
 
     cfg = settings or load_settings()
     qcfg = cfg.get("quote_fetch") or {}
-    order = qcfg.get("sources") or ["xueqiu", "akshare"]
+    order = qcfg.get("sources") or ["eastmoney", "xueqiu", "akshare"]
     max_retries = int(qcfg.get("max_retries", 2))
     ttl = int((cfg.get("akshare") or {}).get("spot_ttl", 60))
 
@@ -112,6 +179,7 @@ def fetch_quotes_map(
     missing = list(unique)
 
     fetchers = {
+        "eastmoney": lambda cs: _fetch_eastmoney(cs, max_retries=max_retries),
         "xueqiu": lambda cs: _fetch_xueqiu(cs, max_retries=max_retries),
         "akshare": lambda cs: _fetch_akshare(cs, max_retries=max_retries, ttl=ttl),
     }

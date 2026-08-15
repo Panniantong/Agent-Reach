@@ -46,6 +46,8 @@ class WeeklyReport:
     skill_research: list[dict[str, Any]] = field(default_factory=list)
     process_improvements: list[dict[str, Any]] = field(default_factory=list)
     watchlist_candidates_update: dict[str, Any] = field(default_factory=dict)
+    hot_topic_diff: dict[str, Any] = field(default_factory=dict)
+    market_review_weekly: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     cash: Optional[float] = None
     cash_ratio: Optional[float] = None
@@ -79,6 +81,8 @@ class WeeklyReport:
             "skill_research": self.skill_research,
             "process_improvements": self.process_improvements,
             "watchlist_candidates_update": self.watchlist_candidates_update,
+            "hot_topic_diff": self.hot_topic_diff,
+            "market_review_weekly": self.market_review_weekly,
             "notes": self.notes,
             "cash": self.cash,
             "cash_ratio": self.cash_ratio,
@@ -1078,6 +1082,16 @@ def generate_weekly_report(
         hot_sectors=hot_sectors,
     )
 
+    from agent_reach.daily_run.redfox_weekly import (
+        build_hot_topic_diff,
+        summarize_week_market_reviews,
+    )
+
+    hot_topic_diff = build_hot_topic_diff(pf, settings=settings)
+    market_review_weekly = summarize_week_market_reviews(
+        week_start, week_end, settings=settings
+    )
+
     return WeeklyReport(
         week_start=week_start,
         week_end=week_end,
@@ -1104,6 +1118,8 @@ def generate_weekly_report(
         skill_learning=[s.to_dict() for s in skill_items],
         skill_research=skill_research,
         process_improvements=[i.to_dict() for i in process_items],
+        hot_topic_diff=hot_topic_diff,
+        market_review_weekly=market_review_weekly,
         notes=notes,
         cash=cash,
         cash_ratio=cash_ratio,
@@ -1347,9 +1363,15 @@ def _render_holdings_lines(report: WeeklyReport) -> list[str]:
             start_s = ""
             if h.get("week_start_price") is not None:
                 start_s = f" · 周初 ¥{float(h['week_start_price']):.2f}"
+            cost_s = ""
+            if h.get("unrealized_pnl") is not None:
+                up = float(h["unrealized_pnl"])
+                up_pct = h.get("unrealized_pct")
+                up_pct_s = f"（{float(up_pct):+.2f}%）" if up_pct is not None else ""
+                cost_s = f" · 成本浮盈 ¥{up:+,.0f}{up_pct_s}"
             lines.append(
                 f"- **{h['name']}** ({h['code']}) {h['shares']}股 "
-                f"市值 ¥{h['market_value']:,.0f}{price_s}{start_s}{week_s}{chg_s}"
+                f"市值 ¥{h['market_value']:,.0f}{price_s}{start_s}{week_s}{cost_s}{chg_s}"
             )
     else:
         lines.append("- 当前无持仓")
@@ -1406,6 +1428,21 @@ def _render_market_lines(report: WeeklyReport) -> list[str]:
             if r.get("summary"):
                 lines.append(r["summary"])
             lines.append("")
+
+    if report.market_review_weekly:
+        from agent_reach.daily_run.redfox_weekly import render_market_review_weekly_markdown
+
+        mr_md = render_market_review_weekly_markdown(report.market_review_weekly)
+        if mr_md:
+            lines.append(mr_md)
+
+    if report.hot_topic_diff:
+        from agent_reach.daily_run.redfox_weekly import render_hot_topic_diff_markdown
+
+        diff_md = render_hot_topic_diff_markdown(report.hot_topic_diff)
+        if diff_md:
+            lines.append(diff_md)
+
     return lines
 
 

@@ -29,6 +29,16 @@ class TestReportPush:
     def test_render_close_sections_skips_empty(self):
         sections = render_close_sections(
             verify_name="澜起",
+            market_markdown="**Market**",
+            verify_markdown="**验证**",
+        )
+        assert len(sections) == 2
+        assert sections[0].category == "close_market"
+        assert sections[1].category == "verify"
+
+    def test_render_close_sections_empty_market(self):
+        sections = render_close_sections(
+            verify_name="澜起",
             verify_markdown="**验证**",
         )
         assert len(sections) == 1

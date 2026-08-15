@@ -55,11 +55,27 @@ def _close_snapshot():
 class TestClosePortfolioSummary:
     def test_build_daily_pnl(self):
         summary = build_close_portfolio_summary(_close_snapshot(), _morning_baseline())
-        assert summary.start_total == 100000.0
+        assert summary.start_total == 102873.0
         assert summary.end_total == 103673.0
-        assert summary.daily_pnl == 3673.0
+        assert summary.day_mv_change == 800.0
+        assert summary.daily_pnl == 800.0
+        assert sum(float(h.get("day_pnl") or 0) for h in summary.holdings) == 800.0
         assert summary.holdings_count == 3
         assert summary.reason_lines
+
+    def test_daily_pnl_equals_sum_of_stock_day_pnl_with_cash_change(self):
+        morning = _morning_baseline()
+        close = _close_snapshot()
+        close["portfolio"] = dict(close["portfolio"])
+        close["portfolio"]["cash"] = 47673.0
+        close["portfolio"]["total"] = 100500.0
+        summary = build_close_portfolio_summary(close, morning)
+        stock_sum = sum(float(h.get("day_pnl") or 0) for h in summary.holdings)
+        assert stock_sum == 800.0
+        assert summary.day_mv_change == 800.0
+        assert summary.cash_delta == -1000.0
+        assert summary.daily_pnl == -200.0
+        assert summary.daily_pnl == round(stock_sum + float(summary.cash_delta or 0), 2)
 
     def test_render_includes_stocks_trades_watchlist(self):
         summary = build_close_portfolio_summary(
@@ -88,6 +104,7 @@ class TestClosePortfolioSummary:
         assert "## 💰 组合盈亏" in md
         assert "## 📈 个股盈亏" in md
         assert "澜起科技" in md
+        assert "当日盈亏" in md
         assert "水晶光电" in md
         assert "## 🔄 成交记录" in md
         assert "## 👀 观察池" in md

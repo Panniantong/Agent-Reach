@@ -69,7 +69,7 @@
   },
 
   "quote_fetch": {
-    "sources": ["akshare", "xueqiu"],
+    "sources": ["eastmoney", "akshare", "xueqiu"],
     "max_retries": 2
   },
 
@@ -280,6 +280,53 @@
 
   "snapshot": {
     "intraday_enrich_level": "quotes"
+  },
+
+  "market_review": {
+    "enabled": true,
+    "persist": true,
+    "fetch_timeout_seconds": 15
+  },
+
+  "redfox": {
+    "enabled": false,
+    "api_key_env": "REDFOX_API_KEY",
+    "cache_ttl_seconds": 3600,
+    "timeout_seconds": 20,
+    "sentiment_boost_per_hit": 1.5,
+    "cache_dir": "~/.agent-reach/daily_run/cache/redfox",
+    "stock_feed": {
+      "enabled": true,
+      "days": 7,
+      "platforms": ["xhs", "dy", "gzh"],
+      "count_per_platform": 50,
+      "use_default_keywords": true,
+      "workflows": ["morning", "close", "weekly"]
+    },
+    "trending_hub": {
+      "enabled": true,
+      "platforms": ["wb", "dy", "zh"],
+      "expand_keywords": true,
+      "source": "全平台热点事件",
+      "workflows": ["morning", "intraday", "close", "weekly"]
+    },
+    "gzh_astock": {
+      "enabled": true,
+      "dual_category": true,
+      "max_accounts_per_category": 5,
+      "use_subscriptions": true,
+      "subscriptions_file": "~/.agent-reach/daily_run/redfox/gzh_subscriptions.json",
+      "workflows": ["morning"]
+    },
+    "weibo_realtime": {
+      "enabled": true,
+      "search_type": "61",
+      "max_keywords": 2,
+      "workflows": ["intraday", "close"]
+    },
+    "weekly_diff": {
+      "enabled": true
+    }
   },
 
   "exa_cache": {

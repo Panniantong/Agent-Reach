@@ -26,6 +26,7 @@ _CATEGORY_LABELS: dict[str, str] = {
     "daily_portfolio": "盈亏·持仓",
     "weekly_portfolio": "盈亏·持仓",
     "weekly_market": "板块·热点",
+    "close_market": "全市场复盘",
     "weekly_track": "MSS·经验",
     "weekly_insights": "学习·改进",
     "forecast_mss": "MSS预测",
@@ -116,9 +117,12 @@ def render_close_sections(
     experience_markdown: str = "",
     verify_markdown: str = "",
     portfolio_markdown: str = "",
+    market_markdown: str = "",
 ) -> list[ReportSection]:
     label = verify_name or "大盘"
     sections: list[ReportSection] = []
+    if market_markdown.strip():
+        sections.append(ReportSection(category="close_market", title="", body=market_markdown.strip()))
     if team_markdown.strip():
         sections.append(ReportSection(category="experts", title="", body=team_markdown.strip()))
     if curve_markdown.strip():
@@ -369,6 +373,7 @@ def morning_sections_from_run(run_result: dict[str, Any]) -> list[ReportSection]
 def close_sections_from_run(run_result: dict[str, Any], *, verify_name: str) -> list[ReportSection]:
     return render_close_sections(
         verify_name=verify_name,
+        market_markdown=run_result.get("market_review_markdown") or "",
         team_markdown=run_result.get("team_markdown") or "",
         curve_markdown=run_result.get("curve_markdown") or "",
         research_markdown=run_result.get("research_markdown") or "",
