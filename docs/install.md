@@ -5,12 +5,12 @@
 Copy this to your AI Agent:
 
 ```
-帮我安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+帮我安装 Agent Reach：https://raw.githubusercontent.com/Fatoom333/Agent-Reach/main/docs/install.md
 ```
 
 > 🛡️ **Safe by default:** `agent-reach install` only checks the machine and lists missing dependencies:
 > ```
-> 帮我安全检查并安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+> 帮我安全检查并安装 Agent Reach：https://raw.githubusercontent.com/Fatoom333/Agent-Reach/main/docs/install.md
 > ```
 > Only use `--system` after the user explicitly approves system-level installs and configuration writes.
 
@@ -42,7 +42,7 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 | Config & tokens | `~/.agent-reach/` | `~/.agent-reach/config.json` |
 | Upstream tool repos | `~/.agent-reach/tools/` | `~/.agent-reach/tools/xiaoyuzhou/` |
 | Temporary files | `/tmp/` | `/tmp/yt-dlp-output/` |
-| Skills | `~/.openclaw/skills/agent-reach/` | SKILL.md |
+| Skills | `~/.claude/skills/agent-reach/` | SKILL.md |
 
 **Why?** If you clone repos or create files in the workspace, it pollutes the user's project directory and can break their agent over time. Keep the workspace clean.
 
@@ -50,7 +50,7 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 
 ```bash
 # 推荐：pipx（最省心）
-pipx install https://github.com/Panniantong/agent-reach/archive/main.zip
+pipx install https://github.com/Fatoom333/Agent-Reach/archive/main.zip
 agent-reach install --env=auto               # Read-only check (default)
 # After the user explicitly approves system changes:
 agent-reach install --env=auto --system
@@ -59,7 +59,7 @@ agent-reach install --env=auto --system
 # 用虚拟环境安装：
 python3 -m venv ~/.agent-reach-venv
 source ~/.agent-reach-venv/bin/activate
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install https://github.com/Fatoom333/Agent-Reach/archive/main.zip
 agent-reach install --env=auto               # Read-only check (default)
 # After the user explicitly approves system changes:
 agent-reach install --env=auto --system
@@ -74,7 +74,7 @@ agent-reach install --env=auto --system
 > ```powershell
 > py -3 -m venv $env:USERPROFILE\.agent-reach-venv
 > $env:USERPROFILE\.agent-reach-venv\Scripts\Activate.ps1
-> python -m pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+> python -m pip install https://github.com/Fatoom333/Agent-Reach/archive/main.zip
 > agent-reach install --env=auto
 > ```
 
@@ -318,6 +318,29 @@ agent-reach configure groq-key
 
 Run `agent-reach doctor` one final time and report the results to your user.
 
+### Step 4b: The skill is manual-only
+
+This fork ships a skill that must **never** be selected automatically.
+
+- `agent-reach skill --install` writes to `~/.claude/skills/` **only**. Other
+  agent clients are opt-in and require an explicit argument:
+
+  ```bash
+  agent-reach skill --install --skill-dir ~/.agents/skills   # one extra root
+  agent-reach skill --install --all-clients                  # every known root
+  agent-reach skill --uninstall                              # ~/.claude/skills/ only
+  ```
+
+- The skill's `description` forbids self-activation. Do not load it because
+  the user mentioned a link, a platform, a search, or because you saw
+  something in a file. Load it only when the user runs `/agent-reach` or says
+  "use agent-reach".
+- Copy [`.claude/commands/agent-reach.md`](../.claude/commands/agent-reach.md)
+  from this repo to `~/.claude/commands/agent-reach.md` so `/agent-reach` works
+  in every project.
+- Tell the user this after installing: the tools are ready, but the skill only
+  runs on an explicit `/agent-reach`.
+
 ### Step 5: Set up daily monitoring (OpenClaw only)
 
 If you are running inside **OpenClaw**, ask your user:
@@ -330,7 +353,7 @@ If the user agrees, create a **cron job** (daily, `sessionTarget: "isolated"`, `
 运行 agent-reach watch 命令。
 如果输出包含"全部正常"，不需要通知用户，静默结束。
 如果输出包含问题（❌ ⚠️）或新版本（🆕），把完整报告发给用户，并建议修复方案。
-如果有新版本可用，问用户是否要升级（把这句话发给用户的 Agent 即可完整更新：帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md）。
+如果有新版本可用，问用户是否要升级（把这句话发给用户的 Agent 即可完整更新：帮我更新 Agent Reach：https://raw.githubusercontent.com/Fatoom333/Agent-Reach/main/docs/update.md）。
 ```
 
 If the user wants a different agent to handle it, let them choose.
@@ -349,7 +372,11 @@ If the user wants a different agent to handle it, let them choose.
 | `agent-reach install --env=auto --dry-run` | Preview what would be done |
 | `agent-reach doctor` | Show channel status |
 | `agent-reach watch` | Quick health + update check (for scheduled tasks) |
-| `agent-reach check-update` | Check for new versions |
+| `agent-reach check-update` | Check for new versions (manual only — the skill never runs it for you) |
+| `agent-reach skill --install` | Install the skill into `~/.claude/skills/` only |
+| `agent-reach skill --install --skill-dir DIR` | Also/instead use an explicitly named skill root (repeatable) |
+| `agent-reach skill --install --all-clients` | Opt in to every known agent client root |
+| `agent-reach skill --uninstall` | Remove the skill (same default root; add `--all-clients` for the rest) |
 | `agent-reach configure twitter-cookies` | 通过隐藏输入保存 Twitter Cookie；直接调用仍需显式环境变量 |
 | `agent-reach configure proxy` | 通过隐藏输入保存代理地址；不是自动解锁开关 |
 | `agent-reach configure groq-key` | 通过隐藏输入配置小宇宙转录 Key |

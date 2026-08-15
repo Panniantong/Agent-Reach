@@ -76,7 +76,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 **Agent Reach 把这件事变成一句话：**
 
 ```
-帮我安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+帮我安装 Agent Reach：https://raw.githubusercontent.com/Fatoom333/Agent-Reach/main/docs/install.md
 ```
 
 复制给你的 Agent，几分钟后它就能读推特、搜 Reddit、看 YouTube、刷小红书了。
@@ -84,7 +84,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 **已经装过了？更新也是一句话：**
 
 ```
-帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+帮我更新 Agent Reach：https://raw.githubusercontent.com/Fatoom333/Agent-Reach/main/docs/update.md
 ```
 
 > ⭐ **Star 这个项目**，我们会持续追踪各平台的变化、接入新的渠道。你不用自己盯——平台封了我们修，有新渠道我们加。
@@ -147,19 +147,19 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 复制这句话给你的 AI Agent（Claude Code、OpenClaw、Cursor 等）：
 
 ```
-帮我安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+帮我安装 Agent Reach：https://raw.githubusercontent.com/Fatoom333/Agent-Reach/main/docs/install.md
 ```
 
 就这一步。Agent 会自己完成剩下的所有事情。
 
 > 🔄 **已安装过？** 更新也是一句话：
 > ```
-> 帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+> 帮我更新 Agent Reach：https://raw.githubusercontent.com/Fatoom333/Agent-Reach/main/docs/update.md
 > ```
 
 > 🛡️ **默认安全：** `agent-reach install` 默认只检查环境，不会自动装系统包或写入配置：
 > ```
-> 帮我安全检查并安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+> 帮我安全检查并安装 Agent Reach：https://raw.githubusercontent.com/Fatoom333/Agent-Reach/main/docs/install.md
 > ```
 > 只有在你明确允许修改系统后，才使用 `agent-reach install --system`。
 
@@ -175,6 +175,35 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 
 安装完之后，`agent-reach doctor` 一条命令告诉你每个渠道的状态、当前走哪条路。
 </details>
+
+---
+
+## 只手动调用（本分支的行为）
+
+本分支的 skill **不会被自动选中**。它只在你明确点名时才生效：
+
+```
+/agent-reach 帮我查一下 X
+```
+
+或者直接说「使用 agent-reach 查一下 X」。
+
+- SKILL.md / SKILL_en.md 的 `description` 已改成显式禁止自动激活：出现链接、
+  平台名（小红书 / 推特 / B站 / Reddit / YouTube / GitHub …）、搜索或调研需求，
+  甚至读取文件时，Agent 都不应该自己去用这个 skill。
+- 常驻规则里「任务结束后自动跑 `agent-reach check-update`」已删除，
+  skill 不会再自己发起网络请求。想检查版本时手动运行 `agent-reach check-update`。
+- 斜杠命令定义在仓库的 [`.claude/commands/agent-reach.md`](.claude/commands/agent-reach.md)。
+  想在所有项目里都能用，把它复制到 `~/.claude/commands/agent-reach.md`。
+- skill 文件默认只安装到 `~/.claude/skills/`。要装到别的 Agent 客户端，
+  必须显式指定：
+
+```bash
+agent-reach skill --install                       # 只写 ~/.claude/skills/
+agent-reach skill --install --skill-dir ~/.agents/skills
+agent-reach skill --install --all-clients         # 所有已知客户端目录
+agent-reach skill --uninstall                     # 同样默认只删 ~/.claude/skills/
+```
 
 ---
 

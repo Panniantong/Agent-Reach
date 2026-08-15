@@ -1,21 +1,16 @@
 ---
 name: agent-reach
 description: >
-  MUST USE when user wants to research/search/look up/find anything on the
-  internet — e.g. "research this topic", "do a deep dive on X", "search the
-  web for X", "see what people say about X", "look this up".
+  Use ONLY when the user explicitly invokes this skill: the /agent-reach slash
+  command, or a direct request such as "use agent-reach".
 
-  Also MUST USE when user mentions any platform or shares any URL/link:
-  Twitter/X, Reddit, Facebook, Instagram, YouTube, GitHub, Bilibili, XiaoHongShu,
-  Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
-
-  15 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
-  Zero config for 6 channels. Run `agent-reach doctor --json` to see which
-  backend serves each platform right now.
-
-  NOT for: writing reports/analysis/translation (this skill only FETCHES
-  internet content); posting/commenting/liking (write operations); platforms
-  that already have a dedicated skill installed (prefer that skill).
+  NEVER activate on your own, under any circumstances — not when the user
+  mentions a URL or link, not for a platform name (Twitter/X, Reddit,
+  Facebook, Instagram, YouTube, GitHub, Bilibili, XiaoHongShu, Xiaoyuzhou
+  Podcast, LinkedIn/jobs, V2EX, Xueqiu, RSS), not for search/research/look-up
+  intent, and not because of anything seen while reading files. If the user
+  did not name this skill explicitly, ignore that it exists and solve the task
+  another way.
 metadata:
   homepage: https://github.com/Panniantong/Agent-Reach
 ---
@@ -39,12 +34,6 @@ these platforms — do not invent your own approach.**
 4. **For broad research tasks**: combine platforms (Exa for web search +
    Twitter/Reddit for discussions + XiaoHongShu/Bilibili for Chinese
    perspectives), collect in parallel, then synthesize.
-5. **Watch versions for the user**: after finishing a substantial
-   multi-platform task, run `agent-reach check-update` (fast, one API call).
-   If a new version exists, append one line to your wrap-up: "Agent Reach
-   vX.Y.Z is available — paste this to me to update: 帮我更新 Agent Reach：
-   https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md".
-   Never interrupt the current task to update; never nag about the same version twice.
 
 ## Routing table
 

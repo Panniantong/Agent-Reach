@@ -53,9 +53,11 @@ def test_skill_frontmatter_uses_opencode_supported_fields():
         ), resource_name
 
 
-def test_install_skill_discovers_opencode_global_directory(tmp_path: Path):
+def test_install_skill_uses_opencode_directory_only_when_requested(tmp_path: Path):
+    """OpenCode is opt-in: an existing root is no longer enough to be written."""
     skill_parent = tmp_path / ".config" / "opencode" / "skills"
     skill_parent.mkdir(parents=True)
+    installed = skill_parent / "agent-reach" / "SKILL.md"
 
     with patch(
         "agent_reach.cli.os.path.expanduser",
@@ -63,12 +65,18 @@ def test_install_skill_discovers_opencode_global_directory(tmp_path: Path):
     ), patch.dict(os.environ, {}, clear=True):
         _install_skill()
 
-    installed = skill_parent / "agent-reach" / "SKILL.md"
+        assert not installed.exists()
+
+        _install_skill(all_clients=True)
+
     assert installed.is_file()
     assert "Agent Reach" in installed.read_text(encoding="utf-8")
 
 
-def test_uninstall_skill_removes_opencode_global_directory(tmp_path: Path):
+def test_uninstall_skill_removes_opencode_directory_only_when_requested(
+    tmp_path: Path,
+):
+    """Uninstall mirrors install: OpenCode is left alone unless asked for."""
     installed = tmp_path / ".config" / "opencode" / "skills" / "agent-reach"
     installed.mkdir(parents=True)
     (installed / "SKILL.md").write_text("test", encoding="utf-8")
@@ -78,6 +86,10 @@ def test_uninstall_skill_removes_opencode_global_directory(tmp_path: Path):
         side_effect=lambda value: value.replace("~", os.fspath(tmp_path)),
     ), patch.dict(os.environ, {}, clear=True):
         _uninstall_skill()
+
+        assert installed.exists()
+
+        _uninstall_skill(all_clients=True)
 
     assert not installed.exists()
 

@@ -149,11 +149,11 @@ class TestSkillCommand(unittest.TestCase):
             # _install_skill may or may not find dirs depending on mock; just ensure no crash
             # The important test is that the function runs without error
 
-    def test_uninstall_skill_removes_dir(self):
-        """_uninstall_skill should remove skill directories."""
+    def test_uninstall_skill_removes_default_dir(self):
+        """_uninstall_skill should remove the default Claude Code skill dir."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create a fake skill installation
-            skill_path = os.path.join(tmpdir, ".openclaw", "skills", "agent-reach")
+            skill_path = os.path.join(tmpdir, ".claude", "skills", "agent-reach")
             os.makedirs(skill_path)
             with open(os.path.join(skill_path, "SKILL.md"), "w", encoding="utf-8") as f:
                 f.write("test")
@@ -171,12 +171,34 @@ class TestSkillCommand(unittest.TestCase):
 
             self.assertFalse(os.path.exists(skill_path))
 
-    def test_install_creates_dir_if_parent_exists(self):
-        """_install_skill should create agent-reach dir inside existing skill dir."""
+    def test_uninstall_keeps_other_clients_until_asked(self):
+        """Other agent clients are only cleaned up on an explicit request."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create the .openclaw/skills parent but not agent-reach subdir
-            skill_parent = os.path.join(tmpdir, ".openclaw", "skills")
-            os.makedirs(skill_parent)
+            skill_path = os.path.join(tmpdir, ".openclaw", "skills", "agent-reach")
+            os.makedirs(skill_path)
+
+            with patch(
+                "agent_reach.cli.os.path.expanduser",
+                side_effect=lambda p: p.replace("~", tmpdir),
+            ):
+                env = os.environ.copy()
+                env.pop("OPENCLAW_HOME", None)
+                with patch.dict(os.environ, env, clear=True):
+                    _uninstall_skill()
+                    self.assertTrue(os.path.exists(skill_path))
+
+                    _uninstall_skill(
+                        skill_dirs=[os.path.join(tmpdir, ".openclaw", "skills")]
+                    )
+
+            self.assertFalse(os.path.exists(skill_path))
+
+    def test_install_defaults_to_claude_skills_only(self):
+        """Default install creates ~/.claude/skills and touches nothing else."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # A pre-existing root for another client must stay untouched.
+            other_parent = os.path.join(tmpdir, ".openclaw", "skills")
+            os.makedirs(other_parent)
 
             with patch(
                 "agent_reach.cli.os.path.expanduser",
@@ -187,17 +209,43 @@ class TestSkillCommand(unittest.TestCase):
                 with patch.dict(os.environ, env, clear=True):
                     _install_skill()
 
-            target = os.path.join(skill_parent, "agent-reach", "SKILL.md")
+            target = os.path.join(
+                tmpdir, ".claude", "skills", "agent-reach", "SKILL.md"
+            )
             self.assertTrue(os.path.exists(target))
             with open(target, encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("Agent Reach", content)
+            self.assertFalse(
+                os.path.exists(os.path.join(other_parent, "agent-reach"))
+            )
+
+    def test_install_writes_explicitly_requested_dir(self):
+        """An explicitly named skill root is created and written."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            skill_parent = os.path.join(tmpdir, "custom", "skills")
+
+            with patch(
+                "agent_reach.cli.os.path.expanduser",
+                side_effect=lambda p: p.replace("~", tmpdir),
+            ), patch.dict(os.environ, {}, clear=False):
+                env = os.environ.copy()
+                env.pop("OPENCLAW_HOME", None)
+                with patch.dict(os.environ, env, clear=True):
+                    _install_skill(skill_dirs=[skill_parent])
+
+            self.assertTrue(
+                os.path.exists(
+                    os.path.join(skill_parent, "agent-reach", "SKILL.md")
+                )
+            )
+            # The default root is not used when a target was named.
+            self.assertFalse(os.path.exists(os.path.join(tmpdir, ".claude")))
 
     def test_install_uses_english_skill_for_english_locale(self):
         """_install_skill should install the English skill file for English locales."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_parent = os.path.join(tmpdir, ".openclaw", "skills")
-            os.makedirs(skill_parent)
+            skill_parent = os.path.join(tmpdir, ".claude", "skills")
 
             with patch(
                 "agent_reach.cli.os.path.expanduser",
@@ -214,11 +262,37 @@ class TestSkillCommand(unittest.TestCase):
             with open(target, encoding="utf-8") as f:
                 content = f.read()
             self.assertTrue(content.strip())
-            self.assertIn("Xiaoyuzhou Podcast, LinkedIn", content)
+            self.assertIn("Standing rules", content)
+            self.assertNotIn("常驻规则", content)
             self.assertNotIn("搜推特", content)
             self.assertTrue(
                 os.path.exists(os.path.join(skill_parent, "agent-reach", "references"))
             )
+
+    def test_skill_descriptions_forbid_automatic_activation(self):
+        """The frontmatter must never invite the agent to pick the skill itself."""
+        skill_dir = importlib.resources.files("agent_reach").joinpath("skill")
+
+        for resource_name in ("SKILL.md", "SKILL_en.md"):
+            text = skill_dir.joinpath(resource_name).read_text(encoding="utf-8")
+            frontmatter = re.match(r"\A---\n(.*?)\n---\n", text, flags=re.DOTALL)
+            self.assertIsNotNone(frontmatter, resource_name)
+            description = frontmatter.group(1)
+
+            self.assertNotIn("MUST USE", description, resource_name)
+            self.assertIn("/agent-reach", description, resource_name)
+            self.assertTrue(
+                "NEVER activate" in description or "禁止自主激活" in description,
+                resource_name,
+            )
+
+    def test_skill_never_self_triggers_update_checks(self):
+        """Standing rules must not tell the agent to call the network on its own."""
+        skill_dir = importlib.resources.files("agent_reach").joinpath("skill")
+
+        for resource_name in ("SKILL.md", "SKILL_en.md"):
+            body = skill_dir.joinpath(resource_name).read_text(encoding="utf-8")
+            self.assertNotIn("check-update", body, resource_name)
 
 
 if __name__ == "__main__":
