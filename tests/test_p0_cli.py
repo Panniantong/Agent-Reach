@@ -1014,6 +1014,44 @@ def test_update_guide_preserves_ytdlp_default_extra():
     assert "pipx install --force 'yt-dlp[default]'" in update_line
 
 
+def test_update_paths_point_at_this_fork():
+    """An update must not pull the upstream auto-triggering skill back in."""
+    assert cli.UPDATE_REPO == "Fatoom333/Agent-Reach"
+    for constant in (
+        cli.UPDATE_GUIDE_URL,
+        cli.UPDATE_ARCHIVE_URL,
+        cli.UPDATE_RELEASE_API,
+        cli.UPDATE_COMMIT_API,
+        cli._UPDATE_INSTRUCTIONS,
+    ):
+        assert "Panniantong" not in constant
+
+    import re
+
+    root = Path(__file__).resolve().parents[1]
+    documents = (
+        root / "README.md",
+        root / "docs" / "install.md",
+        root / "docs" / "update.md",
+        root / "agent_reach" / "skill" / "SKILL.md",
+        root / "agent_reach" / "skill" / "SKILL_en.md",
+        root / "agent_reach" / "integrations" / "mcp_server.py",
+    )
+    # Lines that fetch a guide or install the package — badges and links back
+    # to the upstream project are fine, they install nothing.
+    fetches_code = re.compile(r"raw\.githubusercontent\.com|archive/main\.zip")
+
+    violations = []
+    for path in documents:
+        for number, line in enumerate(
+            path.read_text(encoding="utf-8").splitlines(), 1
+        ):
+            if fetches_code.search(line) and "Panniantong" in line:
+                violations.append(f"{path.relative_to(root)}:{number}: {line.strip()}")
+
+    assert not violations, "\n".join(violations)
+
+
 def test_mcporter_install_adds_exa_to_home_scope(monkeypatch):
     """Installer config remains available across working directories."""
     import shutil

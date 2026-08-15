@@ -5,13 +5,13 @@
 Copy this to your AI Agent:
 
 ```
-帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+帮我更新 Agent Reach：https://raw.githubusercontent.com/Fatoom333/Agent-Reach/main/docs/update.md
 ```
 
 Or in English:
 
 ```
-Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+Update Agent Reach: https://raw.githubusercontent.com/Fatoom333/Agent-Reach/main/docs/update.md
 ```
 
 ---
@@ -26,6 +26,14 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 
 Update Agent Reach to the latest version, refresh upstream tools, migrate from retired backends, and verify everything works. The user should not need to do anything manually (except things only a human can do, like clicking a browser-extension install button).
 
+### ⚠️ Update from this fork only
+
+Every command below points at `Fatoom333/Agent-Reach`. **Never** update from
+`Panniantong/agent-reach`: upstream ships a skill description that tells agents
+to load the skill on any link, platform name or research request, so pulling it
+in would silently undo the manual-invoke-only behaviour this fork exists for.
+The same goes for the packaged `SKILL.md` — do not replace it with upstream's.
+
 ### Step 1: Check current version
 
 ```bash
@@ -37,12 +45,12 @@ If it says "已是最新版本", skip to Step 4 (verify). Otherwise continue.
 ### Step 2: Update Agent Reach package
 
 ```bash
-pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install --upgrade https://github.com/Fatoom333/Agent-Reach/archive/main.zip
 ```
 
 > If pip complains about `externally-managed-environment` (PEP 668), the user
 > originally installed via pipx or a venv — use the matching command:
-> `pipx install --force https://github.com/Panniantong/agent-reach/archive/main.zip`
+> `pipx install --force https://github.com/Fatoom333/Agent-Reach/archive/main.zip`
 > or activate `~/.agent-reach-venv` first.
 
 ### Step 3: Refresh upstream tools
@@ -92,11 +100,23 @@ agent-reach version
 agent-reach doctor
 ```
 
-Running `agent-reach doctor` (text mode) also makes sure an Agent Reach skill
-exists in detected agent skill directories. If the user already has a skill
-there, doctor preserves it instead of overwriting local customizations. Use
-`agent-reach skill --install` when you explicitly want to refresh the bundled
-skill files.
+`agent-reach doctor` only reports channel status — it never writes skill files.
+Refreshing the skill is an explicit step:
+
+```bash
+agent-reach skill --install          # writes ~/.claude/skills/ only
+```
+
+Other agent clients are opt-in (`--skill-dir DIR`, or `--all-clients`); do not
+add them unless the user asks. After refreshing, check that the installed
+`~/.claude/skills/agent-reach/SKILL.md` still forbids automatic activation in
+its `description` — if it says "MUST USE", an upstream copy overwrote it and
+the update pulled from the wrong repo.
+
+The skill stays manual-invoke only: it runs on `/agent-reach` or a direct
+"use agent-reach" request, and never selects itself. Do not re-add a standing
+rule that runs `agent-reach check-update` automatically — version checks are
+the user's call.
 
 Check the doctor output:
 

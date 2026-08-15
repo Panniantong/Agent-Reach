@@ -136,6 +136,6 @@ chains — note: reference docs are written in Chinese, commands are universal):
 ## Configure a channel
 
 If a channel needs setup, fetch the install guide:
-https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+https://raw.githubusercontent.com/Fatoom333/Agent-Reach/main/docs/install.md
 
 The user only provides cookies / one extension click; the agent does the rest.

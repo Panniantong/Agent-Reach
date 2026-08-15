@@ -2241,13 +2241,24 @@ def _github_get_with_retry(url, timeout=10, retries=3, sleeper=time.sleep):
     return None, "unknown", retries
 
 
+#: This build updates from the fork, not from upstream: upstream ships a skill
+#: description that makes agents load the skill automatically, and pulling it
+#: back in would silently undo the manual-invoke-only behaviour.
+UPDATE_REPO = "Fatoom333/Agent-Reach"
+UPDATE_GUIDE_URL = (
+    f"https://raw.githubusercontent.com/{UPDATE_REPO}/main/docs/update.md"
+)
+UPDATE_ARCHIVE_URL = f"https://github.com/{UPDATE_REPO}/archive/main.zip"
+UPDATE_RELEASE_API = f"https://api.github.com/repos/{UPDATE_REPO}/releases/latest"
+UPDATE_COMMIT_API = f"https://api.github.com/repos/{UPDATE_REPO}/commits/main"
+
 #: Full update = package + upstream tools + skill. The one-liner walks an
 #: agent through all three (docs/update.md); bare pip only updates the package.
 _UPDATE_INSTRUCTIONS = (
     "更新方式（推荐，复制这句话给你的 AI Agent，会完整更新本体+上游工具+skill）：\n"
-    "  帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md\n"
+    f"  帮我更新 Agent Reach：{UPDATE_GUIDE_URL}\n"
     "仅更新本体（不含上游工具和 skill）：\n"
-    "  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip"
+    f"  pip install --upgrade {UPDATE_ARCHIVE_URL}"
 )
 
 
@@ -2275,8 +2286,8 @@ def _cmd_check_update():
     from agent_reach import __version__
 
     print(f"当前版本: v{__version__}")
-    release_url = "https://api.github.com/repos/Panniantong/Agent-Reach/releases/latest"
-    commit_url = "https://api.github.com/repos/Panniantong/Agent-Reach/commits/main"
+    release_url = UPDATE_RELEASE_API
+    commit_url = UPDATE_COMMIT_API
 
     # Fetch latest release with retry/backoff.
     resp, err, attempts = _github_get_with_retry(release_url, timeout=10, retries=3)
@@ -2361,7 +2372,7 @@ def _cmd_watch():
     new_version = ""
     release_body = ""
     resp, err, _attempts = _github_get_with_retry(
-        "https://api.github.com/repos/Panniantong/Agent-Reach/releases/latest",
+        UPDATE_RELEASE_API,
         timeout=10,
         retries=2,
     )
@@ -2394,7 +2405,7 @@ def _cmd_watch():
             for line in release_body.strip().split("\n")[:10]:
                 print(f"    {line}")
         print("  更新（一句话发给 Agent 即可完整更新）：")
-        print("    帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md")
+        print(f"    帮我更新 Agent Reach：{UPDATE_GUIDE_URL}")
 
 
 if __name__ == "__main__":

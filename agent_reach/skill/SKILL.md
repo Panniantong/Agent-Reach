@@ -127,6 +127,6 @@ agent-reach doctor --json
 ## 配置渠道
 
 如果某个 channel 需要配置，获取安装指南：
-https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+https://raw.githubusercontent.com/Fatoom333/Agent-Reach/main/docs/install.md
 
 用户只需提供 cookies，其他配置由 agent 完成。
