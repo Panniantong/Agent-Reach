@@ -294,6 +294,8 @@ def patch_experience_in_text(
 def patch_canonical_skill_sections(
     report: dict[str, Any],
     applied_config: list[str],
+    *,
+    settings: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     week_start = str(report.get("week_start") or "")
     week_end = str(report.get("week_end") or "")
@@ -305,6 +307,37 @@ def patch_canonical_skill_sections(
     normalized = _normalize_report_for_writeback(report, skill_text)
     experience_block = build_weekly_experience_block(normalized)
     playbook_block = build_next_week_playbook_block(normalized, applied_config)
+    refinement_id = str(
+        report.get("harness_refinement_id") or report.get("refinement_id") or ""
+    )
+
+    from agent_reach.daily_run.skill_fragments import (
+        FRAGMENTS_DIR,
+        external_enabled,
+        patch_canonical_stubs,
+        write_fragments,
+    )
+
+    if external_enabled(settings):
+        manifest = write_fragments(
+            playbook_block=playbook_block,
+            experience_block=experience_block,
+            week_start=week_start,
+            week_end=week_end,
+            refinement_id=refinement_id,
+            settings=settings,
+        )
+        stub_changed = patch_canonical_stubs(path, week_start=week_start, week_end=week_end)
+        return {
+            "canonical": str(path),
+            "experience": True,
+            "playbook": True,
+            "external": True,
+            "stub_changed": stub_changed,
+            "normalized_report": normalized,
+            "fragments_dir": str(FRAGMENTS_DIR),
+            "fragments_manifest": manifest,
+        }
 
     text, exp_changed = patch_experience_in_text(
         skill_text, experience_block, week_start, week_end
@@ -317,6 +350,7 @@ def patch_canonical_skill_sections(
         "canonical": str(path),
         "experience": exp_changed,
         "playbook": pb_changed,
+        "external": False,
         "normalized_report": normalized,
     }
 
@@ -568,8 +602,19 @@ def annotate_weekly_harness_audit(
     changed = new_text != text
     if changed:
         path.write_text(new_text, encoding="utf-8")
-        if not skip_sync:
-            sync_canonical_skill_to_local(settings)
+
+    from agent_reach.daily_run.skill_fragments import annotate_experience_fragment, external_enabled
+
+    fragment_changed = False
+    if external_enabled(settings):
+        fragment_changed = annotate_experience_fragment(
+            week_start=week_start,
+            week_end=week_end,
+            refinement_id=refinement_id,
+        )
+
+    if (changed or fragment_changed) and not skip_sync:
+        sync_canonical_skill_to_local(settings)
 
     if PLAYBOOK_MANIFEST.exists():
         try:
@@ -589,12 +634,14 @@ def annotate_weekly_harness_audit(
             "skill_changed": changed,
         }
     )
-    return {"skipped": False, "refinement_id": refinement_id, "skill_changed": changed}
+    return {"skipped": False, "refinement_id": refinement_id, "skill_changed": changed, "fragment_changed": fragment_changed}
 
 
 def apply_weekly_skill_closure(
     report: dict[str, Any],
     settings: Optional[dict[str, Any]] = None,
+    *,
+    harness_refinement_id: str = "",
 ) -> dict[str, Any]:
     """Write weekly learnings to skill, apply safe settings fixes, sync local runtime."""
     cfg = settings or load_settings()
@@ -607,12 +654,17 @@ def apply_weekly_skill_closure(
     if not week_start or not week_end:
         return {"skipped": True, "reason": "missing week range"}
 
+    if harness_refinement_id:
+        report = dict(report)
+        report["harness_refinement_id"] = harness_refinement_id
+        report["refinement_id"] = harness_refinement_id
+
     new_settings, applied_config = apply_settings_from_improvements(report, cfg)
     settings_path: Optional[str] = None
     if applied_config and weekly_cfg.get("skill_auto_apply_settings", True) is not False:
         settings_path = str(save_user_settings(new_settings))
 
-    patch_result = patch_canonical_skill_sections(report, applied_config)
+    patch_result = patch_canonical_skill_sections(report, applied_config, settings=new_settings)
     normalized_report = patch_result.get("normalized_report") or report
 
     runtime: dict[str, Any] = {}
@@ -633,7 +685,12 @@ def apply_weekly_skill_closure(
         synced = sync_canonical_skill_to_local(new_settings)
 
     manifest_path = save_playbook_manifest(
-        report, applied_config, synced, runtime, skill_audit=skill_audit
+        report,
+        applied_config,
+        synced,
+        runtime,
+        skill_audit=skill_audit,
+        harness_refinement_id=str(report.get("harness_refinement_id") or ""),
     )
     append_skill_changelog(
         {

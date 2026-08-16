@@ -33,7 +33,7 @@ class TestSkillWritebackSnapshots:
         block = build_weekly_experience_block(SAMPLE_REPORT)
         assert "### 📅 2026-08-10 ~ 2026-08-14 周复盘（周六自动沉淀）" in block
         assert "**情况说明：**" in block
-        assert "盘中扫描偏少" in block
+        assert "盘中扫描偏少" not in block
         assert "Kronos" in block
         assert block.count("2026-08-10 ~ 2026-08-14") == 1
 

@@ -26,8 +26,8 @@ metadata:
 
 **触发本 skill 时，严格按以下顺序执行，避免重复读全文：**
 
-1. **读「📋 下周执行清单」** — 周六 weekly 自动写入的最高优先级任务与已应用参数。
-2. **读「🧠 经验沉淀库」最新周复盘** — 本周盈亏说明、规则库、流程改进。
+1. **读 playbook 外链** — `~/.agent-reach/daily_run/skill/playbook.md`（周六 weekly 写入）。
+2. **读 experience 外链** — `~/.agent-reach/daily_run/skill/experience_latest.md`（最新周复盘）。
 3. **选路径执行**（二选一，不要重复跑）：
    - **自动化（推荐）**：本地 cron 已安装 → 仅监控 / 补跑，不要手工替代全流程。
    - **手工单次**：用下方 `python3 -m agent_reach.cli` 或 `scripts/daily-run-local-cron.sh`。
@@ -51,7 +51,7 @@ ${PY} -m agent_reach.cli daily-run schedule run forecast
 ${PY} -m agent_reach.cli doctor --json
 ```
 
-日志：`~/.agent-reach/daily_run/logs/cron-YYYY-MM-DD.log` · 持仓：`~/.agent-reach/daily_run/portfolio.json` ·  playbook 清单：`~/.agent-reach/daily_run/next_week_playbook.json`
+日志：`~/.agent-reach/daily_run/logs/cron-YYYY-MM-DD.log` · 持仓：`portfolio.json` · playbook：`skill/playbook.md` · experience：`skill/experience_latest.md`
 
 ### ⚡ 性能要点（默认已开启，勿重复拉全量）
 
@@ -83,22 +83,15 @@ ${PY} -m agent_reach.cli doctor --json
 
 | 层级 | 内容 | 何时读 |
 |------|------|--------|
-| **L0 常驻** | ⚡ 入口、📋 下周执行清单、Harness 摘要、本表 | 每次触发必读 |
+| **L0 常驻** | ⚡ 入口、外链 playbook/experience、Harness 摘要、本表 | 每次触发必读 |
 | **L1 按需** | [references/phase1-quality.md](daily_run/references/phase1-quality.md)、[schedule-ops.md](daily_run/references/schedule-ops.md) | 手工补跑 / Gate 失败 / cron 排查 |
 | **L2 任务** | Phase-2.x references（Kronos / 四卡 / redfox 等） | 仅对应 job：`forecast` / `close` / 调研 |
 
 索引：[references/README.md](daily_run/references/README.md)
 
-## 📋 下周执行清单（周六自动更新 · 复盘 2026-08-10~2026-08-14）
+## 📋 下周执行清单（周六自动更新 · 外链）
 
-> 更新时间 2026-08-16 04:25 UTC。Agent 与 daily-run 下周须优先执行；带 ✅ 的参数已自动写入 settings。
-
-### 🔧 流程改进
-
-- 🟡 **1 天盘中扫描偏少** — 日期 2026-08-12 等 intraday 次数 <5，Lookback MSS 可能失真
-  - 执行：确认 GHA cache restore/save 正常；参考 PR #28 修复 intraday_state 累积
-- 🟡 **持仓浮亏标的需关注** — 海能达(-57.2%)
-  - 执行：收盘 verify 若 MSS<macro_veto 则优先纳入明日卖出候选
+> **动态片段** `~/.agent-reach/daily_run/skill/playbook.md` · 索引 `next_week_playbook.json`
 
 > 盘中/收盘执行算法与时间线 — 详见 [references/schedule-ops.md](daily_run/references/schedule-ops.md)（L1，勿在 L0 通读）
 
@@ -161,25 +154,7 @@ ${PY} -m agent_reach.cli doctor --json
 
 ## 🧠 股票大师实战经验沉淀库 (每日收盘更新)
 
-### 📅 2026-08-10 ~ 2026-08-14 周复盘（周六自动沉淀）
-*   **更新时间：** 2026-08-16 04:25 UTC
-*   **本周盈亏说明：**
-*   **情况说明：** 本周组合净值基本 **持平**（-788.00 元，-0.9%）。
-*   **收盘净值轨迹：** 2026-08-10 ¥85,623.27 → 2026-08-14 ¥86,077.27
-*   **持仓浮盈合计：** ¥-17,693（4 只）
-*   **持股周度市值变动：** ¥-788.00（按周初价估算，不含新开仓成本口径）
-*   **周内贡献前列：** 京东方A -378元、澜起科技 -361元、海能达 -40元
-*   **现金仓位：** 46.0%（¥40,176）
-*   **持股概况：** 澜起科技 (688008) +0.80%、海能达 (002583) -1.07%、水晶光电 (002273) +2.45%、京东方A (000725) -0.85%
-*   **强势标的：** 水晶光电 +2.45%、中际旭创 +2.38%、豪威集团 +1.18%
-*   **任务覆盖：** 早盘 0/5、收盘 0/5、盘中 0 次
-*   **收盘经验片段：**
-    *   （示例）宏观一票否决 + MSS 预测命中 — 维持高现金；详见 `~/.agent-reach/daily_run/experience/experience.jsonl`
-*   **量化规则库（最近）：**
-    *   偏差：价格变动超过锚点阈值 8.0%（多条同类已合并）
-*   **板块调研摘要：**
-    *   光通信 板块：Title: 国金证券-通信行业周报：FCC禁令草案扰动光模块，国产大模型跃升商业化加速-行业分析-慧博投研资讯 · URL: https://wt.hibor.com.cn/data/8f7534d33248e8a8535ae8df32e92e55.html · Published: N/A
-    *   半导体 板块：Title: 光大证券-电子行业周报：AI硬件修复延续，PCB材料与存储链催化密集-行业分析-慧博报告数据 · URL: http://systest.fygsoft.com/data/574e138cf1b9d1f8c80a3e9a44d97849.html · Published: N/A
+> **动态片段** `~/.agent-reach/daily_run/skill/experience_latest.md` · 归档 `~/.agent-reach/daily_run/archives/skill/`
 
 ---
 

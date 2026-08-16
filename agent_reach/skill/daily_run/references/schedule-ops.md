@@ -67,7 +67,9 @@ agent-reach daily-run schedule run forecast
 
 **周六 skill 机械门禁**（`weekly_report.skill_gates`）：写回后校验必备章节、行数上限、playbook/experience 标记与 snapshot 块尺寸；未通过则**阻断周报飞书推送**并单独发红色告警卡。配置见 `config/daily_run_settings.json`。
 
-**Harness 计划闭环**：周六 refine 写入 `plan`（status=open）；**周一早盘**自动标记 done；收盘经验卡注入 harness XML（`~/.agent-reach/daily_run/harness/`）。
+**Harness 计划闭环**：周六 refine 写入 `plan`（status=open）；**周一早盘**自动标记 done；收盘经验卡注入 harness XML。
+
+**Skill 外链片段**（`weekly_report.skill_external`）：playbook / experience 写入 `~/.agent-reach/daily_run/skill/*.md`；canonical skill 仅保留 stub（<150 行），Agent L0 读外链而非 skill 正文。
 
 定时任务默认 **doctor 日缓存**、**macro/technicals 日缓存**（intraday 仅刷新 quotes）、**Exa TTL 缓存**、**A 股交易日历跳过休市**。
 

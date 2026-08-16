@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -157,6 +158,9 @@ class HarnessState:
         }
         p.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return p
+
+    def clone(self) -> HarnessState:
+        return deepcopy(self)
 
     def get(self, kind: HarnessKind, entry_id: str) -> Optional[HarnessEntry]:
         return self.entries.get(kind, {}).get(entry_id)
@@ -1058,7 +1062,7 @@ def refine_after_job_llm(
     if not review.get("should_refine"):
         return {"skipped": True, "reason": review.get("rationale") or "review rejected", "review": review}
 
-    baseline = HarnessState.load()
+    baseline = state.clone()
     proposal = plan_harness_refinement(
         job,
         evidence,
@@ -1066,7 +1070,6 @@ def refine_after_job_llm(
         settings=settings,
         instructions=str(review.get("instructions") or ""),
     )
-    state = load_harness()
     _, _, _, _, ev_summary = _evidence_from_job(job, evidence)
     edits, changes = apply_harness_proposal(
         state,

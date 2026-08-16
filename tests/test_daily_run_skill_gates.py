@@ -32,7 +32,11 @@ class TestSkillGates:
             "process_improvements": [],
             "skill_learning": [],
         }
-        result = run_skill_gates(_minimal_skill(), report)
+        result = run_skill_gates(
+            _minimal_skill(),
+            report,
+            settings={"weekly_report": {"skill_external": {"enabled": False}}},
+        )
         assert result["ok"] is True
         assert result.get("block_weekly_push") is False
 
@@ -64,8 +68,13 @@ class TestSkillGates:
         assert result["skipped"] is True
         assert gates_enabled({"weekly_report": {"skill_gates": {"enabled": False}}}) is False
 
-    def test_gates_pass_on_canonical_skill(self, monkeypatch):
-        from agent_reach.daily_run.skill_improvements_apply import canonical_skill_path
+    def test_gates_pass_on_canonical_skill(self):
+        from agent_reach.daily_run.skill_improvements_apply import (
+            build_next_week_playbook_block,
+            canonical_skill_path,
+        )
+        from agent_reach.daily_run.skill_fragments import write_fragments
+        from agent_reach.daily_run.skill_writeback import build_weekly_experience_block
 
         skill_path = canonical_skill_path()
         if not skill_path.exists():
@@ -74,10 +83,22 @@ class TestSkillGates:
         report = {
             "week_start": "2026-08-10",
             "week_end": "2026-08-14",
-            "process_improvements": [],
+            "process_improvements": [
+                {"priority": "medium", "title": "测试", "detail": "d", "action": "a"}
+            ],
             "skill_learning": [],
         }
-        result = run_skill_gates(text, report)
+        write_fragments(
+            playbook_block=build_next_week_playbook_block(report, []),
+            experience_block=build_weekly_experience_block(report),
+            week_start="2026-08-10",
+            week_end="2026-08-14",
+        )
+        result = run_skill_gates(
+            text,
+            report,
+            settings={"weekly_report": {"skill_external": {"enabled": True}}},
+        )
         assert result["ok"] is True, result.get("failures")
 
     def test_format_gate_alert(self):

@@ -801,9 +801,30 @@ def run_weekly(
     report.watchlist_candidates_update = wl_candidates
     steps.append("watchlist_candidates")
 
+    harness_result: dict[str, Any] = {}
+    layer_a_refinement_id = ""
+    try:
+        from agent_reach.daily_run.harness import refine_after_job
+
+        layer_a = refine_after_job(
+            "weekly",
+            evidence={"report": report.to_dict(), "applied_config": []},
+            settings=cfg,
+        )
+        harness_result["layer_a"] = layer_a
+        if layer_a.get("refinement_id"):
+            layer_a_refinement_id = str(layer_a["refinement_id"])
+            steps.append("harness_layer_a")
+    except Exception as exc:
+        harness_result["layer_a"] = {"skipped": True, "error": str(exc)}
+
     from agent_reach.daily_run.skill_improvements_apply import apply_weekly_skill_closure
 
-    skill_writeback = apply_weekly_skill_closure(report.to_dict(), cfg)
+    skill_writeback = apply_weekly_skill_closure(
+        report.to_dict(),
+        cfg,
+        harness_refinement_id=layer_a_refinement_id,
+    )
     if skill_writeback.get("skipped"):
         steps.append("skill_writeback_skipped")
     else:
@@ -878,38 +899,40 @@ def run_weekly(
         )
         steps.append("push_gate_alert")
 
-    harness_result: dict[str, Any] = {}
     try:
-        from agent_reach.daily_run.harness import refine_after_job, refine_after_job_llm
+        from agent_reach.daily_run.harness import refine_after_job_llm
 
         weekly_evidence = {
             "report": report.to_dict(),
             "applied_config": skill_writeback.get("applied_config") or [],
         }
-        layer_a = refine_after_job("weekly", evidence=weekly_evidence, settings=cfg)
         layer_b = refine_after_job_llm("weekly", evidence=weekly_evidence, settings=cfg)
-        harness_result = {"layer_a": layer_a, "layer_b": layer_b}
+        harness_result["layer_b"] = layer_b
+        if layer_b.get("refinement_id"):
+            steps.append("harness_layer_b")
     except Exception as exc:
-        harness_result = {"skipped": True, "error": str(exc)}
+        harness_result["layer_b"] = {"skipped": True, "error": str(exc)}
 
-    refinement_id = ""
-    for layer in (harness_result.get("layer_b") or {}, harness_result.get("layer_a") or {}):
+    layer_b_refinement_id = ""
+    for layer in (harness_result.get("layer_b") or {},):
         if isinstance(layer, dict) and layer.get("refinement_id"):
-            refinement_id = str(layer["refinement_id"])
+            layer_b_refinement_id = str(layer["refinement_id"])
             break
-    if refinement_id:
+    if layer_b_refinement_id and layer_b_refinement_id != layer_a_refinement_id:
         from agent_reach.daily_run.skill_improvements_apply import annotate_weekly_harness_audit
 
         audit_note = annotate_weekly_harness_audit(
             week_start=str(report.week_start or ""),
             week_end=str(report.week_end or ""),
-            refinement_id=refinement_id,
+            refinement_id=layer_b_refinement_id,
             settings=cfg,
             skip_sync=True,
         )
         steps.append("harness_skill_annotate")
         skill_writeback["harness_annotation"] = audit_note
-        if audit_note.get("skill_changed") and weekly_cfg.get("skill_sync_local", True) is not False:
+        if (audit_note.get("skill_changed") or audit_note.get("fragment_changed")) and weekly_cfg.get(
+            "skill_sync_local", True
+        ) is not False:
             from agent_reach.daily_run.skill_improvements_apply import sync_canonical_skill_to_local
 
             sync_canonical_skill_to_local(cfg)

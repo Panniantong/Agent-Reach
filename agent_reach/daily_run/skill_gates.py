@@ -47,6 +47,16 @@ def run_skill_gates(
     if not gates_enabled(settings):
         return {"ok": True, "skipped": True, "reason": "skill_gates disabled"}
 
+    from agent_reach.daily_run.skill_fragments import (
+        external_enabled,
+        read_experience_fragment,
+        read_playbook_fragment,
+    )
+
+    use_external = external_enabled(settings)
+    playbook_text = read_playbook_fragment() if use_external else skill_text
+    experience_text = read_experience_fragment() if use_external else skill_text
+
     failures: list[str] = []
     warnings: list[str] = []
 
@@ -61,22 +71,27 @@ def run_skill_gates(
         failures.append(f"skill 行数 {line_count} 超过上限 {max_lines}")
 
     if cfg.get("require_playbook", True) is not False:
+        if use_external and not playbook_text.strip():
+            failures.append("playbook 外链片段为空")
         for marker in _PLAYBOOK_MARKERS:
-            if marker not in skill_text:
+            if marker not in playbook_text:
                 failures.append(f"playbook 缺少标记：{marker[:24]}")
 
     if cfg.get("require_experience", True) is not False:
         if EXPERIENCE_HEADER not in skill_text:
             failures.append("缺少经验沉淀库章节")
+        if use_external and not experience_text.strip():
+            failures.append("experience 外链片段为空")
         for marker in _EXPERIENCE_MARKERS:
-            if marker not in skill_text:
+            if marker not in experience_text:
                 warnings.append(f"experience 缺少标记：{marker[:24]}")
 
     week_start = str(report.get("week_start") or "")
     week_end = str(report.get("week_end") or "")
     if week_start and week_end:
         week_hdr = f"{week_start} ~ {week_end}"
-        if week_hdr not in skill_text:
+        week_target = experience_text if use_external else skill_text
+        if week_hdr not in week_target:
             failures.append(f"未找到本周复盘块：{week_hdr}")
 
     if cfg.get("snapshot_blocks", True) is not False:
@@ -106,6 +121,7 @@ def run_skill_gates(
         "line_count": line_count,
         "max_lines": max_lines,
         "fingerprints": fingerprints,
+        "external_fragments": use_external,
         "block_weekly_push": bool(cfg.get("block_weekly_push", True)) and not ok,
     }
 

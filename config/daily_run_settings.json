@@ -132,6 +132,9 @@
       "snapshot_blocks": true,
       "max_playbook_lines": 45,
       "max_experience_lines": 55
+    },
+    "skill_external": {
+      "enabled": true
     }
   },
 
