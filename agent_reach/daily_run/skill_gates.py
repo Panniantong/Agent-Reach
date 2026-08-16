@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import re
 from typing import Any, Optional
 
@@ -15,6 +14,7 @@ from agent_reach.daily_run.skill_improvements_apply import (
 from agent_reach.daily_run.skill_writeback import (
     EXPERIENCE_HEADER,
     build_weekly_experience_block,
+    week_section_header,
 )
 
 _DEFAULT_MAX_LINES = 400
@@ -31,8 +31,69 @@ def gates_enabled(settings: Optional[dict[str, Any]] = None) -> bool:
 
 
 def _block_fingerprint(block: str) -> str:
-    normalized = re.sub(r"\s+", " ", block.strip())
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+    from agent_reach.daily_run.skill_fragments import block_fingerprint
+
+    return block_fingerprint(block)
+
+
+def _extract_playbook_block(skill_text: str) -> str:
+    idx = 0
+    best = ""
+    while True:
+        pos = skill_text.find(PLAYBOOK_PREFIX, idx)
+        if pos < 0:
+            break
+        line_end = skill_text.find("\n", pos)
+        search_from = line_end + 1 if line_end >= 0 else pos + len(PLAYBOOK_PREFIX)
+        tail = skill_text[search_from:]
+        ends = [len(skill_text)]
+        for pattern in (r"\n### 📅 ", r"\n---\n", r"\n## "):
+            match = re.search(pattern, tail)
+            if match:
+                ends.append(search_from + match.start())
+        chunk = skill_text[pos : min(ends)]
+        if len(chunk) > len(best):
+            best = chunk
+        idx = pos + len(PLAYBOOK_PREFIX)
+    return best
+
+
+def _extract_experience_block(skill_text: str, week_start: str, week_end: str) -> str:
+    if not week_start or not week_end:
+        return ""
+    header = week_section_header(week_start, week_end)
+    if header not in skill_text:
+        return ""
+    start = skill_text.find(header)
+    tail = skill_text[start:]
+    ends = [len(tail)]
+    for pattern in (r"\n---\n", r"\n### 📅 ", r"\n## "):
+        match = re.search(pattern, tail[len(header) :])
+        if match:
+            ends.append(len(header) + match.start())
+    return skill_text[start : start + min(ends)]
+
+
+def _verify_written_fingerprints(
+    *,
+    expected: dict[str, str],
+    playbook_text: str,
+    experience_text: str,
+    skill_text: str,
+    week_start: str,
+    week_end: str,
+    use_external: bool,
+) -> list[str]:
+    failures: list[str] = []
+    written_pb = playbook_text if use_external else _extract_playbook_block(skill_text)
+    written_exp = experience_text if use_external else _extract_experience_block(
+        skill_text, week_start, week_end
+    )
+    if expected.get("playbook") and _block_fingerprint(written_pb) != expected["playbook"]:
+        failures.append("playbook 写入内容与 snapshot fingerprint 不一致")
+    if expected.get("experience") and _block_fingerprint(written_exp) != expected["experience"]:
+        failures.append("experience 写入内容与 snapshot fingerprint 不一致")
+    return failures
 
 
 def run_skill_gates(
@@ -73,7 +134,10 @@ def run_skill_gates(
     if cfg.get("require_playbook", True) is not False:
         if use_external and not playbook_text.strip():
             failures.append("playbook 外链片段为空")
+        improvements = report.get("process_improvements") or []
         for marker in _PLAYBOOK_MARKERS:
+            if marker == "### 🔧 流程改进" and not improvements:
+                continue
             if marker not in playbook_text:
                 failures.append(f"playbook 缺少标记：{marker[:24]}")
 
@@ -110,6 +174,18 @@ def run_skill_gates(
                 "playbook": _block_fingerprint(pb),
                 "experience": _block_fingerprint(exp),
             }
+            if cfg.get("verify_fingerprints", True) is not False:
+                failures.extend(
+                    _verify_written_fingerprints(
+                        expected=fingerprints,
+                        playbook_text=playbook_text,
+                        experience_text=experience_text,
+                        skill_text=skill_text,
+                        week_start=week_start,
+                        week_end=week_end,
+                        use_external=use_external,
+                    )
+                )
     else:
         fingerprints = {}
 

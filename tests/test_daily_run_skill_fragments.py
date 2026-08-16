@@ -43,8 +43,11 @@ class TestSkillFragments:
             "hot_sectors": [],
             "mss_summary": [],
         }
+        from agent_reach.daily_run.skill_fragments import block_fingerprint
+
+        pb = build_next_week_playbook_block(report, ["a → b"])
         manifest = write_fragments(
-            playbook_block=build_next_week_playbook_block(report, ["a → b"]),
+            playbook_block=pb,
             experience_block=build_weekly_experience_block(report),
             week_start="2026-08-10",
             week_end="2026-08-14",
@@ -53,6 +56,7 @@ class TestSkillFragments:
         assert (fragments_tmp / "playbook.md").exists()
         assert (fragments_tmp / "experience_latest.md").exists()
         assert "refine_0001" == manifest["refinement_id"]
+        assert manifest["fingerprints"]["playbook"] == block_fingerprint(pb)
         pb_text = (fragments_tmp / "playbook.md").read_text(encoding="utf-8")
         assert "流程改进" in pb_text or "下周执行清单" in pb_text
 

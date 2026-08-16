@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -18,6 +20,14 @@ ARCHIVE_DIR = Path.home() / ".agent-reach" / "daily_run" / "archives" / "skill"
 
 PLAYBOOK_STUB_LINE = "> **动态片段** `~/.agent-reach/daily_run/skill/playbook.md`"
 EXPERIENCE_STUB_LINE = "> **动态片段** `~/.agent-reach/daily_run/skill/experience_latest.md`"
+
+
+def block_fingerprint(block: str) -> str:
+    text = str(block or "")
+    text = re.sub(r"> 更新时间[^\n]*", "> 更新时间", text)
+    text = re.sub(r"\*\*更新时间：\*\*[^\n]*", "**更新时间：**", text)
+    normalized = re.sub(r"\s+", " ", text.strip())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
 
 
 def _external_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
@@ -75,6 +85,10 @@ def write_fragments(
         "playbook_path": str(PLAYBOOK_FRAGMENT),
         "experience_path": str(EXPERIENCE_FRAGMENT),
         "archived_previous": str(archived) if archived else "",
+        "fingerprints": {
+            "playbook": block_fingerprint(playbook_block),
+            "experience": block_fingerprint(experience_block),
+        },
     }
     FRAGMENTS_MANIFEST.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return manifest

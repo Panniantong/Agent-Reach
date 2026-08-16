@@ -7,8 +7,8 @@ description: >
   每天早上 8:00 自动执行早盘分析，总结下一步预计操作和预期收益。
   交易日内执行 10 次数据收集，最多进行 5 次调仓量化，每次量化前审视前 3 次收集结论，调仓时间由随机数与上次评估综合决定。
   **全流程实时推送铁律：** 早盘分析、盘中高频数据收集、Lookback 审视过程、量化调仓交易以及每日收盘深度复盘的所有过程数据、决策逻辑和资产净值，系统必须在执行完毕的第一时间，自动、主动将精美的富文本 Markdown 卡片简报推送到指定的飞书群聊中，实现 100% 实时、透明的主动监控。
-  每日收盘后自动执行深度复盘，使用 Exa 技能对热点公司、竞品、市场、财报及关键人物 LinkedIn 进行深度调研，为明天的早盘给出高置信度指导建议，并将量化经验原子化沉淀、更新到技能文件中。
-  **Agent 优先顺序：** 先读 skill 内「📋 下周执行清单」与最新周复盘，再选手工 CLI 或依赖 cron；周日 forecast 参考 Phase-2.5 Kronos；收盘大盘四卡复盘参考 Phase-2.6 a-stock-review-skill；跨平台舆情/热榜/公众号大V 参考 Phase-2.7 redfox-community（可选 REDFOX_API_KEY）。
+  每日收盘后自动执行深度复盘，使用 Exa 技能对热点公司、竞品、市场、财报及关键人物 LinkedIn 进行深度调研，为明天的早盘给出高置信度指导建议，并将量化经验写入 skill 外链片段（`~/.agent-reach/daily_run/skill/`）。
+  **Agent 优先顺序：** 先读 `skill/playbook.md` 与 `skill/experience_latest.md`，再读 canonical skill stub；选手工 CLI 或依赖 cron。周日 forecast 参考 Phase-2.5 Kronos；收盘四卡复盘参考 Phase-2.6；跨平台舆情参考 Phase-2.7 redfox-community（可选 REDFOX_API_KEY）。
 triggers:
   - analyze: 股票大师/每日复盘/股票分析/大盘复盘/热门方向/分析股票/分析市场/复盘/分析/盘后分析/龙虎榜/市场情绪/涨停/炸板
   - stock: 股票/个股/板块/技术面/K线/均线
