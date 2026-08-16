@@ -379,7 +379,12 @@ def optimize_skill_markdown(text: str, *, settings: Optional[dict[str, Any]] = N
     return text.rstrip() + "\n", fixes
 
 
-def audit_weekly_skill(settings: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+def audit_weekly_skill(
+    settings: Optional[dict[str, Any]] = None,
+    *,
+    report: Optional[dict[str, Any]] = None,
+    applied_config: Optional[list[str]] = None,
+) -> dict[str, Any]:
     """Final Saturday step: validate skill structure, optimize, re-sync locally."""
     path = canonical_skill_path()
     if not path.exists():
@@ -394,7 +399,7 @@ def audit_weekly_skill(settings: Optional[dict[str, Any]] = None) -> dict[str, A
     if settings is None or (settings.get("weekly_report") or {}).get("skill_sync_local", True) is not False:
         synced = sync_canonical_skill_to_local(settings)
 
-    return {
+    result: dict[str, Any] = {
         "ok": not missing,
         "path": str(path),
         "missing_sections": missing,
@@ -402,7 +407,23 @@ def audit_weekly_skill(settings: Optional[dict[str, Any]] = None) -> dict[str, A
         "lines_before": len(raw.splitlines()),
         "lines_after": len(optimized.splitlines()),
         "synced_skills": synced,
+        "supersession": audit_supersession_harness(report) if report else {},
     }
+
+    if report:
+        from agent_reach.daily_run.skill_gates import run_skill_gates
+
+        gates = run_skill_gates(
+            optimized,
+            report,
+            applied_config=applied_config or [],
+            settings=settings,
+        )
+        result["gates"] = gates
+        if gates.get("ok") is False and not gates.get("skipped"):
+            result["ok"] = False
+
+    return result
 
 
 def ensure_runtime_updated() -> dict[str, Any]:
@@ -535,8 +556,11 @@ def apply_weekly_skill_closure(
 
     skill_audit: dict[str, Any] = {}
     if weekly_cfg.get("skill_audit", True) is not False:
-        skill_audit = audit_weekly_skill(new_settings)
-        skill_audit["supersession"] = audit_supersession_harness(report)
+        skill_audit = audit_weekly_skill(
+            new_settings,
+            report=report,
+            applied_config=applied_config,
+        )
 
     manifest_path = save_playbook_manifest(
         report, applied_config, synced, runtime, skill_audit=skill_audit

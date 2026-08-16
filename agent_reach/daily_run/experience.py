@@ -104,14 +104,15 @@ def render_experience_markdown(limit: int = 3, *, settings: Optional[dict[str, A
     if harness_cfg.get("enabled") is False or harness_cfg.get("inject_in_experience_card") is False:
         return body
 
-    from agent_reach.daily_run.harness import format_harness_for_briefing
+    from agent_reach.daily_run.harness import render_harness_content
 
-    harness_md = format_harness_for_briefing(limit=int(harness_cfg.get("briefing_limit") or 3))
-    if not harness_md:
+    harness_xml = render_harness_content(limit=int(harness_cfg.get("briefing_limit") or 3))
+    if not harness_xml:
         return body
+    harness_block = f"```xml\n{harness_xml}\n```"
     if body:
-        return body + "\n\n" + harness_md
-    return "**📚 Harness 记忆**\n\n" + harness_md
+        return body + "\n\n" + harness_block
+    return "**📚 Harness 记忆**\n\n" + harness_block
 
 
 def _distill_rules(

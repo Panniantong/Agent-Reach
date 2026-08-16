@@ -65,6 +65,10 @@ agent-reach daily-run schedule run forecast
 | **周六 08:30** | **周报**：盈亏、持股、观察池、热门板块 → 飞书；**闭环** 写回 skill + settings + 本地同步 + skill 审视 |
 | **周日 08:30** | **下周预测**：MSS/标的日走势、新闻热点 → 飞书 + `forecasts/` |
 
+**周六 skill 机械门禁**（`weekly_report.skill_gates`）：写回后校验必备章节、行数上限、playbook/experience 标记与 snapshot 块尺寸；未通过则**阻断周报飞书推送**并单独发红色告警卡。配置见 `config/daily_run_settings.json`。
+
+**Harness 计划闭环**：周六 refine 写入 `plan`（status=open）；**周一早盘**自动标记 done；收盘经验卡注入 harness XML（`~/.agent-reach/daily_run/harness/`）。
+
 定时任务默认 **doctor 日缓存**、**macro/technicals 日缓存**（intraday 仅刷新 quotes）、**Exa TTL 缓存**、**A 股交易日历跳过休市**。
 
 **盘中飞书推送策略**（`schedule.intraday_push_mode`）：

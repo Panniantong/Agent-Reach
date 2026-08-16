@@ -40,6 +40,9 @@ def _slug(text: str, *, limit: int = 48) -> str:
     return raw[:limit]
 
 
+PlanStatus = Literal["open", "done"]
+
+
 @dataclass
 class HarnessEntry:
     id: str
@@ -52,6 +55,7 @@ class HarnessEntry:
     created_at: str = ""
     updated_at: str = ""
     version: int = 1
+    status: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -108,6 +112,9 @@ class HarnessState:
             if isinstance(block, dict):
                 for entry_id, raw in block.items():
                     if isinstance(raw, dict):
+                        status = str(raw.get("status") or "")
+                        if kind == "plan" and not status:
+                            status = "open"
                         state.entries[kind][str(entry_id)] = HarnessEntry(
                             id=str(raw.get("id") or entry_id),
                             kind=kind,
@@ -119,6 +126,7 @@ class HarnessState:
                             created_at=str(raw.get("created_at") or ""),
                             updated_at=str(raw.get("updated_at") or ""),
                             version=int(raw.get("version") or 1),
+                            status=status,
                         )
         for raw in data.get("refinements") or []:
             if isinstance(raw, dict):
@@ -163,13 +171,21 @@ class HarnessState:
         source: str = "",
         job: str = "",
         evidence: str = "",
+        status: str = "",
     ) -> tuple[HarnessEntry, RefinementEdit]:
         bucket = self.entries.setdefault(kind, {})
         existing = bucket.get(entry_id)
         now = _now_iso()
+        entry_status = status or (existing.status if existing else "")
+        if kind == "plan" and not entry_status:
+            entry_status = "open"
         if existing:
             before = existing.to_dict()
-            if existing.content == content and existing.title == title:
+            if (
+                existing.content == content
+                and existing.title == title
+                and (existing.status or "") == entry_status
+            ):
                 return existing, RefinementEdit("noop", kind, entry_id, before=before, after=before)
             entry = HarnessEntry(
                 id=entry_id,
@@ -182,6 +198,7 @@ class HarnessState:
                 created_at=existing.created_at or now,
                 updated_at=now,
                 version=int(existing.version or 1) + 1,
+                status=entry_status,
             )
             action = "update"
         else:
@@ -197,6 +214,7 @@ class HarnessState:
                 created_at=now,
                 updated_at=now,
                 version=1,
+                status=entry_status,
             )
             action = "create"
         bucket[entry_id] = entry
@@ -277,10 +295,84 @@ def format_harness_for_briefing(*, limit: int = 5, kinds: Optional[list[HarnessK
             continue
         label = {"memory": "记忆", "policy": "策略", "playbook": "清单", "plan": "计划"}.get(kind, kind)
         lines.append(f"**Harness {label}**")
-        for entry in sorted(bucket.values(), key=lambda e: e.updated_at, reverse=True)[:limit]:
-            lines.append(f"- {entry.content}")
+        entries = sorted(bucket.values(), key=lambda e: e.updated_at, reverse=True)
+        if kind == "plan":
+            entries = [e for e in entries if (e.status or "open") != "done"]
+        for entry in entries[:limit]:
+            suffix = f" [{entry.status}]" if kind == "plan" and entry.status else ""
+            lines.append(f"- {entry.content}{suffix}")
         lines.append("")
     return "\n".join(lines).strip()
+
+
+def _xml_escape(text: str) -> str:
+    return (
+        str(text)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def render_harness_content(
+    *,
+    limit: int = 5,
+    kinds: Optional[list[HarnessKind]] = None,
+    include_done_plans: bool = False,
+) -> str:
+    """Render harness entries as compact XML (DSH-style agent briefing)."""
+    state = load_harness()
+    use_kinds = kinds or list(_KINDS)
+    lines: list[str] = ["<harness>"]
+    has_entries = False
+    for kind in use_kinds:
+        bucket = state.entries.get(kind) or {}
+        if not bucket:
+            continue
+        entries = sorted(bucket.values(), key=lambda e: e.updated_at, reverse=True)
+        if kind == "plan" and not include_done_plans:
+            entries = [e for e in entries if (e.status or "open") != "done"]
+        for entry in entries[:limit]:
+            has_entries = True
+            attrs: list[str] = [f'id="{_xml_escape(entry.id)}"']
+            if kind == "plan":
+                attrs.append(f'status="{_xml_escape(entry.status or "open")}"')
+            if entry.job:
+                attrs.append(f'job="{_xml_escape(entry.job)}"')
+            attr_s = " " + " ".join(attrs)
+            lines.append(f"  <{kind}{attr_s}>{_xml_escape(entry.content)}</{kind}>")
+    lines.append("</harness>")
+    if not has_entries:
+        return ""
+    return "\n".join(lines)
+
+
+def close_open_plans(*, settings: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    """Mark all open harness plan entries done (typically Monday morning)."""
+    cfg = _harness_cfg(settings)
+    if cfg.get("close_plans_on_morning") is False:
+        return {"skipped": True, "reason": "close_plans_on_morning disabled"}
+    state = load_harness()
+    closed: list[str] = []
+    now = _now_iso()
+    bucket = state.entries.get("plan") or {}
+    for entry_id, entry in list(bucket.items()):
+        if (entry.status or "open") != "open":
+            continue
+        entry.status = "done"
+        entry.updated_at = now
+        closed.append(entry_id)
+    if closed:
+        state.record_refinement(
+            job="morning",
+            trigger="plan_closeout",
+            changes=[f"done plan/{eid}" for eid in closed],
+            evidence=f"closed {len(closed)} open plans",
+            edits=[],
+        )
+        state.save()
+    return {"skipped": False, "closed": closed, "count": len(closed)}
 
 
 def list_refinements(*, limit: int = 20) -> list[dict[str, Any]]:

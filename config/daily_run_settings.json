@@ -121,7 +121,18 @@
     "max_skill_queries": 2,
     "max_skill_items": 8,
     "process_improvements": true,
-    "max_improvement_items": 12
+    "max_improvement_items": 12,
+    "skill_gates": {
+      "enabled": true,
+      "max_lines": 400,
+      "block_weekly_push": true,
+      "require_sections": true,
+      "require_playbook": true,
+      "require_experience": true,
+      "snapshot_blocks": true,
+      "max_playbook_lines": 45,
+      "max_experience_lines": 55
+    }
   },
 
   "week_forecast": {
@@ -507,6 +518,8 @@
     "max_plan": 10,
     "briefing_limit": 3,
     "inject_in_experience_card": true,
+    "close_plans_on_morning": true,
+    "render_format": "xml",
     "jobs": {
       "close": true,
       "weekly": true,

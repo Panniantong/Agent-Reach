@@ -7,9 +7,11 @@ import pytest
 
 from agent_reach.daily_run.harness import (
     HarnessState,
+    close_open_plans,
     format_harness_for_briefing,
     refine_after_job,
     refine_after_job_llm,
+    render_harness_content,
     rollback_refinement,
 )
 
@@ -121,6 +123,51 @@ class TestHarnessRefine:
         )
         md = format_harness_for_briefing(limit=2)
         assert "测试规则注入简报" in md
+
+    def test_render_harness_content_xml(self, harness_tmp):
+        refine_after_job(
+            "weekly",
+            evidence={
+                "report": {
+                    "week_start": "2026-08-10",
+                    "week_end": "2026-08-14",
+                    "process_improvements": [
+                        {"title": "测试计划", "detail": "d", "action": "a", "priority": "high"}
+                    ],
+                }
+            },
+            settings={"harness": {"enabled": True}},
+        )
+        xml = render_harness_content(limit=3)
+        assert xml.startswith("<harness>")
+        assert "<plan" in xml
+        assert 'status="open"' in xml
+        assert "测试计划" in xml or "下周" in xml
+
+    def test_close_open_plans_on_monday(self, harness_tmp):
+        refine_after_job(
+            "weekly",
+            evidence={
+                "report": {
+                    "week_start": "2026-08-10",
+                    "week_end": "2026-08-14",
+                    "process_improvements": [
+                        {"title": "待关闭计划", "detail": "d", "action": "a", "priority": "medium"}
+                    ],
+                }
+            },
+            settings={"harness": {"enabled": True}},
+        )
+        state = HarnessState.load()
+        assert any((e.status or "open") == "open" for e in state.entries["plan"].values())
+
+        result = close_open_plans(settings={"harness": {"close_plans_on_morning": True}})
+        assert result["count"] >= 1
+        state = HarnessState.load()
+        assert all((e.status or "") == "done" for e in state.entries["plan"].values())
+
+        xml = render_harness_content(limit=5)
+        assert not xml or "<plan" not in xml
 
     def test_disabled_skips(self, harness_tmp):
         result = refine_after_job(

@@ -201,6 +201,14 @@ def run_morning(
     if not gate.passed:
         raise RuntimeError(f"质量门禁未通过：{gate.summary()}")
 
+    plan_close: dict[str, Any] = {}
+    if datetime.now().weekday() == 0:
+        from agent_reach.daily_run.harness import close_open_plans
+
+        plan_close = close_open_plans(settings=cfg)
+        if plan_close.get("count"):
+            steps.append(f"harness_plans_closed_{plan_close['count']}")
+
     team_md = render_team_markdown(enriched) if expert_card_enabled(cfg, workflow="morning") else ""
     report_md = render_markdown(report)
     from agent_reach.daily_run.report_narrative import generate_morning_narrative
@@ -235,6 +243,7 @@ def run_morning(
         "report_markdown": report_md,
         "llm_narrative": morning_narrative,
         "feishu": feishu_result,
+        "harness_plan_closeout": plan_close,
     }
 
 
@@ -806,6 +815,9 @@ def run_weekly(
             steps.append("skill_audit")
             if audit.get("fixes"):
                 steps.append(f"skill_audit_fixes_{len(audit['fixes'])}")
+        gates = audit.get("gates") or {}
+        if gates and gates.get("ok") is False and not gates.get("skipped"):
+            steps.append("skill_gates_failed")
 
     from agent_reach.daily_run.report_narrative import generate_weekly_narrative
 
@@ -816,7 +828,16 @@ def run_weekly(
     steps.append("render")
 
     feishu_result = None
-    if push:
+    gate_alert: str = ""
+    gates = ((skill_writeback.get("skill_audit") or {}).get("gates") or {})
+    block_push = bool(gates.get("block_weekly_push"))
+    if block_push:
+        from agent_reach.daily_run.skill_gates import format_gate_alert_markdown
+
+        gate_alert = format_gate_alert_markdown(gates)
+        steps.append("push_blocked_skill_gates")
+
+    if push and not block_push:
         from agent_reach.config import Config
 
         from agent_reach.daily_run.report_push import (
@@ -839,6 +860,21 @@ def run_weekly(
         steps.append("push")
         if feishu_result.get("mode") == "split":
             steps.append(f"push_split_{feishu_result.get('count', 0)}")
+    elif push and block_push and gate_alert:
+        from agent_reach.config import Config
+        from agent_reach.daily_run.report_push import ReportSection, push_report_sections
+
+        cfg_obj = config or Config()
+        feishu_result = push_report_sections(
+            [ReportSection(category="weekly_insights", title="Skill 门禁", body=gate_alert)],
+            settings=cfg,
+            config=cfg_obj,
+            report_type="weekly",
+            fallback_title="⛔ 周六 Skill 门禁未通过",
+            template="red",
+            split=False,
+        )
+        steps.append("push_gate_alert")
 
     harness_result: dict[str, Any] = {}
     try:
