@@ -147,6 +147,7 @@ class TestSchedule:
         assert "SHELL=/bin/bash" in block
         assert "daily-run-local-cron.sh morning" in block
         assert "daily-run-local-cron.sh close" in block
+        assert "0 18 * * 1-5" in block
         assert "S15/15" in block
         assert block.count("daily-run-local-cron.sh intraday") == 14
 

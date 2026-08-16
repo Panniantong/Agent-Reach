@@ -771,12 +771,12 @@ class TestScheduleWeekly:
         assert len(entries) == 18
         assert any("weekly" in e.job for e in entries)
         assert any("forecast" in e.job for e in entries)
-        assert any(e.weekday == "6" and e.hour == "9" for e in entries)
-        assert any(e.weekday == "0" and e.hour == "9" for e in entries)
+        assert any(e.weekday == "6" and e.hour == "8" and e.minute == "30" for e in entries)
+        assert any(e.weekday == "0" and e.hour == "8" and e.minute == "30" for e in entries)
 
     def test_render_crontab_includes_weekly(self):
         from agent_reach.daily_run.schedule import render_crontab_block
 
         block = render_crontab_block()
         assert "daily-run-local-cron.sh weekly" in block
-        assert "0 9 * * 6" in block
+        assert "30 8 * * 6" in block

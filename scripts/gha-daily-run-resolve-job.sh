@@ -24,7 +24,17 @@ if [ -n "${GITHUB_EVENT_SCHEDULE:-}" ]; then
       echo "skip=false"
       exit 0
       ;;
+    "0 18 * * 1-5")
+      echo "job=close"
+      echo "skip=false"
+      exit 0
+      ;;
     "0 9 * * 6")
+      echo "job=weekly"
+      echo "skip=false"
+      exit 0
+      ;;
+    "30 8 * * 6")
       echo "job=weekly"
       echo "skip=false"
       exit 0
@@ -35,6 +45,11 @@ if [ -n "${GITHUB_EVENT_SCHEDULE:-}" ]; then
       exit 0
       ;;
     "0 9 * * 0")
+      echo "job=forecast"
+      echo "skip=false"
+      exit 0
+      ;;
+    "30 8 * * 0")
       echo "job=forecast"
       echo "skip=false"
       exit 0
@@ -64,22 +79,22 @@ if [ "$minutes" -ge 470 ] && [ "$minutes" -le 520 ]; then
   exit 0
 fi
 
-# Close window ~15:30 北京时间.
-if [ "$minutes" -ge 920 ] && [ "$minutes" -le 965 ]; then
+# Close window ~18:00 北京时间.
+if [ "$minutes" -ge 1060 ] && [ "$minutes" -le 1110 ]; then
   echo "job=close"
   echo "skip=false"
   exit 0
 fi
 
-# Weekly report ~09:00 北京时间 Saturday.
-if [ "$(date +%u)" = "6" ] && [ "$minutes" -ge 520 ] && [ "$minutes" -le 570 ]; then
+# Weekly report ~08:30 北京时间 Saturday.
+if [ "$(date +%u)" = "6" ] && [ "$minutes" -ge 500 ] && [ "$minutes" -le 540 ]; then
   echo "job=weekly"
   echo "skip=false"
   exit 0
 fi
 
-# Next-week forecast ~09:00 北京时间 Sunday.
-if [ "$(date +%u)" = "7" ] && [ "$minutes" -ge 520 ] && [ "$minutes" -le 570 ]; then
+# Next-week forecast ~08:30 北京时间 Sunday.
+if [ "$(date +%u)" = "7" ] && [ "$minutes" -ge 500 ] && [ "$minutes" -le 540 ]; then
   echo "job=forecast"
   echo "skip=false"
   exit 0

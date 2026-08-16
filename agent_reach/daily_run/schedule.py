@@ -90,13 +90,13 @@ def default_entries() -> list[CronEntry]:
             )
         )
     entries.append(
-        CronEntry("30", "15", "1-5", _cron_run_cmd("close"), "daily-run 收盘 15:30")
+        CronEntry("0", "18", "1-5", _cron_run_cmd("close"), "daily-run 收盘 18:00")
     )
     entries.append(
-        CronEntry("0", "9", "6", _cron_run_cmd("weekly"), "daily-run 周报 周六 9:00")
+        CronEntry("30", "8", "6", _cron_run_cmd("weekly"), "daily-run 周报 周六 8:30")
     )
     entries.append(
-        CronEntry("0", "9", "0", _cron_run_cmd("forecast"), "daily-run 下周预测 周日 9:00")
+        CronEntry("30", "8", "0", _cron_run_cmd("forecast"), "daily-run 下周预测 周日 8:30")
     )
     return entries
 

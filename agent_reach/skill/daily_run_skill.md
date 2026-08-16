@@ -140,7 +140,7 @@ ${PY} -m agent_reach.cli doctor --json
 |                ^          ^          ^          ^          ^                      |
 |  [时间决定]  (由当前数据分析在 0 - 120 分钟内动态设定基础间隔 + 随机数扰动)          |
 |                                                                                   |
-|  [收盘复盘]  下午 15:30 自动触发：                                                  |
+|  [收盘复盘]  下午 18:00 自动触发：                                                  |
 |              1. 基础复盘：总结今日实盘得失与净值变化                                 |
 |              2. Exa 深度调研：调用 Exa AI 搜索对热点公司、竞品、市场、财报及关键人物   |
 |                 LinkedIn 进行全方位穿透，为明日早盘生成高置信度指导建议               |
@@ -461,7 +461,7 @@ python3 -m agent_reach.cli daily-run schedule run forecast
 
 ## 📊 Phase-2.6 A股每日复盘四卡（[a-stock-review-skill](https://github.com/zjk1984/a-stock-review-skill)）
 
-> 「散户复盘找机会，高手复盘改毛病。」upstream 是纯前端 + Node 零依赖代理，约 5–10 秒拉东财全市场数据，输出 **四张复盘卡片**。daily-run **不嵌入其 HTML UI**，但收盘 15:30 / 周六 weekly 已部分覆盖同类能力；缺项列入 roadmap。
+> 「散户复盘找机会，高手复盘改毛病。」upstream 是纯前端 + Node 零依赖代理，约 5–10 秒拉东财全市场数据，输出 **四张复盘卡片**。daily-run **不嵌入其 HTML UI**，但收盘 18:00 / 周六 weekly 已部分覆盖同类能力；缺项列入 roadmap。
 
 ### upstream 架构
 
@@ -472,7 +472,7 @@ python3 -m agent_reach.cli daily-run schedule run forecast
 
 - **零 npm 依赖**：`server.js` 仅 `http` + `fs` + Node 18+ `fetch`
 - **存储**：复盘快照存浏览器 `localStorage`（最多 60 日），支持 vs 昨日 / vs 上周对比
-- **最佳实践**：15:30 后数据完整；须 `node server.js` 启动（直接开 HTML 可能 CORS 失败）
+- **最佳实践**：18:00 收盘复盘 cron；须 `node server.js` 启动（直接开 HTML 可能 CORS 失败）
 
 本地试跑（与 daily-run cron **并行**，互不冲突）：
 
@@ -539,7 +539,7 @@ upstream `analyzeEmotion()` 综合打分 → 定级 → 仓位：
 
 ### 与收盘 / 周报工作流衔接
 
-**每日 15:30 `daily-run close`（已有）：**
+**每日 18:00 `daily-run close`（已有）：**
 
 1. Team + MSS 曲线 + 组合 P&L + Exa 深度调研
 2. `verify` 对比早盘 MSS 预测区间
@@ -986,9 +986,9 @@ agent-reach daily-run schedule run forecast
 | 07:00 | 盘前 S1 扫描 + 飞书（smart 模式推送） |
 | 08:00 | 早盘全量分析 + S2 + 飞书 + 保存基线 |
 | 09:30–15:00 **11 次**扫描 | 盘中 S3–S12 + 条件调仓 T_n（smart 推送：S1/S2/S12 或调仓时） |
-| 15:30 | 收盘复盘（Team + 曲线 + Exa + 验证 + 预测校准） |
-| **周六 09:00** | **周报**：盈亏、持股、观察池、热门板块 → 飞书；**闭环** 写回 skill + settings + 本地同步 + skill 审视 |
-| **周日 09:00** | **下周预测**：MSS/标的日走势、新闻热点 → 飞书 + `forecasts/` |
+| 18:00 | 收盘复盘（Team + 曲线 + Exa + 验证 + 预测校准） |
+| **周六 08:30** | **周报**：盈亏、持股、观察池、热门板块 → 飞书；**闭环** 写回 skill + settings + 本地同步 + skill 审视 |
+| **周日 08:30** | **下周预测**：MSS/标的日走势、新闻热点 → 飞书 + `forecasts/` |
 
 定时任务默认 **doctor 日缓存**、**macro/technicals 日缓存**（intraday 仅刷新 quotes）、**Exa TTL 缓存**、**A 股交易日历跳过休市**。
 
@@ -1059,7 +1059,7 @@ $$\text{Final\_MSS} = 0.5 \cdot \text{MSS}(S_n) + 0.3 \cdot \text{MSS}(S_{n-1}) 
 
 > 全市场「四卡复盘」（情绪 / 板块主线 / 龙虎榜 / 历史对比）设计见 **Phase-2.6 [a-stock-review-skill](https://github.com/zjk1984/a-stock-review-skill)**；跨平台舆情/热榜/公众号大V 见 **Phase-2.7 [redfox-community](https://github.com/zjk1984/redfox-community)**；本节侧重 **持仓组合 + MSS + Exa 深度**。
 
-每个交易日下午 15:30，系统自动触发收盘深度复盘，并调用 **Exa AI 搜索引擎** 执行全方位穿透式调研：
+每个交易日 **18:00**，系统自动触发收盘深度复盘，并调用 **Exa AI 搜索引擎** 执行全方位穿透式调研：
 *   **Exa 深度调研指令：**
     ```bash
     # 1. 热点公司与最新财报深度调研 (分析营收、净利、毛利率及管理层展望)
