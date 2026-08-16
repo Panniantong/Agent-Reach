@@ -131,7 +131,13 @@
     "calibration_learning_rate": 0.15,
     "max_bias_pct": 3.0,
     "min_vol_scale": 0.6,
-    "max_vol_scale": 1.6
+    "max_vol_scale": 1.6,
+    "llm_narrative": {
+      "enabled": true,
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "timeout_seconds": 60
+    }
   },
 
   "kronos": {

@@ -77,7 +77,12 @@ ${PY} -m agent_reach.cli doctor --json
 | 层级 | 触发 | 作用 |
 |------|------|------|
 | **Layer A** | 每次 `close` / `weekly` / `forecast` 结束 | 确定性写入 memory / policy / playbook |
-| **Layer B** | review gate 通过后 | 合并重复、提炼流程改进（有 Groq/OpenAI key 时用 LLM，否则规则 planner） |
+| **Layer B** | review gate 通过后 | 合并重复、提炼流程改进（DeepSeek / Groq / OpenAI，否则规则 planner） |
+
+**周日 forecast 分工：** Kronos+MC 负责数值路径；DeepSeek 仅生成飞书「AI解读」卡片（`week_forecast.llm_narrative`），不改 blend 结果。
+
+- **LLM 配置：** `~/.agent-reach/config.env` 中 `DEEPSEEK_API_KEY` + `DEEPSEEK_BASE_URL=https://api.deepseek.com`；模型见 `harness.llm_refine.model`（当前 `deepseek-v4-flash`）
+- **CLI 写入 key：** `python3 -m agent_reach.cli configure deepseek-key sk-xxx`
 
 - **存储：** `~/.agent-reach/daily_run/harness/harness_state.json` + `refinements.jsonl`
 - **配置：** `config/daily_run_settings.json` → `harness` / `harness.llm_refine`
