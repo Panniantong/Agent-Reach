@@ -11,9 +11,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, Optional
 
-HarnessKind = Literal["memory", "policy", "playbook"]
+HarnessKind = Literal["memory", "policy", "playbook", "plan"]
 
-_KINDS: tuple[HarnessKind, ...] = ("memory", "policy", "playbook")
+_KINDS: tuple[HarnessKind, ...] = ("memory", "policy", "playbook", "plan")
 _SCHEMA_VERSION = 1
 
 
@@ -275,7 +275,7 @@ def format_harness_for_briefing(*, limit: int = 5, kinds: Optional[list[HarnessK
         bucket = state.entries.get(kind) or {}
         if not bucket:
             continue
-        label = {"memory": "记忆", "policy": "策略", "playbook": "清单"}.get(kind, kind)
+        label = {"memory": "记忆", "policy": "策略", "playbook": "清单", "plan": "计划"}.get(kind, kind)
         lines.append(f"**Harness {label}**")
         for entry in sorted(bucket.values(), key=lambda e: e.updated_at, reverse=True)[:limit]:
             lines.append(f"- {entry.content}")
@@ -361,6 +361,7 @@ def _limits(cfg: dict[str, Any]) -> dict[str, int]:
         "memory": int(cfg.get("max_memory") or 80),
         "policy": int(cfg.get("max_policy") or 30),
         "playbook": int(cfg.get("max_playbook") or 20),
+        "plan": int(cfg.get("max_plan") or 10),
     }
 
 
@@ -397,7 +398,7 @@ def _upsert_texts(
     return changes, edits
 
 
-def _evidence_from_close(evidence: dict[str, Any]) -> tuple[list[str], list[str], list[str], str]:
+def _evidence_from_close(evidence: dict[str, Any]) -> tuple[list[str], list[str], list[str], list[str], str]:
     memory: list[str] = list(evidence.get("rules") or [])
     if not memory and evidence.get("verify"):
         from agent_reach.daily_run.experience import _distill_rules
@@ -410,6 +411,7 @@ def _evidence_from_close(evidence: dict[str, Any]) -> tuple[list[str], list[str]
         )
     policy: list[str] = []
     playbook: list[str] = []
+    plan: list[str] = []
 
     verify = evidence.get("verify") or {}
     name = evidence.get("name") or verify.get("code") or ""
@@ -426,16 +428,18 @@ def _evidence_from_close(evidence: dict[str, Any]) -> tuple[list[str], list[str]
 
     for rec in (verify.get("recommendations") or [])[:2]:
         playbook.append(f"明日：{rec}")
+        plan.append(f"假设：{rec}（待明日 verify）")
 
     summary = f"close {name or verify.get('code', '')}".strip()
-    return memory, policy, playbook, summary
+    return memory, policy, playbook, plan, summary
 
 
-def _evidence_from_weekly(evidence: dict[str, Any]) -> tuple[list[str], list[str], list[str], str]:
+def _evidence_from_weekly(evidence: dict[str, Any]) -> tuple[list[str], list[str], list[str], list[str], str]:
     report = evidence.get("report") or evidence
     memory: list[str] = []
     playbook: list[str] = []
     policy: list[str] = []
+    plan: list[str] = []
 
     pnl = report.get("weekly_pnl")
     pct = report.get("weekly_pnl_pct")
@@ -449,6 +453,8 @@ def _evidence_from_weekly(evidence: dict[str, Any]) -> tuple[list[str], list[str
         detail = item.get("detail") or ""
         action = item.get("action") or ""
         playbook.append(f"{title} — {detail}" + (f"；执行：{action}" if action else ""))
+        if str(item.get("priority") or "") in ("high", "medium"):
+            plan.append(f"下周：{title}" + (f" → {action}" if action else ""))
 
     for item in report.get("skill_learning") or []:
         title = item.get("title") or "技能"
@@ -463,14 +469,15 @@ def _evidence_from_weekly(evidence: dict[str, Any]) -> tuple[list[str], list[str
 
     ws = report.get("week_start") or ""
     we = report.get("week_end") or ""
-    return memory, policy, playbook, f"weekly {ws}~{we}".strip()
+    return memory, policy, playbook, plan, f"weekly {ws}~{we}".strip()
 
 
-def _evidence_from_forecast(evidence: dict[str, Any]) -> tuple[list[str], list[str], list[str], str]:
+def _evidence_from_forecast(evidence: dict[str, Any]) -> tuple[list[str], list[str], list[str], list[str], str]:
     forecast = evidence.get("forecast") or evidence
     memory: list[str] = []
     playbook: list[str] = []
     policy: list[str] = []
+    plan: list[str] = []
 
     ws = forecast.get("week_start") or ""
     we = forecast.get("week_end") or ""
@@ -495,15 +502,19 @@ def _evidence_from_forecast(evidence: dict[str, Any]) -> tuple[list[str], list[s
         elif float(cum) <= -1.0:
             bearish.append(f"{name}({code}) {float(cum):+.1f}%")
     if bullish:
-        playbook.append("Kronos 偏强：" + "、".join(bullish[:4]))
+        line = "Kronos 偏强：" + "、".join(bullish[:4])
+        playbook.append(line)
+        plan.append(f"偏多验证：{line}")
     if bearish:
-        playbook.append("Kronos 偏弱：" + "、".join(bearish[:4]))
+        line = "Kronos 偏弱：" + "、".join(bearish[:4])
+        playbook.append(line)
+        plan.append(f"偏空验证：{line}")
 
     mss = forecast.get("mss_daily") or {}
     if mss.get("summary"):
         memory.append(str(mss["summary"])[:200])
 
-    return memory, policy, playbook, f"forecast {ws}~{we}".strip()
+    return memory, policy, playbook, plan, f"forecast {ws}~{we}".strip()
 
 
 def refine_after_job(
@@ -520,15 +531,16 @@ def refine_after_job(
         return {"skipped": True, "reason": f"job {job} disabled in harness.jobs"}
 
     if job == "close":
-        memory, policy, playbook, ev_summary = _evidence_from_close(evidence)
+        memory, policy, playbook, plan, ev_summary = _evidence_from_close(evidence)
     elif job == "weekly":
-        memory, policy, playbook, ev_summary = _evidence_from_weekly(evidence)
+        memory, policy, playbook, plan, ev_summary = _evidence_from_weekly(evidence)
     elif job == "forecast":
-        memory, policy, playbook, ev_summary = _evidence_from_forecast(evidence)
+        memory, policy, playbook, plan, ev_summary = _evidence_from_forecast(evidence)
     else:
         memory = [str(x) for x in (evidence.get("memory") or []) if str(x).strip()]
         policy = [str(x) for x in (evidence.get("policy") or []) if str(x).strip()]
         playbook = [str(x) for x in (evidence.get("playbook") or []) if str(x).strip()]
+        plan = [str(x) for x in (evidence.get("plan") or []) if str(x).strip()]
         ev_summary = str(evidence.get("summary") or job)
 
     state = load_harness()
@@ -539,6 +551,7 @@ def refine_after_job(
         ("memory", memory),
         ("policy", policy),
         ("playbook", playbook),
+        ("plan", plan),
     ):
         changes, edits = _upsert_texts(
             state,
@@ -826,12 +839,12 @@ def plan_harness_refinement(
 
     provider = str(llm_cfg.get("provider") or "auto")
     if resolve_chat_provider(provider):
-        memory, policy, playbook, ev_summary = _evidence_from_job(job, evidence)
+        memory, policy, playbook, plan, ev_summary = _evidence_from_job(job, evidence)
         payload = chat_json(
             system=(
                 "你是 daily-run harness 规划器。输出 JSON："
                 '{"summary":"...", "rationale":"...", "edits":[{'
-                '"action":"create|update|delete", "kind":"memory|policy|playbook", '
+                '"action":"create|update|delete", "kind":"memory|policy|playbook|plan", '
                 '"entry_id":"optional", "title":"...", "content":"..."}]}。'
                 "每次最多 8 条 edits；content 必须中文且可执行；避免与 Layer A 完全重复。"
             ),
@@ -840,7 +853,7 @@ def plan_harness_refinement(
                     "job": job,
                     "instructions": instructions,
                     "evidence_summary": ev_summary,
-                    "layer_a": {"memory": memory, "policy": policy, "playbook": playbook},
+                    "layer_a": {"memory": memory, "policy": policy, "playbook": playbook, "plan": plan},
                     "harness_overview": state.overview(entry_limit=8),
                     "recent_refinements": [e.to_dict() for e in state.refinements[-8:]],
                 },
@@ -859,7 +872,7 @@ def plan_harness_refinement(
     return plan
 
 
-def _evidence_from_job(job: str, evidence: dict[str, Any]) -> tuple[list[str], list[str], list[str], str]:
+def _evidence_from_job(job: str, evidence: dict[str, Any]) -> tuple[list[str], list[str], list[str], list[str], str]:
     if job == "close":
         return _evidence_from_close(evidence)
     if job == "weekly":
@@ -869,7 +882,8 @@ def _evidence_from_job(job: str, evidence: dict[str, Any]) -> tuple[list[str], l
     memory = [str(x) for x in (evidence.get("memory") or []) if str(x).strip()]
     policy = [str(x) for x in (evidence.get("policy") or []) if str(x).strip()]
     playbook = [str(x) for x in (evidence.get("playbook") or []) if str(x).strip()]
-    return memory, policy, playbook, str(evidence.get("summary") or job)
+    plan = [str(x) for x in (evidence.get("plan") or []) if str(x).strip()]
+    return memory, policy, playbook, plan, str(evidence.get("summary") or job)
 
 
 def apply_harness_proposal(
@@ -961,7 +975,7 @@ def refine_after_job_llm(
         instructions=str(review.get("instructions") or ""),
     )
     state = load_harness()
-    _, _, _, ev_summary = _evidence_from_job(job, evidence)
+    _, _, _, _, ev_summary = _evidence_from_job(job, evidence)
     edits, changes = apply_harness_proposal(
         state,
         proposal,

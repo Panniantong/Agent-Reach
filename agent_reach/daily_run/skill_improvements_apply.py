@@ -14,6 +14,14 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agent_reach.daily_run.settings import clear_settings_cache, load_settings, save_user_settings
+from agent_reach.daily_run.skill_archive import (
+    annotate_experience_refinement_id,
+    compact_experience_sections,
+)
+from agent_reach.daily_run.skill_learning import (
+    dedupe_skill_learning_items,
+    filter_superseded_skill_learning,
+)
 from agent_reach.daily_run.skill_writeback import (
     EXPERIENCE_HEADER,
     OPS_HEADER,
@@ -27,6 +35,7 @@ from agent_reach.daily_run.skill_writeback import (
 
 PLAYBOOK_PREFIX = "## 📋 下周执行清单（周六自动更新"
 PLAYBOOK_MANIFEST = Path.home() / ".agent-reach" / "daily_run" / "next_week_playbook.json"
+SKILL_CHANGELOG = Path.home() / ".agent-reach" / "daily_run" / "skill_changelog.jsonl"
 AGENT_ENTRY_HEADER = "## ⚡ Agent 执行入口"
 DECISION_HEADER = "## 📊 股票大师多市场共振与技术面量化决策模型"
 PHASE1_HEADER = "## 🛡️ Phase-1 质量工程化"
@@ -39,6 +48,17 @@ REQUIRED_SKILL_SECTIONS = (
     EXPERIENCE_HEADER,
     OPS_HEADER,
 )
+
+
+def _normalize_report_for_writeback(report: dict[str, Any], skill_text: str = "") -> dict[str, Any]:
+    """Dedupe skill_learning and drop titles already present in skill/playbook."""
+    out = dict(report)
+    items = dedupe_skill_learning_items(list(out.get("skill_learning") or []))
+    existing: list[str] = []
+    for match in re.finditer(r"\*\*([^*]+)：\*\*", skill_text):
+        existing.append(match.group(1).strip())
+    out["skill_learning"] = filter_superseded_skill_learning(items, existing)
+    return out
 
 
 def build_next_week_playbook_block(
@@ -213,8 +233,10 @@ def patch_canonical_skill_sections(
     if not path.exists():
         return {"canonical": str(path), "experience": False, "playbook": False}
 
-    experience_block = build_weekly_experience_block(report)
-    playbook_block = build_next_week_playbook_block(report, applied_config)
+    skill_text = path.read_text(encoding="utf-8")
+    normalized = _normalize_report_for_writeback(report, skill_text)
+    experience_block = build_weekly_experience_block(normalized)
+    playbook_block = build_next_week_playbook_block(normalized, applied_config)
     exp_ok = patch_skill_file(path, experience_block, week_start, week_end)
     pb_ok = patch_playbook_section(path, playbook_block)
     return {"canonical": str(path), "experience": exp_ok, "playbook": pb_ok}
@@ -305,8 +327,8 @@ def _dedupe_duplicate_h2_sections(text: str) -> tuple[str, bool]:
     return "".join(out), changed
 
 
-def optimize_skill_markdown(text: str) -> tuple[str, list[str]]:
-    """Structural cleanup after weekly writeback (dedupe, orphans, whitespace)."""
+def optimize_skill_markdown(text: str, *, settings: Optional[dict[str, Any]] = None) -> tuple[str, list[str]]:
+    """Structural cleanup after weekly writeback (dedupe, orphans, whitespace, archive)."""
     fixes: list[str] = []
     for fn, label in (
         (_collapse_blank_lines, "collapse_blank_lines"),
@@ -317,6 +339,9 @@ def optimize_skill_markdown(text: str) -> tuple[str, list[str]]:
         text, changed = fn(text)
         if changed:
             fixes.append(label)
+    text, archived = compact_experience_sections(text, settings=settings)
+    if archived:
+        fixes.append(f"archive_experience_{len(archived)}")
     return text.rstrip() + "\n", fixes
 
 
@@ -328,7 +353,7 @@ def audit_weekly_skill(settings: Optional[dict[str, Any]] = None) -> dict[str, A
 
     raw = path.read_text(encoding="utf-8")
     missing = [sec for sec in REQUIRED_SKILL_SECTIONS if sec not in raw]
-    optimized, fixes = optimize_skill_markdown(raw)
+    optimized, fixes = optimize_skill_markdown(raw, settings=settings)
     synced: list[str] = []
     if fixes or optimized != raw:
         path.write_text(optimized, encoding="utf-8")
@@ -370,12 +395,15 @@ def save_playbook_manifest(
     synced_skills: list[str],
     runtime: dict[str, Any],
     skill_audit: Optional[dict[str, Any]] = None,
+    *,
+    harness_refinement_id: str = "",
 ) -> Path:
     PLAYBOOK_MANIFEST.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "week_start": report.get("week_start"),
         "week_end": report.get("week_end"),
+        "harness_refinement_id": harness_refinement_id or report.get("harness_refinement_id") or "",
         "applied_config": applied_config,
         "process_improvements": report.get("process_improvements") or [],
         "skill_learning": report.get("skill_learning") or [],
@@ -385,6 +413,61 @@ def save_playbook_manifest(
     }
     PLAYBOOK_MANIFEST.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return PLAYBOOK_MANIFEST
+
+
+def append_skill_changelog(event: dict[str, Any]) -> None:
+    SKILL_CHANGELOG.parent.mkdir(parents=True, exist_ok=True)
+    row = {"at": datetime.now(timezone.utc).isoformat(), **event}
+    with open(SKILL_CHANGELOG, "a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def annotate_weekly_harness_audit(
+    *,
+    week_start: str,
+    week_end: str,
+    refinement_id: str,
+    settings: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Post-harness: stamp refinement_id into skill experience + playbook manifest."""
+    if not refinement_id:
+        return {"skipped": True, "reason": "no refinement_id"}
+
+    path = canonical_skill_path()
+    if not path.exists():
+        return {"skipped": True, "reason": "canonical skill missing"}
+
+    text = path.read_text(encoding="utf-8")
+    new_text = annotate_experience_refinement_id(
+        text,
+        week_start=week_start,
+        week_end=week_end,
+        refinement_id=refinement_id,
+    )
+    changed = new_text != text
+    if changed:
+        path.write_text(new_text, encoding="utf-8")
+        sync_canonical_skill_to_local(settings)
+
+    if PLAYBOOK_MANIFEST.exists():
+        try:
+            manifest = json.loads(PLAYBOOK_MANIFEST.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            manifest = {}
+        manifest["harness_refinement_id"] = refinement_id
+        manifest["harness_annotated_at"] = datetime.now(timezone.utc).isoformat()
+        PLAYBOOK_MANIFEST.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    append_skill_changelog(
+        {
+            "action": "harness_annotate",
+            "week_start": week_start,
+            "week_end": week_end,
+            "refinement_id": refinement_id,
+            "skill_changed": changed,
+        }
+    )
+    return {"skipped": False, "refinement_id": refinement_id, "skill_changed": changed}
 
 
 def apply_weekly_skill_closure(
@@ -422,6 +505,15 @@ def apply_weekly_skill_closure(
 
     manifest_path = save_playbook_manifest(
         report, applied_config, synced, runtime, skill_audit=skill_audit
+    )
+    append_skill_changelog(
+        {
+            "action": "weekly_writeback",
+            "week_start": week_start,
+            "week_end": week_end,
+            "applied_config": applied_config,
+            "manifest_path": str(manifest_path),
+        }
     )
 
     return {

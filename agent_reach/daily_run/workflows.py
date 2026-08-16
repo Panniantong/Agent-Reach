@@ -854,6 +854,23 @@ def run_weekly(
     except Exception as exc:
         harness_result = {"skipped": True, "error": str(exc)}
 
+    refinement_id = ""
+    for layer in (harness_result.get("layer_b") or {}, harness_result.get("layer_a") or {}):
+        if isinstance(layer, dict) and layer.get("refinement_id"):
+            refinement_id = str(layer["refinement_id"])
+            break
+    if refinement_id:
+        from agent_reach.daily_run.skill_improvements_apply import annotate_weekly_harness_audit
+
+        audit_note = annotate_weekly_harness_audit(
+            week_start=str(report.week_start or ""),
+            week_end=str(report.week_end or ""),
+            refinement_id=refinement_id,
+            settings=cfg,
+        )
+        steps.append("harness_skill_annotate")
+        skill_writeback["harness_annotation"] = audit_note
+
     return {
         "steps": steps,
         "report": report.to_dict(),

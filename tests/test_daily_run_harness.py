@@ -55,6 +55,7 @@ class TestHarnessRefine:
                             "title": "收紧观察池",
                             "detail": "宏观回避时减少新增",
                             "action": "close 时仅 sector_pool 补位",
+                            "priority": "high",
                         }
                     ],
                 }
@@ -64,6 +65,7 @@ class TestHarnessRefine:
         assert result["skipped"] is False
         state = HarnessState.load()
         assert any("观察池" in e.content for e in state.entries["playbook"].values())
+        assert any("观察池" in e.content for e in state.entries["plan"].values())
 
     def test_forecast_refine_kronos_playbook(self, harness_tmp):
         result = refine_after_job(
@@ -143,9 +145,13 @@ class TestHarnessLayerB:
         )
         assert review["should_refine"] is False
 
-    def test_llm_refine_weekly_deterministic(self, harness_tmp):
+    def test_llm_refine_weekly_deterministic(self, harness_tmp, monkeypatch):
         from agent_reach.daily_run.harness import refine_after_job_llm
 
+        monkeypatch.setattr(
+            "agent_reach.daily_run.llm_chat.resolve_chat_provider",
+            lambda provider: None,
+        )
         result = refine_after_job_llm(
             "weekly",
             evidence={

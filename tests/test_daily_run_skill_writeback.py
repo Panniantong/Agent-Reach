@@ -34,6 +34,7 @@ class TestSkillWriteback:
             {
                 "week_start": "2026-07-20",
                 "week_end": "2026-07-24",
+                "harness_refinement_id": "refine_0003",
                 "weekly_pnl": 1200.5,
                 "weekly_pnl_pct": 1.2,
                 "start_total": 87000,
@@ -57,6 +58,7 @@ class TestSkillWriteback:
             }
         )
         assert "2026-07-20 ~ 2026-07-24" in block
+        assert "refine_0003" in block
         assert "情况说明" in block
         assert "持仓浮盈合计" in block
         assert "缺失收盘" in block

@@ -122,8 +122,15 @@ def build_weekly_experience_block(report: dict[str, Any]) -> str:
     lines = [
         header,
         f"*   **更新时间：** {updated}",
-        "*   **本周盈亏说明：**",
     ]
+    ref_id = report.get("harness_refinement_id") or report.get("refinement_id")
+    if ref_id:
+        lines.append(f"*   **Harness refinement_id：** `{ref_id}`")
+    lines.extend(
+        [
+            "*   **本周盈亏说明：**",
+        ]
+    )
     for expl in build_weekly_pnl_explanation(report):
         if expl.startswith("  - "):
             lines.append(f"    *   {expl[4:].strip()}")
