@@ -484,7 +484,7 @@ def generate_week_forecast(
         calibration_used=dict(calibration),
         notes=notes,
     )
-    from agent_reach.daily_run.forecast_narrative import generate_forecast_narrative
+    from agent_reach.daily_run.report_narrative import generate_forecast_narrative
 
     narrative = generate_forecast_narrative(forecast.to_dict(), settings=settings)
     forecast.llm_narrative = narrative
@@ -592,9 +592,9 @@ def _render_news_section(data: dict[str, Any]) -> str:
 def render_forecast_sections(forecast: WeekForecast | dict[str, Any]) -> list[ForecastSection]:
     data = forecast.to_dict() if isinstance(forecast, WeekForecast) else forecast
     sections: list[ForecastSection] = []
-    from agent_reach.daily_run.forecast_narrative import render_forecast_narrative_markdown
+    from agent_reach.daily_run.report_narrative import render_narrative_markdown
 
-    narrative_md = render_forecast_narrative_markdown(data.get("llm_narrative") or {})
+    narrative_md = render_narrative_markdown(data.get("llm_narrative") or {}, job="forecast")
     if narrative_md.strip():
         sections.append(ForecastSection(label="AI解读", markdown=narrative_md))
     mss_md = _render_mss_section(data)

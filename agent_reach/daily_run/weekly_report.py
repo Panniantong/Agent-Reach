@@ -48,6 +48,7 @@ class WeeklyReport:
     watchlist_candidates_update: dict[str, Any] = field(default_factory=dict)
     hot_topic_diff: dict[str, Any] = field(default_factory=dict)
     market_review_weekly: dict[str, Any] = field(default_factory=dict)
+    llm_narrative: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     cash: Optional[float] = None
     cash_ratio: Optional[float] = None
@@ -83,6 +84,7 @@ class WeeklyReport:
             "watchlist_candidates_update": self.watchlist_candidates_update,
             "hot_topic_diff": self.hot_topic_diff,
             "market_review_weekly": self.market_review_weekly,
+            "llm_narrative": self.llm_narrative,
             "notes": self.notes,
             "cash": self.cash,
             "cash_ratio": self.cash_ratio,
@@ -1510,6 +1512,11 @@ def _render_insights_lines(report: WeeklyReport) -> list[str]:
 def render_weekly_sections(report: WeeklyReport) -> list[WeeklySection]:
     """Split weekly report into Feishu-friendly sections (one card each)."""
     sections: list[WeeklySection] = []
+    from agent_reach.daily_run.report_narrative import render_narrative_markdown
+
+    narrative_md = render_narrative_markdown(report.llm_narrative or {}, job="weekly")
+    if narrative_md.strip():
+        sections.append(WeeklySection("AI解读", narrative_md))
 
     portfolio_lines = (
         _period_header_lines(report)

@@ -479,7 +479,20 @@
     "max_entries": 200
   },
 
-    "harness": {
+  "llm_narrative": {
+    "enabled": true,
+    "provider": "deepseek",
+    "model": "deepseek-v4-flash",
+    "timeout_seconds": 60,
+    "jobs": {
+      "morning": true,
+      "close": true,
+      "weekly": true,
+      "forecast": true
+    }
+  },
+
+  "harness": {
     "enabled": true,
     "max_memory": 80,
     "max_policy": 30,

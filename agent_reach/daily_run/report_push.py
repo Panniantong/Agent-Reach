@@ -17,6 +17,7 @@ class ReportSection:
 
 
 _CATEGORY_LABELS: dict[str, str] = {
+    "ai_narrative": "AI解读",
     "experts": "专家共识",
     "decision": "MSS 决策",
     "intraday": "盘中曲线",
@@ -30,6 +31,7 @@ _CATEGORY_LABELS: dict[str, str] = {
     "weekly_track": "MSS·经验",
     "weekly_insights": "学习·改进",
     "forecast_mss": "MSS预测",
+    "forecast_narrative": "AI解读",
     "forecast_symbols": "个股路径",
     "forecast_news": "新闻热点",
 }
@@ -84,10 +86,17 @@ def render_morning_sections(
     team_markdown: str,
     report_markdown: str,
     report: dict[str, Any],
+    narrative: Optional[dict[str, Any]] = None,
 ) -> list[ReportSection]:
     name = report.get("name") or report.get("code") or "大盘"
     verdict = report.get("verdict") or "观察"
     sections: list[ReportSection] = []
+    if narrative:
+        from agent_reach.daily_run.report_narrative import render_narrative_markdown
+
+        ai_md = render_narrative_markdown(narrative, job="morning")
+        if ai_md.strip():
+            sections.append(ReportSection(category="ai_narrative", title="", body=ai_md))
     if team_markdown.strip():
         sections.append(ReportSection(category="experts", title="", body=team_markdown.strip()))
     if report_markdown.strip():
@@ -118,9 +127,16 @@ def render_close_sections(
     verify_markdown: str = "",
     portfolio_markdown: str = "",
     market_markdown: str = "",
+    narrative: Optional[dict[str, Any]] = None,
 ) -> list[ReportSection]:
     label = verify_name or "大盘"
     sections: list[ReportSection] = []
+    if narrative:
+        from agent_reach.daily_run.report_narrative import render_narrative_markdown
+
+        ai_md = render_narrative_markdown(narrative, job="close")
+        if ai_md.strip():
+            sections.append(ReportSection(category="ai_narrative", title="", body=ai_md))
     if market_markdown.strip():
         sections.append(ReportSection(category="close_market", title="", body=market_markdown.strip()))
     if team_markdown.strip():
@@ -150,6 +166,7 @@ def render_close_sections(
 
 
 _WEEKLY_CATEGORY_MAP = {
+    "AI解读": "weekly_narrative",
     "盈亏·持仓": "weekly_portfolio",
     "板块·热点": "weekly_market",
     "MSS·经验": "weekly_track",
@@ -368,6 +385,7 @@ def morning_sections_from_run(run_result: dict[str, Any]) -> list[ReportSection]
         team_markdown=run_result.get("team_markdown") or "",
         report_markdown=run_result.get("report_markdown") or "",
         report=report,
+        narrative=run_result.get("llm_narrative"),
     )
 
 
@@ -381,6 +399,7 @@ def close_sections_from_run(run_result: dict[str, Any], *, verify_name: str) -> 
         experience_markdown=run_result.get("experience_markdown") or "",
         verify_markdown=run_result.get("verify_markdown") or "",
         portfolio_markdown=run_result.get("portfolio_markdown") or "",
+        narrative=run_result.get("llm_narrative"),
     )
 
 

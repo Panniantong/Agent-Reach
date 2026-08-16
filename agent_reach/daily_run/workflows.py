@@ -203,12 +203,16 @@ def run_morning(
 
     team_md = render_team_markdown(enriched) if expert_card_enabled(cfg, workflow="morning") else ""
     report_md = render_markdown(report)
+    from agent_reach.daily_run.report_narrative import generate_morning_narrative
+
+    morning_narrative = generate_morning_narrative(enriched, report, settings=cfg)
     feishu_result = None
     if push:
         sections = render_morning_sections(
             team_markdown=team_md,
             report_markdown=report_md,
             report=report,
+            narrative=morning_narrative,
         )
         feishu_result = push_report_sections(
             sections,
@@ -229,6 +233,7 @@ def run_morning(
         "markdown": team_md + "\n\n---\n\n" + report_md,
         "team_markdown": team_md,
         "report_markdown": report_md,
+        "llm_narrative": morning_narrative,
         "feishu": feishu_result,
     }
 
@@ -460,6 +465,18 @@ def run_close(
         if p
     )
 
+    curve_payload = curve.to_dict() if curve is not None and hasattr(curve, "to_dict") else curve
+    from agent_reach.daily_run.report_narrative import generate_close_narrative
+
+    close_narrative = generate_close_narrative(
+        snapshot=enriched,
+        verify=verify_dict,
+        portfolio_summary=portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
+        curve=curve_payload,
+        forecast_review=forecast_review.to_dict() if forecast_review else None,
+        settings=cfg,
+    )
+
     feishu_result = None
     if push:
         audit_cfg = cfg.get("data_audit", {})
@@ -478,6 +495,7 @@ def run_close(
             experience_markdown=exp_md or "",
             verify_markdown=verify_md,
             portfolio_markdown=portfolio_md,
+            narrative=close_narrative,
         )
         feishu_result = push_report_sections(
             sections,
@@ -525,6 +543,7 @@ def run_close(
         "market_review": market_review_obj,
         "portfolio_markdown": portfolio_md,
         "portfolio_summary": portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
+        "llm_narrative": close_narrative,
         "research": research_results,
         "experience_path": str(exp_path),
         "feishu": feishu_result,
@@ -788,6 +807,11 @@ def run_weekly(
             if audit.get("fixes"):
                 steps.append(f"skill_audit_fixes_{len(audit['fixes'])}")
 
+    from agent_reach.daily_run.report_narrative import generate_weekly_narrative
+
+    report.llm_narrative = generate_weekly_narrative(report.to_dict(), settings=cfg)
+    steps.append("llm_narrative")
+
     md = render_weekly_markdown(report)
     steps.append("render")
 
@@ -836,6 +860,7 @@ def run_weekly(
         "digest_path": str(digest_path),
         "watchlist_candidates": wl_candidates,
         "skill_writeback": skill_writeback,
+        "llm_narrative": report.llm_narrative,
         "harness": harness_result,
         "markdown": md,
         "feishu": feishu_result,
