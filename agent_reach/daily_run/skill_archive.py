@@ -11,6 +11,7 @@ from typing import Any, Optional
 from agent_reach.daily_run.skill_writeback import EXPERIENCE_HEADER, week_section_header
 
 _ARCHIVE_DIR = Path.home() / ".agent-reach" / "daily_run" / "archives" / "skill"
+_ARCHIVE_SUMMARY_HEADER = "### 📦 归档摘要（自动 compaction）"
 _WEEKLY_HEADER_RE = re.compile(
     r"^### 📅 (?P<start>\d{4}-\d{2}-\d{2}) ~ (?P<end>\d{4}-\d{2}-\d{2}) 周复盘（周六自动沉淀）",
     re.MULTILINE,
@@ -53,6 +54,87 @@ def list_weekly_review_headers(text: str) -> list[tuple[str, str]]:
     return rows
 
 
+def _week_label_from_block(block: str, fallback: str) -> str:
+    match = _WEEKLY_HEADER_RE.search(block)
+    if match:
+        return f"{match.group('start')}~{match.group('end')}"
+    return fallback
+
+
+def _rule_summarize_block(block: str) -> str:
+    picks: list[str] = []
+    for line in block.splitlines():
+        raw = line.strip().lstrip("*").strip()
+        if not raw or raw.startswith("#"):
+            continue
+        if any(k in raw for k in ("情况说明", "流程改进", "盈亏", "任务覆盖", "强势", "备注")):
+            picks.append(raw[:100])
+        if len(picks) >= 3:
+            break
+    if picks:
+        return "；".join(picks)[:280]
+    compact = block.strip()
+    return compact[:120] if compact else "（无摘要）"
+
+
+def summarize_archived_block(
+    block: str,
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> str:
+    """LLM summary when configured; else deterministic rule summary."""
+    cfg = (settings or {}).get("weekly_report") or {}
+    if cfg.get("skill_archive_llm_summary", True) is False:
+        return _rule_summarize_block(block)
+
+    from agent_reach.daily_run.llm_chat import chat_json, resolve_chat_provider
+
+    provider = str(((settings or {}).get("llm_narrative") or {}).get("provider") or "auto")
+    if not resolve_chat_provider(provider):
+        return _rule_summarize_block(block)
+
+    try:
+        payload = chat_json(
+            system='你是 daily-run skill compaction 助手。输出 JSON：{"summary":"一句中文摘要，≤120字，含盈亏方向与1条教训"}',
+            user=block[:3500],
+            provider=provider,
+            timeout=int(cfg.get("skill_archive_summary_timeout") or 30),
+        )
+        if isinstance(payload, dict) and payload.get("summary"):
+            return str(payload["summary"]).strip()[:280]
+        return _rule_summarize_block(block)
+    except Exception:
+        return _rule_summarize_block(block)
+
+
+def _upsert_archive_summary_section(text: str, rows: list[tuple[str, str]]) -> str:
+    if not rows or EXPERIENCE_HEADER not in text:
+        return text
+    lines = [_ARCHIVE_SUMMARY_HEADER, ""]
+    for label, summary in rows:
+        lines.append(f"* **{label}：** {summary}")
+    lines.append("")
+    block = "\n".join(lines)
+
+    if _ARCHIVE_SUMMARY_HEADER in text:
+        start = text.find(_ARCHIVE_SUMMARY_HEADER)
+        end = start + len(block)
+        tail = text[start + len(_ARCHIVE_SUMMARY_HEADER) :]
+        for pattern in (r"\n### 📅 ", r"\n---\n", r"\n## "):
+            match = re.search(pattern, tail)
+            if match:
+                end = start + len(_ARCHIVE_SUMMARY_HEADER) + match.start()
+                break
+        return text[:start] + block + text[end:].lstrip("\n")
+
+    pos = text.find(EXPERIENCE_HEADER)
+    line_end = text.find("\n", pos)
+    intro_end = text.find("\n\n", line_end if line_end >= 0 else pos)
+    if intro_end < 0:
+        intro_end = len(text)
+    return text[:intro_end] + "\n\n" + block + text[intro_end:].lstrip("\n")
+
+
 def compact_experience_sections(
     text: str,
     *,
@@ -71,6 +153,7 @@ def compact_experience_sections(
 
     to_archive = headers[: len(headers) - keep]
     archived_paths: list[str] = []
+    summary_rows: list[tuple[str, str]] = []
     new_text = text
 
     _ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
@@ -86,7 +169,12 @@ def compact_experience_sections(
         if not out_path.exists():
             out_path.write_text(block, encoding="utf-8")
         archived_paths.append(str(out_path))
+        label = _week_label_from_block(block, f"{ws}~{we}")
+        summary_rows.append((label, summarize_archived_block(block, settings=settings)))
         new_text = (new_text[: bounds[0]] + new_text[bounds[1] :]).strip() + "\n"
+
+    if summary_rows:
+        new_text = _upsert_archive_summary_section(new_text, summary_rows)
 
     if archived_paths and EXPERIENCE_HEADER in new_text:
         note = (

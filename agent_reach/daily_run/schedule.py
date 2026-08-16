@@ -180,6 +180,7 @@ def run_scheduled(
     *,
     push: bool = True,
     config=None,
+    force: bool = False,
 ) -> dict:
     """Execute morning | intraday | close with auto snapshot + doctor + manifest."""
     from agent_reach.config import Config
@@ -198,31 +199,53 @@ def run_scheduled(
             save_run_manifest(job, result, duration_ms=0)
             return result
 
-    if job in ("weekly", "forecast"):
-        from agent_reach.daily_run.run_manifest import has_job_manifest_today
+    from agent_reach.daily_run.run_guard import (
+        JobBusyError,
+        check_duplicate_job,
+        job_run_lock,
+    )
 
-        label = "周报" if job == "weekly" else "预测"
-        if has_job_manifest_today(job, require_feishu=True):
-            result = {
-                "job": job,
-                "skipped": True,
-                "reason": f"今日{label}已发送（manifest 去重）",
-            }
-            save_run_manifest(job, result, duration_ms=0)
-            return result
+    dup_reason = check_duplicate_job(job, force=force, settings=settings)
+    if dup_reason:
+        result = {"job": job, "skipped": True, "reason": dup_reason, "guard": "dedupe"}
+        save_run_manifest(job, result, duration_ms=0)
+        return result
 
+    try:
+        with job_run_lock(job, force=force, settings=settings):
+            return _run_scheduled_inner(
+                job,
+                push=push,
+                config=cfg_obj,
+                settings=settings,
+                t0=t0,
+            )
+    except JobBusyError as exc:
+        result = {"job": job, "skipped": True, "reason": str(exc), "guard": "lock"}
+        save_run_manifest(job, result, duration_ms=0)
+        return result
+
+
+def _run_scheduled_inner(
+    job: str,
+    *,
+    push: bool,
+    config,
+    settings: dict,
+    t0: float,
+) -> dict:
     from agent_reach.daily_run.job_health import (
         maybe_alert_consecutive_failures,
         record_job_outcome,
     )
 
-    doctor = _doctor_for_job(cfg_obj, settings, job)
+    doctor = _doctor_for_job(config, settings, job)
 
     try:
         result, feishu = _run_job_body(
             job,
             push=push,
-            config=cfg_obj,
+            config=config,
             settings=settings,
             doctor=doctor,
             t0=t0,
@@ -231,7 +254,7 @@ def run_scheduled(
     except Exception as exc:
         job_error = str(exc)
         streak = record_job_outcome(job, success=False, error=job_error)
-        maybe_alert_consecutive_failures(job, settings=settings, config=cfg_obj)
+        maybe_alert_consecutive_failures(job, settings=settings, config=config)
         duration_ms = (time.perf_counter() - t0) * 1000
         fail_payload = {"job": job, "error": job_error, "consecutive_failures": streak}
         save_run_manifest(job, fail_payload, duration_ms=duration_ms)

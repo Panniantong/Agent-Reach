@@ -116,6 +116,7 @@
     "skill_audit": true,
     "skill_archive": true,
     "skill_archive_keep_weeks": 2,
+    "skill_archive_llm_summary": true,
     "exa_skill_research": true,
     "max_skill_queries": 2,
     "max_skill_items": 8,
@@ -283,7 +284,11 @@
     "intraday_push_mode": "smart",
     "intraday_push_milestones": ["S1", "S2", "S3", "S15"],
     "doctor_cache": true,
-    "doctor_cache_ttl_seconds": 14400
+    "doctor_cache_ttl_seconds": 14400,
+    "guard": {
+      "enabled": true,
+      "dedupe_jobs": true
+    }
   },
 
   "snapshot": {

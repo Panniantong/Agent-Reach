@@ -36,6 +36,13 @@ newest week
 
 
 class TestSkillArchive:
+    def test_rule_summarize_block(self):
+        from agent_reach.daily_run.skill_archive import _rule_summarize_block
+
+        block = "### 📅 2026-08-03 ~ 2026-08-07 周复盘\n* **情况说明：** 持平\n* **流程改进（优先）：**\n    * **扫描偏少**"
+        summary = _rule_summarize_block(block)
+        assert "持平" in summary or "扫描" in summary
+
     def test_compact_keeps_newest_weeks(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
             "agent_reach.daily_run.skill_archive._ARCHIVE_DIR",

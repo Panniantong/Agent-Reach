@@ -22,6 +22,10 @@ from agent_reach.daily_run.skill_learning import (
     dedupe_skill_learning_items,
     filter_superseded_skill_learning,
 )
+from agent_reach.daily_run.skill_rejected import (
+    filter_rejected_items,
+    render_rejected_markdown,
+)
 from agent_reach.daily_run.skill_writeback import (
     EXPERIENCE_HEADER,
     OPS_HEADER,
@@ -51,14 +55,40 @@ REQUIRED_SKILL_SECTIONS = (
 
 
 def _normalize_report_for_writeback(report: dict[str, Any], skill_text: str = "") -> dict[str, Any]:
-    """Dedupe skill_learning and drop titles already present in skill/playbook."""
+    """Dedupe skill_learning, drop superseded/rejected titles."""
     out = dict(report)
+    improvements, blocked_imp = filter_rejected_items(list(out.get("process_improvements") or []))
+    out["process_improvements"] = improvements
     items = dedupe_skill_learning_items(list(out.get("skill_learning") or []))
+    items, blocked_skill = filter_rejected_items(items)
     existing: list[str] = []
     for match in re.finditer(r"\*\*([^*]+)：\*\*", skill_text):
         existing.append(match.group(1).strip())
     out["skill_learning"] = filter_superseded_skill_learning(items, existing)
+    blocked = blocked_imp + blocked_skill
+    if blocked:
+        out["_rejected_blocked"] = blocked
     return out
+
+
+def audit_supersession_harness(report: dict[str, Any]) -> dict[str, Any]:
+    """Flag improvements already captured in harness playbook/plan."""
+    from agent_reach.daily_run.harness import load_harness
+
+    state = load_harness()
+    known: set[str] = set()
+    for kind in ("playbook", "plan", "policy"):
+        for entry in (state.entries.get(kind) or {}).values():
+            title = str(entry.title or "")
+            content = str(entry.content or "")
+            known.add(title[:24])
+            known.add(content[:24])
+    duplicates: list[str] = []
+    for item in report.get("process_improvements") or []:
+        title = str(item.get("title") or "")
+        if any(title[:16] and title[:16] in k for k in known):
+            duplicates.append(title)
+    return {"harness_duplicates": duplicates}
 
 
 def build_next_week_playbook_block(
@@ -121,6 +151,10 @@ def build_next_week_playbook_block(
     if not applied_config and not improvements and not skill_items and not ok_research:
         lines.append("- 本周无额外改进项，维持当前策略与 cron 配置。")
         lines.append("")
+
+    rejected_md = render_rejected_markdown(limit=6)
+    if rejected_md:
+        lines.append(rejected_md)
 
     return "\n".join(lines).rstrip() + "\n"
 
@@ -502,6 +536,7 @@ def apply_weekly_skill_closure(
     skill_audit: dict[str, Any] = {}
     if weekly_cfg.get("skill_audit", True) is not False:
         skill_audit = audit_weekly_skill(new_settings)
+        skill_audit["supersession"] = audit_supersession_harness(report)
 
     manifest_path = save_playbook_manifest(
         report, applied_config, synced, runtime, skill_audit=skill_audit
@@ -513,6 +548,8 @@ def apply_weekly_skill_closure(
             "week_end": week_end,
             "applied_config": applied_config,
             "manifest_path": str(manifest_path),
+            "rejected_blocked": report.get("_rejected_blocked") or [],
+            "supersession": (skill_audit.get("supersession") or {}),
         }
     )
 

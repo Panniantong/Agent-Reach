@@ -228,6 +228,8 @@ def main():
     )
     p_dr_sched.add_argument("--dry-run", action="store_true",
                             help="Print crontab block without installing (install action)")
+    p_dr_sched.add_argument("--force", action="store_true",
+                            help="Bypass guard dedupe/lock for schedule run")
     p_dr_hot = p_daily_sub.add_parser("hot-news", help="Self-hosted 60s API for hot news")
     p_dr_hot_sub = p_dr_hot.add_subparsers(dest="hot_news_action", required=True)
     p_dr_hot_install = p_dr_hot_sub.add_parser("install", help="Deploy local 60s (native Node by default)")
@@ -269,6 +271,8 @@ def main():
     p_dr_h_refine = p_dr_harness_sub.add_parser("refine", help="Run Layer B LLM refine for a job")
     p_dr_h_refine.add_argument("--job", required=True, choices=["close", "weekly", "forecast"], help="Job name")
     p_dr_h_refine.add_argument("--force", action="store_true", help="Skip review gate")
+    p_dr_h_refine.add_argument("--ignore-cooldown", action="store_true",
+                               help="Bypass harness LLM refine cooldown")
     p_dr_h_refine.add_argument("--json", action="store_true", help="JSON output")
 
     # ── doctor ──
@@ -1846,10 +1850,15 @@ def _cmd_daily_run(args):
                 print("❌ job must be morning, intraday, close, weekly, or forecast")
                 sys.exit(1)
             try:
-                result = run_scheduled(job, push=not args.dry_run, config=Config())
+                result = run_scheduled(job, push=not args.dry_run, config=Config(), force=args.force)
             except Exception as exc:
                 print(f"❌ Schedule run failed: {exc}")
                 sys.exit(1)
+            if result.get("skipped"):
+                print(f"⏭️  Skipped: {result.get('reason')}")
+                if result.get("guard"):
+                    print(f"   guard={result.get('guard')} · 补跑请加 --force")
+                sys.exit(0)
             job_result = result.get("result") or {}
             print(f"✅ Scheduled job '{job}' completed")
             print(f"   snapshot: {result.get('snapshot_path')}")
@@ -1997,8 +2006,21 @@ def _cmd_daily_run(args):
 
         if action == "refine":
             from agent_reach.daily_run.settings import load_settings
+            from agent_reach.daily_run.run_guard import (
+                HarnessCooldownError,
+                assert_harness_refine_allowed,
+            )
 
             settings = load_settings()
+            try:
+                assert_harness_refine_allowed(
+                    force_review=args.force,
+                    ignore_cooldown=getattr(args, "ignore_cooldown", False),
+                    settings=settings,
+                )
+            except HarnessCooldownError as exc:
+                print(f"⏭️  {exc}")
+                sys.exit(1)
             evidence = {}
             if args.job == "weekly":
                 digest_path = Path.home() / ".agent-reach" / "daily_run" / "weekly_digest.json"

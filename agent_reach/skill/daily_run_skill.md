@@ -182,7 +182,7 @@ ${PY} -m agent_reach.cli doctor --json
 | **`manual-ok`** | 可手工单次补跑 | `schedule run close`、`doctor --json`、单票 verify |
 | **`research-ok`** | 可配合 agent-reach 调研 | Exa 收盘调研、外部 skill 学习 |
 
-**Guard：** cron 已安装 → 勿手工重跑 morning/intraday/close 全流程；Harness cooldown 内 → 勿 `harness refine --force`。
+**Guard：** cron 已安装 → 勿手工重跑 morning/intraday/close 全流程；Harness cooldown 内 → 勿 `harness refine`（除非 `--ignore-cooldown`）；重复 close/weekly → `schedule run` 自动 dedupe，补跑加 `--force`。
 
 ## 🔒 审计铁律（model-visible ⟺ logged）
 
@@ -194,6 +194,8 @@ ${PY} -m agent_reach.cli doctor --json
 | skill 正文变更 | 须带 `refinement_id`（见周复盘块） |
 
 手工改 skill 前：`daily-run harness list-refinements`；与 cron 写回冲突时以 manifest 为准。
+
+**Rejected 库：** `~/.agent-reach/daily_run/rejected_strategies.jsonl` — 已证伪策略禁止写回 playbook / settings（周六审视自动过滤）。
 
 ## 🛡️ Phase-1 质量工程化 · `manual-ok`
 
