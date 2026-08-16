@@ -1512,11 +1512,6 @@ def _render_insights_lines(report: WeeklyReport) -> list[str]:
 def render_weekly_sections(report: WeeklyReport) -> list[WeeklySection]:
     """Split weekly report into Feishu-friendly sections (one card each)."""
     sections: list[WeeklySection] = []
-    from agent_reach.daily_run.report_narrative import render_narrative_markdown
-
-    narrative_md = render_narrative_markdown(report.llm_narrative or {}, job="weekly")
-    if narrative_md.strip():
-        sections.append(WeeklySection("AI解读", narrative_md))
 
     portfolio_lines = (
         _period_header_lines(report)
@@ -1544,6 +1539,12 @@ def render_weekly_sections(report: WeeklyReport) -> list[WeeklySection]:
     if insight_body:
         insight_lines = _period_header_lines(report, continuation=True) + insight_body
         sections.append(WeeklySection("学习·改进", _join_section_lines(insight_lines)))
+
+    from agent_reach.daily_run.report_narrative import render_narrative_markdown
+
+    narrative_md = render_narrative_markdown(report.llm_narrative or {}, job="weekly")
+    if narrative_md.strip():
+        sections.append(WeeklySection("AI解读", narrative_md))
 
     return sections
 

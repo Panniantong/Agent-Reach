@@ -74,7 +74,7 @@ def test_llm_narrative(mock_chat, mock_provider):
     assert "下周偏防守" in md
 
 
-def test_render_forecast_sections_puts_ai_first():
+def test_render_forecast_sections_puts_ai_last():
     sections = render_forecast_sections(
         {
             "week_start": "2026-08-17",
@@ -89,5 +89,5 @@ def test_render_forecast_sections_puts_ai_first():
             "news_events": [],
         }
     )
-    assert sections[0].label == "AI解读"
-    assert isinstance(sections[0], ForecastSection)
+    assert sections[-1].label == "AI解读"
+    assert isinstance(sections[-1], ForecastSection)

@@ -79,7 +79,7 @@ ${PY} -m agent_reach.cli doctor --json
 | **Layer A** | 每次 `close` / `weekly` / `forecast` 结束 | 确定性写入 memory / policy / playbook |
 | **Layer B** | review gate 通过后 | 合并重复、提炼流程改进（DeepSeek / Groq / OpenAI，否则规则 planner） |
 
-**周日 forecast 分工：** Kronos+MC 负责数值路径；DeepSeek 生成飞书「AI解读」卡片（`llm_narrative`，覆盖早报/收盘/周六周报/周日预测）。
+**周日 forecast 分工：** Kronos+MC 负责数值路径；DeepSeek 生成飞书「AI解读」末卡（`llm_narrative`，覆盖早报/收盘/周六周报/周日预测）。
 
 - **配置：** `config/daily_run_settings.json` → `llm_narrative`（`jobs.morning|close|weekly|forecast`）
 - **CLI 写入 key：** `python3 -m agent_reach.cli configure deepseek-key sk-xxx`

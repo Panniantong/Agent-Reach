@@ -25,7 +25,7 @@ def test_morning_narrative_deterministic():
     assert "决策摘要" in md
 
 
-def test_morning_sections_include_ai_first():
+def test_morning_sections_include_ai_last():
     sections = render_morning_sections(
         team_markdown="",
         report_markdown="**MSS**",
@@ -37,20 +37,20 @@ def test_morning_sections_include_ai_first():
             "job": "morning",
         },
     )
-    assert sections[0].category == "ai_narrative"
-    assert "测试早报" in sections[0].body
+    assert sections[-1].category == "ai_narrative"
+    assert "测试早报" in sections[-1].body
 
 
-def test_close_sections_include_ai_first():
+def test_close_sections_include_ai_last():
     sections = render_close_sections(
         verify_name="澜起科技",
         verify_markdown="verify",
         narrative={"summary": "收盘测试", "focus_points": ["B"], "job": "close"},
     )
-    assert sections[0].category == "ai_narrative"
+    assert sections[-1].category == "ai_narrative"
 
 
-def test_weekly_sections_include_ai_first():
+def test_weekly_sections_include_ai_last():
     report = WeeklyReport(
         week_start=__import__("datetime").date(2026, 8, 10),
         week_end=__import__("datetime").date(2026, 8, 14),
@@ -62,7 +62,7 @@ def test_weekly_sections_include_ai_first():
         llm_narrative={"summary": "周报测试", "focus_points": ["C"], "job": "weekly"},
     )
     sections = render_weekly_sections(report)
-    assert sections[0].label == "AI解读"
+    assert sections[-1].label == "AI解读"
 
 
 def test_weekly_narrative_with_pnl():

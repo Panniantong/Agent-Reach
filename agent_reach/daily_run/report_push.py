@@ -91,18 +91,21 @@ def render_morning_sections(
     name = report.get("name") or report.get("code") or "大盘"
     verdict = report.get("verdict") or "观察"
     sections: list[ReportSection] = []
+    ai_section: Optional[ReportSection] = None
     if narrative:
         from agent_reach.daily_run.report_narrative import render_narrative_markdown
 
         ai_md = render_narrative_markdown(narrative, job="morning")
         if ai_md.strip():
-            sections.append(ReportSection(category="ai_narrative", title="", body=ai_md))
+            ai_section = ReportSection(category="ai_narrative", title="", body=ai_md)
     if team_markdown.strip():
         sections.append(ReportSection(category="experts", title="", body=team_markdown.strip()))
     if report_markdown.strip():
         sections.append(
             ReportSection(category="decision", title="", body=report_markdown.strip(), template=None)
         )
+    if ai_section is not None:
+        sections.append(ai_section)
     total = len(sections)
     for i, sec in enumerate(sections, start=1):
         extra = verdict if sec.category == "decision" else ""
@@ -131,12 +134,13 @@ def render_close_sections(
 ) -> list[ReportSection]:
     label = verify_name or "大盘"
     sections: list[ReportSection] = []
+    ai_section: Optional[ReportSection] = None
     if narrative:
         from agent_reach.daily_run.report_narrative import render_narrative_markdown
 
         ai_md = render_narrative_markdown(narrative, job="close")
         if ai_md.strip():
-            sections.append(ReportSection(category="ai_narrative", title="", body=ai_md))
+            ai_section = ReportSection(category="ai_narrative", title="", body=ai_md)
     if market_markdown.strip():
         sections.append(ReportSection(category="close_market", title="", body=market_markdown.strip()))
     if team_markdown.strip():
@@ -153,6 +157,8 @@ def render_close_sections(
         sections.append(
             ReportSection(category="daily_portfolio", title="", body=portfolio_markdown.strip())
         )
+    if ai_section is not None:
+        sections.append(ai_section)
     total = len(sections)
     for i, sec in enumerate(sections, start=1):
         sec.title = section_title(
