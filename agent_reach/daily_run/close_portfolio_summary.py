@@ -14,7 +14,6 @@ from agent_reach.daily_run.weekly_report import (
     _compute_trade_cash_flow,
     _holding_pnl_rows,
     _load_trade_ledger_range,
-    _prices_from_snapshot,
     _watchlist_rows,
 )
 
@@ -218,12 +217,103 @@ def _format_intraday_trade_lines(trades: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def _refresh_enriched_quotes(
+    enriched: dict[str, dict[str, Any]],
+    holding_codes: list[str],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> None:
+    """Refresh live quotes for close holdings (primary snapshot may omit secondary symbols)."""
+    from agent_reach.daily_run.quote_fetch import fetch_quotes_map
+
+    need = list(dict.fromkeys(_normalize_code(c) for c in holding_codes if c))
+    if not need:
+        return
+    result = fetch_quotes_map(need, settings=settings)
+    for code, quote in result.quotes.items():
+        row = enriched.setdefault(code, {})
+        if quote.get("price") is not None:
+            row["price"] = quote["price"]
+        if quote.get("change_pct") is not None:
+            row["change_pct"] = quote["change_pct"]
+        if quote.get("name"):
+            row["name"] = quote["name"]
+
+
+def _quoted_prices_from_holdings(
+    snap: dict[str, Any],
+    codes: Optional[list[str]] = None,
+) -> dict[str, float]:
+    """Mark prices from snapshot rows — never fall back to cost (cost ≠ morning mark)."""
+    targets = {_normalize_code(c) for c in codes if c} if codes else None
+    prices: dict[str, float] = {}
+    for h in (snap.get("portfolio") or {}).get("holdings") or []:
+        code = _normalize_code(str(h.get("code", "")))
+        if not code or (targets is not None and code not in targets):
+            continue
+        if h.get("price") is not None:
+            prices[code] = float(h["price"])
+    primary = snap.get("code")
+    if primary and snap.get("price") is not None:
+        code = _normalize_code(str(primary))
+        if targets is None or code in targets:
+            prices.setdefault(code, float(snap["price"]))
+    return prices
+
+
+def _morning_prices_for_pnl(
+    baseline: dict[str, Any],
+    holding_codes: list[str],
+) -> dict[str, float]:
+    """Morning mark prices for day P&L; backfill missing codes from per-symbol baselines."""
+    import json
+
+    from agent_reach.daily_run.workflows import morning_baseline_path
+
+    codes = list(dict.fromkeys(_normalize_code(c) for c in holding_codes if c))
+    prices = _quoted_prices_from_holdings(baseline, codes)
+    for code in codes:
+        if code in prices:
+            continue
+        path = morning_baseline_path(code)
+        if not path.exists():
+            continue
+        try:
+            snap = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        found = _quoted_prices_from_holdings(snap, [code])
+        if code in found:
+            prices[code] = found[code]
+    return prices
+
+
+def _close_prices_for_pnl(
+    enriched: dict[str, dict[str, Any]],
+    current: dict[str, Any],
+    holding_codes: list[str],
+) -> dict[str, float]:
+    """Close mark prices: prefer live refreshed quotes, then snapshot holding price."""
+    codes = list(dict.fromkeys(_normalize_code(c) for c in holding_codes if c))
+    prices: dict[str, float] = {}
+    for code in codes:
+        row = enriched.get(code) or {}
+        if row.get("price") is not None:
+            prices[code] = float(row["price"])
+    for code, px in _quoted_prices_from_holdings(current, codes).items():
+        prices.setdefault(code, px)
+    return prices
+
+
 def _holding_line(h: dict[str, Any]) -> str:
     name = h.get("name") or h.get("code")
     code = h.get("code")
     parts = [f"**{name}** ({code})"]
-    if h.get("change_pct") is not None:
-        parts.append(f"今日 {float(h['change_pct']):+.2f}%")
+    change_pct = h.get("change_pct")
+    if change_pct is None and h.get("week_chg_pct") is not None:
+        change_pct = h.get("week_chg_pct")
+    if change_pct is not None:
+        parts.append(f"今日 {float(change_pct):+.2f}%")
     if h.get("day_pnl") is not None:
         parts.append(f"当日盈亏 {float(h['day_pnl']):+,.0f}元")
     elif h.get("week_chg") is not None:
@@ -374,11 +464,17 @@ def build_close_portfolio_summary(
     wl_min = watchlist_min_size(settings or {})
     enriched = build_enriched_symbols(current)
     close_pf = portfolio_from_snapshot(current)
+    holding_codes = [
+        _normalize_code(str(h.get("code", "")))
+        for h in close_pf.get("holdings") or []
+        if _normalize_code(str(h.get("code", "")))
+    ]
+    _refresh_enriched_quotes(enriched, holding_codes, settings=settings)
     morning_pf = _morning_portfolio(baseline)
     _recalc_portfolio_totals(close_pf, enriched)
 
-    morning_prices = _prices_from_snapshot(baseline)
-    close_prices = _prices_from_snapshot(current)
+    morning_prices = _morning_prices_for_pnl(baseline, holding_codes)
+    close_prices = _close_prices_for_pnl(enriched, current, holding_codes)
 
     morning_cash_raw = morning_pf.get("cash")
     morning_cash = float(morning_cash_raw) if morning_cash_raw is not None else None

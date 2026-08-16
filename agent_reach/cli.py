@@ -256,6 +256,16 @@ def main():
                                choices=["", "native", "docker", "auto"],
                                help="Stop only selected deploy mode")
     p_daily_sub.add_parser("sample", help="Print example snapshot JSON to stdout")
+    p_dr_harness = p_daily_sub.add_parser("harness", help="Continual harness: show memory / rollback refine")
+    p_dr_harness_sub = p_dr_harness.add_subparsers(dest="harness_action", required=True)
+    p_dr_h_show = p_dr_harness_sub.add_parser("show", help="Show harness entries")
+    p_dr_h_show.add_argument("--limit", type=int, default=8, help="Entries per kind")
+    p_dr_h_show.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_h_list = p_dr_harness_sub.add_parser("list-refinements", help="List recent refinement events")
+    p_dr_h_list.add_argument("--limit", type=int, default=10, help="Max events")
+    p_dr_h_list.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_h_rb = p_dr_harness_sub.add_parser("rollback", help="Rollback one refinement by id")
+    p_dr_h_rb.add_argument("--id", required=True, help="Refinement id e.g. refine_0001")
 
     # ── doctor ──
     p_doctor = sub.add_parser("doctor", help="Check platform availability")
@@ -1925,8 +1935,63 @@ def _cmd_daily_run(args):
         print("Usage: agent-reach daily-run hot-news {install|status|stop}")
         sys.exit(1)
 
+    if args.daily_action == "harness":
+        import json as _json
+
+        from agent_reach.daily_run.harness import (
+            format_harness_for_briefing,
+            list_refinements,
+            load_harness,
+            rollback_refinement,
+        )
+
+        action = args.harness_action
+        if action == "show":
+            if args.json:
+                state = load_harness()
+                payload = {
+                    kind: {eid: ent.to_dict() for eid, ent in bucket.items()}
+                    for kind, bucket in state.entries.items()
+                }
+                print(_json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                state = load_harness()
+                print(state.overview(entry_limit=args.limit))
+                md = format_harness_for_briefing(limit=args.limit)
+                if md:
+                    print("\n" + md)
+            return
+
+        if action == "list-refinements":
+            rows = list_refinements(limit=args.limit)
+            if args.json:
+                print(_json.dumps(rows, ensure_ascii=False, indent=2))
+            else:
+                for row in rows:
+                    print(
+                        f"{row.get('id')} · {row.get('job')} · {len(row.get('changes') or [])} changes · "
+                        f"{row.get('created_at', '')[:19]}"
+                    )
+            return
+
+        if action == "rollback":
+            try:
+                result = rollback_refinement(args.id)
+            except ValueError as exc:
+                print(f"❌ {exc}")
+                sys.exit(1)
+            print(_json.dumps(result, ensure_ascii=False, indent=2))
+            print(f"\n✅ Rolled back {args.id}")
+            return
+
+        print("Usage: agent-reach daily-run harness {show|list-refinements|rollback}")
+        sys.exit(1)
+
     if args.daily_action not in ("evaluate", "push"):
-        print("Usage: agent-reach daily-run {morning|close|intraday|build-snapshot|schedule|hot-news|evaluate|push|fetch|verify|backtest|optimize|plugins|sample} ...")
+        print(
+            "Usage: agent-reach daily-run "
+            "{morning|close|intraday|build-snapshot|schedule|hot-news|harness|evaluate|push|fetch|verify|backtest|optimize|plugins|sample} ..."
+        )
         sys.exit(1)
 
     path = Path(args.input)

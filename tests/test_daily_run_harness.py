@@ -1,0 +1,129 @@
+# -*- coding: utf-8
+"""Tests for continual harness self-learning."""
+
+from pathlib import Path
+
+import pytest
+
+from agent_reach.daily_run.harness import (
+    HarnessState,
+    format_harness_for_briefing,
+    refine_after_job,
+    rollback_refinement,
+)
+
+
+@pytest.fixture
+def harness_tmp(monkeypatch, tmp_path):
+    hdir = tmp_path / "harness"
+    monkeypatch.setattr("agent_reach.daily_run.harness.harness_dir", lambda: hdir)
+    monkeypatch.setattr("agent_reach.daily_run.harness._state_path", lambda: hdir / "harness_state.json")
+    monkeypatch.setattr("agent_reach.daily_run.harness._refinements_path", lambda: hdir / "refinements.jsonl")
+    return hdir
+
+
+class TestHarnessRefine:
+    def test_close_refine_writes_memory(self, harness_tmp):
+        result = refine_after_job(
+            "close",
+            evidence={
+                "rules": ["宏观一票否决生效：维持高现金，禁止接飞刀"],
+                "verify": {"summary": "澜起科技 验证完成", "recommendations": ["维持高现金"]},
+                "name": "澜起科技",
+                "portfolio_summary": {"daily_pnl": 100.0, "daily_pnl_pct": 0.12},
+            },
+            settings={"harness": {"enabled": True}},
+        )
+        assert result["skipped"] is False
+        assert result["changes"] >= 1
+        state = HarnessState.load()
+        assert len(state.entries["memory"]) >= 1
+        assert len(state.entries["playbook"]) >= 1
+
+    def test_weekly_refine_playbook(self, harness_tmp):
+        result = refine_after_job(
+            "weekly",
+            evidence={
+                "report": {
+                    "week_start": "2026-08-10",
+                    "week_end": "2026-08-14",
+                    "weekly_pnl": -500.0,
+                    "weekly_pnl_pct": -0.58,
+                    "process_improvements": [
+                        {
+                            "title": "收紧观察池",
+                            "detail": "宏观回避时减少新增",
+                            "action": "close 时仅 sector_pool 补位",
+                        }
+                    ],
+                }
+            },
+            settings={"harness": {"enabled": True}},
+        )
+        assert result["skipped"] is False
+        state = HarnessState.load()
+        assert any("观察池" in e.content for e in state.entries["playbook"].values())
+
+    def test_forecast_refine_kronos_playbook(self, harness_tmp):
+        result = refine_after_job(
+            "forecast",
+            evidence={
+                "forecast": {
+                    "week_start": "2026-08-17",
+                    "week_end": "2026-08-21",
+                    "notes": ["复用周六周报 digest"],
+                    "symbols": {
+                        "300308": {
+                            "code": "300308",
+                            "name": "中际旭创",
+                            "kronos": {"available": True, "cum_change_pct": 2.0},
+                        },
+                        "600584": {
+                            "code": "600584",
+                            "name": "长电科技",
+                            "kronos": {"available": True, "cum_change_pct": -5.0},
+                        },
+                    },
+                }
+            },
+            settings={"harness": {"enabled": True}},
+        )
+        assert result["skipped"] is False
+        state = HarnessState.load()
+        playbook_text = " ".join(e.content for e in state.entries["playbook"].values())
+        assert "中际旭创" in playbook_text or "长电科技" in playbook_text
+
+    def test_rollback_restores_prior_entry(self, harness_tmp):
+        refine_after_job(
+            "close",
+            evidence={"rules": ["规则A：测试"]},
+            settings={"harness": {"enabled": True}},
+        )
+        second = refine_after_job(
+            "close",
+            evidence={"rules": ["规则B：覆盖"]},
+            settings={"harness": {"enabled": True}},
+        )
+        rollback_refinement(second["refinement_id"])
+        state = HarnessState.load()
+        contents = [e.content for e in state.entries["memory"].values()]
+        assert "规则A：测试" in contents
+        assert "规则B：覆盖" not in contents
+
+    def test_format_briefing(self, harness_tmp):
+        refine_after_job(
+            "close",
+            evidence={"rules": ["测试规则注入简报"]},
+            settings={"harness": {"enabled": True}},
+        )
+        md = format_harness_for_briefing(limit=2)
+        assert "测试规则注入简报" in md
+
+    def test_disabled_skips(self, harness_tmp):
+        result = refine_after_job(
+            "close",
+            evidence={"rules": ["不应写入"]},
+            settings={"harness": {"enabled": False}},
+        )
+        assert result["skipped"] is True
+        assert not (harness_tmp / "harness_state.json").exists()

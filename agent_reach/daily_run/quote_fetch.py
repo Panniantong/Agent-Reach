@@ -41,9 +41,24 @@ def code_to_eastmoney_secid(code: str) -> str:
     return f"{market}.{text}"
 
 
-_EASTMONEY_FIELDS = "f43,f58,f169,f170"
+_EASTMONEY_FIELDS = "f43,f58,f60,f169,f170"
 _EASTMONEY_UA = "Mozilla/5.0 (compatible; AgentReach/1.0)"
 _EASTMONEY_REFERER = "https://quote.eastmoney.com/"
+
+
+def _parse_eastmoney_change_pct(data: dict[str, Any]) -> Optional[float]:
+    """Parse daily change % from Eastmoney push2 stock/get (f170 is pct * 100)."""
+    raw = data.get("f170")
+    if raw is not None:
+        return round(float(raw) / 100.0, 2)
+    raw_price = data.get("f43")
+    prev_close = data.get("f60")
+    if raw_price is not None and prev_close:
+        price = float(raw_price) / 100.0
+        prev = float(prev_close) / 100.0
+        if prev > 0:
+            return round((price - prev) / prev * 100, 2)
+    return None
 
 
 def _fetch_eastmoney(codes: list[str], *, max_retries: int) -> dict[str, dict[str, Any]]:
@@ -72,13 +87,14 @@ def _fetch_eastmoney(codes: list[str], *, max_retries: int) -> dict[str, dict[st
         if raw_price is None:
             return None
         price = float(raw_price) / 100.0
-        change_pct = data.get("f170")
+        prev_raw = data.get("f60")
+        prev_close = float(prev_raw) / 100.0 if prev_raw is not None else price
         return {
             "code": normalize_code(code),
             "name": str(data.get("f58") or code),
             "price": price,
-            "change_pct": float(change_pct) if change_pct is not None else None,
-            "reference_price": price,
+            "change_pct": _parse_eastmoney_change_pct(data),
+            "reference_price": prev_close,
             "source": "eastmoney",
         }
 

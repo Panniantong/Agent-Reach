@@ -78,18 +78,40 @@ def load_recent_experience(limit: int = 10) -> list[dict[str, Any]]:
     return out
 
 
-def render_experience_markdown(limit: int = 3) -> str:
+def render_experience_markdown(limit: int = 3, *, settings: Optional[dict[str, Any]] = None) -> str:
     recent = load_recent_experience(limit)
     if not recent:
-        return ""
-    lines = ["**📚 经验沉淀（最近）**", ""]
-    for e in reversed(recent):
-        hit = "✅" if e.get("prediction_hit") else "—"
-        lines.append(
-            f"- {e.get('date')} {e.get('name')} MSS={e.get('mss_final')} {hit} "
-            + "；".join((e.get("rules") or [])[:2])
-        )
-    return "\n".join(lines)
+        body = ""
+    else:
+        lines = ["**📚 经验沉淀（最近）**", ""]
+        for e in reversed(recent):
+            hit = "✅" if e.get("prediction_hit") else "—"
+            lines.append(
+                f"- {e.get('date')} {e.get('name')} MSS={e.get('mss_final')} {hit} "
+                + "；".join((e.get("rules") or [])[:2])
+            )
+        body = "\n".join(lines)
+
+    cfg = settings
+    if cfg is None:
+        try:
+            from agent_reach.daily_run.settings import load_settings
+
+            cfg = load_settings()
+        except Exception:
+            cfg = {}
+    harness_cfg = (cfg or {}).get("harness") or {}
+    if harness_cfg.get("enabled") is False or harness_cfg.get("inject_in_experience_card") is False:
+        return body
+
+    from agent_reach.daily_run.harness import format_harness_for_briefing
+
+    harness_md = format_harness_for_briefing(limit=int(harness_cfg.get("briefing_limit") or 3))
+    if not harness_md:
+        return body
+    if body:
+        return body + "\n\n" + harness_md
+    return "**📚 Harness 记忆**\n\n" + harness_md
 
 
 def _distill_rules(

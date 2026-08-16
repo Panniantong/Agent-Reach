@@ -359,7 +359,7 @@ def run_close(
         settings=cfg,
         forecast_review=forecast_review.to_dict() if forecast_review else None,
     )
-    exp_md = render_experience_markdown(limit=3) or ""
+    exp_md = render_experience_markdown(limit=3, settings=cfg) or ""
 
     if cfg.get("close_improvements", {}).get("enabled", True):
         from agent_reach.daily_run.close_improvements import (
@@ -493,6 +493,26 @@ def run_close(
 
     close_baseline_path = save_close_baseline(snapshot=enriched, verify=verify_dict)
 
+    harness_result: dict[str, Any] = {}
+    try:
+        from agent_reach.daily_run.harness import refine_after_job
+
+        curve_payload = curve.to_dict() if hasattr(curve, "to_dict") else curve
+        harness_result = refine_after_job(
+            "close",
+            evidence={
+                "snapshot": enriched,
+                "verify": verify_dict,
+                "curve": curve_payload,
+                "forecast_review": forecast_review.to_dict() if forecast_review else None,
+                "name": enriched.get("name"),
+                "portfolio_summary": portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
+            },
+            settings=cfg,
+        )
+    except Exception as exc:
+        harness_result = {"skipped": True, "error": str(exc)}
+
     return {
         "verify": verify_dict,
         "snapshot": enriched,
@@ -511,6 +531,7 @@ def run_close(
         "feishu": feishu_result,
         "close_baseline_path": str(close_baseline_path) if close_baseline_path else None,
         "forecast_review": forecast_review.to_dict() if forecast_review else None,
+        "harness": harness_result,
         "audit": {
             "passed": audit.passed,
             "issues": audit.issues,
@@ -796,12 +817,28 @@ def run_weekly(
         if feishu_result.get("mode") == "split":
             steps.append(f"push_split_{feishu_result.get('count', 0)}")
 
+    harness_result: dict[str, Any] = {}
+    try:
+        from agent_reach.daily_run.harness import refine_after_job
+
+        harness_result = refine_after_job(
+            "weekly",
+            evidence={
+                "report": report.to_dict(),
+                "applied_config": skill_writeback.get("applied_config") or [],
+            },
+            settings=cfg,
+        )
+    except Exception as exc:
+        harness_result = {"skipped": True, "error": str(exc)}
+
     return {
         "steps": steps,
         "report": report.to_dict(),
         "digest_path": str(digest_path),
         "watchlist_candidates": wl_candidates,
         "skill_writeback": skill_writeback,
+        "harness": harness_result,
         "markdown": md,
         "feishu": feishu_result,
     }
@@ -862,10 +899,23 @@ def run_forecast(
         if feishu_result.get("mode") == "split":
             steps.append(f"push_split_{feishu_result.get('count', 0)}")
 
+    harness_result: dict[str, Any] = {}
+    try:
+        from agent_reach.daily_run.harness import refine_after_job
+
+        harness_result = refine_after_job(
+            "forecast",
+            evidence={"forecast": forecast.to_dict()},
+            settings=cfg,
+        )
+    except Exception as exc:
+        harness_result = {"skipped": True, "error": str(exc)}
+
     return {
         "steps": steps,
         "forecast": forecast.to_dict(),
         "forecast_path": str(path),
+        "harness": harness_result,
         "markdown": md,
         "feishu": feishu_result,
     }

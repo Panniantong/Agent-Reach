@@ -471,5 +471,21 @@
     "enabled": true,
     "max_rules": 50,
     "max_entries": 200
+  },
+
+  "harness": {
+    "enabled": true,
+    "max_memory": 80,
+    "max_policy": 30,
+    "max_playbook": 20,
+    "briefing_limit": 3,
+    "inject_in_experience_card": true,
+    "jobs": {
+      "close": true,
+      "weekly": true,
+      "forecast": true,
+      "morning": false,
+      "intraday": false
+    }
   }
 }
