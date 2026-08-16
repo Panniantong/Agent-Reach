@@ -64,13 +64,29 @@ def append_experience_entry(
     return jsonl_path
 
 
+def _tail_jsonl_lines(path: Path, limit: int) -> list[str]:
+    if not path.exists() or limit <= 0:
+        return []
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return []
+    if size == 0:
+        return []
+    chunk = min(size, 65536)
+    with open(path, "rb") as handle:
+        handle.seek(max(0, size - chunk))
+        data = handle.read().decode("utf-8", errors="replace")
+    lines = data.splitlines()
+    return lines[-limit:] if len(lines) > limit else lines
+
+
 def load_recent_experience(limit: int = 10) -> list[dict[str, Any]]:
     path = experience_dir() / "experience.jsonl"
     if not path.exists():
         return []
-    lines = path.read_text(encoding="utf-8").strip().splitlines()
     out = []
-    for line in lines[-limit:]:
+    for line in _tail_jsonl_lines(path, limit):
         try:
             out.append(json.loads(line))
         except json.JSONDecodeError:

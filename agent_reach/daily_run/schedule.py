@@ -513,6 +513,9 @@ def _run_job_body(
                 watchlist_adjust=wl_result_dict,
                 code_review=code_review_dict,
                 verify_dict=prepared.get("verify"),
+                experts_already_ran=any(
+                    s in (prepared.get("steps") or []) for s in ("team_first", "mss_experts")
+                ),
             )
             run_result["baseline_source"] = baseline_source
             if baseline_note:

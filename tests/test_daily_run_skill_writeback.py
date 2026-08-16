@@ -61,7 +61,7 @@ class TestSkillWriteback:
         assert "refine_0003" in block
         assert "情况说明" in block
         assert "持仓浮盈合计" in block
-        assert "缺失收盘" in block
+        assert "缺失收盘" not in block
         assert "backtest" in block
 
     def test_patch_skill_file_insert_and_replace(self, tmp_path: Path):

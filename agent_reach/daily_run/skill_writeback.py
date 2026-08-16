@@ -102,6 +102,25 @@ def _hot_sectors_line(hot_sectors: list[dict[str, Any]], limit: int = 3) -> str:
     return "、".join(parts)
 
 
+def _dedupe_text_lines(items: list[str], *, limit: int) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in reversed(items):
+        text = str(item or "").strip()
+        if not text:
+            continue
+        key = re.sub(r"\d{4}-\d{2}-\d{2}", "", text)
+        key = re.sub(r"MSS=[\d.]+", "MSS=", key)
+        key = re.sub(r"价格变动 [-\d.]+%", "价格变动", key)
+        key = key[:96]
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+    out.reverse()
+    return out[-limit:]
+
+
 def _job_stats(report: dict[str, Any]) -> str:
     mss = report.get("mss_summary") or []
     morning = sum(1 for m in mss if m.get("job") == "morning")
@@ -151,26 +170,17 @@ def build_weekly_experience_block(report: dict[str, Any]) -> str:
     if notes:
         lines.append(f"*   **备注：** {'；'.join(str(n) for n in notes[:3])}")
 
-    snippets = report.get("experience_snippets") or []
+    snippets = _dedupe_text_lines(list(report.get("experience_snippets") or []), limit=5)
     if snippets:
         lines.append("*   **收盘经验片段：**")
-        for snippet in snippets[-5:]:
+        for snippet in snippets:
             lines.append(f"    *   {snippet}")
 
-    rules = _load_rules_summary()
+    rules = _dedupe_text_lines(_load_rules_summary(), limit=5)
     if rules:
         lines.append("*   **量化规则库（最近）：**")
         for rule in rules:
             lines.append(f"    *   {rule}")
-
-    improvements = report.get("process_improvements") or []
-    priority_items = [i for i in improvements if i.get("priority") in ("high", "medium")]
-    if priority_items:
-        lines.append("*   **流程改进（优先）：**")
-        for item in priority_items[:6]:
-            title = item.get("title") or "改进项"
-            action = item.get("action") or item.get("detail") or ""
-            lines.append(f"    *   **{title}** — {action}")
 
     skill_items = report.get("skill_learning") or []
     if skill_items:

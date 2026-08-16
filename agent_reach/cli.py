@@ -1658,6 +1658,9 @@ def _cmd_daily_run(args):
             watchlist_adjust=prepared["watchlist_adjust"],
             code_review=prepared["code_review"],
             verify_dict=prepared.get("verify"),
+            experts_already_ran=any(
+                s in (prepared.get("steps") or []) for s in ("team_first", "mss_experts")
+            ),
         )
         result["code_review"] = prepared["code_review"]
         result["watchlist_adjust"] = prepared["watchlist_adjust"]

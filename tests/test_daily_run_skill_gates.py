@@ -1,6 +1,8 @@
 # -*- coding: utf-8
 """Tests for Saturday skill mechanical gates."""
 
+import pytest
+
 from agent_reach.daily_run.skill_gates import (
     format_gate_alert_markdown,
     gates_enabled,
@@ -61,6 +63,22 @@ class TestSkillGates:
         )
         assert result["skipped"] is True
         assert gates_enabled({"weekly_report": {"skill_gates": {"enabled": False}}}) is False
+
+    def test_gates_pass_on_canonical_skill(self, monkeypatch):
+        from agent_reach.daily_run.skill_improvements_apply import canonical_skill_path
+
+        skill_path = canonical_skill_path()
+        if not skill_path.exists():
+            pytest.skip("canonical skill missing")
+        text = skill_path.read_text(encoding="utf-8")
+        report = {
+            "week_start": "2026-08-10",
+            "week_end": "2026-08-14",
+            "process_improvements": [],
+            "skill_learning": [],
+        }
+        result = run_skill_gates(text, report)
+        assert result["ok"] is True, result.get("failures")
 
     def test_format_gate_alert(self):
         md = format_gate_alert_markdown({"ok": False, "failures": ["缺少 playbook"], "warnings": []})

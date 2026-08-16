@@ -41,7 +41,7 @@ PLAYBOOK_PREFIX = "## 📋 下周执行清单（周六自动更新"
 PLAYBOOK_MANIFEST = Path.home() / ".agent-reach" / "daily_run" / "next_week_playbook.json"
 SKILL_CHANGELOG = Path.home() / ".agent-reach" / "daily_run" / "skill_changelog.jsonl"
 AGENT_ENTRY_HEADER = "## ⚡ Agent 执行入口"
-DECISION_HEADER = "## 📊 股票大师多市场共振与技术面量化决策模型"
+DECISION_HEADER = "## 📊 决策模型"
 PHASE1_HEADER = "## 🛡️ Phase-1 质量工程化"
 
 REQUIRED_SKILL_SECTIONS = (
@@ -61,14 +61,25 @@ def _normalize_report_for_writeback(report: dict[str, Any], skill_text: str = ""
     out["process_improvements"] = improvements
     items = dedupe_skill_learning_items(list(out.get("skill_learning") or []))
     items, blocked_skill = filter_rejected_items(items)
-    existing: list[str] = []
-    for match in re.finditer(r"\*\*([^*]+)：\*\*", skill_text):
-        existing.append(match.group(1).strip())
-    out["skill_learning"] = filter_superseded_skill_learning(items, existing)
+    out["skill_learning"] = filter_superseded_skill_learning(
+        items, _existing_skill_learning_titles(skill_text)
+    )
     blocked = blocked_imp + blocked_skill
     if blocked:
         out["_rejected_blocked"] = blocked
     return out
+
+
+def _existing_skill_learning_titles(skill_text: str) -> list[str]:
+    """Extract titles only from skill-learning sections (avoid matching workflow prose)."""
+    titles: list[str] = []
+    for match in re.finditer(
+        r"(?:### 🎓 技能学习|\*\*技能学习要点：\*\*)[\s\S]*?(?=\n### |\n## |\Z)",
+        skill_text,
+    ):
+        for title_match in re.finditer(r"\*\*([^*]+)：\*\*", match.group(0)):
+            titles.append(title_match.group(1).strip())
+    return titles
 
 
 def audit_supersession_harness(report: dict[str, Any]) -> dict[str, Any]:
@@ -192,7 +203,9 @@ def apply_settings_from_improvements(
             if plugins.get("exa_research_on_close") is not True:
                 plugins["exa_research_on_close"] = True
                 applied.append("plugins.exa_research_on_close: false → true")
-            exa_applied = True
+                exa_applied = True
+            else:
+                exa_applied = True
 
         if category == "portfolio" and "回撤" in title:
             thr = cfg.setdefault("thresholds", {})
@@ -224,30 +237,31 @@ def _find_next_h2(text: str, start: int) -> int:
     return len(text) if match_pos < 0 else match_pos + 1
 
 
-def patch_playbook_section(path: Path, block: str) -> bool:
-    if not path.exists():
-        return False
-    text = path.read_text(encoding="utf-8")
+def patch_playbook_in_text(text: str, block: str) -> tuple[str, bool]:
     idx = text.find(PLAYBOOK_PREFIX)
     if idx >= 0:
         end = _find_next_h2(text, idx + len(PLAYBOOK_PREFIX))
         new_text = text[:idx] + block.rstrip() + "\n\n" + text[end:].lstrip()
     elif OPS_HEADER in text:
         new_text = text.replace(OPS_HEADER, block.rstrip() + "\n\n\n" + OPS_HEADER, 1)
-    else:
-        anchor = "## 🚀 极致量化执行算法"
-        if anchor in text:
-            new_text = text.replace(anchor, block.rstrip() + "\n\n" + anchor, 1)
-        elif EXPERIENCE_HEADER in text:
-            pos = text.find(EXPERIENCE_HEADER)
-            end = _find_next_h2(text, pos + len(EXPERIENCE_HEADER))
-            if end >= len(text):
-                new_text = text.rstrip() + "\n\n" + block.rstrip() + "\n"
-            else:
-                new_text = text[:end].rstrip() + "\n\n" + block.rstrip() + "\n\n" + text[end:].lstrip()
-        else:
+    elif EXPERIENCE_HEADER in text:
+        pos = text.find(EXPERIENCE_HEADER)
+        end = _find_next_h2(text, pos + len(EXPERIENCE_HEADER))
+        if end >= len(text):
             new_text = text.rstrip() + "\n\n" + block.rstrip() + "\n"
-    if new_text == text:
+        else:
+            new_text = text[:end].rstrip() + "\n\n" + block.rstrip() + "\n\n" + text[end:].lstrip()
+    else:
+        new_text = text.rstrip() + "\n\n" + block.rstrip() + "\n"
+    return new_text, new_text != text
+
+
+def patch_playbook_section(path: Path, block: str) -> bool:
+    if not path.exists():
+        return False
+    text = path.read_text(encoding="utf-8")
+    new_text, changed = patch_playbook_in_text(text, block)
+    if not changed:
         return False
     path.write_text(new_text, encoding="utf-8")
     return True
@@ -255,6 +269,26 @@ def patch_playbook_section(path: Path, block: str) -> bool:
 
 def canonical_skill_path() -> Path:
     return _repo_root() / "agent_reach" / "skill" / "daily_run_skill.md"
+
+
+def patch_experience_in_text(
+    text: str,
+    block: str,
+    week_start: str,
+    week_end: str,
+) -> tuple[str, bool]:
+    from agent_reach.daily_run.skill_writeback import (
+        _insert_weekly_section,
+        _replace_weekly_section,
+        week_section_header,
+    )
+
+    header = week_section_header(week_start, week_end)
+    if header in text:
+        new_text = _replace_weekly_section(text, header, block)
+    else:
+        new_text = _insert_weekly_section(text, block)
+    return new_text, new_text != text
 
 
 def patch_canonical_skill_sections(
@@ -271,9 +305,20 @@ def patch_canonical_skill_sections(
     normalized = _normalize_report_for_writeback(report, skill_text)
     experience_block = build_weekly_experience_block(normalized)
     playbook_block = build_next_week_playbook_block(normalized, applied_config)
-    exp_ok = patch_skill_file(path, experience_block, week_start, week_end)
-    pb_ok = patch_playbook_section(path, playbook_block)
-    return {"canonical": str(path), "experience": exp_ok, "playbook": pb_ok}
+
+    text, exp_changed = patch_experience_in_text(
+        skill_text, experience_block, week_start, week_end
+    )
+    text, pb_changed = patch_playbook_in_text(text, playbook_block)
+    if exp_changed or pb_changed:
+        path.write_text(text, encoding="utf-8")
+
+    return {
+        "canonical": str(path),
+        "experience": exp_changed,
+        "playbook": pb_changed,
+        "normalized_report": normalized,
+    }
 
 
 def sync_canonical_skill_to_local(settings: Optional[dict[str, Any]] = None) -> list[str]:
@@ -384,6 +429,7 @@ def audit_weekly_skill(
     *,
     report: Optional[dict[str, Any]] = None,
     applied_config: Optional[list[str]] = None,
+    skip_sync: bool = False,
 ) -> dict[str, Any]:
     """Final Saturday step: validate skill structure, optimize, re-sync locally."""
     path = canonical_skill_path()
@@ -396,7 +442,10 @@ def audit_weekly_skill(
     synced: list[str] = []
     if fixes or optimized != raw:
         path.write_text(optimized, encoding="utf-8")
-    if settings is None or (settings.get("weekly_report") or {}).get("skill_sync_local", True) is not False:
+    if (
+        not skip_sync
+        and (settings is None or (settings.get("weekly_report") or {}).get("skill_sync_local", True) is not False)
+    ):
         synced = sync_canonical_skill_to_local(settings)
 
     result: dict[str, Any] = {
@@ -430,11 +479,27 @@ def ensure_runtime_updated() -> dict[str, Any]:
     """Reinstall editable package so cron uses latest code next week."""
     repo = _repo_root()
     result: dict[str, Any] = {"repo": str(repo), "steps": [], "errors": []}
+    stamp_path = Path.home() / ".agent-reach" / "daily_run" / "runtime_install.stamp"
+    pyproject = repo / "pyproject.toml"
+    pkg_dir = repo / "agent_reach"
+    try:
+        marker = f"{pyproject.stat().st_mtime_ns}:{pkg_dir.stat().st_mtime_ns}"
+    except OSError:
+        marker = ""
+    if marker and stamp_path.exists() and stamp_path.read_text(encoding="utf-8").strip() == marker:
+        result["steps"].append("pip_skipped_unchanged")
+        clear_settings_cache()
+        result["steps"].append("settings_cache_cleared")
+        return result
+
     cmd = [sys.executable, "-m", "pip", "install", "-q", "-e", f"{repo}[dev]"]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=str(repo))
         if proc.returncode == 0:
             result["steps"].append("pip_install_editable")
+            if marker:
+                stamp_path.parent.mkdir(parents=True, exist_ok=True)
+                stamp_path.write_text(marker + "\n", encoding="utf-8")
         else:
             result["errors"].append((proc.stderr or proc.stdout or "pip failed").strip()[:500])
     except OSError as exc:
@@ -483,6 +548,7 @@ def annotate_weekly_harness_audit(
     week_end: str,
     refinement_id: str,
     settings: Optional[dict[str, Any]] = None,
+    skip_sync: bool = False,
 ) -> dict[str, Any]:
     """Post-harness: stamp refinement_id into skill experience + playbook manifest."""
     if not refinement_id:
@@ -502,7 +568,8 @@ def annotate_weekly_harness_audit(
     changed = new_text != text
     if changed:
         path.write_text(new_text, encoding="utf-8")
-        sync_canonical_skill_to_local(settings)
+        if not skip_sync:
+            sync_canonical_skill_to_local(settings)
 
     if PLAYBOOK_MANIFEST.exists():
         try:
@@ -546,9 +613,7 @@ def apply_weekly_skill_closure(
         settings_path = str(save_user_settings(new_settings))
 
     patch_result = patch_canonical_skill_sections(report, applied_config)
-    synced: list[str] = []
-    if weekly_cfg.get("skill_sync_local", True) is not False:
-        synced = sync_canonical_skill_to_local(new_settings)
+    normalized_report = patch_result.get("normalized_report") or report
 
     runtime: dict[str, Any] = {}
     if weekly_cfg.get("skill_sync_runtime", True) is not False:
@@ -558,9 +623,14 @@ def apply_weekly_skill_closure(
     if weekly_cfg.get("skill_audit", True) is not False:
         skill_audit = audit_weekly_skill(
             new_settings,
-            report=report,
+            report=normalized_report,
             applied_config=applied_config,
+            skip_sync=True,
         )
+
+    synced: list[str] = []
+    if weekly_cfg.get("skill_sync_local", True) is not False:
+        synced = sync_canonical_skill_to_local(new_settings)
 
     manifest_path = save_playbook_manifest(
         report, applied_config, synced, runtime, skill_audit=skill_audit

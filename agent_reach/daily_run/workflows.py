@@ -263,6 +263,7 @@ def run_close(
     code_review: Optional[dict[str, Any]] = None,
     verify_dict: Optional[dict[str, Any]] = None,
     portfolio_summary: bool = True,
+    experts_already_ran: bool = False,
 ) -> dict[str, Any]:
     """Close workflow: Team-First experts → verify baseline vs current → Feishu push."""
     cfg = settings or load_settings()
@@ -282,7 +283,8 @@ def run_close(
         enriched = attach_kronos_to_snapshot(dict(current), settings=cfg)
 
     if use_team:
-        enriched = run_team_first(enriched, cfg, names=plugin_names)
+        if not experts_already_ran:
+            enriched = run_team_first(enriched, cfg, names=plugin_names)
         team_md = render_team_markdown(enriched)
 
     if verify_dict is not None:
@@ -903,9 +905,15 @@ def run_weekly(
             week_end=str(report.week_end or ""),
             refinement_id=refinement_id,
             settings=cfg,
+            skip_sync=True,
         )
         steps.append("harness_skill_annotate")
         skill_writeback["harness_annotation"] = audit_note
+        if audit_note.get("skill_changed") and weekly_cfg.get("skill_sync_local", True) is not False:
+            from agent_reach.daily_run.skill_improvements_apply import sync_canonical_skill_to_local
+
+            sync_canonical_skill_to_local(cfg)
+            steps.append("skill_sync_post_harness")
 
     return {
         "steps": steps,
