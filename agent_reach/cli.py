@@ -266,6 +266,10 @@ def main():
     p_dr_h_list.add_argument("--json", action="store_true", help="JSON output")
     p_dr_h_rb = p_dr_harness_sub.add_parser("rollback", help="Rollback one refinement by id")
     p_dr_h_rb.add_argument("--id", required=True, help="Refinement id e.g. refine_0001")
+    p_dr_h_refine = p_dr_harness_sub.add_parser("refine", help="Run Layer B LLM refine for a job")
+    p_dr_h_refine.add_argument("--job", required=True, choices=["close", "weekly", "forecast"], help="Job name")
+    p_dr_h_refine.add_argument("--force", action="store_true", help="Skip review gate")
+    p_dr_h_refine.add_argument("--json", action="store_true", help="JSON output")
 
     # ── doctor ──
     p_doctor = sub.add_parser("doctor", help="Check platform availability")
@@ -1942,6 +1946,7 @@ def _cmd_daily_run(args):
             format_harness_for_briefing,
             list_refinements,
             load_harness,
+            refine_after_job_llm,
             rollback_refinement,
         )
 
@@ -1984,7 +1989,38 @@ def _cmd_daily_run(args):
             print(f"\n✅ Rolled back {args.id}")
             return
 
-        print("Usage: agent-reach daily-run harness {show|list-refinements|rollback}")
+        if action == "refine":
+            from agent_reach.daily_run.settings import load_settings
+
+            settings = load_settings()
+            evidence = {}
+            if args.job == "weekly":
+                digest_path = Path.home() / ".agent-reach" / "daily_run" / "weekly_digest.json"
+                if digest_path.exists():
+                    evidence = {"report": _json.loads(digest_path.read_text(encoding="utf-8"))}
+            elif args.job == "forecast":
+                forecast_dir = Path.home() / ".agent-reach" / "daily_run" / "forecasts"
+                files = sorted(forecast_dir.glob("*.json")) if forecast_dir.exists() else []
+                if files:
+                    evidence = {"forecast": _json.loads(files[-1].read_text(encoding="utf-8"))}
+            result = refine_after_job_llm(
+                args.job,
+                evidence=evidence,
+                settings=settings,
+                skip_review=args.force,
+            )
+            if args.json:
+                print(_json.dumps(result, ensure_ascii=False, indent=2))
+            elif result.get("skipped"):
+                print(f"⏭️  skipped: {result.get('reason')}")
+            else:
+                print(
+                    f"✅ {args.job} Layer B refine · {result.get('refinement_id')} · "
+                    f"{result.get('changes')} changes · planner={result.get('planner')}"
+                )
+            return
+
+        print("Usage: agent-reach daily-run harness {show|list-refinements|rollback|refine}")
         sys.exit(1)
 
     if args.daily_action not in ("evaluate", "push"):

@@ -473,7 +473,7 @@
     "max_entries": 200
   },
 
-  "harness": {
+    "harness": {
     "enabled": true,
     "max_memory": 80,
     "max_policy": 30,
@@ -486,6 +486,18 @@
       "forecast": true,
       "morning": false,
       "intraday": false
+    },
+    "llm_refine": {
+      "enabled": true,
+      "provider": "auto",
+      "use_llm_review": false,
+      "cooldown_hours": 24,
+      "timeout_seconds": 60,
+      "jobs": {
+        "close": true,
+        "weekly": true,
+        "forecast": true
+      }
     }
   }
 }

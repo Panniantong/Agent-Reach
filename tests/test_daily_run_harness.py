@@ -9,6 +9,7 @@ from agent_reach.daily_run.harness import (
     HarnessState,
     format_harness_for_briefing,
     refine_after_job,
+    refine_after_job_llm,
     rollback_refinement,
 )
 
@@ -127,3 +128,83 @@ class TestHarnessRefine:
         )
         assert result["skipped"] is True
         assert not (harness_tmp / "harness_state.json").exists()
+
+
+class TestHarnessLayerB:
+    def test_review_rejects_when_no_signals(self, harness_tmp):
+        from agent_reach.daily_run.harness import review_harness_refine
+
+        state = HarnessState.load()
+        review = review_harness_refine(
+            "close",
+            evidence={"verify": {}, "portfolio_summary": {}},
+            state=state,
+            settings={"harness": {"llm_refine": {"enabled": True, "cooldown_hours": 0}}},
+        )
+        assert review["should_refine"] is False
+
+    def test_llm_refine_weekly_deterministic(self, harness_tmp):
+        from agent_reach.daily_run.harness import refine_after_job_llm
+
+        result = refine_after_job_llm(
+            "weekly",
+            evidence={
+                "report": {
+                    "week_start": "2026-08-10",
+                    "week_end": "2026-08-14",
+                    "weekly_pnl_pct": -0.9,
+                    "process_improvements": [
+                        {"title": "收紧观察池", "detail": "宏观回避时减少新增", "action": "close 补位"}
+                    ],
+                },
+                "applied_config": ["macro_veto=40"],
+            },
+            settings={"harness": {"enabled": True, "llm_refine": {"enabled": True, "cooldown_hours": 0}}},
+        )
+        assert result["skipped"] is False
+        assert result["planner"] == "deterministic"
+        state = HarnessState.load()
+        playbook = " ".join(e.content for e in state.entries["playbook"].values())
+        assert "收紧观察池" in playbook
+
+    def test_llm_refine_respects_cooldown(self, harness_tmp):
+        from agent_reach.daily_run.harness import refine_after_job_llm
+
+        settings = {"harness": {"enabled": True, "llm_refine": {"enabled": True, "cooldown_hours": 24}}}
+        evidence = {
+            "report": {
+                "week_start": "2026-08-10",
+                "week_end": "2026-08-14",
+                "weekly_pnl_pct": -1.0,
+                "process_improvements": [{"title": "A", "detail": "d"}],
+            }
+        }
+        first = refine_after_job_llm("weekly", evidence=evidence, settings=settings)
+        assert first["skipped"] is False
+        second = refine_after_job_llm("weekly", evidence=evidence, settings=settings)
+        assert second["skipped"] is True
+        assert "cooldown" in str(second.get("reason", "")).lower()
+
+    def test_manual_refine_skips_review_gate(self, harness_tmp):
+        from agent_reach.daily_run.harness import refine_after_job_llm
+
+        result = refine_after_job_llm(
+            "forecast",
+            evidence={
+                "forecast": {
+                    "week_start": "2026-08-17",
+                    "week_end": "2026-08-21",
+                    "symbols": {
+                        "300308": {
+                            "code": "300308",
+                            "name": "中际旭创",
+                            "kronos": {"available": True, "cum_change_pct": 2.5},
+                        }
+                    },
+                }
+            },
+            settings={"harness": {"enabled": True, "llm_refine": {"enabled": True, "cooldown_hours": 0}}},
+            skip_review=True,
+        )
+        assert result["skipped"] is False
+        assert result["review"]["rationale"] == "manual refine"

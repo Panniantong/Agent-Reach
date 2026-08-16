@@ -495,21 +495,20 @@ def run_close(
 
     harness_result: dict[str, Any] = {}
     try:
-        from agent_reach.daily_run.harness import refine_after_job
+        from agent_reach.daily_run.harness import refine_after_job, refine_after_job_llm
 
         curve_payload = curve.to_dict() if hasattr(curve, "to_dict") else curve
-        harness_result = refine_after_job(
-            "close",
-            evidence={
-                "snapshot": enriched,
-                "verify": verify_dict,
-                "curve": curve_payload,
-                "forecast_review": forecast_review.to_dict() if forecast_review else None,
-                "name": enriched.get("name"),
-                "portfolio_summary": portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
-            },
-            settings=cfg,
-        )
+        close_evidence = {
+            "snapshot": enriched,
+            "verify": verify_dict,
+            "curve": curve_payload,
+            "forecast_review": forecast_review.to_dict() if forecast_review else None,
+            "name": enriched.get("name"),
+            "portfolio_summary": portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
+        }
+        layer_a = refine_after_job("close", evidence=close_evidence, settings=cfg)
+        layer_b = refine_after_job_llm("close", evidence=close_evidence, settings=cfg)
+        harness_result = {"layer_a": layer_a, "layer_b": layer_b}
     except Exception as exc:
         harness_result = {"skipped": True, "error": str(exc)}
 
@@ -819,16 +818,15 @@ def run_weekly(
 
     harness_result: dict[str, Any] = {}
     try:
-        from agent_reach.daily_run.harness import refine_after_job
+        from agent_reach.daily_run.harness import refine_after_job, refine_after_job_llm
 
-        harness_result = refine_after_job(
-            "weekly",
-            evidence={
-                "report": report.to_dict(),
-                "applied_config": skill_writeback.get("applied_config") or [],
-            },
-            settings=cfg,
-        )
+        weekly_evidence = {
+            "report": report.to_dict(),
+            "applied_config": skill_writeback.get("applied_config") or [],
+        }
+        layer_a = refine_after_job("weekly", evidence=weekly_evidence, settings=cfg)
+        layer_b = refine_after_job_llm("weekly", evidence=weekly_evidence, settings=cfg)
+        harness_result = {"layer_a": layer_a, "layer_b": layer_b}
     except Exception as exc:
         harness_result = {"skipped": True, "error": str(exc)}
 
@@ -901,13 +899,12 @@ def run_forecast(
 
     harness_result: dict[str, Any] = {}
     try:
-        from agent_reach.daily_run.harness import refine_after_job
+        from agent_reach.daily_run.harness import refine_after_job, refine_after_job_llm
 
-        harness_result = refine_after_job(
-            "forecast",
-            evidence={"forecast": forecast.to_dict()},
-            settings=cfg,
-        )
+        forecast_evidence = {"forecast": forecast.to_dict()}
+        layer_a = refine_after_job("forecast", evidence=forecast_evidence, settings=cfg)
+        layer_b = refine_after_job_llm("forecast", evidence=forecast_evidence, settings=cfg)
+        harness_result = {"layer_a": layer_a, "layer_b": layer_b}
     except Exception as exc:
         harness_result = {"skipped": True, "error": str(exc)}
 

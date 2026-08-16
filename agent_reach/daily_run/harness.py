@@ -569,3 +569,426 @@ def refine_after_job(
         "changes": len(all_changes),
         "state_path": str(path),
     }
+
+
+def _llm_refine_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
+    cfg = _harness_cfg(settings)
+    return dict(cfg.get("llm_refine") or {})
+
+
+def _llm_job_enabled(llm_cfg: dict[str, Any], job: str) -> bool:
+    jobs = llm_cfg.get("jobs") or {}
+    if isinstance(jobs, dict) and job in jobs:
+        return bool(jobs[job])
+    return job in {"close", "weekly", "forecast"}
+
+
+def _parse_iso(ts: str) -> Optional[datetime]:
+    raw = str(ts or "").strip()
+    if not raw:
+        return None
+    try:
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+def _within_llm_cooldown(state: HarnessState, llm_cfg: dict[str, Any]) -> bool:
+    hours = float(llm_cfg.get("cooldown_hours") or 24)
+    if hours <= 0:
+        return False
+    cutoff = datetime.now(timezone.utc).timestamp() - hours * 3600
+    for event in reversed(state.refinements):
+        if not str(event.trigger or "").startswith("llm:"):
+            continue
+        created = _parse_iso(event.created_at)
+        if created and created.timestamp() >= cutoff:
+            return True
+    return False
+
+
+def _collect_refine_signals(job: str, evidence: dict[str, Any]) -> list[str]:
+    signals: list[str] = []
+    if job == "close":
+        pf = evidence.get("portfolio_summary") or {}
+        pct = pf.get("daily_pnl_pct")
+        if pct is not None and abs(float(pct)) >= 0.5:
+            signals.append(f"收盘组合波动 {float(pct):+.2f}%")
+        verify = evidence.get("verify") or {}
+        if verify.get("recommendations"):
+            signals.append("verify 含明日建议")
+        if verify.get("deviations"):
+            signals.append("verify 出现偏差项")
+        rules = evidence.get("rules") or []
+        if rules:
+            signals.append(f"规则 {len(rules)} 条待沉淀")
+    elif job == "weekly":
+        report = evidence.get("report") or evidence
+        pct = report.get("weekly_pnl_pct")
+        if pct is not None and abs(float(pct)) >= 0.3:
+            signals.append(f"本周净值波动 {float(pct):+.2f}%")
+        improvements = report.get("process_improvements") or []
+        if improvements:
+            signals.append(f"流程改进 {len(improvements)} 项")
+        if report.get("skill_learning"):
+            signals.append("周六技能学习非空")
+    elif job == "forecast":
+        forecast = evidence.get("forecast") or evidence
+        symbols = forecast.get("symbols") or {}
+        kronos_hits = 0
+        for row in symbols.values():
+            kronos = (row.get("kronos") or {}) if isinstance(row, dict) else {}
+            if kronos.get("available") and kronos.get("cum_change_pct") is not None:
+                kronos_hits += 1
+        if kronos_hits:
+            signals.append(f"Kronos 覆盖 {kronos_hits} 只")
+        if forecast.get("notes"):
+            signals.append("预测备注待提炼")
+    return signals
+
+
+def review_harness_refine(
+    job: str,
+    evidence: dict[str, Any],
+    state: HarnessState,
+    *,
+    settings: Optional[dict[str, Any]] = None,
+    skip_review: bool = False,
+) -> dict[str, Any]:
+    """Review gate before Layer B refine (deterministic; optional LLM assist)."""
+    llm_cfg = _llm_refine_cfg(settings)
+    if skip_review:
+        return {"should_refine": True, "rationale": "manual refine", "instructions": ""}
+
+    if _within_llm_cooldown(state, llm_cfg):
+        return {"should_refine": False, "rationale": "llm refine cooldown active"}
+
+    signals = _collect_refine_signals(job, evidence)
+    if not signals:
+        return {"should_refine": False, "rationale": "no actionable signals"}
+
+    instructions = "优先合并重复 memory、将流程改进写入 playbook、policy 仅保留可执行参数。"
+    if llm_cfg.get("use_llm_review"):
+        from agent_reach.daily_run.llm_chat import chat_json, resolve_chat_provider
+
+        if resolve_chat_provider(str(llm_cfg.get("provider") or "auto")):
+            payload = chat_json(
+                system=(
+                    "你是 daily-run harness 审查员。仅输出 JSON："
+                    '{"should_refine": bool, "rationale": "...", "instructions": "..."}。'
+                    "仅在出现可沉淀的模式/流程改进/预测校准时 should_refine=true。"
+                ),
+                user=json.dumps(
+                    {
+                        "job": job,
+                        "signals": signals,
+                        "harness_overview": state.overview(entry_limit=4),
+                        "recent_refinements": [e.to_dict() for e in state.refinements[-5:]],
+                    },
+                    ensure_ascii=False,
+                ),
+                provider=str(llm_cfg.get("provider") or "auto"),
+                model=llm_cfg.get("model") or None,
+                timeout=int(llm_cfg.get("timeout_seconds") or 45),
+            )
+            if isinstance(payload, dict) and "should_refine" in payload:
+                return {
+                    "should_refine": bool(payload.get("should_refine")),
+                    "rationale": str(payload.get("rationale") or ""),
+                    "instructions": str(payload.get("instructions") or instructions),
+                }
+
+    return {
+        "should_refine": True,
+        "rationale": "；".join(signals[:4]),
+        "instructions": instructions,
+    }
+
+
+def _plan_from_signals(
+    job: str,
+    evidence: dict[str, Any],
+    state: HarnessState,
+    *,
+    instructions: str = "",
+) -> dict[str, Any]:
+    """Deterministic Layer B planner when LLM is unavailable."""
+    edits: list[dict[str, Any]] = []
+    if job == "weekly":
+        report = evidence.get("report") or evidence
+        for idx, item in enumerate(report.get("process_improvements") or []):
+            title = str(item.get("title") or "改进").strip()
+            detail = str(item.get("detail") or "").strip()
+            action = str(item.get("action") or "").strip()
+            content = f"[P{idx + 1}] {title} — {detail}" + (f"；执行：{action}" if action else "")
+            edits.append(
+                {
+                    "action": "create",
+                    "kind": "playbook",
+                    "entry_id": _slug(f"weekly_{title}") or f"weekly_{idx}",
+                    "title": title[:48],
+                    "content": content[:240],
+                }
+            )
+        for note in evidence.get("applied_config") or report.get("applied_config") or []:
+            line = f"已应用参数：{note}"
+            edits.append(
+                {
+                    "action": "create",
+                    "kind": "policy",
+                    "entry_id": _slug(line[:60]),
+                    "title": line[:48],
+                    "content": line[:240],
+                }
+            )
+    elif job == "forecast":
+        forecast = evidence.get("forecast") or evidence
+        symbols = forecast.get("symbols") or {}
+        strong: list[str] = []
+        weak: list[str] = []
+        for code, row in symbols.items():
+            kronos = (row.get("kronos") or {}) if isinstance(row, dict) else {}
+            if not kronos.get("available"):
+                continue
+            cum = kronos.get("cum_change_pct")
+            if cum is None:
+                continue
+            name = row.get("name") or code
+            tag = f"{name}({code}) {float(cum):+.1f}%"
+            if float(cum) >= 1.0:
+                strong.append(tag)
+            elif float(cum) <= -1.0:
+                weak.append(tag)
+        if strong:
+            edits.append(
+                {
+                    "action": "create",
+                    "kind": "playbook",
+                    "entry_id": "forecast_kronos_bull",
+                    "title": "Kronos 偏强",
+                    "content": "Kronos 偏强：" + "、".join(strong[:4]),
+                }
+            )
+        if weak:
+            edits.append(
+                {
+                    "action": "create",
+                    "kind": "playbook",
+                    "entry_id": "forecast_kronos_bear",
+                    "title": "Kronos 偏弱",
+                    "content": "Kronos 偏弱：" + "、".join(weak[:4]),
+                }
+            )
+    elif job == "close":
+        verify = evidence.get("verify") or {}
+        for idx, rec in enumerate((verify.get("recommendations") or [])[:3]):
+            content = f"明日：{rec}"
+            edits.append(
+                {
+                    "action": "create",
+                    "kind": "playbook",
+                    "entry_id": _slug(content[:60]) or f"close_play_{idx}",
+                    "title": content[:48],
+                    "content": content[:240],
+                }
+            )
+
+    # Dedupe near-duplicate memory entries (keep shorter)
+    memory_entries = list((state.entries.get("memory") or {}).values())
+    memory_entries.sort(key=lambda e: e.updated_at or e.created_at, reverse=True)
+    seen_prefix: set[str] = set()
+    for entry in memory_entries:
+        prefix = entry.content[:24]
+        if prefix in seen_prefix:
+            edits.append({"action": "delete", "kind": "memory", "entry_id": entry.id})
+        else:
+            seen_prefix.add(prefix)
+
+    summary = f"deterministic {job}"
+    if instructions:
+        summary += f" ({instructions[:60]})"
+    return {"summary": summary, "rationale": "rule-based planner", "edits": edits}
+
+
+def plan_harness_refinement(
+    job: str,
+    evidence: dict[str, Any],
+    state: HarnessState,
+    *,
+    settings: Optional[dict[str, Any]] = None,
+    instructions: str = "",
+) -> dict[str, Any]:
+    """Layer B planner — LLM when configured, else deterministic fallback."""
+    llm_cfg = _llm_refine_cfg(settings)
+    from agent_reach.daily_run.llm_chat import chat_json, resolve_chat_provider
+
+    provider = str(llm_cfg.get("provider") or "auto")
+    if resolve_chat_provider(provider):
+        memory, policy, playbook, ev_summary = _evidence_from_job(job, evidence)
+        payload = chat_json(
+            system=(
+                "你是 daily-run harness 规划器。输出 JSON："
+                '{"summary":"...", "rationale":"...", "edits":[{'
+                '"action":"create|update|delete", "kind":"memory|policy|playbook", '
+                '"entry_id":"optional", "title":"...", "content":"..."}]}。'
+                "每次最多 8 条 edits；content 必须中文且可执行；避免与 Layer A 完全重复。"
+            ),
+            user=json.dumps(
+                {
+                    "job": job,
+                    "instructions": instructions,
+                    "evidence_summary": ev_summary,
+                    "layer_a": {"memory": memory, "policy": policy, "playbook": playbook},
+                    "harness_overview": state.overview(entry_limit=8),
+                    "recent_refinements": [e.to_dict() for e in state.refinements[-8:]],
+                },
+                ensure_ascii=False,
+            ),
+            provider=provider,
+            model=llm_cfg.get("model") or None,
+            timeout=int(llm_cfg.get("timeout_seconds") or 60),
+        )
+        if isinstance(payload, dict) and isinstance(payload.get("edits"), list):
+            payload["planner"] = "llm"
+            return payload
+
+    plan = _plan_from_signals(job, evidence, state, instructions=instructions)
+    plan["planner"] = "deterministic"
+    return plan
+
+
+def _evidence_from_job(job: str, evidence: dict[str, Any]) -> tuple[list[str], list[str], list[str], str]:
+    if job == "close":
+        return _evidence_from_close(evidence)
+    if job == "weekly":
+        return _evidence_from_weekly(evidence)
+    if job == "forecast":
+        return _evidence_from_forecast(evidence)
+    memory = [str(x) for x in (evidence.get("memory") or []) if str(x).strip()]
+    policy = [str(x) for x in (evidence.get("policy") or []) if str(x).strip()]
+    playbook = [str(x) for x in (evidence.get("playbook") or []) if str(x).strip()]
+    return memory, policy, playbook, str(evidence.get("summary") or job)
+
+
+def apply_harness_proposal(
+    state: HarnessState,
+    proposal: dict[str, Any],
+    *,
+    job: str,
+    baseline_state: HarnessState,
+    evidence: str,
+) -> tuple[list[RefinementEdit], list[str]]:
+    """Apply planner edits with baseline conflict detection."""
+    edits_out: list[RefinementEdit] = []
+    changes: list[str] = []
+    raw_edits = proposal.get("edits") or []
+    if not isinstance(raw_edits, list):
+        return edits_out, changes
+
+    for raw in raw_edits[:12]:
+        if not isinstance(raw, dict):
+            continue
+        action = str(raw.get("action") or "").strip().lower()
+        kind = raw.get("kind")
+        if kind not in _KINDS:
+            continue
+        entry_id = str(raw.get("entry_id") or _slug(str(raw.get("content") or raw.get("title") or "")) or "")
+        if not entry_id and action != "delete":
+            continue
+
+        baseline_entry = baseline_state.get(kind, entry_id)
+        current_entry = state.get(kind, entry_id)
+        if action in {"update", "delete"} and baseline_entry and current_entry:
+            if (current_entry.version or 1) != (baseline_entry.version or 1):
+                if current_entry.updated_at != baseline_entry.updated_at:
+                    continue
+
+        if action == "delete":
+            edit = state.delete(kind, entry_id)
+            if edit:
+                edits_out.append(edit)
+                changes.append(f"delete {kind}/{entry_id}")
+            continue
+
+        title = str(raw.get("title") or entry_id)[:48]
+        content = str(raw.get("content") or "").strip()
+        if not content:
+            continue
+        _, edit = state.upsert(
+            kind,
+            entry_id,
+            title=title,
+            content=content[:400],
+            source="llm_refine",
+            job=job,
+            evidence=evidence,
+        )
+        if edit.action != "noop":
+            edits_out.append(edit)
+            changes.append(f"{edit.action} {kind}/{entry_id}: {content[:80]}")
+
+    return edits_out, changes
+
+
+def refine_after_job_llm(
+    job: str,
+    *,
+    evidence: dict[str, Any],
+    settings: Optional[dict[str, Any]] = None,
+    skip_review: bool = False,
+) -> dict[str, Any]:
+    """Layer B: review gate → plan → apply (prime-agent style)."""
+    cfg = _harness_cfg(settings)
+    llm_cfg = _llm_refine_cfg(settings)
+    if cfg.get("enabled") is False or llm_cfg.get("enabled") is False:
+        return {"skipped": True, "reason": "llm_refine disabled"}
+    if not _llm_job_enabled(llm_cfg, job):
+        return {"skipped": True, "reason": f"llm job {job} disabled"}
+
+    state = load_harness()
+    review = review_harness_refine(job, evidence, state, settings=settings, skip_review=skip_review)
+    if not review.get("should_refine"):
+        return {"skipped": True, "reason": review.get("rationale") or "review rejected", "review": review}
+
+    baseline = HarnessState.load()
+    proposal = plan_harness_refinement(
+        job,
+        evidence,
+        baseline,
+        settings=settings,
+        instructions=str(review.get("instructions") or ""),
+    )
+    state = load_harness()
+    _, _, _, ev_summary = _evidence_from_job(job, evidence)
+    edits, changes = apply_harness_proposal(
+        state,
+        proposal,
+        job=job,
+        baseline_state=baseline,
+        evidence=ev_summary,
+    )
+    if not changes:
+        return {"skipped": True, "reason": "empty proposal", "review": review, "proposal": proposal}
+
+    trim_changes = state.trim(_limits(cfg))
+    changes.extend(trim_changes)
+    event = state.record_refinement(
+        job=job,
+        trigger=f"llm:{job}",
+        changes=changes,
+        evidence=str(proposal.get("summary") or ev_summary),
+        edits=edits,
+    )
+    path = state.save()
+    return {
+        "skipped": False,
+        "job": job,
+        "refinement_id": event.id,
+        "changes": len(changes),
+        "review": review,
+        "proposal_summary": proposal.get("summary"),
+        "planner": proposal.get("planner") or "deterministic",
+        "state_path": str(path),
+    }
