@@ -10,6 +10,18 @@ import urllib.error
 import urllib.request
 from typing import Any, Optional
 
+_DEFAULT_DEEPSEEK_BASE = "https://api.deepseek.com"
+
+
+def chat_completions_url(base_url: str) -> str:
+    """Normalize an OpenAI-compatible base URL to a chat/completions endpoint."""
+    base = str(base_url or _DEFAULT_DEEPSEEK_BASE).strip().rstrip("/")
+    if base.endswith("/chat/completions"):
+        return base
+    if base.endswith("/v1"):
+        return f"{base}/chat/completions"
+    return f"{base}/v1/chat/completions"
+
 
 def _resolve_api_key(provider: str) -> tuple[str, str]:
     from agent_reach.config import Config
@@ -21,13 +33,23 @@ def _resolve_api_key(provider: str) -> tuple[str, str]:
     if provider == "openai":
         key = os.environ.get("OPENAI_API_KEY") or cfg.get("openai_api_key") or ""
         return str(key).strip(), "https://api.openai.com/v1/chat/completions"
+    if provider == "deepseek":
+        key = os.environ.get("DEEPSEEK_API_KEY") or cfg.get("deepseek_api_key") or ""
+        base = (
+            os.environ.get("DEEPSEEK_BASE_URL")
+            or cfg.get("deepseek_base_url")
+            or _DEFAULT_DEEPSEEK_BASE
+        )
+        return str(key).strip(), chat_completions_url(str(base))
     raise ValueError(f"unknown provider: {provider}")
 
 
 def resolve_chat_provider(preferred: str = "auto") -> Optional[str]:
-    """Return groq, openai, or None when no key is configured."""
-    order = ["groq", "openai"] if preferred == "auto" else [preferred]
-    for provider in order:
+    """Return configured provider name, or None when no key is available."""
+    if preferred != "auto":
+        key, _ = _resolve_api_key(preferred)
+        return preferred if key else None
+    for provider in ("deepseek", "groq", "openai"):
         key, _ = _resolve_api_key(provider)
         if key:
             return provider
@@ -73,8 +95,9 @@ def chat_json(
     default_models = {
         "groq": "llama-3.3-70b-versatile",
         "openai": "gpt-4o-mini",
+        "deepseek": "deepseek-chat",
     }
-    use_model = model or default_models.get(resolved, default_models["groq"])
+    use_model = model or default_models.get(resolved, default_models["deepseek"])
 
     payload = {
         "model": use_model,

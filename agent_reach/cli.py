@@ -80,7 +80,7 @@ def main():
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
     p_conf.add_argument("key", nargs="?", default=None,
-                        choices=["proxy", "github-token", "groq-key", "openai-key",
+                        choices=["proxy", "github-token", "groq-key", "openai-key", "deepseek-key",
                                  "twitter-cookies", "youtube-cookies",
                                  "xhs-cookies",
                                  "feishu-app-id", "feishu-app-secret", "feishu-chat-id",
@@ -1316,6 +1316,12 @@ def _cmd_configure(args):
     elif args.key == "openai-key":
         config.set("openai_api_key", value)
         print(f"✅ OpenAI key configured!")
+
+    elif args.key == "deepseek-key":
+        config.set("deepseek_api_key", value)
+        if not config.get("deepseek_base_url"):
+            config.set("deepseek_base_url", "https://api.deepseek.com")
+        print("✅ DeepSeek key configured!")
 
     elif args.key == "feishu-app-id":
         config.set("feishu_app_id", value.strip())

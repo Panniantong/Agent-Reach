@@ -489,7 +489,8 @@
     },
     "llm_refine": {
       "enabled": true,
-      "provider": "auto",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
       "use_llm_review": false,
       "cooldown_hours": 24,
       "timeout_seconds": 60,
