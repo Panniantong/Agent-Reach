@@ -111,8 +111,10 @@ def adjust_watchlist(
     pf = copy_portfolio(portfolio)
     enriched = build_enriched_symbols(snapshot)
     changes: list[WatchlistChange] = []
+    from agent_reach.daily_run.harness_policy import threshold_default
+
     thresholds = settings.get("thresholds", {})
-    macro_veto = float(thresholds.get("macro_veto", 40))
+    macro_veto = float(thresholds.get("macro_veto", threshold_default(settings, "macro_veto")))
     held_codes = {_normalize_code(str(h.get("code", ""))) for h in pf.get("holdings") or []}
     base_mss = _snapshot_base_mss(snapshot, settings)
     wl_cfg = watchlist_settings(settings)

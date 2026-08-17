@@ -40,3 +40,23 @@ def test_supervisor_detects_conflict():
     ]
     review = supervisor_review({"expert_results": results}, load_settings())
     assert review.conflicts
+
+
+def test_supervisor_counter_thesis_on_bullish():
+    results = [
+        {"name": "technical", "score": 65, "summary": "t", "success": True},
+        {"name": "macro", "score": 62, "summary": "m", "success": True},
+        {"name": "sentiment", "score": 60, "summary": "s", "success": True},
+        {"name": "risk", "score": 55, "summary": "r", "success": True},
+    ]
+    review = supervisor_review(
+        {
+            "expert_results": results,
+            "mss_breakdown": {"global": 35},
+        },
+        load_settings(),
+    )
+    assert review.consensus_label == "可做"
+    assert review.counter_thesis.startswith("反面检验")
+    md = render_team_markdown({"team_review": review.to_dict(), "expert_results": results})
+    assert "反面检验" in md

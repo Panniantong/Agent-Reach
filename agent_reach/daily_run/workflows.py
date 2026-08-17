@@ -14,7 +14,7 @@ from agent_reach.daily_run.report_push import (
     render_morning_sections,
     split_push_enabled,
 )
-from agent_reach.daily_run.settings import load_settings
+from agent_reach.daily_run.settings import effective_settings, load_settings
 from agent_reach.daily_run.close_code_review import render_code_review_markdown
 from agent_reach.daily_run.close_research import render_research_markdown, run_exa_research
 from agent_reach.daily_run.curve_analysis import analyze_intraday_curve, render_curve_markdown
@@ -28,6 +28,19 @@ from agent_reach.daily_run.team import (
     team_first_enabled,
 )
 from agent_reach.daily_run.verify import render_verify_markdown, verify_snapshots
+
+try:
+    from loguru import logger
+except ImportError:  # pragma: no cover
+    import logging
+
+    logger = logging.getLogger("agent_reach.daily_run.workflows")
+
+
+def _workflow_harness_error(errors: list[str], context: str, exc: BaseException) -> None:
+    msg = f"{context}: {exc}"
+    errors.append(msg)
+    logger.warning("daily-run workflow harness error: {}", msg)
 
 
 def _default_baseline_path() -> Path:
@@ -156,8 +169,9 @@ def run_morning(
     Full morning pipeline:
     snapshot → audit/verdict/gate → Feishu push
     """
-    cfg = settings or load_settings()
+    cfg = effective_settings(settings)
     steps: list[str] = []
+    morning_harness_errors: list[str] = []
 
     if start_notify and push:
         _send_start_notification(config, cfg)
@@ -201,14 +215,57 @@ def run_morning(
     if not gate.passed:
         raise RuntimeError(f"质量门禁未通过：{gate.summary()}")
 
+    plan_close: dict[str, Any] = {}
+    if datetime.now().weekday() == 0:
+        from agent_reach.daily_run.harness import close_open_plans
+
+        plan_close = close_open_plans(settings=cfg)
+        if plan_close.get("count"):
+            steps.append(f"harness_plans_closed_{plan_close['count']}")
+
+    morning_harness_result: dict[str, Any] = {}
+    try:
+        from agent_reach.daily_run.morning_harness import apply_morning_harness_refinement
+
+        morning_harness_result = apply_morning_harness_refinement(
+            {
+                "snapshot": enriched,
+                "evaluation": evaluation,
+                "harness_plan_closeout": plan_close,
+            },
+            settings=cfg,
+        )
+    except Exception as exc:
+        _workflow_harness_error(morning_harness_errors, "morning_harness", exc)
+        morning_harness_result = {"skipped": True, "error": str(exc)}
+
     team_md = render_team_markdown(enriched) if expert_card_enabled(cfg, workflow="morning") else ""
     report_md = render_markdown(report)
+    from agent_reach.daily_run.report_narrative import generate_morning_narrative
+
+    morning_narrative = generate_morning_narrative(enriched, report, settings=cfg)
+    push_harness_summary = _harness_push_summary_enabled(cfg, report_kind="morning")
+    harness_md = ""
+    if push_harness_summary:
+        from agent_reach.daily_run.harness import format_harness_push_markdown
+
+        harness_payload = {"morning": morning_harness_result}
+        if plan_close.get("count"):
+            harness_payload["harness_plan_closeout"] = plan_close
+        harness_md = format_harness_push_markdown(
+            harness_payload,
+            job="morning",
+            harness_errors=morning_harness_errors,
+        )
+
     feishu_result = None
     if push:
         sections = render_morning_sections(
             team_markdown=team_md,
             report_markdown=report_md,
             report=report,
+            harness_markdown=harness_md,
+            narrative=morning_narrative,
         )
         feishu_result = push_report_sections(
             sections,
@@ -222,6 +279,17 @@ def run_morning(
         if feishu_result.get("mode") == "split":
             steps.append(f"push_split_{feishu_result.get('count', 0)}")
 
+    followup_steps = push_harness_followups(
+        settings=cfg,
+        config=config,
+        report_kind="morning",
+        harness_result={"morning": morning_harness_result},
+        harness_errors=morning_harness_errors,
+        push=push,
+        summary_in_main_push=push_harness_summary,
+    )
+    steps.extend(followup_steps)
+
     return {
         "steps": steps,
         "snapshot": enriched,
@@ -229,8 +297,262 @@ def run_morning(
         "markdown": team_md + "\n\n---\n\n" + report_md,
         "team_markdown": team_md,
         "report_markdown": report_md,
+        "llm_narrative": morning_narrative,
         "feishu": feishu_result,
+        "harness_plan_closeout": plan_close,
+        "harness_morning": morning_harness_result,
+        **({"harness_errors": morning_harness_errors} if morning_harness_errors else {}),
     }
+
+
+def _harness_push_summary_enabled(settings: dict[str, Any], *, report_kind: str) -> bool:
+    harness_cfg = settings.get("harness") or {}
+    if report_kind == "close":
+        return bool(harness_cfg.get("push_summary_on_close", False))
+    if report_kind == "weekly":
+        if "push_summary_on_weekly" in harness_cfg:
+            return bool(harness_cfg.get("push_summary_on_weekly"))
+        return bool(harness_cfg.get("push_summary_on_close", False))
+    if report_kind == "forecast":
+        if "push_summary_on_forecast" in harness_cfg:
+            return bool(harness_cfg.get("push_summary_on_forecast"))
+        return bool(harness_cfg.get("push_summary_on_close", False))
+    if report_kind == "morning":
+        if "push_summary_on_morning" in harness_cfg:
+            return bool(harness_cfg.get("push_summary_on_morning"))
+        return bool(harness_cfg.get("push_summary_on_close", False))
+    if report_kind == "intraday":
+        if "push_summary_on_intraday" in harness_cfg:
+            return bool(harness_cfg.get("push_summary_on_intraday"))
+        return False
+    return False
+
+
+def _harness_errors_push_enabled(settings: dict[str, Any]) -> bool:
+    harness_cfg = settings.get("harness") or {}
+    return bool(harness_cfg.get("push_harness_errors_on_feishu", True))
+
+
+def _harness_rollback_push_enabled(settings: dict[str, Any]) -> bool:
+    harness_cfg = settings.get("harness") or {}
+    return bool(harness_cfg.get("push_rollback_on_feishu", True))
+
+
+def _harness_card_template(settings: dict[str, Any], report_kind: str) -> str:
+    templates = (settings.get("report") or {})
+    mapping = {
+        "close": templates.get("feishu_template_verify", "purple"),
+        "weekly": templates.get("feishu_template_weekly", "blue"),
+        "forecast": templates.get("feishu_template_forecast", "blue"),
+        "morning": templates.get("feishu_template_premarket", "orange"),
+        "intraday": templates.get("feishu_template_intraday", "blue"),
+    }
+    return str(mapping.get(report_kind, "blue"))
+
+
+def _harness_card_title(report_kind: str) -> str:
+    titles = {
+        "close": "🧬 Harness 进化 · 收盘",
+        "weekly": "🧬 Harness 进化 · 周报",
+        "forecast": "🧬 Harness 进化 · 预测",
+        "morning": "🧬 Harness 进化 · 早盘",
+        "intraday": "🧬 Harness 进化 · 盘中",
+    }
+    return titles.get(report_kind, f"🧬 Harness 进化 · {report_kind}")
+
+
+def _push_harness_summary_card(
+    harness_result: dict[str, Any],
+    *,
+    settings: dict[str, Any],
+    config: Any,
+    report_kind: str,
+    title: Optional[str] = None,
+    template: Optional[str] = None,
+    harness_errors: Optional[list[str]] = None,
+    body: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
+    from agent_reach.daily_run.harness import format_harness_push_markdown
+    from agent_reach.daily_run.report_push import ReportSection, push_report_sections
+
+    harness_md = body or format_harness_push_markdown(
+        harness_result,
+        job=report_kind,
+        harness_errors=harness_errors,
+    )
+    if not harness_md.strip():
+        return None
+    card_title = title or _harness_card_title(report_kind)
+    return push_report_sections(
+        [ReportSection(category="harness", title=card_title, body=harness_md)],
+        settings=settings,
+        config=config,
+        report_type=report_kind,
+        fallback_title=card_title,
+        template=template or _harness_card_template(settings, report_kind),
+        split=False,
+    )
+
+
+def push_harness_followups(
+    *,
+    settings: dict[str, Any],
+    config: Any,
+    report_kind: str,
+    harness_result: Optional[dict[str, Any]] = None,
+    harness_errors: Optional[list[str]] = None,
+    push: bool = True,
+    summary_in_main_push: bool = False,
+) -> list[str]:
+    """Push standalone harness rollback/errors cards when not embedded in main report."""
+    steps: list[str] = []
+    if not push:
+        return steps
+
+    harness_result = harness_result or {}
+    errors = list(harness_errors or [])
+    rollback = harness_result.get("auto_rollback") or {}
+
+    if rollback.get("triggered") and _harness_rollback_push_enabled(settings) and not summary_in_main_push:
+        from agent_reach.daily_run.harness import format_harness_rollback_markdown, format_harness_errors_markdown
+
+        body = format_harness_rollback_markdown(rollback, job=report_kind)
+        errors_md = format_harness_errors_markdown(errors) if _harness_errors_push_enabled(settings) else ""
+        if errors_md:
+            body = f"{body}\n\n{errors_md}"
+        if _push_harness_summary_card(
+            harness_result,
+            settings=settings,
+            config=config,
+            report_kind=report_kind,
+            title=f"⚠️ {_harness_card_title(report_kind)} · 回滚",
+            template="red",
+            body=body,
+        ):
+            steps.append("push_harness_rollback")
+        return steps
+
+    if errors and _harness_errors_push_enabled(settings) and not summary_in_main_push:
+        from agent_reach.daily_run.harness import format_harness_errors_markdown
+
+        body = format_harness_errors_markdown(errors)
+        if _push_harness_summary_card(
+            harness_result,
+            settings=settings,
+            config=config,
+            report_kind=report_kind,
+            title=f"⚠️ {_harness_card_title(report_kind)} · 异常",
+            template="red",
+            body=body,
+        ):
+            steps.append("push_harness_errors")
+    return steps
+
+
+def push_scheduled_harness_card(
+    *,
+    job: str,
+    harness_result: dict[str, Any],
+    settings: dict[str, Any],
+    config: Any,
+    push: bool = True,
+    harness_errors: Optional[list[str]] = None,
+) -> list[str]:
+    """Push harness summary card for scheduled jobs (e.g. intraday post-hook)."""
+    steps: list[str] = []
+    if not push or not _harness_push_summary_enabled(settings, report_kind=job):
+        return push_harness_followups(
+            settings=settings,
+            config=config,
+            report_kind=job,
+            harness_result=harness_result,
+            harness_errors=harness_errors,
+            push=push,
+            summary_in_main_push=False,
+        )
+
+    if _push_harness_summary_card(
+        harness_result,
+        settings=settings,
+        config=config,
+        report_kind=job,
+        harness_errors=harness_errors,
+    ):
+        steps.append("push_harness_summary")
+    return steps
+
+
+def _attach_close_session_refinements(
+    harness_result: dict[str, Any],
+    *,
+    harness_skills_report: Any = None,
+    experience_harness: Optional[dict[str, Any]] = None,
+) -> None:
+    if harness_skills_report is not None:
+        harness_result["close_skills"] = harness_skills_report.to_dict()
+    if experience_harness and experience_harness.get("refinement_id"):
+        harness_result["experience"] = experience_harness
+
+
+def _run_close_harness_layer_ab(
+    *,
+    enriched: dict[str, Any],
+    verify_dict: dict[str, Any],
+    curve: Any,
+    forecast_review: Any,
+    portfolio_summary_obj: Any,
+    settings: dict[str, Any],
+    harness_skills_report: Any = None,
+    experience_harness: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    from agent_reach.daily_run.close_harness_skills import run_close_layer_a_refinement
+    from agent_reach.daily_run.harness import refine_after_job_llm
+
+    curve_payload = curve.to_dict() if curve is not None and hasattr(curve, "to_dict") else curve
+    close_evidence = {
+        "snapshot": enriched,
+        "verify": verify_dict,
+        "curve": curve_payload,
+        "forecast_review": forecast_review.to_dict() if forecast_review else None,
+        "name": enriched.get("name"),
+        "portfolio_summary": portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
+    }
+    layer_a = run_close_layer_a_refinement(close_evidence, settings=settings)
+    layer_b = refine_after_job_llm("close", evidence=close_evidence, settings=settings)
+    harness_result = {"layer_a": layer_a, "layer_b": layer_b}
+    _attach_close_session_refinements(
+        harness_result,
+        harness_skills_report=harness_skills_report,
+        experience_harness=experience_harness,
+    )
+    if harness_skills_report is not None:
+        harness_skills_report.close_layer_a = layer_a
+        enriched["harness_skills"] = harness_skills_report.to_dict()
+    return harness_result
+
+
+def _finalize_close_harness(
+    harness_result: dict[str, Any],
+    *,
+    portfolio_summary_obj: Any,
+    settings: dict[str, Any],
+    harness_errors: Optional[list[str]] = None,
+) -> str:
+    from agent_reach.daily_run.harness import auto_rollback_on_bad_trade, format_harness_push_markdown
+
+    rollback = auto_rollback_on_bad_trade(
+        portfolio_summary=portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
+        harness_result=harness_result,
+        settings=settings,
+        job="close",
+    )
+    if rollback.get("triggered"):
+        harness_result["auto_rollback"] = rollback
+    return format_harness_push_markdown(
+        harness_result,
+        job="close",
+        harness_errors=harness_errors,
+    )
 
 
 def run_close(
@@ -249,9 +571,11 @@ def run_close(
     code_review: Optional[dict[str, Any]] = None,
     verify_dict: Optional[dict[str, Any]] = None,
     portfolio_summary: bool = True,
+    experts_already_ran: bool = False,
 ) -> dict[str, Any]:
     """Close workflow: Team-First experts → verify baseline vs current → Feishu push."""
-    cfg = settings or load_settings()
+    cfg = effective_settings(settings)
+    harness_errors: list[str] = []
     current = _attach_intraday_scans(dict(current), code=current.get("code"))
     current.setdefault("report_type", "close")
 
@@ -268,7 +592,8 @@ def run_close(
         enriched = attach_kronos_to_snapshot(dict(current), settings=cfg)
 
     if use_team:
-        enriched = run_team_first(enriched, cfg, names=plugin_names)
+        if not experts_already_ran:
+            enriched = run_team_first(enriched, cfg, names=plugin_names)
         team_md = render_team_markdown(enriched)
 
     if verify_dict is not None:
@@ -332,6 +657,7 @@ def run_close(
     forecast_review = None
     forecast_review_md = ""
     improvements_md = ""
+    improvements = None
     try:
         from agent_reach.daily_run.week_forecast_tracker import (
             render_forecast_review_markdown,
@@ -348,10 +674,10 @@ def run_close(
         )
         if forecast_review:
             forecast_review_md = render_forecast_review_markdown(forecast_review)
-    except Exception:
-        pass
+    except Exception as exc:
+        _workflow_harness_error(harness_errors, "forecast_review", exc)
 
-    exp_path = append_experience_entry(
+    exp_append = append_experience_entry(
         enriched,
         verify_dict,
         curve=curve,
@@ -359,7 +685,9 @@ def run_close(
         settings=cfg,
         forecast_review=forecast_review.to_dict() if forecast_review else None,
     )
-    exp_md = render_experience_markdown(limit=3) or ""
+    exp_path = exp_append.path
+    experience_harness = exp_append.harness
+    exp_md = render_experience_markdown(limit=3, settings=cfg) or ""
 
     if cfg.get("close_improvements", {}).get("enabled", True):
         from agent_reach.daily_run.close_improvements import (
@@ -383,6 +711,35 @@ def run_close(
 
     verify_md = render_verify_markdown(verify)
 
+    market_review_md = ""
+    market_review_obj = None
+    from agent_reach.daily_run.market_review import (
+        get_or_collect_market_review,
+        market_review_enabled,
+        render_market_review_markdown,
+    )
+    from agent_reach.daily_run.redfox_collector import attach_redfox_close_markdown, redfox_enabled
+
+    if market_review_enabled(cfg):
+        market_review_obj = get_or_collect_market_review(settings=cfg)
+        if market_review_obj:
+            market_review_md = render_market_review_markdown(market_review_obj)
+            enriched["market_review"] = market_review_obj
+
+    redfox_md = ""
+    if redfox_enabled(cfg):
+        redfox_md, redfox_result = attach_redfox_close_markdown(
+            enriched,
+            market_review_obj,
+            settings=cfg,
+        )
+        if redfox_result:
+            enriched["redfox"] = redfox_result.to_dict()
+        if redfox_md:
+            market_review_md = (
+                (market_review_md + "\n\n" + redfox_md) if market_review_md else redfox_md
+            )
+
     portfolio_md = ""
     portfolio_summary_obj = None
     if portfolio_summary:
@@ -404,6 +761,23 @@ def run_close(
     from agent_reach.daily_run.auditor import run_data_audit
 
     audit = run_data_audit(enriched, cfg)
+    harness_skills_report = None
+    try:
+        from agent_reach.daily_run.close_harness_skills import run_close_harness_refinements
+
+        harness_skills_report = run_close_harness_refinements(
+            verify=verify_dict,
+            improvements=improvements,
+            audit=audit,
+            forecast_review=forecast_review.to_dict() if forecast_review else None,
+            watchlist_adjust=watchlist_adjust,
+            settings=cfg,
+        )
+        enriched["harness_skills"] = harness_skills_report.to_dict()
+    except Exception as exc:
+        _workflow_harness_error(harness_errors, "close_harness_skills", exc)
+        enriched["harness_skills"] = {"skipped": True, "error": str(exc)}
+
     audit_lines: list[str] = []
     if not audit.passed:
         audit_lines.append(f"**数据审计未通过：** {'；'.join(audit.issues)}")
@@ -417,6 +791,7 @@ def run_close(
     md = "\n\n---\n\n".join(
         p
         for p in [
+            market_review_md,
             team_md,
             curve_md,
             research_md,
@@ -430,6 +805,43 @@ def run_close(
         if p
     )
 
+    curve_payload = curve.to_dict() if curve is not None and hasattr(curve, "to_dict") else curve
+    from agent_reach.daily_run.report_narrative import generate_close_narrative
+
+    close_narrative = generate_close_narrative(
+        snapshot=enriched,
+        verify=verify_dict,
+        portfolio_summary=portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
+        curve=curve_payload,
+        forecast_review=forecast_review.to_dict() if forecast_review else None,
+        settings=cfg,
+    )
+
+    push_harness_summary = _harness_push_summary_enabled(cfg, report_kind="close")
+    harness_result: dict[str, Any] = {}
+    harness_md = ""
+    if push_harness_summary:
+        try:
+            harness_result = _run_close_harness_layer_ab(
+                enriched=enriched,
+                verify_dict=verify_dict,
+                curve=curve,
+                forecast_review=forecast_review,
+                portfolio_summary_obj=portfolio_summary_obj,
+                settings=cfg,
+                harness_skills_report=harness_skills_report,
+                experience_harness=experience_harness,
+            )
+            harness_md = _finalize_close_harness(
+                harness_result,
+                portfolio_summary_obj=portfolio_summary_obj,
+                settings=cfg,
+                harness_errors=harness_errors,
+            )
+        except Exception as exc:
+            _workflow_harness_error(harness_errors, "close_harness_layer_ab", exc)
+            harness_result = {"skipped": True, "error": str(exc)}
+
     feishu_result = None
     if push:
         audit_cfg = cfg.get("data_audit", {})
@@ -441,12 +853,15 @@ def run_close(
         cfg_obj = config or Config()
         sections = render_close_sections(
             verify_name=verify.name or verify.code or "大盘",
+            market_markdown=market_review_md,
             team_markdown=team_md,
             curve_markdown=curve_md,
             research_markdown=research_md or "",
             experience_markdown=exp_md or "",
             verify_markdown=verify_md,
             portfolio_markdown=portfolio_md,
+            harness_markdown=harness_md,
+            narrative=close_narrative,
         )
         feishu_result = push_report_sections(
             sections,
@@ -462,7 +877,48 @@ def run_close(
 
     close_baseline_path = save_close_baseline(snapshot=enriched, verify=verify_dict)
 
-    return {
+    if not push_harness_summary:
+        try:
+            harness_result = _run_close_harness_layer_ab(
+                enriched=enriched,
+                verify_dict=verify_dict,
+                curve=curve,
+                forecast_review=forecast_review,
+                portfolio_summary_obj=portfolio_summary_obj,
+                settings=cfg,
+                harness_skills_report=harness_skills_report,
+                experience_harness=experience_harness,
+            )
+        except Exception as exc:
+            _workflow_harness_error(harness_errors, "close_harness_layer_ab", exc)
+            harness_result = {"skipped": True, "error": str(exc)}
+        else:
+            rollback = None
+            try:
+                from agent_reach.daily_run.harness import auto_rollback_on_bad_trade
+
+                rollback = auto_rollback_on_bad_trade(
+                    portfolio_summary=portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
+                    harness_result=harness_result,
+                    settings=cfg,
+                    job="close",
+                )
+            except Exception as exc:
+                _workflow_harness_error(harness_errors, "close_harness_auto_rollback", exc)
+            if rollback and rollback.get("triggered"):
+                harness_result["auto_rollback"] = rollback
+
+    followup_steps = push_harness_followups(
+        settings=cfg,
+        config=config,
+        report_kind="close",
+        harness_result=harness_result,
+        harness_errors=harness_errors,
+        push=push,
+        summary_in_main_push=push_harness_summary,
+    )
+
+    result: dict[str, Any] = {
         "verify": verify_dict,
         "snapshot": enriched,
         "markdown": md,
@@ -471,19 +927,27 @@ def run_close(
         "research_markdown": research_md,
         "experience_markdown": exp_md,
         "verify_markdown": verify_md,
+        "market_review_markdown": market_review_md,
+        "market_review": market_review_obj,
         "portfolio_markdown": portfolio_md,
         "portfolio_summary": portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
+        "llm_narrative": close_narrative,
         "research": research_results,
         "experience_path": str(exp_path),
         "feishu": feishu_result,
         "close_baseline_path": str(close_baseline_path) if close_baseline_path else None,
         "forecast_review": forecast_review.to_dict() if forecast_review else None,
+        "harness": harness_result,
         "audit": {
             "passed": audit.passed,
             "issues": audit.issues,
             "warnings": audit.warnings,
         },
+        "harness_followup_steps": followup_steps,
     }
+    if harness_errors:
+        result["harness_errors"] = harness_errors
+    return result
 
 
 def prepare_close_run(
@@ -497,7 +961,7 @@ def prepare_close_run(
     attach_intraday: bool = True,
 ) -> dict[str, Any]:
     """Shared pre-close pipeline for schedule cron and CLI."""
-    cfg = settings or load_settings()
+    cfg = effective_settings(settings)
     steps: list[str] = []
     snap = dict(snapshot)
     pf_work = portfolio
@@ -702,8 +1166,9 @@ def run_weekly(
         weekly_report_title,
     )
 
-    cfg = settings or load_settings()
+    cfg = effective_settings(settings)
     weekly_cfg = cfg.get("weekly_report") or {}
+    harness_errors: list[str] = []
     if weekly_cfg.get("enabled", True) is False:
         return {"steps": ["skipped"], "message": "weekly_report disabled", "feishu": None}
 
@@ -734,12 +1199,58 @@ def run_weekly(
             steps.append("skill_audit")
             if audit.get("fixes"):
                 steps.append(f"skill_audit_fixes_{len(audit['fixes'])}")
+        gates = audit.get("gates") or {}
+        if gates and gates.get("ok") is False and not gates.get("skipped"):
+            steps.append("skill_gates_failed")
+
+    harness_result: dict[str, Any] = {}
+    layer_a_refinement_id = ""
+    weekly_skills_report = None
+    try:
+        from agent_reach.daily_run.weekly_harness_skills import (
+            run_weekly_harness_refinements,
+            run_weekly_layer_a_refinement,
+        )
+
+        weekly_skills_report = run_weekly_harness_refinements(report.to_dict(), settings=cfg)
+        harness_result["run_guard"] = weekly_skills_report.run_guard
+
+        weekly_evidence = {
+            "report": report.to_dict(),
+            "applied_config": skill_writeback.get("applied_config") or [],
+        }
+        layer_a = run_weekly_layer_a_refinement(weekly_evidence, settings=cfg)
+        harness_result["layer_a"] = layer_a
+        weekly_skills_report.weekly_layer_a = layer_a
+        if layer_a.get("refinement_id"):
+            layer_a_refinement_id = str(layer_a["refinement_id"])
+            steps.append("harness_layer_a")
+        if weekly_skills_report.run_guard.get("refinement_id"):
+            steps.append("harness_run_guard")
+        harness_result["weekly_skills"] = weekly_skills_report.to_dict()
+    except Exception as exc:
+        _workflow_harness_error(harness_errors, "weekly_harness_layer_a", exc)
+        harness_result["layer_a"] = {"skipped": True, "error": str(exc)}
+
+    from agent_reach.daily_run.report_narrative import generate_weekly_narrative
+
+    report.llm_narrative = generate_weekly_narrative(report.to_dict(), settings=cfg)
+    steps.append("llm_narrative")
 
     md = render_weekly_markdown(report)
     steps.append("render")
 
     feishu_result = None
-    if push:
+    gate_alert: str = ""
+    gates = ((skill_writeback.get("skill_audit") or {}).get("gates") or {})
+    block_push = bool(gates.get("block_weekly_push"))
+    if block_push:
+        from agent_reach.daily_run.skill_gates import format_gate_alert_markdown
+
+        gate_alert = format_gate_alert_markdown(gates)
+        steps.append("push_blocked_skill_gates")
+
+    if push and not block_push:
         from agent_reach.config import Config
 
         from agent_reach.daily_run.report_push import (
@@ -762,6 +1273,98 @@ def run_weekly(
         steps.append("push")
         if feishu_result.get("mode") == "split":
             steps.append(f"push_split_{feishu_result.get('count', 0)}")
+    elif push and block_push and gate_alert:
+        from agent_reach.config import Config
+        from agent_reach.daily_run.report_push import ReportSection, push_report_sections
+
+        cfg_obj = config or Config()
+        feishu_result = push_report_sections(
+            [ReportSection(category="weekly_insights", title="Skill 门禁", body=gate_alert)],
+            settings=cfg,
+            config=cfg_obj,
+            report_type="weekly",
+            fallback_title="⛔ 周六 Skill 门禁未通过",
+            template="red",
+            split=False,
+        )
+        steps.append("push_gate_alert")
+
+    try:
+        from agent_reach.daily_run.harness import refine_after_job_llm
+
+        weekly_evidence = {
+            "report": report.to_dict(),
+            "applied_config": skill_writeback.get("applied_config") or [],
+        }
+        layer_b = refine_after_job_llm("weekly", evidence=weekly_evidence, settings=cfg)
+        harness_result["layer_b"] = layer_b
+        if layer_b.get("refinement_id"):
+            steps.append("harness_layer_b")
+    except Exception as exc:
+        _workflow_harness_error(harness_errors, "weekly_harness_layer_b", exc)
+        harness_result["layer_b"] = {"skipped": True, "error": str(exc)}
+
+    harness_result["weekly_skills"] = harness_result.get("weekly_skills") or (
+        weekly_skills_report.to_dict() if weekly_skills_report is not None else {}
+    )
+    if push and not block_push:
+        from agent_reach.config import Config
+        from agent_reach.daily_run.harness import auto_rollback_on_bad_trade
+
+        rollback = auto_rollback_on_bad_trade(
+            portfolio_summary={"weekly_pnl_pct": report.weekly_pnl_pct},
+            harness_result=harness_result,
+            settings=cfg,
+            job="weekly",
+        )
+        if rollback.get("triggered"):
+            harness_result["auto_rollback"] = rollback
+        cfg_obj = config or Config()
+        summary_enabled = _harness_push_summary_enabled(cfg, report_kind="weekly")
+        if summary_enabled and _push_harness_summary_card(
+            harness_result,
+            settings=cfg,
+            config=cfg_obj,
+            report_kind="weekly",
+            harness_errors=harness_errors,
+        ):
+            steps.append("push_harness_summary")
+        steps.extend(
+            push_harness_followups(
+                settings=cfg,
+                config=cfg_obj,
+                report_kind="weekly",
+                harness_result=harness_result,
+                harness_errors=harness_errors,
+                push=True,
+                summary_in_main_push=summary_enabled,
+            )
+        )
+
+    layer_b_refinement_id = ""
+    for layer in (harness_result.get("layer_b") or {},):
+        if isinstance(layer, dict) and layer.get("refinement_id"):
+            layer_b_refinement_id = str(layer["refinement_id"])
+            break
+    if layer_b_refinement_id and layer_b_refinement_id != layer_a_refinement_id:
+        from agent_reach.daily_run.skill_improvements_apply import annotate_weekly_harness_audit
+
+        audit_note = annotate_weekly_harness_audit(
+            week_start=str(report.week_start or ""),
+            week_end=str(report.week_end or ""),
+            refinement_id=layer_b_refinement_id,
+            settings=cfg,
+            skip_sync=True,
+        )
+        steps.append("harness_skill_annotate")
+        skill_writeback["harness_annotation"] = audit_note
+        if (audit_note.get("skill_changed") or audit_note.get("fragment_changed")) and weekly_cfg.get(
+            "skill_sync_local", True
+        ) is not False:
+            from agent_reach.daily_run.skill_improvements_apply import sync_canonical_skill_to_local
+
+            sync_canonical_skill_to_local(cfg)
+            steps.append("skill_sync_post_harness")
 
     return {
         "steps": steps,
@@ -769,8 +1372,11 @@ def run_weekly(
         "digest_path": str(digest_path),
         "watchlist_candidates": wl_candidates,
         "skill_writeback": skill_writeback,
+        "llm_narrative": report.llm_narrative,
+        "harness": harness_result,
         "markdown": md,
         "feishu": feishu_result,
+        **({"harness_errors": harness_errors} if harness_errors else {}),
     }
 
 
@@ -791,8 +1397,9 @@ def run_forecast(
         render_forecast_markdown,
     )
 
-    cfg = settings or load_settings()
+    cfg = effective_settings(settings)
     wf_cfg = cfg.get("week_forecast") or {}
+    harness_errors: list[str] = []
     if wf_cfg.get("enabled", True) is False:
         return {"steps": ["skipped"], "message": "week_forecast disabled", "feishu": None}
 
@@ -829,10 +1436,60 @@ def run_forecast(
         if feishu_result.get("mode") == "split":
             steps.append(f"push_split_{feishu_result.get('count', 0)}")
 
+    harness_result: dict[str, Any] = {}
+    try:
+        from agent_reach.daily_run.forecast_harness_skills import (
+            run_forecast_harness_refinements,
+            run_forecast_layer_a_refinement,
+        )
+        from agent_reach.daily_run.harness import refine_after_job_llm
+
+        forecast_dict = forecast.to_dict()
+        skills_report = run_forecast_harness_refinements(forecast_dict, settings=cfg)
+        forecast_evidence = {"forecast": forecast_dict}
+        layer_a = run_forecast_layer_a_refinement(forecast_evidence, settings=cfg)
+        layer_b = refine_after_job_llm("forecast", evidence=forecast_evidence, settings=cfg)
+        harness_result = {
+            "forecast_calibrate": skills_report.forecast_calibrate,
+            "layer_a": layer_a,
+            "layer_b": layer_b,
+            "forecast_skills": skills_report.to_dict(),
+        }
+    except Exception as exc:
+        _workflow_harness_error(harness_errors, "forecast_harness", exc)
+        harness_result = {"skipped": True, "error": str(exc)}
+
+    if push:
+        from agent_reach.config import Config
+
+        cfg_obj = config or Config()
+        summary_enabled = _harness_push_summary_enabled(cfg, report_kind="forecast")
+        if summary_enabled and _push_harness_summary_card(
+            harness_result,
+            settings=cfg,
+            config=cfg_obj,
+            report_kind="forecast",
+            harness_errors=harness_errors,
+        ):
+            steps.append("push_harness_summary")
+        steps.extend(
+            push_harness_followups(
+                settings=cfg,
+                config=cfg_obj,
+                report_kind="forecast",
+                harness_result=harness_result,
+                harness_errors=harness_errors,
+                push=True,
+                summary_in_main_push=summary_enabled,
+            )
+        )
+
     return {
         "steps": steps,
         "forecast": forecast.to_dict(),
         "forecast_path": str(path),
+        "harness": harness_result,
         "markdown": md,
         "feishu": feishu_result,
+        **({"harness_errors": harness_errors} if harness_errors else {}),
     }

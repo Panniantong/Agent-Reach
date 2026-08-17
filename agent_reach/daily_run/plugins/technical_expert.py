@@ -14,6 +14,8 @@ class TechnicalExpert(ExpertPlugin):
 
     def run(self, context: PluginContext) -> PluginResult:
         snap = context.snapshot
+        from agent_reach.daily_run.harness_policy import threshold_default
+
         thresholds = context.settings.get("thresholds", {})
         price = _f(snap.get("price"))
         ma20 = _f(snap.get("ma20"))
@@ -60,7 +62,9 @@ class TechnicalExpert(ExpertPlugin):
             score -= 15
             notes.append("收盘<MA20")
 
-        high_pos = float(thresholds.get("high_position_20d", 0.7))
+        high_pos = float(
+            thresholds.get("high_position_20d", threshold_default(context.settings, "high_position_20d"))
+        )
         if pos is not None:
             if 0.4 <= pos <= 0.6:
                 score += 10
@@ -69,7 +73,9 @@ class TechnicalExpert(ExpertPlugin):
                 score -= 10
                 notes.append(f"20日位置 {pos:.0%} 偏高")
 
-        min_vol = float(thresholds.get("min_volume_ratio", 1.0))
+        min_vol = float(
+            thresholds.get("min_volume_ratio", threshold_default(context.settings, "min_volume_ratio"))
+        )
         if vol is not None:
             if vol >= min_vol:
                 score += 5

@@ -119,6 +119,18 @@ class TestIntradayWorkflow:
             "agent_reach.daily_run.snapshot_builder.default_portfolio_path",
             lambda: portfolio_path,
         )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager.daily_trade_state_path",
+            lambda: tmp_path / "daily_trade_state.json",
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager.default_ledger_path",
+            lambda: tmp_path / "trade_ledger.jsonl",
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager._today_str",
+            lambda: "2026-07-24",
+        )
 
         snapshot = {
             "code": "688008",
@@ -152,6 +164,69 @@ class TestIntradayWorkflow:
         assert result.applied is True
         saved = __import__("json").loads(portfolio_path.read_text(encoding="utf-8"))
         assert any(h["code"] == "000725" for h in saved["holdings"])
+
+    def test_apply_paper_trade_blocks_duplicate(self, tmp_path, monkeypatch):
+        from agent_reach.daily_run.intraday import TradeDecision, apply_paper_trade
+        from agent_reach.daily_run.portfolio_manager import ApplyResult, TradeAction
+
+        portfolio_path = tmp_path / "portfolio.json"
+        portfolio_path.write_text(
+            '{"total":100000,"cash":80000,"cash_ratio":0.8,'
+            '"holdings":[{"code":"688008","name":"澜起科技","shares":100,"cost":255.87,"days_held":5}],'
+            '"watchlist":[{"code":"000725","name":"京东方A"}]}',
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.snapshot_builder.default_portfolio_path",
+            lambda: portfolio_path,
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager.daily_trade_state_path",
+            lambda: tmp_path / "daily_trade_state.json",
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager.default_ledger_path",
+            lambda: tmp_path / "trade_ledger.jsonl",
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager._today_str",
+            lambda: "2026-07-31",
+        )
+
+        trade = TradeAction(
+            side="buy",
+            code="000725",
+            name="京东方A",
+            shares=5300,
+            price=7.5,
+            amount=39750.0,
+            commission=59.62,
+            reasoning="test",
+        )
+        pf = __import__("json").loads(portfolio_path.read_text(encoding="utf-8"))
+
+        def _fake_apply(*_args, **_kwargs):
+            return ApplyResult(applied=True, portfolio=pf, actions=[trade], message="ok")
+
+        monkeypatch.setattr("agent_reach.daily_run.portfolio_manager.apply_auto_adjust", _fake_apply)
+
+        snapshot = {"code": "688008", "portfolio": pf, "watchlist": pf["watchlist"]}
+        settings = load_settings()
+        settings.setdefault("portfolio", {})["auto_adjust_enabled"] = True
+        decision = TradeDecision(
+            action="buy",
+            trade_id="T1",
+            lookback_mss=55.0,
+            lookback_detail=[],
+            trend="rising",
+            reasoning="MSS 达阈值",
+        )
+
+        first = apply_paper_trade(decision, snapshot, settings=settings)
+        second = apply_paper_trade(decision, snapshot, settings=settings)
+        assert first.applied is True
+        assert second.applied is False
+        assert "重复成交" in second.message
 
     def test_max_scans_limit(self, intraday_snapshot, tmp_path):
         state_path = tmp_path / "intraday.json"

@@ -17,6 +17,7 @@ class ReportSection:
 
 
 _CATEGORY_LABELS: dict[str, str] = {
+    "ai_narrative": "AI解读",
     "experts": "专家共识",
     "decision": "MSS 决策",
     "intraday": "盘中曲线",
@@ -26,11 +27,14 @@ _CATEGORY_LABELS: dict[str, str] = {
     "daily_portfolio": "盈亏·持仓",
     "weekly_portfolio": "盈亏·持仓",
     "weekly_market": "板块·热点",
+    "close_market": "全市场复盘",
     "weekly_track": "MSS·经验",
     "weekly_insights": "学习·改进",
     "forecast_mss": "MSS预测",
+    "forecast_narrative": "AI解读",
     "forecast_symbols": "个股路径",
     "forecast_news": "新闻热点",
+    "harness": "Harness 进化",
 }
 
 
@@ -83,16 +87,29 @@ def render_morning_sections(
     team_markdown: str,
     report_markdown: str,
     report: dict[str, Any],
+    harness_markdown: str = "",
+    narrative: Optional[dict[str, Any]] = None,
 ) -> list[ReportSection]:
     name = report.get("name") or report.get("code") or "大盘"
     verdict = report.get("verdict") or "观察"
     sections: list[ReportSection] = []
+    ai_section: Optional[ReportSection] = None
+    if narrative:
+        from agent_reach.daily_run.report_narrative import render_narrative_markdown
+
+        ai_md = render_narrative_markdown(narrative, job="morning")
+        if ai_md.strip():
+            ai_section = ReportSection(category="ai_narrative", title="", body=ai_md)
     if team_markdown.strip():
         sections.append(ReportSection(category="experts", title="", body=team_markdown.strip()))
     if report_markdown.strip():
         sections.append(
             ReportSection(category="decision", title="", body=report_markdown.strip(), template=None)
         )
+    if harness_markdown.strip():
+        sections.append(ReportSection(category="harness", title="", body=harness_markdown.strip()))
+    if ai_section is not None:
+        sections.append(ai_section)
     total = len(sections)
     for i, sec in enumerate(sections, start=1):
         extra = verdict if sec.category == "decision" else ""
@@ -116,9 +133,21 @@ def render_close_sections(
     experience_markdown: str = "",
     verify_markdown: str = "",
     portfolio_markdown: str = "",
+    market_markdown: str = "",
+    harness_markdown: str = "",
+    narrative: Optional[dict[str, Any]] = None,
 ) -> list[ReportSection]:
     label = verify_name or "大盘"
     sections: list[ReportSection] = []
+    ai_section: Optional[ReportSection] = None
+    if narrative:
+        from agent_reach.daily_run.report_narrative import render_narrative_markdown
+
+        ai_md = render_narrative_markdown(narrative, job="close")
+        if ai_md.strip():
+            ai_section = ReportSection(category="ai_narrative", title="", body=ai_md)
+    if market_markdown.strip():
+        sections.append(ReportSection(category="close_market", title="", body=market_markdown.strip()))
     if team_markdown.strip():
         sections.append(ReportSection(category="experts", title="", body=team_markdown.strip()))
     if curve_markdown.strip():
@@ -129,10 +158,14 @@ def render_close_sections(
         sections.append(ReportSection(category="experience", title="", body=experience_markdown.strip()))
     if verify_markdown.strip():
         sections.append(ReportSection(category="verify", title="", body=verify_markdown.strip()))
+    if harness_markdown.strip():
+        sections.append(ReportSection(category="harness", title="", body=harness_markdown.strip()))
     if portfolio_markdown.strip():
         sections.append(
             ReportSection(category="daily_portfolio", title="", body=portfolio_markdown.strip())
         )
+    if ai_section is not None:
+        sections.append(ai_section)
     total = len(sections)
     for i, sec in enumerate(sections, start=1):
         sec.title = section_title(
@@ -146,6 +179,7 @@ def render_close_sections(
 
 
 _WEEKLY_CATEGORY_MAP = {
+    "AI解读": "weekly_narrative",
     "盈亏·持仓": "weekly_portfolio",
     "板块·热点": "weekly_market",
     "MSS·经验": "weekly_track",
@@ -175,6 +209,7 @@ def render_weekly_push_sections(report) -> list[ReportSection]:
 
 
 _FORECAST_CATEGORY_MAP = {
+    "AI解读": "forecast_narrative",
     "MSS预测": "forecast_mss",
     "个股路径": "forecast_symbols",
     "新闻热点": "forecast_news",
@@ -363,18 +398,21 @@ def morning_sections_from_run(run_result: dict[str, Any]) -> list[ReportSection]
         team_markdown=run_result.get("team_markdown") or "",
         report_markdown=run_result.get("report_markdown") or "",
         report=report,
+        narrative=run_result.get("llm_narrative"),
     )
 
 
 def close_sections_from_run(run_result: dict[str, Any], *, verify_name: str) -> list[ReportSection]:
     return render_close_sections(
         verify_name=verify_name,
+        market_markdown=run_result.get("market_review_markdown") or "",
         team_markdown=run_result.get("team_markdown") or "",
         curve_markdown=run_result.get("curve_markdown") or "",
         research_markdown=run_result.get("research_markdown") or "",
         experience_markdown=run_result.get("experience_markdown") or "",
         verify_markdown=run_result.get("verify_markdown") or "",
         portfolio_markdown=run_result.get("portfolio_markdown") or "",
+        narrative=run_result.get("llm_narrative"),
     )
 
 

@@ -12,23 +12,14 @@
     "risk": 0.05
   },
 
-  "lookback_weights": [0.5, 0.3, 0.2],
-
   "morning_mss": {
     "use_prior_close": true,
     "show_delta_in_report": true
   },
 
   "thresholds": {
-    "macro_veto": 40,
-    "aggressive_entry": 50,
-    "min_cash_ratio": 0.4,
-    "max_price_deviation_pct": 0.08,
     "max_snapshot_age_hours": 24,
-    "high_position_20d": 0.7,
-    "low_position_20d": 0.4,
-    "min_volume_ratio": 1.0,
-    "max_vwap_deviation_pct": 0.04
+    "low_position_20d": 0.4
   },
 
   "buffett_filter": {
@@ -39,9 +30,7 @@
 
   "trading": {
     "commission_rate": 0.0015,
-    "slippage_rate": 0.001,
-    "stop_loss_ma20_pct": 0.04,
-    "holding_lock_days": 3
+    "slippage_rate": 0.001
   },
 
   "quality_gate": {
@@ -65,11 +54,12 @@
     "intraday_block_on_audit_fail": false,
     "min_quote_coverage_pct": 0.8,
     "quote_coverage_mode": "block",
-    "required_doctor_channels": ["web", "xueqiu"]
+    "required_doctor_channels": ["web", "xueqiu"],
+    "harness_evolve": true
   },
 
   "quote_fetch": {
-    "sources": ["akshare", "xueqiu"],
+    "sources": ["eastmoney", "akshare", "xueqiu"],
     "max_retries": 2
   },
 
@@ -114,15 +104,35 @@
     "skill_sync_local": true,
     "skill_sync_runtime": true,
     "skill_audit": true,
+    "skill_archive": true,
+    "skill_archive_keep_weeks": 2,
+    "skill_archive_llm_summary": true,
     "exa_skill_research": true,
     "max_skill_queries": 2,
     "max_skill_items": 8,
     "process_improvements": true,
-    "max_improvement_items": 12
+    "max_improvement_items": 12,
+    "skill_gates": {
+      "enabled": true,
+      "harness_evolve": true,
+      "max_lines": 400,
+      "block_weekly_push": true,
+      "require_sections": true,
+      "require_playbook": true,
+      "require_experience": true,
+      "snapshot_blocks": true,
+      "max_playbook_lines": 45,
+      "max_experience_lines": 55,
+      "verify_fingerprints": true
+    },
+    "skill_external": {
+      "enabled": true
+    }
   },
 
   "week_forecast": {
     "enabled": true,
+    "harness_evolve": true,
     "split_push": true,
     "exa_news_research": true,
     "max_news_queries": 2,
@@ -131,7 +141,13 @@
     "calibration_learning_rate": 0.15,
     "max_bias_pct": 3.0,
     "min_vol_scale": 0.6,
-    "max_vol_scale": 1.6
+    "max_vol_scale": 1.6,
+    "llm_narrative": {
+      "enabled": true,
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "timeout_seconds": 60
+    }
   },
 
   "kronos": {
@@ -178,6 +194,7 @@
   },
 
   "optimizer": {
+    "harness_evolve": true,
     "macro_veto_grid": [38, 40, 42, 45],
     "aggressive_entry_grid": [48, 50, 52, 55],
     "default_objective": "excess_return",
@@ -255,9 +272,7 @@
   },
 
   "mss_forecast": {
-    "simulations": 200,
-    "base_spread": 8,
-    "vol_multiplier": 6
+    "simulations": 200
   },
 
   "schedule": {
@@ -268,18 +283,68 @@
     "symbol_push_mode": "merge_by_category",
     "symbol_push_interval_seconds": 0.5,
     "intraday_trade_enabled": true,
-    "trade_min_scans": 3,
-    "trade_every_n_scans": 2,
     "morning_doctor": true,
     "alert_after_consecutive_failures": 3,
     "intraday_push_mode": "smart",
     "intraday_push_milestones": ["S1", "S2", "S3", "S15"],
     "doctor_cache": true,
-    "doctor_cache_ttl_seconds": 14400
+    "doctor_cache_ttl_seconds": 14400,
+    "guard": {
+      "enabled": true,
+      "dedupe_jobs": true,
+      "harness_evolve": true
+    }
   },
 
   "snapshot": {
     "intraday_enrich_level": "quotes"
+  },
+
+  "market_review": {
+    "enabled": true,
+    "persist": true,
+    "fetch_timeout_seconds": 15
+  },
+
+  "redfox": {
+    "enabled": false,
+    "api_key_env": "REDFOX_API_KEY",
+    "cache_ttl_seconds": 3600,
+    "timeout_seconds": 20,
+    "sentiment_boost_per_hit": 1.5,
+    "cache_dir": "~/.agent-reach/daily_run/cache/redfox",
+    "stock_feed": {
+      "enabled": true,
+      "days": 7,
+      "platforms": ["xhs", "dy", "gzh"],
+      "count_per_platform": 50,
+      "use_default_keywords": true,
+      "workflows": ["morning", "close", "weekly"]
+    },
+    "trending_hub": {
+      "enabled": true,
+      "platforms": ["wb", "dy", "zh"],
+      "expand_keywords": true,
+      "source": "全平台热点事件",
+      "workflows": ["morning", "intraday", "close", "weekly"]
+    },
+    "gzh_astock": {
+      "enabled": true,
+      "dual_category": true,
+      "max_accounts_per_category": 5,
+      "use_subscriptions": true,
+      "subscriptions_file": "~/.agent-reach/daily_run/redfox/gzh_subscriptions.json",
+      "workflows": ["morning"]
+    },
+    "weibo_realtime": {
+      "enabled": true,
+      "search_type": "61",
+      "max_keywords": 2,
+      "workflows": ["intraday", "close"]
+    },
+    "weekly_diff": {
+      "enabled": true
+    }
   },
 
   "exa_cache": {
@@ -289,8 +354,6 @@
 
   "portfolio": {
     "auto_adjust_enabled": true,
-    "max_holdings": 10,
-    "max_total_symbols": 15,
     "mode": "paper",
     "min_deploy_cash": 1000,
     "add_sold_to_watchlist": true
@@ -298,6 +361,7 @@
 
   "watchlist": {
     "auto_adjust_enabled": true,
+    "harness_evolve": true,
     "adjust_phases": ["morning", "close"],
     "min_size": 5,
     "max_size": 10,
@@ -396,12 +460,14 @@
   },
 
   "close_improvements": {
-    "enabled": true
+    "enabled": true,
+    "harness_evolve": true
   },
 
   "close_code_review": {
     "enabled": true,
     "auto_fix_portfolio": true,
+    "harness_evolve_on_walk": true,
     "walk_on_close": false,
     "run_smoke_tests": false,
     "walk_modules": [
@@ -422,7 +488,88 @@
 
   "experience": {
     "enabled": true,
+    "harness_evolve": true,
+    "harness_consolidate": true,
     "max_rules": 50,
     "max_entries": 200
+  },
+
+  "rejected_strategies": {
+    "harness_evolve": true
+  },
+
+  "llm_narrative": {
+    "enabled": true,
+    "provider": "deepseek",
+    "model": "deepseek-v4-flash",
+    "timeout_seconds": 60,
+    "jobs": {
+      "morning": true,
+      "close": true,
+      "weekly": true,
+      "forecast": true
+    }
+  },
+
+  "harness": {
+    "enabled": true,
+    "runtime_overlay": true,
+    "runtime_overlay_sources": ["policy", "memory", "playbook"],
+    "runtime_rejected_guard": true,
+    "min_cash_ratio_mode": "harness",
+    "threshold_evolution_mode": "harness",
+    "max_memory": 80,
+    "max_policy": 30,
+    "max_playbook": 20,
+    "max_plan": 10,
+    "briefing_limit": 3,
+    "inject_in_experience_card": true,
+    "close_plans_on_morning": true,
+    "push_summary_on_close": true,
+    "push_summary_on_weekly": true,
+    "push_summary_on_forecast": true,
+    "push_summary_on_morning": true,
+    "push_summary_on_intraday": false,
+    "push_harness_errors_on_feishu": true,
+    "push_rollback_on_feishu": true,
+    "auto_rollback_on_bad_trade": true,
+    "bad_trade_pnl_pct": -1.0,
+    "bad_trade_weekly_pnl_pct": -2.0,
+    "render_format": "xml",
+    "jobs": {
+      "close": true,
+      "weekly": true,
+      "forecast": true,
+      "code_walk": true,
+      "verify": true,
+      "close_improve": true,
+      "data_audit": true,
+      "skill_closure": true,
+      "optimize": true,
+      "experience": true,
+      "run_guard": true,
+      "morning": true,
+      "intraday": true,
+      "rejected_strategies": true,
+      "skill_gates": true,
+      "watchlist_adjust": true,
+      "forecast_calibrate": true
+    },
+    "llm_refine": {
+      "enabled": true,
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "use_llm_review": true,
+      "cooldown_hours": 24,
+      "timeout_seconds": 60,
+      "summarize_enabled": true,
+      "summarize_jobs": ["skill_closure", "code_walk"],
+      "summarize_cooldown_hours": 24,
+      "jobs": {
+        "close": true,
+        "weekly": true,
+        "forecast": true
+      }
+    }
   }
 }

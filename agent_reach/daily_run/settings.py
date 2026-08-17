@@ -36,6 +36,7 @@ def load_settings(path: Path | None = None) -> dict[str, Any]:
         return deepcopy(_settings_cache["data"])
 
     data = _read_json(active)
+    data = _merge_repo_defaults(data, active)
     validate_settings(data)
     _settings_cache["path"] = active
     _settings_cache["mtime"] = mtime
@@ -57,7 +58,7 @@ def validate_settings(data: dict[str, Any]) -> None:
     thresholds = data.get("thresholds")
     if not isinstance(thresholds, dict):
         raise ValueError("settings.thresholds must be an object")
-    for key in ("macro_veto", "aggressive_entry", "max_snapshot_age_hours"):
+    for key in ("max_snapshot_age_hours",):
         if key not in thresholds:
             raise ValueError(f"settings.thresholds missing {key}")
 
@@ -82,6 +83,22 @@ def _read_json(path: Path) -> dict[str, Any]:
     return deepcopy(data)
 
 
+def _merge_repo_defaults(data: dict[str, Any], active: Path) -> dict[str, Any]:
+    """Fill missing top-level blocks from repo defaults (user file wins on overlap)."""
+    if active == _DEFAULT_PATH or not _DEFAULT_PATH.exists():
+        return data
+    defaults = _read_json(_DEFAULT_PATH)
+    merged = deepcopy(defaults)
+    for key, value in data.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            block = deepcopy(merged[key])
+            block.update(value)
+            merged[key] = block
+        else:
+            merged[key] = deepcopy(value)
+    return merged
+
+
 def save_user_settings(data: dict[str, Any], *, path: Path | None = None) -> Path:
     """Persist daily-run settings to ~/.agent-reach/daily_run_settings.json."""
     target = path or _USER_PATH
@@ -94,3 +111,14 @@ def save_user_settings(data: dict[str, Any], *, path: Path | None = None) -> Pat
 
 def user_settings_path() -> Path:
     return _USER_PATH
+
+
+def effective_settings(settings: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Settings with optional harness policy/memory threshold overlay."""
+    cfg = deepcopy(settings) if settings is not None else load_settings()
+    try:
+        from agent_reach.daily_run.harness_policy import apply_harness_policy_overlay
+
+        return apply_harness_policy_overlay(cfg)
+    except Exception:
+        return cfg

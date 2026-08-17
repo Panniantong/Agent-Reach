@@ -335,6 +335,7 @@ class WeekForecast:
     calibration_used: dict[str, Any]
     notes: list[str] = field(default_factory=list)
     kronos_paths: dict[str, Any] = field(default_factory=dict)
+    llm_narrative: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -351,6 +352,7 @@ class WeekForecast:
             "calibration_used": self.calibration_used,
             "reviews": [],
             "notes": self.notes,
+            "llm_narrative": self.llm_narrative,
         }
 
 
@@ -470,7 +472,7 @@ def generate_week_forecast(
     else:
         news_research = run_news_research(news_queries, settings)
 
-    return WeekForecast(
+    forecast = WeekForecast(
         week_start=week_start,
         week_end=week_end,
         trading_days=[d.isoformat() for d in trading_days],
@@ -482,6 +484,11 @@ def generate_week_forecast(
         calibration_used=dict(calibration),
         notes=notes,
     )
+    from agent_reach.daily_run.report_narrative import generate_forecast_narrative
+
+    narrative = generate_forecast_narrative(forecast.to_dict(), settings=settings)
+    forecast.llm_narrative = narrative
+    return forecast
 
 
 def persist_week_forecast(forecast: WeekForecast) -> Path:
@@ -594,6 +601,11 @@ def render_forecast_sections(forecast: WeekForecast | dict[str, Any]) -> list[Fo
     news_md = _render_news_section(data)
     if news_md.strip():
         sections.append(ForecastSection(label="新闻热点", markdown=news_md))
+    from agent_reach.daily_run.report_narrative import render_narrative_markdown
+
+    narrative_md = render_narrative_markdown(data.get("llm_narrative") or {}, job="forecast")
+    if narrative_md.strip():
+        sections.append(ForecastSection(label="AI解读", markdown=narrative_md))
     return sections
 
 

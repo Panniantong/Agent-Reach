@@ -4,9 +4,23 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
+
+try:
+    from loguru import logger
+except ImportError:  # pragma: no cover
+    import logging
+
+    logger = logging.getLogger("agent_reach.daily_run.experience")
+
+
+@dataclass
+class ExperienceAppendResult:
+    path: Path
+    harness: dict[str, Any] = field(default_factory=dict)
 
 
 def experience_dir() -> Path:
@@ -21,17 +35,38 @@ def append_experience_entry(
     research: Optional[list[dict[str, Any]]] = None,
     settings: Optional[dict[str, Any]] = None,
     forecast_review: Optional[dict[str, Any]] = None,
-) -> Path:
+) -> ExperienceAppendResult:
     """Append one close review atom to experience.jsonl and update rules summary."""
     cfg = (settings or {}).get("experience", {})
     if cfg.get("enabled") is False:
-        return experience_dir() / "experience.jsonl"
+        return ExperienceAppendResult(path=experience_dir() / "experience.jsonl")
 
     out_dir = experience_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
     jsonl_path = out_dir / "experience.jsonl"
 
     rules = _distill_rules(snapshot, verify, curve, forecast_review=forecast_review)
+
+    harness_result: dict[str, Any] = {}
+    try:
+        from agent_reach.daily_run.experience_harness import (
+            apply_experience_harness_refinement,
+            experience_harness_enabled,
+        )
+
+        if experience_harness_enabled(settings):
+            harness_result = apply_experience_harness_refinement(
+                snapshot,
+                verify,
+                rules=rules,
+                curve=curve,
+                forecast_review=forecast_review,
+                settings=settings,
+            )
+    except Exception as exc:
+        logger.warning("daily-run experience harness failed: {}", exc)
+        harness_result = {"skipped": True, "error": str(exc), "job": "experience"}
+
     entry = {
         "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "at": datetime.now(timezone.utc).isoformat(),
@@ -44,7 +79,6 @@ def append_experience_entry(
         "deviations": verify.get("deviations") or [],
         "recommendations": verify.get("recommendations") or [],
         "curve_trend": (curve or {}).get("trend"),
-        "rules": rules,
         "research_count": len(research or []),
     }
     if forecast_review:
@@ -57,20 +91,55 @@ def append_experience_entry(
             "optimization_notes": forecast_review.get("optimization_notes") or [],
         }
 
+    if harness_result and not harness_result.get("skipped"):
+        entry["harness_refinement_id"] = harness_result.get("refinement_id")
+
+    consolidated = False
+    try:
+        from agent_reach.daily_run.experience_harness import experience_consolidated_mode
+
+        consolidated = experience_consolidated_mode(settings)
+    except Exception as exc:
+        logger.debug("daily-run experience consolidated_mode check failed: {}", exc)
+        consolidated = False
+
+    if consolidated:
+        entry["rules"] = []
+        entry["rules_in_harness"] = True
+    else:
+        entry["rules"] = rules
+
     with open(jsonl_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
-    _update_rules_summary(out_dir / "rules_summary.json", rules, cfg)
-    return jsonl_path
+    if not consolidated:
+        _update_rules_summary(out_dir / "rules_summary.json", rules, cfg)
+    return ExperienceAppendResult(path=jsonl_path, harness=harness_result)
+
+
+def _tail_jsonl_lines(path: Path, limit: int) -> list[str]:
+    if not path.exists() or limit <= 0:
+        return []
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return []
+    if size == 0:
+        return []
+    chunk = min(size, 65536)
+    with open(path, "rb") as handle:
+        handle.seek(max(0, size - chunk))
+        data = handle.read().decode("utf-8", errors="replace")
+    lines = data.splitlines()
+    return lines[-limit:] if len(lines) > limit else lines
 
 
 def load_recent_experience(limit: int = 10) -> list[dict[str, Any]]:
     path = experience_dir() / "experience.jsonl"
     if not path.exists():
         return []
-    lines = path.read_text(encoding="utf-8").strip().splitlines()
     out = []
-    for line in lines[-limit:]:
+    for line in _tail_jsonl_lines(path, limit):
         try:
             out.append(json.loads(line))
         except json.JSONDecodeError:
@@ -78,18 +147,105 @@ def load_recent_experience(limit: int = 10) -> list[dict[str, Any]]:
     return out
 
 
-def render_experience_markdown(limit: int = 3) -> str:
+def load_experience_rules(limit: int = 5, *, settings: Optional[dict[str, Any]] = None) -> list[str]:
+    """Rules from harness memory when consolidated, else rules_summary.json."""
+    cfg = settings
+    if cfg is None:
+        try:
+            from agent_reach.daily_run.settings import load_settings
+
+            cfg = load_settings()
+        except Exception as exc:
+            logger.debug("daily-run experience load_settings failed: {}", exc)
+            cfg = {}
+
+    try:
+        from agent_reach.daily_run.experience_harness import experience_consolidated_mode
+
+        if experience_consolidated_mode(cfg):
+            from agent_reach.daily_run.harness import load_harness
+
+            state = load_harness()
+            memories = list((getattr(state, "entries", {}) or {}).get("memory", {}).values())
+            memories.sort(key=lambda e: str(getattr(e, "updated_at", "") or ""), reverse=True)
+            rules: list[str] = []
+            seen: set[str] = set()
+            for entry in memories:
+                job = str(getattr(entry, "job", "") or "")
+                if job and job not in ("experience", "verify", "close_improve", "skill_closure"):
+                    continue
+                content = str(getattr(entry, "content", "") or "").strip()
+                if not content or content in seen:
+                    continue
+                seen.add(content)
+                rules.append(content)
+                if len(rules) >= limit:
+                    break
+            return rules
+    except Exception as exc:
+        logger.warning("daily-run load_experience_rules harness path failed: {}", exc)
+
+    path = experience_dir() / "rules_summary.json"
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        rules = list(data.get("rules") or [])
+        return rules[-limit:]
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def render_experience_markdown(limit: int = 3, *, settings: Optional[dict[str, Any]] = None) -> str:
     recent = load_recent_experience(limit)
+    consolidated = False
+    try:
+        from agent_reach.daily_run.experience_harness import experience_consolidated_mode
+
+        consolidated = experience_consolidated_mode(settings)
+    except Exception as exc:
+        logger.debug("daily-run render_experience consolidated check failed: {}", exc)
+        consolidated = False
+
     if not recent:
-        return ""
-    lines = ["**📚 经验沉淀（最近）**", ""]
-    for e in reversed(recent):
-        hit = "✅" if e.get("prediction_hit") else "—"
-        lines.append(
-            f"- {e.get('date')} {e.get('name')} MSS={e.get('mss_final')} {hit} "
-            + "；".join((e.get("rules") or [])[:2])
-        )
-    return "\n".join(lines)
+        body = ""
+    else:
+        lines = ["**📚 经验沉淀（最近）**", ""]
+        for e in reversed(recent):
+            hit = "✅" if e.get("prediction_hit") else "—"
+            if consolidated or e.get("rules_in_harness"):
+                lines.append(
+                    f"- {e.get('date')} {e.get('name')} MSS={e.get('mss_final')} {hit} verdict={e.get('verdict')}"
+                )
+            else:
+                lines.append(
+                    f"- {e.get('date')} {e.get('name')} MSS={e.get('mss_final')} {hit} "
+                    + "；".join((e.get("rules") or [])[:2])
+                )
+        body = "\n".join(lines)
+
+    cfg = settings
+    if cfg is None:
+        try:
+            from agent_reach.daily_run.settings import load_settings
+
+            cfg = load_settings()
+        except Exception as exc:
+            logger.debug("daily-run experience load_settings failed: {}", exc)
+            cfg = {}
+    harness_cfg = (cfg or {}).get("harness") or {}
+    if harness_cfg.get("enabled") is False or harness_cfg.get("inject_in_experience_card") is False:
+        return body
+
+    from agent_reach.daily_run.harness import render_harness_content
+
+    harness_xml = render_harness_content(limit=int(harness_cfg.get("briefing_limit") or 3))
+    if not harness_xml:
+        return body
+    harness_block = f"```xml\n{harness_xml}\n```"
+    if body:
+        return body + "\n\n" + harness_block
+    return "**📚 Harness 记忆**\n\n" + harness_block
 
 
 def _distill_rules(

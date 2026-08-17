@@ -140,15 +140,26 @@ def save_optimized_settings(
     *,
     path: Optional[Path] = None,
 ) -> Path:
-    """Merge best params into user settings file."""
-    cfg = copy.deepcopy(settings or load_settings())
+    """Persist optimizer run metadata; thresholds go to harness when evolution mode is harness."""
+    from agent_reach.daily_run.harness_policy import harness_evolution_mode
+
+    base = settings or load_settings()
+    cfg = copy.deepcopy(base)
     params = result.best_params
-    cfg.setdefault("thresholds", {})
-    cfg["thresholds"]["macro_veto"] = params["macro_veto"]
-    cfg["thresholds"]["aggressive_entry"] = params["aggressive_entry"]
-    cfg.setdefault("backtest", {})
-    cfg["backtest"]["macro_veto"] = params["macro_veto"]
-    cfg["backtest"]["aggressive_entry"] = params["aggressive_entry"]
+    harness_mode = harness_evolution_mode(cfg) == "harness"
+
+    if harness_mode:
+        from agent_reach.daily_run.optimizer_harness import apply_optimizer_harness_refinement
+
+        apply_optimizer_harness_refinement(result, settings=cfg)
+    else:
+        cfg.setdefault("thresholds", {})
+        cfg["thresholds"]["macro_veto"] = params["macro_veto"]
+        cfg["thresholds"]["aggressive_entry"] = params["aggressive_entry"]
+        cfg.setdefault("backtest", {})
+        cfg["backtest"]["macro_veto"] = params["macro_veto"]
+        cfg["backtest"]["aggressive_entry"] = params["aggressive_entry"]
+
     if params.get("mss_weights"):
         cfg["mss_weights"] = params["mss_weights"]
 
@@ -158,6 +169,7 @@ def save_optimized_settings(
         "best_score": result.best_score,
         "best_params": params,
         "metrics": result.metrics,
+        "harness_mode": harness_mode,
     }
 
     out = path or (Path.home() / ".agent-reach" / "daily_run_settings.json")

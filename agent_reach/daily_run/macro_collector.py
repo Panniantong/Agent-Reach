@@ -11,6 +11,7 @@ def collect_macro_context(
     *,
     config=None,
     settings: Optional[dict[str, Any]] = None,
+    workflow: str = "morning",
 ) -> dict[str, Any]:
     """
     Collect macro signals and derive mss_breakdown + sources.
@@ -88,6 +89,39 @@ def collect_macro_context(
     except Exception:
         pass
 
+    # --- RedFox API (optional Path B) ---
+    try:
+        from agent_reach.daily_run.redfox_collector import collect_redfox_context, redfox_enabled
+
+        if redfox_enabled(cfg):
+            redfox = collect_redfox_context(portfolio, settings=cfg, workflow=workflow)
+            if redfox.summary or redfox.gzh_summary or redfox.matched or redfox.stock_feed_items:
+                signals["redfox"] = redfox.to_dict()
+                signals["redfox_matched"] = redfox.matched
+                signals["redfox_hits"] = len(redfox.matched)
+                detail_parts = [p for p in (redfox.gzh_summary, redfox.summary) if p]
+                sources["redfox"] = {
+                    "summary": "；".join(detail_parts)[:240] or redfox.summary,
+                    "backend": "redfox_api",
+                    "platforms": redfox.platforms_ok,
+                    "matched_count": len(redfox.matched),
+                }
+                if redfox.errors:
+                    sources["redfox"]["warnings"] = redfox.errors[:3]
+    except Exception as exc:
+        try:
+            from loguru import logger
+
+            logger.warning("redfox macro collection failed: {}", exc)
+        except ImportError:
+            pass
+        if redfox_enabled(cfg):
+            sources["redfox"] = {
+                "summary": f"RedFox 采集失败: {exc}"[:120],
+                "backend": "redfox_api",
+                "error": str(exc),
+            }
+
     # Merge portfolio overrides (non-placeholder only)
     for cat, detail in overrides.items():
         if isinstance(detail, dict) and not _is_placeholder(detail.get("summary", "")):
@@ -110,6 +144,9 @@ def collect_macro_context(
         pass
     elif hot_summary:
         macro_parts.append(hot_summary[:40])
+    redfox_src = sources.get("redfox")
+    if isinstance(redfox_src, dict) and redfox_src.get("summary"):
+        macro_parts.append(str(redfox_src["summary"])[:60])
 
     macro_summary = portfolio.get("macro_summary")
     if macro_parts:
@@ -130,9 +167,11 @@ def _derive_mss_breakdown(
     settings: dict[str, Any],
 ) -> dict[str, float]:
     """Map live signals to MSS factor scores 0-100."""
+    from agent_reach.daily_run.harness_policy import threshold_default
+
     thresholds = settings.get("thresholds", {})
-    macro_veto = float(thresholds.get("macro_veto", 40))
-    aggressive = float(thresholds.get("aggressive_entry", 50))
+    macro_veto = float(thresholds.get("macro_veto", threshold_default(settings, "macro_veto")))
+    aggressive = float(thresholds.get("aggressive_entry", threshold_default(settings, "aggressive_entry")))
 
     fx = float(base.get("fx", 50))
     flow = float(base.get("flow", 50))
@@ -157,6 +196,12 @@ def _derive_mss_breakdown(
     if hot_hits:
         boost = float(hot_cfg.get("sentiment_boost_per_hit", 2))
         sentiment = _clamp(sentiment + hot_hits * boost)
+
+    redfox_hits = int(signals.get("redfox_hits") or 0)
+    if redfox_hits:
+        rf_cfg = settings.get("redfox") or {}
+        boost = float(rf_cfg.get("sentiment_boost_per_hit", 1.5))
+        sentiment = _clamp(sentiment + redfox_hits * boost)
 
     return {
         "fx": round(fx, 1),

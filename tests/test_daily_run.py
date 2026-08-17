@@ -10,7 +10,7 @@ import pytest
 from agent_reach.daily_run.auditor import run_data_audit
 from agent_reach.daily_run.pipeline import evaluate_snapshot, render_markdown
 from agent_reach.daily_run.quality_gate import validate_report
-from agent_reach.daily_run.settings import load_settings
+from agent_reach.daily_run.settings import effective_settings, load_settings
 from agent_reach.daily_run.verdict import compute_mss, compute_verdict
 
 
@@ -44,7 +44,13 @@ def base_snapshot():
 class TestSettings:
     def test_load_settings(self, settings):
         assert settings["version"] == "1.0.0"
-        assert settings["thresholds"]["macro_veto"] == 40
+        assert "macro_veto" not in settings["thresholds"]
+
+    def test_effective_settings_evolve_thresholds(self):
+        cfg = effective_settings()
+        assert cfg["thresholds"]["macro_veto"] >= 25
+        assert cfg["thresholds"]["aggressive_entry"] >= 40
+        assert "max_price_deviation_pct" in cfg["thresholds"]
 
 
 class TestAuditor:

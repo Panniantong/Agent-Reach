@@ -65,11 +65,16 @@ class TestOptimizer:
         assert "mss_weights" in result.best_params
         assert result.best_score is not None
 
-    def test_save_optimized_settings(self, tmp_path):
+    def test_save_optimized_settings(self, tmp_path, monkeypatch):
+        import agent_reach.daily_run.harness as h
+
+        monkeypatch.setattr(h, "_state_path", lambda: tmp_path / "harness_state.json")
         history = json.loads(
             Path("config/daily_run_history.example.json").read_text(encoding="utf-8")
         )
-        result = grid_search_optimize(history, load_settings())
-        out = save_optimized_settings(result, load_settings(), path=tmp_path / "opt.json")
+        settings = load_settings()
+        settings.setdefault("harness", {})["threshold_evolution_mode"] = "fixed"
+        result = grid_search_optimize(history, settings)
+        out = save_optimized_settings(result, settings, path=tmp_path / "opt.json")
         saved = json.loads(out.read_text(encoding="utf-8"))
         assert saved["thresholds"]["macro_veto"] == result.best_params["macro_veto"]

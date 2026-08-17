@@ -102,3 +102,36 @@ def is_trading_day(d: Optional[date] = None, *, settings: Optional[dict] = None)
         return False, "周末"
 
     return True, "weekday_default"
+
+
+def trading_days_held(
+    acquired: date,
+    as_of: Optional[date] = None,
+    *,
+    settings: Optional[dict] = None,
+) -> int:
+    """
+    Trading days elapsed since acquisition for T+1 sell rules.
+
+    Buy on ``acquired`` -> 0 on that day, 1 on the next trading day, etc.
+    """
+    end = as_of or today_shanghai()
+    if end <= acquired:
+        return 0
+
+    trade_dates = _load_trade_dates_akshare()
+    if trade_dates:
+        start_s = acquired.isoformat()
+        end_s = end.isoformat()
+        return sum(1 for ds in trade_dates if start_s < ds <= end_s)
+
+    from datetime import timedelta
+
+    count = 0
+    d = acquired + timedelta(days=1)
+    while d <= end:
+        ok, _ = is_trading_day(d, settings=settings)
+        if ok:
+            count += 1
+        d += timedelta(days=1)
+    return count

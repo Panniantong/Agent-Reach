@@ -91,6 +91,7 @@ class TeamReview:
     consensus_score: float
     consensus_label: str
     conflicts: list[str] = field(default_factory=list)
+    counter_thesis: str = ""
     blocked: bool = False
     block_reason: str = ""
     expert_results: list[dict[str, Any]] = field(default_factory=list)
@@ -102,6 +103,7 @@ class TeamReview:
             "consensus_score": self.consensus_score,
             "consensus_label": self.consensus_label,
             "conflicts": self.conflicts,
+            "counter_thesis": self.counter_thesis,
             "blocked": self.blocked,
             "block_reason": self.block_reason,
             "expert_results": self.expert_results,
@@ -163,9 +165,11 @@ def supervisor_review(
     values = [float(r.get("score", 50)) for r in results]
     consensus = round(sum(values) / len(values), 1)
 
+    from agent_reach.daily_run.harness_policy import threshold_default
+
     thresholds = settings.get("thresholds", {})
-    macro_veto = float(thresholds.get("macro_veto", 40))
-    aggressive = float(thresholds.get("aggressive_entry", 50))
+    macro_veto = float(thresholds.get("macro_veto", threshold_default(settings, "macro_veto")))
+    aggressive = float(thresholds.get("aggressive_entry", threshold_default(settings, "aggressive_entry")))
 
     if consensus >= aggressive:
         label = "可做"
@@ -195,16 +199,67 @@ def supervisor_review(
         block_reason = f"专家鉴别未通过：{identifier.get('summary', '')}"
         label = "观察"
 
+    counter_thesis = _build_counter_thesis(
+        snapshot,
+        label=label,
+        conflicts=conflicts,
+        by_name=by_name,
+        macro_veto=macro_veto,
+    )
+
     return TeamReview(
         mode=mode,
         expert_count=len(results),
         consensus_score=consensus,
         consensus_label=label,
         conflicts=conflicts,
+        counter_thesis=counter_thesis,
         blocked=blocked,
         block_reason=block_reason,
         expert_results=results,
     )
+
+
+def _build_counter_thesis(
+    snapshot: dict[str, Any],
+    *,
+    label: str,
+    conflicts: list[str],
+    by_name: dict[str, float],
+    macro_veto: float,
+) -> str:
+    """Devil's advocate line when supervisor consensus is bullish (stock-analysis inspired)."""
+    if label != "可做":
+        return ""
+
+    parts: list[str] = []
+    if conflicts:
+        parts.append(conflicts[0])
+
+    risk = by_name.get("risk")
+    if risk is not None and risk < macro_veto + 8:
+        parts.append(f"风控 {risk:.0f} 分仍偏紧，需假设回撤可控")
+
+    breakdown = snapshot.get("mss_breakdown") or {}
+    global_score = breakdown.get("global")
+    if global_score is not None and float(global_score) < macro_veto + 5:
+        parts.append(f"宏观分 {float(global_score):.0f} 未确认趋势反转")
+
+    try:
+        from agent_reach.daily_run.redfox_collector import RedfoxResult, _result_from_dict, _sentiment_score, _sentiment_titles
+
+        raw = snapshot.get("redfox") or (snapshot.get("macro_signals") or {}).get("redfox")
+        if isinstance(raw, dict):
+            rf = _result_from_dict(raw)
+            score = _sentiment_score(_sentiment_titles(rf))
+            if score <= -1:
+                parts.append("RedFox 跨平台舆情偏冷，需验证增量叙事")
+    except Exception:
+        pass
+
+    if not parts:
+        parts.append("若北向转流出或热点退潮，当前共识可能失效")
+    return "反面检验：" + "；".join(parts[:3])
 
 
 def render_team_markdown(snapshot: dict[str, Any]) -> str:
@@ -239,6 +294,10 @@ def render_team_markdown(snapshot: dict[str, Any]) -> str:
 
     if review.get("blocked"):
         lines.extend(["", f"⚠️ **鉴别阻断：** {review.get('block_reason', '')}"])
+
+    counter = review.get("counter_thesis") or ""
+    if counter:
+        lines.extend(["", f"**{counter}**"])
 
     return "\n".join(lines)
 

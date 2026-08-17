@@ -40,16 +40,37 @@ def resolve_skill_writeback_paths(settings: Optional[dict[str, Any]] = None) -> 
     return paths
 
 
-def _load_rules_summary(limit: int = 5) -> list[str]:
-    path = Path.home() / ".agent-reach" / "daily_run" / "experience" / "rules_summary.json"
-    if not path.exists():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        rules = list(data.get("rules") or [])
-        return rules[-limit:]
-    except (json.JSONDecodeError, OSError):
-        return []
+def resolve_cursor_agent_skill_sources() -> list[Path]:
+    """Repo Cursor agent skill manuals (harness / code-walk)."""
+    root = _repo_root()
+    sources: list[Path] = []
+    for rel in (
+        ".cursor/skills/daily-run-harness-skills/SKILL.md",
+        ".cursor/skills/daily-run-code-walk/SKILL.md",
+    ):
+        path = root / rel
+        if path.is_file():
+            sources.append(path)
+    return sources
+
+
+def sync_cursor_agent_skills_to_local() -> list[str]:
+    """Copy repo .cursor/skills/daily-run-* manuals to ~/.cursor/skills/."""
+    import shutil
+
+    synced: list[str] = []
+    for source in resolve_cursor_agent_skill_sources():
+        dest = Path.home() / ".cursor" / "skills" / source.parent.name / "SKILL.md"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, dest)
+        synced.append(str(dest))
+    return synced
+
+
+def _load_rules_summary(limit: int = 5, *, settings: Optional[dict[str, Any]] = None) -> list[str]:
+    from agent_reach.daily_run.experience import load_experience_rules
+
+    return load_experience_rules(limit, settings=settings)
 
 
 def _format_money(value: Optional[float]) -> str:
@@ -102,6 +123,25 @@ def _hot_sectors_line(hot_sectors: list[dict[str, Any]], limit: int = 3) -> str:
     return "、".join(parts)
 
 
+def _dedupe_text_lines(items: list[str], *, limit: int) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in reversed(items):
+        text = str(item or "").strip()
+        if not text:
+            continue
+        key = re.sub(r"\d{4}-\d{2}-\d{2}", "", text)
+        key = re.sub(r"MSS=[\d.]+", "MSS=", key)
+        key = re.sub(r"价格变动 [-\d.]+%", "价格变动", key)
+        key = key[:96]
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+    out.reverse()
+    return out[-limit:]
+
+
 def _job_stats(report: dict[str, Any]) -> str:
     mss = report.get("mss_summary") or []
     morning = sum(1 for m in mss if m.get("job") == "morning")
@@ -122,8 +162,15 @@ def build_weekly_experience_block(report: dict[str, Any]) -> str:
     lines = [
         header,
         f"*   **更新时间：** {updated}",
-        "*   **本周盈亏说明：**",
     ]
+    ref_id = report.get("harness_refinement_id") or report.get("refinement_id")
+    if ref_id:
+        lines.append(f"*   **Harness refinement_id：** `{ref_id}`")
+    lines.extend(
+        [
+            "*   **本周盈亏说明：**",
+        ]
+    )
     for expl in build_weekly_pnl_explanation(report):
         if expl.startswith("  - "):
             lines.append(f"    *   {expl[4:].strip()}")
@@ -144,26 +191,17 @@ def build_weekly_experience_block(report: dict[str, Any]) -> str:
     if notes:
         lines.append(f"*   **备注：** {'；'.join(str(n) for n in notes[:3])}")
 
-    snippets = report.get("experience_snippets") or []
+    snippets = _dedupe_text_lines(list(report.get("experience_snippets") or []), limit=5)
     if snippets:
         lines.append("*   **收盘经验片段：**")
-        for snippet in snippets[-5:]:
+        for snippet in snippets:
             lines.append(f"    *   {snippet}")
 
-    rules = _load_rules_summary()
+    rules = _dedupe_text_lines(_load_rules_summary(), limit=5)
     if rules:
         lines.append("*   **量化规则库（最近）：**")
         for rule in rules:
             lines.append(f"    *   {rule}")
-
-    improvements = report.get("process_improvements") or []
-    priority_items = [i for i in improvements if i.get("priority") in ("high", "medium")]
-    if priority_items:
-        lines.append("*   **流程改进（优先）：**")
-        for item in priority_items[:6]:
-            title = item.get("title") or "改进项"
-            action = item.get("action") or item.get("detail") or ""
-            lines.append(f"    *   **{title}** — {action}")
 
     skill_items = report.get("skill_learning") or []
     if skill_items:

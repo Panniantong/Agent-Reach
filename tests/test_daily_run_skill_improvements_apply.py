@@ -31,7 +31,11 @@ class TestSkillImprovementsApply:
                 },
             ]
         }
-        settings = {"mss_forecast": {"base_spread": 8}, "schedule": {"alert_after_consecutive_failures": 3}}
+        settings = {
+            "mss_forecast": {"base_spread": 8},
+            "schedule": {"alert_after_consecutive_failures": 3},
+            "harness": {"threshold_evolution_mode": "fixed"},
+        }
         new_settings, applied = apply_settings_from_improvements(report, settings)
         assert new_settings["mss_forecast"]["base_spread"] == 9
         assert new_settings["schedule"]["alert_after_consecutive_failures"] == 2
@@ -97,7 +101,10 @@ class TestSkillImprovementsApply:
                 ],
                 "skill_learning": [],
             },
-            {"weekly_report": {"skill_writeback": True, "skill_auto_apply_settings": True}},
+            {
+                "weekly_report": {"skill_writeback": True, "skill_auto_apply_settings": True},
+                "harness": {"threshold_evolution_mode": "fixed"},
+            },
         )
         assert result["skipped"] is False
         assert result["synced_skills"] == ["/tmp/SKILL.md"]
@@ -124,7 +131,7 @@ class TestSkillImprovementsApply:
                     "## ⚡ Agent 执行入口",
                     "## 📋 下周执行清单（周六自动更新 · x）",
                     "## 🛡️ Phase-1 质量工程化",
-                    "## 📊 股票大师多市场共振与技术面量化决策模型",
+                    "## 📊 决策模型",
                     "## 🧠 股票大师实战经验沉淀库 (每日收盘更新)",
                     "## 🛠️ 运维与排障指南",
                 ]

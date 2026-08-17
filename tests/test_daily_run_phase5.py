@@ -84,8 +84,8 @@ class TestExperience:
             "deviations": [],
             "recommendations": [],
         }
-        path = append_experience_entry(snap, verify, settings=load_settings())
-        assert path.exists()
+        result = append_experience_entry(snap, verify, settings=load_settings())
+        assert result.path.exists()
         recent = load_recent_experience(5)
         assert len(recent) == 1
 

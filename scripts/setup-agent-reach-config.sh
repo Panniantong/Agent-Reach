@@ -39,6 +39,8 @@ env_map = {
     "TWITTER_CT0": "twitter_ct0",
     "EXA_API_KEY": "exa_api_key",
     "OPENAI_API_KEY": "openai_api_key",
+    "DEEPSEEK_API_KEY": "deepseek_api_key",
+    "DEEPSEEK_BASE_URL": "deepseek_base_url",
     "GROQ_API_KEY": "groq_api_key",
     "GITHUB_TOKEN": "github_token",
     "PROXY": "proxy",

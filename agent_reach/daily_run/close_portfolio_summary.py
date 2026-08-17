@@ -11,10 +11,9 @@ from agent_reach.daily_run.snapshot_builder import _normalize_code
 from agent_reach.daily_run.symbols import build_enriched_symbols, portfolio_from_snapshot
 from agent_reach.daily_run.trade_calendar import today_shanghai
 from agent_reach.daily_run.weekly_report import (
-    _compute_realized_pnl,
+    _compute_trade_cash_flow,
     _holding_pnl_rows,
     _load_trade_ledger_range,
-    _prices_from_snapshot,
     _watchlist_rows,
 )
 
@@ -218,19 +217,140 @@ def _format_intraday_trade_lines(trades: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def _refresh_enriched_quotes(
+    enriched: dict[str, dict[str, Any]],
+    holding_codes: list[str],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> None:
+    """Refresh live quotes for close holdings (primary snapshot may omit secondary symbols)."""
+    from agent_reach.daily_run.quote_fetch import fetch_quotes_map
+
+    need = list(dict.fromkeys(_normalize_code(c) for c in holding_codes if c))
+    if not need:
+        return
+    result = fetch_quotes_map(need, settings=settings)
+    for code, quote in result.quotes.items():
+        row = enriched.setdefault(code, {})
+        if quote.get("price") is not None:
+            row["price"] = quote["price"]
+        if quote.get("change_pct") is not None:
+            row["change_pct"] = quote["change_pct"]
+        if quote.get("name"):
+            row["name"] = quote["name"]
+
+
+def _quoted_prices_from_holdings(
+    snap: dict[str, Any],
+    codes: Optional[list[str]] = None,
+) -> dict[str, float]:
+    """Mark prices from snapshot rows — never fall back to cost (cost ≠ morning mark)."""
+    targets = {_normalize_code(c) for c in codes if c} if codes else None
+    prices: dict[str, float] = {}
+    for h in (snap.get("portfolio") or {}).get("holdings") or []:
+        code = _normalize_code(str(h.get("code", "")))
+        if not code or (targets is not None and code not in targets):
+            continue
+        if h.get("price") is not None:
+            prices[code] = float(h["price"])
+    primary = snap.get("code")
+    if primary and snap.get("price") is not None:
+        code = _normalize_code(str(primary))
+        if targets is None or code in targets:
+            prices.setdefault(code, float(snap["price"]))
+    return prices
+
+
+def _morning_prices_for_pnl(
+    baseline: dict[str, Any],
+    holding_codes: list[str],
+) -> dict[str, float]:
+    """Morning mark prices for day P&L; backfill missing codes from per-symbol baselines."""
+    import json
+
+    from agent_reach.daily_run.workflows import morning_baseline_path
+
+    codes = list(dict.fromkeys(_normalize_code(c) for c in holding_codes if c))
+    prices = _quoted_prices_from_holdings(baseline, codes)
+    for code in codes:
+        if code in prices:
+            continue
+        path = morning_baseline_path(code)
+        if not path.exists():
+            continue
+        try:
+            snap = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        found = _quoted_prices_from_holdings(snap, [code])
+        if code in found:
+            prices[code] = found[code]
+    return prices
+
+
+def _close_prices_for_pnl(
+    enriched: dict[str, dict[str, Any]],
+    current: dict[str, Any],
+    holding_codes: list[str],
+) -> dict[str, float]:
+    """Close mark prices: prefer live refreshed quotes, then snapshot holding price."""
+    codes = list(dict.fromkeys(_normalize_code(c) for c in holding_codes if c))
+    prices: dict[str, float] = {}
+    for code in codes:
+        row = enriched.get(code) or {}
+        if row.get("price") is not None:
+            prices[code] = float(row["price"])
+    for code, px in _quoted_prices_from_holdings(current, codes).items():
+        prices.setdefault(code, px)
+    return prices
+
+
 def _holding_line(h: dict[str, Any]) -> str:
     name = h.get("name") or h.get("code")
     code = h.get("code")
     parts = [f"**{name}** ({code})"]
-    if h.get("change_pct") is not None:
-        parts.append(f"今日 {float(h['change_pct']):+.2f}%")
-    if h.get("week_chg") is not None:
-        parts.append(f"日内 {float(h['week_chg']):+,.0f}元")
+    change_pct = h.get("change_pct")
+    if change_pct is None and h.get("week_chg_pct") is not None:
+        change_pct = h.get("week_chg_pct")
+    if change_pct is not None:
+        parts.append(f"今日 {float(change_pct):+.2f}%")
+    if h.get("day_pnl") is not None:
+        parts.append(f"当日盈亏 {float(h['day_pnl']):+,.0f}元")
+    elif h.get("week_chg") is not None:
+        parts.append(f"当日盈亏 {float(h['week_chg']):+,.0f}元")
     if h.get("unrealized_pnl") is not None:
         parts.append(f"浮盈 {float(h['unrealized_pnl']):+,.0f}元")
     if h.get("weight_pct") is not None:
         parts.append(f"权重 {float(h['weight_pct']):.1f}%")
     return "- " + " · ".join(parts)
+
+
+def _stock_mv_from_holdings(
+    holdings: list[dict[str, Any]],
+    prices: dict[str, float],
+) -> float:
+    total = 0.0
+    for h in holdings:
+        code = _normalize_code(str(h.get("code", "")))
+        if not code:
+            continue
+        shares = int(h.get("shares") or 0)
+        px = prices.get(code)
+        if px is None:
+            px = h.get("price") or h.get("cost")
+        if px is not None:
+            total += shares * float(px)
+    return round(total, 2)
+
+
+def _attach_day_pnl(holdings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for h in holdings:
+        row = dict(h)
+        if row.get("week_chg") is not None:
+            row["day_pnl"] = row["week_chg"]
+        out.append(row)
+    return out
 
 
 def _attach_weights(holdings: list[dict[str, Any]], end_total: Optional[float]) -> list[dict[str, Any]]:
@@ -274,14 +394,14 @@ def _build_reason_lines(data: dict[str, Any]) -> list[str]:
         lines.append("缺少早盘净值基线，仅报告收盘持仓与现金。")
 
     if day_mv is not None and pnl is not None:
-        gap = round(float(pnl) - float(day_mv), 2)
+        gap = round(float(pnl) - float(day_mv) - float(cash_delta or 0), 2)
         if abs(gap) >= 50:
             lines.append(
-                f"持股日内市值合计变动 **¥{float(day_mv):+,.0f}**，"
-                f"与净值变动差额 **¥{gap:+,.0f}**（现金变动或成交口径所致）。"
+                f"持股当日盈亏合计 **¥{float(day_mv):+,.0f}**，"
+                f"与净值变动差额 **¥{gap:+,.0f}**（口径不一致或缺少早盘价）。"
             )
         elif winners or losers:
-            lines.append(f"持股日内市值合计变动 **¥{float(day_mv):+,.0f}**。")
+            lines.append(f"持股当日盈亏合计 **¥{float(day_mv):+,.0f}**（与组合盈亏一致）。")
 
     perf_parts: list[str] = []
     if winners:
@@ -344,34 +464,70 @@ def build_close_portfolio_summary(
     wl_min = watchlist_min_size(settings or {})
     enriched = build_enriched_symbols(current)
     close_pf = portfolio_from_snapshot(current)
+    holding_codes = [
+        _normalize_code(str(h.get("code", "")))
+        for h in close_pf.get("holdings") or []
+        if _normalize_code(str(h.get("code", "")))
+    ]
+    _refresh_enriched_quotes(enriched, holding_codes, settings=settings)
     morning_pf = _morning_portfolio(baseline)
     _recalc_portfolio_totals(close_pf, enriched)
 
-    morning_prices = _prices_from_snapshot(baseline)
-    start_total = morning_pf.get("total")
-    if start_total is not None:
-        start_total = float(start_total)
+    morning_prices = _morning_prices_for_pnl(baseline, holding_codes)
+    close_prices = _close_prices_for_pnl(enriched, current, holding_codes)
 
-    end_total = close_pf.get("total")
-    if end_total is not None:
-        end_total = float(end_total)
+    morning_cash_raw = morning_pf.get("cash")
+    morning_cash = float(morning_cash_raw) if morning_cash_raw is not None else None
+    start_stock_mv = _stock_mv_from_holdings(morning_pf.get("holdings") or [], morning_prices)
+    start_total: Optional[float] = None
+    if morning_cash is not None:
+        start_total = round(start_stock_mv + morning_cash, 2)
+
+    end_cash_raw = close_pf.get("cash")
+    end_cash = float(end_cash_raw) if end_cash_raw is not None else None
+
+    holdings = _holding_pnl_rows(close_pf, enriched, morning_prices, close_prices)
+    holdings = _attach_day_pnl(holdings)
+    end_stock_mv = round(sum(float(h.get("market_value") or 0) for h in holdings), 2)
+
+    end_total: Optional[float] = None
+    if end_cash is not None:
+        end_total = round(end_stock_mv + end_cash, 2)
 
     notes: list[str] = []
     daily_pnl: Optional[float] = None
     daily_pnl_pct: Optional[float] = None
-    if start_total is not None and end_total is not None:
+    stock_pnl: Optional[float] = None
+    cash_pnl: Optional[float] = None
+
+    day_mv_change = 0.0
+    has_day_mv = False
+    for h in holdings:
+        if h.get("day_pnl") is not None:
+            day_mv_change += float(h["day_pnl"])
+            has_day_mv = True
+    if has_day_mv:
+        stock_pnl = round(day_mv_change, 2)
+
+    cash_delta: Optional[float] = None
+    if end_cash is not None and morning_cash is not None:
+        cash_delta = round(end_cash - morning_cash, 2)
+        cash_pnl = cash_delta
+
+    if stock_pnl is not None:
+        daily_pnl = round(stock_pnl + (cash_pnl or 0.0), 2)
+    elif start_total is not None and end_total is not None:
         daily_pnl = round(end_total - start_total, 2)
-        daily_pnl_pct = round(daily_pnl / start_total * 100, 2) if start_total > 0 else None
-    elif end_total is not None:
+
+    if daily_pnl is not None and start_total is not None and start_total > 0:
+        daily_pnl_pct = round(daily_pnl / start_total * 100, 2)
+    elif end_total is not None and start_total is None:
         notes.append("缺少早盘净值基线，无法计算当日组合盈亏")
 
-    holdings = _holding_pnl_rows(close_pf, enriched, morning_prices)
     holdings = _attach_weights(holdings, end_total)
     watchlist = _watchlist_rows(close_pf, enriched)
 
     winners = losers = flat = 0
-    day_mv_change = 0.0
-    has_day_mv = False
     total_unrealized = 0.0
     max_weight: Optional[float] = None
     for h in holdings:
@@ -384,9 +540,6 @@ def build_close_portfolio_summary(
                 losers += 1
             else:
                 flat += 1
-        if h.get("week_chg") is not None:
-            day_mv_change += float(h["week_chg"])
-            has_day_mv = True
         if h.get("unrealized_pnl") is not None:
             total_unrealized += float(h["unrealized_pnl"])
         weight = h.get("weight_pct")
@@ -394,22 +547,16 @@ def build_close_portfolio_summary(
             max_weight = max(max_weight or 0.0, float(weight))
 
     ledger_trades = _load_trade_ledger_range(day, day)
-    realized = _compute_realized_pnl(ledger_trades)
+    realized = _compute_trade_cash_flow(ledger_trades)
     intraday_list = list(intraday_trades or [])
     wl_changes = _watchlist_changes_from_adjust(watchlist_adjust)
 
-    cash = close_pf.get("cash")
+    cash = end_cash
     cash_ratio = close_pf.get("cash_ratio")
-    morning_cash = morning_pf.get("cash")
-    cash_delta: Optional[float] = None
-    if cash is not None:
-        cash = float(cash)
     if cash_ratio is not None:
         cash_ratio = float(cash_ratio)
-    if cash is not None and morning_cash is not None:
-        cash_delta = round(float(cash) - float(morning_cash), 2)
 
-    stock_mv = round(float(end_total) - float(cash), 2) if end_total is not None and cash is not None else None
+    stock_mv = end_stock_mv if holdings else None
     stock_ratio = round(1 - float(cash_ratio), 4) if cash_ratio is not None else None
 
     summary = ClosePortfolioSummary(
@@ -429,7 +576,7 @@ def build_close_portfolio_summary(
         winners=winners,
         losers=losers,
         flat=flat,
-        day_mv_change=round(day_mv_change, 2) if has_day_mv else None,
+        day_mv_change=stock_pnl,
         total_unrealized=round(total_unrealized, 2) if holdings else None,
         position_change=_describe_position_change(morning_pf, close_pf),
         holdings=holdings,
@@ -459,13 +606,20 @@ def render_close_portfolio_markdown(summary: ClosePortfolioSummary | dict[str, A
             pct = float(data["daily_pnl_pct"])
             pct_s = f"（{sign}{pct}%）"
         headline = f"**{sign}¥{pnl:,.0f}{pct_s}**"
+        stock_part = ""
+        day_mv = data.get("day_mv_change")
+        cash_delta = data.get("cash_delta")
+        if day_mv is not None:
+            stock_part = f" · 持股合计 {float(day_mv):+,.0f}"
+        if cash_delta is not None and abs(float(cash_delta)) >= 0.01:
+            stock_part += f" · 现金 {float(cash_delta):+,.0f}"
         if data.get("start_total") is not None and data.get("end_total") is not None:
             lines.append(
-                f"- {headline} · 早盘 ¥{float(data['start_total']):,.0f} → "
+                f"- {headline}{stock_part} · 早盘 ¥{float(data['start_total']):,.0f} → "
                 f"收盘 ¥{float(data['end_total']):,.0f}"
             )
         else:
-            lines.append(f"- {headline}")
+            lines.append(f"- {headline}{stock_part}")
     elif data.get("end_total") is not None:
         lines.append(f"- 收盘净值 **¥{float(data['end_total']):,.0f}**")
     else:

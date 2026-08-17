@@ -91,7 +91,7 @@ def generate_close_improvements(
     schedule_cfg = settings.get("schedule") or {}
 
     _improve_mss(out, baseline, current, verify, curve, thresholds, settings)
-    _improve_portfolio(out, current, verify, trades or [], portfolio_cfg, thresholds)
+    _improve_portfolio(out, current, verify, trades or [], portfolio_cfg, thresholds, settings)
     _improve_watchlist(out, current, watchlist_adjust, watchlist_cfg, portfolio_cfg)
     _improve_schedule(out, scans or [], trades or [], schedule_cfg, settings)
     _improve_forecast(out, forecast_review, settings)
@@ -209,11 +209,15 @@ def _improve_portfolio(
     trades: list[dict[str, Any]],
     portfolio_cfg: dict[str, Any],
     thresholds: dict[str, Any],
+    settings: dict[str, Any],
 ) -> None:
+    from agent_reach.daily_run.harness_policy import min_cash_ratio_default, runtime_int_default
+    from agent_reach.daily_run.portfolio_manager import effective_days_held
+
     pf = current.get("portfolio") or {}
     holdings = pf.get("holdings") or []
     cash_ratio = pf.get("cash_ratio")
-    min_cash = float(thresholds.get("min_cash_ratio", 0.4))
+    min_cash = float(thresholds.get("min_cash_ratio", min_cash_ratio_default(settings)))
     max_t = int(
         portfolio_cfg["max_total_symbols"]
         if "max_total_symbols" in portfolio_cfg
@@ -278,13 +282,14 @@ def _improve_portfolio(
             "检查 friction 门槛与 holding_lock_days；过高频可能放大佣金损耗",
         )
 
-    locked = [h for h in holdings if h.get("days_held") is not None and int(h["days_held"]) < 3]
+    lock_days = runtime_int_default(settings, "trading", "holding_lock_days")
+    locked = [h for h in holdings if effective_days_held(h, settings=settings) < lock_days]
     if locked and any(t.get("action") == "sell" for t in trades):
         out.add(
             "portfolio",
             "low",
             "锁定期内曾出现卖出信号",
-            "holding_lock_days 生效中；若需灵活止损可评估缩短锁定期（默认 3 天）",
+            f"holding_lock_days={lock_days} 生效中；若需灵活止损可评估缩短锁定期",
         )
 
 

@@ -80,7 +80,7 @@ def main():
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
     p_conf.add_argument("key", nargs="?", default=None,
-                        choices=["proxy", "github-token", "groq-key", "openai-key",
+                        choices=["proxy", "github-token", "groq-key", "openai-key", "deepseek-key",
                                  "twitter-cookies", "youtube-cookies",
                                  "xhs-cookies",
                                  "feishu-app-id", "feishu-app-secret", "feishu-chat-id",
@@ -228,6 +228,8 @@ def main():
     )
     p_dr_sched.add_argument("--dry-run", action="store_true",
                             help="Print crontab block without installing (install action)")
+    p_dr_sched.add_argument("--force", action="store_true",
+                            help="Bypass guard dedupe/lock for schedule run")
     p_dr_hot = p_daily_sub.add_parser("hot-news", help="Self-hosted 60s API for hot news")
     p_dr_hot_sub = p_dr_hot.add_subparsers(dest="hot_news_action", required=True)
     p_dr_hot_install = p_dr_hot_sub.add_parser("install", help="Deploy local 60s (native Node by default)")
@@ -256,6 +258,41 @@ def main():
                                choices=["", "native", "docker", "auto"],
                                help="Stop only selected deploy mode")
     p_daily_sub.add_parser("sample", help="Print example snapshot JSON to stdout")
+    p_dr_harness = p_daily_sub.add_parser("harness", help="Continual harness: show memory / rollback refine")
+    p_dr_harness_sub = p_dr_harness.add_subparsers(dest="harness_action", required=True)
+    p_dr_h_show = p_dr_harness_sub.add_parser("show", help="Show harness entries")
+    p_dr_h_show.add_argument("--limit", type=int, default=8, help="Entries per kind")
+    p_dr_h_show.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_h_show.add_argument(
+        "--overlay",
+        action="store_true",
+        help="Show base vs effective harness runtime overlay diff",
+    )
+    p_dr_h_list = p_dr_harness_sub.add_parser("list-refinements", help="List recent refinement events")
+    p_dr_h_list.add_argument("--limit", type=int, default=10, help="Max events")
+    p_dr_h_list.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_h_rb = p_dr_harness_sub.add_parser("rollback", help="Rollback one refinement by id")
+    p_dr_h_rb.add_argument("--id", required=True, help="Refinement id e.g. refine_0001")
+    p_dr_h_refine = p_dr_harness_sub.add_parser("refine", help="Run Layer B LLM refine for a job")
+    p_dr_h_refine.add_argument("--job", required=True, choices=["close", "weekly", "forecast"], help="Job name")
+    p_dr_h_refine.add_argument("--force", action="store_true", help="Skip review gate")
+    p_dr_h_refine.add_argument("--ignore-cooldown", action="store_true",
+                               help="Bypass harness LLM refine cooldown")
+    p_dr_h_refine.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_h_migrate = p_dr_harness_sub.add_parser(
+        "migrate-settings",
+        help="Strip evolved keys from ~/.agent-reach/daily_run_settings.json",
+    )
+    p_dr_h_migrate.add_argument("--dry-run", action="store_true", help="Report only, do not write")
+    p_dr_h_migrate.add_argument("--path", default=None, help="Settings file path")
+    p_dr_h_migrate.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_h_sync = p_dr_harness_sub.add_parser(
+        "sync-settings",
+        help="Merge missing harness keys from repo defaults into user settings",
+    )
+    p_dr_h_sync.add_argument("--dry-run", action="store_true", help="Report only, do not write")
+    p_dr_h_sync.add_argument("--path", default=None, help="Settings file path")
+    p_dr_h_sync.add_argument("--json", action="store_true", help="JSON output")
 
     # ── doctor ──
     p_doctor = sub.add_parser("doctor", help="Check platform availability")
@@ -1303,6 +1340,12 @@ def _cmd_configure(args):
         config.set("openai_api_key", value)
         print(f"✅ OpenAI key configured!")
 
+    elif args.key == "deepseek-key":
+        config.set("deepseek_api_key", value)
+        if not config.get("deepseek_base_url"):
+            config.set("deepseek_base_url", "https://api.deepseek.com")
+        print("✅ DeepSeek key configured!")
+
     elif args.key == "feishu-app-id":
         config.set("feishu_app_id", value.strip())
         print("✅ Feishu App ID configured!")
@@ -1491,7 +1534,12 @@ def _cmd_daily_run(args):
         print(md)
         if args.save:
             out = save_optimized_settings(result, settings)
-            print(f"\n✅ Saved optimized settings to {out}")
+            harness_mode = (settings.get("harness") or {}).get("threshold_evolution_mode") == "harness"
+            if harness_mode:
+                print(f"\n✅ Optimizer metadata saved to {out}")
+                print("   Thresholds written to harness policy (not static JSON)")
+            else:
+                print(f"\n✅ Saved optimized settings to {out}")
         if args.push:
             try:
                 send_card(
@@ -1634,6 +1682,9 @@ def _cmd_daily_run(args):
             watchlist_adjust=prepared["watchlist_adjust"],
             code_review=prepared["code_review"],
             verify_dict=prepared.get("verify"),
+            experts_already_ran=any(
+                s in (prepared.get("steps") or []) for s in ("team_first", "mss_experts")
+            ),
         )
         result["code_review"] = prepared["code_review"]
         result["watchlist_adjust"] = prepared["watchlist_adjust"]
@@ -1826,10 +1877,15 @@ def _cmd_daily_run(args):
                 print("❌ job must be morning, intraday, close, weekly, or forecast")
                 sys.exit(1)
             try:
-                result = run_scheduled(job, push=not args.dry_run, config=Config())
+                result = run_scheduled(job, push=not args.dry_run, config=Config(), force=args.force)
             except Exception as exc:
                 print(f"❌ Schedule run failed: {exc}")
                 sys.exit(1)
+            if result.get("skipped"):
+                print(f"⏭️  Skipped: {result.get('reason')}")
+                if result.get("guard"):
+                    print(f"   guard={result.get('guard')} · 补跑请加 --force")
+                sys.exit(0)
             job_result = result.get("result") or {}
             print(f"✅ Scheduled job '{job}' completed")
             print(f"   snapshot: {result.get('snapshot_path')}")
@@ -1925,8 +1981,154 @@ def _cmd_daily_run(args):
         print("Usage: agent-reach daily-run hot-news {install|status|stop}")
         sys.exit(1)
 
+    if args.daily_action == "harness":
+        import json as _json
+
+        from agent_reach.daily_run.harness import (
+            format_harness_for_briefing,
+            list_refinements,
+            load_harness,
+            refine_after_job_llm,
+            rollback_refinement,
+        )
+
+        action = args.harness_action
+        if action == "show":
+            if args.overlay:
+                from agent_reach.daily_run.harness import format_harness_overlay_markdown
+                from agent_reach.daily_run.settings import effective_settings, load_settings
+
+                base = load_settings()
+                effective = effective_settings(base)
+                runtime = effective.get("harness_runtime") or {}
+                if args.json:
+                    print(_json.dumps(runtime, ensure_ascii=False, indent=2))
+                else:
+                    print(format_harness_overlay_markdown(base, effective))
+                return
+            if args.json:
+                state = load_harness()
+                payload = {
+                    kind: {eid: ent.to_dict() for eid, ent in bucket.items()}
+                    for kind, bucket in state.entries.items()
+                }
+                print(_json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                state = load_harness()
+                print(state.overview(entry_limit=args.limit))
+                md = format_harness_for_briefing(limit=args.limit)
+                if md:
+                    print("\n" + md)
+            return
+
+        if action == "list-refinements":
+            rows = list_refinements(limit=args.limit)
+            if args.json:
+                print(_json.dumps(rows, ensure_ascii=False, indent=2))
+            else:
+                for row in rows:
+                    print(
+                        f"{row.get('id')} · {row.get('job')} · {len(row.get('changes') or [])} changes · "
+                        f"{row.get('created_at', '')[:19]}"
+                    )
+            return
+
+        if action == "rollback":
+            try:
+                result = rollback_refinement(args.id)
+            except ValueError as exc:
+                print(f"❌ {exc}")
+                sys.exit(1)
+            print(_json.dumps(result, ensure_ascii=False, indent=2))
+            print(f"\n✅ Rolled back {args.id}")
+            return
+
+        if action == "refine":
+            from agent_reach.daily_run.settings import load_settings
+            from agent_reach.daily_run.run_guard import (
+                HarnessCooldownError,
+                assert_harness_refine_allowed,
+            )
+
+            settings = load_settings()
+            try:
+                assert_harness_refine_allowed(
+                    force_review=args.force,
+                    ignore_cooldown=getattr(args, "ignore_cooldown", False),
+                    settings=settings,
+                )
+            except HarnessCooldownError as exc:
+                print(f"⏭️  {exc}")
+                sys.exit(1)
+            evidence = {}
+            if args.job == "weekly":
+                digest_path = Path.home() / ".agent-reach" / "daily_run" / "weekly_digest.json"
+                if digest_path.exists():
+                    evidence = {"report": _json.loads(digest_path.read_text(encoding="utf-8"))}
+            elif args.job == "forecast":
+                forecast_dir = Path.home() / ".agent-reach" / "daily_run" / "forecasts"
+                files = sorted(forecast_dir.glob("*.json")) if forecast_dir.exists() else []
+                if files:
+                    evidence = {"forecast": _json.loads(files[-1].read_text(encoding="utf-8"))}
+            result = refine_after_job_llm(
+                args.job,
+                evidence=evidence,
+                settings=settings,
+                skip_review=args.force,
+            )
+            if args.json:
+                print(_json.dumps(result, ensure_ascii=False, indent=2))
+            elif result.get("skipped"):
+                print(f"⏭️  skipped: {result.get('reason')}")
+            else:
+                print(
+                    f"✅ {args.job} Layer B refine · {result.get('refinement_id')} · "
+                    f"{result.get('changes')} changes · planner={result.get('planner')}"
+                )
+            return
+
+        if action == "migrate-settings":
+            from pathlib import Path as _Path
+
+            from agent_reach.daily_run.harness_migrate import migrate_user_settings, render_migrate_markdown
+
+            path = _Path(args.path).expanduser() if args.path else None
+            result = migrate_user_settings(path=path, dry_run=args.dry_run)
+            if args.json:
+                print(_json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print(render_migrate_markdown(result))
+                if result.get("saved"):
+                    print(f"\n✅ Settings migrated: {result.get('path')}")
+                elif result.get("dry_run") and result.get("removed"):
+                    print("\n(dry-run — re-run without --dry-run to apply)")
+            return
+
+        if action == "sync-settings":
+            from pathlib import Path as _Path
+
+            from agent_reach.daily_run.harness_migrate import render_sync_harness_markdown, sync_user_harness_keys
+
+            path = _Path(args.path).expanduser() if args.path else None
+            result = sync_user_harness_keys(path=path, dry_run=args.dry_run)
+            if args.json:
+                print(_json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print(render_sync_harness_markdown(result))
+                if result.get("saved"):
+                    print(f"\n✅ Harness keys synced: {result.get('path')}")
+                elif result.get("dry_run") and result.get("added"):
+                    print("\n(dry-run — re-run without --dry-run to apply)")
+            return
+
+        print("Usage: agent-reach daily-run harness {show|list-refinements|rollback|refine|migrate-settings|sync-settings}")
+        sys.exit(1)
+
     if args.daily_action not in ("evaluate", "push"):
-        print("Usage: agent-reach daily-run {morning|close|intraday|build-snapshot|schedule|hot-news|evaluate|push|fetch|verify|backtest|optimize|plugins|sample} ...")
+        print(
+            "Usage: agent-reach daily-run "
+            "{morning|close|intraday|build-snapshot|schedule|hot-news|harness|evaluate|push|fetch|verify|backtest|optimize|plugins|sample} ..."
+        )
         sys.exit(1)
 
     path = Path(args.input)

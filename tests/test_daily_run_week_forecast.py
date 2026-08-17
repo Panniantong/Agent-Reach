@@ -247,4 +247,4 @@ class TestScheduleForecast:
 
         block = render_crontab_block()
         assert "daily-run-local-cron.sh forecast" in block
-        assert "0 9 * * 0" in block
+        assert "30 8 * * 0" in block
