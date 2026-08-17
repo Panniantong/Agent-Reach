@@ -19,7 +19,9 @@ def compute_lookback_mss(
     if not scans:
         return 0.0, []
 
-    weights = [float(w) for w in settings.get("lookback_weights", [0.5, 0.3, 0.2])]
+    from agent_reach.daily_run.harness_policy import lookback_weights_default
+
+    weights = lookback_weights_default(settings)
     recent = list(reversed(scans[-3:]))  # newest → oldest
     used = weights[: len(recent)]
     total_w = sum(used)

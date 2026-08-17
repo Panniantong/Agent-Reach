@@ -9,7 +9,7 @@ from typing import Any, Optional
 
 from agent_reach.daily_run.auditor import AuditResult, run_data_audit
 from agent_reach.daily_run.quality_gate import GateResult, validate_report
-from agent_reach.daily_run.settings import load_settings
+from agent_reach.daily_run.settings import effective_settings, load_settings
 from agent_reach.daily_run.verdict import VerdictResult, compute_verdict, fuse_verdict_with_team
 
 
@@ -20,7 +20,7 @@ def evaluate_snapshot(
     doctor_channels: Optional[dict[str, dict]] = None,
 ) -> dict[str, Any]:
     """Run audit + verdict + quality gate on a market snapshot."""
-    cfg = settings or load_settings()
+    cfg = effective_settings(settings)
     audit = run_data_audit(snapshot, cfg, doctor_channels=doctor_channels)
     enriched = dict(snapshot)
     enriched["audit_passed"] = audit.passed

@@ -13,7 +13,9 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agent_reach.daily_run.portfolio_manager import (
+    effective_days_held,
     max_total_symbols,
+    sync_portfolio_holding_days,
     unique_symbol_codes,
     unique_symbol_count,
     watchlist_capacity,
@@ -30,8 +32,45 @@ DEFAULT_WALK_MODULES = (
     "close_improvements.py",
     "close_code_review.py",
     "snapshot_builder.py",
+    "harness_policy.py",
+    "settings.py",
     "verify.py",
 )
+
+_WALK_MODULE_EXTRAS = (
+    "harness.py",
+    "harness_skill_base.py",
+    "close_harness_skills.py",
+    "weekly_harness_skills.py",
+    "forecast_harness_skills.py",
+)
+
+
+def list_walk_module_names(settings: Optional[dict[str, Any]] = None) -> list[str]:
+    """Core daily_run modules plus harness skill runtimes for static walk."""
+    cfg = (settings or {}).get("close_code_review") or {}
+    explicit = cfg.get("walk_modules")
+    if explicit:
+        return list(explicit)
+
+    names: list[str] = list(DEFAULT_WALK_MODULES)
+    seen = set(names)
+    try:
+        import agent_reach.daily_run as pkg
+
+        base = Path(pkg.__file__).resolve().parent
+        for pattern in ("*_harness.py", "*_harness_skills.py"):
+            for path in sorted(base.glob(pattern)):
+                if path.name not in seen:
+                    names.append(path.name)
+                    seen.add(path.name)
+        for extra in _WALK_MODULE_EXTRAS:
+            if (base / extra).is_file() and extra not in seen:
+                names.append(extra)
+                seen.add(extra)
+    except (ImportError, TypeError):
+        pass
+    return names
 
 
 @dataclass
@@ -61,14 +100,18 @@ class CodeReviewResult:
     portfolio: Optional[dict[str, Any]] = None
     portfolio_changed: bool = False
     smoke_tests: Optional[dict[str, Any]] = None
+    harness_refinement: Optional[dict[str, Any]] = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out = {
             "findings": [f.to_dict() for f in self.findings],
             "fixes_applied": self.fixes_applied,
             "portfolio_changed": self.portfolio_changed,
             "smoke_tests": self.smoke_tests,
         }
+        if self.harness_refinement:
+            out["harness_refinement"] = self.harness_refinement
+        return out
 
 
 def run_close_code_review(
@@ -88,6 +131,7 @@ def run_close_code_review(
     auto_fix = cfg.get("auto_fix_portfolio", True) is not False
 
     _review_portfolio(out, snapshot, settings, auto_fix=auto_fix)
+    _review_harness_evolution(out, settings, trades=trades or [])
     _review_intraday_state(out, scans or [], trades or [], settings)
     _review_today_manifests(out)
     if cfg.get("walk_on_close", False) is True:
@@ -95,6 +139,11 @@ def run_close_code_review(
 
     if cfg.get("run_smoke_tests") is True:
         out.smoke_tests = _run_smoke_tests(settings)
+
+    if cfg.get("harness_evolve_on_walk", True) is not False:
+        from agent_reach.daily_run.code_walk_harness import apply_code_walk_harness_refinement
+
+        out.harness_refinement = apply_code_walk_harness_refinement(out, settings=settings)
 
     return out
 
@@ -123,6 +172,12 @@ def render_code_review_markdown(result: CodeReviewResult, *, enabled: bool = Tru
             lines.append(f"**冒烟测试：** {st.get('passed', 0)} passed")
         else:
             lines.append(f"**冒烟测试失败：** {st.get('summary', '见日志')}")
+        lines.append("")
+
+    ref = result.harness_refinement or {}
+    if ref and not ref.get("skipped"):
+        lines.append("**Harness 自进化**")
+        lines.append(f"- refinement `{ref.get('refinement_id', '')}` · {ref.get('changes', 0)} changes")
         lines.append("")
 
     if not result.fixes_applied and not open_findings and not (
@@ -169,8 +224,79 @@ def _review_portfolio(
     auto_fix: bool,
 ) -> None:
     pf = out.portfolio or {}
+    before_holdings = [dict(h) for h in (pf.get("holdings") or [])]
+    pf = sync_portfolio_holding_days(pf, settings=settings)
+    out.portfolio = pf
     holdings = list(pf.get("holdings") or [])
     watchlist = list(pf.get("watchlist") or [])
+
+    for before, h in zip(before_holdings, holdings):
+        code = _normalize_code(str(h.get("code", "")))
+        if not code:
+            continue
+        stored = before.get("days_held")
+        effective = h.get("days_held")
+        acquired = before.get("acquired_date") or h.get("acquired_date")
+
+        if acquired and stored is not None and int(stored) != int(effective or 0):
+            msg = (
+                f"持仓 {code} days_held {stored} → {effective}"
+                f"（acquired_date={acquired}，交易日历重算）"
+            )
+            if auto_fix:
+                out.portfolio_changed = True
+                out.fixes_applied.append(msg)
+                out.findings.append(
+                    CodeFinding(
+                        "portfolio",
+                        "high",
+                        f"持仓 {code} days_held 与 acquired_date 不一致",
+                        f"磁盘记录 {stored}，应为 {effective}",
+                        fixed=True,
+                        fix_note=msg,
+                    )
+                )
+            else:
+                out.findings.append(
+                    CodeFinding(
+                        "portfolio",
+                        "high",
+                        f"持仓 {code} days_held 与 acquired_date 不一致",
+                        f"磁盘记录 {stored}，应为 {effective}；启用 auto_fix_portfolio 可自动修正",
+                    )
+                )
+        elif acquired is None and stored is None:
+            out.findings.append(
+                CodeFinding(
+                    "portfolio",
+                    "medium",
+                    f"持仓 {code} 缺少 acquired_date / days_held",
+                    "无法判断 T+1 锁仓；买入时应写入 acquired_date",
+                )
+            )
+        elif acquired is None and stored is not None:
+            out.findings.append(
+                CodeFinding(
+                    "portfolio",
+                    "medium",
+                    f"持仓 {code} 仅有 days_held 计数器",
+                    "缺少 acquired_date，跨假期/停盘后计数可能失真；建议补写买入日",
+                )
+            )
+        elif stored is None and acquired:
+            out.findings.append(
+                CodeFinding(
+                    "portfolio",
+                    "low",
+                    f"持仓 {code} 缺少 days_held",
+                    "已由 acquired_date 重算并写入 portfolio",
+                    fixed=auto_fix,
+                    fix_note=f"days_held → {effective}" if auto_fix else "",
+                )
+            )
+            if auto_fix:
+                out.portfolio_changed = True
+
     held = {
         _normalize_code(str(h.get("code", "")))
         for h in holdings
@@ -285,16 +411,6 @@ def _review_portfolio(
                     fix_note=msg,
                 )
             )
-        if h.get("days_held") is None:
-            out.findings.append(
-                CodeFinding(
-                    "portfolio",
-                    "low",
-                    f"持仓 {code} 缺少 days_held",
-                    "早盘 increment_holding_days 可能未执行",
-                )
-            )
-
     cash = pf.get("cash")
     total = pf.get("total")
     ratio = pf.get("cash_ratio")
@@ -327,6 +443,127 @@ def _review_portfolio(
                         detail,
                     )
                 )
+
+
+def _review_harness_evolution(
+    out: CodeReviewResult,
+    settings: dict[str, Any],
+    *,
+    trades: list[dict[str, Any]],
+) -> None:
+    """Validate harness overlay wiring and signal/threshold consistency."""
+    harness = settings.get("harness") or {}
+    if harness.get("enabled") is False:
+        return
+
+    from agent_reach.daily_run.harness import load_harness
+    from agent_reach.daily_run.harness_policy import (
+        harness_evolution_mode,
+        list_static_config_pollution,
+        resolve_harness_trade_signals,
+    )
+    from agent_reach.daily_run.settings import effective_settings, load_settings
+
+    if harness_evolution_mode(settings) != "harness":
+        return
+
+    raw = load_settings()
+    pollution = list_static_config_pollution(raw)
+    if pollution:
+        shown = ", ".join(pollution[:10])
+        if len(pollution) > 10:
+            shown += "…"
+        out.findings.append(
+            CodeFinding(
+                "harness",
+                "medium",
+                "静态配置仍含 harness 进化项",
+                f"应从 JSON 移除，改由 harness memory/policy 驱动：{shown}",
+            )
+        )
+
+    overlay_on = harness.get("runtime_overlay", True) is not False
+    if overlay_on and not settings.get("harness_runtime"):
+        out.findings.append(
+            CodeFinding(
+                "harness",
+                "high",
+                "settings 未应用 harness overlay",
+                "调用方须先 effective_settings()；否则阈值/锁仓/schedule 仍用静态默认",
+            )
+        )
+
+    effective = settings if settings.get("harness_runtime") else effective_settings(raw)
+    state = load_harness()
+    signals = resolve_harness_trade_signals(state, settings=effective)
+    thresholds = effective.get("thresholds") or {}
+    trading = effective.get("trading") or {}
+    runtime = effective.get("harness_runtime") or {}
+
+    if signals.get("defensive_trim"):
+        macro = float(thresholds.get("macro_veto", 40))
+        aggressive = float(thresholds.get("aggressive_entry", 50))
+        min_cash = float(thresholds.get("min_cash_ratio", 0))
+        lock_days = int(trading.get("holding_lock_days", 1))
+        if macro > 32:
+            out.findings.append(
+                CodeFinding(
+                    "harness",
+                    "high",
+                    "防御信号与 macro_veto 不一致",
+                    f"defensive_trim=True 但 macro_veto={macro:.0f}（期望 ≤30）",
+                )
+            )
+        if aggressive > 46:
+            out.findings.append(
+                CodeFinding(
+                    "harness",
+                    "medium",
+                    "防御信号与 aggressive_entry 不一致",
+                    f"defensive_trim=True 但 aggressive_entry={aggressive:.0f}（期望 ≤45）",
+                )
+            )
+        if min_cash < 0.45:
+            out.findings.append(
+                CodeFinding(
+                    "harness",
+                    "medium",
+                    "防御信号与 min_cash_ratio 不一致",
+                    f"defensive_trim=True 但 min_cash_ratio={min_cash:.0%}（期望 ≥45%）",
+                )
+            )
+        if lock_days < 2:
+            out.findings.append(
+                CodeFinding(
+                    "harness",
+                    "medium",
+                    "防御信号与 holding_lock_days 不一致",
+                    f"defensive_trim=True 但 holding_lock_days={lock_days}（期望 ≥2）",
+                )
+            )
+
+    trade_signals = runtime.get("trade_signals") or {}
+    if trade_signals.get("defensive_trim") != signals.get("defensive_trim"):
+        out.findings.append(
+            CodeFinding(
+                "harness",
+                "medium",
+                "harness_runtime.trade_signals 过期",
+                "settings 内 trade_signals 与当前 harness 状态不一致，应重新 effective_settings()",
+            )
+        )
+
+    if trades and signals.get("defensive_trim"):
+        sells = [t for t in trades if t.get("action") == "sell"]
+        if not sells:
+            out.findings.append(
+                CodeFinding(
+                    "harness",
+                    "low",
+                    "防御期无卖出执行",
+                    "defensive_trim 已触发但今日无 sell；可能锁仓/摩擦/lookback 阻断，属预期或需复盘",
+                )
+            )
 
 
 def _review_intraday_state(
@@ -451,7 +688,7 @@ def _review_today_manifests(out: CodeReviewResult) -> None:
 
 def _walk_source_modules(out: CodeReviewResult, settings: dict[str, Any]) -> None:
     cfg = settings.get("close_code_review") or {}
-    names = cfg.get("walk_modules") or list(DEFAULT_WALK_MODULES)
+    names = list_walk_module_names(settings)
     try:
         import agent_reach.daily_run as pkg
 
@@ -485,6 +722,8 @@ def _walk_source_modules(out: CodeReviewResult, settings: dict[str, Any]) -> Non
 
         _check_bare_except(out, tree, name)
         _check_undefined_name_patterns(out, source, name)
+        _check_harness_consumer_patterns(out, source, name)
+        _check_derived_field_patterns(out, source, name)
 
 
 def _check_bare_except(out: CodeReviewResult, tree: ast.AST, module: str) -> None:
@@ -498,6 +737,51 @@ def _check_bare_except(out: CodeReviewResult, tree: ast.AST, module: str) -> Non
                     f"line {node.lineno}：建议捕获具体异常类型",
                 )
             )
+
+
+def _check_harness_consumer_patterns(out: CodeReviewResult, source: str, module: str) -> None:
+    """Heuristic: evolved keys read without harness helper fallback."""
+    if module in ("harness_policy.py", "settings.py", "optimizer.py", "backtest.py"):
+        return
+    evolved_reads = (
+        'get("macro_veto"',
+        'get("aggressive_entry"',
+        'get("min_cash_ratio"',
+        'get("holding_lock_days"',
+        'get("base_spread"',
+    )
+    helpers = (
+        "threshold_default",
+        "min_cash_ratio_default",
+        "runtime_int_default",
+        "runtime_float_default",
+        "forecast_int_default",
+        "friction_min_return_default",
+        "effective_settings",
+    )
+    if any(r in source for r in evolved_reads) and not any(h in source for h in helpers):
+        out.findings.append(
+            CodeFinding(
+                "harness",
+                "medium",
+                f"{module} 可能绕过 harness 读阈值",
+                " evolved 键须 threshold_default / runtime_*_default / effective_settings",
+            )
+        )
+
+
+def _check_derived_field_patterns(out: CodeReviewResult, source: str, module: str) -> None:
+    if module in ("portfolio_manager.py", "close_code_review.py"):
+        return
+    if '.get("days_held")' in source and "effective_days_held" not in source:
+        out.findings.append(
+            CodeFinding(
+                "portfolio",
+                "medium",
+                f"{module} 直接读 days_held",
+                "业务判断应走 effective_days_held() 或确保 load_portfolio 已 sync",
+            )
+        )
 
 
 def _check_undefined_name_patterns(out: CodeReviewResult, source: str, module: str) -> None:

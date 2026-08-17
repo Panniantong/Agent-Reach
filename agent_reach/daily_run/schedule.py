@@ -12,6 +12,13 @@ from typing import Any, Optional
 
 from agent_reach.daily_run.run_manifest import StepTimer, save_run_manifest
 
+try:
+    from loguru import logger
+except ImportError:  # pragma: no cover
+    import logging
+
+    logger = logging.getLogger("agent_reach.daily_run.schedule")
+
 
 MARKER_BEGIN = "# agent-reach daily-run schedule BEGIN"
 MARKER_END = "# agent-reach daily-run schedule END"
@@ -208,6 +215,8 @@ def run_scheduled(
     dup_reason = check_duplicate_job(job, force=force, settings=settings)
     if dup_reason:
         result = {"job": job, "skipped": True, "reason": dup_reason, "guard": "dedupe"}
+        _apply_scheduled_guard_harness(job, dup_reason, "dedupe", settings, result=result)
+        _attach_manifest_harness_summary(result)
         save_run_manifest(job, result, duration_ms=0)
         return result
 
@@ -222,8 +231,91 @@ def run_scheduled(
             )
     except JobBusyError as exc:
         result = {"job": job, "skipped": True, "reason": str(exc), "guard": "lock"}
+        _apply_scheduled_guard_harness(job, str(exc), "lock", settings, result=result)
+        _attach_manifest_harness_summary(result)
         save_run_manifest(job, result, duration_ms=0)
         return result
+
+
+def _attach_manifest_harness_summary(payload: dict[str, Any]) -> None:
+    from agent_reach.daily_run.harness import build_manifest_harness_summary
+
+    payload["harness_summary"] = build_manifest_harness_summary(payload)
+
+
+def _append_harness_error(target: dict[str, Any], context: str, exc: BaseException) -> None:
+    msg = f"{context}: {exc}"
+    target.setdefault("harness_errors", []).append(msg)
+    logger.warning("daily-run harness error: {}", msg)
+
+
+def _apply_scheduled_guard_harness(
+    job: str,
+    reason: str,
+    guard: str,
+    settings: dict,
+    *,
+    consecutive_failures: int | None = None,
+    result: Optional[dict[str, Any]] = None,
+) -> None:
+    try:
+        from agent_reach.daily_run.run_guard_harness import apply_run_guard_harness_refinement
+
+        apply_run_guard_harness_refinement(
+            job,
+            reason=reason,
+            guard=guard,
+            consecutive_failures=consecutive_failures,
+            settings=settings,
+        )
+    except Exception as exc:
+        if result is not None:
+            _append_harness_error(result, f"run_guard:{guard}", exc)
+        else:
+            logger.warning("daily-run run_guard harness failed ({}): {}", job, exc)
+
+
+def _apply_scheduled_job_harness(
+    job: str,
+    result: dict,
+    settings: dict,
+    *,
+    push: bool = False,
+    config=None,
+) -> None:
+    """Post-schedule harness for intraday only; morning is handled inside run_morning()."""
+    if job == "morning":
+        return
+    try:
+        if job == "intraday":
+            from agent_reach.daily_run.intraday_harness import apply_intraday_harness_refinement
+
+            if result.get("skipped"):
+                harness_ref = apply_intraday_harness_refinement(result, settings=settings)
+            else:
+                run_result = result.get("result") or {}
+                harness_ref = (
+                    apply_intraday_harness_refinement(run_result, settings=settings)
+                    if run_result
+                    else {"skipped": True, "reason": "empty intraday result"}
+                )
+            if harness_ref:
+                result["harness_intraday"] = harness_ref
+                if push and config is not None:
+                    from agent_reach.daily_run.workflows import push_scheduled_harness_card
+
+                    steps = push_scheduled_harness_card(
+                        job="intraday",
+                        harness_result={"intraday": harness_ref},
+                        settings=settings,
+                        config=config,
+                        push=push,
+                        harness_errors=result.get("harness_errors"),
+                    )
+                    if steps:
+                        result.setdefault("harness_followup_steps", []).extend(steps)
+    except Exception as exc:
+        _append_harness_error(result, f"scheduled_job_harness:{job}", exc)
 
 
 def _run_scheduled_inner(
@@ -257,10 +349,16 @@ def _run_scheduled_inner(
         maybe_alert_consecutive_failures(job, settings=settings, config=config)
         duration_ms = (time.perf_counter() - t0) * 1000
         fail_payload = {"job": job, "error": job_error, "consecutive_failures": streak}
+        _apply_scheduled_guard_harness(
+            job, job_error, "failure", settings, consecutive_failures=streak, result=fail_payload
+        )
+        _attach_manifest_harness_summary(fail_payload)
         save_run_manifest(job, fail_payload, duration_ms=duration_ms)
         raise
 
     duration_ms = (time.perf_counter() - t0) * 1000
+    _apply_scheduled_job_harness(job, result, settings, push=push, config=config)
+    _attach_manifest_harness_summary(result)
     manifest_path = save_run_manifest(job, result, feishu=feishu, duration_ms=duration_ms)
     result["manifest_path"] = str(manifest_path)
     return result

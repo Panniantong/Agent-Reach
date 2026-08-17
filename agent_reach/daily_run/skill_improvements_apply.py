@@ -34,6 +34,7 @@ from agent_reach.daily_run.skill_writeback import (
     build_weekly_experience_block,
     patch_skill_file,
     resolve_skill_writeback_paths,
+    sync_cursor_agent_skills_to_local,
     week_section_header,
 )
 
@@ -67,6 +68,16 @@ def _normalize_report_for_writeback(report: dict[str, Any], skill_text: str = ""
     blocked = blocked_imp + blocked_skill
     if blocked:
         out["_rejected_blocked"] = blocked
+        try:
+            from agent_reach.daily_run.rejected_strategies_harness import apply_rejected_strategies_harness_refinement
+            from agent_reach.daily_run.settings import load_settings
+
+            apply_rejected_strategies_harness_refinement(
+                blocked=blocked,
+                settings=load_settings(),
+            )
+        except Exception:
+            pass
     return out
 
 
@@ -175,7 +186,12 @@ def apply_settings_from_improvements(
     settings: dict[str, Any],
 ) -> tuple[dict[str, Any], list[str]]:
     """Apply safe, deterministic settings tweaks suggested by weekly improvements."""
+    from agent_reach.daily_run.skill_closure_harness import harness_mode_blocks_settings_writeback
+
     cfg = deepcopy(settings)
+    if harness_mode_blocks_settings_writeback(cfg):
+        return cfg, []
+
     applied: list[str] = []
     improvements = report.get("process_improvements") or []
     mss_applied = exa_applied = schedule_applied = False
@@ -190,12 +206,15 @@ def apply_settings_from_improvements(
         if not mss_applied and (
             category == "mss" or "mss" in title.lower() or "预测未命中" in title
         ):
-            mss_cfg = cfg.setdefault("mss_forecast", {})
-            old = int(mss_cfg.get("base_spread", 8))
-            new = min(old + 1, 15)
-            if new != old:
-                mss_cfg["base_spread"] = new
-                applied.append(f"mss_forecast.base_spread: {old} → {new}（{title}）")
+            from agent_reach.daily_run.harness_policy import evolution_mode
+
+            if evolution_mode(cfg, "base_spread") == "fixed":
+                mss_cfg = cfg.setdefault("mss_forecast", {})
+                old = int(mss_cfg.get("base_spread", 8))
+                new = min(old + 1, 15)
+                if new != old:
+                    mss_cfg["base_spread"] = new
+                    applied.append(f"mss_forecast.base_spread: {old} → {new}（{title}）")
             mss_applied = True
 
         if not exa_applied and category == "data":
@@ -208,12 +227,15 @@ def apply_settings_from_improvements(
                 exa_applied = True
 
         if category == "portfolio" and "回撤" in title:
-            thr = cfg.setdefault("thresholds", {})
-            old = int(thr.get("macro_veto", 40))
-            new = min(old + 1, 45)
-            if new != old:
-                thr["macro_veto"] = new
-                applied.append(f"thresholds.macro_veto: {old} → {new}（{title}）")
+            from agent_reach.daily_run.harness_policy import threshold_mode
+
+            if threshold_mode(cfg, "macro_veto") == "fixed":
+                thr = cfg.setdefault("thresholds", {})
+                old = int(thr.get("macro_veto", 40))
+                new = min(old + 1, 45)
+                if new != old:
+                    thr["macro_veto"] = new
+                    applied.append(f"thresholds.macro_veto: {old} → {new}（{title}）")
 
         if not schedule_applied and category == "schedule" and item.get("priority") == "high":
             schedule = cfg.setdefault("schedule", {})
@@ -359,7 +381,8 @@ def sync_canonical_skill_to_local(settings: Optional[dict[str, Any]] = None) -> 
     """Copy patched canonical daily_run_skill.md to installed local skill paths."""
     source = canonical_skill_path()
     if not source.exists():
-        return []
+        synced_cursor = sync_cursor_agent_skills_to_local()
+        return synced_cursor
     synced: list[str] = []
     for path in resolve_skill_writeback_paths(settings):
         if path.resolve() == source.resolve():
@@ -367,6 +390,7 @@ def sync_canonical_skill_to_local(settings: Optional[dict[str, Any]] = None) -> 
         path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, path)
         synced.append(str(path))
+    synced.extend(sync_cursor_agent_skills_to_local())
     return synced
 
 
@@ -505,6 +529,15 @@ def audit_weekly_skill(
         result["gates"] = gates
         if gates.get("ok") is False and not gates.get("skipped"):
             result["ok"] = False
+            try:
+                from agent_reach.daily_run.skill_gates_harness import apply_skill_gates_harness_refinement
+
+                result["skill_gates_harness"] = apply_skill_gates_harness_refinement(
+                    gates,
+                    settings=settings,
+                )
+            except Exception:
+                pass
 
     return result
 
@@ -659,6 +692,14 @@ def apply_weekly_skill_closure(
         report["harness_refinement_id"] = harness_refinement_id
         report["refinement_id"] = harness_refinement_id
 
+    skill_harness_ref: dict[str, Any] = {}
+    try:
+        from agent_reach.daily_run.skill_closure_harness import apply_skill_closure_harness_refinement
+
+        skill_harness_ref = apply_skill_closure_harness_refinement(report, settings=cfg)
+    except Exception:
+        skill_harness_ref = {"skipped": True, "reason": "skill_closure_harness error"}
+
     new_settings, applied_config = apply_settings_from_improvements(report, cfg)
     settings_path: Optional[str] = None
     if applied_config and weekly_cfg.get("skill_auto_apply_settings", True) is not False:
@@ -715,6 +756,7 @@ def apply_weekly_skill_closure(
         "runtime": runtime,
         "skill_audit": skill_audit,
         "manifest_path": str(manifest_path),
+        "skill_harness_refinement": skill_harness_ref,
     }
 
 

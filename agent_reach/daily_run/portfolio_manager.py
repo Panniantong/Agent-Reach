@@ -9,9 +9,11 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
+from agent_reach.daily_run import trade_calendar
+from agent_reach.daily_run.harness_policy import min_cash_ratio_default, runtime_int_default, runtime_float_default
+from agent_reach.daily_run.settings import effective_settings
 from agent_reach.daily_run.snapshot_builder import _normalize_code
 from agent_reach.daily_run.symbols import build_enriched_symbols, copy_portfolio
-from agent_reach.daily_run.trade_calendar import today_shanghai
 
 
 @dataclass
@@ -62,7 +64,7 @@ def daily_trade_state_path() -> Path:
 
 
 def _today_str() -> str:
-    return today_shanghai().isoformat()
+    return trade_calendar.today_shanghai().isoformat()
 
 
 def _actions_fingerprint(actions: list[TradeAction]) -> str:
@@ -166,13 +168,13 @@ def max_total_symbols(settings: dict[str, Any]) -> int:
     pf = portfolio_settings(settings)
     if "max_total_symbols" in pf:
         return int(pf["max_total_symbols"])
-    return int(pf.get("max_holdings", 10))
+    return runtime_int_default(settings, "portfolio", "max_total_symbols")
 
 
 def max_holdings(settings: dict[str, Any]) -> int:
     """Max distinct held symbols (portfolio.max_holdings)."""
     pf = portfolio_settings(settings)
-    return int(pf.get("max_holdings", 10))
+    return runtime_int_default(settings, "portfolio", "max_holdings")
 
 
 def unique_symbol_codes(portfolio: dict[str, Any]) -> set[str]:
@@ -223,16 +225,53 @@ def append_trade_ledger(
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-def increment_holding_days(portfolio: dict[str, Any]) -> dict[str, Any]:
-    """Bump days_held on each holding (call once per trading day, e.g. morning)."""
+def effective_days_held(
+    holding: dict[str, Any],
+    *,
+    as_of: Optional[date] = None,
+    settings: Optional[dict[str, Any]] = None,
+) -> int:
+    """Prefer acquired_date (T+1 calendar) over stale days_held counter."""
+    acquired = holding.get("acquired_date")
+    if acquired:
+        try:
+            start = date.fromisoformat(str(acquired)[:10])
+            as_of = as_of or trade_calendar.today_shanghai()
+            return trade_calendar.trading_days_held(start, as_of, settings=settings)
+        except ValueError:
+            pass
+    return int(holding.get("days_held") or 0)
+
+
+def holding_is_sellable(
+    holding: dict[str, Any],
+    settings: dict[str, Any],
+    *,
+    as_of: Optional[date] = None,
+) -> bool:
+    lock_days = runtime_int_default(settings, "trading", "holding_lock_days")
+    return effective_days_held(holding, as_of=as_of, settings=settings) >= lock_days
+
+
+def sync_portfolio_holding_days(
+    portfolio: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Refresh days_held from acquired_date for all holdings."""
     pf = dict(portfolio)
     holdings = []
     for h in pf.get("holdings") or []:
         row = dict(h)
-        row["days_held"] = int(row.get("days_held") or 0) + 1
+        row["days_held"] = effective_days_held(row, settings=settings)
         holdings.append(row)
     pf["holdings"] = holdings
     return pf
+
+
+def increment_holding_days(portfolio: dict[str, Any]) -> dict[str, Any]:
+    """Legacy counter bump; prefer sync_portfolio_holding_days from acquired_date."""
+    return sync_portfolio_holding_days(portfolio)
 
 
 def apply_auto_adjust(
@@ -251,6 +290,8 @@ def apply_auto_adjust(
     if not is_auto_adjust_enabled(settings):
         return ApplyResult(applied=False, portfolio=portfolio, message="auto_adjust 未启用")
 
+    settings = effective_settings(settings)
+
     action = getattr(decision, "action", None) or (decision.get("action") if isinstance(decision, dict) else None)
     blocked = getattr(decision, "blocked", False) if not isinstance(decision, dict) else decision.get("blocked", False)
     friction_blocked = (
@@ -265,7 +306,7 @@ def apply_auto_adjust(
     if action == "buy" and (blocked or friction_blocked):
         return ApplyResult(applied=False, portfolio=portfolio, message="买入信号被风控或摩擦成本阻断")
 
-    pf = copy_portfolio(portfolio)
+    pf = sync_portfolio_holding_days(copy_portfolio(portfolio), settings=settings)
     enriched = build_enriched_symbols(snapshot)
 
     if action == "sell":
@@ -288,12 +329,11 @@ def _apply_sell(
     if not holdings:
         return ApplyResult(applied=False, portfolio=pf, message="无持仓可卖")
 
-    lock_days = int(settings.get("trading", {}).get("holding_lock_days", 3))
+    lock_days = runtime_int_default(settings, "trading", "holding_lock_days")
     sellable = []
     for h in holdings:
         code = _normalize_code(str(h.get("code", "")))
-        days = h.get("days_held")
-        if days is not None and int(days) < lock_days:
+        if not holding_is_sellable(h, settings):
             continue
         row = dict(h)
         row.update(enriched.get(code, {}))
@@ -375,10 +415,26 @@ def _apply_buy(
     candidates.sort(key=lambda x: _symbol_score(x, None, settings), reverse=True)
     target = candidates[0]
     code = _normalize_code(str(target["code"]))
+
+    from agent_reach.daily_run.skill_rejected import trade_blocked_by_rejected
+
+    rejected = trade_blocked_by_rejected(
+        "buy",
+        code=code,
+        name=str(target.get("name", code)),
+        settings=settings,
+    )
+    if rejected:
+        return ApplyResult(
+            applied=False,
+            portfolio=pf,
+            message=f"已证伪策略阻断买入：{rejected}",
+        )
+
     price = float(_price_for(target, enriched))
 
     thresholds = settings.get("thresholds", {})
-    min_cash_ratio = float(thresholds.get("min_cash_ratio", 0.4))
+    min_cash_ratio = float(thresholds.get("min_cash_ratio", min_cash_ratio_default(settings)))
     total = float(pf.get("total") or 0)
     cash = float(pf.get("cash") or 0)
     if total <= 0:
@@ -423,7 +479,7 @@ def _apply_buy(
             "shares": shares,
             "cost": round(price, 4),
             "days_held": 0,
-            "acquired_date": date.today().isoformat(),
+            "acquired_date": trade_calendar.today_shanghai().isoformat(),
         }
     )
     pf["holdings"] = holdings
@@ -490,6 +546,10 @@ def _symbol_score(row: dict[str, Any], decision: Any, settings: dict[str, Any]) 
     pos = row.get("position_20d")
     if pos is not None:
         base += (0.5 - float(pos)) * 10
+    from agent_reach.daily_run.harness_policy import kronos_score_adjustment
+
+    code = _normalize_code(str(row.get("code", "")))
+    base += kronos_score_adjustment(code, settings)
     return base
 
 

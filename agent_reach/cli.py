@@ -263,6 +263,11 @@ def main():
     p_dr_h_show = p_dr_harness_sub.add_parser("show", help="Show harness entries")
     p_dr_h_show.add_argument("--limit", type=int, default=8, help="Entries per kind")
     p_dr_h_show.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_h_show.add_argument(
+        "--overlay",
+        action="store_true",
+        help="Show base vs effective harness runtime overlay diff",
+    )
     p_dr_h_list = p_dr_harness_sub.add_parser("list-refinements", help="List recent refinement events")
     p_dr_h_list.add_argument("--limit", type=int, default=10, help="Max events")
     p_dr_h_list.add_argument("--json", action="store_true", help="JSON output")
@@ -274,6 +279,20 @@ def main():
     p_dr_h_refine.add_argument("--ignore-cooldown", action="store_true",
                                help="Bypass harness LLM refine cooldown")
     p_dr_h_refine.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_h_migrate = p_dr_harness_sub.add_parser(
+        "migrate-settings",
+        help="Strip evolved keys from ~/.agent-reach/daily_run_settings.json",
+    )
+    p_dr_h_migrate.add_argument("--dry-run", action="store_true", help="Report only, do not write")
+    p_dr_h_migrate.add_argument("--path", default=None, help="Settings file path")
+    p_dr_h_migrate.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_h_sync = p_dr_harness_sub.add_parser(
+        "sync-settings",
+        help="Merge missing harness keys from repo defaults into user settings",
+    )
+    p_dr_h_sync.add_argument("--dry-run", action="store_true", help="Report only, do not write")
+    p_dr_h_sync.add_argument("--path", default=None, help="Settings file path")
+    p_dr_h_sync.add_argument("--json", action="store_true", help="JSON output")
 
     # ── doctor ──
     p_doctor = sub.add_parser("doctor", help="Check platform availability")
@@ -1515,7 +1534,12 @@ def _cmd_daily_run(args):
         print(md)
         if args.save:
             out = save_optimized_settings(result, settings)
-            print(f"\n✅ Saved optimized settings to {out}")
+            harness_mode = (settings.get("harness") or {}).get("threshold_evolution_mode") == "harness"
+            if harness_mode:
+                print(f"\n✅ Optimizer metadata saved to {out}")
+                print("   Thresholds written to harness policy (not static JSON)")
+            else:
+                print(f"\n✅ Saved optimized settings to {out}")
         if args.push:
             try:
                 send_card(
@@ -1970,6 +1994,18 @@ def _cmd_daily_run(args):
 
         action = args.harness_action
         if action == "show":
+            if args.overlay:
+                from agent_reach.daily_run.harness import format_harness_overlay_markdown
+                from agent_reach.daily_run.settings import effective_settings, load_settings
+
+                base = load_settings()
+                effective = effective_settings(base)
+                runtime = effective.get("harness_runtime") or {}
+                if args.json:
+                    print(_json.dumps(runtime, ensure_ascii=False, indent=2))
+                else:
+                    print(format_harness_overlay_markdown(base, effective))
+                return
             if args.json:
                 state = load_harness()
                 payload = {
@@ -2051,7 +2087,41 @@ def _cmd_daily_run(args):
                 )
             return
 
-        print("Usage: agent-reach daily-run harness {show|list-refinements|rollback|refine}")
+        if action == "migrate-settings":
+            from pathlib import Path as _Path
+
+            from agent_reach.daily_run.harness_migrate import migrate_user_settings, render_migrate_markdown
+
+            path = _Path(args.path).expanduser() if args.path else None
+            result = migrate_user_settings(path=path, dry_run=args.dry_run)
+            if args.json:
+                print(_json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print(render_migrate_markdown(result))
+                if result.get("saved"):
+                    print(f"\n✅ Settings migrated: {result.get('path')}")
+                elif result.get("dry_run") and result.get("removed"):
+                    print("\n(dry-run — re-run without --dry-run to apply)")
+            return
+
+        if action == "sync-settings":
+            from pathlib import Path as _Path
+
+            from agent_reach.daily_run.harness_migrate import render_sync_harness_markdown, sync_user_harness_keys
+
+            path = _Path(args.path).expanduser() if args.path else None
+            result = sync_user_harness_keys(path=path, dry_run=args.dry_run)
+            if args.json:
+                print(_json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print(render_sync_harness_markdown(result))
+                if result.get("saved"):
+                    print(f"\n✅ Harness keys synced: {result.get('path')}")
+                elif result.get("dry_run") and result.get("added"):
+                    print("\n(dry-run — re-run without --dry-run to apply)")
+            return
+
+        print("Usage: agent-reach daily-run harness {show|list-refinements|rollback|refine|migrate-settings|sync-settings}")
         sys.exit(1)
 
     if args.daily_action not in ("evaluate", "push"):

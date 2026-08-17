@@ -104,7 +104,14 @@ def run_data_audit(
             live = float(live_price)
             if ref > 0:
                 dev = abs(live - ref) / ref
-                max_dev = float(thresholds.get("max_price_deviation_pct", 0.08))
+                from agent_reach.daily_run.harness_policy import threshold_default
+
+                max_dev = float(
+                    thresholds.get(
+                        "max_price_deviation_pct",
+                        threshold_default(settings, "max_price_deviation_pct"),
+                    )
+                )
                 if dev > max_dev:
                     msg = f"价格锚点偏差 {dev:.1%} 超过阈值 {max_dev:.1%}"
                     if audit_cfg.get("block_on_price_deviation", True):

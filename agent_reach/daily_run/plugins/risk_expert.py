@@ -14,10 +14,13 @@ class RiskExpert(ExpertPlugin):
 
     def run(self, context: PluginContext) -> PluginResult:
         snap = context.snapshot
-        thresholds = context.settings.get("thresholds", {})
-        trading = context.settings.get("trading", {})
-        macro_veto = float(thresholds.get("macro_veto", 40))
-        min_cash = float(thresholds.get("min_cash_ratio", 0.4))
+        settings = context.settings
+        thresholds = settings.get("thresholds", {})
+        trading = settings.get("trading", {})
+        from agent_reach.daily_run.harness_policy import min_cash_ratio_default, runtime_float_default, threshold_default
+
+        macro_veto = float(thresholds.get("macro_veto", threshold_default(settings, "macro_veto")))
+        min_cash = float(thresholds.get("min_cash_ratio", min_cash_ratio_default(settings)))
 
         breakdown = snap.get("mss_breakdown") or {}
         mss = snap.get("mss_final")
@@ -69,7 +72,7 @@ class RiskExpert(ExpertPlugin):
         price = _f(snap.get("price"))
         ma20 = _f(snap.get("ma20"))
         if price is not None and ma20 is not None:
-            stop_pct = float(trading.get("stop_loss_ma20_pct", 0.04))
+            stop_pct = runtime_float_default(settings, "trading", "stop_loss_ma20_pct")
             stop = min(ma20, price * (1 - stop_pct))
             if price < ma20:
                 score -= 10

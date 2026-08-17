@@ -167,9 +167,11 @@ def _derive_mss_breakdown(
     settings: dict[str, Any],
 ) -> dict[str, float]:
     """Map live signals to MSS factor scores 0-100."""
+    from agent_reach.daily_run.harness_policy import threshold_default
+
     thresholds = settings.get("thresholds", {})
-    macro_veto = float(thresholds.get("macro_veto", 40))
-    aggressive = float(thresholds.get("aggressive_entry", 50))
+    macro_veto = float(thresholds.get("macro_veto", threshold_default(settings, "macro_veto")))
+    aggressive = float(thresholds.get("aggressive_entry", threshold_default(settings, "aggressive_entry")))
 
     fx = float(base.get("fx", 50))
     flow = float(base.get("flow", 50))

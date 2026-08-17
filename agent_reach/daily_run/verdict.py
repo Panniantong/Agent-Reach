@@ -58,11 +58,15 @@ def compute_verdict(snapshot: dict[str, Any], settings: dict[str, Any]) -> Verdi
     thresholds = settings.get("thresholds", {})
     trading = settings.get("trading", {})
 
-    macro_veto = float(thresholds.get("macro_veto", 40))
-    aggressive = float(thresholds.get("aggressive_entry", 50))
-    high_pos = float(thresholds.get("high_position_20d", 0.7))
-    min_vol_ratio = float(thresholds.get("min_volume_ratio", 1.0))
-    max_vwap_dev = float(thresholds.get("max_vwap_deviation_pct", 0.04))
+    from agent_reach.daily_run.harness_policy import threshold_default
+
+    macro_veto = float(thresholds.get("macro_veto", threshold_default(settings, "macro_veto")))
+    aggressive = float(thresholds.get("aggressive_entry", threshold_default(settings, "aggressive_entry")))
+    high_pos = float(thresholds.get("high_position_20d", threshold_default(settings, "high_position_20d")))
+    min_vol_ratio = float(thresholds.get("min_volume_ratio", threshold_default(settings, "min_volume_ratio")))
+    max_vwap_dev = float(
+        thresholds.get("max_vwap_deviation_pct", threshold_default(settings, "max_vwap_deviation_pct"))
+    )
 
     breakdown = snapshot.get("mss_breakdown") or {}
     mss = snapshot.get("mss_final")
@@ -141,7 +145,9 @@ def compute_verdict(snapshot: dict[str, Any], settings: dict[str, Any]) -> Verdi
     stop_loss = None
     entry = price
     if price is not None and ma20 is not None:
-        stop_pct = float(trading.get("stop_loss_ma20_pct", 0.04))
+        from agent_reach.daily_run.harness_policy import runtime_float_default
+
+        stop_pct = runtime_float_default(settings, "trading", "stop_loss_ma20_pct")
         stop_loss = round(min(ma20, price * (1 - stop_pct)), 2)
 
     invalidation = (

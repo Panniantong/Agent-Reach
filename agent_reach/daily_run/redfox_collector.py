@@ -444,10 +444,10 @@ def attach_redfox_close_markdown(
 ) -> tuple[str, Optional[RedfoxResult]]:
     """Reuse snapshot RedFox data; cross-validate vs market review when available."""
     cfg = settings or {}
-    if not redfox_enabled(cfg):
+    result = redfox_result_from_snapshot(snapshot)
+    if not redfox_enabled(cfg) and result is None:
         return "", None
 
-    result = redfox_result_from_snapshot(snapshot)
     if result is None:
         pf = merge_portfolio_for_redfox(snapshot)
         result = collect_redfox_context(pf, settings=cfg, workflow="close")

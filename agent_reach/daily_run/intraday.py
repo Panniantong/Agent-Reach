@@ -12,7 +12,13 @@ from typing import Any, Optional
 from agent_reach.daily_run.lookback import compute_lookback_mss, detect_mss_trend
 from agent_reach.daily_run.pipeline import evaluate_snapshot, render_markdown
 from agent_reach.daily_run.plugins.loader import run_experts
-from agent_reach.daily_run.settings import load_settings
+from agent_reach.daily_run.harness_policy import (
+    friction_min_return_default,
+    min_cash_ratio_default,
+    runtime_int_default,
+    threshold_default,
+)
+from agent_reach.daily_run.settings import effective_settings, load_settings
 from agent_reach.daily_run.trade_calendar import today_shanghai
 
 
@@ -119,7 +125,7 @@ def record_scan(
     state_path: Optional[Path] = None,
 ) -> dict[str, Any]:
     """Record one intraday data collection (S_n) after experts + evaluate."""
-    cfg = settings or load_settings()
+    cfg = effective_settings(settings)
     st = state or load_state(state_path)
 
     if len(st.scans) >= MAX_SCANS:
@@ -261,13 +267,13 @@ def should_evaluate_trade(
     state_path: Optional[Path] = None,
 ) -> bool:
     """Heuristic: trade after ≥3 scans, <5 trades, on trend shift or every 2nd scan."""
-    cfg = settings or load_settings()
+    cfg = effective_settings(settings)
     sched = cfg.get("schedule", {})
     if not sched.get("intraday_trade_enabled", True):
         return False
 
     st = state or load_state(state_path)
-    if len(st.scans) < int(sched.get("trade_min_scans", 3)):
+    if len(st.scans) < runtime_int_default(cfg, "schedule", "trade_min_scans"):
         return False
     if len(st.trades) >= MAX_TRADES:
         return False
@@ -280,7 +286,8 @@ def should_evaluate_trade(
     trend = detect_mss_trend(st.scans)
     if trend in ("turning_up", "turning_down", "rising", "falling"):
         return True
-    return len(st.scans) % int(sched.get("trade_every_n_scans", 2)) == 0
+    every_n = runtime_int_default(cfg, "schedule", "trade_every_n_scans")
+    return len(st.scans) % every_n == 0
 
 
 def apply_paper_trade(
@@ -301,7 +308,7 @@ def apply_paper_trade(
     from agent_reach.daily_run.snapshot_builder import load_portfolio, save_portfolio
     from agent_reach.daily_run.symbols import sync_snapshot_portfolio
 
-    cfg = settings or load_settings()
+    cfg = effective_settings(settings)
     pf = load_portfolio()
     if not is_auto_adjust_enabled(cfg):
         return ApplyResult(applied=False, portfolio=pf, message="auto_adjust 未启用")
@@ -357,7 +364,7 @@ def evaluate_trade(
     pre_evaluation: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     """Evaluate T_n trade opportunity using lookback MSS over recent scans."""
-    cfg = settings or load_settings()
+    cfg = effective_settings(settings)
     st = state or load_state(state_path)
 
     from agent_reach.daily_run.portfolio_manager import global_trades_today
@@ -447,7 +454,7 @@ def run_intraday(
     state_path: Optional[Path] = None,
 ) -> dict[str, Any]:
     """One-click intraday: record scan → optional trade eval → Feishu push."""
-    cfg = settings or load_settings()
+    cfg = effective_settings(settings)
     steps: list[str] = []
 
     scan_result = record_scan(
@@ -596,6 +603,21 @@ def render_intraday_trade_markdown(
     return "\n".join(lines)
 
 
+def _harness_overlay_note(settings: dict[str, Any]) -> str:
+    overlay = (settings.get("harness_runtime") or {}).get("threshold_overlay") or {}
+    if not overlay:
+        return ""
+    parts = []
+    for key, row in overlay.items():
+        if key == "min_cash_ratio":
+            parts.append(f"{key} {row['base']:.0%}→{row['effective']:.0%}")
+        elif key == "max_price_deviation_pct":
+            parts.append(f"{key} {row['base']:.1%}→{row['effective']:.1%}")
+        else:
+            parts.append(f"{key} {row['base']:.0f}→{row['effective']:.0f}")
+    return f"（harness: {', '.join(parts)}）"
+
+
 def _decide_trade(
     *,
     lookback_mss: float,
@@ -609,29 +631,30 @@ def _decide_trade(
 ) -> TradeDecision:
     thresholds = settings.get("thresholds", {})
     trading = settings.get("trading", {})
-    macro_veto = float(thresholds.get("macro_veto", 40))
-    aggressive = float(thresholds.get("aggressive_entry", 50))
-    min_cash = float(thresholds.get("min_cash_ratio", 0.4))
+    macro_veto = float(thresholds.get("macro_veto", threshold_default(settings, "macro_veto")))
+    aggressive = float(thresholds.get("aggressive_entry", threshold_default(settings, "aggressive_entry")))
+    min_cash = float(thresholds.get("min_cash_ratio", min_cash_ratio_default(settings)))
 
     trade_id = f"T{trade_index}"
     portfolio = snapshot.get("portfolio") or {}
     cash_ratio = portfolio.get("cash_ratio")
+    overlay_note = _harness_overlay_note(settings)
 
     exp_ret = expected_return_pct
     if exp_ret is None:
         exp_ret = _estimate_expected_return(lookback_mss, aggressive, macro_veto)
 
-    friction_blocked = not _passes_friction(exp_ret, trading)
+    friction_blocked = not _passes_friction(exp_ret, settings)
     blocked = verdict.blocked or report.get("blocked", False)
 
     if lookback_mss < macro_veto:
         return TradeDecision(
-            action="sell" if not _holding_locked(snapshot, settings) else "hold",
+            action="sell" if _has_sellable_holdings(snapshot, settings) else "hold",
             trade_id=trade_id,
             lookback_mss=lookback_mss,
             lookback_detail=[],
             trend=trend,
-            reasoning=f"Lookback MSS {lookback_mss:.0f} 低于否决线 {macro_veto:.0f}，宏观避险",
+            reasoning=f"Lookback MSS {lookback_mss:.0f} 低于否决线 {macro_veto:.0f}，宏观避险{overlay_note}",
             blocked=False,
             friction_blocked=False,
             expected_return_pct=exp_ret,
@@ -651,6 +674,27 @@ def _decide_trade(
         )
 
     if lookback_mss >= aggressive and trend in ("rising", "turning_up"):
+        buy_block = None
+        from agent_reach.daily_run.skill_rejected import trade_blocked_by_rejected
+
+        buy_block = trade_blocked_by_rejected(
+            "buy",
+            code=str(report.get("code") or ""),
+            name=str(report.get("name") or ""),
+            settings=settings,
+        )
+        if buy_block:
+            return TradeDecision(
+                action="hold",
+                trade_id=trade_id,
+                lookback_mss=lookback_mss,
+                lookback_detail=[],
+                trend=trend,
+                reasoning=f"已证伪策略阻断买入：{buy_block}{overlay_note}",
+                blocked=True,
+                friction_blocked=friction_blocked,
+                expected_return_pct=exp_ret,
+            )
         if cash_ratio is not None and cash_ratio < min_cash:
             return TradeDecision(
                 action="hold",
@@ -658,7 +702,7 @@ def _decide_trade(
                 lookback_mss=lookback_mss,
                 lookback_detail=[],
                 trend=trend,
-                reasoning=f"现金比例 {cash_ratio:.0%} 低于最低 {min_cash:.0%}，暂不加仓",
+                reasoning=f"现金比例 {cash_ratio:.0%} 低于最低 {min_cash:.0%}，暂不加仓{overlay_note}",
                 blocked=True,
                 friction_blocked=friction_blocked,
                 expected_return_pct=exp_ret,
@@ -681,7 +725,30 @@ def _decide_trade(
             lookback_mss=lookback_mss,
             lookback_detail=[],
             trend=trend,
-            reasoning=f"Lookback MSS {lookback_mss:.0f} ≥ {aggressive:.0f} 且趋势 {trend}，条件性建仓",
+            reasoning=f"Lookback MSS {lookback_mss:.0f} ≥ {aggressive:.0f} 且趋势 {trend}，条件性建仓{overlay_note}",
+            blocked=False,
+            friction_blocked=False,
+            expected_return_pct=exp_ret,
+        )
+
+    runtime = settings.get("harness_runtime") or {}
+    trade_signals = runtime.get("trade_signals") or {}
+    if (
+        trade_signals.get("defensive_trim")
+        and trend in ("falling", "turning_down")
+        and lookback_mss >= macro_veto
+        and _has_sellable_holdings(snapshot, settings)
+    ):
+        return TradeDecision(
+            action="sell",
+            trade_id=trade_id,
+            lookback_mss=lookback_mss,
+            lookback_detail=[],
+            trend=trend,
+            reasoning=(
+                f"Harness MSS预测偏离/偏差信号 + 趋势 {trend}，"
+                f"Lookback MSS {lookback_mss:.0f} ≥ 否决线 {macro_veto:.0f}，防御性减仓{overlay_note}"
+            ),
             blocked=False,
             friction_blocked=False,
             expected_return_pct=exp_ret,
@@ -693,17 +760,15 @@ def _decide_trade(
         lookback_mss=lookback_mss,
         lookback_detail=[],
         trend=trend,
-        reasoning=f"Lookback MSS {lookback_mss:.0f}，趋势 {trend}，维持观望",
+        reasoning=f"Lookback MSS {lookback_mss:.0f}，趋势 {trend}，维持观望{overlay_note}",
         blocked=False,
         friction_blocked=friction_blocked,
         expected_return_pct=exp_ret,
     )
 
 
-def _passes_friction(expected_return_pct: float, trading: dict[str, Any]) -> bool:
-    commission = float(trading.get("commission_rate", 0.0015)) * 2
-    slippage = float(trading.get("slippage_rate", 0.001)) * 2
-    return expected_return_pct > commission + slippage
+def _passes_friction(expected_return_pct: float, settings: dict[str, Any]) -> bool:
+    return expected_return_pct > friction_min_return_default(settings)
 
 
 def _estimate_expected_return(mss: float, aggressive: float, macro_veto: float) -> float:
@@ -715,13 +780,21 @@ def _estimate_expected_return(mss: float, aggressive: float, macro_veto: float) 
 
 
 def _holding_locked(snapshot: dict[str, Any], settings: dict[str, Any]) -> bool:
-    lock_days = int(settings.get("trading", {}).get("holding_lock_days", 3))
+    from agent_reach.daily_run.portfolio_manager import holding_is_sellable
+
     holdings = (snapshot.get("portfolio") or {}).get("holdings") or []
-    for h in holdings:
-        days_held = h.get("days_held")
-        if days_held is not None and int(days_held) < lock_days:
-            return True
-    return False
+    if not holdings:
+        return False
+    return not any(holding_is_sellable(h, settings) for h in holdings)
+
+
+def _has_sellable_holdings(snapshot: dict[str, Any], settings: dict[str, Any]) -> bool:
+    from agent_reach.daily_run.portfolio_manager import holding_is_sellable
+
+    return any(
+        holding_is_sellable(h, settings)
+        for h in (snapshot.get("portfolio") or {}).get("holdings") or []
+    )
 
 
 def _today_str() -> str:

@@ -494,24 +494,57 @@ def _upsert_texts(
     return changes, edits
 
 
-def _evidence_from_close(evidence: dict[str, Any]) -> tuple[list[str], list[str], list[str], list[str], str]:
-    memory: list[str] = list(evidence.get("rules") or [])
-    if not memory and evidence.get("verify"):
-        from agent_reach.daily_run.experience import _distill_rules
+def _close_specialized_jobs_enabled(cfg: dict[str, Any]) -> bool:
+    """True when verify/close_improve jobs handle close-derived harness evidence."""
+    jobs = cfg.get("jobs") or {}
+    if not isinstance(jobs, dict):
+        return False
+    return bool(jobs.get("verify")) or bool(jobs.get("close_improve"))
 
-        memory = _distill_rules(
-            evidence.get("snapshot") or {},
-            evidence.get("verify") or {},
-            evidence.get("curve"),
-            forecast_review=evidence.get("forecast_review"),
-        )
+
+def _weekly_specialized_jobs_enabled(cfg: dict[str, Any]) -> bool:
+    """True when skill_closure/run_guard jobs handle weekly-derived harness evidence."""
+    jobs = cfg.get("jobs") or {}
+    if not isinstance(jobs, dict):
+        return False
+    return bool(jobs.get("skill_closure")) or bool(jobs.get("run_guard"))
+
+
+def _forecast_specialized_jobs_enabled(cfg: dict[str, Any]) -> bool:
+    """True when forecast_calibrate job handles MSS/calibration harness evidence."""
+    jobs = cfg.get("jobs") or {}
+    if not isinstance(jobs, dict):
+        return False
+    return bool(jobs.get("forecast_calibrate"))
+
+
+def _evidence_from_close(
+    evidence: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> tuple[list[str], list[str], list[str], list[str], str]:
+    cfg = _harness_cfg(settings)
+    specialized = _close_specialized_jobs_enabled(cfg)
+
+    memory: list[str] = []
+    if not specialized:
+        memory = list(evidence.get("rules") or [])
+        if not memory and evidence.get("verify"):
+            from agent_reach.daily_run.experience import _distill_rules
+
+            memory = _distill_rules(
+                evidence.get("snapshot") or {},
+                evidence.get("verify") or {},
+                evidence.get("curve"),
+                forecast_review=evidence.get("forecast_review"),
+            )
     policy: list[str] = []
     playbook: list[str] = []
     plan: list[str] = []
 
     verify = evidence.get("verify") or {}
     name = evidence.get("name") or verify.get("code") or ""
-    if verify.get("summary"):
+    if not specialized and verify.get("summary"):
         memory.append(str(verify["summary"]))
 
     pf = evidence.get("portfolio_summary") or {}
@@ -522,15 +555,25 @@ def _evidence_from_close(evidence: dict[str, Any]) -> tuple[list[str], list[str]
         pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
         memory.append(f"{name} 收盘组合盈亏 {sign}¥{float(pnl):,.0f}{pct_s}".strip())
 
-    for rec in (verify.get("recommendations") or [])[:2]:
-        playbook.append(f"明日：{rec}")
-        plan.append(f"假设：{rec}（待明日 verify）")
+    if not specialized:
+        for rec in (verify.get("recommendations") or [])[:2]:
+            playbook.append(f"明日：{rec}")
+            plan.append(f"假设：{rec}（待明日 verify）")
 
     summary = f"close {name or verify.get('code', '')}".strip()
+    if specialized:
+        summary = f"{summary} residual".strip()
     return memory, policy, playbook, plan, summary
 
 
-def _evidence_from_weekly(evidence: dict[str, Any]) -> tuple[list[str], list[str], list[str], list[str], str]:
+def _evidence_from_weekly(
+    evidence: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> tuple[list[str], list[str], list[str], list[str], str]:
+    cfg = _harness_cfg(settings)
+    specialized = _weekly_specialized_jobs_enabled(cfg)
+
     report = evidence.get("report") or evidence
     memory: list[str] = []
     playbook: list[str] = []
@@ -544,18 +587,19 @@ def _evidence_from_weekly(evidence: dict[str, Any]) -> tuple[list[str], list[str
         pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
         memory.append(f"本周组合净值 {sign}¥{float(pnl):,.0f}{pct_s}")
 
-    for item in report.get("process_improvements") or []:
-        title = item.get("title") or "改进"
-        detail = item.get("detail") or ""
-        action = item.get("action") or ""
-        playbook.append(f"{title} — {detail}" + (f"；执行：{action}" if action else ""))
-        if str(item.get("priority") or "") in ("high", "medium"):
-            plan.append(f"下周：{title}" + (f" → {action}" if action else ""))
+    if not specialized:
+        for item in report.get("process_improvements") or []:
+            title = item.get("title") or "改进"
+            detail = item.get("detail") or ""
+            action = item.get("action") or ""
+            playbook.append(f"{title} — {detail}" + (f"；执行：{action}" if action else ""))
+            if str(item.get("priority") or "") in ("high", "medium"):
+                plan.append(f"下周：{title}" + (f" → {action}" if action else ""))
 
-    for item in report.get("skill_learning") or []:
-        title = item.get("title") or "技能"
-        summary = item.get("summary") or ""
-        memory.append(f"{title}：{summary}")
+        for item in report.get("skill_learning") or []:
+            title = item.get("title") or "技能"
+            summary = item.get("summary") or ""
+            memory.append(f"{title}：{summary}")
 
     for snippet in report.get("experience_snippets") or []:
         memory.append(str(snippet)[:200])
@@ -565,10 +609,20 @@ def _evidence_from_weekly(evidence: dict[str, Any]) -> tuple[list[str], list[str
 
     ws = report.get("week_start") or ""
     we = report.get("week_end") or ""
-    return memory, policy, playbook, plan, f"weekly {ws}~{we}".strip()
+    summary = f"weekly {ws}~{we}".strip()
+    if specialized:
+        summary = f"{summary} residual".strip()
+    return memory, policy, playbook, plan, summary
 
 
-def _evidence_from_forecast(evidence: dict[str, Any]) -> tuple[list[str], list[str], list[str], list[str], str]:
+def _evidence_from_forecast(
+    evidence: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> tuple[list[str], list[str], list[str], list[str], str]:
+    cfg = _harness_cfg(settings)
+    specialized = _forecast_specialized_jobs_enabled(cfg)
+
     forecast = evidence.get("forecast") or evidence
     memory: list[str] = []
     playbook: list[str] = []
@@ -579,8 +633,13 @@ def _evidence_from_forecast(evidence: dict[str, Any]) -> tuple[list[str], list[s
     we = forecast.get("week_end") or ""
     memory.append(f"下周预测窗口 {ws}~{we}")
 
-    for note in forecast.get("notes") or []:
-        memory.append(str(note)[:200])
+    if not specialized:
+        for note in forecast.get("notes") or []:
+            memory.append(str(note)[:200])
+
+        mss = forecast.get("mss_daily") or {}
+        if mss.get("summary"):
+            memory.append(str(mss["summary"])[:200])
 
     symbols = forecast.get("symbols") or {}
     bullish: list[str] = []
@@ -606,11 +665,10 @@ def _evidence_from_forecast(evidence: dict[str, Any]) -> tuple[list[str], list[s
         playbook.append(line)
         plan.append(f"偏空验证：{line}")
 
-    mss = forecast.get("mss_daily") or {}
-    if mss.get("summary"):
-        memory.append(str(mss["summary"])[:200])
-
-    return memory, policy, playbook, plan, f"forecast {ws}~{we}".strip()
+    summary = f"forecast {ws}~{we}".strip()
+    if specialized:
+        summary = f"{summary} residual".strip()
+    return memory, policy, playbook, plan, summary
 
 
 def refine_after_job(
@@ -627,11 +685,17 @@ def refine_after_job(
         return {"skipped": True, "reason": f"job {job} disabled in harness.jobs"}
 
     if job == "close":
-        memory, policy, playbook, plan, ev_summary = _evidence_from_close(evidence)
+        memory, policy, playbook, plan, ev_summary = _evidence_from_close(evidence, settings=settings)
     elif job == "weekly":
-        memory, policy, playbook, plan, ev_summary = _evidence_from_weekly(evidence)
+        memory, policy, playbook, plan, ev_summary = _evidence_from_weekly(evidence, settings=settings)
     elif job == "forecast":
-        memory, policy, playbook, plan, ev_summary = _evidence_from_forecast(evidence)
+        memory, policy, playbook, plan, ev_summary = _evidence_from_forecast(evidence, settings=settings)
+    elif job == "code_walk":
+        memory = [str(x) for x in (evidence.get("memory") or []) if str(x).strip()]
+        policy = [str(x) for x in (evidence.get("policy") or []) if str(x).strip()]
+        playbook = [str(x) for x in (evidence.get("playbook") or []) if str(x).strip()]
+        plan = [str(x) for x in (evidence.get("plan") or []) if str(x).strip()]
+        ev_summary = str(evidence.get("summary") or "code_walk")
     else:
         memory = [str(x) for x in (evidence.get("memory") or []) if str(x).strip()]
         policy = [str(x) for x in (evidence.get("policy") or []) if str(x).strip()]
@@ -690,6 +754,44 @@ def _llm_job_enabled(llm_cfg: dict[str, Any], job: str) -> bool:
     if isinstance(jobs, dict) and job in jobs:
         return bool(jobs[job])
     return job in {"close", "weekly", "forecast"}
+
+
+# Layer A stays deterministic; LLM summarize only on low-frequency jobs after Layer A.
+_LLM_SUMMARIZE_BLOCKED_JOBS: frozenset[str] = frozenset({"morning", "intraday"})
+_LLM_SUMMARIZE_DEFAULT_JOBS: tuple[str, ...] = ("skill_closure", "code_walk")
+
+
+def _llm_summarize_enabled(llm_cfg: dict[str, Any]) -> bool:
+    if llm_cfg.get("enabled") is False:
+        return False
+    return llm_cfg.get("summarize_enabled", True) is not False
+
+
+def _llm_summarize_job_enabled(llm_cfg: dict[str, Any], job: str) -> bool:
+    if job in _LLM_SUMMARIZE_BLOCKED_JOBS:
+        return False
+    raw = llm_cfg.get("summarize_jobs")
+    if raw is None:
+        return job in _LLM_SUMMARIZE_DEFAULT_JOBS
+    if isinstance(raw, dict):
+        return bool(raw.get(job))
+    if isinstance(raw, (list, tuple, set)):
+        return job in raw
+    return False
+
+
+def _within_summarize_cooldown(state: HarnessState, llm_cfg: dict[str, Any]) -> bool:
+    hours = float(llm_cfg.get("summarize_cooldown_hours") or llm_cfg.get("cooldown_hours") or 24)
+    if hours <= 0:
+        return False
+    cutoff = datetime.now(timezone.utc).timestamp() - hours * 3600
+    for event in reversed(state.refinements):
+        if not str(event.trigger or "").startswith("llm_summarize:"):
+            continue
+        created = _parse_iso(event.created_at)
+        if created and created.timestamp() >= cutoff:
+            return True
+    return False
 
 
 def _parse_iso(ts: str) -> Optional[datetime]:
@@ -935,7 +1037,7 @@ def plan_harness_refinement(
 
     provider = str(llm_cfg.get("provider") or "auto")
     if resolve_chat_provider(provider):
-        memory, policy, playbook, plan, ev_summary = _evidence_from_job(job, evidence)
+        memory, policy, playbook, plan, ev_summary = _evidence_from_job(job, evidence, settings=settings)
         payload = chat_json(
             system=(
                 "你是 daily-run harness 规划器。输出 JSON："
@@ -968,13 +1070,18 @@ def plan_harness_refinement(
     return plan
 
 
-def _evidence_from_job(job: str, evidence: dict[str, Any]) -> tuple[list[str], list[str], list[str], list[str], str]:
+def _evidence_from_job(
+    job: str,
+    evidence: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> tuple[list[str], list[str], list[str], list[str], str]:
     if job == "close":
-        return _evidence_from_close(evidence)
+        return _evidence_from_close(evidence, settings=settings)
     if job == "weekly":
-        return _evidence_from_weekly(evidence)
+        return _evidence_from_weekly(evidence, settings=settings)
     if job == "forecast":
-        return _evidence_from_forecast(evidence)
+        return _evidence_from_forecast(evidence, settings=settings)
     memory = [str(x) for x in (evidence.get("memory") or []) if str(x).strip()]
     policy = [str(x) for x in (evidence.get("policy") or []) if str(x).strip()]
     playbook = [str(x) for x in (evidence.get("playbook") or []) if str(x).strip()]
@@ -1070,7 +1177,7 @@ def refine_after_job_llm(
         settings=settings,
         instructions=str(review.get("instructions") or ""),
     )
-    _, _, _, _, ev_summary = _evidence_from_job(job, evidence)
+    _, _, _, _, ev_summary = _evidence_from_job(job, evidence, settings=settings)
     edits, changes = apply_harness_proposal(
         state,
         proposal,
@@ -1100,4 +1207,391 @@ def refine_after_job_llm(
         "proposal_summary": proposal.get("summary"),
         "planner": proposal.get("planner") or "deterministic",
         "state_path": str(path),
+    }
+
+
+def refine_after_job_llm_summarize(
+    job: str,
+    *,
+    evidence: dict[str, Any],
+    settings: Optional[dict[str, Any]] = None,
+    layer_a_result: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Optional post-Layer-A LLM synthesis for low-frequency jobs (skill_closure, code_walk).
+
+    Requires API key; does not fall back to deterministic planner (Layer A already wrote facts).
+    """
+    cfg = _harness_cfg(settings)
+    llm_cfg = _llm_refine_cfg(settings)
+    if cfg.get("enabled") is False:
+        return {"skipped": True, "reason": "harness disabled", "job": job}
+    if not _llm_summarize_enabled(llm_cfg):
+        return {"skipped": True, "reason": "llm_summarize disabled", "job": job}
+    if not _llm_summarize_job_enabled(llm_cfg, job):
+        return {"skipped": True, "reason": f"llm_summarize job {job} not allowed", "job": job}
+    if layer_a_result and layer_a_result.get("skipped"):
+        return {"skipped": True, "reason": "layer_a skipped", "job": job}
+
+    from agent_reach.daily_run.llm_chat import resolve_chat_provider
+
+    provider = str(llm_cfg.get("provider") or "auto")
+    if not resolve_chat_provider(provider):
+        return {"skipped": True, "reason": "no llm provider", "job": job}
+
+    state = load_harness()
+    if _within_summarize_cooldown(state, llm_cfg):
+        return {"skipped": True, "reason": "llm summarize cooldown active", "job": job}
+
+    baseline = state.clone()
+    instructions = (
+        "Layer A 已写入原子事实；仅补充不重复的综合 playbook/policy edits，"
+        "最多 4 条；禁止改写阈值数字；content 必须中文且可执行。"
+    )
+    proposal = plan_harness_refinement(
+        job,
+        evidence,
+        baseline,
+        settings=settings,
+        instructions=instructions,
+    )
+    if proposal.get("planner") != "llm":
+        return {
+            "skipped": True,
+            "reason": "llm planner unavailable",
+            "job": job,
+            "proposal": proposal,
+        }
+
+    _, _, _, _, ev_summary = _evidence_from_job(job, evidence, settings=settings)
+    edits, changes = apply_harness_proposal(
+        state,
+        proposal,
+        job=job,
+        baseline_state=baseline,
+        evidence=f"summarize:{ev_summary}",
+    )
+    if not changes:
+        return {
+            "skipped": True,
+            "reason": "empty summarize proposal",
+            "job": job,
+            "proposal": proposal,
+        }
+
+    trim_changes = state.trim(_limits(cfg))
+    changes.extend(trim_changes)
+    event = state.record_refinement(
+        job=job,
+        trigger=f"llm_summarize:{job}",
+        changes=changes,
+        evidence=str(proposal.get("summary") or ev_summary),
+        edits=edits,
+    )
+    path = state.save()
+    return {
+        "skipped": False,
+        "job": job,
+        "refinement_id": event.id,
+        "changes": len(changes),
+        "proposal_summary": proposal.get("summary"),
+        "planner": "llm",
+        "layer": "summarize",
+        "state_path": str(path),
+    }
+
+
+_OVERLAY_SECTION_LABELS: dict[str, str] = {
+    "threshold_overlay": "阈值",
+    "runtime_overlay": "运行时",
+    "forecast_overlay": "MSS 预测",
+    "lookback_overlay": "Lookback 权重",
+    "mss_weights_overlay": "MSS 权重",
+}
+
+
+def _collect_harness_refinement_layers(harness_result: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    """Collect refinement blocks from nested harness session payloads."""
+    layers: list[tuple[str, dict[str, Any]]] = []
+    seen_ids: set[str] = set()
+    skip_keys = frozenset(
+        {"effective_overlay", "total_changes", "auto_rollback", "skipped", "error", "reason", "message"}
+    )
+
+    def _add(label: str, layer: dict[str, Any]) -> None:
+        rid = str(layer.get("refinement_id") or "")
+        if not rid or layer.get("skipped") or rid in seen_ids:
+            return
+        seen_ids.add(rid)
+        layers.append((label, layer))
+
+    def _walk(prefix: str, block: Any) -> None:
+        if not isinstance(block, dict):
+            return
+        if block.get("refinement_id") is not None and (
+            block.get("changes") is not None or block.get("planner") is not None or block.get("job")
+        ):
+            _add(prefix or str(block.get("job") or "refine"), block)
+            return
+        for key, value in block.items():
+            if key in skip_keys:
+                continue
+            child_prefix = f"{prefix}.{key}" if prefix else str(key)
+            if isinstance(value, dict):
+                _walk(child_prefix, value)
+
+    if isinstance(harness_result, dict):
+        _walk("", harness_result)
+    return layers
+
+
+def format_harness_errors_markdown(errors: list[str]) -> str:
+    """Markdown block for harness workflow errors."""
+    cleaned = [str(e).strip() for e in errors if str(e).strip()]
+    if not cleaned:
+        return ""
+    lines = ["**Harness 异常**"]
+    lines.extend(f"- ⚠️ {err}" for err in cleaned)
+    return "\n".join(lines)
+
+
+def format_harness_rollback_markdown(rollback: dict[str, Any], *, job: str = "close") -> str:
+    """Standalone markdown for bad-trade auto rollback notification."""
+    if not rollback.get("triggered"):
+        return ""
+    job_label = {"close": "收盘", "weekly": "周报", "forecast": "预测", "morning": "早盘", "intraday": "盘中"}.get(
+        job, job
+    )
+    pnl_label = rollback.get("pnl_label") or "PnL"
+    lines = [
+        f"**Harness 坏交易回滚 · {job_label}**",
+        "",
+        f"- {pnl_label} **{rollback.get('pnl_pct')}%** ≤ 阈值 **{rollback.get('threshold')}%**",
+        f"- 已撤销 **{rollback.get('count', 0)}** 次 refine",
+    ]
+    for item in rollback.get("rolled_back") or []:
+        rid = item.get("refinement_id") or item.get("rolled_back") or ""
+        if rid:
+            lines.append(f"- 回滚 `{rid}`")
+    return "\n".join(lines)
+
+
+def format_harness_push_markdown(
+    harness_result: dict[str, Any],
+    *,
+    job: str = "close",
+    harness_errors: Optional[list[str]] = None,
+) -> str:
+    """Markdown card summarizing harness refinements for Feishu push."""
+    layers = _collect_harness_refinement_layers(harness_result)
+    rollback = harness_result.get("auto_rollback") or {}
+    errors_md = format_harness_errors_markdown(list(harness_errors or []))
+
+    if not layers and harness_result.get("skipped"):
+        body = f"**Harness {job}** · 跳过：{harness_result.get('error', 'unknown')}"
+        if errors_md:
+            body += f"\n\n{errors_md}"
+        return body
+    if not layers:
+        if rollback.get("triggered"):
+            body = format_harness_rollback_markdown(rollback, job=job)
+            if errors_md:
+                body += f"\n\n{errors_md}"
+            return body
+        return errors_md
+
+    job_label = {
+        "close": "收盘",
+        "weekly": "周报",
+        "forecast": "预测",
+        "morning": "早盘",
+        "intraday": "盘中",
+    }.get(job, job)
+    lines = [f"**Harness 进化 · {job_label}**"]
+    total_changes = 0
+    for label, layer in layers:
+        changes = int(layer.get("changes") or 0)
+        total_changes += changes
+        planner = layer.get("planner") or layer.get("layer") or label
+        rid = layer.get("refinement_id") or ""
+        summary = str(layer.get("proposal_summary") or layer.get("reason") or "").strip()
+        line = f"- `{rid}` · {planner} · {changes} 项变更"
+        if summary:
+            line += f" · {summary[:80]}"
+        lines.append(line)
+    if harness_result.get("skipped") and harness_result.get("error"):
+        lines.append(f"- ⚠️ 部分跳过：{harness_result['error']}")
+    if rollback.get("triggered"):
+        pnl_label = rollback.get("pnl_label") or "PnL"
+        lines.append(
+            f"\n⚠️ **坏交易回滚** · {pnl_label} {rollback.get('pnl_pct')}% ≤ "
+            f"{rollback.get('threshold')}% · 已撤销 {rollback.get('count', 0)} 次 refine"
+        )
+    lines.append(f"\n合计 **{total_changes}** 项 harness 变更")
+    body = "\n".join(lines)
+    if errors_md:
+        body += f"\n\n{errors_md}"
+    return body
+
+
+def format_harness_overlay_markdown(
+    base_settings: dict[str, Any],
+    effective_settings: dict[str, Any],
+) -> str:
+    """Human-readable base vs effective harness overlay diff."""
+    runtime = dict((effective_settings or {}).get("harness_runtime") or {})
+    if not runtime:
+        overlay_on = bool(((base_settings or {}).get("harness") or {}).get("runtime_overlay", True))
+        if not overlay_on:
+            return "Harness runtime overlay disabled — no effective diff."
+        return "Harness runtime overlay active — no parameter changes from harness entries."
+
+    lines = ["Harness overlay (base → effective):"]
+    for section, label in _OVERLAY_SECTION_LABELS.items():
+        block = runtime.get(section)
+        if not block:
+            continue
+        lines.append(f"\n**{label}**")
+        if section == "lookback_overlay":
+            lb = block.get("lookback_weights") or block
+            base_vals = lb.get("base") or []
+            eff_vals = lb.get("effective") or []
+            lines.append(f"- lookback_weights: {base_vals} → {eff_vals}")
+            continue
+        for key, change in block.items():
+            if not isinstance(change, dict):
+                continue
+            base_val = change.get("base")
+            eff_val = change.get("effective")
+            lines.append(f"- {key}: {base_val} → {eff_val}")
+
+    trade_signals = runtime.get("trade_signals") or {}
+    if trade_signals:
+        active = [k for k, v in trade_signals.items() if v]
+        if active:
+            lines.append("\n**交易信号**")
+            lines.extend(f"- {k}: {trade_signals[k]}" for k in active)
+
+    for side in ("kronos_bullish", "kronos_bearish"):
+        bias = runtime.get(side) or {}
+        if bias:
+            lines.append(f"\n**{side}**")
+            for code, val in list(bias.items())[:8]:
+                lines.append(f"- {code}: {val}")
+    return "\n".join(lines)
+
+
+def auto_rollback_on_bad_trade(
+    *,
+    portfolio_summary: Optional[dict[str, Any]] = None,
+    harness_result: Optional[dict[str, Any]] = None,
+    settings: Optional[dict[str, Any]] = None,
+    job: str = "close",
+) -> dict[str, Any]:
+    """Rollback session harness refinements when PnL breaches configured threshold."""
+    cfg = _harness_cfg(settings)
+    if not cfg.get("auto_rollback_on_bad_trade"):
+        return {"skipped": True, "reason": "disabled"}
+
+    if job == "forecast":
+        return {"skipped": True, "reason": "forecast has no rollback threshold"}
+
+    if job == "weekly":
+        threshold = float(
+            cfg.get("bad_trade_weekly_pnl_pct")
+            if cfg.get("bad_trade_weekly_pnl_pct") is not None
+            else -2.0
+        )
+        pct = (portfolio_summary or {}).get("weekly_pnl_pct")
+        if pct is None:
+            pct = (portfolio_summary or {}).get("daily_pnl_pct")
+        pnl_label = "周PnL"
+    else:
+        threshold = float(cfg.get("bad_trade_pnl_pct") if cfg.get("bad_trade_pnl_pct") is not None else -1.0)
+        pct = (portfolio_summary or {}).get("daily_pnl_pct")
+        pnl_label = "日PnL"
+
+    if pct is None:
+        return {"skipped": True, "reason": "no pnl_pct", "threshold": threshold, "job": job}
+    if float(pct) > threshold:
+        return {
+            "skipped": True,
+            "reason": "pnl above threshold",
+            "pnl_pct": pct,
+            "threshold": threshold,
+            "job": job,
+            "pnl_label": pnl_label,
+        }
+
+    layers = _collect_harness_refinement_layers(harness_result or {})
+    refinement_ids = [layer.get("refinement_id") for _, layer in layers if layer.get("refinement_id")]
+    rolled_back: list[dict[str, Any]] = []
+    for refinement_id in reversed(refinement_ids):
+        try:
+            result = rollback_refinement(str(refinement_id))
+            rolled_back.append({"refinement_id": refinement_id, **result})
+        except ValueError:
+            continue
+    return {
+        "triggered": True,
+        "pnl_pct": pct,
+        "pnl_label": pnl_label,
+        "threshold": threshold,
+        "job": job,
+        "rolled_back": rolled_back,
+        "count": len(rolled_back),
+    }
+
+
+def build_manifest_harness_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    """Compact harness refinement summary for run manifests."""
+    refinements: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def _walk(obj: Any) -> None:
+        if isinstance(obj, dict):
+            if obj is payload and "harness_summary" in obj:
+                return
+            refinement_id = obj.get("refinement_id")
+            if refinement_id and (
+                obj.get("changes") is not None or obj.get("skipped") is not None
+            ):
+                key = "|".join(
+                    str(x)
+                    for x in (
+                        refinement_id,
+                        obj.get("job"),
+                        obj.get("layer"),
+                        obj.get("planner"),
+                    )
+                )
+                if key not in seen:
+                    seen.add(key)
+                    refinements.append(
+                        {
+                            "job": obj.get("job"),
+                            "refinement_id": refinement_id,
+                            "changes": obj.get("changes"),
+                            "skipped": obj.get("skipped"),
+                            "reason": obj.get("reason"),
+                            "planner": obj.get("planner"),
+                            "layer": obj.get("layer"),
+                        }
+                    )
+            for value in obj.values():
+                _walk(value)
+        elif isinstance(obj, list):
+            for value in obj:
+                _walk(value)
+
+    _walk(payload)
+    errors = list(payload.get("harness_errors") or [])
+    total_changes = sum(
+        int(item.get("changes") or 0)
+        for item in refinements
+        if not item.get("skipped")
+    )
+    return {
+        "refinements": refinements,
+        "total_changes": total_changes,
+        "errors": errors,
     }

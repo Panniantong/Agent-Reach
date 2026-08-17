@@ -84,9 +84,14 @@ def verify_snapshots(
     settings: Optional[dict[str, Any]] = None,
 ) -> VerifyResult:
     """Compare two snapshots and explain deviations."""
-    cfg = settings or load_settings()
+    from agent_reach.daily_run.settings import effective_settings
+    from agent_reach.daily_run.harness_policy import threshold_default
+
+    cfg = effective_settings(settings)
     thresholds = cfg.get("thresholds", {})
-    max_price_dev = float(thresholds.get("max_price_deviation_pct", 0.08))
+    max_price_dev = float(
+        thresholds.get("max_price_deviation_pct", threshold_default(cfg, "max_price_deviation_pct"))
+    )
 
     code = current.get("code") or baseline.get("code")
     name = current.get("name") or baseline.get("name")

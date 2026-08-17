@@ -58,7 +58,7 @@ def validate_settings(data: dict[str, Any]) -> None:
     thresholds = data.get("thresholds")
     if not isinstance(thresholds, dict):
         raise ValueError("settings.thresholds must be an object")
-    for key in ("macro_veto", "aggressive_entry", "max_snapshot_age_hours"):
+    for key in ("max_snapshot_age_hours",):
         if key not in thresholds:
             raise ValueError(f"settings.thresholds missing {key}")
 
@@ -111,3 +111,14 @@ def save_user_settings(data: dict[str, Any], *, path: Path | None = None) -> Pat
 
 def user_settings_path() -> Path:
     return _USER_PATH
+
+
+def effective_settings(settings: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Settings with optional harness policy/memory threshold overlay."""
+    cfg = deepcopy(settings) if settings is not None else load_settings()
+    try:
+        from agent_reach.daily_run.harness_policy import apply_harness_policy_overlay
+
+        return apply_harness_policy_overlay(cfg)
+    except Exception:
+        return cfg

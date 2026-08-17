@@ -33,21 +33,31 @@ def _portfolio_is_empty(data: dict[str, Any]) -> bool:
     return not holdings and not watchlist
 
 
+def _finalize_portfolio(data: dict[str, Any]) -> dict[str, Any]:
+    """Sync derived portfolio fields whenever config is loaded from disk."""
+    if not data.get("holdings"):
+        return data
+    from agent_reach.daily_run.portfolio_manager import sync_portfolio_holding_days
+    from agent_reach.daily_run.settings import load_settings
+
+    return sync_portfolio_holding_days(data, settings=load_settings())
+
+
 def load_portfolio(path: Optional[Path] = None) -> dict[str, Any]:
     p = path or default_portfolio_path()
     if p.exists():
         data = json.loads(p.read_text(encoding="utf-8"))
         if not _portfolio_is_empty(data):
-            return data
+            return _finalize_portfolio(data)
 
     for fallback in (repo_portfolio_path(), example_portfolio_path()):
         if fallback.exists():
             data = json.loads(fallback.read_text(encoding="utf-8"))
             if not _portfolio_is_empty(data):
-                return data
+                return _finalize_portfolio(data)
 
     if p.exists():
-        return json.loads(p.read_text(encoding="utf-8"))
+        return _finalize_portfolio(json.loads(p.read_text(encoding="utf-8")))
 
     raise FileNotFoundError(
         f"未找到持仓配置：{p}。可复制 config/daily_run_portfolio.json 到该路径"
@@ -55,6 +65,10 @@ def load_portfolio(path: Optional[Path] = None) -> dict[str, Any]:
 
 
 def save_portfolio(portfolio: dict[str, Any], path: Optional[Path] = None) -> Path:
+    from agent_reach.daily_run.portfolio_manager import sync_portfolio_holding_days
+    from agent_reach.daily_run.settings import load_settings
+
+    portfolio = sync_portfolio_holding_days(portfolio, settings=load_settings())
     p = path or default_portfolio_path()
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(portfolio, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

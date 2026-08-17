@@ -89,11 +89,9 @@ ${PY} -m agent_reach.cli doctor --json
 
 索引：[references/README.md](daily_run/references/README.md)
 
-## 📋 下周执行清单（周六自动更新 · 外链）
+## 📋 下周执行清单（周六自动更新 · 外链 2026-08-10~2026-08-14）
 
 > **动态片段** `~/.agent-reach/daily_run/skill/playbook.md` · 索引 `next_week_playbook.json`
-
-> 盘中/收盘执行算法与时间线 — 详见 [references/schedule-ops.md](daily_run/references/schedule-ops.md)（L1，勿在 L0 通读）
 
 ## 🏷️ Invocation 标记（cron vs 手工）
 
@@ -152,11 +150,9 @@ ${PY} -m agent_reach.cli doctor --json
 
 ---
 
-## 🧠 股票大师实战经验沉淀库 (每日收盘更新)
+## 🧠 股票大师实战经验沉淀库
 
 > **动态片段** `~/.agent-reach/daily_run/skill/experience_latest.md` · 归档 `~/.agent-reach/daily_run/archives/skill/`
-
----
 
 ## 🛠️ 运维与排障指南
 

@@ -40,16 +40,37 @@ def resolve_skill_writeback_paths(settings: Optional[dict[str, Any]] = None) -> 
     return paths
 
 
-def _load_rules_summary(limit: int = 5) -> list[str]:
-    path = Path.home() / ".agent-reach" / "daily_run" / "experience" / "rules_summary.json"
-    if not path.exists():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        rules = list(data.get("rules") or [])
-        return rules[-limit:]
-    except (json.JSONDecodeError, OSError):
-        return []
+def resolve_cursor_agent_skill_sources() -> list[Path]:
+    """Repo Cursor agent skill manuals (harness / code-walk)."""
+    root = _repo_root()
+    sources: list[Path] = []
+    for rel in (
+        ".cursor/skills/daily-run-harness-skills/SKILL.md",
+        ".cursor/skills/daily-run-code-walk/SKILL.md",
+    ):
+        path = root / rel
+        if path.is_file():
+            sources.append(path)
+    return sources
+
+
+def sync_cursor_agent_skills_to_local() -> list[str]:
+    """Copy repo .cursor/skills/daily-run-* manuals to ~/.cursor/skills/."""
+    import shutil
+
+    synced: list[str] = []
+    for source in resolve_cursor_agent_skill_sources():
+        dest = Path.home() / ".cursor" / "skills" / source.parent.name / "SKILL.md"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, dest)
+        synced.append(str(dest))
+    return synced
+
+
+def _load_rules_summary(limit: int = 5, *, settings: Optional[dict[str, Any]] = None) -> list[str]:
+    from agent_reach.daily_run.experience import load_experience_rules
+
+    return load_experience_rules(limit, settings=settings)
 
 
 def _format_money(value: Optional[float]) -> str:

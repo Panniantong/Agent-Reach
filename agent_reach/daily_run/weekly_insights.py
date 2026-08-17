@@ -89,13 +89,13 @@ def _local_skill_inventory() -> list[dict[str, str]]:
 
 
 def _load_rules_summary() -> list[str]:
-    path = Path.home() / ".agent-reach" / "daily_run" / "experience" / "rules_summary.json"
-    if not path.exists():
-        return []
+    from agent_reach.daily_run.experience import load_experience_rules
+
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return list(data.get("rules") or [])
-    except (json.JSONDecodeError, OSError):
+        from agent_reach.daily_run.settings import load_settings
+
+        return load_experience_rules(50, settings=load_settings())
+    except Exception:
         return []
 
 
@@ -450,7 +450,9 @@ def generate_weekly_improvements(
             )
         )
 
-    min_cash = float(thresholds.get("min_cash_ratio", 0.4))
+    from agent_reach.daily_run.harness_policy import min_cash_ratio_default
+
+    min_cash = float(thresholds.get("min_cash_ratio", min_cash_ratio_default(cfg)))
     if cfg.get("skill_writeback", True) is False:
         items.append(
             InsightItem(

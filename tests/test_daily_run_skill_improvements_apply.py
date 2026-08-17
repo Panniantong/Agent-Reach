@@ -31,7 +31,11 @@ class TestSkillImprovementsApply:
                 },
             ]
         }
-        settings = {"mss_forecast": {"base_spread": 8}, "schedule": {"alert_after_consecutive_failures": 3}}
+        settings = {
+            "mss_forecast": {"base_spread": 8},
+            "schedule": {"alert_after_consecutive_failures": 3},
+            "harness": {"threshold_evolution_mode": "fixed"},
+        }
         new_settings, applied = apply_settings_from_improvements(report, settings)
         assert new_settings["mss_forecast"]["base_spread"] == 9
         assert new_settings["schedule"]["alert_after_consecutive_failures"] == 2
@@ -97,7 +101,10 @@ class TestSkillImprovementsApply:
                 ],
                 "skill_learning": [],
             },
-            {"weekly_report": {"skill_writeback": True, "skill_auto_apply_settings": True}},
+            {
+                "weekly_report": {"skill_writeback": True, "skill_auto_apply_settings": True},
+                "harness": {"threshold_evolution_mode": "fixed"},
+            },
         )
         assert result["skipped"] is False
         assert result["synced_skills"] == ["/tmp/SKILL.md"]

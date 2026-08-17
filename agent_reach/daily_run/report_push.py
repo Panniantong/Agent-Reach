@@ -34,6 +34,7 @@ _CATEGORY_LABELS: dict[str, str] = {
     "forecast_narrative": "AI解读",
     "forecast_symbols": "个股路径",
     "forecast_news": "新闻热点",
+    "harness": "Harness 进化",
 }
 
 
@@ -86,6 +87,7 @@ def render_morning_sections(
     team_markdown: str,
     report_markdown: str,
     report: dict[str, Any],
+    harness_markdown: str = "",
     narrative: Optional[dict[str, Any]] = None,
 ) -> list[ReportSection]:
     name = report.get("name") or report.get("code") or "大盘"
@@ -104,6 +106,8 @@ def render_morning_sections(
         sections.append(
             ReportSection(category="decision", title="", body=report_markdown.strip(), template=None)
         )
+    if harness_markdown.strip():
+        sections.append(ReportSection(category="harness", title="", body=harness_markdown.strip()))
     if ai_section is not None:
         sections.append(ai_section)
     total = len(sections)
@@ -130,6 +134,7 @@ def render_close_sections(
     verify_markdown: str = "",
     portfolio_markdown: str = "",
     market_markdown: str = "",
+    harness_markdown: str = "",
     narrative: Optional[dict[str, Any]] = None,
 ) -> list[ReportSection]:
     label = verify_name or "大盘"
@@ -153,6 +158,8 @@ def render_close_sections(
         sections.append(ReportSection(category="experience", title="", body=experience_markdown.strip()))
     if verify_markdown.strip():
         sections.append(ReportSection(category="verify", title="", body=verify_markdown.strip()))
+    if harness_markdown.strip():
+        sections.append(ReportSection(category="harness", title="", body=harness_markdown.strip()))
     if portfolio_markdown.strip():
         sections.append(
             ReportSection(category="daily_portfolio", title="", body=portfolio_markdown.strip())

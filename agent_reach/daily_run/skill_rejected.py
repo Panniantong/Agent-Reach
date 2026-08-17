@@ -53,6 +53,44 @@ def is_rejected_title(title: str) -> bool:
     return bool(key) and key in rejected_title_keys()
 
 
+_BUY_BLOCK_PHRASES: tuple[str, ...] = (
+    "接飞刀",
+    "加大仓位",
+    "激进建仓",
+    "满仓进攻",
+    "逆势加仓",
+)
+
+
+def trade_blocked_by_rejected(
+    action: str,
+    *,
+    code: str = "",
+    name: str = "",
+    settings: Optional[dict[str, Any]] = None,
+) -> Optional[str]:
+    """Return rejected strategy title if trade action should be blocked."""
+    harness_cfg = dict((settings or {}).get("harness") or {})
+    if harness_cfg.get("runtime_rejected_guard", True) is False:
+        return None
+
+    action = str(action or "").lower()
+    if action != "buy":
+        return None
+
+    for label in (name, code):
+        if label and is_rejected_title(str(label)):
+            return str(label)
+
+    for row in load_rejected_records():
+        title = str(row.get("title") or "")
+        reason = str(row.get("reason") or "")
+        blob = f"{title} {reason}"
+        if any(p in blob for p in _BUY_BLOCK_PHRASES):
+            return title or reason
+    return None
+
+
 def add_rejected_strategy(
     title: str,
     reason: str,
@@ -73,6 +111,20 @@ def add_rejected_strategy(
     _REJECTED_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(_REJECTED_PATH, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    try:
+        from agent_reach.daily_run.rejected_strategies_harness import apply_rejected_strategies_harness_refinement
+        from agent_reach.daily_run.settings import load_settings
+
+        apply_rejected_strategies_harness_refinement(
+            title=str(title).strip(),
+            reason=str(reason).strip(),
+            source=source,
+            settings=load_settings(),
+        )
+    except Exception:
+        pass
+
     return record
 
 

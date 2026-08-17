@@ -165,9 +165,11 @@ def supervisor_review(
     values = [float(r.get("score", 50)) for r in results]
     consensus = round(sum(values) / len(values), 1)
 
+    from agent_reach.daily_run.harness_policy import threshold_default
+
     thresholds = settings.get("thresholds", {})
-    macro_veto = float(thresholds.get("macro_veto", 40))
-    aggressive = float(thresholds.get("aggressive_entry", 50))
+    macro_veto = float(thresholds.get("macro_veto", threshold_default(settings, "macro_veto")))
+    aggressive = float(thresholds.get("aggressive_entry", threshold_default(settings, "aggressive_entry")))
 
     if consensus >= aggressive:
         label = "可做"

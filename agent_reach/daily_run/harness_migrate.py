@@ -1,0 +1,165 @@
+# -*- coding: utf-8
+"""Strip evolved keys from static daily_run_settings when harness mode is active."""
+
+from __future__ import annotations
+
+import json
+from copy import deepcopy
+from pathlib import Path
+from typing import Any, Optional
+
+from agent_reach.daily_run.harness_policy import (
+    EVOLVED_CONFIG_KEYS_BY_SECTION,
+    EVOLVED_TOP_LEVEL_KEYS,
+    harness_evolution_mode,
+    list_static_config_pollution,
+)
+from agent_reach.daily_run.settings import load_settings, save_user_settings, user_settings_path
+
+
+def strip_evolved_keys(settings: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Return cleaned copy and list of removed dotted keys."""
+    if harness_evolution_mode(settings) != "harness":
+        return deepcopy(settings), []
+
+    cleaned = deepcopy(settings)
+    removed: list[str] = []
+
+    for section, keys in EVOLVED_CONFIG_KEYS_BY_SECTION.items():
+        block = cleaned.get(section)
+        if not isinstance(block, dict):
+            continue
+        for key in keys:
+            if key in block:
+                del block[key]
+                removed.append(f"{section}.{key}")
+
+    for key in EVOLVED_TOP_LEVEL_KEYS:
+        if key in cleaned:
+            del cleaned[key]
+            removed.append(key)
+
+    return cleaned, removed
+
+
+HARNESS_SYNC_KEYS: tuple[str, ...] = (
+    "push_summary_on_close",
+    "push_summary_on_weekly",
+    "push_summary_on_forecast",
+    "push_summary_on_morning",
+    "push_summary_on_intraday",
+    "push_harness_errors_on_feishu",
+    "push_rollback_on_feishu",
+    "auto_rollback_on_bad_trade",
+    "bad_trade_pnl_pct",
+    "bad_trade_weekly_pnl_pct",
+)
+
+
+def sync_user_harness_keys(
+    *,
+    path: Optional[Path] = None,
+    settings: Optional[dict[str, Any]] = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Merge missing harness keys from repo defaults into user settings."""
+    from agent_reach.daily_run.settings import _DEFAULT_PATH, _read_json, save_user_settings, user_settings_path
+
+    target = path or user_settings_path()
+    current = settings or (_read_json(target) if target.exists() else load_settings())
+    defaults = _read_json(_DEFAULT_PATH) if _DEFAULT_PATH.exists() else {}
+    default_harness = dict(defaults.get("harness") or {})
+    harness = dict(current.get("harness") or {})
+    added: list[str] = []
+
+    for key in HARNESS_SYNC_KEYS:
+        if key not in harness and key in default_harness:
+            harness[key] = deepcopy(default_harness[key])
+            added.append(f"harness.{key}")
+
+    result: dict[str, Any] = {
+        "dry_run": dry_run,
+        "path": str(target),
+        "added": added,
+        "saved": False,
+    }
+    if not added:
+        result["message"] = "无需同步（harness 键已齐全）"
+        return result
+
+    if dry_run:
+        result["message"] = f"将新增 {len(added)} 个 harness 键"
+        return result
+
+    merged = deepcopy(current)
+    merged["harness"] = harness
+    save_user_settings(merged, path=target)
+    result["saved"] = True
+    result["message"] = f"已新增 {len(added)} 个 harness 键"
+    return result
+
+
+def render_sync_harness_markdown(result: dict[str, Any]) -> str:
+    lines = [
+        "**Harness 配置同步**",
+        "",
+        f"- 路径：`{result.get('path')}`",
+        f"- 状态：{result.get('message')}",
+    ]
+    added = result.get("added") or []
+    if added:
+        lines.extend(["", "**新增键：**", ""])
+        for key in added:
+            lines.append(f"- `{key}`")
+    return "\n".join(lines)
+
+
+def migrate_user_settings(
+    *,
+    path: Optional[Path] = None,
+    settings: Optional[dict[str, Any]] = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Remove static evolved keys from user settings file."""
+    src = settings or load_settings()
+    target = path or user_settings_path()
+    pollution = list_static_config_pollution(src)
+    cleaned, removed = strip_evolved_keys(src)
+
+    result: dict[str, Any] = {
+        "dry_run": dry_run,
+        "path": str(target),
+        "harness_mode": harness_evolution_mode(src) == "harness",
+        "pollution_detected": pollution,
+        "removed": removed,
+        "saved": False,
+    }
+
+    if not removed:
+        result["message"] = "无需迁移（无 evolved keys 或 harness 未启用）"
+        return result
+
+    if dry_run:
+        result["message"] = f"将移除 {len(removed)} 个 evolved keys"
+        return result
+
+    save_user_settings(cleaned, path=target)
+    result["saved"] = True
+    result["message"] = f"已移除 {len(removed)} 个 evolved keys"
+    return result
+
+
+def render_migrate_markdown(result: dict[str, Any]) -> str:
+    lines = [
+        "**Harness 静态配置迁移**",
+        "",
+        f"- 模式：{'harness' if result.get('harness_mode') else 'fixed'}",
+        f"- 路径：`{result.get('path')}`",
+        f"- 状态：{result.get('message')}",
+    ]
+    removed = result.get("removed") or []
+    if removed:
+        lines.extend(["", "**移除键：**", ""])
+        for key in removed:
+            lines.append(f"- `{key}`")
+    return "\n".join(lines)

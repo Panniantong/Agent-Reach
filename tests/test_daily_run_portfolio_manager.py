@@ -133,8 +133,10 @@ class TestApplyAutoAdjust:
         assert "002273" in watch_codes
 
     def test_sell_respects_lock(self, portfolio, snapshot, settings_enabled):
-        portfolio["holdings"][0]["days_held"] = 1
-        portfolio["holdings"][1]["days_held"] = 1
+        portfolio["holdings"][0]["days_held"] = 0
+        portfolio["holdings"][0].pop("acquired_date", None)
+        portfolio["holdings"][1]["days_held"] = 0
+        portfolio["holdings"][1].pop("acquired_date", None)
         decision = TradeDecision(
             action="sell",
             trade_id="T1",
@@ -212,9 +214,49 @@ class TestApplyAutoAdjust:
 
 
 class TestIncrementDays:
-    def test_increment(self, portfolio):
+    def test_sync_without_acquired_date_keeps_counter(self, portfolio):
         updated = increment_holding_days(portfolio)
-        assert updated["holdings"][0]["days_held"] == 6
+        assert updated["holdings"][0]["days_held"] == 5
+
+    def test_sync_from_acquired_date_t_plus_one(self):
+        from datetime import date
+        from unittest.mock import patch
+
+        from agent_reach.daily_run.portfolio_manager import holding_is_sellable, sync_portfolio_holding_days
+
+        pf = {"holdings": [{"code": "000725", "acquired_date": "2026-07-24", "days_held": 0}]}
+        with patch("agent_reach.daily_run.trade_calendar.today_shanghai", return_value=date(2026, 7, 24)):
+            assert holding_is_sellable(pf["holdings"][0], {"trading": {"holding_lock_days": 1}}) is False
+        with patch("agent_reach.daily_run.trade_calendar.today_shanghai", return_value=date(2026, 7, 27)):
+            synced = sync_portfolio_holding_days(pf)
+            assert synced["holdings"][0]["days_held"] == 1
+            assert holding_is_sellable(synced["holdings"][0], {"trading": {"holding_lock_days": 1}}) is True
+
+    def test_load_portfolio_syncs_days_held(self):
+        from datetime import date
+        from unittest.mock import patch
+
+        from agent_reach.daily_run.snapshot_builder import load_portfolio
+
+        raw = {
+            "holdings": [{"code": "000725", "acquired_date": "2026-07-24", "days_held": 0}],
+            "watchlist": [{"code": "603986"}],
+        }
+        with patch(
+            "agent_reach.daily_run.snapshot_builder.json.loads",
+            return_value=raw,
+        ), patch(
+            "agent_reach.daily_run.snapshot_builder.default_portfolio_path",
+        ) as mock_path, patch(
+            "agent_reach.daily_run.trade_calendar.today_shanghai",
+            return_value=date(2026, 7, 27),
+        ), patch(
+            "agent_reach.daily_run.settings.load_settings",
+            return_value={"trading": {"holding_lock_days": 1}, "thresholds": {"max_snapshot_age_hours": 24}},
+        ):
+            mock_path.return_value.exists.return_value = True
+            loaded = load_portfolio()
+        assert loaded["holdings"][0]["days_held"] == 1
 
 
 class TestTradeLedgerDedup:

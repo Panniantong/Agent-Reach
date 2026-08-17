@@ -30,8 +30,12 @@ def forecast_mss_range(
         base = compute_mss(breakdown, settings)
     base = float(base)
 
+    from agent_reach.daily_run.harness_policy import forecast_int_default
+
     vol_hint = _volatility_hint(snapshot)
-    spread = float(cfg.get("base_spread", 8)) + vol_hint * float(cfg.get("vol_multiplier", 6))
+    spread = float(forecast_int_default(settings, "base_spread")) + vol_hint * float(
+        forecast_int_default(settings, "vol_multiplier")
+    )
 
     rng = random.Random(int(base * 100) % 9973)
     samples: list[float] = []

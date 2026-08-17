@@ -7,10 +7,12 @@ import pytest
 
 from agent_reach.daily_run.harness import (
     HarnessState,
+    build_manifest_harness_summary,
     close_open_plans,
     format_harness_for_briefing,
     refine_after_job,
     refine_after_job_llm,
+    refine_after_job_llm_summarize,
     render_harness_content,
     rollback_refinement,
 )
@@ -261,3 +263,153 @@ class TestHarnessLayerB:
         )
         assert result["skipped"] is False
         assert result["review"]["rationale"] == "manual refine"
+
+
+class TestHarnessLlmSummarize:
+    def test_summarize_blocks_high_freq_jobs(self, harness_tmp):
+        layer_a = {"skipped": False, "refinement_id": "ref_a", "changes": 1}
+        for job in ("morning", "intraday"):
+            result = refine_after_job_llm_summarize(
+                job,
+                evidence={"memory": ["test"], "summary": job},
+                settings={
+                    "harness": {
+                        "enabled": True,
+                        "llm_refine": {"enabled": True, "summarize_enabled": True},
+                    }
+                },
+                layer_a_result=layer_a,
+            )
+            assert result["skipped"] is True
+            assert "not allowed" in result.get("reason", "")
+
+    def test_summarize_skips_without_provider(self, harness_tmp, monkeypatch):
+        monkeypatch.setattr(
+            "agent_reach.daily_run.llm_chat.resolve_chat_provider",
+            lambda provider: None,
+        )
+        result = refine_after_job_llm_summarize(
+            "skill_closure",
+            evidence={"memory": ["layer a fact"], "summary": "skill_closure"},
+            settings={
+                "harness": {
+                    "enabled": True,
+                    "llm_refine": {"enabled": True, "summarize_enabled": True, "cooldown_hours": 0},
+                }
+            },
+            layer_a_result={"skipped": False, "changes": 1},
+        )
+        assert result["skipped"] is True
+        assert result.get("reason") == "no llm provider"
+
+    def test_summarize_after_skill_closure_with_mock_llm(self, harness_tmp, monkeypatch):
+        from agent_reach.daily_run.harness_skill_base import apply_skill_refinement
+
+        monkeypatch.setattr(
+            "agent_reach.daily_run.llm_chat.resolve_chat_provider",
+            lambda provider: "deepseek",
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.harness.plan_harness_refinement",
+            lambda job, evidence, state, settings=None, instructions="": {
+                "summary": "summarize skill_closure",
+                "rationale": "mock",
+                "planner": "llm",
+                "edits": [
+                    {
+                        "action": "create",
+                        "kind": "playbook",
+                        "entry_id": "closure_synth",
+                        "title": "周六综合",
+                        "content": "综合：收紧 MSS 偏离时的观察池",
+                    }
+                ],
+            },
+        )
+        result = apply_skill_refinement(
+            "skill_closure",
+            {
+                "memory": ["MSS 预测偏离：下日调低进攻阈值"],
+                "playbook": ["mss/high：MSS miss — detail"],
+                "summary": "skill_closure improvements=1",
+            },
+            settings={
+                "harness": {
+                    "enabled": True,
+                    "jobs": {"skill_closure": True},
+                    "llm_refine": {
+                        "enabled": True,
+                        "summarize_enabled": True,
+                        "summarize_cooldown_hours": 0,
+                    },
+                }
+            },
+        )
+        assert result.get("skipped") is False
+        summarize = result.get("llm_summarize") or {}
+        assert summarize.get("skipped") is False
+        assert summarize.get("layer") == "summarize"
+        state = HarnessState.load()
+        playbook = " ".join(e.content for e in state.entries["playbook"].values())
+        assert "综合" in playbook or "MSS" in playbook
+
+    def test_use_llm_review_gate(self, harness_tmp, monkeypatch):
+        from agent_reach.daily_run.harness import review_harness_refine
+
+        monkeypatch.setattr(
+            "agent_reach.daily_run.llm_chat.resolve_chat_provider",
+            lambda provider: "deepseek",
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.llm_chat.chat_json",
+            lambda **kwargs: {
+                "should_refine": True,
+                "rationale": "mock llm review",
+                "instructions": "合并重复项",
+            },
+        )
+        state = HarnessState.load()
+        review = review_harness_refine(
+            "close",
+            {
+                "verify": {"deviations": [{"field": "mss"}]},
+                "portfolio_summary": {"daily_pnl_pct": 0.6},
+            },
+            state,
+            settings={
+                "harness": {
+                    "llm_refine": {
+                        "enabled": True,
+                        "use_llm_review": True,
+                        "cooldown_hours": 0,
+                    }
+                }
+            },
+        )
+        assert review["should_refine"] is True
+        assert review["rationale"] == "mock llm review"
+
+
+class TestManifestHarnessSummary:
+    def test_build_manifest_harness_summary_nested(self):
+        payload = {
+            "job": "close",
+            "result": {
+                "harness": {
+                    "layer_a": {"refinement_id": "ref_a", "changes": 2, "skipped": False, "job": "close"},
+                    "layer_b": {
+                        "refinement_id": "ref_b",
+                        "changes": 1,
+                        "skipped": False,
+                        "job": "close",
+                        "planner": "llm",
+                    },
+                }
+            },
+            "harness_errors": ["run_guard:dedupe: boom"],
+        }
+        summary = build_manifest_harness_summary(payload)
+        assert summary["total_changes"] == 3
+        assert len(summary["refinements"]) == 2
+        assert summary["errors"] == ["run_guard:dedupe: boom"]
+        assert any(r.get("planner") == "llm" for r in summary["refinements"])
