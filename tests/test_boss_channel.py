@@ -2,8 +2,9 @@
 """Dedicated tests for the ``boss`` channel.
 
 Boss直聘 走 CDP 调试端口复用已登录的真 Chrome（headless 是禁区，code 36 风控）。
-check() 只做三层只读探测：boss-agent-cli 装没装 → CDP 端口通不通 → 有无可复用
-zhipin 页签。四分支各自返回 (status, message)，且永不触发浏览器启动（无副作用）。
+check() 只做只读探测：boss-agent-cli 装没装 → CDP 端口通不通 → 有无可复用
+zhipin 页签 → 页签是否都停在反爬安全校验页。各分支各自返回 (status, message)，
+且永不触发浏览器启动（无副作用）。
 """
 
 from unittest.mock import patch
@@ -114,6 +115,30 @@ def test_check_warn_when_ready():
     assert "boss --cdp-url http://localhost:9222 login --cdp" in message
     assert "--browser-mode cdp-required" in message
     assert "code 37 = TOKEN_REFRESH_FAILED" not in message
+    assert ch.active_backend is None
+
+
+def test_check_warn_when_stuck_on_security_check():
+    ch = BossChannel()
+
+    def fake_cdp(path):
+        if path == "/json/version":
+            return {"Browser": "Chrome"}
+        return [
+            {
+                "type": "page",
+                "url": "https://www.zhipin.com/web/common/security-check.html?seed=abc",
+            }
+        ]
+
+    with patch.object(boss_mod, "probe_command", return_value=_ok_probe()), patch.object(
+        boss_mod, "_cdp_json", side_effect=fake_cdp
+    ):
+        status, message = ch.check()
+    assert status == "warn"
+    assert "安全校验" in message
+    assert "不代表未登录" in message
+    assert "boss status" in message
     assert ch.active_backend is None
 
 

@@ -91,10 +91,16 @@ Cookie-Editor 手工导出后配置 xiaohongshu-mcp / 存量工具。
 Boss直聘配置触发：当用户说“帮我配 Boss直聘”时，先读取 `references/career.md`
 的 Boss 章节，然后在获得安装授权后运行
 `agent-reach install --env=local --system --channels=boss`。Agent 负责按系统启动
-只绑定 `127.0.0.1:9222` 的专用 Chrome；必须暂停让用户手动登录、扫码或处理
-滑块，用户确认后再运行 `boss --cdp-url http://localhost:9222 login --cdp`、
+只绑定 `127.0.0.1:9222` 的专用 Chrome；若 `boss status` 判定未登录，暂停让用户
+登录/扫码，用户确认后再运行 `boss --cdp-url http://localhost:9222 login --cdp`、
 `boss status` 和 `agent-reach doctor` 验收。不要让用户自己研究端口参数。
 专用 Chrome profile 必须长期复用，不要每次创建，也不要默认改用日常主 Chrome。
+
+判断登录态只信 `boss status`（wt2/__zp_stoken__），绝不用当前页 URL：
+`security-check` / `zhipin-security` / `_security_check` 安全校验页是 Boss 反爬挑战，
+与登录无关——已登录也会出现（带 CDP 调试端口的 Chrome 几乎必现）。看到它不要
+当成“未登录”，先跑 `boss status` 验证，再决定是否需要用户登录。
+
 执行搜索时必须使用
 `boss --browser-mode cdp-required --cdp-url http://localhost:9222 search ...`；
 遇到 `ENVIRONMENT_RISK` 立即停止，不刷新、不重新登录、不自动重试。

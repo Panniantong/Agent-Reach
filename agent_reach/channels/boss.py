@@ -71,6 +71,24 @@ def _has_zhipin_page(pages) -> bool:
     return False
 
 
+_SECURITY_CHECK_MARKERS = ("security-check", "zhipin-security", "_security_check")
+
+
+def _security_check_blocks_all(pages) -> bool:
+    """现有 zhipin 页签是否全部停在反爬安全校验页（不是登录页）。"""
+    zhipin_urls = [
+        page.get("url", "")
+        for page in (pages or [])
+        if page.get("type") == "page" and host_matches(page.get("url", ""), "zhipin.com")
+    ]
+    if not zhipin_urls:
+        return False
+    return all(
+        any(marker in url.lower() for marker in _SECURITY_CHECK_MARKERS)
+        for url in zhipin_urls
+    )
+
+
 class BossChannel(Channel):
     name = "boss"
     description = "Boss直聘 职位搜索与 JD"
@@ -116,6 +134,13 @@ class BossChannel(Channel):
             return "warn", (
                 "CDP 可达但未发现现成 zhipin.com 页签（不代表未登录：Cookie 可能仍在，"
                 "boss-agent-cli 会自行新建页签）。建议先在 Chrome 登录 zhipin.com。"
+            )
+        if _security_check_blocks_all(pages):
+            return "warn", (
+                "CDP 链路就绪，但现有 zhipin 页签都停在安全校验页"
+                "（security-check / zhipin-security）。这是 Boss 反爬挑战，与登录无关"
+                "——已登录也会出现，不代表未登录。先用 `boss status` 判断登录态"
+                "（看 wt2/__zp_stoken__），不要据此要求用户重新登录。"
             )
 
         return "warn", (
