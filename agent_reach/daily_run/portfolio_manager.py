@@ -215,11 +215,22 @@ def append_trade_ledger(
         return
     p = path or default_ledger_path()
     p.parent.mkdir(parents=True, exist_ok=True)
+    at = datetime.now(timezone.utc).isoformat()
+    raw_actions = [a.to_dict() for a in actions]
+    from agent_reach.daily_run.realized_pnl import enrich_sell_actions, load_ledger_entries
+
+    prior = load_ledger_entries(path=p, end=trade_calendar.today_shanghai())
+    enriched = enrich_sell_actions(
+        prior,
+        raw_actions,
+        entry_at=at,
+        trade_id=trade_id,
+    )
     entry = {
-        "at": datetime.now(timezone.utc).isoformat(),
+        "at": at,
         "trade_id": trade_id,
         "decision_action": decision_action,
-        "actions": [a.to_dict() for a in actions],
+        "actions": enriched,
     }
     with open(p, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")

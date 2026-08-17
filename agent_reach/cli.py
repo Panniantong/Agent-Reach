@@ -309,6 +309,26 @@ def main():
     p_dr_cap_list = p_dr_capital_sub.add_parser("list", help="List capital events")
     p_dr_cap_list.add_argument("--date", default="", help="Filter by date YYYY-MM-DD")
     p_dr_cap_list.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_pnl = p_daily_sub.add_parser("pnl", help="Realized/unrealized P&L overview")
+    p_dr_pnl_sub = p_dr_pnl.add_subparsers(dest="pnl_action", required=True)
+    p_dr_pnl_show = p_dr_pnl_sub.add_parser("overview", help="Show P&L overview")
+    p_dr_pnl_show.add_argument(
+        "--period",
+        default="all",
+        choices=["day", "week", "month", "all"],
+        help="Aggregation period (default: all)",
+    )
+    p_dr_pnl_show.add_argument("--date", default="", help="End date YYYY-MM-DD (default: today)")
+    p_dr_pnl_show.add_argument(
+        "--portfolio", "-p", default="",
+        help="Portfolio JSON (default: ~/.agent-reach/daily_run/portfolio.json)",
+    )
+    p_dr_pnl_show.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_pnl_bf = p_dr_pnl_sub.add_parser(
+        "backfill",
+        help="Backfill realized_pnl on sell actions in trade ledger",
+    )
+    p_dr_pnl_bf.add_argument("--dry-run", action="store_true", help="Report only")
 
     # ── doctor ──
     p_doctor = sub.add_parser("doctor", help="Check platform availability")
@@ -2209,10 +2229,64 @@ def _cmd_daily_run(args):
         print("Usage: agent-reach daily-run capital {deposit|withdraw|list}")
         sys.exit(1)
 
+    if args.daily_action == "pnl":
+        import json as _json
+        from datetime import date as _date, timedelta as _timedelta
+
+        from agent_reach.daily_run.realized_pnl import (
+            backfill_ledger_realized_pnl,
+            build_pnl_overview,
+            render_pnl_overview_markdown,
+        )
+        from agent_reach.daily_run.snapshot_builder import load_portfolio
+
+        action = args.pnl_action
+
+        if action == "backfill":
+            result = backfill_ledger_realized_pnl(dry_run=args.dry_run)
+            print(_json.dumps(result, ensure_ascii=False, indent=2))
+            if result.get("updated"):
+                print(f"\n✅ Backfilled {result['updated']} ledger entries")
+            elif args.dry_run:
+                print("\n(dry-run — re-run without --dry-run to apply)")
+            else:
+                print("\n✅ Ledger already up to date")
+            return
+
+        if action == "overview":
+            try:
+                end = _date.fromisoformat(args.date) if args.date else None
+            except ValueError as exc:
+                print(f"❌ invalid date: {exc}")
+                sys.exit(1)
+            from agent_reach.daily_run.trade_calendar import today_shanghai
+
+            end = end or today_shanghai()
+            if args.period == "day":
+                start = end
+            elif args.period == "week":
+                start = end - _timedelta(days=6)
+            elif args.period == "month":
+                start = end - _timedelta(days=29)
+            else:
+                start = _date(1970, 1, 1)
+
+            pf_path = Path(args.portfolio).expanduser() if args.portfolio else None
+            portfolio = load_portfolio(pf_path)
+            overview = build_pnl_overview(portfolio, start=start, end=end)
+            if args.json:
+                print(_json.dumps(overview.to_dict(), ensure_ascii=False, indent=2))
+            else:
+                print(render_pnl_overview_markdown(overview))
+            return
+
+        print("Usage: agent-reach daily-run pnl {overview|backfill}")
+        sys.exit(1)
+
     if args.daily_action not in ("evaluate", "push"):
         print(
             "Usage: agent-reach daily-run "
-            "{morning|close|intraday|build-snapshot|schedule|hot-news|harness|capital|evaluate|push|fetch|verify|backtest|optimize|plugins|sample} ..."
+            "{morning|close|intraday|build-snapshot|schedule|hot-news|harness|capital|pnl|evaluate|push|fetch|verify|backtest|optimize|plugins|sample} ..."
         )
         sys.exit(1)
 

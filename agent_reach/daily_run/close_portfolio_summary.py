@@ -11,10 +11,14 @@ from agent_reach.daily_run.snapshot_builder import _normalize_code
 from agent_reach.daily_run.symbols import build_enriched_symbols, portfolio_from_snapshot
 from agent_reach.daily_run.trade_calendar import today_shanghai
 from agent_reach.daily_run.weekly_report import (
-    _compute_trade_cash_flow,
     _holding_pnl_rows,
     _load_trade_ledger_range,
     _watchlist_rows,
+)
+from agent_reach.daily_run.realized_pnl import (
+    compute_realized_pnl,
+    compute_trade_cash_flow,
+    replay_realized_sells,
 )
 
 
@@ -44,6 +48,8 @@ class ClosePortfolioSummary:
     watchlist: list[dict[str, Any]] = field(default_factory=list)
     sector_weights: list[dict[str, Any]] = field(default_factory=list)
     realized_pnl: float = 0.0
+    trade_cash_flow: float = 0.0
+    realized_sells: list[dict[str, Any]] = field(default_factory=list)
     trades: list[dict[str, Any]] = field(default_factory=list)
     intraday_trades: list[dict[str, Any]] = field(default_factory=list)
     watchlist_changes: list[dict[str, Any]] = field(default_factory=list)
@@ -77,6 +83,8 @@ class ClosePortfolioSummary:
             "watchlist": self.watchlist,
             "sector_weights": self.sector_weights,
             "realized_pnl": self.realized_pnl,
+            "trade_cash_flow": self.trade_cash_flow,
+            "realized_sells": self.realized_sells,
             "trades": self.trades,
             "intraday_trades": self.intraday_trades,
             "watchlist_changes": self.watchlist_changes,
@@ -187,6 +195,11 @@ def _format_ledger_trade_lines(trades: list[dict[str, Any]]) -> list[str]:
                 detail += f" · 信号 **{decision}**"
             if reason:
                 detail += f" — {reason}"
+            if action.get("side") == "sell" and action.get("realized_pnl") is not None:
+                pnl = float(action["realized_pnl"])
+                pct = action.get("realized_pnl_pct")
+                pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
+                detail += f" · 已实现 **{pnl:+,.0f}**{pct_s}"
             lines.append(f"- {detail}")
     return lines
 
@@ -432,7 +445,11 @@ def _build_reason_lines(data: dict[str, Any]) -> list[str]:
 
     if trades and abs(realized) > 0.01:
         sign = "+" if realized >= 0 else ""
-        lines.append(f"今日成交 **{len(trades)}** 笔，ledger 净额 {sign}¥{realized:,.0f}。")
+        lines.append(f"今日卖出已实现盈亏 **{sign}¥{realized:,.0f}**（FIFO）。")
+    elif trades and abs(float(data.get("trade_cash_flow") or 0)) > 0.01:
+        cash_flow = float(data.get("trade_cash_flow") or 0)
+        sign = "+" if cash_flow >= 0 else ""
+        lines.append(f"今日成交净额 {sign}¥{cash_flow:,.0f}。")
     elif position_change not in ("持仓结构未变", "基线无持仓快照，跳过结构对比"):
         lines.append(f"持仓变化：**{position_change}**。")
     else:
@@ -569,7 +586,9 @@ def build_close_portfolio_summary(
             max_weight = max(max_weight or 0.0, float(weight))
 
     ledger_trades = _load_trade_ledger_range(day, day)
-    realized = _compute_trade_cash_flow(ledger_trades)
+    realized = compute_realized_pnl(ledger_trades)
+    trade_cash_flow = compute_trade_cash_flow(ledger_trades)
+    realized_sells = [r.to_dict() for r in replay_realized_sells(ledger_trades)]
     intraday_list = list(intraday_trades or [])
     wl_changes = _watchlist_changes_from_adjust(watchlist_adjust)
 
@@ -606,6 +625,8 @@ def build_close_portfolio_summary(
         watchlist=watchlist,
         sector_weights=[],
         realized_pnl=realized,
+        trade_cash_flow=trade_cash_flow,
+        realized_sells=realized_sells,
         trades=ledger_trades or list(trades or []),
         intraday_trades=intraday_list,
         watchlist_changes=wl_changes,
@@ -657,10 +678,38 @@ def render_close_portfolio_markdown(summary: ClosePortfolioSummary | dict[str, A
         lines.append(
             f"- 仓位：股票 **{float(stock_ratio):.1%}** / 现金 **{float(cash_ratio):.1%}**"
         )
-    if data.get("realized_pnl") and abs(float(data["realized_pnl"])) > 0.01:
+    if data.get("realized_pnl") is not None and abs(float(data["realized_pnl"])) > 0.01:
         realized = float(data["realized_pnl"])
         sign = "+" if realized >= 0 else ""
-        lines.append(f"- 成交净额 {sign}¥{realized:,.0f}")
+        lines.append(f"- 今日已实现盈亏（FIFO） {sign}¥{realized:,.0f}")
+    elif data.get("trade_cash_flow") and abs(float(data["trade_cash_flow"])) > 0.01:
+        cash_flow = float(data["trade_cash_flow"])
+        sign = "+" if cash_flow >= 0 else ""
+        lines.append(f"- 今日成交净额 {sign}¥{cash_flow:,.0f}")
+
+    from agent_reach.daily_run.realized_pnl import build_pnl_overview, render_pnl_overview_markdown
+
+    overview_pf = {
+        "holdings": [
+            {
+                "code": h.get("code"),
+                "name": h.get("name"),
+                "shares": h.get("shares"),
+                "cost": h.get("cost"),
+                "price": h.get("week_end_price") or h.get("price"),
+            }
+            for h in data.get("holdings") or []
+        ]
+    }
+    as_of = data.get("as_of")
+    if as_of:
+        overview = build_pnl_overview(
+            overview_pf,
+            start=date(1970, 1, 1),
+            end=date.fromisoformat(str(as_of)[:10]),
+        )
+        lines.append("")
+        lines.append(render_pnl_overview_markdown(overview))
 
     lines.append("")
     lines.append("## 📈 个股盈亏")
