@@ -763,6 +763,7 @@ def run_close(
 
     portfolio_md = ""
     portfolio_summary_obj = None
+    pnl_target_cycle: dict[str, Any] | None = None
     if portfolio_summary:
         from agent_reach.daily_run.close_portfolio_summary import (
             build_close_portfolio_summary,
@@ -777,7 +778,16 @@ def run_close(
             watchlist_adjust=watchlist_adjust,
             settings=cfg,
         )
-        portfolio_md = render_close_portfolio_markdown(portfolio_summary_obj)
+        from agent_reach.daily_run.pnl_target import run_pnl_target_close_cycle
+
+        pnl_target_cycle = run_pnl_target_close_cycle(
+            portfolio_summary_obj.to_dict(),
+            settings=cfg,
+        )
+        portfolio_md = render_close_portfolio_markdown(
+            portfolio_summary_obj,
+            pnl_target_cycle=pnl_target_cycle,
+        )
         from agent_reach.daily_run.daily_pnl_history import append_daily_pnl
 
         append_daily_pnl(
@@ -799,6 +809,7 @@ def run_close(
             forecast_review=forecast_review.to_dict() if forecast_review else None,
             watchlist_adjust=watchlist_adjust,
             portfolio_summary=portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
+            pnl_target_cycle=pnl_target_cycle,
             settings=cfg,
         )
         enriched["harness_skills"] = harness_skills_report.to_dict()

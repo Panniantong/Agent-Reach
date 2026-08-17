@@ -203,6 +203,8 @@ _MEMORY_ENTRY_NUDGES: tuple[tuple[str, dict[str, float]], ...] = (
     ("调低进攻阈值", {"aggressive_entry": -2.0}),
     ("缩窄仓位", {"aggressive_entry": -1.0}),
     ("MSS 预测偏离", {"aggressive_entry": -2.0}),
+    ("盈亏目标奖励", {"aggressive_entry": 2.0}),
+    ("盈亏目标未达", {"aggressive_entry": -2.0}),
 )
 
 _MEMORY_CASH_NUDGES: tuple[tuple[str, float], ...] = (
@@ -798,6 +800,30 @@ def _has_deviation_signal(state: Any, *, sources: set[str]) -> bool:
     return "forecast_policy_mss_weight_update" in policy
 
 
+def _apply_pnl_target_signal_evolution(
+    merged: dict[str, float],
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    signals = resolve_harness_trade_signals(state, settings=settings)
+    if signals.get("pnl_target_hit"):
+        if threshold_mode(settings, "aggressive_entry") == "harness":
+            merged["aggressive_entry"] = max(float(merged.get("aggressive_entry", 50.0)), 52.0)
+        if threshold_mode(settings, "macro_veto") == "harness":
+            merged["macro_veto"] = max(float(merged.get("macro_veto", 40.0)), 38.0)
+        if evolution_mode(settings, "trade_min_scans") == "harness":
+            merged["trade_min_scans"] = min(float(merged.get("trade_min_scans", 3.0)), 2.0)
+    elif signals.get("pnl_target_miss"):
+        if threshold_mode(settings, "aggressive_entry") == "harness":
+            merged["aggressive_entry"] = min(float(merged.get("aggressive_entry", 50.0)), 45.0)
+        if threshold_mode(settings, "min_cash_ratio") == "harness":
+            merged["min_cash_ratio"] = max(float(merged.get("min_cash_ratio", 0.0)), 0.45)
+        if evolution_mode(settings, "max_holdings") == "harness":
+            merged["max_holdings"] = min(float(merged.get("max_holdings", 10.0)), 5.0)
+    return merged
+
+
 def resolve_harness_flat_overrides(
     state: Any,
     base_thresholds: dict[str, Any],
@@ -819,6 +845,7 @@ def resolve_harness_flat_overrides(
     merged = _apply_technical_signal_evolution(merged, state, settings=cfg)
     merged = _apply_forecast_signal_evolution(merged, state, settings=cfg)
     merged = _apply_cash_signal_evolution(merged, state, settings=cfg)
+    merged = _apply_pnl_target_signal_evolution(merged, state, settings=cfg)
     return _clamp_flat_values(merged)
 
 
@@ -911,13 +938,17 @@ def resolve_harness_trade_signals(
     mss_miss = any(any(p in blob for p in _MSS_MISS_PHRASES) for blob in blobs)
     deviation = _has_deviation_signal(state, sources=sources)
     bullish, bearish = resolve_harness_kronos_bias(state, settings=settings)
+    pnl_hit = any("盈亏目标达成" in blob for blob in blobs)
+    pnl_miss = any("盈亏目标未达" in blob for blob in blobs)
 
     return {
         "mss_forecast_miss": mss_miss,
-        "defensive_trim": mss_miss or deviation,
+        "defensive_trim": mss_miss or deviation or pnl_miss,
         "deviation_active": deviation,
         "kronos_bullish": bullish,
         "kronos_bearish": bearish,
+        "pnl_target_hit": pnl_hit,
+        "pnl_target_miss": pnl_miss,
     }
 
 
@@ -1071,7 +1102,13 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
         harness_meta["kronos_bearish"] = trade_signals["kronos_bearish"]
     harness_meta["trade_signals"] = {
         k: trade_signals[k]
-        for k in ("mss_forecast_miss", "defensive_trim", "deviation_active")
+        for k in (
+            "mss_forecast_miss",
+            "defensive_trim",
+            "deviation_active",
+            "pnl_target_hit",
+            "pnl_target_miss",
+        )
     }
 
     if harness_meta:

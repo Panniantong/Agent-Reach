@@ -655,7 +655,11 @@ def build_close_portfolio_summary(
     return summary
 
 
-def render_close_portfolio_markdown(summary: ClosePortfolioSummary | dict[str, Any]) -> str:
+def render_close_portfolio_markdown(
+    summary: ClosePortfolioSummary | dict[str, Any],
+    *,
+    pnl_target_cycle: Optional[dict[str, Any]] = None,
+) -> str:
     """Portfolio close summary: overview + per-stock P&L + trades + watchlist."""
     data = summary.to_dict() if isinstance(summary, ClosePortfolioSummary) else summary
     lines: list[str] = ["## 💰 组合盈亏"]
@@ -704,6 +708,17 @@ def render_close_portfolio_markdown(summary: ClosePortfolioSummary | dict[str, A
         cash_flow = float(data["trade_cash_flow"])
         sign = "+" if cash_flow >= 0 else ""
         lines.append(f"- 今日成交净额 {sign}¥{cash_flow:,.0f}")
+
+    if pnl_target_cycle and not pnl_target_cycle.get("skipped"):
+        from agent_reach.daily_run.pnl_target import render_pnl_target_markdown
+
+        lines.append("")
+        lines.append(
+            render_pnl_target_markdown(
+                last_result=pnl_target_cycle.get("evaluated"),
+                next_target=pnl_target_cycle.get("next_target"),
+            )
+        )
 
     from agent_reach.daily_run.pnl_overview_harness import build_close_pnl_overview
     from agent_reach.daily_run.realized_pnl import render_pnl_overview_markdown

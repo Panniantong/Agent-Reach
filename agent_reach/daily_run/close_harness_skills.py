@@ -19,6 +19,7 @@ class CloseHarnessSkillsReport:
     data_audit: dict[str, Any] = field(default_factory=dict)
     watchlist_adjust: dict[str, Any] = field(default_factory=dict)
     pnl_overview: dict[str, Any] = field(default_factory=dict)
+    pnl_target: dict[str, Any] = field(default_factory=dict)
     close_layer_a: dict[str, Any] = field(default_factory=dict)
     effective_overlay: dict[str, Any] = field(default_factory=dict)
 
@@ -29,6 +30,7 @@ class CloseHarnessSkillsReport:
             "data_audit": self.data_audit,
             "watchlist_adjust": self.watchlist_adjust,
             "pnl_overview": self.pnl_overview,
+            "pnl_target": self.pnl_target,
             "close_layer_a": self.close_layer_a,
             "effective_overlay": self.effective_overlay,
             "total_changes": sum(
@@ -39,6 +41,7 @@ class CloseHarnessSkillsReport:
                     self.data_audit,
                     self.watchlist_adjust,
                     self.pnl_overview,
+                    self.pnl_target,
                     self.close_layer_a,
                 )
                 if not (block or {}).get("skipped")
@@ -54,6 +57,7 @@ def run_close_harness_refinements(
     forecast_review: Optional[dict[str, Any]] = None,
     watchlist_adjust: Optional[dict[str, Any]] = None,
     portfolio_summary: Optional[dict[str, Any]] = None,
+    pnl_target_cycle: Optional[dict[str, Any]] = None,
     settings: Optional[dict[str, Any]] = None,
 ) -> CloseHarnessSkillsReport:
     """Run verify / close_improve / data_audit harness refinements after close."""
@@ -96,6 +100,14 @@ def run_close_harness_refinements(
         report.pnl_overview = apply_pnl_overview_harness_refinement(
             portfolio_summary,
             settings=cfg,
+        )
+
+        from agent_reach.daily_run.pnl_target_harness import apply_pnl_target_harness_refinement
+
+        report.pnl_target = apply_pnl_target_harness_refinement(
+            portfolio_summary,
+            settings=cfg,
+            cycle=pnl_target_cycle,
         )
 
     report.effective_overlay = effective_overlay_snapshot(cfg)

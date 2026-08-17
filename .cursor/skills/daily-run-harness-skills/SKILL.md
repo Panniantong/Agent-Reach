@@ -26,10 +26,11 @@ description: >-
 | `watchlist_adjust` | `watchlist_adjust_harness.py` | 收盘/早盘观察池 adjust |
 | `forecast_calibrate` | `forecast_calibrate_harness.py` | 周日 forecast MSS/校准 |
 | `pnl_overview` | `pnl_overview_harness.py` | 收盘 FIFO 已实现 + 浮动盈亏总览 |
+| `pnl_target` | `pnl_target_harness.py` | 下一交易日总盈亏目标 + 达成奖励/未达处罚 |
 
 ## 收盘自动
 
-`run_close()` → `run_close_harness_refinements()` 依次 refine verify / close_improve / data_audit / **pnl_overview**；
+`run_close()` → `run_close_harness_refinements()` 依次 refine verify / close_improve / data_audit / **pnl_overview** / **pnl_target**；
 `append_experience_entry()` → experience harness（harness 模式下 rules 同步进 memory/policy）；
 随后 `run_close_layer_a_refinement()` 只写入组合盈亏等 residual。
 
@@ -105,6 +106,7 @@ python3 .cursor/skills/daily-run-code-walk/scripts/run_walk.py
 ```json
 "harness": { "jobs": { "verify": true, "close_improve": true, "data_audit": true, "pnl_overview": true, "skill_closure": true, "optimize": true, "experience": true, "morning": true, "intraday": true, "run_guard": true } },
 "pnl_overview": { "harness_evolve": true },
+"pnl_target": { "enabled": true, "harness_evolve": true, "base_target_pct": 0.5 },
 "close_improvements": { "harness_evolve": true },
 "data_audit": { "harness_evolve": true },
 "optimizer": { "harness_evolve": true },

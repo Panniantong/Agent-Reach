@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 from zoneinfo import ZoneInfo
@@ -135,3 +135,19 @@ def trading_days_held(
             count += 1
         d += timedelta(days=1)
     return count
+
+
+def next_trading_day(
+    d: Optional[date] = None,
+    *,
+    settings: Optional[dict] = None,
+) -> date:
+    """Next A-share trading day strictly after ``d`` (default today Shanghai)."""
+    cursor = (d or today_shanghai()) + timedelta(days=1)
+    cfg = settings or {}
+    for _ in range(15):
+        ok, _ = is_trading_day(cursor, settings=cfg)
+        if ok:
+            return cursor
+        cursor += timedelta(days=1)
+    return (d or today_shanghai()) + timedelta(days=1)

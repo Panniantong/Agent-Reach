@@ -65,6 +65,20 @@
     "large_unrealized_loss_pct": 10
   },
 
+  "pnl_target": {
+    "enabled": true,
+    "harness_evolve": true,
+    "base_target_pct": 0.5,
+    "base_target_cny": 0,
+    "min_target_cny": 100,
+    "streak_bonus_pct": 10,
+    "miss_recovery_factor": 0.8,
+    "evaluate_by_pct": false,
+    "history_limit": 120,
+    "reward_plan": "pnl_target：目标达成，维持策略并适度进攻",
+    "penalty_plan": "pnl_target：目标未达，下日 verify 偏防御"
+  },
+
   "quote_fetch": {
     "sources": ["eastmoney", "akshare", "xueqiu"],
     "max_retries": 2
@@ -561,7 +575,8 @@
       "skill_gates": true,
       "watchlist_adjust": true,
       "forecast_calibrate": true,
-      "pnl_overview": true
+      "pnl_overview": true,
+      "pnl_target": true
     },
     "llm_refine": {
       "enabled": true,

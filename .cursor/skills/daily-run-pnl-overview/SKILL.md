@@ -34,6 +34,7 @@ daily-run pnl history  →  ASCII / SVG 折线图
 | 收盘自动 | `run_close()` → `run_close_harness_refinements(portfolio_summary=…)` |
 | 手动总览 | `daily-run pnl overview` |
 | 每日盈亏曲线 | `daily-run pnl history [--days 30] [--chart ascii\|svg]` |
+| 下一日盈亏目标 | `daily-run pnl target` |
 | 补录 ledger | `daily-run pnl backfill` |
 | 手动 harness | 见下方脚本 |
 
@@ -44,6 +45,7 @@ daily-run pnl history  →  ASCII / SVG 折线图
 - **持仓浮动**：每笔写入 memory（数量、买入价、现价、浮盈浮亏、买入时间）
 - **浮亏警示**：超过 `large_unrealized_loss_cny` 或 `large_unrealized_loss_pct` → policy + 减仓 plan
 - **ledger 缺成本**：cost_basis≈0 → playbook 提示 `pnl backfill`
+- **盈亏目标**：收盘评估当日目标 → 达成奖励 / 未达处罚 → 设定下一交易日目标（`pnl_target` job）
 - **入金剔除**：`capital_net_flow` 存在 → memory + capital CLI 提醒
 - **close layer_a residual**：仅保留日 PnL headline（明细由本 job 承担）
 
@@ -80,11 +82,18 @@ python3 .cursor/skills/daily-run-pnl-overview/scripts/run_pnl_harness.py --json
 "pnl_overview": {
   "harness_evolve": true,
   "large_unrealized_loss_cny": 5000,
-  "large_realized_loss_cny": 500,
-  "large_unrealized_loss_pct": 10
+  "large_realized_loss_cny": 500
+},
+"pnl_target": {
+  "enabled": true,
+  "harness_evolve": true,
+  "base_target_pct": 0.5,
+  "min_target_cny": 100,
+  "streak_bonus_pct": 10,
+  "miss_recovery_factor": 0.8
 },
 "harness": {
-  "jobs": { "pnl_overview": true }
+  "jobs": { "pnl_overview": true, "pnl_target": true }
 }
 ```
 
@@ -92,6 +101,8 @@ python3 .cursor/skills/daily-run-pnl-overview/scripts/run_pnl_harness.py --json
 
 - `agent_reach/daily_run/realized_pnl.py` — FIFO、overview、backfill
 - `agent_reach/daily_run/daily_pnl_history.py` — 每日盈亏 JSONL + ASCII/SVG 折线图
+- `agent_reach/daily_run/pnl_target.py` — 下一交易日盈亏目标 + 奖惩周期
+- `agent_reach/daily_run/pnl_target_harness.py` — 目标评估 → harness refine
 - `agent_reach/daily_run/pnl_overview_harness.py` — evidence + refine
 - `close_harness_skills.py` — 收盘编排
 

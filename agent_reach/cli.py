@@ -350,6 +350,8 @@ def main():
         "--backfill", action="store_true", help="Import missing days from close manifests"
     )
     p_dr_pnl_hist.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_pnl_target = p_dr_pnl_sub.add_parser("target", help="Next trading day P&L target")
+    p_dr_pnl_target.add_argument("--json", action="store_true", help="JSON output")
 
     # ── doctor ──
     p_doctor = sub.add_parser("doctor", help="Check platform availability")
@@ -2360,7 +2362,26 @@ def _cmd_daily_run(args):
                     print("\n" + svg_doc)
             return
 
-        print("Usage: agent-reach daily-run pnl {overview|backfill|history}")
+        if action == "target":
+            from agent_reach.daily_run.pnl_target import (
+                load_pnl_target_state,
+                render_pnl_target_markdown,
+            )
+
+            state = load_pnl_target_state()
+            if args.json:
+                print(_json.dumps(state, ensure_ascii=False, indent=2))
+            else:
+                print(
+                    render_pnl_target_markdown(
+                        pending=state.get("pending"),
+                        last_result=state.get("last_result"),
+                        next_target=state.get("pending"),
+                    )
+                )
+            return
+
+        print("Usage: agent-reach daily-run pnl {overview|backfill|history|target}")
         sys.exit(1)
 
     if args.daily_action not in ("evaluate", "push"):
