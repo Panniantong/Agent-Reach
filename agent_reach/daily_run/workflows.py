@@ -110,6 +110,27 @@ def enrich_morning_baseline(snapshot: dict[str, Any]) -> dict[str, Any]:
     cfg_holdings = list(pf_cfg.get("holdings") or [])
     merged = _merge_holdings_for_baseline(snap_holdings, cfg_holdings)
     holdings = _holdings_baseline_snapshot(merged)
+    missing_codes = [
+        str(h.get("code") or "")
+        for h in holdings
+        if h.get("code") and h.get("price") is None
+    ]
+    if missing_codes:
+        from agent_reach.daily_run.quote_fetch import fetch_quotes_map
+        from agent_reach.daily_run.settings import load_settings
+
+        quotes = fetch_quotes_map(missing_codes, settings=load_settings()).quotes
+        for h in holdings:
+            code = str(h.get("code") or "")
+            q = quotes.get(code) or {}
+            if h.get("price") is None and q.get("price") is not None:
+                h["price"] = q["price"]
+            if h.get("change_pct") is None and q.get("change_pct") is not None:
+                h["change_pct"] = q["change_pct"]
+            shares = h.get("shares")
+            price = h.get("price")
+            if shares is not None and price is not None and h.get("market_value") is None:
+                h["market_value"] = round(int(shares) * float(price), 2)
 
     pf_work: dict[str, Any] = {
         "total": pf_block.get("total") if pf_block.get("total") is not None else pf_cfg.get("total"),

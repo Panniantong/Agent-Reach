@@ -194,6 +194,37 @@ class TestClosePortfolioSummary:
         assert "今日 -1.07%" in md
         assert "当日盈亏 -90元" in md
 
+    def test_day_pnl_fallback_from_change_pct_when_morning_price_missing(self):
+        morning = {
+            "portfolio": {
+                "cash": 48673.0,
+                "holdings": [
+                    {"code": "002273", "name": "水晶光电", "shares": 300, "cost": 33.81},
+                ],
+            }
+        }
+        close = {
+            "portfolio": {
+                "cash": 48673.0,
+                "holdings": [
+                    {
+                        "code": "002273",
+                        "name": "水晶光电",
+                        "shares": 300,
+                        "cost": 33.81,
+                        "price": 29.1,
+                        "change_pct": 5.36,
+                    }
+                ],
+            }
+        }
+        summary = _build_summary(close, morning)
+        row = next(h for h in summary.holdings if h["code"] == "002273")
+        assert row.get("week_start_price") is None
+        assert row["day_pnl"] == pytest.approx(444.12, abs=0.05)
+        md = render_close_portfolio_markdown(summary)
+        assert "当日盈亏 +444" in md
+
     def test_morning_price_skips_cost_fallback(self):
         from pathlib import Path
 
@@ -237,8 +268,11 @@ class TestClosePortfolioSummary:
         ):
             summary = build_close_portfolio_summary(close, morning)
         row = next(h for h in summary.holdings if h["code"] == "002583")
-        assert row.get("day_pnl") is None
         assert row.get("week_start_price") is None
+        assert row["day_pnl"] == pytest.approx(-89.66, abs=0.05)
+        md = render_close_portfolio_markdown(summary)
+        assert "今日 -1.07%" in md
+        assert "当日盈亏 -90元" in md or "当日盈亏 -89元" in md
 
     def test_render_includes_stocks_trades_watchlist(self):
         summary = _build_summary(

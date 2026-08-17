@@ -358,12 +358,29 @@ def _stock_mv_from_holdings(
     return round(total, 2)
 
 
-def _attach_day_pnl(holdings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _attach_day_pnl(
+    holdings: list[dict[str, Any]],
+    *,
+    allow_change_pct_fallback: bool = True,
+) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for h in holdings:
         row = dict(h)
         if row.get("week_chg") is not None:
             row["day_pnl"] = row["week_chg"]
+        elif (
+            allow_change_pct_fallback
+            and row.get("day_pnl") is None
+            and row.get("week_start_price") is None
+        ):
+            chg = row.get("change_pct")
+            if chg is None:
+                chg = row.get("week_chg_pct")
+            end_px = row.get("week_end_price") or row.get("price")
+            shares = int(row.get("shares") or 0)
+            if chg is not None and end_px is not None and shares > 0:
+                start_px = float(end_px) / (1 + float(chg) / 100.0)
+                row["day_pnl"] = round((float(end_px) - start_px) * shares, 2)
         out.append(row)
     return out
 
@@ -519,7 +536,8 @@ def build_close_portfolio_summary(
     end_cash = float(end_cash_raw) if end_cash_raw is not None else None
 
     holdings = _holding_pnl_rows(close_pf, enriched, morning_prices, close_prices)
-    holdings = _attach_day_pnl(holdings)
+    baseline_has_holdings = bool(morning_pf.get("holdings"))
+    holdings = _attach_day_pnl(holdings, allow_change_pct_fallback=baseline_has_holdings)
     end_stock_mv = round(sum(float(h.get("market_value") or 0) for h in holdings), 2)
 
     end_total: Optional[float] = None
