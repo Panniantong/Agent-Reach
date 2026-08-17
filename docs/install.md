@@ -112,6 +112,7 @@ After installing the basics, **ask the user** which additional channels they nee
 > - 📷 **Instagram** — 用户搜索、Profile、用户最近帖子、Explore（桌面走 OpenCLI，复用 Chrome 登录态）
 > - 📺 **B站完整版** — 热门、排行、搜索、视频详情（bili-cli，无需登录）
 > - 💼 **LinkedIn** — Profile、职位搜索
+> - 🎯 **Boss直聘** — 搜索岗位 + JD 全文（本地专用 Chrome；用户手动登录）
 >
 > 告诉我你要哪些，比如"帮我装小红书和 Twitter"、"帮我装 Facebook 和 Instagram"。或者说"全部装"。
 
@@ -120,10 +121,11 @@ Based on the user's choice, run:
 ```bash
 agent-reach install --env=auto --system --channels=opencli,xiaohongshu   # Desktop user chose XHS
 agent-reach install --env=auto --system --channels=facebook,instagram    # Desktop Meta channels
+agent-reach install --env=local --system --channels=boss                # Desktop Boss直聘
 agent-reach install --env=auto --system --channels=all                   # User approved everything
 ```
 
-Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `facebook`, `instagram`, `bilibili`, `linkedin`, `all`
+Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `facebook`, `instagram`, `bilibili`, `linkedin`, `boss`, `all`
 
 ### Step 3: Fix what's broken
 
@@ -137,7 +139,7 @@ Only ask the user when you genuinely need their input (credentials, permissions,
 
 Some channels need credentials only the user can provide. Based on the doctor output, ask for what's missing:
 
-> 🔒 **Security tip:** For platforms that need cookies or browser sessions (Twitter, XiaoHongShu, Reddit, Facebook, Instagram), we recommend using a **dedicated/secondary account** rather than your main account. Cookie/browser-session auth carries two risks:
+> 🔒 **Security tip:** For platforms that need cookies or browser sessions (Twitter, XiaoHongShu, Reddit, Facebook, Instagram, Boss直聘), we recommend using a **dedicated/secondary account** rather than your main account. Cookie/browser-session auth carries two risks:
 > 1. **Account ban** — platforms may detect non-browser API calls and restrict or ban the account
 > 2. **Credential exposure** — cookies grant full account access; using a secondary account limits the blast radius if credentials are ever compromised
 
@@ -314,6 +316,50 @@ agent-reach configure groq-key
 >
 > 详见 https://github.com/stickerdaniel/linkedin-mcp-server
 
+**Boss直聘（桌面专用 — boss-agent-cli + CDP）:**
+
+当用户说“帮我配 Boss直聘”时，Agent 完成可自动完成的部分，只把网站登录留给用户：
+
+1. 先说明将安装一个上游 CLI、启动独立 Chrome 配置目录，并请求系统安装授权。
+2. 用户同意后运行：
+   ```bash
+   agent-reach install --env=local --system --channels=boss
+   ```
+3. 按操作系统启动只绑定本机回环地址的专用 Chrome：
+   ```bash
+   # macOS
+   open -na "Google Chrome" --args --remote-debugging-address=127.0.0.1 \
+     --remote-debugging-port=9222 --user-data-dir="$HOME/.boss-chrome-profile" \
+     "https://www.zhipin.com/web/geek/job"
+
+   # Linux
+   google-chrome --remote-debugging-address=127.0.0.1 \
+     --remote-debugging-port=9222 --user-data-dir="$HOME/.boss-chrome-profile" \
+     "https://www.zhipin.com/web/geek/job"
+   ```
+   Windows PowerShell：
+   ```powershell
+   Start-Process chrome.exe -ArgumentList '--remote-debugging-address=127.0.0.1','--remote-debugging-port=9222',"--user-data-dir=$env:USERPROFILE\.boss-chrome-profile",'https://www.zhipin.com/web/geek/job'
+   ```
+4. 暂停，让**用户手动登录**、扫码或处理滑块；Agent 不索取账号密码、不代替登录。
+5. 用户确认登录完成后运行：
+   ```bash
+   boss --cdp-url http://localhost:9222 login --cdp
+   boss status
+   agent-reach doctor
+   ```
+
+> 安全边界：任何能访问调试端口 9222 的本机进程都能完全控制这个 Chrome。
+> 必须使用 `--remote-debugging-address=127.0.0.1`，不得暴露到局域网或公网；使用
+> 独立 profile 并长期复用，不要每次删除或新建，也不要默认切换到日常主 Chrome；
+> 不使用时关闭专用 Chrome。Boss 不支持服务器/无桌面环境。搜索命令必须带
+> `--browser-mode cdp-required --cdp-url http://localhost:9222`。
+>
+> 临时依赖：boss-agent-cli PR #382 尚未发布，安装器锁定 fork 的不可变提交
+> `ba0f12541079ad794eae4c3bf3fc348befd228c9`，不跟随会移动的 branch。上游发布后，
+> Agent Reach 应改用包含 `browser_mode="cdp_required"`、`JobItem.lid` 和
+> `job_card_browser()` 的正式版本。
+
 ### Step 4: Final check
 
 Run `agent-reach doctor` one final time and report the results to your user.
@@ -344,6 +390,7 @@ If the user wants a different agent to handle it, let them choose.
 | `agent-reach install --env=auto` | Read-only dependency and channel check (default) |
 | `agent-reach install --env=auto --system` | Explicitly install/configure core external tools |
 | `agent-reach install --env=auto --system --channels=twitter,xiaohongshu` | Install approved optional channels |
+| `agent-reach install --env=local --system --channels=boss` | Install the desktop Boss直聘 strict-CDP backend |
 | `agent-reach install --env=auto --system --channels=all` | Install everything after explicit approval |
 | `agent-reach install --env=auto --safe` | Compatibility alias for the safe default |
 | `agent-reach install --env=auto --dry-run` | Preview what would be done |
@@ -370,6 +417,7 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 | 小红书 | `opencli`（服务器 `mcporter`） | `opencli xiaohongshu search "query" -f yaml` |
 | 小宇宙播客 | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 | LinkedIn | `mcporter` | `mcporter call linkedin.get_person_profile linkedin_username="..."` |
+| Boss直聘 | `boss` / Python public API | `boss status`；搜索和 JD 见 `references/career.md` |
 | RSS | `feedparser` | `python3 -c "import feedparser; ..."` |
 
 > 多后端平台以 `agent-reach doctor --json` 的 `active_backend` 为准。

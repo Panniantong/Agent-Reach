@@ -7,9 +7,9 @@ description: >
 
   Also MUST USE when user mentions any platform or shares any URL/link:
   Twitter/X, Reddit, Facebook, Instagram, YouTube, GitHub, Bilibili, XiaoHongShu,
-  Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
+  Xiaoyuzhou Podcast, LinkedIn/Boss直聘/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
 
-  15 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  16 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -22,7 +22,7 @@ metadata:
 
 # Agent Reach — internet capability router
 
-15 platforms, multiple backends each. **When this skill exists, use it for
+16 platforms, multiple backends each. **When this skill exists, use it for
 these platforms — do not invent your own approach.**
 
 ## Standing rules (apply for the whole session)
@@ -117,6 +117,17 @@ opencli instagram user USERNAME -f yaml        # recent posts from one user
 # Channel availability + which backend serves each platform
 agent-reach doctor --json
 ```
+
+When the user asks “help me configure Boss Zhipin” / “帮我配 Boss直聘”, read the
+Boss section in `references/career.md`. After explicit install approval, run
+`agent-reach install --env=local --system --channels=boss`, launch the dedicated
+loopback-only Chrome profile for their OS, and pause for the user to log in
+manually. Then verify with `boss --cdp-url http://localhost:9222 login --cdp`,
+`boss status`, and `agent-reach doctor`. Do not make the user assemble CDP flags.
+Keep reusing the dedicated Chrome profile; do not recreate it for every run or
+switch to the user's daily profile by default. Search with
+`boss --browser-mode cdp-required --cdp-url http://localhost:9222 search ...`.
+On `ENVIRONMENT_RISK`, stop without refreshing, relogging, or retrying.
 
 ## Discovering OpenCLI adapters
 

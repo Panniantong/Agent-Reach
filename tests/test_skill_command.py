@@ -109,6 +109,36 @@ class TestSkillCommand(unittest.TestCase):
         self.assertNotIn("linkedin-scraper.", linkedin_section)
         self.assertNotIn("--transport streamable-http", linkedin_section)
 
+    def test_boss_setup_is_agent_driven_and_reproducible(self):
+        root = Path(__file__).resolve().parents[1]
+        install_doc = (root / "docs" / "install.md").read_text(encoding="utf-8")
+        skill = (root / "agent_reach" / "skill" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        career = (
+            root / "agent_reach" / "skill" / "references" / "career.md"
+        ).read_text(encoding="utf-8")
+        readme = (root / "README.md").read_text(encoding="utf-8")
+
+        for content in (install_doc, skill, readme):
+            self.assertIn("帮我配 Boss直聘", content)
+        self.assertIn("agent-reach install --env=local --system --channels=boss", install_doc)
+        self.assertIn("--remote-debugging-address=127.0.0.1", install_doc)
+        self.assertIn("用户手动登录", install_doc)
+        self.assertIn("完全控制", install_doc)
+
+        self.assertIn(
+            'auth = AuthManager(Path.home() / ".boss-agent")', career
+        )
+        self.assertIn('browser_mode="cdp_required"', career)
+        self.assertIn("job_card_browser", career)
+        self.assertIn("ba0f12541079ad794eae4c3bf3fc348befd228c9", career)
+        self.assertIn("ENVIRONMENT_RISK", career)
+        self.assertIn("--browser-mode cdp-required", career)
+        self.assertIn("长期复用", career)
+        self.assertNotIn("code 37（TOKEN_REFRESH_FAILED）→ 重新登录", career)
+        self.assertNotIn("client = BossClient(auth", career)
+
     def test_localized_readmes_use_current_linkedin_server_name(self):
         root = Path(__file__).resolve().parents[1]
         for name in ("README_ja.md", "README_ko.md"):
