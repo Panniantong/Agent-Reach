@@ -778,6 +778,12 @@ def run_close(
             settings=cfg,
         )
         portfolio_md = render_close_portfolio_markdown(portfolio_summary_obj)
+        from agent_reach.daily_run.daily_pnl_history import append_daily_pnl
+
+        append_daily_pnl(
+            portfolio_summary_obj.to_dict(),
+            source="close",
+        )
 
     from agent_reach.daily_run.auditor import run_data_audit
 

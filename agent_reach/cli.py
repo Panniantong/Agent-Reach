@@ -329,6 +329,27 @@ def main():
         help="Backfill realized_pnl on sell actions in trade ledger",
     )
     p_dr_pnl_bf.add_argument("--dry-run", action="store_true", help="Report only")
+    p_dr_pnl_hist = p_dr_pnl_sub.add_parser("history", help="Daily P&L history and charts")
+    p_dr_pnl_hist.add_argument("--days", type=int, default=30, help="Show last N days (default: 30)")
+    p_dr_pnl_hist.add_argument(
+        "--chart",
+        default="ascii",
+        choices=["ascii", "svg", "both", "none"],
+        help="Chart format (default: ascii)",
+    )
+    p_dr_pnl_hist.add_argument(
+        "--series",
+        default="both",
+        choices=["daily", "cumulative", "both"],
+        help="Which series to chart (default: both)",
+    )
+    p_dr_pnl_hist.add_argument(
+        "--output", "-o", default="", help="Write SVG chart to file (requires --chart svg|both)"
+    )
+    p_dr_pnl_hist.add_argument(
+        "--backfill", action="store_true", help="Import missing days from close manifests"
+    )
+    p_dr_pnl_hist.add_argument("--json", action="store_true", help="JSON output")
 
     # ── doctor ──
     p_doctor = sub.add_parser("doctor", help="Check platform availability")
@@ -2280,7 +2301,66 @@ def _cmd_daily_run(args):
                 print(render_pnl_overview_markdown(overview))
             return
 
-        print("Usage: agent-reach daily-run pnl {overview|backfill}")
+        if action == "history":
+            from agent_reach.daily_run.daily_pnl_history import (
+                attach_cumulative_pnl,
+                backfill_from_manifests,
+                load_daily_pnl_history,
+                render_pnl_history_markdown,
+                render_pnl_line_chart_ascii,
+                render_pnl_line_chart_svg,
+            )
+            from agent_reach.daily_run.trade_calendar import today_shanghai
+
+            end = today_shanghai()
+            start = end - _timedelta(days=max(int(args.days), 1) - 1)
+            if args.backfill:
+                bf = backfill_from_manifests(start=start, end=end)
+                if not args.json:
+                    print(f"✅ backfill imported {bf.get('imported', 0)} days → {bf.get('path')}")
+
+            rows = load_daily_pnl_history(start=start, end=end)
+            attach_cumulative_pnl(rows)
+
+            if args.json:
+                print(
+                    _json.dumps(
+                        [r.to_dict() for r in rows],
+                        ensure_ascii=False,
+                        indent=2,
+                    )
+                )
+                return
+
+            print(render_pnl_history_markdown(rows, days=int(args.days)))
+
+            chart_mode = args.chart
+            if chart_mode in ("ascii", "both"):
+                if args.series in ("daily", "both"):
+                    print("\n" + render_pnl_line_chart_ascii(rows, value_key="daily_pnl", title="每日盈亏"))
+                if args.series in ("cumulative", "both"):
+                    print("\n" + render_pnl_line_chart_ascii(rows, value_key="cumulative_pnl", title="累计盈亏"))
+            if chart_mode in ("svg", "both"):
+                svg_parts: list[str] = []
+                if args.series in ("daily", "both"):
+                    svg_parts.append(
+                        render_pnl_line_chart_svg(rows, value_key="daily_pnl", title="每日盈亏")
+                    )
+                if args.series in ("cumulative", "both"):
+                    svg_parts.append(
+                        render_pnl_line_chart_svg(rows, value_key="cumulative_pnl", title="累计盈亏")
+                    )
+                svg_doc = "\n".join(svg_parts)
+                if args.output:
+                    out_path = Path(args.output).expanduser()
+                    out_path.parent.mkdir(parents=True, exist_ok=True)
+                    out_path.write_text(svg_doc, encoding="utf-8")
+                    print(f"\n✅ SVG saved: {out_path}")
+                elif chart_mode == "svg":
+                    print("\n" + svg_doc)
+            return
+
+        print("Usage: agent-reach daily-run pnl {overview|backfill|history}")
         sys.exit(1)
 
     if args.daily_action not in ("evaluate", "push"):

@@ -27,6 +27,7 @@ apply_pnl_overview_harness_refinement()  →  ~/.agent-reach/harness_state.json
 |------|------|
 | 收盘自动 | `run_close()` → `run_close_harness_refinements(portfolio_summary=…)` |
 | 手动总览 | `daily-run pnl overview` |
+| 每日盈亏曲线 | `daily-run pnl history [--days 30] [--chart ascii\|svg]` |
 | 补录 ledger | `daily-run pnl backfill` |
 | 手动 harness | 见下方脚本 |
 
@@ -51,6 +52,11 @@ python3 -m agent_reach.cli daily-run pnl overview --period week --json
 
 # 补录历史卖出 realized_pnl
 python3 -m agent_reach.cli daily-run pnl backfill
+
+# 每日盈亏历史 + 折线图
+python3 -m agent_reach.cli daily-run pnl history --days 30
+python3 -m agent_reach.cli daily-run pnl history --chart svg -o /tmp/pnl.svg
+python3 -m agent_reach.cli daily-run pnl history --backfill --json
 
 # 入金/出金（避免日 PnL 失真）
 python3 -m agent_reach.cli daily-run capital deposit --amount 100000 --note "追加本金"
@@ -79,6 +85,7 @@ python3 .cursor/skills/daily-run-pnl-overview/scripts/run_pnl_harness.py --json
 ## 模块
 
 - `agent_reach/daily_run/realized_pnl.py` — FIFO、overview、backfill
+- `agent_reach/daily_run/daily_pnl_history.py` — 每日盈亏 JSONL + ASCII/SVG 折线图
 - `agent_reach/daily_run/pnl_overview_harness.py` — evidence + refine
 - `close_harness_skills.py` — 收盘编排
 
