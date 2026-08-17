@@ -771,6 +771,7 @@ def run_close(
             audit=audit,
             forecast_review=forecast_review.to_dict() if forecast_review else None,
             watchlist_adjust=watchlist_adjust,
+            portfolio_summary=portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
             settings=cfg,
         )
         enriched["harness_skills"] = harness_skills_report.to_dict()

@@ -499,7 +499,7 @@ def _close_specialized_jobs_enabled(cfg: dict[str, Any]) -> bool:
     jobs = cfg.get("jobs") or {}
     if not isinstance(jobs, dict):
         return False
-    return bool(jobs.get("verify")) or bool(jobs.get("close_improve"))
+    return bool(jobs.get("verify")) or bool(jobs.get("close_improve")) or bool(jobs.get("pnl_overview"))
 
 
 def _weekly_specialized_jobs_enabled(cfg: dict[str, Any]) -> bool:
@@ -550,10 +550,15 @@ def _evidence_from_close(
     pf = evidence.get("portfolio_summary") or {}
     pnl = pf.get("daily_pnl")
     pct = pf.get("daily_pnl_pct")
+    jobs = cfg.get("jobs") or {}
+    pnl_job = isinstance(jobs, dict) and jobs.get("pnl_overview")
     if pnl is not None:
         sign = "+" if float(pnl) >= 0 else ""
         pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
-        memory.append(f"{name} 收盘组合盈亏 {sign}¥{float(pnl):,.0f}{pct_s}".strip())
+        if pnl_job:
+            memory.append(f"收盘日PnL {sign}¥{float(pnl):,.0f}{pct_s}（明细见 pnl_overview job）")
+        else:
+            memory.append(f"{name} 收盘组合盈亏 {sign}¥{float(pnl):,.0f}{pct_s}".strip())
 
     if not specialized:
         for rec in (verify.get("recommendations") or [])[:2]:

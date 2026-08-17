@@ -18,6 +18,7 @@ class CloseHarnessSkillsReport:
     close_improve: dict[str, Any] = field(default_factory=dict)
     data_audit: dict[str, Any] = field(default_factory=dict)
     watchlist_adjust: dict[str, Any] = field(default_factory=dict)
+    pnl_overview: dict[str, Any] = field(default_factory=dict)
     close_layer_a: dict[str, Any] = field(default_factory=dict)
     effective_overlay: dict[str, Any] = field(default_factory=dict)
 
@@ -27,6 +28,7 @@ class CloseHarnessSkillsReport:
             "close_improve": self.close_improve,
             "data_audit": self.data_audit,
             "watchlist_adjust": self.watchlist_adjust,
+            "pnl_overview": self.pnl_overview,
             "close_layer_a": self.close_layer_a,
             "effective_overlay": self.effective_overlay,
             "total_changes": sum(
@@ -36,6 +38,7 @@ class CloseHarnessSkillsReport:
                     self.close_improve,
                     self.data_audit,
                     self.watchlist_adjust,
+                    self.pnl_overview,
                     self.close_layer_a,
                 )
                 if not (block or {}).get("skipped")
@@ -50,6 +53,7 @@ def run_close_harness_refinements(
     audit: Optional[AuditResult | dict[str, Any]] = None,
     forecast_review: Optional[dict[str, Any]] = None,
     watchlist_adjust: Optional[dict[str, Any]] = None,
+    portfolio_summary: Optional[dict[str, Any]] = None,
     settings: Optional[dict[str, Any]] = None,
 ) -> CloseHarnessSkillsReport:
     """Run verify / close_improve / data_audit harness refinements after close."""
@@ -83,6 +87,14 @@ def run_close_harness_refinements(
 
         report.watchlist_adjust = apply_watchlist_adjust_harness_refinement(
             watchlist_adjust,
+            settings=cfg,
+        )
+
+    if portfolio_summary is not None:
+        from agent_reach.daily_run.pnl_overview_harness import apply_pnl_overview_harness_refinement
+
+        report.pnl_overview = apply_pnl_overview_harness_refinement(
+            portfolio_summary,
             settings=cfg,
         )
 

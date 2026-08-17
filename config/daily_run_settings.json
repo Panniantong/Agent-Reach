@@ -58,6 +58,13 @@
     "harness_evolve": true
   },
 
+  "pnl_overview": {
+    "harness_evolve": true,
+    "large_unrealized_loss_cny": 5000,
+    "large_realized_loss_cny": 500,
+    "large_unrealized_loss_pct": 10
+  },
+
   "quote_fetch": {
     "sources": ["eastmoney", "akshare", "xueqiu"],
     "max_retries": 2
@@ -553,7 +560,8 @@
       "rejected_strategies": true,
       "skill_gates": true,
       "watchlist_adjust": true,
-      "forecast_calibrate": true
+      "forecast_calibrate": true,
+      "pnl_overview": true
     },
     "llm_refine": {
       "enabled": true,

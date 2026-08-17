@@ -1,7 +1,7 @@
 ---
 name: daily-run-harness-skills
 description: >-
-  Daily-run harness 自进化 skills 集合：verify、close_improve、data_audit、
+  Daily-run harness 自进化 skills 集合：verify、close_improve、data_audit、pnl_overview、
   skill_closure、experience、morning、intraday、run_guard。收盘/定时/周六/Agent 改代码后运行。
 ---
 
@@ -25,10 +25,11 @@ description: >-
 | `skill_gates` | `skill_gates_harness.py` | 周六 skill gate 失败 |
 | `watchlist_adjust` | `watchlist_adjust_harness.py` | 收盘/早盘观察池 adjust |
 | `forecast_calibrate` | `forecast_calibrate_harness.py` | 周日 forecast MSS/校准 |
+| `pnl_overview` | `pnl_overview_harness.py` | 收盘 FIFO 已实现 + 浮动盈亏总览 |
 
 ## 收盘自动
 
-`run_close()` → `run_close_harness_refinements()` 依次 refine verify / close_improve / data_audit；
+`run_close()` → `run_close_harness_refinements()` 依次 refine verify / close_improve / data_audit / **pnl_overview**；
 `append_experience_entry()` → experience harness（harness 模式下 rules 同步进 memory/policy）；
 随后 `run_close_layer_a_refinement()` 只写入组合盈亏等 residual。
 
@@ -60,6 +61,9 @@ python3 -m agent_reach.cli daily-run harness migrate-settings
 ```bash
 # 收盘三件套（smoke）
 python3 .cursor/skills/daily-run-harness-skills/scripts/run_close_harness.py --json
+
+# 盈亏总览 harness
+python3 .cursor/skills/daily-run-pnl-overview/scripts/run_pnl_harness.py --json
 
 # 代码走读
 python3 .cursor/skills/daily-run-code-walk/scripts/run_walk.py
@@ -99,7 +103,8 @@ python3 .cursor/skills/daily-run-code-walk/scripts/run_walk.py
 ## 配置
 
 ```json
-"harness": { "jobs": { "verify": true, "close_improve": true, "data_audit": true, "skill_closure": true, "optimize": true, "experience": true, "morning": true, "intraday": true, "run_guard": true } },
+"harness": { "jobs": { "verify": true, "close_improve": true, "data_audit": true, "pnl_overview": true, "skill_closure": true, "optimize": true, "experience": true, "morning": true, "intraday": true, "run_guard": true } },
+"pnl_overview": { "harness_evolve": true },
 "close_improvements": { "harness_evolve": true },
 "data_audit": { "harness_evolve": true },
 "optimizer": { "harness_evolve": true },

@@ -687,29 +687,16 @@ def render_close_portfolio_markdown(summary: ClosePortfolioSummary | dict[str, A
         sign = "+" if cash_flow >= 0 else ""
         lines.append(f"- 今日成交净额 {sign}¥{cash_flow:,.0f}")
 
-    from agent_reach.daily_run.realized_pnl import build_pnl_overview, render_pnl_overview_markdown
+    from agent_reach.daily_run.pnl_overview_harness import build_close_pnl_overview
+    from agent_reach.daily_run.realized_pnl import render_pnl_overview_markdown
 
     overview_pf = {
-        "holdings": [
-            {
-                "code": h.get("code"),
-                "name": h.get("name"),
-                "shares": h.get("shares"),
-                "cost": h.get("cost"),
-                "price": h.get("week_end_price") or h.get("price"),
-            }
-            for h in data.get("holdings") or []
-        ]
+        "as_of": data.get("as_of"),
+        "holdings": data.get("holdings") or [],
     }
-    as_of = data.get("as_of")
-    if as_of:
-        overview = build_pnl_overview(
-            overview_pf,
-            start=date(1970, 1, 1),
-            end=date.fromisoformat(str(as_of)[:10]),
-        )
-        lines.append("")
-        lines.append(render_pnl_overview_markdown(overview))
+    overview = build_close_pnl_overview(overview_pf)
+    lines.append("")
+    lines.append(render_pnl_overview_markdown(overview))
 
     lines.append("")
     lines.append("## 📈 个股盈亏")
