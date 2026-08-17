@@ -19,6 +19,12 @@ build_pnl_overview() / build_close_pnl_overview()
 pnl_overview_to_harness_evidence()
         ↓
 apply_pnl_overview_harness_refinement()  →  ~/.agent-reach/harness_state.json
+
+收盘 portfolio_summary.daily_pnl
+        ↓
+append_daily_pnl()  →  ~/.agent-reach/daily_run/pnl_history.jsonl
+        ↓
+daily-run pnl history  →  ASCII / SVG 折线图
 ```
 
 ## 触发
