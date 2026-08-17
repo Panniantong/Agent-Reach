@@ -32,11 +32,13 @@ apply_pnl_overview_harness_refinement()  →  ~/.agent-reach/harness_state.json
 
 ## 进化规则（Layer A 确定性）
 
-- **卖出已实现**：每笔 FIFO 盈亏写入 memory；大亏 → policy/plan；大盈 → playbook 止盈参考
-- **浮亏警示**：超过 `large_unrealized_loss_cny` 或 `large_unrealized_loss_pct` → memory + 减仓 plan
+- **买入记录**：每笔写入 memory（数量、买入价、成交额、佣金、成交时间、trade_id）
+- **卖出已实现**：每笔 FIFO 盈亏写入 memory（数量、买/卖价、已实现、时间）；大亏 → policy/plan；大盈 → playbook 止盈参考
+- **持仓浮动**：每笔写入 memory（数量、买入价、现价、浮盈浮亏、买入时间）
+- **浮亏警示**：超过 `large_unrealized_loss_cny` 或 `large_unrealized_loss_pct` → policy + 减仓 plan
 - **ledger 缺成本**：cost_basis≈0 → playbook 提示 `pnl backfill`
 - **入金剔除**：`capital_net_flow` 存在 → memory + capital CLI 提醒
-- **close layer_a residual**：仅保留日 PnL  headline（明细由本 job 承担）
+- **close layer_a residual**：仅保留日 PnL headline（明细由本 job 承担）
 
 ## CLI
 

@@ -7,7 +7,13 @@ from datetime import date
 from typing import Any, Optional
 
 from agent_reach.daily_run.harness_skill_base import apply_skill_refinement
-from agent_reach.daily_run.realized_pnl import PnlOverview, build_pnl_overview
+from agent_reach.daily_run.realized_pnl import (
+    PnlOverview,
+    build_pnl_overview,
+    format_buy_trade_line,
+    format_holding_trade_line,
+    format_sell_trade_line,
+)
 
 
 def _pnl_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
@@ -57,15 +63,15 @@ def pnl_overview_to_harness_evidence(
         memory.append(f"当日入出金已剔除：{float(capital_flow):+,.0f} 元（PnL 口径）")
         playbook.append("有外部入金/出金时用 daily-run capital 记录，避免日PnL失真")
 
+    for row in data.get("buys") or []:
+        memory.append(format_buy_trade_line(row))
+
     for row in data.get("realized_sells") or []:
         name = row.get("name") or row.get("code") or "?"
         code = row.get("code") or "?"
         pnl = float(row.get("realized_pnl") or 0)
-        pct = row.get("realized_pnl_pct")
         cost_basis = float(row.get("cost_basis") or 0)
-        pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
-        line = f"卖出 {name}({code}) 已实现 {pnl:+,.0f}{pct_s}"
-        memory.append(line)
+        memory.append(format_sell_trade_line(row))
 
         if cost_basis <= 0.01 and int(row.get("shares") or 0) > 0:
             playbook.append(
@@ -80,6 +86,7 @@ def pnl_overview_to_harness_evidence(
             playbook.append(f"止盈参考：{name} 已实现 +{pnl:,.0f}，同类标的可分批兑现")
 
     for h in data.get("holdings") or []:
+        memory.append(format_holding_trade_line(h))
         up = float(h.get("unrealized_pnl") or 0)
         pct = h.get("unrealized_pnl_pct")
         name = h.get("name") or h.get("code") or "?"
@@ -87,7 +94,6 @@ def pnl_overview_to_harness_evidence(
         if up <= -large_unreal_cny or (
             pct is not None and float(pct) <= -large_unreal_pct
         ):
-            memory.append(f"浮亏警示 {name}({code}) {up:+,.0f}" + (f"（{float(pct):+.1f}%）" if pct is not None else ""))
             if up <= -large_unreal_cny * 2:
                 policy.append(f"深浮亏 {name}：禁止接飞刀加仓，优先 verify 回避/减仓")
                 plan.append(f"pnl：审视 {code} 止损/减仓阈值")
@@ -130,6 +136,7 @@ def build_close_pnl_overview(
                 "shares": h.get("shares"),
                 "cost": h.get("cost"),
                 "price": h.get("week_end_price") or h.get("price"),
+                "acquired_date": h.get("acquired_date"),
             }
             for h in portfolio_summary.get("holdings") or []
         ]

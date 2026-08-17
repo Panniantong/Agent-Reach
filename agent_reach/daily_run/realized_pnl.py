@@ -6,9 +6,10 @@ from __future__ import annotations
 import json
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
 from agent_reach.daily_run.portfolio_manager import (
     dedupe_trade_ledger_entries,
@@ -32,20 +33,57 @@ class RealizedSellRow:
     realized_pnl_pct: Optional[float] = None
     trade_id: Optional[str] = None
     reasoning: str = ""
+    at: str = ""
+    avg_buy_price: Optional[float] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "date": self.date,
+            "at": self.at,
             "code": self.code,
             "name": self.name,
             "shares": self.shares,
             "price": self.price,
+            "sell_price": self.price,
+            "avg_buy_price": self.avg_buy_price,
             "amount": self.amount,
             "commission": self.commission,
             "cost_basis": round(self.cost_basis, 2),
             "realized_pnl": round(self.realized_pnl, 2),
             "realized_pnl_pct": self.realized_pnl_pct,
             "trade_id": self.trade_id,
+            "reasoning": self.reasoning,
+        }
+
+
+@dataclass
+class LedgerBuyRow:
+    date: str
+    at: str
+    code: str
+    name: str
+    shares: int
+    price: float
+    amount: float
+    commission: float
+    trade_id: Optional[str] = None
+    decision_action: Optional[str] = None
+    reasoning: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "date": self.date,
+            "at": self.at,
+            "side": "buy",
+            "code": self.code,
+            "name": self.name,
+            "shares": self.shares,
+            "price": self.price,
+            "buy_price": self.price,
+            "amount": self.amount,
+            "commission": self.commission,
+            "trade_id": self.trade_id,
+            "decision_action": self.decision_action,
             "reasoning": self.reasoning,
         }
 
@@ -60,6 +98,7 @@ class PnlOverview:
     total_pnl: float
     trade_cash_flow: float
     realized_sells: list[RealizedSellRow] = field(default_factory=list)
+    buys: list[LedgerBuyRow] = field(default_factory=list)
     win_count: int = 0
     loss_count: int = 0
     flat_count: int = 0
@@ -75,6 +114,7 @@ class PnlOverview:
             "total_pnl": round(self.total_pnl, 2),
             "trade_cash_flow": round(self.trade_cash_flow, 2),
             "realized_sells": [r.to_dict() for r in self.realized_sells],
+            "buys": [b.to_dict() for b in self.buys],
             "win_count": self.win_count,
             "loss_count": self.loss_count,
             "flat_count": self.flat_count,
@@ -108,6 +148,136 @@ def load_ledger_entries(
             continue
         entries.append(entry)
     return dedupe_trade_ledger_entries(entries)
+
+
+def format_trade_at(iso_at: str) -> str:
+    """Format ledger ISO timestamp for display (Asia/Shanghai)."""
+    raw = str(iso_at or "").strip()
+    if not raw:
+        return ""
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M")
+    except ValueError:
+        return raw[:16].replace("T", " ")
+
+
+def _ledger_buy_rows(trades: list[dict[str, Any]]) -> list[LedgerBuyRow]:
+    rows: list[LedgerBuyRow] = []
+    for entry in trades:
+        entry_at = str(entry.get("at") or "")
+        day = entry_at[:10]
+        trade_id = entry.get("trade_id")
+        decision = entry.get("decision_action")
+        for action in entry.get("actions") or []:
+            if action.get("side") != "buy":
+                continue
+            shares = int(action.get("shares") or 0)
+            if shares <= 0:
+                continue
+            rows.append(
+                LedgerBuyRow(
+                    date=day,
+                    at=entry_at,
+                    code=_normalize_code(str(action.get("code") or "")),
+                    name=str(action.get("name") or action.get("code") or "?"),
+                    shares=shares,
+                    price=float(action.get("price") or 0),
+                    amount=float(action.get("amount") or 0),
+                    commission=float(action.get("commission") or 0),
+                    trade_id=str(trade_id) if trade_id else None,
+                    decision_action=str(decision) if decision else None,
+                    reasoning=str(action.get("reasoning") or ""),
+                )
+            )
+    return rows
+
+
+def _latest_buys_by_code(buys: list[LedgerBuyRow]) -> dict[str, LedgerBuyRow]:
+    out: dict[str, LedgerBuyRow] = {}
+    for row in buys:
+        if row.code:
+            out[row.code] = row
+    return out
+
+
+def format_buy_trade_line(row: dict[str, Any] | LedgerBuyRow) -> str:
+    data = row.to_dict() if isinstance(row, LedgerBuyRow) else row
+    name = data.get("name") or data.get("code") or "?"
+    code = data.get("code") or "?"
+    shares = int(data.get("shares") or 0)
+    price = float(data.get("price") or data.get("buy_price") or 0)
+    commission = float(data.get("commission") or 0)
+    when = format_trade_at(str(data.get("at") or "")) or str(data.get("date") or "")
+    parts = [
+        f"买入 **{name}** ({code})",
+        f"{shares}股 @ ¥{price:.2f}",
+        f"成交额 ¥{float(data.get('amount') or 0):,.0f}",
+    ]
+    if commission:
+        parts.append(f"佣金 ¥{commission:.2f}")
+    if when:
+        parts.append(when)
+    trade_id = data.get("trade_id")
+    if trade_id:
+        parts.append(f"#{trade_id}")
+    return " · ".join(parts)
+
+
+def format_sell_trade_line(row: dict[str, Any] | RealizedSellRow) -> str:
+    data = row.to_dict() if isinstance(row, RealizedSellRow) else row
+    name = data.get("name") or data.get("code") or "?"
+    code = data.get("code") or "?"
+    shares = int(data.get("shares") or 0)
+    sell_px = float(data.get("price") or data.get("sell_price") or 0)
+    buy_px = data.get("avg_buy_price")
+    pnl = float(data.get("realized_pnl") or 0)
+    pct = data.get("realized_pnl_pct")
+    when = format_trade_at(str(data.get("at") or "")) or str(data.get("date") or "")
+    px_part = f"卖 ¥{sell_px:.2f}"
+    if buy_px is not None:
+        px_part = f"买 ¥{float(buy_px):.2f} → {px_part}"
+    pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
+    parts = [
+        f"卖出 **{name}** ({code})",
+        f"{shares}股",
+        px_part,
+        f"已实现 **{pnl:+,.0f}**{pct_s}",
+    ]
+    commission = float(data.get("commission") or 0)
+    if commission:
+        parts.append(f"佣金 ¥{commission:.2f}")
+    if when:
+        parts.append(when)
+    trade_id = data.get("trade_id")
+    if trade_id:
+        parts.append(f"#{trade_id}")
+    return " · ".join(parts)
+
+
+def format_holding_trade_line(row: dict[str, Any]) -> str:
+    name = row.get("name") or row.get("code") or "?"
+    code = row.get("code") or "?"
+    shares = int(row.get("shares") or 0)
+    buy_px = row.get("buy_price")
+    if buy_px is None:
+        buy_px = row.get("cost")
+    close_px = row.get("price")
+    pnl = float(row.get("unrealized_pnl") or 0)
+    pct = row.get("unrealized_pnl_pct")
+    pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
+    parts = [f"**{name}** ({code})", f"{shares}股"]
+    if buy_px is not None and close_px is not None:
+        parts.append(f"买 ¥{float(buy_px):.2f} → 现 ¥{float(close_px):.2f}")
+    elif close_px is not None:
+        parts.append(f"现价 ¥{float(close_px):.2f}")
+    parts.append(f"浮盈浮亏 **{pnl:+,.0f}**{pct_s}")
+    when = row.get("buy_at")
+    if when:
+        parts.append(f"买入 {format_trade_at(str(when)) or str(when)[:10]}")
+    return " · ".join(parts)
 
 
 def compute_trade_cash_flow(trades: list[dict[str, Any]]) -> float:
@@ -179,7 +349,8 @@ def replay_realized_sells(trades: list[dict[str, Any]]) -> list[RealizedSellRow]
 
     for entry in trades:
         actions = list(entry.get("actions") or [])
-        at = str(entry.get("at") or "")[:10]
+        entry_at = str(entry.get("at") or "")
+        at = entry_at[:10]
         trade_id = entry.get("trade_id")
 
         if (
@@ -195,6 +366,7 @@ def replay_realized_sells(trades: list[dict[str, Any]]) -> list[RealizedSellRow]
                 rows.append(
                     RealizedSellRow(
                         date=at,
+                        at=entry_at,
                         code=_normalize_code(str(action.get("code") or "")),
                         name=str(action.get("name") or action.get("code") or "?"),
                         shares=int(action.get("shares") or 0),
@@ -205,6 +377,7 @@ def replay_realized_sells(trades: list[dict[str, Any]]) -> list[RealizedSellRow]
                         realized_pnl=cash_pnl,
                         trade_id=str(trade_id) if trade_id else None,
                         reasoning=str(action.get("reasoning") or ""),
+                        avg_buy_price=None,
                     )
                 )
             continue
@@ -223,6 +396,7 @@ def replay_realized_sells(trades: list[dict[str, Any]]) -> list[RealizedSellRow]
                     rows.append(
                         RealizedSellRow(
                             date=at,
+                            at=entry_at,
                             code=_normalize_code(str(action.get("code") or "")),
                             name=str(action.get("name") or action.get("code") or "?"),
                             shares=0,
@@ -233,6 +407,7 @@ def replay_realized_sells(trades: list[dict[str, Any]]) -> list[RealizedSellRow]
                             realized_pnl=round(amount - commission, 2),
                             trade_id=str(trade_id) if trade_id else None,
                             reasoning=str(action.get("reasoning") or ""),
+                            avg_buy_price=None,
                         )
                     )
 
@@ -240,9 +415,11 @@ def replay_realized_sells(trades: list[dict[str, Any]]) -> list[RealizedSellRow]
             realized, cost_basis = _apply_sell(lots, action)
             shares = int(action.get("shares") or 0)
             pct = round(realized / cost_basis * 100, 2) if cost_basis > 0 else None
+            avg_buy = round(cost_basis / shares, 4) if shares > 0 and cost_basis > 0 else None
             rows.append(
                 RealizedSellRow(
                     date=at,
+                    at=entry_at,
                     code=_normalize_code(str(action.get("code") or "")),
                     name=str(action.get("name") or action.get("code") or "?"),
                     shares=shares,
@@ -254,6 +431,7 @@ def replay_realized_sells(trades: list[dict[str, Any]]) -> list[RealizedSellRow]
                     realized_pnl_pct=pct,
                     trade_id=str(trade_id) if trade_id else None,
                     reasoning=str(action.get("reasoning") or ""),
+                    avg_buy_price=avg_buy,
                 )
             )
     return rows
@@ -316,30 +494,41 @@ def enrich_sell_actions(
     return enriched
 
 
-def _holding_unrealized_rows(portfolio: dict[str, Any]) -> list[dict[str, Any]]:
+def _holding_unrealized_rows(
+    portfolio: dict[str, Any],
+    *,
+    latest_buys: dict[str, LedgerBuyRow] | None = None,
+) -> list[dict[str, Any]]:
+    latest_buys = latest_buys or {}
     rows: list[dict[str, Any]] = []
     for h in portfolio.get("holdings") or []:
         code = _normalize_code(str(h.get("code") or ""))
         shares = int(h.get("shares") or 0)
-        cost = float(h.get("cost") or 0)
+        buy = latest_buys.get(code)
+        cost = float(buy.price if buy else h.get("cost") or 0)
         price = float(h.get("price") or cost)
         cost_basis = round(shares * cost, 2)
         mv = round(shares * price, 2)
         unrealized = round(mv - cost_basis, 2)
         pct = round(unrealized / cost_basis * 100, 2) if cost_basis > 0 else None
-        rows.append(
-            {
-                "code": code,
-                "name": h.get("name") or code,
-                "shares": shares,
-                "cost": cost,
-                "price": price,
-                "cost_basis": cost_basis,
-                "market_value": mv,
-                "unrealized_pnl": unrealized,
-                "unrealized_pnl_pct": pct,
-            }
-        )
+        row: dict[str, Any] = {
+            "code": code,
+            "name": h.get("name") or code,
+            "shares": shares,
+            "cost": cost,
+            "price": price,
+            "cost_basis": cost_basis,
+            "market_value": mv,
+            "unrealized_pnl": unrealized,
+            "unrealized_pnl_pct": pct,
+        }
+        if buy:
+            row["buy_at"] = buy.at
+            row["buy_price"] = round(buy.price, 4)
+            row["buy_shares"] = buy.shares
+        elif h.get("acquired_date"):
+            row["buy_at"] = str(h.get("acquired_date") or "")
+        rows.append(row)
     rows.sort(key=lambda x: abs(float(x.get("unrealized_pnl") or 0)), reverse=True)
     return rows
 
@@ -354,12 +543,14 @@ def build_pnl_overview(
     day = end or today_shanghai()
     period_start = start or day
     entries = load_ledger_entries(path=ledger_path, start=period_start, end=day)
+    buy_rows = _ledger_buy_rows(entries)
+    latest_buys = _latest_buys_by_code(buy_rows)
     realized_rows = replay_realized_sells(entries)
     realized = round(sum(r.realized_pnl for r in realized_rows), 2)
     cash_flow = compute_trade_cash_flow(entries)
 
     pf = portfolio or {}
-    holdings = _holding_unrealized_rows(pf)
+    holdings = _holding_unrealized_rows(pf, latest_buys=latest_buys)
     unrealized = round(sum(float(h.get("unrealized_pnl") or 0) for h in holdings), 2)
 
     wins = losses = flats = 0
@@ -380,6 +571,7 @@ def build_pnl_overview(
         total_pnl=round(realized + unrealized, 2),
         trade_cash_flow=cash_flow,
         realized_sells=realized_rows,
+        buys=buy_rows,
         win_count=wins,
         loss_count=losses,
         flat_count=flats,
@@ -403,19 +595,18 @@ def render_pnl_overview_markdown(overview: PnlOverview | dict[str, Any]) -> str:
         lines.append(f"- 卖出统计：{wins} 盈 / {losses} 亏")
 
     sells = data.get("realized_sells") or []
+    buys = data.get("buys") or []
+    if buys:
+        lines.append("")
+        lines.append("### 买入记录")
+        for row in buys:
+            lines.append(f"- {format_buy_trade_line(row)}")
+
     lines.append("")
     lines.append("### 已实现（卖出）")
     if sells:
         for row in sells:
-            name = row.get("name") or row.get("code")
-            code = row.get("code") or "?"
-            pnl = float(row.get("realized_pnl") or 0)
-            pct = row.get("realized_pnl_pct")
-            pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
-            lines.append(
-                f"- **{name}** ({code}) {row.get('shares')}股 · "
-                f"盈亏 **{pnl:+,.0f}**{pct_s}"
-            )
+            lines.append(f"- {format_sell_trade_line(row)}")
     else:
         lines.append("- 暂无卖出记录")
 
@@ -424,12 +615,7 @@ def render_pnl_overview_markdown(overview: PnlOverview | dict[str, Any]) -> str:
     lines.append("### 浮动（持仓）")
     if holdings:
         for h in holdings:
-            pnl = float(h.get("unrealized_pnl") or 0)
-            pct = h.get("unrealized_pnl_pct")
-            pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
-            lines.append(
-                f"- **{h.get('name')}** ({h.get('code')}) · 浮盈浮亏 **{pnl:+,.0f}**{pct_s}"
-            )
+            lines.append(f"- {format_holding_trade_line(h)}")
     else:
         lines.append("- 当前无持仓")
 

@@ -16,20 +16,38 @@ def test_pnl_overview_maps_sell_loss_to_policy():
             "total_pnl": -17292.0,
             "win_count": 0,
             "loss_count": 1,
+            "buys": [
+                {
+                    "name": "澜起科技",
+                    "code": "688008",
+                    "shares": 100,
+                    "price": 255.87,
+                    "amount": 25587.0,
+                    "commission": 38.38,
+                    "at": "2026-08-01T09:30:00+08:00",
+                }
+            ],
             "realized_sells": [
                 {
                     "name": "澜起科技",
                     "code": "688008",
                     "shares": 100,
+                    "price": 255.87,
+                    "avg_buy_price": 255.87,
                     "realized_pnl": -38.0,
                     "realized_pnl_pct": -0.15,
                     "cost_basis": 25587.0,
+                    "at": "2026-08-17T14:00:00+08:00",
                 }
             ],
             "holdings": [
                 {
                     "name": "海能达",
                     "code": "002583",
+                    "shares": 500,
+                    "cost": 12.5,
+                    "price": 10.34,
+                    "buy_at": "2026-08-10",
                     "unrealized_pnl": -11080.0,
                     "unrealized_pnl_pct": -57.17,
                 }
@@ -40,7 +58,11 @@ def test_pnl_overview_maps_sell_loss_to_policy():
     blob = " ".join(ev["memory"])
     assert "盈亏总览" in blob
     assert "澜起科技" in blob
-    assert any("浮亏" in m for m in ev["memory"])
+    assert "100股" in blob
+    assert "255.87" in blob
+    assert "2026-08-17" in blob
+    assert "海能达" in blob
+    assert "500股" in blob
     assert ev["plan"]
 
 
