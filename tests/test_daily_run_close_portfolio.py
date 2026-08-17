@@ -3,12 +3,22 @@
 
 from unittest.mock import patch
 
+import pytest
+
 from agent_reach.daily_run.close_portfolio_summary import (
     build_close_portfolio_summary,
     render_close_portfolio_markdown,
 )
 from agent_reach.daily_run.quote_fetch import QuoteFetchResult
 from agent_reach.daily_run.report_push import merge_sections_by_category, render_close_sections
+
+
+@pytest.fixture(autouse=True)
+def _no_capital_flow(monkeypatch):
+    monkeypatch.setattr(
+        "agent_reach.daily_run.capital_events.net_capital_flow",
+        lambda day, path=None: 0.0,
+    )
 
 
 def _morning_baseline():

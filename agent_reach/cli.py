@@ -293,6 +293,22 @@ def main():
     p_dr_h_sync.add_argument("--dry-run", action="store_true", help="Report only, do not write")
     p_dr_h_sync.add_argument("--path", default=None, help="Settings file path")
     p_dr_h_sync.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_capital = p_daily_sub.add_parser(
+        "capital",
+        help="Record external deposits/withdrawals for accurate daily P&L",
+    )
+    p_dr_capital_sub = p_dr_capital.add_subparsers(dest="capital_action", required=True)
+    p_dr_cap_dep = p_dr_capital_sub.add_parser("deposit", help="Record a capital deposit")
+    p_dr_cap_dep.add_argument("--amount", type=float, required=True, help="Deposit amount (CNY)")
+    p_dr_cap_dep.add_argument("--note", default="", help="Optional note")
+    p_dr_cap_dep.add_argument("--date", default="", help="Event date YYYY-MM-DD (default: today)")
+    p_dr_cap_wd = p_dr_capital_sub.add_parser("withdraw", help="Record a capital withdrawal")
+    p_dr_cap_wd.add_argument("--amount", type=float, required=True, help="Withdrawal amount (CNY)")
+    p_dr_cap_wd.add_argument("--note", default="", help="Optional note")
+    p_dr_cap_wd.add_argument("--date", default="", help="Event date YYYY-MM-DD (default: today)")
+    p_dr_cap_list = p_dr_capital_sub.add_parser("list", help="List capital events")
+    p_dr_cap_list.add_argument("--date", default="", help="Filter by date YYYY-MM-DD")
+    p_dr_cap_list.add_argument("--json", action="store_true", help="JSON output")
 
     # ── doctor ──
     p_doctor = sub.add_parser("doctor", help="Check platform availability")
@@ -2124,10 +2140,79 @@ def _cmd_daily_run(args):
         print("Usage: agent-reach daily-run harness {show|list-refinements|rollback|refine|migrate-settings|sync-settings}")
         sys.exit(1)
 
+    if args.daily_action == "capital":
+        import json as _json
+        from datetime import date as _date
+
+        from agent_reach.daily_run.capital_events import (
+            append_capital_event,
+            load_capital_events,
+            net_capital_flow,
+        )
+
+        action = args.capital_action
+
+        def _parse_event_date(raw: str) -> _date:
+            if not raw:
+                from agent_reach.daily_run.trade_calendar import today_shanghai
+
+                return today_shanghai()
+            try:
+                return _date.fromisoformat(raw)
+            except ValueError as exc:
+                raise ValueError(f"invalid date: {raw}") from exc
+
+        if action in ("deposit", "withdraw"):
+            try:
+                event_date = _parse_event_date(args.date)
+                event = append_capital_event(
+                    action,
+                    args.amount,
+                    note=args.note,
+                    event_date=event_date,
+                )
+            except ValueError as exc:
+                print(f"❌ {exc}")
+                sys.exit(1)
+            label = "入金" if action == "deposit" else "出金"
+            print(
+                f"✅ 已记录{label} ¥{event.amount:,.2f} · {event.date}"
+                + (f" · {event.note}" if event.note else "")
+            )
+            net = net_capital_flow(event_date)
+            if abs(net) >= 0.01:
+                print(f"   当日净入出金: {net:+,.2f}")
+            return
+
+        if action == "list":
+            if args.date:
+                try:
+                    day = _parse_event_date(args.date)
+                except ValueError as exc:
+                    print(f"❌ {exc}")
+                    sys.exit(1)
+                events = load_capital_events(start=day, end=day)
+            else:
+                events = load_capital_events()
+            rows = [e.to_dict() for e in events]
+            if args.json:
+                print(_json.dumps(rows, ensure_ascii=False, indent=2))
+            elif not rows:
+                print("（暂无入出金记录）")
+            else:
+                for row in rows:
+                    kind = "入金" if row["kind"] == "deposit" else "出金"
+                    note = f" · {row['note']}" if row.get("note") else ""
+                    print(f"{row['date']} · {kind} ¥{float(row['amount']):,.2f}{note}")
+            return
+
+        print("Usage: agent-reach daily-run capital {deposit|withdraw|list}")
+        sys.exit(1)
+
     if args.daily_action not in ("evaluate", "push"):
         print(
             "Usage: agent-reach daily-run "
-            "{morning|close|intraday|build-snapshot|schedule|hot-news|harness|evaluate|push|fetch|verify|backtest|optimize|plugins|sample} ..."
+            "{morning|close|intraday|build-snapshot|schedule|hot-news|harness|capital|evaluate|push|fetch|verify|backtest|optimize|plugins|sample} ..."
         )
         sys.exit(1)
 
