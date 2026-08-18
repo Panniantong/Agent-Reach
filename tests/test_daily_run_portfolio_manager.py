@@ -90,7 +90,7 @@ class TestApplyAutoAdjust:
         assert result.applied is False
         assert len(result.actions) == 0
 
-    def test_sell_weakest(self, portfolio, snapshot, settings_enabled):
+    def test_sell_decision_symbol_only(self, portfolio, snapshot, settings_enabled):
         decision = TradeDecision(
             action="sell",
             trade_id="T1",
@@ -102,13 +102,30 @@ class TestApplyAutoAdjust:
         result = apply_auto_adjust(portfolio, decision, snapshot, settings_enabled)
         assert result.applied is True
         assert result.actions[0].side == "sell"
-        # 水晶光电 change_pct -6.23 worse than 澜起 -2.39
-        assert result.actions[0].code == "002273"
+        # snapshot.code=688008：只卖澜起，不卖 change_pct 更弱的水晶光电
+        assert result.actions[0].code == "688008"
         codes = {h["code"] for h in result.portfolio["holdings"]}
-        assert "002273" not in codes
+        assert "688008" not in codes
+        assert "002273" in codes
         assert result.portfolio["cash"] > portfolio["cash"]
         watch_codes = {w["code"] for w in result.portfolio["watchlist"]}
-        assert "002273" not in watch_codes
+        assert "688008" not in watch_codes
+
+    def test_sell_skips_when_decision_symbol_not_held(self, portfolio, snapshot, settings_enabled):
+        snapshot = dict(snapshot)
+        snapshot["code"] = "603986"
+        decision = TradeDecision(
+            action="sell",
+            trade_id="T1",
+            lookback_mss=35.0,
+            lookback_detail=[],
+            trend="falling",
+            reasoning="宏观避险",
+        )
+        result = apply_auto_adjust(portfolio, decision, snapshot, settings_enabled)
+        assert result.applied is False
+        assert "不在持仓中" in result.message
+        assert len(result.portfolio["holdings"]) == 2
 
     def test_sell_adds_watchlist_when_allowed(self, portfolio, snapshot, settings_enabled):
         decision = TradeDecision(
@@ -130,13 +147,12 @@ class TestApplyAutoAdjust:
         )
         assert result.applied is True
         watch_codes = {w["code"] for w in result.portfolio["watchlist"]}
-        assert "002273" in watch_codes
+        assert "688008" in watch_codes
 
     def test_sell_respects_lock(self, portfolio, snapshot, settings_enabled):
         portfolio["holdings"][0]["days_held"] = 0
         portfolio["holdings"][0].pop("acquired_date", None)
-        portfolio["holdings"][1]["days_held"] = 0
-        portfolio["holdings"][1].pop("acquired_date", None)
+        portfolio["holdings"][1]["days_held"] = 5
         decision = TradeDecision(
             action="sell",
             trade_id="T1",
@@ -147,6 +163,8 @@ class TestApplyAutoAdjust:
         )
         result = apply_auto_adjust(portfolio, decision, snapshot, settings_enabled)
         assert result.applied is False
+        assert "688008" in result.message
+        assert len(result.portfolio["holdings"]) == 2
 
     def test_buy_from_watchlist(self, portfolio, snapshot, settings_enabled):
         decision = TradeDecision(

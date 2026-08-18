@@ -712,7 +712,9 @@ def _decide_trade(
 
     if lookback_mss < macro_veto:
         return TradeDecision(
-            action="sell" if _has_sellable_holdings(snapshot, settings) else "hold",
+            action="sell"
+            if _decision_symbol_sellable(snapshot, settings, report.get("code"))
+            else "hold",
             trade_id=trade_id,
             lookback_mss=lookback_mss,
             lookback_detail=[],
@@ -800,7 +802,7 @@ def _decide_trade(
         trade_signals.get("defensive_trim")
         and trend in ("falling", "turning_down")
         and lookback_mss >= macro_veto
-        and _has_sellable_holdings(snapshot, settings)
+        and _decision_symbol_sellable(snapshot, settings, report.get("code"))
     ):
         return TradeDecision(
             action="sell",
@@ -851,13 +853,14 @@ def _holding_locked(snapshot: dict[str, Any], settings: dict[str, Any]) -> bool:
     return not any(holding_is_sellable(h, settings) for h in holdings)
 
 
-def _has_sellable_holdings(snapshot: dict[str, Any], settings: dict[str, Any]) -> bool:
-    from agent_reach.daily_run.portfolio_manager import holding_is_sellable
+def _decision_symbol_sellable(
+    snapshot: dict[str, Any],
+    settings: dict[str, Any],
+    code: Any,
+) -> bool:
+    from agent_reach.daily_run.portfolio_manager import decision_symbol_sellable
 
-    return any(
-        holding_is_sellable(h, settings)
-        for h in (snapshot.get("portfolio") or {}).get("holdings") or []
-    )
+    return decision_symbol_sellable(snapshot, settings, str(code or ""))
 
 
 def _today_str() -> str:

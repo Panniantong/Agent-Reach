@@ -264,6 +264,24 @@ def holding_is_sellable(
     return effective_days_held(holding, as_of=as_of, settings=settings) >= lock_days
 
 
+def decision_symbol_sellable(
+    snapshot: dict[str, Any],
+    settings: dict[str, Any],
+    code: str,
+    *,
+    as_of: Optional[date] = None,
+) -> bool:
+    """True when the decision symbol is held and past the lock period."""
+    target = _normalize_code(str(code or ""))
+    if not target:
+        return False
+    for holding in (snapshot.get("portfolio") or {}).get("holdings") or []:
+        if _normalize_code(str(holding.get("code", ""))) != target:
+            continue
+        return holding_is_sellable(holding, settings, as_of=as_of)
+    return False
+
+
 def sync_portfolio_holding_days(
     portfolio: dict[str, Any],
     *,
@@ -321,7 +339,15 @@ def apply_auto_adjust(
     enriched = build_enriched_symbols(snapshot)
 
     if action == "sell":
-        return _apply_sell(pf, enriched, settings, decision, allow_watchlist_changes=allow_watchlist_changes)
+        prefer_code = _normalize_code(str(snapshot.get("code") or ""))
+        return _apply_sell(
+            pf,
+            enriched,
+            settings,
+            decision,
+            allow_watchlist_changes=allow_watchlist_changes,
+            prefer_code=prefer_code or None,
+        )
     if action == "buy":
         prefer_code = _normalize_code(str(snapshot.get("code") or ""))
         return _apply_buy(
@@ -342,29 +368,30 @@ def _apply_sell(
     decision: Any,
     *,
     allow_watchlist_changes: bool = False,
+    prefer_code: Optional[str] = None,
 ) -> ApplyResult:
     holdings = list(pf.get("holdings") or [])
     if not holdings:
         return ApplyResult(applied=False, portfolio=pf, message="无持仓可卖")
 
     lock_days = runtime_int_default(settings, "trading", "holding_lock_days")
-    sellable = []
+    code = _normalize_code(str(prefer_code or ""))
+    if not code:
+        return ApplyResult(applied=False, portfolio=pf, message="卖出决策缺少标的代码")
+
+    target = None
     for h in holdings:
-        code = _normalize_code(str(h.get("code", "")))
-        if not holding_is_sellable(h, settings):
-            continue
-        row = dict(h)
-        row.update(enriched.get(code, {}))
-        sellable.append(row)
+        if _normalize_code(str(h.get("code", ""))) == code:
+            target = dict(h)
+            break
 
-    if not sellable:
-        return ApplyResult(applied=False, portfolio=pf, message=f"持仓均在 {lock_days} 天锁定期内")
+    if target is None:
+        return ApplyResult(applied=False, portfolio=pf, message=f"{code} 不在持仓中，跳过卖出")
 
-    # Sell weakest position first (lowest change_pct, then lowest score)
-    sellable.sort(key=lambda x: (_symbol_score(x, decision, settings), x.get("change_pct") or 0))
+    if not holding_is_sellable(target, settings):
+        return ApplyResult(applied=False, portfolio=pf, message=f"{code} 在 {lock_days} 天锁定期内，无法卖出")
 
-    target = sellable[0]
-    code = _normalize_code(str(target["code"]))
+    target.update(enriched.get(code, {}))
     shares = int(target.get("shares") or 0)
     price = _price_for(target, enriched)
     if shares <= 0 or price is None or price <= 0:

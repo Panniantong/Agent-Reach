@@ -129,6 +129,26 @@ class TestBuyPreferSignalCode:
         assert result.applied is True
         assert result.actions[0].code == "600584"
 
+
+class TestSellPreferSignalCode:
+    def test_sell_prefers_snapshot_code(self, portfolio, settings_trade_limits):
+        snapshot = {
+            "code": "688008",
+            "portfolio": portfolio,
+            "watchlist": portfolio["watchlist"],
+        }
+        decision = TradeDecision(
+            action="sell",
+            trade_id="T1",
+            lookback_mss=35.0,
+            lookback_detail=[],
+            trend="falling",
+            reasoning="宏观避险",
+        )
+        result = apply_auto_adjust(portfolio, decision, snapshot, settings_trade_limits)
+        assert result.applied is True
+        assert result.actions[0].code == "688008"
+
     def test_apply_paper_trade_blocks_when_global_applied_cap_full(
         self, portfolio, monkeypatch, tmp_path, settings_trade_limits
     ):

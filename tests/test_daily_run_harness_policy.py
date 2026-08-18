@@ -460,6 +460,43 @@ class TestHarnessRuntimeExtensions:
         assert decision.action == "sell"
         assert "防御性减仓" in decision.reasoning
 
+    def test_defensive_trim_hold_when_decision_symbol_not_sellable(self):
+        settings = {
+            "thresholds": {"macro_veto": 30, "aggressive_entry": 45, "min_cash_ratio": 0.5},
+            "trading": {"commission_rate": 0.0015, "slippage_rate": 0.001, "holding_lock_days": 3},
+            "harness_runtime": {"trade_signals": {"defensive_trim": True}},
+        }
+        verdict = VerdictResult(
+            verdict="观察",
+            confidence="中",
+            mss_final=54,
+            entry_price=None,
+            stop_loss_price=None,
+            invalidation="",
+            reasoning="",
+            blocked=False,
+        )
+        decision = _decide_trade(
+            lookback_mss=54.0,
+            trend="falling",
+            verdict=verdict,
+            report={"code": "688008", "name": "澜起科技", "blocked": False},
+            snapshot={
+                "portfolio": {
+                    "cash_ratio": 0.75,
+                    "holdings": [
+                        {"code": "688008", "days_held": 0},
+                        {"code": "002583", "days_held": 5},
+                    ],
+                }
+            },
+            settings=settings,
+            trade_index=1,
+            expected_return_pct=0.01,
+        )
+        assert decision.action == "hold"
+        assert "防御性减仓" not in decision.reasoning
+
     def test_rejected_blocks_buy(self, tmp_path, monkeypatch):
         rej = tmp_path / "rejected_strategies.jsonl"
         monkeypatch.setattr("agent_reach.daily_run.skill_rejected._REJECTED_PATH", rej)
