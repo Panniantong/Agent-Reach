@@ -106,6 +106,8 @@ HARNESS_RIGOR_CHECK_DEFAULTS: dict[str, Any] = {
     "block_on_fail": {"optimize": True},
     "jobs": {
         "finance_close": True,
+        "finance_variance": True,
+        "finance_close_plan": True,
         "optimize": True,
         "pnl_target": True,
         "forecast_calibrate": True,

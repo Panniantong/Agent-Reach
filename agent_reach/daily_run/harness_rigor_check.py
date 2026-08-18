@@ -40,7 +40,14 @@ def _rigor_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
     raw = dict(harness.get("rigor_check") or {})
     jobs = raw.get("jobs")
     if jobs is None:
-        job_set = {"finance_close", "optimize", "pnl_target", "forecast_calibrate"}
+        job_set = {
+            "finance_close",
+            "finance_variance",
+            "finance_close_plan",
+            "optimize",
+            "pnl_target",
+            "forecast_calibrate",
+        }
     elif isinstance(jobs, dict):
         job_set = {k for k, v in jobs.items() if v}
     else:
@@ -117,6 +124,11 @@ def _check_evidence(domain: dict[str, Any], *, job: str) -> RigorCheck:
         if missing:
             return RigorCheck("evidence", False, f"missing {','.join(missing)}")
         return RigorCheck("evidence", True, "portfolio fields present")
+    if job in {"finance_variance", "finance_close_plan"}:
+        report = domain.get("report") or {}
+        if not report.get("week_start") or not report.get("week_end"):
+            return RigorCheck("evidence", False, "missing week range")
+        return RigorCheck("evidence", True, "weekly report present")
     if job == "optimize":
         result = domain
         if not result.get("trials"):

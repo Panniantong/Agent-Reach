@@ -28,6 +28,8 @@ description: >-
 | `pnl_overview` | `pnl_overview_harness.py` | 收盘 FIFO 已实现 + 浮动盈亏总览 |
 | `pnl_target` | `pnl_target_harness.py` | 下一交易日总盈亏目标 + 达成奖励/未达处罚 |
 | `finance_close` | `finance_close_harness.py` | 收盘 dsh-finance 对账/风控/variance bridge |
+| `finance_variance` | `finance_variance_harness.py` | 周六 weekly 盈亏 waterfall（stock/cash bridge） |
+| `finance_close_plan` | `finance_close_plan_harness.py` | 周六 T+1~T+5 下周 close 日历 |
 
 ## 收盘自动
 
@@ -56,7 +58,7 @@ python3 -m agent_reach.cli daily-run harness migrate-settings
 
 **weekly 去重**：
 - `skill_closure` / `run_guard` 开启时，`weekly` layer_a 只写 PnL / experience_snippets / applied_config
-- 周六顺序：`apply_weekly_skill_closure` → `run_weekly_harness_refinements` → `run_weekly_layer_a_refinement`
+- 周六顺序：`apply_weekly_skill_closure` → `run_weekly_harness_refinements`（**finance_variance** / **finance_close_plan** / run_guard）→ `run_weekly_layer_a_refinement`
 
 ## 手动运行
 
@@ -215,6 +217,23 @@ python3 -m agent_reach.cli daily-run harness restore-snapshot --path ~/.agent-re
 - `finance_close` 对账/bridge 失败仍会写入 playbook（rigor 仅记录，不 block）。
 - `optimize` rigor 或 forge 失败 → `reason=rigor_check_failed` / `forge_gate_failed`，不写 harness。
 
+**周六 weekly 扩展（dsh-finance variance-analysis / close-management）**
+
+| Job | 模块 | 行为 |
+|-----|------|------|
+| `finance_variance` | `finance_variance_harness.py` | 周盈亏 stock/cash bridge + materiality → harness |
+| `finance_close_plan` | `finance_close_plan_harness.py` | T+1~T+5 下周 close 任务日历（manifest/skill gates/blockers） |
+
+```json
+"finance_variance": {
+  "enabled": true,
+  "variance_materiality_cny": 1000,
+  "percent_materiality": 1.0
+},
+"finance_close_plan": { "enabled": true, "calendar_days": 5 },
+"harness": { "jobs": { "finance_variance": true, "finance_close_plan": true } }
+```
+
 ### Feishu Harness 摘要卡
 
 | 开关 | 行为 |
@@ -254,5 +273,5 @@ python3 -m agent_reach.cli daily-run harness sync-settings
 ## 测试
 
 ```bash
-python3 -m pytest tests/test_daily_run_harness_p7.py tests/test_daily_run_harness_p6.py tests/test_daily_run_harness_p5.py tests/test_daily_run_harness_p4.py tests/test_daily_run_harness_p3.py tests/test_daily_run_harness_p2.py tests/test_daily_run_harness_p1.py -q
+python3 -m pytest tests/test_daily_run_harness_p8.py tests/test_daily_run_harness_p7.py tests/test_daily_run_harness_p6.py tests/test_daily_run_harness_p5.py tests/test_daily_run_harness_p4.py tests/test_daily_run_harness_p3.py tests/test_daily_run_harness_p2.py tests/test_daily_run_harness_p1.py -q
 ```

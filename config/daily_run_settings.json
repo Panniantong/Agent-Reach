@@ -91,6 +91,20 @@
     "variance_materiality_cny": 500
   },
 
+  "finance_variance": {
+    "enabled": true,
+    "harness_evolve": true,
+    "variance_tolerance_cny": 5.0,
+    "variance_materiality_cny": 1000,
+    "percent_materiality": 1.0
+  },
+
+  "finance_close_plan": {
+    "enabled": true,
+    "harness_evolve": true,
+    "calendar_days": 5
+  },
+
   "quote_fetch": {
     "sources": ["eastmoney", "akshare", "xueqiu"],
     "max_retries": 2
@@ -614,6 +628,8 @@
       },
       "jobs": {
         "finance_close": true,
+        "finance_variance": true,
+        "finance_close_plan": true,
         "optimize": true,
         "pnl_target": true,
         "forecast_calibrate": true
@@ -640,7 +656,9 @@
       "forecast_calibrate": true,
       "pnl_overview": true,
       "pnl_target": true,
-      "finance_close": true
+      "finance_close": true,
+      "finance_variance": true,
+      "finance_close_plan": true
     },
     "llm_refine": {
       "enabled": true,

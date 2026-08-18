@@ -173,7 +173,34 @@ def validate_optimize_forge(
     return ForgeGateResult(job="optimize", passed=not violations, violations=violations)
 
 
-_FORGE_JOBS = frozenset({"pnl_target", "forecast_calibrate", "finance_close", "optimize"})
+def validate_finance_variance_forge(
+    domain: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> ForgeGateResult:
+    violations: list[str] = []
+    report = domain.get("report") or {}
+    if report.get("start_total") is None or report.get("end_total") is None:
+        violations.append("missing weekly start/end total")
+    return ForgeGateResult(job="finance_variance", passed=not violations, violations=violations)
+
+
+def validate_finance_close_plan_forge(
+    domain: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> ForgeGateResult:
+    violations: list[str] = []
+    report = domain.get("report") or {}
+    if not report.get("week_start") or not report.get("week_end"):
+        violations.append("missing week range")
+    plan = domain.get("plan") or {}
+    if not plan.get("tasks"):
+        violations.append("empty close plan tasks")
+    return ForgeGateResult(job="finance_close_plan", passed=not violations, violations=violations)
+
+
+_FORGE_JOBS = frozenset({"pnl_target", "forecast_calibrate", "finance_close", "optimize", "finance_variance", "finance_close_plan"})
 
 
 def evaluate_forge_gate(
@@ -203,6 +230,10 @@ def evaluate_forge_gate(
         return validate_finance_close_forge(domain, settings=settings)
     if job == "optimize":
         return validate_optimize_forge(domain, settings=settings)
+    if job == "finance_variance":
+        return validate_finance_variance_forge(domain, settings=settings)
+    if job == "finance_close_plan":
+        return validate_finance_close_plan_forge(domain, settings=settings)
     return None
 
 

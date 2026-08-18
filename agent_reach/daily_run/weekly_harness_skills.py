@@ -12,18 +12,27 @@ from agent_reach.daily_run.settings import effective_settings, load_settings
 
 @dataclass
 class WeeklyHarnessSkillsReport:
+    finance_variance: dict[str, Any] = field(default_factory=dict)
+    finance_close_plan: dict[str, Any] = field(default_factory=dict)
     run_guard: dict[str, Any] = field(default_factory=dict)
     weekly_layer_a: dict[str, Any] = field(default_factory=dict)
     effective_overlay: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "finance_variance": self.finance_variance,
+            "finance_close_plan": self.finance_close_plan,
             "run_guard": self.run_guard,
             "weekly_layer_a": self.weekly_layer_a,
             "effective_overlay": self.effective_overlay,
             "total_changes": sum(
                 int((block or {}).get("changes") or 0)
-                for block in (self.run_guard, self.weekly_layer_a)
+                for block in (
+                    self.finance_variance,
+                    self.finance_close_plan,
+                    self.run_guard,
+                    self.weekly_layer_a,
+                )
                 if not (block or {}).get("skipped")
             ),
         }
@@ -41,11 +50,26 @@ def run_weekly_harness_refinements(
     *,
     settings: Optional[dict[str, Any]] = None,
     skip_run_guard: bool = False,
+    skill_writeback: Optional[dict[str, Any]] = None,
 ) -> WeeklyHarnessSkillsReport:
-    """Run run_guard harness when skill_closure is off (schedule gaps subset)."""
+    """Run weekly finance harness jobs and run_guard when skill_closure is off."""
     cfg = effective_settings(settings or load_settings())
     harness_cfg = cfg.get("harness") or {}
     out = WeeklyHarnessSkillsReport()
+
+    if _job_enabled(harness_cfg, "finance_variance"):
+        from agent_reach.daily_run.finance_variance_harness import apply_finance_variance_harness_refinement
+
+        out.finance_variance = apply_finance_variance_harness_refinement(report, settings=cfg)
+
+    if _job_enabled(harness_cfg, "finance_close_plan"):
+        from agent_reach.daily_run.finance_close_plan_harness import apply_finance_close_plan_harness_refinement
+
+        out.finance_close_plan = apply_finance_close_plan_harness_refinement(
+            report,
+            settings=cfg,
+            skill_writeback=skill_writeback,
+        )
 
     if (
         not skip_run_guard

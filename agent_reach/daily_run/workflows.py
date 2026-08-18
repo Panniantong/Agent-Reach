@@ -1256,7 +1256,13 @@ def run_weekly(
             run_weekly_layer_a_refinement,
         )
 
-        weekly_skills_report = run_weekly_harness_refinements(report.to_dict(), settings=cfg)
+        weekly_skills_report = run_weekly_harness_refinements(
+            report.to_dict(),
+            settings=cfg,
+            skill_writeback=skill_writeback,
+        )
+        harness_result["finance_variance"] = weekly_skills_report.finance_variance
+        harness_result["finance_close_plan"] = weekly_skills_report.finance_close_plan
         harness_result["run_guard"] = weekly_skills_report.run_guard
 
         weekly_evidence = {

@@ -220,19 +220,27 @@ def reconcile_close_portfolio(
     )
 
 
-def analyze_close_variance_bridge(
-    portfolio_summary: dict[str, Any],
+def _variance_cfg(settings: Optional[dict[str, Any]], section: str) -> dict[str, float]:
+    block = dict((settings or {}).get(section) or {})
+    if section == "finance_close" and not block.get("variance_tolerance_cny"):
+        block = {**_finance_cfg(settings), **block}
+    return {
+        "tolerance": float(block.get("variance_tolerance_cny", 1.0)),
+        "materiality_cny": float(block.get("variance_materiality_cny", 500)),
+        "materiality_pct": float(block.get("percent_materiality", 0.0)),
+    }
+
+
+def analyze_variance_bridge_values(
+    base_value: Optional[float],
+    actual_value: Optional[float],
+    drivers: list[dict[str, Any]],
     *,
     settings: Optional[dict[str, Any]] = None,
+    section: str = "finance_close",
 ) -> VarianceBridgeResult:
-    """Variance bridge for NAV change (dsh-finance finance_variance_bridge style)."""
-    cfg = _finance_cfg(settings)
-    tolerance = float(cfg.get("variance_tolerance_cny", 1.0))
-    materiality = float(cfg.get("variance_materiality_cny", 500))
-
-    start = portfolio_summary.get("start_total")
-    end = portfolio_summary.get("end_total")
-    if start is None or end is None:
+    cfg = _variance_cfg(settings, section)
+    if base_value is None or actual_value is None:
         return VarianceBridgeResult(
             base_value=0.0,
             actual_value=0.0,
@@ -241,25 +249,25 @@ def analyze_close_variance_bridge(
             residual=0.0,
             reconciled=False,
             material=False,
-            flags=["缺少 start/end，无法构建 variance bridge"],
+            flags=["缺少 base/actual，无法构建 variance bridge"],
         )
 
-    base = float(start)
-    actual = float(end)
+    base = float(base_value)
+    actual = float(actual_value)
     total = _round(actual - base)
-    drivers = [
-        {"name": "daily_pnl", "amount": float(portfolio_summary.get("daily_pnl") or 0)},
-        {"name": "capital_net_flow", "amount": float(portfolio_summary.get("capital_net_flow") or 0)},
-    ]
-    driver_total = _round(sum(d["amount"] for d in drivers))
+    driver_total = _round(sum(float(d.get("amount") or 0) for d in drivers))
     residual = _round(total - driver_total)
-    reconciled = abs(residual) <= tolerance
+    reconciled = abs(residual) <= cfg["tolerance"]
     flags: list[str] = []
     if not reconciled:
         flags.append(f"variance bridge 残差 {residual:+,.2f} 元")
-    material = abs(total) >= materiality
+
+    material = abs(total) >= cfg["materiality_cny"]
+    if cfg["materiality_pct"] > 0 and base != 0:
+        pct = abs(total / base * 100)
+        material = material or pct >= cfg["materiality_pct"]
     if material:
-        flags.append(f"日净值变动 {total:+,.0f} 元达到 materiality 阈值 {materiality:,.0f}")
+        flags.append(f"变动 {total:+,.0f} 元达到 materiality 阈值")
 
     return VarianceBridgeResult(
         base_value=_round(base),
@@ -271,6 +279,141 @@ def analyze_close_variance_bridge(
         material=material,
         flags=flags,
     )
+
+
+def analyze_close_variance_bridge(
+    portfolio_summary: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> VarianceBridgeResult:
+    """Variance bridge for NAV change (dsh-finance finance_variance_bridge style)."""
+    drivers = [
+        {"name": "daily_pnl", "amount": float(portfolio_summary.get("daily_pnl") or 0)},
+        {"name": "capital_net_flow", "amount": float(portfolio_summary.get("capital_net_flow") or 0)},
+    ]
+    return analyze_variance_bridge_values(
+        portfolio_summary.get("start_total"),
+        portfolio_summary.get("end_total"),
+        drivers,
+        settings=settings,
+        section="finance_close",
+    )
+
+
+def _variance_cfg_section(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
+    return dict((settings or {}).get("finance_variance") or {})
+
+
+def analyze_weekly_variance_bridge(
+    report: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> VarianceBridgeResult:
+    """Weekly PnL waterfall: stock vs cash drivers (dsh-finance variance-analysis)."""
+    drivers: list[dict[str, Any]] = []
+    if report.get("stock_pnl") is not None:
+        drivers.append({"name": "stock_mv", "amount": float(report["stock_pnl"])})
+    if report.get("cash_pnl") is not None:
+        drivers.append({"name": "cash", "amount": float(report["cash_pnl"])})
+    if not drivers and report.get("weekly_pnl") is not None:
+        drivers.append({"name": "weekly_pnl", "amount": float(report["weekly_pnl"])})
+    return analyze_variance_bridge_values(
+        report.get("start_total"),
+        report.get("end_total"),
+        drivers,
+        settings=settings,
+        section="finance_variance",
+    )
+
+
+def _close_plan_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
+    return dict((settings or {}).get("finance_close_plan") or {})
+
+
+def build_close_management_plan(
+    report: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+    skill_writeback: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """T+1..T+5 next-week close calendar (dsh-finance close-management style)."""
+    cfg = _close_plan_cfg(settings)
+    days = max(1, int(cfg.get("calendar_days", 5)))
+    ws = str(report.get("week_start") or "")
+    we = str(report.get("week_end") or "")
+
+    blockers: list[str] = []
+    tasks: list[dict[str, Any]] = []
+
+    def _task(day: int, title: str, *, owner: str = "daily-run", dependency: str = "", blocker: bool = False) -> None:
+        tasks.append(
+            {
+                "day": f"T+{day}",
+                "title": title,
+                "owner": owner,
+                "dependency": dependency,
+                "status": "blocked" if blocker else "pending",
+            }
+        )
+        if blocker:
+            blockers.append(title)
+
+    variance = analyze_weekly_variance_bridge(report, settings=settings)
+    if not variance.reconciled:
+        blockers.append(f"weekly variance 残差 {variance.residual:+,.2f}")
+        _task(1, "复核本周 stock/cash 盈亏分解与 ledger", blocker=True)
+    elif variance.material:
+        _task(1, "复盘 material 周盈亏驱动与持仓贡献")
+
+    daily_totals = report.get("daily_totals") or []
+    close_days = {str(r.get("date")) for r in daily_totals if r.get("job") == "close"}
+    if len(close_days) < 3:
+        _task(2, "补全缺失交易日 close manifest / 收盘复盘", blocker=True)
+        blockers.append("close manifest 覆盖不足")
+    else:
+        _task(2, "核对 cron close 任务与 job_health 零失败")
+
+    improvements = report.get("process_improvements") or []
+    high = [i for i in improvements if str(i.get("priority") or "").lower() == "high"]
+    for idx, item in enumerate(high[:2], start=1):
+        title = str(item.get("title") or "流程改进")
+        _task(min(2 + idx, days), f"执行改进：{title}")
+
+    gates = ((skill_writeback or {}).get("skill_audit") or {}).get("gates") or {}
+    if gates and gates.get("ok") is False and not gates.get("skipped"):
+        _task(3, "修复周六 skill gates 后再推送 weekly", blocker=True, dependency="skill_gates")
+        blockers.append("skill gates 未通过")
+
+    for item in report.get("skill_gate_failures") or []:
+        _task(3, f"skill_gate：{item}", blocker=True)
+
+    _task(min(4, days), "盘中 scan 与 quote 覆盖率 spot-check", owner="intraday")
+    _task(min(4, days), "finance_close 对账 + variance bridge 日检", dependency="close")
+
+    audit_rows = 0
+    try:
+        from agent_reach.daily_run.harness_weekly_narrative import load_apply_audit_in_window
+
+        audit_rows = len(load_apply_audit_in_window(week_start=ws, week_end=we))
+    except Exception:
+        audit_rows = 0
+    if audit_rows:
+        _task(min(5, days), f"审阅本周 {audit_rows} 条 harness apply_audit")
+
+    _task(days, "周五收盘后 weekly 预检：PnL / skill / harness 卡")
+
+    critical_path = [t["title"] for t in tasks if t.get("status") == "blocked"] or [
+        t["title"] for t in tasks[:3]
+    ]
+    return {
+        "week_start": ws,
+        "week_end": we,
+        "calendar_days": days,
+        "tasks": tasks[: days + 2],
+        "blockers": blockers,
+        "critical_path": critical_path,
+        "variance": variance.to_dict(),
+    }
 
 
 def run_finance_close_checks(
