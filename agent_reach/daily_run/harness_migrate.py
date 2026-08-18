@@ -138,6 +138,7 @@ HARNESS_RIGOR_CHECK_DEFAULTS: dict[str, Any] = {
         "finance_close_plan": True,
         "finance_statements": True,
         "finance_research": True,
+        "expert_consensus": True,
         "optimize": True,
         "pnl_target": True,
         "forecast_calibrate": True,

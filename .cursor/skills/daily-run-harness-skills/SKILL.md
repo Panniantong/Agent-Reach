@@ -34,10 +34,11 @@ description: >-
 | `finance_statements` | `finance_statements_harness.py` | 周六 weekly 三表骨架（损益/资产负债/现金流） |
 | `finance_research` | `finance_research_harness.py` | 周六/周日 structured research workflow（sources/queries/gaps） |
 | `finance_close_plan` | `finance_close_plan_harness.py` | 周六 T+1~T+5 下周 close 日历 |
+| `expert_consensus` | `expert_consensus_harness.py` | 收盘/早盘/盘中 Team-First 专家共识 → policy/playbook |
 
 ## 收盘自动
 
-`run_close()` → `run_close_harness_refinements()` 依次 refine verify / close_improve / data_audit / **pnl_overview** / **pnl_target** / **finance_close** / **finance_ledger_prep** / **finance_ledger**；
+`run_close()` → `run_close_harness_refinements()` 依次 refine verify / close_improve / data_audit / **pnl_overview** / **pnl_target** / **finance_close** / **finance_ledger_prep** / **finance_ledger** / **expert_consensus**；
 `append_experience_entry()` → experience harness（harness 模式下 rules 同步进 memory/policy）；
 随后 `run_close_layer_a_refinement()` 只写入组合盈亏等 residual。
 
@@ -209,6 +210,7 @@ python3 -m agent_reach.cli daily-run harness restore-snapshot --path ~/.agent-re
 | `dsh-memory-evolve` git 分支感知 | `harness_git.py` | 非 main 分支 harness 状态隔离到 `harness/branches/<slug>/` |
 | `dsh-context-doctor` 去重 | `harness_context_doctor.py` | Layer A apply 前按相似度剔除重复 memory/policy/playbook/plan |
 | `dsh-context-doctor` 冲突检测 | `harness_context_doctor.py` | policy 偏防御 vs playbook 激进等跨 kind 冲突拦截 |
+| Team-First 8 专家 / MSS 插件 | `harness_experts.py` + `expert_consensus_harness.py` | 共识/冲突/MSS drift/identifier block → harness policy/playbook |
 | forge 扩展 | `harness_forge_gates.py` | 新增 `finance_close`、`finance_ledger`、`optimize` 数值 sanity |
 
 ```json

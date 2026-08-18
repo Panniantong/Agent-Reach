@@ -23,6 +23,7 @@ class CloseHarnessSkillsReport:
     finance_close: dict[str, Any] = field(default_factory=dict)
     finance_ledger_prep: dict[str, Any] = field(default_factory=dict)
     finance_ledger: dict[str, Any] = field(default_factory=dict)
+    expert_consensus: dict[str, Any] = field(default_factory=dict)
     close_layer_a: dict[str, Any] = field(default_factory=dict)
     effective_overlay: dict[str, Any] = field(default_factory=dict)
 
@@ -37,6 +38,7 @@ class CloseHarnessSkillsReport:
             "finance_close": self.finance_close,
             "finance_ledger_prep": self.finance_ledger_prep,
             "finance_ledger": self.finance_ledger,
+            "expert_consensus": self.expert_consensus,
             "close_layer_a": self.close_layer_a,
             "effective_overlay": self.effective_overlay,
             "total_changes": sum(
@@ -51,6 +53,7 @@ class CloseHarnessSkillsReport:
                     self.finance_close,
                     self.finance_ledger_prep,
                     self.finance_ledger,
+                    self.expert_consensus,
                     self.close_layer_a,
                 )
                 if not (block or {}).get("skipped")
@@ -67,6 +70,7 @@ def run_close_harness_refinements(
     watchlist_adjust: Optional[dict[str, Any]] = None,
     portfolio_summary: Optional[dict[str, Any]] = None,
     pnl_target_cycle: Optional[dict[str, Any]] = None,
+    snapshot: Optional[dict[str, Any]] = None,
     settings: Optional[dict[str, Any]] = None,
 ) -> CloseHarnessSkillsReport:
     """Run verify / close_improve / data_audit harness refinements after close."""
@@ -138,6 +142,15 @@ def run_close_harness_refinements(
         report.finance_ledger = apply_finance_ledger_harness_refinement(
             portfolio_summary,
             settings=cfg,
+        )
+
+    if snapshot is not None:
+        from agent_reach.daily_run.expert_consensus_harness import apply_expert_consensus_harness_refinement
+
+        report.expert_consensus = apply_expert_consensus_harness_refinement(
+            snapshot,
+            settings=cfg,
+            workflow="close",
         )
 
     report.effective_overlay = effective_overlay_snapshot(cfg)

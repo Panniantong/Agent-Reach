@@ -79,4 +79,16 @@ def apply_morning_harness_refinement(
     evidence = morning_to_harness_evidence(run_result)
     if not any(evidence.get(k) for k in ("memory", "policy", "playbook", "plan")):
         return {"skipped": True, "reason": "empty evidence", "job": "morning"}
-    return apply_skill_refinement("morning", evidence, settings=settings)
+    result = apply_skill_refinement("morning", evidence, settings=settings)
+    snapshot = run_result.get("snapshot") or {}
+    if snapshot.get("expert_results") or snapshot.get("team_review"):
+        from agent_reach.daily_run.expert_consensus_harness import apply_expert_consensus_harness_refinement
+
+        expert = apply_expert_consensus_harness_refinement(
+            snapshot,
+            settings=settings,
+            workflow="morning",
+        )
+        if not expert.get("skipped"):
+            result["expert_consensus"] = expert
+    return result

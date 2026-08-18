@@ -115,6 +115,7 @@ def build_weekly_harness_narrative(
     context_doctor_drops = 0
     context_conflict_drops = 0
     finance_jobs = 0
+    expert_consensus_runs = 0
     branches: Counter[str] = Counter()
 
     for row in audit_rows:
@@ -122,6 +123,8 @@ def build_weekly_harness_narrative(
         job_counts[job] += 1
         if job.startswith("finance_"):
             finance_jobs += 1
+        if job == "expert_consensus":
+            expert_consensus_runs += 1
         total_changes += int(row.get("changes") or 0)
         reason = str(row.get("reason") or "")
         if reason == "forge_gate_failed":
@@ -186,6 +189,7 @@ def build_weekly_harness_narrative(
         "context_doctor_drops": context_doctor_drops,
         "context_conflict_drops": context_conflict_drops,
         "finance_jobs": finance_jobs,
+        "expert_consensus_runs": expert_consensus_runs,
         "study_registry_entries": len(study_rows),
         "git_branches": dict(branches.most_common(4)),
         "jobs": dict(top_jobs),
@@ -230,6 +234,8 @@ def format_weekly_harness_narrative_markdown(
         lines.append(f"- Context doctor 冲突拦截 **{int(narrative['context_conflict_drops'])}** 条")
     if narrative.get("finance_jobs"):
         lines.append(f"- Finance harness job **{int(narrative['finance_jobs'])}** 次")
+    if narrative.get("expert_consensus_runs"):
+        lines.append(f"- Expert consensus harness **{int(narrative['expert_consensus_runs'])}** 次")
     if narrative.get("study_registry_entries"):
         lines.append(f"- Study registry 登记 **{int(narrative['study_registry_entries'])}** 条")
     if narrative.get("snapshots"):

@@ -48,6 +48,7 @@ def _rigor_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
             "finance_close_plan",
             "finance_statements",
             "finance_research",
+            "expert_consensus",
             "optimize",
             "pnl_target",
             "forecast_calibrate",
@@ -86,6 +87,11 @@ def _check_closure(domain: dict[str, Any]) -> RigorCheck:
         ok = bool(reconcile.get("reconciled"))
         diff = reconcile.get("difference")
         return RigorCheck("closure", ok, f"reconcile diff={diff}")
+    review = domain.get("review") or {}
+    if review:
+        ok = not bool(review.get("blocked"))
+        detail = review.get("block_reason") or f"label={review.get('consensus_label')}"
+        return RigorCheck("closure", ok, detail)
     metrics = domain.get("metrics") or {}
     if metrics:
         total = metrics.get("total_return")
@@ -94,7 +100,16 @@ def _check_closure(domain: dict[str, Any]) -> RigorCheck:
     return RigorCheck("closure", True, "no closure domain")
 
 
-def _check_invariant(domain: dict[str, Any]) -> RigorCheck:
+def _check_invariant(domain: dict[str, Any], *, job: str = "") -> RigorCheck:
+    review = domain.get("review") or {}
+    if job == "expert_consensus" and review:
+        bad: list[str] = []
+        if review.get("blocked") and review.get("consensus_label") == "可做":
+            bad.append("blocked but label 可做")
+        checks = domain.get("checks") or {}
+        for flag in checks.get("blocking_flags") or []:
+            bad.append(str(flag))
+        return RigorCheck("invariant", not bad, "; ".join(bad) if bad else "consensus consistent")
     risk = domain.get("risk") or {}
     flags = list(risk.get("flags") or [])
     hard = [f for f in flags if "超过上限" in f or "低于下限" in f]
@@ -137,6 +152,13 @@ def _check_evidence(domain: dict[str, Any], *, job: str, settings: Optional[dict
         if not report.get("week_start") or not report.get("week_end"):
             return RigorCheck("evidence", False, "missing week range")
         return RigorCheck("evidence", True, "weekly report present")
+    if job == "expert_consensus":
+        review = domain.get("review") or {}
+        if review.get("expert_count", 0) <= 0:
+            return RigorCheck("evidence", False, "no experts in review")
+        if not (domain.get("expert_results") or review.get("expert_count")):
+            return RigorCheck("evidence", False, "missing expert_results")
+        return RigorCheck("evidence", True, f"experts={review.get('expert_count')}")
     if job == "finance_ledger":
         journal = domain.get("journal") or {}
         if not journal.get("actions_checked") and not (domain.get("trades") or []):
@@ -179,7 +201,7 @@ def evaluate_rigor_battery(
 
     checks = [
         _check_closure(domain),
-        _check_invariant(domain),
+        _check_invariant(domain, job=job),
         _check_boundary(domain, job=job),
         _check_evidence(domain, job=job, settings=settings),
     ]

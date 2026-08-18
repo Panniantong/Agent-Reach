@@ -255,6 +255,39 @@ def validate_finance_research_forge(
     return ForgeGateResult(job="finance_research", passed=not violations, violations=violations)
 
 
+def validate_expert_consensus_forge(
+    domain: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> ForgeGateResult:
+    violations: list[str] = []
+    review = domain.get("review") or {}
+    results = domain.get("expert_results") or []
+
+    for row in results:
+        score = row.get("score")
+        if score is None:
+            continue
+        val = float(score)
+        if val < 0 or val > 100:
+            violations.append(f"{row.get('name')} score {val} outside [0,100]")
+
+    if review.get("expert_count", 0) > 0 and review.get("consensus_score") is None:
+        violations.append("missing consensus_score")
+
+    if review.get("blocked") and review.get("consensus_label") == "可做":
+        violations.append("identifier blocked but consensus_label is 可做")
+
+    drift_limit = float(
+        dict((settings or {}).get("expert_consensus") or {}).get("max_mss_drift_flags") or 4
+    )
+    drift = review.get("mss_drift") or []
+    if len(drift) > drift_limit:
+        violations.append(f"mss_drift flags {len(drift)} > max {drift_limit}")
+
+    return ForgeGateResult(job="expert_consensus", passed=not violations, violations=violations)
+
+
 _FORGE_JOBS = frozenset(
     {
         "pnl_target",
@@ -267,6 +300,7 @@ _FORGE_JOBS = frozenset(
         "finance_close_plan",
         "finance_statements",
         "finance_research",
+        "expert_consensus",
     }
 )
 
@@ -310,6 +344,8 @@ def evaluate_forge_gate(
         return validate_finance_statements_forge(domain, settings=settings)
     if job == "finance_research":
         return validate_finance_research_forge(domain, settings=settings)
+    if job == "expert_consensus":
+        return validate_expert_consensus_forge(domain, settings=settings)
     return None
 
 

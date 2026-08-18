@@ -143,6 +143,20 @@
     "block_same_preparer_approver": true
   },
 
+  "expert_consensus": {
+    "enabled": true,
+    "harness_evolve": true,
+    "mss_drift_threshold": 12,
+    "low_score_cutoff": 42,
+    "high_score_cutoff": 62,
+    "max_mss_drift_flags": 4,
+    "workflows": {
+      "morning": true,
+      "intraday": true,
+      "close": true
+    }
+  },
+
   "quote_fetch": {
     "sources": ["eastmoney", "akshare", "xueqiu"],
     "max_retries": 2
@@ -694,6 +708,7 @@
         "finance_close_plan": true,
         "finance_statements": true,
         "finance_research": true,
+        "expert_consensus": true,
         "optimize": true,
         "pnl_target": true,
         "forecast_calibrate": true
@@ -726,7 +741,8 @@
       "finance_variance": true,
       "finance_statements": true,
       "finance_research": true,
-        "finance_close_plan": true
+      "finance_close_plan": true,
+      "expert_consensus": true
     },
     "llm_refine": {
       "enabled": true,
