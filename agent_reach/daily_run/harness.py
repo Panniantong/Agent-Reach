@@ -731,6 +731,9 @@ def refine_after_job(
         bounded[kind], injection_meta[kind] = bound_kind_texts(kind_texts[kind], settings=cfg)
 
     state = load_harness()
+    from agent_reach.daily_run.harness_snapshot import save_pre_apply_snapshot
+
+    snapshot_path = save_pre_apply_snapshot(state, job=job, trigger="layer_a", settings=cfg)
     all_edits: list[RefinementEdit] = []
     all_changes: list[str] = []
 
@@ -769,16 +772,21 @@ def refine_after_job(
         injection_meta=injection_meta,
         skipped_kinds=gate_skipped,
         changes=len(all_changes),
+        snapshot_path=str(snapshot_path) if snapshot_path else None,
     )
+    gate_dict = gate.to_dict()
+    if snapshot_path:
+        gate_dict["snapshot_path"] = str(snapshot_path)
     return {
         "skipped": False,
         "job": job,
         "refinement_id": event.id,
         "changes": len(all_changes),
         "state_path": str(path),
-        "apply_gate": gate.to_dict(),
+        "apply_gate": gate_dict,
         "injection": injection_meta,
         "apply_audit_at": audit_event.get("at"),
+        "snapshot_path": str(snapshot_path) if snapshot_path else None,
     }
 
 
@@ -1208,6 +1216,13 @@ def refine_after_job_llm(
         return {"skipped": True, "reason": review.get("rationale") or "review rejected", "review": review}
 
     baseline = state.clone()
+    from agent_reach.daily_run.harness_apply_gate import (
+        evaluate_layer_b_admission,
+        filter_proposal_for_admission,
+    )
+    from agent_reach.daily_run.harness_snapshot import save_pre_apply_snapshot
+
+    snapshot_path = save_pre_apply_snapshot(baseline, job=job, trigger="layer_b", settings=cfg)
     proposal = plan_harness_refinement(
         job,
         evidence,
@@ -1215,6 +1230,16 @@ def refine_after_job_llm(
         settings=settings,
         instructions=str(review.get("instructions") or ""),
     )
+    admission = evaluate_layer_b_admission(proposal, settings=settings)
+    if not admission.passed:
+        return {
+            "skipped": True,
+            "reason": "layer_b_admission_rejected",
+            "review": review,
+            "admission": admission.to_dict(),
+            "snapshot_path": str(snapshot_path) if snapshot_path else None,
+        }
+    proposal = filter_proposal_for_admission(proposal, admission)
     _, _, _, _, ev_summary = _evidence_from_job(job, evidence, settings=settings)
     edits, changes = apply_harness_proposal(
         state,
@@ -1245,6 +1270,9 @@ def refine_after_job_llm(
         "proposal_summary": proposal.get("summary"),
         "planner": proposal.get("planner") or "deterministic",
         "state_path": str(path),
+        "admission": admission.to_dict(),
+        "snapshot_path": str(snapshot_path) if snapshot_path else None,
+        "layer": "b",
     }
 
 
@@ -1281,6 +1309,13 @@ def refine_after_job_llm_summarize(
         return {"skipped": True, "reason": "llm summarize cooldown active", "job": job}
 
     baseline = state.clone()
+    from agent_reach.daily_run.harness_apply_gate import (
+        evaluate_layer_b_admission,
+        filter_proposal_for_admission,
+    )
+    from agent_reach.daily_run.harness_snapshot import save_pre_apply_snapshot
+
+    snapshot_path = save_pre_apply_snapshot(baseline, job=job, trigger="summarize", settings=cfg)
     instructions = (
         "Layer A 已写入原子事实；仅补充不重复的综合 playbook/policy edits，"
         "最多 4 条；禁止改写阈值数字；content 必须中文且可执行。"
@@ -1299,6 +1334,17 @@ def refine_after_job_llm_summarize(
             "job": job,
             "proposal": proposal,
         }
+
+    admission = evaluate_layer_b_admission(proposal, settings=settings)
+    if not admission.passed:
+        return {
+            "skipped": True,
+            "reason": "layer_b_admission_rejected",
+            "job": job,
+            "admission": admission.to_dict(),
+            "snapshot_path": str(snapshot_path) if snapshot_path else None,
+        }
+    proposal = filter_proposal_for_admission(proposal, admission)
 
     _, _, _, _, ev_summary = _evidence_from_job(job, evidence, settings=settings)
     edits, changes = apply_harness_proposal(
@@ -1335,6 +1381,8 @@ def refine_after_job_llm_summarize(
         "planner": "llm",
         "layer": "summarize",
         "state_path": str(path),
+        "admission": admission.to_dict(),
+        "snapshot_path": str(snapshot_path) if snapshot_path else None,
     }
 
 

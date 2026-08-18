@@ -293,6 +293,12 @@ def main():
     p_dr_h_sync.add_argument("--dry-run", action="store_true", help="Report only, do not write")
     p_dr_h_sync.add_argument("--path", default=None, help="Settings file path")
     p_dr_h_sync.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_h_snap_list = p_dr_harness_sub.add_parser("list-snapshots", help="List pre-apply harness snapshots")
+    p_dr_h_snap_list.add_argument("--limit", type=int, default=10, help="Max snapshots")
+    p_dr_h_snap_list.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_h_snap_restore = p_dr_harness_sub.add_parser("restore-snapshot", help="Restore harness state from snapshot")
+    p_dr_h_snap_restore.add_argument("--path", required=True, help="Snapshot file path")
+    p_dr_h_snap_restore.add_argument("--json", action="store_true", help="JSON output")
     p_dr_capital = p_daily_sub.add_parser(
         "capital",
         help="Record external deposits/withdrawals for accurate daily P&L",
@@ -2180,7 +2186,37 @@ def _cmd_daily_run(args):
                     print("\n(dry-run — re-run without --dry-run to apply)")
             return
 
-        print("Usage: agent-reach daily-run harness {show|list-refinements|rollback|refine|migrate-settings|sync-settings}")
+        if action == "list-snapshots":
+            from agent_reach.daily_run.harness_snapshot import list_snapshots
+
+            rows = list_snapshots(limit=args.limit)
+            if args.json:
+                print(_json.dumps(rows, ensure_ascii=False, indent=2))
+            else:
+                for row in rows:
+                    print(
+                        f"{row.get('name')} · {row.get('job')} · {row.get('trigger')} · "
+                        f"{str(row.get('saved_at', ''))[:19]}"
+                    )
+            return
+
+        if action == "restore-snapshot":
+            from agent_reach.daily_run.harness_snapshot import restore_snapshot
+
+            try:
+                result = restore_snapshot(args.path)
+            except (FileNotFoundError, ValueError) as exc:
+                print(f"❌ {exc}")
+                sys.exit(1)
+            if args.json:
+                print(_json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print(f"✅ Restored from {result.get('restored_from')}")
+                if result.get("pre_restore_snapshot"):
+                    print(f"   pre-restore backup: {result.get('pre_restore_snapshot')}")
+            return
+
+        print("Usage: agent-reach daily-run harness {show|list-refinements|rollback|refine|migrate-settings|sync-settings|list-snapshots|restore-snapshot}")
         sys.exit(1)
 
     if args.daily_action == "capital":

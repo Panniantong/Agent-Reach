@@ -559,13 +559,25 @@
     "apply_gate": {
       "enabled": true,
       "block_policy_on_audit_fail": true,
-      "block_policy_on_structured_incomplete": true
+      "block_policy_on_structured_incomplete": true,
+      "block_playbook_on_morning_gate_fail": true
     },
     "injection": {
       "max_per_kind_per_job": 8,
       "max_chars_per_line": 240,
       "max_overlay_claims": 3,
       "max_overlay_chars": 1200
+    },
+    "snapshots": {
+      "enabled": true,
+      "max_keep": 20
+    },
+    "layer_b_admission": {
+      "enabled": true,
+      "max_edits": 8,
+      "max_score_drift": 15,
+      "max_ratio_drift": 0.25,
+      "block_threshold_literals": true
     },
     "render_format": "xml",
     "jobs": {

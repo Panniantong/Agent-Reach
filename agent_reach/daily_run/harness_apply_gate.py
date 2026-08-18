@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from pathlib import Path
 from typing import Any, Literal, Optional
 
@@ -44,6 +46,22 @@ def gate_cfg(settings: Optional[dict[str, Any]] = None) -> dict[str, Any]:
             "block_policy_on_structured_incomplete", True
         )
         is not False,
+        "block_playbook_on_morning_gate_fail": raw.get(
+            "block_playbook_on_morning_gate_fail", True
+        )
+        is not False,
+    }
+
+
+def admission_cfg(settings: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    cfg = _harness_cfg(settings)
+    raw = dict(cfg.get("layer_b_admission") or {})
+    return {
+        "enabled": raw.get("enabled", True) is not False,
+        "max_edits": max(1, int(raw.get("max_edits") or 8)),
+        "max_score_drift": float(raw.get("max_score_drift") or 15),
+        "max_ratio_drift": float(raw.get("max_ratio_drift") or 0.25),
+        "block_threshold_literals": raw.get("block_threshold_literals", True) is not False,
     }
 
 
@@ -171,6 +189,10 @@ def evaluate_apply_gate(
         blocked.add("policy")
         reasons.append("structured_incomplete_blocks_policy")
 
+    if evidence.get("morning_gate_passed") is False and cfg["block_playbook_on_morning_gate_fail"]:
+        blocked.add("playbook")
+        reasons.append("morning_gate_blocks_playbook")
+
     result.blocked_kinds = sorted(blocked)
     result.reasons = reasons
     result.passed = not blocked
@@ -260,6 +282,184 @@ def bound_overlay_blobs(blobs: list[str], *, settings: Optional[dict[str, Any]] 
     }
 
 
+_VERIFY_MARKERS = ("待验证", "假设", "TODO", "FIXME", "未证实")
+
+
+def classify_overlay_claims(
+    blobs: list[str],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> list[dict[str, Any]]:
+    """Per-claim adopt / verify / ignore decisions (memory-gate CBDC style)."""
+    limits = injection_cfg(settings)
+    max_claims = max(1, limits["max_overlay_claims"])
+    max_chars = max(200, limits["max_overlay_chars"])
+    claims: list[dict[str, Any]] = []
+    kept_count = 0
+    kept_chars = 0
+    for blob in blobs:
+        text = str(blob or "").strip()
+        if not text:
+            continue
+        preview = text[:80]
+        if kept_count >= max_claims:
+            claims.append({"text": preview, "decision": "ignored", "reason": "over_claim_cap"})
+            continue
+        if kept_chars + len(text) > max_chars and kept_count > 0:
+            claims.append({"text": preview, "decision": "ignored", "reason": "over_char_cap"})
+            continue
+        if any(marker in text for marker in _VERIFY_MARKERS):
+            decision = "verify"
+            reason = "needs_verification_marker"
+        else:
+            decision = "adopted"
+            reason = "within_injection_budget"
+        claims.append({"text": preview, "decision": decision, "reason": reason})
+        kept_count += 1
+        kept_chars += len(text)
+    return claims
+
+
+_THRESHOLD_LITERAL_RE = re.compile(
+    r"(macro_veto|aggressive_entry|min_cash_ratio|max_price_deviation_pct|"
+    r"high_position_20d|min_volume_ratio|max_vwap_deviation_pct|"
+    r"trade_min_scans|max_holdings|stop_loss_ma20_pct|friction_min_return_pct|"
+    r"base_spread|vol_multiplier)\s*(?:=|→|->|:)\s*([0-9]+(?:\.[0-9]+)?)",
+    re.IGNORECASE,
+)
+
+_SCORE_KEYS = frozenset({"macro_veto", "aggressive_entry", "base_spread", "vol_multiplier", "trade_min_scans", "max_holdings"})
+_RATIO_KEYS = frozenset(
+    {
+        "min_cash_ratio",
+        "max_price_deviation_pct",
+        "high_position_20d",
+        "min_volume_ratio",
+        "max_vwap_deviation_pct",
+        "stop_loss_ma20_pct",
+        "friction_min_return_pct",
+    }
+)
+
+_NEUTRAL_DEFAULTS: dict[str, float] = {
+    "macro_veto": 40.0,
+    "aggressive_entry": 50.0,
+    "min_cash_ratio": 0.0,
+    "max_price_deviation_pct": 0.08,
+    "high_position_20d": 0.7,
+    "min_volume_ratio": 1.0,
+    "max_vwap_deviation_pct": 0.04,
+    "trade_min_scans": 3.0,
+    "max_holdings": 10.0,
+    "stop_loss_ma20_pct": 0.04,
+    "friction_min_return_pct": 0.005,
+    "base_spread": 8.0,
+    "vol_multiplier": 6.0,
+}
+
+
+@dataclass
+class LayerBAdmissionResult:
+    passed: bool = True
+    accepted_edits: list[dict[str, Any]] = field(default_factory=list)
+    rejected_edits: list[dict[str, Any]] = field(default_factory=list)
+    reasons: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _threshold_literal_ok(key: str, value: float, cfg: dict[str, Any]) -> Optional[str]:
+    base = float(_NEUTRAL_DEFAULTS.get(key, 0.0))
+    if key in _SCORE_KEYS:
+        if value < 10 or value > 100:
+            return f"{key} out of range"
+        if abs(value - base) > float(cfg["max_score_drift"]):
+            return f"{key} drift {value} vs neutral {base}"
+    elif key in _RATIO_KEYS:
+        if value < 0 or value > 1.5:
+            return f"{key} ratio out of range"
+        if abs(value - base) > float(cfg["max_ratio_drift"]):
+            return f"{key} drift {value} vs neutral {base}"
+    else:
+        if value < 0 or value > 100:
+            return f"{key} value out of range"
+    return None
+
+
+def evaluate_layer_b_admission(
+    proposal: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> LayerBAdmissionResult:
+    """Harbor-style admission for Layer B edits before apply."""
+    cfg = admission_cfg(settings)
+    result = LayerBAdmissionResult()
+    raw_edits = proposal.get("edits") or []
+    if not isinstance(raw_edits, list):
+        result.passed = False
+        result.reasons.append("invalid_edits")
+        return result
+    if not cfg["enabled"]:
+        result.accepted_edits = list(raw_edits)
+        return result
+
+    if len(raw_edits) > cfg["max_edits"]:
+        result.reasons.append(f"too_many_edits:{len(raw_edits)}")
+
+    for raw in raw_edits[: cfg["max_edits"] + 4]:
+        if not isinstance(raw, dict):
+            result.rejected_edits.append({"raw": raw, "reason": "not_a_dict"})
+            continue
+        kind = raw.get("kind")
+        if kind not in _KINDS:
+            result.rejected_edits.append({**raw, "reason": "invalid_kind"})
+            continue
+        content = str(raw.get("content") or "").strip()
+        if not content:
+            result.rejected_edits.append({**raw, "reason": "empty_content"})
+            continue
+        if len(content) > 400:
+            result.rejected_edits.append({**raw, "reason": "content_too_long"})
+            continue
+        if cfg["block_threshold_literals"]:
+            bad_literal = False
+            for match in _THRESHOLD_LITERAL_RE.finditer(content):
+                key = str(match.group(1)).lower()
+                try:
+                    val = float(match.group(2))
+                except ValueError:
+                    bad_literal = True
+                    result.rejected_edits.append({**raw, "reason": f"bad_literal:{key}"})
+                    break
+                err = _threshold_literal_ok(key, val, cfg)
+                if err:
+                    bad_literal = True
+                    result.rejected_edits.append({**raw, "reason": err})
+                    break
+            if bad_literal:
+                continue
+        if kind == "policy" and "→" in content and any(k in content for k in _NEUTRAL_DEFAULTS):
+            result.rejected_edits.append({**raw, "reason": "policy_threshold_arrow_blocked"})
+            continue
+        result.accepted_edits.append(raw)
+
+    result.passed = bool(result.accepted_edits)
+    if result.rejected_edits:
+        result.reasons.append(f"rejected={len(result.rejected_edits)}")
+    return result
+
+
+def filter_proposal_for_admission(
+    proposal: dict[str, Any],
+    admission: LayerBAdmissionResult,
+) -> dict[str, Any]:
+    out = dict(proposal)
+    out["edits"] = list(admission.accepted_edits)
+    out["admission"] = admission.to_dict()
+    return out
+
+
 def build_overlay_injection_audit(
     state: Any,
     *,
@@ -273,13 +473,17 @@ def build_overlay_injection_audit(
     for kind in ("memory", "policy", "playbook"):
         if kind in sources:
             raw_blobs.extend(_collect_text_blobs(state, sources=sources, kind=kind, bounded=False))
-    bounded, meta = bound_overlay_blobs(raw_blobs, settings=settings)
-    adopted = [b[:80] for b in bounded]
-    ignored = max(0, meta["input_count"] - meta["kept_count"])
+    claims = classify_overlay_claims(raw_blobs, settings=settings)
+    adopted = [c["text"] for c in claims if c.get("decision") == "adopted"]
+    verify = [c["text"] for c in claims if c.get("decision") == "verify"]
+    ignored = [c for c in claims if c.get("decision") == "ignored"]
     return {
-        **meta,
-        "adopted_preview": adopted,
-        "ignored_count": ignored,
+        "input_count": len(raw_blobs),
+        "kept_count": len(adopted) + len(verify),
+        "ignored_count": len(ignored),
+        "claims": claims,
+        "adopted_preview": adopted[:3],
+        "verify_preview": verify[:3],
         "sources": sorted(sources),
     }
 
@@ -292,6 +496,8 @@ def record_apply_audit(
     injection_meta: dict[str, Any],
     skipped_kinds: list[str],
     changes: int,
+    snapshot_path: Optional[str] = None,
+    admission: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     event = {
         "at": _now_iso(),
@@ -301,6 +507,8 @@ def record_apply_audit(
         "injection": injection_meta,
         "skipped_kinds": skipped_kinds,
         "changes": changes,
+        "snapshot_path": snapshot_path,
+        "admission": admission,
     }
     path = _audit_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -343,4 +551,9 @@ def format_gate_markdown(gate: dict[str, Any]) -> str:
     )
     if dropped:
         lines.append(f"- 有界注入：丢弃 {dropped} 条超长/超额 evidence")
+    admission = gate.get("admission") or {}
+    if admission.get("rejected_edits"):
+        lines.append(f"- Layer B Admission：拒绝 {len(admission['rejected_edits'])} 条 edits")
+    if gate.get("snapshot_path"):
+        lines.append(f"- 改前快照：`{Path(str(gate['snapshot_path'])).name}`")
     return "\n".join(lines)

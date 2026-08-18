@@ -129,17 +129,27 @@ python3 .cursor/skills/daily-run-code-walk/scripts/run_walk.py
 
 审计轨迹：`~/.agent-reach/daily_run/harness/apply_audit.jsonl`；Feishu harness 卡展示 verification_signals / 门控拦截。
 
+### 改前快照 + Layer B Admission（dsh-guard / self-evolving）
+
+| 能力 | 说明 |
+|------|------|
+| `snapshots.enabled` | 每次 refine 前写入 `harness/snapshots/*.json`（默认保留 20 份） |
+| `layer_b_admission.enabled` | Layer B / summarize 应用前过滤危险 edits（阈值漂移、超长、过多条数） |
+| claim 决策 | overlay 扫描输出 `adopted` / `verify` / `ignored` 写入 `injection_gate.claims` |
+
+```bash
+python3 -m agent_reach.cli daily-run harness list-snapshots
+python3 -m agent_reach.cli daily-run harness restore-snapshot --path ~/.agent-reach/daily_run/harness/snapshots/....json
+```
+
 ```json
 "harness": {
-  "apply_gate": {
+  "snapshots": { "enabled": true, "max_keep": 20 },
+  "layer_b_admission": {
     "enabled": true,
-    "block_policy_on_audit_fail": true,
-    "block_policy_on_structured_incomplete": true
-  },
-  "injection": {
-    "max_per_kind_per_job": 8,
-    "max_overlay_claims": 3,
-    "max_overlay_chars": 1200
+    "max_edits": 8,
+    "max_score_drift": 15,
+    "max_ratio_drift": 0.25
   }
 }
 ```

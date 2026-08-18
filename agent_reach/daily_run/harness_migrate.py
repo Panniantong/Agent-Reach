@@ -60,6 +60,7 @@ HARNESS_APPLY_GATE_DEFAULTS: dict[str, Any] = {
     "enabled": True,
     "block_policy_on_audit_fail": True,
     "block_policy_on_structured_incomplete": True,
+    "block_playbook_on_morning_gate_fail": True,
 }
 
 HARNESS_INJECTION_DEFAULTS: dict[str, Any] = {
@@ -67,6 +68,19 @@ HARNESS_INJECTION_DEFAULTS: dict[str, Any] = {
     "max_chars_per_line": 240,
     "max_overlay_claims": 3,
     "max_overlay_chars": 1200,
+}
+
+HARNESS_SNAPSHOT_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "max_keep": 20,
+}
+
+HARNESS_LAYER_B_ADMISSION_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "max_edits": 8,
+    "max_score_drift": 15,
+    "max_ratio_drift": 0.25,
+    "block_threshold_literals": True,
 }
 
 
@@ -94,6 +108,8 @@ def sync_user_harness_keys(
     for nested_key, nested_defaults in (
         ("apply_gate", HARNESS_APPLY_GATE_DEFAULTS),
         ("injection", HARNESS_INJECTION_DEFAULTS),
+        ("snapshots", HARNESS_SNAPSHOT_DEFAULTS),
+        ("layer_b_admission", HARNESS_LAYER_B_ADMISSION_DEFAULTS),
     ):
         block = dict(harness.get(nested_key) or {})
         default_block = dict(default_harness.get(nested_key) or nested_defaults)
