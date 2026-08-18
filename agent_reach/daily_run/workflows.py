@@ -392,6 +392,8 @@ def _push_harness_summary_card(
     template: Optional[str] = None,
     harness_errors: Optional[list[str]] = None,
     body: Optional[str] = None,
+    week_start: Optional[str] = None,
+    week_end: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     from agent_reach.daily_run.harness import format_harness_push_markdown
     from agent_reach.daily_run.report_push import ReportSection, push_report_sections
@@ -400,6 +402,9 @@ def _push_harness_summary_card(
         harness_result,
         job=report_kind,
         harness_errors=harness_errors,
+        week_start=week_start,
+        week_end=week_end,
+        settings=settings,
     )
     if not harness_md.strip():
         return None
@@ -1366,6 +1371,8 @@ def run_weekly(
             config=cfg_obj,
             report_kind="weekly",
             harness_errors=harness_errors,
+            week_start=str(report.week_start or ""),
+            week_end=str(report.week_end or ""),
         ):
             steps.append("push_harness_summary")
         steps.extend(

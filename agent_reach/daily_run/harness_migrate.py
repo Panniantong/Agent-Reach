@@ -83,6 +83,23 @@ HARNESS_LAYER_B_ADMISSION_DEFAULTS: dict[str, Any] = {
     "block_threshold_literals": True,
 }
 
+HARNESS_FORGE_GATES_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "pnl_target": {
+        "max_target_pct": 3.0,
+        "max_target_cny": 50000,
+    },
+    "forecast_calibrate": {
+        "use_week_forecast_bounds": True,
+    },
+}
+
+HARNESS_WEEKLY_NARRATIVE_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "append_to_weekly_card": True,
+    "audit_days": 7,
+}
+
 
 def sync_user_harness_keys(
     *,
@@ -110,6 +127,8 @@ def sync_user_harness_keys(
         ("injection", HARNESS_INJECTION_DEFAULTS),
         ("snapshots", HARNESS_SNAPSHOT_DEFAULTS),
         ("layer_b_admission", HARNESS_LAYER_B_ADMISSION_DEFAULTS),
+        ("forge_gates", HARNESS_FORGE_GATES_DEFAULTS),
+        ("weekly_narrative", HARNESS_WEEKLY_NARRATIVE_DEFAULTS),
     ):
         block = dict(harness.get(nested_key) or {})
         default_block = dict(default_harness.get(nested_key) or nested_defaults)

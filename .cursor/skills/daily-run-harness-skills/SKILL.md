@@ -150,9 +150,32 @@ python3 -m agent_reach.cli daily-run harness restore-snapshot --path ~/.agent-re
     "max_edits": 8,
     "max_score_drift": 15,
     "max_ratio_drift": 0.25
+  },
+  "forge_gates": {
+    "enabled": true,
+    "pnl_target": { "max_target_pct": 3.0, "max_target_cny": 50000 },
+    "forecast_calibrate": { "use_week_forecast_bounds": true }
+  },
+  "weekly_narrative": {
+    "enabled": true,
+    "append_to_weekly_card": true,
+    "audit_days": 7
   }
 }
 ```
+
+### Forge 数值门控 + 周度叙事（dsh-forge / period-report）
+
+| 能力 | 说明 |
+|------|------|
+| `forge_gates.enabled` | `pnl_target` / `forecast_calibrate` refine 前校验 domain 数值 |
+| `forge_gates.pnl_target.max_target_pct` | 下一日目标盈亏占比上限（默认 3%） |
+| `forge_gates.pnl_target.max_target_cny` | 下一日目标盈亏绝对值上限（默认 50000） |
+| `weekly_narrative.enabled` | 周六 harness 卡追加本周 apply_audit 聚合叙事 |
+| `weekly_narrative.append_to_weekly_card` | 嵌入 weekly Feishu harness 卡（默认 true） |
+
+- Forge 失败：`apply_skill_refinement` 返回 `reason=forge_gate_failed`，不写 harness。
+- 周度叙事：统计 audit 事件数、变更项、gate 拦截、Layer B 拒绝、job 分布。
 
 ### Feishu Harness 摘要卡
 

@@ -1466,9 +1466,18 @@ def format_harness_push_markdown(
     *,
     job: str = "close",
     harness_errors: Optional[list[str]] = None,
+    week_start: Optional[str] = None,
+    week_end: Optional[str] = None,
+    settings: Optional[dict[str, Any]] = None,
 ) -> str:
     """Markdown card summarizing harness refinements for Feishu push."""
     from agent_reach.daily_run.harness_apply_gate import format_gate_markdown
+    from agent_reach.daily_run.harness_forge_gates import format_forge_gate_markdown
+    from agent_reach.daily_run.harness_weekly_narrative import (
+        build_weekly_harness_narrative,
+        format_weekly_harness_narrative_markdown,
+        weekly_narrative_cfg,
+    )
 
     layers = _collect_harness_refinement_layers(harness_result)
     rollback = harness_result.get("auto_rollback") or {}
@@ -1508,6 +1517,9 @@ def format_harness_push_markdown(
         gate_md = format_gate_markdown(layer.get("apply_gate") or {})
         if gate_md:
             line += f"\n  {gate_md.replace(chr(10), chr(10) + '  ')}"
+        forge_md = format_forge_gate_markdown(layer.get("forge_gate") or {})
+        if forge_md:
+            line += f"\n  {forge_md}"
         lines.append(line)
     if harness_result.get("skipped") and harness_result.get("error"):
         lines.append(f"- ⚠️ 部分跳过：{harness_result['error']}")
@@ -1519,6 +1531,18 @@ def format_harness_push_markdown(
         )
     lines.append(f"\n合计 **{total_changes}** 项 harness 变更")
     body = "\n".join(lines)
+    if job == "weekly":
+        wn_cfg = weekly_narrative_cfg(settings)
+        if wn_cfg.get("enabled") and wn_cfg.get("append_to_weekly_card"):
+            narrative = build_weekly_harness_narrative(
+                week_start=week_start,
+                week_end=week_end,
+                harness_result=harness_result,
+                settings=settings,
+            )
+            narrative_md = format_weekly_harness_narrative_markdown(narrative, settings=settings)
+            if narrative_md:
+                body += narrative_md
     if errors_md:
         body += f"\n\n{errors_md}"
     return body

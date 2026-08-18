@@ -105,6 +105,10 @@ def apply_pnl_target_harness_refinement(
         portfolio_summary=portfolio_summary,
         settings=settings,
     )
+    evidence["forge_domain"] = {
+        "evaluated": run.get("evaluated"),
+        "next_target": run.get("next_target"),
+    }
     refine = apply_skill_refinement(
         "pnl_target",
         evidence,

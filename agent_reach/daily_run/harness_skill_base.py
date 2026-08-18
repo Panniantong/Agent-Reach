@@ -76,7 +76,23 @@ def apply_skill_refinement(
     if not any(evidence.get(k) for k in ("memory", "policy", "playbook", "plan")):
         return {"skipped": True, "reason": "empty evidence", "job": job}
 
-    result = refine_after_job(job, evidence=evidence, settings=cfg)
+    from agent_reach.daily_run.harness_forge_gates import (
+        evaluate_forge_gate,
+        strip_forge_domain,
+    )
+
+    forge = evaluate_forge_gate(job, evidence, settings=cfg)
+    if forge is not None and not forge.passed:
+        return {
+            "skipped": True,
+            "reason": "forge_gate_failed",
+            "job": job,
+            "forge_gate": forge.to_dict(),
+        }
+
+    result = refine_after_job(job, evidence=strip_forge_domain(evidence), settings=cfg)
+    if forge is not None:
+        result["forge_gate"] = forge.to_dict()
     result["job"] = job
     if not result.get("skipped"):
         try:

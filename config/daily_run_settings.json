@@ -579,6 +579,21 @@
       "max_ratio_drift": 0.25,
       "block_threshold_literals": true
     },
+    "forge_gates": {
+      "enabled": true,
+      "pnl_target": {
+        "max_target_pct": 3.0,
+        "max_target_cny": 50000
+      },
+      "forecast_calibrate": {
+        "use_week_forecast_bounds": true
+      }
+    },
+    "weekly_narrative": {
+      "enabled": true,
+      "append_to_weekly_card": true,
+      "audit_days": 7
+    },
     "render_format": "xml",
     "jobs": {
       "close": true,
