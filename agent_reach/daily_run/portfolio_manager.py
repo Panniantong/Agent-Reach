@@ -583,25 +583,10 @@ def _price_for(row: dict[str, Any], enriched: dict[str, dict[str, Any]]) -> Opti
 
 
 def _symbol_score(row: dict[str, Any], decision: Any, settings: dict[str, Any]) -> float:
-    """Rank symbols: higher = better buy candidate / lower sell priority."""
-    base = 50.0
-    if decision is not None:
-        lb = getattr(decision, "lookback_mss", None)
-        if lb is None and isinstance(decision, dict):
-            lb = decision.get("lookback_mss")
-        if lb is not None:
-            base = float(lb)
-    chg = row.get("change_pct")
-    if chg is not None:
-        base += float(chg) * 0.5
-    pos = row.get("position_20d")
-    if pos is not None:
-        base += (0.5 - float(pos)) * 10
-    from agent_reach.daily_run.harness_policy import kronos_score_adjustment
+    """Rank symbols: higher = better buy candidate."""
+    from agent_reach.daily_run.harness_policy import harness_symbol_score
 
-    code = _normalize_code(str(row.get("code", "")))
-    base += kronos_score_adjustment(code, settings)
-    return base
+    return harness_symbol_score(row, settings, decision=decision)
 
 
 def _round_lot(code: str, shares: int) -> int:

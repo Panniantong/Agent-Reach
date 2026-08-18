@@ -5,7 +5,10 @@ from agent_reach.daily_run.harness import HarnessEntry, HarnessState
 from agent_reach.daily_run.harness_policy import (
     aggressive_entry_default,
     apply_harness_policy_overlay,
+    harness_symbol_score,
     kronos_score_adjustment,
+    resolve_harness_symbol_bias,
+    resolve_harness_symbol_score_weights,
     resolve_harness_flat_overrides,
     resolve_harness_kronos_bias,
     resolve_harness_lookback_weights,
@@ -425,6 +428,62 @@ class TestHarnessRuntimeExtensions:
         bull = _symbol_score({"code": "300308", "change_pct": 0}, None, settings)
         plain = _symbol_score({"code": "603501", "change_pct": 0}, None, settings)
         assert bull > plain
+
+    def test_symbol_score_weights_evolve_on_defensive_trim(self):
+        state = HarnessState()
+        state.entries["memory"]["miss"] = HarnessEntry(
+            id="miss",
+            kind="memory",
+            title="MSS 预测偏离",
+            content="MSS 预测偏离：下日调低进攻阈值或缩窄仓位",
+            source="deterministic",
+            job="close",
+            evidence="close",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        settings = {"harness": {"runtime_overlay_sources": ["memory"]}}
+        weights = resolve_harness_symbol_score_weights(state, settings=settings)
+        assert weights["change_pct_weight"] == 0.25
+        assert weights["position_20d_weight"] == 12.5
+
+    def test_symbol_bias_from_harness_policy(self):
+        state = HarnessState()
+        state.entries["policy"]["deep_loss"] = HarnessEntry(
+            id="deep_loss",
+            kind="policy",
+            title="深浮亏 海能达",
+            content="深浮亏 002583：禁止接飞刀加仓，优先 verify 回避/减仓",
+            source="deterministic",
+            job="pnl_overview",
+            evidence="pnl",
+            created_at="2026-08-18T00:00:00+00:00",
+            updated_at="2026-08-18T00:00:00+00:00",
+        )
+        bias = resolve_harness_symbol_bias(
+            state,
+            settings={"harness": {"runtime_overlay_sources": ["policy"]}},
+        )
+        assert bias["002583"] < 0
+
+    def test_harness_symbol_score_applies_bias_and_change_weight(self):
+        settings = {
+            "harness_runtime": {
+                "symbol_score_weights": {
+                    "base_mss": 50.0,
+                    "change_pct_weight": 0.25,
+                    "position_20d_weight": 10.0,
+                    "kronos_bullish_mult": 2.0,
+                    "kronos_bearish_mult": 1.5,
+                    "symbol_bias_penalty": 15.0,
+                    "symbol_bias_boost": 8.0,
+                },
+                "symbol_bias": {"002583": -20.0},
+            }
+        }
+        weak = harness_symbol_score({"code": "002583", "change_pct": 2.0}, settings)
+        strong = harness_symbol_score({"code": "600584", "change_pct": 2.0}, settings)
+        assert weak < strong
 
     def test_defensive_trim_decision(self):
         settings = {

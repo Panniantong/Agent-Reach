@@ -86,6 +86,46 @@ _LOOKBACK_SCAN_SPARSE: list[float] = [0.6, 0.25, 0.15]
 _LOOKBACK_OFFENSIVE: list[float] = [0.45, 0.35, 0.2]
 _LOOKBACK_DEFENSIVE: list[float] = [0.55, 0.28, 0.17]
 
+_EVOLVED_SYMBOL_SCORE_KEYS: tuple[str, ...] = (
+    "base_mss",
+    "change_pct_weight",
+    "position_20d_weight",
+    "kronos_bullish_mult",
+    "kronos_bearish_mult",
+    "symbol_bias_penalty",
+    "symbol_bias_boost",
+)
+
+_SYMBOL_SCORE_NEUTRAL: dict[str, float] = {
+    "base_mss": 50.0,
+    "change_pct_weight": 0.5,
+    "position_20d_weight": 10.0,
+    "kronos_bullish_mult": 2.0,
+    "kronos_bearish_mult": 1.5,
+    "symbol_bias_penalty": 15.0,
+    "symbol_bias_boost": 8.0,
+}
+
+_SYMBOL_BIAS_CODE_RE = re.compile(r"(?<!\d)(\d{6})(?!\d)")
+
+_SYMBOL_BIAS_NEGATIVE: tuple[str, ...] = (
+    "深浮亏",
+    "浮亏警示",
+    "回避",
+    "减仓",
+    "禁止接飞刀",
+    "止损",
+    "接飞刀",
+)
+
+_SYMBOL_BIAS_POSITIVE: tuple[str, ...] = (
+    "优先处置",
+    "优先",
+    "偏强",
+    "进攻",
+    "热点匹配",
+)
+
 _RUNTIME_SECTIONS: dict[str, str] = {
     "trade_min_scans": "schedule",
     "trade_every_n_scans": "schedule",
@@ -1201,6 +1241,15 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
         harness_meta["kronos_bullish"] = trade_signals["kronos_bullish"]
     if trade_signals.get("kronos_bearish"):
         harness_meta["kronos_bearish"] = trade_signals["kronos_bearish"]
+    base_score_weights = resolve_harness_base_symbol_score_weights(cfg)
+    effective_score_weights = resolve_harness_symbol_score_weights(state, settings=cfg)
+    harness_meta["symbol_score_weights"] = effective_score_weights
+    score_weight_meta = harness_symbol_score_overlay_meta(base_score_weights, effective_score_weights)
+    if score_weight_meta:
+        harness_meta["symbol_score_overlay"] = score_weight_meta
+    symbol_bias = resolve_harness_symbol_bias(state, settings=cfg, weights=effective_score_weights)
+    if symbol_bias:
+        harness_meta["symbol_bias"] = symbol_bias
     harness_meta["trade_signals"] = {
         k: trade_signals[k]
         for k in (
@@ -1232,15 +1281,175 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
     return cfg
 
 
-def kronos_score_adjustment(code: str, settings: dict[str, Any]) -> float:
-    """Score delta for watchlist ranking from harness Kronos bias."""
+def symbol_score_weight_base(settings: dict[str, Any], key: str) -> float:
+    if evolution_mode(settings, key) == "fixed":
+        block = settings.get("symbol_score") or {}
+        if key in block:
+            return float(block[key])
+    return float(_SYMBOL_SCORE_NEUTRAL.get(key, 0.0))
+
+
+def resolve_harness_base_symbol_score_weights(settings: dict[str, Any]) -> dict[str, float]:
+    return {key: symbol_score_weight_base(settings, key) for key in _EVOLVED_SYMBOL_SCORE_KEYS}
+
+
+def _apply_symbol_score_signal_evolution(
+    merged: dict[str, float],
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    signals = resolve_harness_trade_signals(state, settings=settings)
+    if signals.get("defensive_trim"):
+        if evolution_mode(settings, "change_pct_weight") == "harness":
+            merged["change_pct_weight"] = float(merged.get("change_pct_weight", 0.5)) * 0.5
+        if evolution_mode(settings, "position_20d_weight") == "harness":
+            merged["position_20d_weight"] = float(merged.get("position_20d_weight", 10.0)) * 1.25
+        if evolution_mode(settings, "symbol_bias_penalty") == "harness":
+            merged["symbol_bias_penalty"] = max(float(merged.get("symbol_bias_penalty", 15.0)), 20.0)
+    elif signals.get("pnl_target_hit"):
+        if evolution_mode(settings, "change_pct_weight") == "harness":
+            merged["change_pct_weight"] = float(merged.get("change_pct_weight", 0.5)) * 1.2
+    if _blob_has_phrase(state, "进攻期", settings=settings):
+        if evolution_mode(settings, "change_pct_weight") == "harness":
+            merged["change_pct_weight"] = float(merged.get("change_pct_weight", 0.5)) * 1.3
+    if signals.get("mss_forecast_miss") and not signals.get("defensive_trim"):
+        if evolution_mode(settings, "change_pct_weight") == "harness":
+            merged["change_pct_weight"] = float(merged.get("change_pct_weight", 0.5)) * 0.75
+    return merged
+
+
+def resolve_harness_symbol_score_weights(
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    merged = resolve_harness_base_symbol_score_weights(settings)
+    if not _overlay_enabled(settings):
+        return merged
+    return _apply_symbol_score_signal_evolution(merged, state, settings=settings)
+
+
+def resolve_harness_symbol_bias(
+    state: Any,
+    *,
+    settings: dict[str, Any],
+    weights: Optional[dict[str, float]] = None,
+) -> dict[str, float]:
+    """Per-symbol score delta from harness memory/policy/playbook mentions."""
+    if not _overlay_enabled(settings):
+        return {}
+    weights = weights or resolve_harness_base_symbol_score_weights(settings)
+    penalty = float(weights.get("symbol_bias_penalty", 15.0))
+    boost = float(weights.get("symbol_bias_boost", 8.0))
+    sources = _overlay_sources(settings)
+    bias: dict[str, float] = {}
+    for kind in ("policy", "memory", "playbook"):
+        for blob in _collect_text_blobs(state, sources=sources, kind=kind, settings=settings):
+            codes = {_normalize_code(c) for c in _SYMBOL_BIAS_CODE_RE.findall(blob)}
+            if not codes:
+                continue
+            delta = 0.0
+            if any(p in blob for p in _SYMBOL_BIAS_NEGATIVE):
+                delta -= penalty
+            if any(p in blob for p in _SYMBOL_BIAS_POSITIVE):
+                delta += boost
+            if delta == 0.0:
+                continue
+            for code in codes:
+                if code:
+                    bias[code] = round(bias.get(code, 0.0) + delta, 2)
+    return bias
+
+
+def harness_symbol_score_overlay_meta(
+    base_weights: dict[str, float],
+    effective_weights: dict[str, float],
+) -> dict[str, Any]:
+    changed: dict[str, dict[str, float]] = {}
+    for key in _EVOLVED_SYMBOL_SCORE_KEYS:
+        base_val = float(base_weights.get(key, _SYMBOL_SCORE_NEUTRAL.get(key, 0.0)))
+        eff_val = float(effective_weights.get(key, base_val))
+        if abs(eff_val - base_val) >= 0.01:
+            changed[key] = {"base": base_val, "effective": eff_val}
+    return changed
+
+
+def _symbol_score_weights(settings: dict[str, Any]) -> dict[str, float]:
+    runtime = settings.get("harness_runtime") or {}
+    weights = runtime.get("symbol_score_weights")
+    if weights:
+        return dict(weights)
+    if _overlay_enabled(settings):
+        from agent_reach.daily_run.harness import load_harness
+
+        return resolve_harness_symbol_score_weights(load_harness(), settings=settings)
+    return dict(_SYMBOL_SCORE_NEUTRAL)
+
+
+def _kronos_score_delta(code: str, settings: dict[str, Any], weights: dict[str, float]) -> float:
     runtime = settings.get("harness_runtime") or {}
     norm = _normalize_code(code)
-    boost = 0.0
+    if not norm:
+        return 0.0
     bullish = runtime.get("kronos_bullish") or {}
     bearish = runtime.get("kronos_bearish") or {}
+    b_mult = float(weights.get("kronos_bullish_mult", 2.0))
+    s_mult = float(weights.get("kronos_bearish_mult", 1.5))
+    boost = 0.0
     if norm in bullish:
-        boost += min(abs(float(bullish[norm])) * 2.0, 12.0)
+        boost += min(abs(float(bullish[norm])) * b_mult, 12.0)
     if norm in bearish:
-        boost -= min(abs(float(bearish[norm])) * 1.5, 10.0)
+        boost -= min(abs(float(bearish[norm])) * s_mult, 10.0)
     return boost
+
+
+def harness_symbol_score(
+    row: dict[str, Any],
+    settings: dict[str, Any],
+    *,
+    decision: Any = None,
+    base_mss: Optional[float] = None,
+) -> float:
+    """Rank score for buy/watchlist selection — weights and bias from harness evolution."""
+    weights = _symbol_score_weights(settings)
+    score: Optional[float] = None
+    if base_mss is not None:
+        score = float(base_mss)
+    elif row.get("mss_final") is not None:
+        score = float(row["mss_final"])
+    elif decision is not None:
+        lb = getattr(decision, "lookback_mss", None)
+        if lb is None and isinstance(decision, dict):
+            lb = decision.get("lookback_mss")
+        if lb is not None:
+            score = float(lb)
+    if score is None:
+        score = float(weights.get("base_mss", 50.0))
+
+    chg = row.get("change_pct")
+    if chg is not None:
+        score += float(chg) * float(weights.get("change_pct_weight", 0.5))
+
+    pos = row.get("position_20d")
+    if pos is not None:
+        score += (0.5 - float(pos)) * float(weights.get("position_20d_weight", 10.0))
+
+    code = _normalize_code(str(row.get("code", "")))
+    score += _kronos_score_delta(code, settings, weights)
+
+    runtime = settings.get("harness_runtime") or {}
+    bias_map = runtime.get("symbol_bias")
+    if bias_map is None and _overlay_enabled(settings):
+        from agent_reach.daily_run.harness import load_harness
+
+        bias_map = resolve_harness_symbol_bias(load_harness(), settings=settings, weights=weights)
+    if code and bias_map and code in bias_map:
+        score += float(bias_map[code])
+
+    return score
+
+
+def kronos_score_adjustment(code: str, settings: dict[str, Any]) -> float:
+    """Score delta for watchlist ranking from harness Kronos bias."""
+    return _kronos_score_delta(code, settings, _symbol_score_weights(settings))
