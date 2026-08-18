@@ -324,6 +324,14 @@ def _holding_line(h: dict[str, Any]) -> str:
     name = h.get("name") or h.get("code")
     code = h.get("code")
     parts = [f"**{name}** ({code})"]
+    cost = h.get("cost")
+    price = h.get("price")
+    if cost is not None and price is not None:
+        parts.append(f"成本 ¥{float(cost):.2f} · 现价 ¥{float(price):.2f}")
+    elif cost is not None:
+        parts.append(f"成本 ¥{float(cost):.2f}")
+    elif price is not None:
+        parts.append(f"现价 ¥{float(price):.2f}")
     change_pct = h.get("change_pct")
     if change_pct is None and h.get("week_chg_pct") is not None:
         change_pct = h.get("week_chg_pct")

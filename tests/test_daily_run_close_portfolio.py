@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from agent_reach.daily_run.close_portfolio_summary import (
+    _holding_line,
     build_close_portfolio_summary,
     render_close_portfolio_markdown,
 )
@@ -301,6 +302,7 @@ class TestClosePortfolioSummary:
         assert "## 💰 组合盈亏" in md
         assert "## 📈 个股盈亏" in md
         assert "澜起科技" in md
+        assert "成本 ¥255.87 · 现价 ¥260.00" in md
         assert "当日盈亏" in md
         assert "水晶光电" in md
         assert "## 🔄 成交记录" in md
@@ -408,3 +410,26 @@ class TestClosePortfolioSummary:
             summary = _build_summary(_close_snapshot(), baseline)
         assert summary.daily_pnl is None
         assert "基线无持仓快照" in summary.position_change
+
+
+class TestHoldingLine:
+    def test_shows_cost_and_price(self):
+        line = _holding_line(
+            {
+                "code": "688008",
+                "name": "澜起科技",
+                "cost": 255.87,
+                "price": 260.0,
+                "change_pct": 4.0,
+                "day_pnl": 400.0,
+                "unrealized_pnl": 413.0,
+                "weight_pct": 25.1,
+            }
+        )
+        assert "成本 ¥255.87 · 现价 ¥260.00" in line
+        assert "今日 +4.00%" in line
+
+    def test_price_only_when_cost_missing(self):
+        line = _holding_line({"code": "000001", "name": "测试", "price": 10.5})
+        assert "现价 ¥10.50" in line
+        assert "成本" not in line
