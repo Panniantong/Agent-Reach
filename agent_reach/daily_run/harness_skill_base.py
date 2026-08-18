@@ -128,6 +128,18 @@ def apply_skill_refinement(
         result["forge_gate"] = forge.to_dict()
     result["job"] = job
     if not result.get("skipped"):
+        domain = rigor_domain if isinstance(rigor_domain, dict) else {}
+        if job in {"optimize", "backtest"} and domain:
+            from agent_reach.daily_run.harness_study_registry import register_study
+
+            study = register_study(
+                job,
+                domain,
+                settings=cfg,
+                refinement_id=str(result.get("refinement_id") or ""),
+            )
+            if study:
+                result["study_registry"] = study
         try:
             from agent_reach.daily_run.harness import refine_after_job_llm_summarize
 

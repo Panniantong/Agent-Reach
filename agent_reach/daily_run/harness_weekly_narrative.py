@@ -110,15 +110,23 @@ def build_weekly_harness_narrative(
     admission_rejects = 0
     forge_blocks = 0
     layer_b_skips = 0
+    rigor_blocks = 0
     snapshots = 0
+    context_doctor_drops = 0
+    finance_jobs = 0
+    branches: Counter[str] = Counter()
 
     for row in audit_rows:
         job = str(row.get("job") or "unknown")
         job_counts[job] += 1
+        if job.startswith("finance_"):
+            finance_jobs += 1
         total_changes += int(row.get("changes") or 0)
         reason = str(row.get("reason") or "")
         if reason == "forge_gate_failed":
             forge_blocks += 1
+        if reason == "rigor_check_failed":
+            rigor_blocks += 1
         if reason == "layer_b_admission_rejected":
             layer_b_skips += 1
         gate = row.get("gate") or {}
@@ -129,6 +137,27 @@ def build_weekly_harness_narrative(
             admission_rejects += len(admission["rejected_edits"])
         if row.get("snapshot_path") or gate.get("snapshot_path"):
             snapshots += 1
+        injection = row.get("injection") or {}
+        doctor = injection.get("context_doctor") or {}
+        if isinstance(doctor, dict):
+            for kind_meta in doctor.values():
+                if isinstance(kind_meta, dict):
+                    context_doctor_drops += int(kind_meta.get("dropped_count") or 0)
+        branch = str(row.get("git_branch") or "")
+        if branch:
+            branches[branch] += 1
+
+    study_rows = []
+    try:
+        from agent_reach.daily_run.harness_study_registry import list_studies_in_window
+
+        study_rows = list_studies_in_window(
+            week_start=week_start,
+            week_end=week_end,
+            settings=settings,
+        )
+    except Exception:
+        study_rows = []
 
     session_layers = 0
     if harness_result:
@@ -147,8 +176,13 @@ def build_weekly_harness_narrative(
         "gate_blocks": gate_blocks,
         "admission_rejects": admission_rejects,
         "forge_blocks": forge_blocks,
+        "rigor_blocks": rigor_blocks,
         "layer_b_skips": layer_b_skips,
         "snapshots": snapshots,
+        "context_doctor_drops": context_doctor_drops,
+        "finance_jobs": finance_jobs,
+        "study_registry_entries": len(study_rows),
+        "git_branches": dict(branches.most_common(4)),
         "jobs": dict(top_jobs),
     }
 
@@ -179,12 +213,24 @@ def format_weekly_harness_narrative_markdown(
         lines.append(f"- Apply gate 拦截 **{int(narrative['gate_blocks'])}** 次")
     if narrative.get("forge_blocks"):
         lines.append(f"- Forge 门控拦截 **{int(narrative['forge_blocks'])}** 次")
+    if narrative.get("rigor_blocks"):
+        lines.append(f"- Rigor 拦截 **{int(narrative['rigor_blocks'])}** 次")
     if narrative.get("layer_b_skips"):
         lines.append(f"- Layer B 拒绝 **{int(narrative['layer_b_skips'])}** 次")
     if narrative.get("admission_rejects"):
         lines.append(f"- Layer B Admission 拒绝 **{int(narrative['admission_rejects'])}** 条 edits")
+    if narrative.get("context_doctor_drops"):
+        lines.append(f"- Context doctor 去重 **{int(narrative['context_doctor_drops'])}** 条")
+    if narrative.get("finance_jobs"):
+        lines.append(f"- Finance harness job **{int(narrative['finance_jobs'])}** 次")
+    if narrative.get("study_registry_entries"):
+        lines.append(f"- Study registry 登记 **{int(narrative['study_registry_entries'])}** 条")
     if narrative.get("snapshots"):
         lines.append(f"- 改前快照 **{int(narrative['snapshots'])}** 份")
+    branches = narrative.get("git_branches") or {}
+    if branches:
+        branch_bits = [f"{name}×{count}" for name, count in branches.items()]
+        lines.append(f"- Git 分支：{', '.join(branch_bits)}")
 
     jobs = narrative.get("jobs") or {}
     if jobs:

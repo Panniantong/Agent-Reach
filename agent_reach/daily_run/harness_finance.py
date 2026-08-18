@@ -666,6 +666,140 @@ def build_weekly_financial_statements(
     }
 
 
+def _research_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
+    return dict((settings or {}).get("finance_research") or {})
+
+
+def build_finance_research_workflow(
+    report: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+    forecast: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Structured public-market research plan (dsh-finance finance_research_workflow)."""
+    cfg = _research_cfg(settings)
+    max_queries = max(1, int(cfg.get("max_queries") or 6))
+    max_sources = max(1, int(cfg.get("max_sources") or 8))
+
+    sources: list[dict[str, Any]] = []
+    queries: list[dict[str, Any]] = []
+    evidence_gaps: list[str] = []
+    steps: list[str] = [
+        "inventory sources and mark evidence limitations",
+        "prioritize material holdings / policy drivers",
+        "run Exa / agent-reach research per query",
+        "cross-check claims against portfolio ledger",
+    ]
+
+    ws = str(report.get("week_start") or (forecast or {}).get("week_start") or "")
+    we = str(report.get("week_end") or (forecast or {}).get("week_end") or "")
+
+    for row in report.get("skill_research") or []:
+        if len(sources) >= max_sources:
+            break
+        title = str(row.get("title") or row.get("query") or "skill_research")
+        sources.append(
+            {
+                "kind": "skill_research",
+                "title": title[:120],
+                "url": row.get("url") or "",
+                "summary": str(row.get("summary") or "")[:240],
+            }
+        )
+
+    holdings = sorted(
+        [h for h in (report.get("holdings") or []) if h.get("week_chg") is not None],
+        key=lambda x: abs(float(x["week_chg"])),
+        reverse=True,
+    )
+    for row in holdings[:3]:
+        name = str(row.get("name") or row.get("code") or "")
+        chg = float(row["week_chg"])
+        sources.append(
+            {
+                "kind": "holding",
+                "title": f"{name} 周内 {chg:+,.0f}",
+                "code": row.get("code"),
+                "summary": "portfolio mark-to-market driver",
+            }
+        )
+        queries.append(
+            {
+                "topic": name,
+                "query": f"{name} 最新财报 行业竞争 舆情",
+                "priority": "high" if abs(chg) >= float(cfg.get("holding_materiality_cny") or 2000) else "medium",
+                "evidence": "holding_week_chg",
+            }
+        )
+
+    statements = build_weekly_financial_statements(report, settings=settings) if report.get("week_start") else {}
+    if statements.get("material"):
+        queries.append(
+            {
+                "topic": "weekly_pnl",
+                "query": f"本周 A 股 {ws}~{we} 宏观与板块驱动",
+                "priority": "high",
+                "evidence": "material_weekly_pnl",
+            }
+        )
+
+    for item in report.get("process_improvements") or []:
+        if str(item.get("priority") or "").lower() != "high":
+            continue
+        title = str(item.get("title") or "")
+        if not title:
+            continue
+        queries.append(
+            {
+                "topic": title[:48],
+                "query": f"{title} 最佳实践 量化交易",
+                "priority": "medium",
+                "evidence": "process_improvement",
+            }
+        )
+
+    if forecast:
+        for note in forecast.get("notes") or []:
+            text = str(note)
+            if "MSS" in text or "预测" in text:
+                queries.append(
+                    {
+                        "topic": "forecast",
+                        "query": f"下周 {ws}~{we} 宏观流动性与 MSS 相关因子",
+                        "priority": "high",
+                        "evidence": "forecast_note",
+                    }
+                )
+                break
+
+    if not (report.get("skill_research") or []):
+        evidence_gaps.append("无 skill_research 摘录，Exa 结果未回填 weekly report")
+    if not holdings:
+        evidence_gaps.append("缺少 holdings week_chg，持仓驱动研究降级")
+    if forecast and not (forecast.get("notes") or []):
+        evidence_gaps.append("forecast 无 notes，周日校准上下文不足")
+
+    unique_queries: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in queries:
+        key = str(row.get("query") or "")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        unique_queries.append(row)
+    unique_queries = unique_queries[:max_queries]
+
+    return {
+        "period": f"{ws}~{we}" if ws and we else "",
+        "sources": sources[:max_sources],
+        "queries": unique_queries,
+        "steps": steps,
+        "evidence_gaps": evidence_gaps,
+        "ready_for_review": bool(unique_queries) and not evidence_gaps,
+        "limitations": "research workflow prepares plans only; no investment authorization",
+    }
+
+
 def _ledger_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
     return dict((settings or {}).get("finance_ledger") or {})
 

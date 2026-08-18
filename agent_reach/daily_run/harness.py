@@ -19,15 +19,33 @@ _SCHEMA_VERSION = 1
 
 
 def harness_dir() -> Path:
-    return Path.home() / ".agent-reach" / "daily_run" / "harness"
+    try:
+        from agent_reach.daily_run.harness_git import resolve_harness_paths
+        from agent_reach.daily_run.settings import load_settings
+
+        return resolve_harness_paths(load_settings())["root"]
+    except Exception:
+        return Path.home() / ".agent-reach" / "daily_run" / "harness"
 
 
 def _state_path() -> Path:
-    return harness_dir() / "harness_state.json"
+    try:
+        from agent_reach.daily_run.harness_git import resolve_harness_state_path
+        from agent_reach.daily_run.settings import load_settings
+
+        return resolve_harness_state_path(load_settings())
+    except Exception:
+        return harness_dir() / "harness_state.json"
 
 
 def _refinements_path() -> Path:
-    return harness_dir() / "refinements.jsonl"
+    try:
+        from agent_reach.daily_run.harness_git import resolve_harness_paths
+        from agent_reach.daily_run.settings import load_settings
+
+        return resolve_harness_paths(load_settings())["refinements"]
+    except Exception:
+        return harness_dir() / "refinements.jsonl"
 
 
 def _now_iso() -> str:
@@ -282,7 +300,7 @@ class HarnessState:
 
 
 def load_harness() -> HarnessState:
-    return HarnessState.load()
+    return HarnessState.load(_state_path())
 
 
 def save_harness(state: HarnessState) -> Path:

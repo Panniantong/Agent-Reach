@@ -31,6 +31,7 @@ description: >-
 | `finance_ledger` | `finance_ledger_harness.py` | 收盘 trade ledger 分录校验（journal-entry check） |
 | `finance_variance` | `finance_variance_harness.py` | 周六 weekly 盈亏 waterfall（stock/cash bridge） |
 | `finance_statements` | `finance_statements_harness.py` | 周六 weekly 三表骨架（损益/资产负债/现金流） |
+| `finance_research` | `finance_research_harness.py` | 周六/周日 structured research workflow（sources/queries/gaps） |
 | `finance_close_plan` | `finance_close_plan_harness.py` | 周六 T+1~T+5 下周 close 日历 |
 
 ## 收盘自动
@@ -60,7 +61,8 @@ python3 -m agent_reach.cli daily-run harness migrate-settings
 
 **weekly 去重**：
 - `skill_closure` / `run_guard` 开启时，`weekly` layer_a 只写 PnL / experience_snippets / applied_config
-- 周六顺序：`apply_weekly_skill_closure` → `run_weekly_harness_refinements`（**finance_variance** / **finance_statements** / **finance_close_plan** / run_guard）→ `run_weekly_layer_a_refinement`
+- 周六顺序：`apply_weekly_skill_closure` → `run_weekly_harness_refinements`（**finance_variance** / **finance_statements** / **finance_research** / **finance_close_plan** / run_guard）→ `run_weekly_layer_a_refinement`
+- 周日 forecast：`run_forecast_harness_refinements` 在 `forecast_calibrate` 后可再跑 **finance_research**（`finance_research.run_on_forecast`）
 
 ## 手动运行
 
@@ -254,6 +256,14 @@ python3 -m agent_reach.cli daily-run harness restore-snapshot --path ~/.agent-re
   "rigor_schema": {
     "enabled": true,
     "jobs": ["optimize"]
+  },
+  "branch_overlay": {
+    "enabled": true,
+    "use_root_for_main": true
+  },
+  "study_registry": {
+    "enabled": true,
+    "jobs": ["optimize", "backtest"]
   }
 }
 ```

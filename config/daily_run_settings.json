@@ -117,6 +117,15 @@
     "tie_tolerance_cny": 5.0
   },
 
+  "finance_research": {
+    "enabled": true,
+    "harness_evolve": true,
+    "max_queries": 6,
+    "max_sources": 8,
+    "holding_materiality_cny": 2000,
+    "run_on_forecast": true
+  },
+
   "finance_ledger": {
     "enabled": true,
     "harness_evolve": true,
@@ -653,6 +662,16 @@
       "min_trials": 1,
       "require_metrics": ["total_return", "max_drawdown"]
     },
+    "branch_overlay": {
+      "enabled": true,
+      "use_root_for_main": true,
+      "main_names": ["main", "master"]
+    },
+    "study_registry": {
+      "enabled": true,
+      "max_entries": 200,
+      "jobs": ["optimize", "backtest"]
+    },
     "rigor_check": {
       "enabled": true,
       "block_on_fail": {
@@ -664,6 +683,7 @@
         "finance_variance": true,
         "finance_close_plan": true,
         "finance_statements": true,
+        "finance_research": true,
         "optimize": true,
         "pnl_target": true,
         "forecast_calibrate": true
@@ -693,8 +713,9 @@
       "finance_close": true,
       "finance_ledger": true,
       "finance_variance": true,
-      "finance_statements": true,
-      "finance_close_plan": true
+        "finance_statements": true,
+        "finance_research": true,
+        "finance_close_plan": true
     },
     "llm_refine": {
       "enabled": true,

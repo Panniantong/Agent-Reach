@@ -46,6 +46,7 @@ def _rigor_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
             "finance_variance",
             "finance_close_plan",
             "finance_statements",
+            "finance_research",
             "optimize",
             "pnl_target",
             "forecast_calibrate",
@@ -130,7 +131,7 @@ def _check_evidence(domain: dict[str, Any], *, job: str, settings: Optional[dict
         if missing:
             return RigorCheck("evidence", False, f"missing {','.join(missing)}")
         return RigorCheck("evidence", True, "portfolio fields present")
-    if job in {"finance_variance", "finance_close_plan", "finance_statements"}:
+    if job in {"finance_variance", "finance_close_plan", "finance_statements", "finance_research"}:
         report = domain.get("report") or {}
         if not report.get("week_start") or not report.get("week_end"):
             return RigorCheck("evidence", False, "missing week range")

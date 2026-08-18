@@ -14,6 +14,7 @@ from agent_reach.daily_run.settings import effective_settings, load_settings
 class WeeklyHarnessSkillsReport:
     finance_variance: dict[str, Any] = field(default_factory=dict)
     finance_statements: dict[str, Any] = field(default_factory=dict)
+    finance_research: dict[str, Any] = field(default_factory=dict)
     finance_close_plan: dict[str, Any] = field(default_factory=dict)
     run_guard: dict[str, Any] = field(default_factory=dict)
     weekly_layer_a: dict[str, Any] = field(default_factory=dict)
@@ -23,6 +24,7 @@ class WeeklyHarnessSkillsReport:
         return {
             "finance_variance": self.finance_variance,
             "finance_statements": self.finance_statements,
+            "finance_research": self.finance_research,
             "finance_close_plan": self.finance_close_plan,
             "run_guard": self.run_guard,
             "weekly_layer_a": self.weekly_layer_a,
@@ -32,6 +34,7 @@ class WeeklyHarnessSkillsReport:
                 for block in (
                     self.finance_variance,
                     self.finance_statements,
+                    self.finance_research,
                     self.finance_close_plan,
                     self.run_guard,
                     self.weekly_layer_a,
@@ -71,6 +74,11 @@ def run_weekly_harness_refinements(
         )
 
         out.finance_statements = apply_finance_statements_harness_refinement(report, settings=cfg)
+
+    if _job_enabled(harness_cfg, "finance_research"):
+        from agent_reach.daily_run.finance_research_harness import apply_finance_research_harness_refinement
+
+        out.finance_research = apply_finance_research_harness_refinement(report, settings=cfg)
 
     if _job_enabled(harness_cfg, "finance_close_plan"):
         from agent_reach.daily_run.finance_close_plan_harness import apply_finance_close_plan_harness_refinement

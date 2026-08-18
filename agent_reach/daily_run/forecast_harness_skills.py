@@ -13,17 +13,19 @@ from agent_reach.daily_run.settings import effective_settings, load_settings
 @dataclass
 class ForecastHarnessSkillsReport:
     forecast_calibrate: dict[str, Any] = field(default_factory=dict)
+    finance_research: dict[str, Any] = field(default_factory=dict)
     forecast_layer_a: dict[str, Any] = field(default_factory=dict)
     effective_overlay: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "forecast_calibrate": self.forecast_calibrate,
+            "finance_research": self.finance_research,
             "forecast_layer_a": self.forecast_layer_a,
             "effective_overlay": self.effective_overlay,
             "total_changes": sum(
                 int((block or {}).get("changes") or 0)
-                for block in (self.forecast_calibrate, self.forecast_layer_a)
+                for block in (self.forecast_calibrate, self.finance_research, self.forecast_layer_a)
                 if not (block or {}).get("skipped")
             ),
         }
@@ -40,6 +42,20 @@ def run_forecast_harness_refinements(
     from agent_reach.daily_run.forecast_calibrate_harness import apply_forecast_calibrate_harness_refinement
 
     report.forecast_calibrate = apply_forecast_calibrate_harness_refinement(forecast, settings=cfg)
+
+    harness_cfg = cfg.get("harness") or {}
+    jobs = harness_cfg.get("jobs") or {}
+    if not isinstance(jobs, dict) or jobs.get("finance_research", True) is not False:
+        fr_cfg = cfg.get("finance_research") or {}
+        if fr_cfg.get("run_on_forecast", True) is not False:
+            from agent_reach.daily_run.finance_research_harness import apply_finance_research_harness_refinement
+
+            report.finance_research = apply_finance_research_harness_refinement(
+                {"week_start": forecast.get("week_start"), "week_end": forecast.get("week_end")},
+                settings=cfg,
+                forecast=forecast,
+            )
+
     report.effective_overlay = effective_overlay_snapshot(cfg)
     return report
 

@@ -1138,6 +1138,12 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
         pass
 
     if harness_meta:
+        try:
+            from agent_reach.daily_run.harness_git import detect_git_branch
+
+            harness_meta["git_branch"] = detect_git_branch()
+        except Exception:
+            pass
         cfg["harness_runtime"] = harness_meta
     return cfg
 

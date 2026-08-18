@@ -114,6 +114,18 @@ HARNESS_RIGOR_SCHEMA_DEFAULTS: dict[str, Any] = {
     "require_metrics": ["total_return", "max_drawdown"],
 }
 
+HARNESS_BRANCH_OVERLAY_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "use_root_for_main": True,
+    "main_names": ["main", "master"],
+}
+
+HARNESS_STUDY_REGISTRY_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "max_entries": 200,
+    "jobs": ["optimize", "backtest"],
+}
+
 HARNESS_RIGOR_CHECK_DEFAULTS: dict[str, Any] = {
     "enabled": True,
     "block_on_fail": {"optimize": True},
@@ -123,6 +135,7 @@ HARNESS_RIGOR_CHECK_DEFAULTS: dict[str, Any] = {
         "finance_variance": True,
         "finance_close_plan": True,
         "finance_statements": True,
+        "finance_research": True,
         "optimize": True,
         "pnl_target": True,
         "forecast_calibrate": True,
@@ -160,6 +173,8 @@ def sync_user_harness_keys(
         ("weekly_narrative", HARNESS_WEEKLY_NARRATIVE_DEFAULTS),
         ("context_doctor", HARNESS_CONTEXT_DOCTOR_DEFAULTS),
         ("rigor_schema", HARNESS_RIGOR_SCHEMA_DEFAULTS),
+        ("branch_overlay", HARNESS_BRANCH_OVERLAY_DEFAULTS),
+        ("study_registry", HARNESS_STUDY_REGISTRY_DEFAULTS),
         ("rigor_check", HARNESS_RIGOR_CHECK_DEFAULTS),
     ):
         block = dict(harness.get(nested_key) or {})

@@ -8,7 +8,6 @@ import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from pathlib import Path
 from typing import Any, Literal, Optional
 
 HarnessKind = Literal["memory", "policy", "playbook", "plan"]
@@ -20,9 +19,13 @@ def _now_iso() -> str:
 
 
 def _audit_path() -> Path:
-    from agent_reach.daily_run.harness import harness_dir
+    try:
+        from agent_reach.daily_run.harness_git import resolve_harness_paths
+        from agent_reach.daily_run.settings import load_settings
 
-    return harness_dir() / "apply_audit.jsonl"
+        return resolve_harness_paths(load_settings())["audit"]
+    except Exception:
+        return Path.home() / ".agent-reach" / "daily_run" / "harness" / "apply_audit.jsonl"
 
 
 def _harness_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
@@ -568,6 +571,12 @@ def record_apply_audit(
         "admission": admission,
         "forge_gate": forge_gate,
     }
+    try:
+        from agent_reach.daily_run.harness_git import detect_git_branch
+
+        event["git_branch"] = detect_git_branch()
+    except Exception:
+        pass
     path = _audit_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", encoding="utf-8") as f:

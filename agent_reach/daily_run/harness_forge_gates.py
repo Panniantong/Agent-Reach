@@ -229,6 +229,18 @@ def validate_finance_statements_forge(
     return ForgeGateResult(job="finance_statements", passed=not violations, violations=violations)
 
 
+def validate_finance_research_forge(
+    domain: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> ForgeGateResult:
+    violations: list[str] = []
+    workflow = domain.get("workflow") or {}
+    if not workflow.get("queries"):
+        violations.append("empty research queries")
+    return ForgeGateResult(job="finance_research", passed=not violations, violations=violations)
+
+
 _FORGE_JOBS = frozenset(
     {
         "pnl_target",
@@ -239,6 +251,7 @@ _FORGE_JOBS = frozenset(
         "finance_variance",
         "finance_close_plan",
         "finance_statements",
+        "finance_research",
     }
 )
 
@@ -278,6 +291,8 @@ def evaluate_forge_gate(
         return validate_finance_close_plan_forge(domain, settings=settings)
     if job == "finance_statements":
         return validate_finance_statements_forge(domain, settings=settings)
+    if job == "finance_research":
+        return validate_finance_research_forge(domain, settings=settings)
     return None
 
 
