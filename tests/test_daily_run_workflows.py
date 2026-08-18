@@ -297,3 +297,121 @@ class TestPrepareCloseRun:
         )
         mock_verify.assert_not_called()
         assert result["verify"]["summary"] == "prepared once"
+
+
+class TestCloseMssExperts:
+    @patch("agent_reach.daily_run.market_review.get_or_collect_market_review", return_value=None)
+    @patch("agent_reach.daily_run.workflows.run_exa_research", return_value=[])
+    @patch("agent_reach.daily_run.plugins.loader.run_experts")
+    @patch("agent_reach.daily_run.workflows.verify_snapshots")
+    def test_run_close_runs_mss_experts(
+        self,
+        mock_verify,
+        mock_run_experts,
+        _mock_research,
+        _mock_mr,
+        morning_snapshot,
+    ):
+        from agent_reach.daily_run.plugins.loader import MSS_EXPERT_NAMES
+        from agent_reach.daily_run.verify import VerifyResult
+
+        mock_verify.return_value = VerifyResult(
+            code="688008",
+            name="澜起科技",
+            price_baseline=255.0,
+            price_current=255.87,
+            price_delta_pct=0.003,
+            mss_baseline=52.0,
+            mss_current=48.0,
+            mss_delta=-4.0,
+            verdict_baseline="可做",
+            verdict_current="观察",
+            verdict_changed=True,
+            mss_range_baseline=(45.0, 55.0),
+            mss_within_prediction=True,
+            summary="ok",
+        )
+        mock_run_experts.side_effect = lambda snap, cfg, **kw: {
+            **snap,
+            "expert_results": [{"name": n, "score": 50, "summary": n, "success": True} for n in MSS_EXPERT_NAMES],
+            "expert_scores": {n: 50.0 for n in MSS_EXPERT_NAMES},
+        }
+
+        baseline = dict(morning_snapshot)
+        baseline["mss_final"] = 52
+        current = dict(morning_snapshot)
+        settings = _settings_with_team(
+            enabled=False,
+            mss_experts=True,
+            close_mss_experts=True,
+            close_team_first=False,
+        )
+        run_close(current, baseline, settings=settings, push=False)
+        mock_run_experts.assert_called_once()
+        assert mock_run_experts.call_args.kwargs.get("names") == MSS_EXPERT_NAMES
+
+    @patch("agent_reach.daily_run.snapshot_builder.save_portfolio")
+    @patch("agent_reach.daily_run.close_code_review.run_close_code_review")
+    @patch("agent_reach.daily_run.watchlist_manager.adjust_watchlist")
+    @patch("agent_reach.daily_run.plugins.loader.run_experts")
+    @patch("agent_reach.daily_run.workflows.run_team_first")
+    @patch("agent_reach.daily_run.workflows.verify_snapshots")
+    def test_prepare_close_run_mss_experts(
+        self,
+        mock_verify,
+        mock_team,
+        mock_run_experts,
+        mock_adjust,
+        mock_code_review,
+        mock_save_pf,
+        morning_snapshot,
+        portfolio,
+    ):
+        from agent_reach.daily_run.close_code_review import CodeReviewResult
+        from agent_reach.daily_run.plugins.loader import MSS_EXPERT_NAMES
+        from agent_reach.daily_run.verify import VerifyResult
+        from agent_reach.daily_run.watchlist_manager import WatchlistAdjustResult
+
+        mock_run_experts.side_effect = lambda snap, cfg, **kw: {
+            **snap,
+            "expert_results": [{"name": "technical", "score": 55, "summary": "t", "success": True}],
+        }
+        mock_verify.return_value = VerifyResult(
+            code="688008",
+            name="澜起科技",
+            price_baseline=255.0,
+            price_current=247.0,
+            price_delta_pct=-0.03,
+            mss_baseline=52.0,
+            mss_current=48.0,
+            mss_delta=-4.0,
+            verdict_baseline="可做",
+            verdict_current="观察",
+            verdict_changed=True,
+            mss_range_baseline=(45.0, 55.0),
+            mss_within_prediction=True,
+            summary="ok",
+        )
+        mock_adjust.return_value = WatchlistAdjustResult(
+            applied=False,
+            portfolio=portfolio,
+            message="观察池无变更",
+        )
+        mock_code_review.return_value = CodeReviewResult(portfolio=portfolio)
+
+        settings = _settings_with_team(
+            enabled=False,
+            mss_experts=True,
+            close_mss_experts=True,
+            close_team_first=False,
+        )
+        prepared = prepare_close_run(
+            dict(morning_snapshot),
+            dict(morning_snapshot),
+            portfolio,
+            settings=settings,
+        )
+        assert "mss_experts" in prepared["steps"]
+        mock_run_experts.assert_called_once()
+        mock_team.assert_not_called()
+        assert mock_run_experts.call_args.kwargs.get("names") == MSS_EXPERT_NAMES

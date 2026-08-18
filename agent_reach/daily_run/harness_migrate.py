@@ -139,6 +139,7 @@ HARNESS_RIGOR_CHECK_DEFAULTS: dict[str, Any] = {
         "finance_statements": True,
         "finance_research": True,
         "expert_consensus": True,
+        "expert_consensus_weekly": True,
         "optimize": True,
         "pnl_target": True,
         "forecast_calibrate": True,
@@ -189,6 +190,25 @@ def sync_user_harness_keys(
         if block:
             harness[nested_key] = block
 
+    default_jobs = dict(default_harness.get("jobs") or {})
+    jobs = dict(harness.get("jobs") or {})
+    for job_key, job_val in default_jobs.items():
+        if job_key not in jobs:
+            jobs[job_key] = deepcopy(job_val)
+            added.append(f"harness.jobs.{job_key}")
+    if jobs:
+        harness["jobs"] = jobs
+
+    for section_key in ("expert_consensus",):
+        default_section = dict(defaults.get(section_key) or {})
+        section = dict(current.get(section_key) or {})
+        for sub_key, sub_val in default_section.items():
+            if sub_key not in section:
+                section[sub_key] = deepcopy(sub_val)
+                added.append(f"{section_key}.{sub_key}")
+        if section:
+            current[section_key] = section
+
     result: dict[str, Any] = {
         "dry_run": dry_run,
         "path": str(target),
@@ -205,6 +225,8 @@ def sync_user_harness_keys(
 
     merged = deepcopy(current)
     merged["harness"] = harness
+    if "expert_consensus" in current:
+        merged["expert_consensus"] = current["expert_consensus"]
     save_user_settings(merged, path=target)
     result["saved"] = True
     result["message"] = f"已新增 {len(added)} 个 harness 键"
