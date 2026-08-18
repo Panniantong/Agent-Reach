@@ -12,8 +12,10 @@ from typing import Any, Optional
 from agent_reach.daily_run import trade_calendar
 from agent_reach.daily_run.harness_policy import (
     deep_loss_policy_default,
+    friction_commission_rate_default,
     harness_buy_budget,
     min_cash_ratio_default,
+    min_deploy_cash_default,
     runtime_int_default,
     runtime_float_default,
 )
@@ -580,7 +582,7 @@ def _apply_sell(
     if shares <= 0 or price is None or price <= 0:
         return ApplyResult(applied=False, portfolio=pf, message=f"{code} 无法卖出（股数或价格无效）")
 
-    commission_rate = float(settings.get("trading", {}).get("commission_rate", 0.0015))
+    commission_rate = friction_commission_rate_default(settings)
     gross = shares * price
     commission = round(gross * commission_rate, 2)
     proceeds = gross - commission
@@ -769,15 +771,15 @@ def _buy_budget_context(
 
     min_cash = total * min_cash_ratio
     deployable = cash - min_cash
-    min_deploy = float(portfolio_settings(settings).get("min_deploy_cash", 1000))
+    min_deploy = min_deploy_cash_default(settings)
     if deployable < min_deploy:
         return ApplyResult(
             applied=False,
             portfolio=pf,
-            message=f"可部署现金 {deployable:.0f} 不足（需保留 {min_cash_ratio:.0%} 现金）",
+            message=f"可部署现金 {deployable:.0f} 不足（最低部署 {min_deploy:.0f}）",
         )
 
-    commission_rate = float(settings.get("trading", {}).get("commission_rate", 0.0015))
+    commission_rate = friction_commission_rate_default(settings)
     return total, cash, deployable, min_deploy, min_cash_ratio, commission_rate
 
 

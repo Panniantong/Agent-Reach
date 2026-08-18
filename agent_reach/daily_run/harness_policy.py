@@ -199,6 +199,39 @@ _INTRADAY_AUDIT_NEUTRAL: dict[str, float] = {
     "min_quote_coverage_pct": 0.8,
 }
 
+_EVOLVED_MIN_DEPLOY_KEYS: tuple[str, ...] = ("min_deploy_cash",)
+
+_MIN_DEPLOY_NEUTRAL: dict[str, float] = {
+    "min_deploy_cash": 1000.0,
+}
+
+_EVOLVED_FRICTION_MODEL_KEYS: tuple[str, ...] = (
+    "commission_rate",
+    "slippage_rate",
+)
+
+_FRICTION_MODEL_NEUTRAL: dict[str, float] = {
+    "commission_rate": 0.0015,
+    "slippage_rate": 0.001,
+}
+
+_EVOLVED_DEFENSIVE_TRIM_KEYS: tuple[str, ...] = (
+    "defensive_trim_min_mss",
+    "defensive_trim_mss_buffer",
+)
+
+_DEFENSIVE_TRIM_NEUTRAL: dict[str, float] = {
+    "defensive_trim_min_mss": 40.0,
+    "defensive_trim_mss_buffer": 0.0,
+}
+
+_DEFAULT_EVAL_TRENDS: tuple[str, ...] = (
+    "turning_up",
+    "turning_down",
+    "rising",
+    "falling",
+)
+
 _SYMBOL_BIAS_CODE_RE = re.compile(r"(?<!\d)(\d{6})(?!\d)")
 
 _SYMBOL_BIAS_NEGATIVE: tuple[str, ...] = (
@@ -1425,6 +1458,31 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
         effective_intraday_audit.get("min_quote_coverage_pct", data_audit.get("min_quote_coverage_pct", 0.8))
     )
     cfg["data_audit"] = data_audit
+    base_min_deploy = resolve_harness_base_min_deploy_policy(cfg)
+    effective_min_deploy = resolve_harness_min_deploy_policy(state, settings=cfg)
+    harness_meta["min_deploy_policy"] = effective_min_deploy
+    min_deploy_meta = harness_min_deploy_overlay_meta(base_min_deploy, effective_min_deploy)
+    if min_deploy_meta:
+        harness_meta["min_deploy_overlay"] = min_deploy_meta
+    portfolio = dict(cfg.get("portfolio") or {})
+    portfolio["min_deploy_cash"] = float(effective_min_deploy.get("min_deploy_cash", 1000.0))
+    cfg["portfolio"] = portfolio
+    base_friction_model = resolve_harness_base_friction_model_policy(cfg)
+    effective_friction_model = resolve_harness_friction_model_policy(state, settings=cfg)
+    harness_meta["friction_model_policy"] = effective_friction_model
+    friction_meta = harness_friction_model_overlay_meta(base_friction_model, effective_friction_model)
+    if friction_meta:
+        harness_meta["friction_model_overlay"] = friction_meta
+    trading = dict(cfg.get("trading") or {})
+    trading["commission_rate"] = float(effective_friction_model.get("commission_rate", 0.0015))
+    trading["slippage_rate"] = float(effective_friction_model.get("slippage_rate", 0.001))
+    cfg["trading"] = trading
+    base_defensive_trim = resolve_harness_base_defensive_trim_policy(cfg)
+    effective_defensive_trim = resolve_harness_defensive_trim_policy(state, settings=cfg)
+    harness_meta["defensive_trim_policy"] = effective_defensive_trim
+    defensive_meta = harness_defensive_trim_overlay_meta(base_defensive_trim, effective_defensive_trim)
+    if defensive_meta:
+        harness_meta["defensive_trim_overlay"] = defensive_meta
     harness_meta["trade_signals"] = {
         k: trade_signals[k]
         for k in (
@@ -1884,7 +1942,15 @@ def resolve_harness_base_trend_policy(settings: dict[str, Any]) -> dict[str, Any
         **{key: trend_policy_base(settings, key) for key in _EVOLVED_TREND_SCALAR_KEYS},
         "buy_trends": _default_buy_trends(settings),
         "sell_trends": _default_sell_trends(settings),
+        "eval_trends": _default_eval_trends(settings),
     }
+
+
+def _default_eval_trends(settings: dict[str, Any]) -> list[str]:
+    raw = _intraday_cfg(settings).get("eval_trends")
+    if isinstance(raw, list) and raw:
+        return [str(x) for x in raw]
+    return list(_DEFAULT_EVAL_TRENDS)
 
 
 def _apply_trend_policy_evolution(
@@ -1918,6 +1984,10 @@ def _apply_trend_policy_evolution(
         sell_trends = list(dict.fromkeys([*sell_trends, "turning_down", "mixed"]))
     if _overlay_has_phrase(state, "达进攻阈值未落账", settings=settings):
         merged["trend_delta_threshold"] = min(float(merged.get("trend_delta_threshold", 1.0)), 0.9)
+    eval_trends = list(merged.get("eval_trends") or _DEFAULT_EVAL_TRENDS)
+    if signals.get("defensive_trim"):
+        eval_trends = list(dict.fromkeys([*eval_trends, "mixed"]))
+    merged["eval_trends"] = eval_trends
     merged["buy_trends"] = buy_trends
     merged["sell_trends"] = sell_trends
     return merged
@@ -1936,6 +2006,7 @@ def resolve_harness_trend_policy(
     merged["trend_delta_threshold"] = max(0.5, min(3.0, float(merged.get("trend_delta_threshold", 1.0))))
     merged["buy_trends"] = list(merged.get("buy_trends") or _DEFAULT_BUY_TRENDS)
     merged["sell_trends"] = list(merged.get("sell_trends") or _DEFAULT_SELL_TRENDS)
+    merged["eval_trends"] = list(merged.get("eval_trends") or _DEFAULT_EVAL_TRENDS)
     return merged
 
 
@@ -1958,6 +2029,11 @@ def harness_trend_overlay_meta(
         changed["sell_trends"] = {
             "base": list(base_policy.get("sell_trends") or []),
             "effective": list(effective_policy.get("sell_trends") or []),
+        }
+    if list(base_policy.get("eval_trends") or []) != list(effective_policy.get("eval_trends") or []):
+        changed["eval_trends"] = {
+            "base": list(base_policy.get("eval_trends") or []),
+            "effective": list(effective_policy.get("eval_trends") or []),
         }
     return changed
 
@@ -2121,6 +2197,204 @@ def intraday_audit_policy_default(settings: dict[str, Any], key: str) -> float:
     if key == "min_quote_coverage_pct":
         return float(audit.get("min_quote_coverage_pct", _INTRADAY_AUDIT_NEUTRAL[key]))
     return float(_INTRADAY_AUDIT_NEUTRAL.get(key, 0.0))
+
+
+def min_deploy_policy_base(settings: dict[str, Any], key: str) -> float:
+    pf = settings.get("portfolio") or {}
+    if key == "min_deploy_cash":
+        return float(pf.get("min_deploy_cash", _MIN_DEPLOY_NEUTRAL[key]))
+    return float(_MIN_DEPLOY_NEUTRAL.get(key, 0.0))
+
+
+def resolve_harness_base_min_deploy_policy(settings: dict[str, Any]) -> dict[str, float]:
+    return {key: min_deploy_policy_base(settings, key) for key in _EVOLVED_MIN_DEPLOY_KEYS}
+
+
+def _apply_min_deploy_policy_evolution(
+    merged: dict[str, float],
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    signals = resolve_harness_trade_signals(state, settings=settings)
+    if signals.get("defensive_trim") or signals.get("pnl_target_miss"):
+        merged["min_deploy_cash"] = max(float(merged.get("min_deploy_cash", 1000.0)), 1500.0)
+    if _overlay_has_phrase(state, "连亏警戒", settings=settings) or _overlay_has_phrase(
+        state, "卖出胜率偏低", settings=settings
+    ):
+        merged["min_deploy_cash"] = max(float(merged.get("min_deploy_cash", 1000.0)), 2000.0)
+    if _overlay_has_phrase(state, "维持高现金", settings=settings):
+        merged["min_deploy_cash"] = max(float(merged.get("min_deploy_cash", 1000.0)), 1800.0)
+    if signals.get("pnl_target_hit"):
+        merged["min_deploy_cash"] = min(float(merged.get("min_deploy_cash", 1000.0)), 800.0)
+    return merged
+
+
+def resolve_harness_min_deploy_policy(
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    merged = resolve_harness_base_min_deploy_policy(settings)
+    if not _overlay_enabled(settings):
+        return merged
+    merged = _apply_min_deploy_policy_evolution(merged, state, settings=settings)
+    merged["min_deploy_cash"] = max(500.0, min(5000.0, float(merged.get("min_deploy_cash", 1000.0))))
+    return merged
+
+
+def harness_min_deploy_overlay_meta(
+    base_policy: dict[str, float],
+    effective_policy: dict[str, float],
+) -> dict[str, Any]:
+    changed: dict[str, dict[str, float]] = {}
+    for key in _EVOLVED_MIN_DEPLOY_KEYS:
+        base_val = float(base_policy.get(key, _MIN_DEPLOY_NEUTRAL.get(key, 0.0)))
+        eff_val = float(effective_policy.get(key, base_val))
+        if abs(eff_val - base_val) >= 1.0:
+            changed[key] = {"base": base_val, "effective": eff_val}
+    return changed
+
+
+def min_deploy_cash_default(settings: dict[str, Any]) -> float:
+    runtime = settings.get("harness_runtime") or {}
+    policy = runtime.get("min_deploy_policy")
+    if policy and "min_deploy_cash" in policy:
+        return float(policy["min_deploy_cash"])
+    pf = settings.get("portfolio") or {}
+    if "min_deploy_cash" in pf:
+        return float(pf["min_deploy_cash"])
+    return float(_MIN_DEPLOY_NEUTRAL["min_deploy_cash"])
+
+
+def friction_model_policy_base(settings: dict[str, Any], key: str) -> float:
+    trading = settings.get("trading") or {}
+    if key in trading:
+        return float(trading[key])
+    return float(_FRICTION_MODEL_NEUTRAL.get(key, 0.0))
+
+
+def resolve_harness_base_friction_model_policy(settings: dict[str, Any]) -> dict[str, float]:
+    return {key: friction_model_policy_base(settings, key) for key in _EVOLVED_FRICTION_MODEL_KEYS}
+
+
+def _apply_friction_model_policy_evolution(
+    merged: dict[str, float],
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    if _overlay_has_phrase(state, "摩擦成本过高", settings=settings) or _overlay_has_phrase(
+        state, "减少频繁调仓", settings=settings
+    ):
+        merged["commission_rate"] = max(float(merged.get("commission_rate", 0.0015)), 0.0018)
+        merged["slippage_rate"] = max(float(merged.get("slippage_rate", 0.001)), 0.0012)
+    if _overlay_has_phrase(state, "达进攻阈值未落账", settings=settings):
+        merged["commission_rate"] = min(float(merged.get("commission_rate", 0.0015)), 0.0012)
+    return merged
+
+
+def resolve_harness_friction_model_policy(
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    merged = resolve_harness_base_friction_model_policy(settings)
+    if not _overlay_enabled(settings):
+        return merged
+    merged = _apply_friction_model_policy_evolution(merged, state, settings=settings)
+    merged["commission_rate"] = max(0.0005, min(0.003, float(merged.get("commission_rate", 0.0015))))
+    merged["slippage_rate"] = max(0.0005, min(0.003, float(merged.get("slippage_rate", 0.001))))
+    return merged
+
+
+def harness_friction_model_overlay_meta(
+    base_policy: dict[str, float],
+    effective_policy: dict[str, float],
+) -> dict[str, Any]:
+    changed: dict[str, dict[str, float]] = {}
+    for key in _EVOLVED_FRICTION_MODEL_KEYS:
+        base_val = float(base_policy.get(key, _FRICTION_MODEL_NEUTRAL.get(key, 0.0)))
+        eff_val = float(effective_policy.get(key, base_val))
+        if abs(eff_val - base_val) >= 0.0001:
+            changed[key] = {"base": base_val, "effective": eff_val}
+    return changed
+
+
+def friction_commission_rate_default(settings: dict[str, Any]) -> float:
+    runtime = settings.get("harness_runtime") or {}
+    policy = runtime.get("friction_model_policy")
+    if policy and "commission_rate" in policy:
+        return float(policy["commission_rate"])
+    trading = settings.get("trading") or {}
+    return float(trading.get("commission_rate", _FRICTION_MODEL_NEUTRAL["commission_rate"]))
+
+
+def friction_slippage_rate_default(settings: dict[str, Any]) -> float:
+    runtime = settings.get("harness_runtime") or {}
+    policy = runtime.get("friction_model_policy")
+    if policy and "slippage_rate" in policy:
+        return float(policy["slippage_rate"])
+    trading = settings.get("trading") or {}
+    return float(trading.get("slippage_rate", _FRICTION_MODEL_NEUTRAL["slippage_rate"]))
+
+
+def defensive_trim_policy_base(settings: dict[str, Any], key: str) -> float:
+    cfg = _intraday_cfg(settings)
+    if key == "defensive_trim_min_mss":
+        return float(cfg.get("defensive_trim_min_mss", _DEFENSIVE_TRIM_NEUTRAL[key]))
+    if key == "defensive_trim_mss_buffer":
+        return float(cfg.get("defensive_trim_mss_buffer", _DEFENSIVE_TRIM_NEUTRAL[key]))
+    return float(_DEFENSIVE_TRIM_NEUTRAL.get(key, 0.0))
+
+
+def resolve_harness_base_defensive_trim_policy(settings: dict[str, Any]) -> dict[str, float]:
+    return {key: defensive_trim_policy_base(settings, key) for key in _EVOLVED_DEFENSIVE_TRIM_KEYS}
+
+
+def _apply_defensive_trim_policy_evolution(
+    merged: dict[str, float],
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    signals = resolve_harness_trade_signals(state, settings=settings)
+    if signals.get("defensive_trim") or signals.get("pnl_target_miss"):
+        merged["defensive_trim_min_mss"] = max(float(merged.get("defensive_trim_min_mss", 40.0)), 42.0)
+        merged["defensive_trim_mss_buffer"] = max(float(merged.get("defensive_trim_mss_buffer", 0.0)), 2.0)
+    if _overlay_has_phrase(state, "卖晚了", settings=settings):
+        merged["defensive_trim_min_mss"] = min(float(merged.get("defensive_trim_min_mss", 40.0)), 38.0)
+        merged["defensive_trim_mss_buffer"] = min(float(merged.get("defensive_trim_mss_buffer", 0.0)), 0.0)
+    if _overlay_has_phrase(state, "防御性减仓", settings=settings):
+        merged["defensive_trim_mss_buffer"] = max(float(merged.get("defensive_trim_mss_buffer", 0.0)), 1.0)
+    return merged
+
+
+def resolve_harness_defensive_trim_policy(
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    merged = resolve_harness_base_defensive_trim_policy(settings)
+    if not _overlay_enabled(settings):
+        return merged
+    merged = _apply_defensive_trim_policy_evolution(merged, state, settings=settings)
+    merged["defensive_trim_min_mss"] = max(30.0, min(60.0, float(merged.get("defensive_trim_min_mss", 40.0))))
+    merged["defensive_trim_mss_buffer"] = max(0.0, min(10.0, float(merged.get("defensive_trim_mss_buffer", 0.0))))
+    return merged
+
+
+def harness_defensive_trim_overlay_meta(
+    base_policy: dict[str, float],
+    effective_policy: dict[str, float],
+) -> dict[str, Any]:
+    changed: dict[str, dict[str, float]] = {}
+    for key in _EVOLVED_DEFENSIVE_TRIM_KEYS:
+        base_val = float(base_policy.get(key, _DEFENSIVE_TRIM_NEUTRAL.get(key, 0.0)))
+        eff_val = float(effective_policy.get(key, base_val))
+        if abs(eff_val - base_val) >= 0.5:
+            changed[key] = {"base": base_val, "effective": eff_val}
+    return changed
 
 
 def symbol_score_weight_base(settings: dict[str, Any], key: str) -> float:

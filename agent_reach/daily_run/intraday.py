@@ -11,16 +11,18 @@ from typing import Any, Optional
 
 from agent_reach.daily_run.lookback import compute_lookback_mss, detect_mss_trend
 from agent_reach.daily_run.intraday_policy import (
+    defensive_trim_allows_sell,
+    effective_aggressive_entry,
+    effective_friction_hurdle,
     estimate_expected_return,
     intraday_audit_block_reason,
     kronos_buy_block_reason,
     trend_allows_buy,
-    trend_allows_defensive_sell,
+    trend_triggers_eval,
 )
 from agent_reach.daily_run.pipeline import evaluate_snapshot, render_markdown
 from agent_reach.daily_run.plugins.loader import run_experts
 from agent_reach.daily_run.harness_policy import (
-    friction_min_return_default,
     aggressive_entry_default,
     macro_veto_default,
     min_cash_ratio_default,
@@ -82,7 +84,7 @@ def explain_trade_skip_reason(
 
     trend = detect_mss_trend(st.scans, cfg)
     every_n = runtime_int_default(cfg, "schedule", "trade_every_n_scans")
-    if trend in ("turning_up", "turning_down", "rising", "falling"):
+    if trend_triggers_eval(cfg, trend):
         return "内部状态异常：趋势已变化但未触发评估"
 
     return (
@@ -344,7 +346,7 @@ def should_evaluate_trade(
         return False
 
     trend = detect_mss_trend(st.scans, cfg)
-    if trend in ("turning_up", "turning_down", "rising", "falling"):
+    if trend_triggers_eval(cfg, trend):
         return True
     every_n = runtime_int_default(cfg, "schedule", "trade_every_n_scans")
     return len(st.scans) % every_n == 0
@@ -706,7 +708,12 @@ def _decide_trade(
 ) -> TradeDecision:
     trading = settings.get("trading", {})
     macro_veto = macro_veto_default(settings)
-    aggressive = aggressive_entry_default(settings)
+    aggressive = effective_aggressive_entry(
+        settings,
+        str(report.get("code") or ""),
+        aggressive_entry_default(settings),
+        macro_veto=macro_veto,
+    )
     min_cash = min_cash_ratio_default(settings)
 
     trade_id = f"T{trade_index}"
@@ -865,8 +872,12 @@ def _decide_trade(
     trade_signals = runtime.get("trade_signals") or {}
     if (
         trade_signals.get("defensive_trim")
-        and trend_allows_defensive_sell(settings, trend)
-        and lookback_mss >= macro_veto
+        and defensive_trim_allows_sell(
+            settings,
+            lookback_mss=lookback_mss,
+            macro_veto=macro_veto,
+            trend=trend,
+        )
     ):
         if _decision_symbol_sellable(snapshot, settings, report.get("code")):
             return TradeDecision(
@@ -911,7 +922,7 @@ def _decide_trade(
 
 
 def _passes_friction(expected_return_pct: float, settings: dict[str, Any]) -> bool:
-    return expected_return_pct > friction_min_return_default(settings)
+    return expected_return_pct > effective_friction_hurdle(settings)
 
 
 def _holding_locked(snapshot: dict[str, Any], settings: dict[str, Any]) -> bool:

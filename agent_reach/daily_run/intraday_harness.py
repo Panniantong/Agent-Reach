@@ -86,6 +86,12 @@ def intraday_to_harness_evidence(payload: dict[str, Any]) -> dict[str, Any]:
                 policy.append("过早买入：turning_up 摩擦阻断，提高 trend_min_points")
             if "Kronos 偏弱" in reasoning:
                 policy.append(f"Kronos 偏弱阻断买入：{name}({scan.get('code') or '?'})")
+            if "Kronos 偏强" in reasoning or (
+                action == "buy" and "条件性建仓" in reasoning and "≥" in reasoning
+            ):
+                playbook.append(f"Kronos 偏多放宽进攻阈值：{name}({scan.get('code') or '?'})")
+            if "最低部署" in portfolio_msg or "可部署现金" in portfolio_msg:
+                policy.append("可部署现金不足：提高 min_deploy_cash 或降低 deploy_ratio")
             if "数据审计未通过" in reasoning or "行情覆盖率不足" in reasoning:
                 policy.append("数据审计未通过：盘中 block_on_audit_fail 生效")
                 plan.append(f"intraday：补全 {name} 行情/flow/sentiment 后再调仓")

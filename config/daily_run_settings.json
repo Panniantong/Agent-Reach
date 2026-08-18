@@ -40,6 +40,11 @@
     "buy_trends": ["rising", "turning_up"],
     "sell_trends": ["falling", "turning_down"],
     "kronos_bearish_block_buy": true,
+    "kronos_bullish_relax_buy": true,
+    "kronos_bullish_entry_pts": 2.0,
+    "eval_trends": ["turning_up", "turning_down", "rising", "falling"],
+    "defensive_trim_min_mss": 40,
+    "defensive_trim_mss_buffer": 0,
     "expected_return": {
       "base": 0.015,
       "slope": 0.001,

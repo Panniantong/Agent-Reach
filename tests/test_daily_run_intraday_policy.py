@@ -166,3 +166,98 @@ class TestIntradayHarnessEvidence:
         )
         assert policy["trend_min_points"] >= 3.0
         assert policy["buy_trends"] == ["rising"]
+
+
+class TestEvalTrendPolicy:
+    def test_should_evaluate_respects_eval_trends(self):
+        from agent_reach.daily_run.intraday import should_evaluate_trade, IntradayState
+
+        settings = {
+            "harness": {"enabled": False},
+            "schedule": {"intraday_trade_enabled": True, "trade_min_scans": 2, "trade_every_n_scans": 5},
+            "intraday": {"eval_trends": ["rising"]},
+        }
+        st = IntradayState(
+            date="2026-08-18",
+            scans=[
+                {"scan_id": "S1", "mss_final": 40},
+                {"scan_id": "S2", "mss_final": 41},
+                {"scan_id": "S3", "mss_final": 42},
+            ],
+            trades=[],
+        )
+        assert should_evaluate_trade(st, settings) is True
+
+        st_flat = IntradayState(
+            date="2026-08-18",
+            scans=[
+                {"scan_id": "S1", "mss_final": 50},
+                {"scan_id": "S2", "mss_final": 50},
+            ],
+            trades=[],
+        )
+        assert should_evaluate_trade(st_flat, settings) is False
+
+
+class TestKronosBullishRelax:
+    def test_effective_aggressive_entry_lowers_on_bullish(self):
+        from agent_reach.daily_run.intraday_policy import effective_aggressive_entry
+
+        settings = {
+            "intraday": {"kronos_bullish_relax_buy": True, "kronos_bullish_entry_pts": 3.0},
+            "harness_runtime": {"kronos_bullish": {"688008": 2.5}},
+        }
+        aggressive = effective_aggressive_entry(settings, "688008", 50.0, macro_veto=40.0)
+        assert aggressive == pytest.approx(47.0)
+
+
+class TestMinDeployAndFriction:
+    def test_min_deploy_evolution_on_loss_streak(self):
+        from agent_reach.daily_run.harness import HarnessEntry, HarnessState
+        from agent_reach.daily_run.harness_policy import resolve_harness_min_deploy_policy
+
+        state = HarnessState()
+        state.entries["policy"]["streak"] = HarnessEntry(
+            id="streak",
+            kind="policy",
+            title="连亏",
+            content="连亏警戒：连续3笔卖出亏损",
+            source="deterministic",
+            job="pnl_overview",
+            evidence="pnl",
+            created_at="2026-08-18T00:00:00+00:00",
+            updated_at="2026-08-18T00:00:00+00:00",
+        )
+        policy = resolve_harness_min_deploy_policy(
+            state,
+            settings={"harness": {"runtime_overlay_sources": ["policy"]}, "portfolio": {"min_deploy_cash": 1000}},
+        )
+        assert policy["min_deploy_cash"] >= 2000.0
+
+    def test_effective_friction_hurdle_includes_round_trip(self):
+        from agent_reach.daily_run.intraday_policy import effective_friction_hurdle
+
+        hurdle = effective_friction_hurdle(
+            {
+                "harness": {"enabled": False},
+                "trading": {"commission_rate": 0.002, "slippage_rate": 0.001, "friction_min_return_pct": 0.003},
+            }
+        )
+        assert hurdle >= 0.006
+
+
+class TestDefensiveTrimPolicy:
+    def test_defensive_trim_requires_mss_buffer(self):
+        from agent_reach.daily_run.intraday_policy import defensive_trim_allows_sell
+
+        settings = {
+            "harness_runtime": {
+                "defensive_trim_policy": {
+                    "defensive_trim_min_mss": 40.0,
+                    "defensive_trim_mss_buffer": 5.0,
+                },
+                "trend_policy": {"sell_trends": ["falling"]},
+            }
+        }
+        assert defensive_trim_allows_sell(settings, lookback_mss=44.0, macro_veto=40.0, trend="falling") is False
+        assert defensive_trim_allows_sell(settings, lookback_mss=46.0, macro_veto=40.0, trend="falling") is True

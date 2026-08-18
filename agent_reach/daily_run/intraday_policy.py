@@ -9,6 +9,13 @@ from agent_reach.daily_run.snapshot_builder import _normalize_code
 
 _DEFAULT_BUY_TRENDS = ("rising", "turning_up")
 _DEFAULT_SELL_TRENDS = ("falling", "turning_down")
+_DEFAULT_EVAL_TRENDS = ("turning_up", "turning_down", "rising", "falling")
+
+
+def _overlay_enabled(settings: dict[str, Any]) -> bool:
+    from agent_reach.daily_run.harness_policy import _overlay_enabled as _enabled
+
+    return _enabled(settings)
 
 
 def _intraday_cfg(settings: dict[str, Any]) -> dict[str, Any]:
@@ -40,11 +47,14 @@ def trend_policy(settings: dict[str, Any]) -> dict[str, Any]:
 
 def _inline_trend_policy(settings: dict[str, Any]) -> dict[str, Any]:
     cfg = _intraday_cfg(settings)
+    eval_raw = cfg.get("eval_trends")
+    eval_trends = [str(x) for x in eval_raw] if isinstance(eval_raw, list) and eval_raw else list(_DEFAULT_EVAL_TRENDS)
     return {
         "trend_min_points": float(cfg.get("trend_min_points", 2)),
         "trend_delta_threshold": float(cfg.get("trend_delta_threshold", 1.0)),
         "buy_trends": list(cfg.get("buy_trends") or _DEFAULT_BUY_TRENDS),
         "sell_trends": list(cfg.get("sell_trends") or _DEFAULT_SELL_TRENDS),
+        "eval_trends": eval_trends,
     }
 
 
@@ -129,6 +139,104 @@ def trend_allows_buy(settings: dict[str, Any], trend: str) -> bool:
 def trend_allows_defensive_sell(settings: dict[str, Any], trend: str) -> bool:
     allowed = trend_policy(settings).get("sell_trends") or list(_DEFAULT_SELL_TRENDS)
     return str(trend or "") in {str(x) for x in allowed}
+
+
+def trend_triggers_eval(settings: dict[str, Any], trend: str) -> bool:
+    allowed = trend_policy(settings).get("eval_trends") or list(_DEFAULT_EVAL_TRENDS)
+    return str(trend or "") in {str(x) for x in allowed}
+
+
+def effective_aggressive_entry(
+    settings: dict[str, Any],
+    code: str,
+    base_aggressive: float,
+    *,
+    macro_veto: float,
+) -> float:
+    """Lower entry threshold when Kronos is bullish on the decision symbol."""
+    cfg = _intraday_cfg(settings)
+    if cfg.get("kronos_bullish_relax_buy") is False:
+        return base_aggressive
+    norm = _normalize_code(str(code or ""))
+    if not norm:
+        return base_aggressive
+    runtime = settings.get("harness_runtime") or {}
+    bullish = runtime.get("kronos_bullish") or {}
+    pct = bullish.get(norm)
+    if pct is None or float(pct) <= 0:
+        return base_aggressive
+    pts = float(cfg.get("kronos_bullish_entry_pts", 2.0))
+    floor = float(macro_veto) + 1.0
+    return max(floor, float(base_aggressive) - pts)
+
+
+def defensive_trim_policy(settings: dict[str, Any]) -> dict[str, float]:
+    runtime = settings.get("harness_runtime") or {}
+    if runtime.get("defensive_trim_policy"):
+        raw = runtime["defensive_trim_policy"]
+        return {k: float(v) for k, v in raw.items()}
+    harness = settings.get("harness") or {}
+    if harness.get("enabled") is False or harness.get("runtime_overlay") is False:
+        return _inline_defensive_trim_policy(settings)
+    if not harness and _intraday_cfg(settings):
+        return _inline_defensive_trim_policy(settings)
+    if _overlay_enabled(settings):
+        from agent_reach.daily_run.harness import load_harness
+        from agent_reach.daily_run.harness_policy import resolve_harness_defensive_trim_policy
+
+        return resolve_harness_defensive_trim_policy(load_harness(), settings=settings)
+    return _inline_defensive_trim_policy(settings)
+
+
+def _inline_defensive_trim_policy(settings: dict[str, Any]) -> dict[str, float]:
+    cfg = _intraday_cfg(settings)
+    return {
+        "defensive_trim_min_mss": float(cfg.get("defensive_trim_min_mss", 40.0)),
+        "defensive_trim_mss_buffer": float(cfg.get("defensive_trim_mss_buffer", 0.0)),
+    }
+
+
+def defensive_trim_allows_sell(
+    settings: dict[str, Any],
+    *,
+    lookback_mss: float,
+    macro_veto: float,
+    trend: str,
+) -> bool:
+    if not trend_allows_defensive_sell(settings, trend):
+        return False
+    policy = defensive_trim_policy(settings)
+    min_mss = float(policy.get("defensive_trim_min_mss", macro_veto))
+    buffer = float(policy.get("defensive_trim_mss_buffer", 0.0))
+    threshold = max(float(macro_veto), min_mss) + buffer
+    return float(lookback_mss) >= threshold
+
+
+def min_deploy_cash_default(settings: dict[str, Any]) -> float:
+    from agent_reach.daily_run.harness_policy import min_deploy_cash_default as _default
+
+    return _default(settings)
+
+
+def friction_commission_rate_default(settings: dict[str, Any]) -> float:
+    from agent_reach.daily_run.harness_policy import friction_commission_rate_default as _default
+
+    return _default(settings)
+
+
+def friction_slippage_rate_default(settings: dict[str, Any]) -> float:
+    from agent_reach.daily_run.harness_policy import friction_slippage_rate_default as _default
+
+    return _default(settings)
+
+
+def effective_friction_hurdle(settings: dict[str, Any]) -> float:
+    from agent_reach.daily_run.harness_policy import friction_min_return_default
+
+    commission = friction_commission_rate_default(settings)
+    slippage = friction_slippage_rate_default(settings)
+    round_trip = (commission + slippage) * 2.0
+    return max(friction_min_return_default(settings), round_trip)
 
 
 def estimate_expected_return(
