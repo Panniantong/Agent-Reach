@@ -46,6 +46,13 @@ def expert_consensus_to_harness_evidence(
     if review.get("high_scorers"):
         memory.append("高分专家：" + "，".join(review["high_scorers"][:4]))
 
+    mode = str(review.get("expert_mode") or "")
+    if mode == "mss_only":
+        memory.append("专家路径 MSS-only（technical/quant/risk/fundamental）")
+        playbook.append("MSS-only：macro/sentiment 分歧靠 breakdown + verdict，勿臆造 8 专家冲突")
+    elif mode == "full_team":
+        memory.append("专家路径 Team-First 全量")
+
     if review.get("blocked"):
         reason = review.get("block_reason") or "专家鉴别未通过"
         memory.append(f"identifier block：{reason}")
@@ -79,6 +86,14 @@ def expert_consensus_to_harness_evidence(
         verification_signals.append("expert_conflicts")
     if review.get("mss_drift"):
         verification_signals.append("expert_mss_drift")
+    mode = str(review.get("expert_mode") or "")
+    if mode == "mss_only":
+        verification_signals.append("expert_mode_mss_only")
+    elif mode == "full_team":
+        verification_signals.append("expert_mode_full_team")
+    wf = str(review.get("workflow") or "")
+    if wf:
+        verification_signals.append(f"expert_workflow_{wf}")
 
     name = (snapshot or {}).get("name") or (snapshot or {}).get("code") or ""
     if name:

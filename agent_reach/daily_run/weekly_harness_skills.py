@@ -16,6 +16,7 @@ class WeeklyHarnessSkillsReport:
     finance_statements: dict[str, Any] = field(default_factory=dict)
     finance_research: dict[str, Any] = field(default_factory=dict)
     finance_close_plan: dict[str, Any] = field(default_factory=dict)
+    expert_consensus_weekly: dict[str, Any] = field(default_factory=dict)
     run_guard: dict[str, Any] = field(default_factory=dict)
     weekly_layer_a: dict[str, Any] = field(default_factory=dict)
     effective_overlay: dict[str, Any] = field(default_factory=dict)
@@ -26,6 +27,7 @@ class WeeklyHarnessSkillsReport:
             "finance_statements": self.finance_statements,
             "finance_research": self.finance_research,
             "finance_close_plan": self.finance_close_plan,
+            "expert_consensus_weekly": self.expert_consensus_weekly,
             "run_guard": self.run_guard,
             "weekly_layer_a": self.weekly_layer_a,
             "effective_overlay": self.effective_overlay,
@@ -36,6 +38,7 @@ class WeeklyHarnessSkillsReport:
                     self.finance_statements,
                     self.finance_research,
                     self.finance_close_plan,
+                    self.expert_consensus_weekly,
                     self.run_guard,
                     self.weekly_layer_a,
                 )
@@ -87,6 +90,16 @@ def run_weekly_harness_refinements(
             report,
             settings=cfg,
             skill_writeback=skill_writeback,
+        )
+
+    if _job_enabled(harness_cfg, "expert_consensus_weekly"):
+        from agent_reach.daily_run.expert_consensus_weekly_harness import (
+            apply_expert_consensus_weekly_harness_refinement,
+        )
+
+        out.expert_consensus_weekly = apply_expert_consensus_weekly_harness_refinement(
+            report,
+            settings=cfg,
         )
 
     if (

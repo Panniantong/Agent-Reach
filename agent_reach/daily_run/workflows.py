@@ -621,6 +621,10 @@ def run_close(
         if not experts_already_ran:
             enriched = run_team_first(enriched, cfg, names=plugin_names)
         team_md = render_team_markdown(enriched)
+    elif mss_experts_enabled(cfg, workflow="close") and not experts_already_ran:
+        from agent_reach.daily_run.plugins.loader import MSS_EXPERT_NAMES, run_experts
+
+        enriched = run_experts(dict(enriched), cfg, names=plugin_names or MSS_EXPERT_NAMES)
 
     if verify_dict is not None:
         from agent_reach.daily_run.verify import verify_from_dict

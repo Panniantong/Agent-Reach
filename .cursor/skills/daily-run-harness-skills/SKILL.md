@@ -35,6 +35,7 @@ description: >-
 | `finance_research` | `finance_research_harness.py` | 周六/周日 structured research workflow（sources/queries/gaps） |
 | `finance_close_plan` | `finance_close_plan_harness.py` | 周六 T+1~T+5 下周 close 日历 |
 | `expert_consensus` | `expert_consensus_harness.py` | 收盘/早盘/盘中 Team-First 专家共识 → policy/playbook |
+| `expert_consensus_weekly` | `expert_consensus_weekly_harness.py` | 周六汇总本周 expert_consensus audit → 周度 policy |
 
 ## 收盘自动
 
@@ -63,7 +64,7 @@ python3 -m agent_reach.cli daily-run harness migrate-settings
 
 **weekly 去重**：
 - `skill_closure` / `run_guard` 开启时，`weekly` layer_a 只写 PnL / experience_snippets / applied_config
-- 周六顺序：`apply_weekly_skill_closure` → `run_weekly_harness_refinements`（**finance_variance** / **finance_statements** / **finance_research** / **finance_close_plan** / run_guard）→ `run_weekly_layer_a_refinement`
+- 周六顺序：`apply_weekly_skill_closure` → `run_weekly_harness_refinements`（**finance_variance** / **finance_statements** / **finance_research** / **finance_close_plan** / **expert_consensus_weekly** / run_guard）→ `run_weekly_layer_a_refinement`
 - 周日 forecast：`run_forecast_harness_refinements` 在 `forecast_calibrate` 后可再跑 **finance_research**（`finance_research.run_on_forecast`）
 
 ## 手动运行
