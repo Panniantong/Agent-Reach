@@ -9,6 +9,9 @@ import pytest
 from agent_reach.daily_run.quote_fetch import QuoteFetchResult
 from agent_reach.daily_run.schedule import default_entries, render_crontab_block
 from agent_reach.daily_run.snapshot_builder import (
+    _attach_technicals,
+    _backfill_missing_technicals,
+    _fallback_technicals_patch,
     build_snapshot,
     code_to_xueqiu_symbol,
     load_portfolio,
@@ -65,7 +68,7 @@ class TestSnapshotBuilder:
             sources_used=["xueqiu"],
         )
         with patch("agent_reach.daily_run.snapshot_builder._backfill_missing_technicals") as mock_backfill:
-            mock_backfill.side_effect = lambda codes, quote_map, cached: cached
+            mock_backfill.side_effect = lambda codes, quote_map, cached, **kwargs: cached
             snap = build_snapshot(
                 portfolio,
                 report_type="intraday",
@@ -136,6 +139,63 @@ class TestSnapshotBuilder:
         assert snap.get("enrich_level") == "lite"
         # lite mode still refreshes quotes (may differ from static cost)
         assert snap.get("price") is not None
+
+    def test_fallback_technicals_patch_uses_portfolio_ma20(self):
+        patch = _fallback_technicals_patch(
+            "688008",
+            {"price": 260.0},
+            row={"ma20": 255.0},
+        )
+        assert patch["ma20"] == 255.0
+        assert patch["position_20d"] is not None
+
+    def test_fallback_technicals_patch_uses_cost_when_ma20_missing(self):
+        patch = _fallback_technicals_patch(
+            "688008",
+            {"price": 260.0},
+            row={"cost": 255.87},
+        )
+        assert patch["ma20"] == 255.87
+
+    def test_fallback_technicals_patch_respects_cost_fallback_disabled(self):
+        patch = _fallback_technicals_patch(
+            "688008",
+            {"price": 260.0},
+            row={"cost": 255.87},
+            settings={"snapshot": {"technicals_cost_fallback": False}},
+        )
+        assert patch == {}
+
+    @patch("agent_reach.daily_run.akshare_adapter.fetch_technicals", side_effect=RuntimeError("network"))
+    def test_attach_technicals_falls_back_to_portfolio_ma20(self, _mock_fetch):
+        out = _attach_technicals(
+            {"code": "688008", "price": 260.0},
+            "688008",
+            fallback_row={"ma20": 255.0},
+        )
+        assert out["ma20"] == 255.0
+        assert out["position_20d"] is not None
+
+    @patch("agent_reach.daily_run.snapshot_cache.save_daily_cache")
+    @patch("agent_reach.daily_run.akshare_adapter.fetch_technicals", side_effect=RuntimeError("network"))
+    def test_backfill_missing_technicals_uses_cost_fallback(self, _mock_fetch, _mock_save, portfolio):
+        quote_map = {
+            "688008": {"code": "688008", "price": 260.0},
+            "002273": {"code": "002273", "price": 27.0},
+        }
+        source_rows = {
+            "688008": portfolio["holdings"][0],
+            "002273": portfolio["holdings"][1],
+        }
+        updated = _backfill_missing_technicals(
+            ["688008", "002273"],
+            quote_map,
+            {},
+            source_rows=source_rows,
+        )
+        assert updated["688008"]["ma20"] == 255.87
+        assert updated["002273"]["ma20"] == 33.81
+        assert quote_map["688008"]["ma20"] == 255.87
 
 
 class TestSchedule:
