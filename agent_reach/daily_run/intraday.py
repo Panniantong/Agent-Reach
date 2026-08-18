@@ -19,6 +19,10 @@ from agent_reach.daily_run.harness_policy import (
     min_cash_ratio_default,
     runtime_int_default,
 )
+from agent_reach.daily_run.pnl_execution_guard import (
+    pnl_buy_block_reason,
+    pnl_symbol_ledger_block_reason,
+)
 from agent_reach.daily_run.settings import effective_settings, load_settings
 from agent_reach.daily_run.trade_calendar import today_shanghai
 
@@ -760,6 +764,33 @@ def _decide_trade(
                 friction_blocked=friction_blocked,
                 expected_return_pct=exp_ret,
             )
+        pnl_buy_block = pnl_buy_block_reason(settings, portfolio)
+        if pnl_buy_block:
+            return TradeDecision(
+                action="hold",
+                trade_id=trade_id,
+                lookback_mss=lookback_mss,
+                lookback_detail=[],
+                trend=trend,
+                reasoning=f"{pnl_buy_block}{overlay_note}",
+                blocked=True,
+                friction_blocked=friction_blocked,
+                expected_return_pct=exp_ret,
+            )
+        symbol_code = str(report.get("code") or "")
+        ledger_block = pnl_symbol_ledger_block_reason(settings, symbol_code, portfolio)
+        if ledger_block:
+            return TradeDecision(
+                action="hold",
+                trade_id=trade_id,
+                lookback_mss=lookback_mss,
+                lookback_detail=[],
+                trend=trend,
+                reasoning=f"{ledger_block}{overlay_note}",
+                blocked=True,
+                friction_blocked=friction_blocked,
+                expected_return_pct=exp_ret,
+            )
         if cash_ratio is not None and cash_ratio < min_cash:
             return TradeDecision(
                 action="hold",
@@ -802,22 +833,35 @@ def _decide_trade(
         trade_signals.get("defensive_trim")
         and trend in ("falling", "turning_down")
         and lookback_mss >= macro_veto
-        and _decision_symbol_sellable(snapshot, settings, report.get("code"))
     ):
-        return TradeDecision(
-            action="sell",
-            trade_id=trade_id,
-            lookback_mss=lookback_mss,
-            lookback_detail=[],
-            trend=trend,
-            reasoning=(
-                f"Harness MSS预测偏离/偏差信号 + 趋势 {trend}，"
-                f"Lookback MSS {lookback_mss:.0f} ≥ 否决线 {macro_veto:.0f}，防御性减仓{overlay_note}"
-            ),
-            blocked=False,
-            friction_blocked=False,
-            expected_return_pct=exp_ret,
-        )
+        if _decision_symbol_sellable(snapshot, settings, report.get("code")):
+            return TradeDecision(
+                action="sell",
+                trade_id=trade_id,
+                lookback_mss=lookback_mss,
+                lookback_detail=[],
+                trend=trend,
+                reasoning=(
+                    f"Harness MSS预测偏离/偏差信号 + 趋势 {trend}，"
+                    f"Lookback MSS {lookback_mss:.0f} ≥ 否决线 {macro_veto:.0f}，防御性减仓{overlay_note}"
+                ),
+                blocked=False,
+                friction_blocked=False,
+                expected_return_pct=exp_ret,
+            )
+        deep_loss_reason = _deep_loss_sell_block_reason(snapshot, settings, report.get("code"))
+        if deep_loss_reason:
+            return TradeDecision(
+                action="hold",
+                trade_id=trade_id,
+                lookback_mss=lookback_mss,
+                lookback_detail=[],
+                trend=trend,
+                reasoning=f"防御性减仓信号触发，但{deep_loss_reason}{overlay_note}",
+                blocked=True,
+                friction_blocked=False,
+                expected_return_pct=exp_ret,
+            )
 
     return TradeDecision(
         action="hold",
@@ -861,6 +905,29 @@ def _decision_symbol_sellable(
     from agent_reach.daily_run.portfolio_manager import decision_symbol_sellable
 
     return decision_symbol_sellable(snapshot, settings, str(code or ""))
+
+
+def _deep_loss_sell_block_reason(
+    snapshot: dict[str, Any],
+    settings: dict[str, Any],
+    code: Any,
+) -> Optional[str]:
+    from agent_reach.daily_run.portfolio_manager import deep_loss_sell_block_reason, holding_is_sellable
+    from agent_reach.daily_run.symbols import build_enriched_symbols
+
+    target = str(code or "").strip()
+    if not target:
+        return None
+    pf = snapshot.get("portfolio") or {}
+    enriched = build_enriched_symbols(snapshot, settings)
+    norm = lambda c: str(c).zfill(6)[-6:]
+    for holding in pf.get("holdings") or []:
+        if norm(holding.get("code", "")) != norm(target):
+            continue
+        if not holding_is_sellable(holding, settings):
+            return None
+        return deep_loss_sell_block_reason(pf, holding, enriched, settings)
+    return None
 
 
 def _today_str() -> str:

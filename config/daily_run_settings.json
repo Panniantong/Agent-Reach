@@ -62,7 +62,17 @@
     "harness_evolve": true,
     "large_unrealized_loss_cny": 5000,
     "large_realized_loss_cny": 500,
-    "large_unrealized_loss_pct": 10
+    "large_realized_gain_cny": 500,
+    "large_unrealized_loss_pct": 10,
+    "deep_loss_sell_require_cover": true,
+    "deep_loss_cover_ratio": 1.0,
+    "deep_loss_sell_ratio": 1.0,
+    "deep_loss_tier_multiplier": 2.0,
+    "portfolio_loss_cny_threshold": 5000,
+    "coverable_realized_weight": 1.0,
+    "win_rate_min": 0.33,
+    "loss_streak_max": 3,
+    "ledger_cost_tolerance_cny": 0.01
   },
 
   "pnl_target": {

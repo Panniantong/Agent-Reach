@@ -166,6 +166,202 @@ class TestApplyAutoAdjust:
         assert "688008" in result.message
         assert len(result.portfolio["holdings"]) == 2
 
+    def test_sell_deep_loss_blocked_when_cover_insufficient(self, portfolio, snapshot, settings_enabled, tmp_path, monkeypatch):
+        portfolio = {
+            "total": 186000,
+            "cash": 75000,
+            "holdings": [
+                {
+                    "code": "002583",
+                    "name": "海能达",
+                    "shares": 1000,
+                    "cost": 19.38,
+                    "price": 8.32,
+                    "days_held": 30,
+                },
+                {
+                    "code": "600584",
+                    "name": "长电科技",
+                    "shares": 800,
+                    "cost": 80.8,
+                    "price": 85.0,
+                    "days_held": 5,
+                },
+            ],
+            "watchlist": [],
+        }
+        snapshot = {
+            "code": "002583",
+            "price": 8.32,
+            "portfolio": portfolio,
+            "watchlist": [],
+        }
+        settings_enabled.setdefault("pnl_overview", {})["deep_loss_sell_require_cover"] = True
+        ledger = tmp_path / "trade_ledger.jsonl"
+        ledger.write_text("", encoding="utf-8")
+        monkeypatch.setattr("agent_reach.daily_run.realized_pnl.default_ledger_path", lambda: ledger)
+
+        decision = TradeDecision(
+            action="sell",
+            trade_id="T1",
+            lookback_mss=35.0,
+            lookback_detail=[],
+            trend="falling",
+            reasoning="防御性减仓",
+        )
+        result = apply_auto_adjust(portfolio, decision, snapshot, settings_enabled)
+        assert result.applied is False
+        assert "深度套牢" in result.message
+        assert "不足" in result.message
+        assert len(result.portfolio["holdings"]) == 2
+
+    def test_sell_deep_loss_partial_when_allowed(self, settings_enabled, tmp_path, monkeypatch):
+        portfolio = {
+            "total": 186000,
+            "cash": 75000,
+            "holdings": [
+                {
+                    "code": "002583",
+                    "name": "海能达",
+                    "shares": 1000,
+                    "cost": 19.38,
+                    "price": 8.32,
+                    "days_held": 30,
+                },
+                {
+                    "code": "600584",
+                    "name": "长电科技",
+                    "shares": 800,
+                    "cost": 80.8,
+                    "price": 120.0,
+                    "days_held": 5,
+                },
+            ],
+            "watchlist": [],
+        }
+        snapshot = {
+            "code": "002583",
+            "price": 8.32,
+            "portfolio": portfolio,
+            "watchlist": [],
+        }
+        settings_enabled.setdefault("pnl_overview", {})["deep_loss_sell_require_cover"] = True
+        settings_enabled["harness_runtime"] = {
+            "deep_loss_policy": {
+                "loss_cny_threshold": 5000,
+                "loss_pct_threshold": 10,
+                "cover_ratio": 0.8,
+                "sell_ratio": 0.5,
+            }
+        }
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager.effective_settings",
+            lambda s: s,
+        )
+        ledger = tmp_path / "trade_ledger.jsonl"
+        ledger.write_text(
+            '{"at":"2026-08-01T00:00:00+00:00","actions":[{"side":"sell","code":"688008","shares":100,"price":300,"amount":30000,"commission":45,"realized_pnl":5000}]}\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setattr("agent_reach.daily_run.realized_pnl.default_ledger_path", lambda: ledger)
+
+        decision = TradeDecision(
+            action="sell",
+            trade_id="T1",
+            lookback_mss=35.0,
+            lookback_detail=[],
+            trend="falling",
+            reasoning="防御性减仓",
+        )
+        result = apply_auto_adjust(portfolio, decision, snapshot, settings_enabled)
+        assert result.applied is True
+        assert result.actions[0].code == "002583"
+        assert result.actions[0].shares == 500
+        remaining = next(h for h in result.portfolio["holdings"] if h["code"] == "002583")
+        assert remaining["shares"] == 500
+
+    def test_coverable_gains_uses_realized_weight(self, tmp_path, monkeypatch):
+        from agent_reach.daily_run.portfolio_manager import portfolio_coverable_gains
+
+        portfolio = {
+            "holdings": [
+                {"code": "600584", "name": "长电", "shares": 100, "cost": 80, "price": 90},
+            ],
+        }
+        enriched = {"600584": {"price": 90}}
+        settings = {
+            "harness_runtime": {
+                "deep_loss_policy": {"coverable_realized_weight": 0.5},
+            }
+        }
+        ledger = tmp_path / "trade_ledger.jsonl"
+        ledger.write_text(
+            "\n".join(
+                [
+                    '{"at":"2026-07-01T00:00:00+00:00","actions":[{"side":"buy","code":"688008","shares":100,"price":250,"amount":25000,"commission":37.5}]}',
+                    '{"at":"2026-08-01T00:00:00+00:00","actions":[{"side":"sell","code":"688008","shares":100,"price":300,"amount":30000,"commission":45,"realized_pnl":5000}]}',
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr("agent_reach.daily_run.realized_pnl.default_ledger_path", lambda: ledger)
+        coverable = portfolio_coverable_gains(
+            portfolio, enriched, settings, exclude_code="002583"
+        )
+        assert 3400 <= coverable <= 3600
+        assert coverable < 5000.0
+
+    def test_sell_deep_loss_allowed_when_cover_sufficient(self, portfolio, snapshot, settings_enabled, tmp_path, monkeypatch):
+        portfolio = {
+            "total": 186000,
+            "cash": 75000,
+            "holdings": [
+                {
+                    "code": "002583",
+                    "name": "海能达",
+                    "shares": 1000,
+                    "cost": 19.38,
+                    "price": 8.32,
+                    "days_held": 30,
+                },
+                {
+                    "code": "600584",
+                    "name": "长电科技",
+                    "shares": 800,
+                    "cost": 80.8,
+                    "price": 120.0,
+                    "days_held": 5,
+                },
+            ],
+            "watchlist": [],
+        }
+        snapshot = {
+            "code": "002583",
+            "price": 8.32,
+            "portfolio": portfolio,
+            "watchlist": [],
+        }
+        settings_enabled.setdefault("pnl_overview", {})["deep_loss_sell_require_cover"] = True
+        ledger = tmp_path / "trade_ledger.jsonl"
+        ledger.write_text(
+            '{"at":"2026-08-01T00:00:00+00:00","actions":[{"side":"sell","code":"688008","shares":100,"price":300,"amount":30000,"commission":45,"realized_pnl":5000}]}\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setattr("agent_reach.daily_run.realized_pnl.default_ledger_path", lambda: ledger)
+
+        decision = TradeDecision(
+            action="sell",
+            trade_id="T1",
+            lookback_mss=35.0,
+            lookback_detail=[],
+            trend="falling",
+            reasoning="防御性减仓",
+        )
+        result = apply_auto_adjust(portfolio, decision, snapshot, settings_enabled)
+        assert result.applied is True
+        assert result.actions[0].code == "002583"
+
     def test_buy_from_watchlist(self, portfolio, snapshot, settings_enabled):
         decision = TradeDecision(
             action="buy",
@@ -181,6 +377,57 @@ class TestApplyAutoAdjust:
         assert result.actions[0].code in ("603986", "000725")
         assert len(result.portfolio["holdings"]) == 3
         assert result.portfolio["cash"] < portfolio["cash"]
+
+    def test_buy_decision_symbol_when_already_held(self, portfolio, snapshot, settings_enabled):
+        """Decision symbol may be bought even when already in holdings (add to position)."""
+        snapshot = dict(snapshot)
+        snapshot["code"] = "002273"
+        snapshot["price"] = 32.04
+        snapshot["name"] = "水晶光电"
+
+        decision = TradeDecision(
+            action="buy",
+            trade_id="T1",
+            lookback_mss=55.0,
+            lookback_detail=[],
+            trend="rising",
+            reasoning="MSS 达阈值",
+        )
+        before_shares = next(h["shares"] for h in portfolio["holdings"] if h["code"] == "002273")
+        result = apply_auto_adjust(portfolio, decision, snapshot, settings_enabled)
+        assert result.applied is True
+        assert result.actions[0].code == "002273"
+        held = next(h for h in result.portfolio["holdings"] if h["code"] == "002273")
+        assert held["shares"] > before_shares
+        assert len(result.portfolio["holdings"]) == 2
+
+    def test_buy_falls_back_to_watchlist_when_decision_symbol_unaffordable(
+        self, portfolio, snapshot, settings_enabled
+    ):
+        """When cash cannot cover one lot of the decision symbol, pick top watchlist score."""
+        portfolio = dict(portfolio)
+        portfolio["cash"] = 52000
+        portfolio["cash_ratio"] = 0.52
+        portfolio["total"] = 100000
+        snapshot = dict(snapshot)
+        snapshot["portfolio"] = dict(snapshot["portfolio"])
+        snapshot["portfolio"]["cash"] = 52000
+        snapshot["portfolio"]["cash_ratio"] = 0.52
+        snapshot["portfolio"]["total"] = 100000
+        settings_enabled.setdefault("thresholds", {})["min_cash_ratio"] = 0.48
+
+        decision = TradeDecision(
+            action="buy",
+            trade_id="T1",
+            lookback_mss=55.0,
+            lookback_detail=[],
+            trend="rising",
+            reasoning="MSS 达阈值",
+        )
+        result = apply_auto_adjust(portfolio, decision, snapshot, settings_enabled)
+        assert result.applied is True
+        assert result.actions[0].code in ("603986", "000725")
+        assert result.actions[0].code != "688008"
 
     def test_max_total_blocks_buy_when_full(self, portfolio, snapshot, settings_enabled):
         settings_enabled["portfolio"]["max_holdings"] = 4

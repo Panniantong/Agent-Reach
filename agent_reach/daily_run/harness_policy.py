@@ -116,6 +116,52 @@ _POSITION_NEUTRAL: dict[str, float] = {
     "max_position_pct": 35.0,
 }
 
+_EVOLVED_DEEP_LOSS_KEYS: tuple[str, ...] = (
+    "loss_cny_threshold",
+    "loss_pct_threshold",
+    "cover_ratio",
+    "sell_ratio",
+    "realized_loss_threshold",
+    "realized_gain_threshold",
+    "deep_loss_tier_multiplier",
+    "portfolio_loss_cny_threshold",
+    "coverable_realized_weight",
+    "win_rate_min",
+    "loss_streak_max",
+    "ledger_cost_tolerance_cny",
+)
+
+_DEEP_LOSS_NEUTRAL: dict[str, float] = {
+    "loss_cny_threshold": 5000.0,
+    "loss_pct_threshold": 10.0,
+    "cover_ratio": 1.0,
+    "sell_ratio": 1.0,
+    "realized_loss_threshold": 500.0,
+    "realized_gain_threshold": 500.0,
+    "deep_loss_tier_multiplier": 2.0,
+    "portfolio_loss_cny_threshold": 5000.0,
+    "coverable_realized_weight": 1.0,
+    "win_rate_min": 0.0,
+    "loss_streak_max": 0.0,
+    "ledger_cost_tolerance_cny": 0.01,
+}
+
+_EVOLVED_PNL_TARGET_KEYS: tuple[str, ...] = (
+    "base_target_pct",
+    "base_target_cny",
+    "min_target_cny",
+    "streak_bonus_pct",
+    "miss_recovery_factor",
+)
+
+_PNL_TARGET_NEUTRAL: dict[str, float] = {
+    "base_target_pct": 0.5,
+    "base_target_cny": 0.0,
+    "min_target_cny": 100.0,
+    "streak_bonus_pct": 10.0,
+    "miss_recovery_factor": 0.8,
+}
+
 _SYMBOL_BIAS_CODE_RE = re.compile(r"(?<!\d)(\d{6})(?!\d)")
 
 _SYMBOL_BIAS_NEGATIVE: tuple[str, ...] = (
@@ -191,6 +237,22 @@ HARNESS_CONSUMER_HELPERS: dict[str, str] = {
     "lookback_weights": "lookback_weights_default(settings)",
     "deploy_ratio": "position_policy_default(settings, 'deploy_ratio')",
     "max_position_pct": "position_policy_default(settings, 'max_position_pct')",
+    "loss_cny_threshold": "deep_loss_policy_default(settings, 'loss_cny_threshold')",
+    "loss_pct_threshold": "deep_loss_policy_default(settings, 'loss_pct_threshold')",
+    "cover_ratio": "deep_loss_policy_default(settings, 'cover_ratio')",
+    "sell_ratio": "deep_loss_policy_default(settings, 'sell_ratio')",
+    "realized_loss_threshold": "deep_loss_policy_default(settings, 'realized_loss_threshold')",
+    "realized_gain_threshold": "deep_loss_policy_default(settings, 'realized_gain_threshold')",
+    "deep_loss_tier_multiplier": "deep_loss_policy_default(settings, 'deep_loss_tier_multiplier')",
+    "portfolio_loss_cny_threshold": "deep_loss_policy_default(settings, 'portfolio_loss_cny_threshold')",
+    "coverable_realized_weight": "deep_loss_policy_default(settings, 'coverable_realized_weight')",
+    "win_rate_min": "deep_loss_policy_default(settings, 'win_rate_min')",
+    "loss_streak_max": "deep_loss_policy_default(settings, 'loss_streak_max')",
+    "ledger_cost_tolerance_cny": "deep_loss_policy_default(settings, 'ledger_cost_tolerance_cny')",
+    "base_target_pct": "pnl_target_policy_default(settings, 'base_target_pct')",
+    "min_target_cny": "pnl_target_policy_default(settings, 'min_target_cny')",
+    "streak_bonus_pct": "pnl_target_policy_default(settings, 'streak_bonus_pct')",
+    "miss_recovery_factor": "pnl_target_policy_default(settings, 'miss_recovery_factor')",
 }
 
 
@@ -732,6 +794,10 @@ def _apply_cash_signal_evolution(
 ) -> dict[str, float]:
     if threshold_mode(settings, "min_cash_ratio") != "harness":
         return merged
+    if _overlay_has_phrase(state, "浮动亏损主导净值", settings=settings):
+        merged["min_cash_ratio"] = max(float(merged.get("min_cash_ratio") or 0), 0.5)
+    elif _overlay_has_phrase(state, "维持高现金", settings=settings):
+        merged["min_cash_ratio"] = max(float(merged.get("min_cash_ratio") or 0), 0.45)
     if float(merged.get("min_cash_ratio") or 0.0) > 0:
         return merged
 
@@ -869,6 +935,17 @@ def _blob_has_phrase(state: Any, phrase: str, *, settings: dict[str, Any]) -> bo
         for blob in _collect_text_blobs(state, sources=sources, kind=kind, settings=settings):
             if phrase in blob:
                 return True
+    return False
+
+
+def _overlay_has_phrase(state: Any, phrase: str, *, settings: dict[str, Any]) -> bool:
+    """Match phrase in memory/playbook/policy harness blobs."""
+    if _blob_has_phrase(state, phrase, settings=settings):
+        return True
+    sources = _overlay_sources(settings)
+    for blob in _collect_text_blobs(state, sources=sources, kind="policy", settings=settings):
+        if phrase in blob:
+            return True
     return False
 
 
@@ -1268,6 +1345,18 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
     position_meta = harness_position_overlay_meta(base_position, effective_position)
     if position_meta:
         harness_meta["position_overlay"] = position_meta
+    base_deep_loss = resolve_harness_base_deep_loss_policy(cfg)
+    effective_deep_loss = resolve_harness_deep_loss_policy(state, settings=cfg)
+    harness_meta["deep_loss_policy"] = effective_deep_loss
+    deep_loss_meta = harness_deep_loss_overlay_meta(base_deep_loss, effective_deep_loss)
+    if deep_loss_meta:
+        harness_meta["deep_loss_overlay"] = deep_loss_meta
+    base_pnl_target = resolve_harness_base_pnl_target_policy(cfg)
+    effective_pnl_target = resolve_harness_pnl_target_policy(state, settings=cfg)
+    harness_meta["pnl_target_policy"] = effective_pnl_target
+    pnl_target_meta = harness_pnl_target_overlay_meta(base_pnl_target, effective_pnl_target)
+    if pnl_target_meta:
+        harness_meta["pnl_target_overlay"] = pnl_target_meta
     harness_meta["trade_signals"] = {
         k: trade_signals[k]
         for k in (
@@ -1349,6 +1438,20 @@ def _apply_position_signal_evolution(
             merged["deploy_ratio"] = min(float(merged.get("deploy_ratio", 1.0)), 0.3)
         if evolution_mode(settings, "max_position_pct") == "harness":
             merged["max_position_pct"] = min(float(merged.get("max_position_pct", 35.0)), 25.0)
+    if _overlay_has_phrase(state, "浮动亏损主导净值", settings=settings):
+        if evolution_mode(settings, "deploy_ratio") == "harness":
+            merged["deploy_ratio"] = min(float(merged.get("deploy_ratio", 1.0)), 0.25)
+        if evolution_mode(settings, "max_position_pct") == "harness":
+            merged["max_position_pct"] = min(float(merged.get("max_position_pct", 35.0)), 22.0)
+    if _overlay_has_phrase(state, "卖出胜率偏低", settings=settings):
+        if evolution_mode(settings, "deploy_ratio") == "harness":
+            merged["deploy_ratio"] = min(float(merged.get("deploy_ratio", 1.0)), 0.35)
+    if _overlay_has_phrase(state, "连亏警戒", settings=settings):
+        if evolution_mode(settings, "deploy_ratio") == "harness":
+            merged["deploy_ratio"] = min(float(merged.get("deploy_ratio", 1.0)), 0.3)
+    if _overlay_has_phrase(state, "ledger 缺买入成本", settings=settings):
+        if evolution_mode(settings, "deploy_ratio") == "harness":
+            merged["deploy_ratio"] = min(float(merged.get("deploy_ratio", 1.0)), 0.4)
     if signals.get("mss_forecast_miss") and not signals.get("defensive_trim"):
         if evolution_mode(settings, "deploy_ratio") == "harness":
             merged["deploy_ratio"] = float(merged.get("deploy_ratio", 1.0)) * 0.7
@@ -1412,6 +1515,273 @@ def harness_buy_budget(
     if total > 0 and max_pct > 0:
         budget = min(budget, total * max_pct / 100.0)
     return max(0.0, budget)
+
+
+def deep_loss_policy_base(settings: dict[str, Any], key: str) -> float:
+    cfg = settings.get("pnl_overview") or {}
+    if key == "loss_cny_threshold":
+        return float(cfg.get("large_unrealized_loss_cny", _DEEP_LOSS_NEUTRAL[key]))
+    if key == "loss_pct_threshold":
+        return float(cfg.get("large_unrealized_loss_pct", _DEEP_LOSS_NEUTRAL[key]))
+    if key == "cover_ratio":
+        if cfg.get("deep_loss_sell_require_cover") is False:
+            return 0.0
+        return float(cfg.get("deep_loss_cover_ratio", _DEEP_LOSS_NEUTRAL[key]))
+    if key == "sell_ratio":
+        return float(cfg.get("deep_loss_sell_ratio", _DEEP_LOSS_NEUTRAL[key]))
+    if key == "realized_loss_threshold":
+        return float(cfg.get("large_realized_loss_cny", _DEEP_LOSS_NEUTRAL[key]))
+    if key == "realized_gain_threshold":
+        return float(
+            cfg.get(
+                "large_realized_gain_cny",
+                cfg.get("large_realized_loss_cny", _DEEP_LOSS_NEUTRAL[key]),
+            )
+        )
+    if key == "deep_loss_tier_multiplier":
+        return float(cfg.get("deep_loss_tier_multiplier", _DEEP_LOSS_NEUTRAL[key]))
+    if key == "portfolio_loss_cny_threshold":
+        return float(
+            cfg.get(
+                "portfolio_loss_cny_threshold",
+                cfg.get("large_unrealized_loss_cny", _DEEP_LOSS_NEUTRAL[key]),
+            )
+        )
+    if key == "coverable_realized_weight":
+        return float(cfg.get("coverable_realized_weight", _DEEP_LOSS_NEUTRAL[key]))
+    if key == "win_rate_min":
+        return float(cfg.get("win_rate_min", _DEEP_LOSS_NEUTRAL[key]))
+    if key == "loss_streak_max":
+        return float(cfg.get("loss_streak_max", _DEEP_LOSS_NEUTRAL[key]))
+    if key == "ledger_cost_tolerance_cny":
+        return float(cfg.get("ledger_cost_tolerance_cny", _DEEP_LOSS_NEUTRAL[key]))
+    return float(_DEEP_LOSS_NEUTRAL.get(key, 0.0))
+
+
+def resolve_harness_base_deep_loss_policy(settings: dict[str, Any]) -> dict[str, float]:
+    return {key: deep_loss_policy_base(settings, key) for key in _EVOLVED_DEEP_LOSS_KEYS}
+
+
+def _apply_deep_loss_signal_evolution(
+    merged: dict[str, float],
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    signals = resolve_harness_trade_signals(state, settings=settings)
+    if signals.get("defensive_trim"):
+        merged["sell_ratio"] = min(float(merged.get("sell_ratio", 1.0)), 0.5)
+        merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.0)
+    if signals.get("pnl_target_miss"):
+        merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.2)
+        merged["sell_ratio"] = min(float(merged.get("sell_ratio", 1.0)), 0.35)
+    if signals.get("pnl_target_hit"):
+        merged["sell_ratio"] = max(float(merged.get("sell_ratio", 1.0)), 0.6)
+    if _overlay_has_phrase(state, "深浮亏", settings=settings) or _overlay_has_phrase(
+        state, "深度套牢", settings=settings
+    ):
+        merged["loss_cny_threshold"] = min(float(merged.get("loss_cny_threshold", 5000.0)), 4000.0)
+        merged["loss_pct_threshold"] = min(float(merged.get("loss_pct_threshold", 10.0)), 8.0)
+        merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.0)
+        merged["sell_ratio"] = min(float(merged.get("sell_ratio", 1.0)), 0.5)
+    if _overlay_has_phrase(state, "浮亏警示", settings=settings):
+        merged["loss_cny_threshold"] = min(float(merged.get("loss_cny_threshold", 5000.0)), 4500.0)
+    if _overlay_has_phrase(state, "维持高现金", settings=settings) or _overlay_has_phrase(
+        state, "浮动亏损主导净值", settings=settings
+    ):
+        merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.1)
+        merged["sell_ratio"] = min(float(merged.get("sell_ratio", 1.0)), 0.4)
+        merged["portfolio_loss_cny_threshold"] = min(
+            float(merged.get("portfolio_loss_cny_threshold", 5000.0)), 4000.0
+        )
+    if _overlay_has_phrase(state, "已实现亏损较大", settings=settings):
+        merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.05)
+        merged["realized_loss_threshold"] = min(
+            float(merged.get("realized_loss_threshold", 500.0)), 400.0
+        )
+    if _overlay_has_phrase(state, "止盈参考", settings=settings):
+        merged["sell_ratio"] = max(float(merged.get("sell_ratio", 1.0)), 0.55)
+        merged["realized_gain_threshold"] = min(
+            float(merged.get("realized_gain_threshold", 500.0)), 400.0
+        )
+    if _overlay_has_phrase(state, "已实现盈利但浮亏拖累", settings=settings):
+        merged["cover_ratio"] = min(float(merged.get("cover_ratio", 1.0)), 0.85)
+        merged["sell_ratio"] = min(float(merged.get("sell_ratio", 1.0)), 0.6)
+    if _overlay_has_phrase(state, "优先 verify 回避/减仓", settings=settings):
+        merged["sell_ratio"] = min(float(merged.get("sell_ratio", 1.0)), 0.5)
+    if _overlay_has_phrase(state, "卖出胜率偏低", settings=settings):
+        merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.1)
+        merged["coverable_realized_weight"] = min(
+            float(merged.get("coverable_realized_weight", 1.0)), 0.75
+        )
+        if float(merged.get("win_rate_min") or 0) > 0:
+            merged["win_rate_min"] = min(float(merged["win_rate_min"]), 0.4)
+    if _overlay_has_phrase(state, "连亏警戒", settings=settings):
+        merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.15)
+        merged["sell_ratio"] = min(float(merged.get("sell_ratio", 1.0)), 0.4)
+        if float(merged.get("loss_streak_max") or 0) > 0:
+            merged["loss_streak_max"] = max(2.0, float(merged["loss_streak_max"]) - 1.0)
+    if _overlay_has_phrase(state, "ledger 缺买入成本", settings=settings):
+        merged["coverable_realized_weight"] = min(
+            float(merged.get("coverable_realized_weight", 1.0)), 0.65
+        )
+        merged["ledger_cost_tolerance_cny"] = max(
+            float(merged.get("ledger_cost_tolerance_cny", 0.01)), 50.0
+        )
+    return merged
+
+
+def resolve_harness_deep_loss_policy(
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    merged = resolve_harness_base_deep_loss_policy(settings)
+    if not _overlay_enabled(settings):
+        return merged
+    merged = _apply_deep_loss_signal_evolution(merged, state, settings=settings)
+    merged["loss_cny_threshold"] = max(1000.0, float(merged.get("loss_cny_threshold", 5000.0)))
+    merged["loss_pct_threshold"] = max(5.0, min(50.0, float(merged.get("loss_pct_threshold", 10.0))))
+    merged["cover_ratio"] = max(0.0, min(2.0, float(merged.get("cover_ratio", 1.0))))
+    merged["sell_ratio"] = max(0.1, min(1.0, float(merged.get("sell_ratio", 1.0))))
+    merged["realized_loss_threshold"] = max(
+        100.0, float(merged.get("realized_loss_threshold", 500.0))
+    )
+    merged["realized_gain_threshold"] = max(
+        100.0, float(merged.get("realized_gain_threshold", 500.0))
+    )
+    merged["deep_loss_tier_multiplier"] = max(
+        1.2, min(4.0, float(merged.get("deep_loss_tier_multiplier", 2.0)))
+    )
+    merged["portfolio_loss_cny_threshold"] = max(
+        1000.0, float(merged.get("portfolio_loss_cny_threshold", 5000.0))
+    )
+    merged["coverable_realized_weight"] = max(
+        0.0, min(1.0, float(merged.get("coverable_realized_weight", 1.0)))
+    )
+    merged["win_rate_min"] = max(0.0, min(0.9, float(merged.get("win_rate_min", 0.0))))
+    merged["loss_streak_max"] = max(0.0, min(10.0, float(merged.get("loss_streak_max", 0.0))))
+    merged["ledger_cost_tolerance_cny"] = max(
+        0.01, float(merged.get("ledger_cost_tolerance_cny", 0.01))
+    )
+    return merged
+
+
+def harness_deep_loss_overlay_meta(
+    base_policy: dict[str, float],
+    effective_policy: dict[str, float],
+) -> dict[str, Any]:
+    changed: dict[str, dict[str, float]] = {}
+    for key in _EVOLVED_DEEP_LOSS_KEYS:
+        base_val = float(base_policy.get(key, _DEEP_LOSS_NEUTRAL.get(key, 0.0)))
+        eff_val = float(effective_policy.get(key, base_val))
+        if abs(eff_val - base_val) >= 0.01:
+            changed[key] = {"base": base_val, "effective": eff_val}
+    return changed
+
+
+def _deep_loss_policy(settings: dict[str, Any]) -> dict[str, float]:
+    runtime = settings.get("harness_runtime") or {}
+    policy = runtime.get("deep_loss_policy")
+    if policy:
+        return dict(policy)
+    if _overlay_enabled(settings):
+        from agent_reach.daily_run.harness import load_harness
+
+        return resolve_harness_deep_loss_policy(load_harness(), settings=settings)
+    return dict(_DEEP_LOSS_NEUTRAL)
+
+
+def deep_loss_policy_default(settings: dict[str, Any], key: str) -> float:
+    return float(_deep_loss_policy(settings).get(key, _DEEP_LOSS_NEUTRAL.get(key, 0.0)))
+
+
+def deep_loss_tier_cny_threshold(settings: dict[str, Any]) -> float:
+    """Float-loss tier boundary: loss_cny_threshold × deep_loss_tier_multiplier."""
+    loss_cny = deep_loss_policy_default(settings, "loss_cny_threshold")
+    multiplier = deep_loss_policy_default(settings, "deep_loss_tier_multiplier")
+    return round(loss_cny * multiplier, 2)
+
+
+def pnl_target_policy_base(settings: dict[str, Any], key: str) -> float:
+    cfg = settings.get("pnl_target") or {}
+    if key in cfg:
+        return float(cfg[key])
+    return float(_PNL_TARGET_NEUTRAL.get(key, 0.0))
+
+
+def resolve_harness_base_pnl_target_policy(settings: dict[str, Any]) -> dict[str, float]:
+    return {key: pnl_target_policy_base(settings, key) for key in _EVOLVED_PNL_TARGET_KEYS}
+
+
+def _apply_pnl_target_policy_evolution(
+    merged: dict[str, float],
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    signals = resolve_harness_trade_signals(state, settings=settings)
+    if signals.get("pnl_target_hit"):
+        merged["base_target_pct"] = max(float(merged.get("base_target_pct", 0.5)), 0.55)
+        merged["streak_bonus_pct"] = max(float(merged.get("streak_bonus_pct", 10.0)), 12.0)
+        merged["miss_recovery_factor"] = max(float(merged.get("miss_recovery_factor", 0.8)), 0.85)
+    elif signals.get("pnl_target_miss"):
+        merged["base_target_pct"] = min(float(merged.get("base_target_pct", 0.5)), 0.4)
+        merged["min_target_cny"] = min(float(merged.get("min_target_cny", 100.0)), 80.0)
+        merged["miss_recovery_factor"] = min(float(merged.get("miss_recovery_factor", 0.8)), 0.7)
+    if _blob_has_phrase(state, "进攻期", settings=settings):
+        merged["base_target_pct"] = max(float(merged.get("base_target_pct", 0.5)), 0.52)
+        merged["streak_bonus_pct"] = max(float(merged.get("streak_bonus_pct", 10.0)), 11.0)
+    if _overlay_has_phrase(state, "缩窄仓位", settings=settings):
+        merged["base_target_pct"] = min(float(merged.get("base_target_pct", 0.5)), 0.38)
+        merged["min_target_cny"] = min(float(merged.get("min_target_cny", 100.0)), 75.0)
+    return merged
+
+
+def resolve_harness_pnl_target_policy(
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    merged = resolve_harness_base_pnl_target_policy(settings)
+    if not _overlay_enabled(settings):
+        return merged
+    merged = _apply_pnl_target_policy_evolution(merged, state, settings=settings)
+    merged["base_target_pct"] = max(0.05, min(5.0, float(merged.get("base_target_pct", 0.5))))
+    merged["base_target_cny"] = max(0.0, float(merged.get("base_target_cny", 0.0)))
+    merged["min_target_cny"] = max(0.0, float(merged.get("min_target_cny", 100.0)))
+    merged["streak_bonus_pct"] = max(0.0, min(50.0, float(merged.get("streak_bonus_pct", 10.0))))
+    merged["miss_recovery_factor"] = max(0.3, min(1.0, float(merged.get("miss_recovery_factor", 0.8))))
+    return merged
+
+
+def harness_pnl_target_overlay_meta(
+    base_policy: dict[str, float],
+    effective_policy: dict[str, float],
+) -> dict[str, Any]:
+    changed: dict[str, dict[str, float]] = {}
+    for key in _EVOLVED_PNL_TARGET_KEYS:
+        base_val = float(base_policy.get(key, _PNL_TARGET_NEUTRAL.get(key, 0.0)))
+        eff_val = float(effective_policy.get(key, base_val))
+        if abs(eff_val - base_val) >= 0.01:
+            changed[key] = {"base": base_val, "effective": eff_val}
+    return changed
+
+
+def _pnl_target_policy(settings: dict[str, Any]) -> dict[str, float]:
+    runtime = settings.get("harness_runtime") or {}
+    policy = runtime.get("pnl_target_policy")
+    if policy:
+        return dict(policy)
+    if _overlay_enabled(settings):
+        from agent_reach.daily_run.harness import load_harness
+
+        return resolve_harness_pnl_target_policy(load_harness(), settings=settings)
+    return dict(_PNL_TARGET_NEUTRAL)
+
+
+def pnl_target_policy_default(settings: dict[str, Any], key: str) -> float:
+    return float(_pnl_target_policy(settings).get(key, _PNL_TARGET_NEUTRAL.get(key, 0.0)))
 
 
 def symbol_score_weight_base(settings: dict[str, Any], key: str) -> float:

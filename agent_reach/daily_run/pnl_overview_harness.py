@@ -7,6 +7,7 @@ from datetime import date
 from typing import Any, Optional
 
 from agent_reach.daily_run.harness_skill_base import apply_skill_refinement
+from agent_reach.daily_run.pnl_execution_guard import ledger_cost_missing, sell_loss_streak
 from agent_reach.daily_run.realized_pnl import (
     PnlOverview,
     build_pnl_overview,
@@ -20,6 +21,31 @@ def _pnl_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
     return dict((settings or {}).get("pnl_overview") or {})
 
 
+def _pnl_thresholds(settings: Optional[dict[str, Any]]) -> dict[str, float]:
+    """Harness-evolved PnL thresholds (fallback to pnl_overview static config)."""
+    from agent_reach.daily_run.harness_policy import (
+        deep_loss_policy_default,
+        deep_loss_tier_cny_threshold,
+    )
+
+    cfg = settings or {}
+    return {
+        "loss_cny": deep_loss_policy_default(cfg, "loss_cny_threshold"),
+        "loss_pct": deep_loss_policy_default(cfg, "loss_pct_threshold"),
+        "realized_loss": deep_loss_policy_default(cfg, "realized_loss_threshold"),
+        "realized_gain": deep_loss_policy_default(cfg, "realized_gain_threshold"),
+        "deep_loss_tier_cny": deep_loss_tier_cny_threshold(cfg),
+        "portfolio_loss": deep_loss_policy_default(cfg, "portfolio_loss_cny_threshold"),
+        "tier_multiplier": deep_loss_policy_default(cfg, "deep_loss_tier_multiplier"),
+        "cover_ratio": deep_loss_policy_default(cfg, "cover_ratio"),
+        "sell_ratio": deep_loss_policy_default(cfg, "sell_ratio"),
+        "coverable_realized_weight": deep_loss_policy_default(cfg, "coverable_realized_weight"),
+        "win_rate_min": deep_loss_policy_default(cfg, "win_rate_min"),
+        "loss_streak_max": deep_loss_policy_default(cfg, "loss_streak_max"),
+        "ledger_cost_tolerance": deep_loss_policy_default(cfg, "ledger_cost_tolerance_cny"),
+    }
+
+
 def pnl_overview_to_harness_evidence(
     overview: PnlOverview | dict[str, Any],
     *,
@@ -28,11 +54,14 @@ def pnl_overview_to_harness_evidence(
 ) -> dict[str, Any]:
     data = overview.to_dict() if isinstance(overview, PnlOverview) else overview
     pf = portfolio_summary or {}
-    cfg = _pnl_cfg(settings)
+    thr = _pnl_thresholds(settings)
 
-    large_unreal_cny = float(cfg.get("large_unrealized_loss_cny", 5000))
-    large_real_cny = float(cfg.get("large_realized_loss_cny", 500))
-    large_unreal_pct = float(cfg.get("large_unrealized_loss_pct", 10))
+    large_unreal_cny = thr["loss_cny"]
+    large_real_cny = thr["realized_loss"]
+    large_gain_cny = thr["realized_gain"]
+    large_unreal_pct = thr["loss_pct"]
+    deep_loss_tier_cny = thr["deep_loss_tier_cny"]
+    portfolio_loss_cny = thr["portfolio_loss"]
 
     memory: list[str] = []
     policy: list[str] = []
@@ -57,6 +86,20 @@ def pnl_overview_to_harness_evidence(
     )
     if wins or losses:
         memory.append(f"卖出胜率：{wins} 盈 / {losses} 亏")
+        total_sells = wins + losses
+        win_rate_min = thr["win_rate_min"]
+        if win_rate_min > 0 and total_sells >= 3:
+            win_rate = wins / total_sells
+            if win_rate < win_rate_min:
+                policy.append(
+                    f"卖出胜率偏低：{wins}盈/{losses}亏（<{win_rate_min:.0%}）"
+                )
+                plan.append("pnl：下日提高入场门槛，减少新开仓")
+        loss_streak_max = int(thr["loss_streak_max"])
+        streak = sell_loss_streak(data.get("realized_sells") or [])
+        if loss_streak_max > 0 and streak >= loss_streak_max:
+            policy.append(f"连亏警戒：连续{streak}笔卖出亏损")
+            plan.append("pnl：连亏后优先 verify 回避，暂缓加仓")
 
     capital_flow = pf.get("capital_net_flow")
     if capital_flow is not None and abs(float(capital_flow)) >= 1:
@@ -73,16 +116,17 @@ def pnl_overview_to_harness_evidence(
         cost_basis = float(row.get("cost_basis") or 0)
         memory.append(format_sell_trade_line(row))
 
-        if cost_basis <= 0.01 and int(row.get("shares") or 0) > 0:
+        if ledger_cost_missing(row, thr["ledger_cost_tolerance"]):
             playbook.append(
                 f"{name}({code}) ledger 缺买入成本，运行 daily-run pnl backfill 或补录历史买入"
             )
             plan.append(f"pnl：补全 {code} 成本基准后再评估卖出策略")
+            policy.append(f"ledger 缺买入成本：{name}({code}) 成本基准不可靠")
 
         if pnl <= -large_real_cny:
             policy.append(f"已实现亏损较大：{name} 卖出后复盘入场/止损纪律")
             plan.append(f"pnl：{name} 亏损 {pnl:,.0f}，下日 verify 偏防御")
-        elif pnl >= large_real_cny:
+        elif pnl >= large_gain_cny:
             playbook.append(f"止盈参考：{name} 已实现 +{pnl:,.0f}，同类标的可分批兑现")
 
     for h in data.get("holdings") or []:
@@ -94,13 +138,17 @@ def pnl_overview_to_harness_evidence(
         if up <= -large_unreal_cny or (
             pct is not None and float(pct) <= -large_unreal_pct
         ):
-            if up <= -large_unreal_cny * 2:
-                policy.append(f"深浮亏 {name}：禁止接飞刀加仓，优先 verify 回避/减仓")
+            if up <= -deep_loss_tier_cny:
+                policy.append(
+                    f"深度套牢 {name}({code})：cover_ratio≥{thr['cover_ratio']:.0%}，"
+                    f"sell_ratio≤{min(thr['sell_ratio'], 0.5):.0%}，"
+                    f"卖出前需组合盈利覆盖浮亏"
+                )
                 plan.append(f"pnl：审视 {code} 止损/减仓阈值")
             else:
                 plan.append(f"pnl：跟踪 {code} 浮亏收敛或触发 defensive_trim")
 
-    if total < -large_unreal_cny and unrealized < realized:
+    if total < -portfolio_loss_cny and unrealized < realized:
         policy.append("浮动亏损主导净值：维持高现金，减少新开仓")
     if realized > 0 and unrealized < 0 and abs(unrealized) > abs(realized):
         playbook.append("已实现盈利但浮亏拖累：优先处理浮亏最大持仓")
@@ -111,7 +159,8 @@ def pnl_overview_to_harness_evidence(
 
     summary = (
         f"pnl_overview realized={realized:+.0f} unrealized={unrealized:+.0f} "
-        f"sells={len(data.get('realized_sells') or [])}"
+        f"sells={len(data.get('realized_sells') or [])} "
+        f"tier={deep_loss_tier_cny:.0f}"
     )
     return {
         "memory": memory,
