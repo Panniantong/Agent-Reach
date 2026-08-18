@@ -14,9 +14,10 @@ from agent_reach.daily_run.pipeline import evaluate_snapshot, render_markdown
 from agent_reach.daily_run.plugins.loader import run_experts
 from agent_reach.daily_run.harness_policy import (
     friction_min_return_default,
+    aggressive_entry_default,
+    macro_veto_default,
     min_cash_ratio_default,
     runtime_int_default,
-    threshold_default,
 )
 from agent_reach.daily_run.settings import effective_settings, load_settings
 from agent_reach.daily_run.trade_calendar import today_shanghai
@@ -692,11 +693,10 @@ def _decide_trade(
     trade_index: int,
     expected_return_pct: Optional[float],
 ) -> TradeDecision:
-    thresholds = settings.get("thresholds", {})
     trading = settings.get("trading", {})
-    macro_veto = float(thresholds.get("macro_veto", threshold_default(settings, "macro_veto")))
-    aggressive = float(thresholds.get("aggressive_entry", threshold_default(settings, "aggressive_entry")))
-    min_cash = float(thresholds.get("min_cash_ratio", min_cash_ratio_default(settings)))
+    macro_veto = macro_veto_default(settings)
+    aggressive = aggressive_entry_default(settings)
+    min_cash = min_cash_ratio_default(settings)
 
     trade_id = f"T{trade_index}"
     portfolio = snapshot.get("portfolio") or {}

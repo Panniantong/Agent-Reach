@@ -294,9 +294,7 @@
 
   "backtest": {
     "default_initial_capital": 100000,
-    "commission_rate": 0.0015,
-    "macro_veto": 40,
-    "aggressive_entry": 50
+    "commission_rate": 0.0015
   },
 
   "optimizer": {

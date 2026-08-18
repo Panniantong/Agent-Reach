@@ -1551,19 +1551,21 @@ def _cmd_daily_run(args):
 
     if args.daily_action == "backtest":
         from agent_reach.daily_run.backtest import render_backtest_markdown, run_mss_backtest
-        from agent_reach.daily_run.settings import load_settings
+        from agent_reach.daily_run.harness_policy import aggressive_entry_default, macro_veto_default
+        from agent_reach.daily_run.settings import effective_settings, load_settings
 
         history = json.loads(Path(args.input).read_text(encoding="utf-8"))
         if not isinstance(history, list):
             print("❌ backtest input must be a JSON array")
             sys.exit(1)
-        cfg = load_settings().get("backtest", {})
+        settings = effective_settings(load_settings())
+        backtest_cfg = settings.get("backtest", {})
         result = run_mss_backtest(
             history,
-            macro_veto=float(cfg.get("macro_veto", 40)),
-            aggressive_entry=float(cfg.get("aggressive_entry", 50)),
-            initial_capital=float(cfg.get("default_initial_capital", 100000)),
-            commission_rate=float(cfg.get("commission_rate", 0.0015)),
+            macro_veto=macro_veto_default(settings),
+            aggressive_entry=aggressive_entry_default(settings),
+            initial_capital=float(backtest_cfg.get("default_initial_capital", 100000)),
+            commission_rate=float(backtest_cfg.get("commission_rate", 0.0015)),
         )
         print(json.dumps({"metrics": result.metrics.to_dict(), "trades": result.trades}, ensure_ascii=False, indent=2))
         print("\n--- Markdown ---\n")

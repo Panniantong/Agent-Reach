@@ -3,6 +3,7 @@
 
 from agent_reach.daily_run.harness import HarnessEntry, HarnessState
 from agent_reach.daily_run.harness_policy import (
+    aggressive_entry_default,
     apply_harness_policy_overlay,
     kronos_score_adjustment,
     resolve_harness_flat_overrides,
@@ -302,6 +303,30 @@ class TestHarnessPolicyOverlay:
             settings=_harness_settings(),
         )
         assert flat["max_applied_trades_per_day"] == 3.0
+
+    def test_aggressive_entry_miss_memory_lowers_threshold(self):
+        state = HarnessState()
+        state.entries["memory"]["miss"] = HarnessEntry(
+            id="miss",
+            kind="memory",
+            title="未落账",
+            content="达进攻阈值未落账：MSS 达标但未成交",
+            source="deterministic",
+            job="intraday",
+            evidence="intraday",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        flat = resolve_harness_flat_overrides(
+            state,
+            {"max_snapshot_age_hours": 24},
+            settings=_harness_settings(),
+        )
+        assert flat["aggressive_entry"] == 49.0
+        assert flat["trade_min_scans"] == 2.0
+
+    def test_aggressive_entry_default_helper(self):
+        assert aggressive_entry_default(_harness_settings()) == 50.0
 
     def test_scan_sparse_lookback_weights(self):
         state = HarnessState()

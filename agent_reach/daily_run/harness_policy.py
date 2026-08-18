@@ -112,10 +112,11 @@ EVOLVED_CONFIG_KEYS_BY_SECTION: dict[str, tuple[str, ...]] = {
     "mss_forecast": _EVOLVED_FORECAST_KEYS,
 }
 EVOLVED_TOP_LEVEL_KEYS: tuple[str, ...] = ("lookback_weights",)
+EVOLVED_BACKTEST_KEYS: tuple[str, ...] = ("macro_veto", "aggressive_entry")
 
 HARNESS_CONSUMER_HELPERS: dict[str, str] = {
     "macro_veto": "threshold_default(settings, 'macro_veto')",
-    "aggressive_entry": "threshold_default(settings, 'aggressive_entry')",
+    "aggressive_entry": "aggressive_entry_default(settings)",
     "min_cash_ratio": "min_cash_ratio_default(settings)",
     "max_price_deviation_pct": "threshold_default(settings, 'max_price_deviation_pct')",
     "high_position_20d": "threshold_default(settings, 'high_position_20d')",
@@ -160,6 +161,10 @@ def list_static_config_pollution(settings: dict[str, Any]) -> list[str]:
     for key in EVOLVED_TOP_LEVEL_KEYS:
         if settings.get(key) is not None:
             found.append(key)
+    backtest = settings.get("backtest") or {}
+    for key in EVOLVED_BACKTEST_KEYS:
+        if key in backtest:
+            found.append(f"backtest.{key}")
     return found
 
 _STRUCTURED_POLICY_THRESHOLDS: dict[str, dict[str, float]] = {
@@ -225,6 +230,7 @@ _MEMORY_ENTRY_NUDGES: tuple[tuple[str, dict[str, float]], ...] = (
     ("MSS 预测偏离", {"aggressive_entry": -2.0}),
     ("盈亏目标奖励", {"aggressive_entry": 2.0}),
     ("盈亏目标未达", {"aggressive_entry": -2.0}),
+    ("达进攻阈值未落账", {"aggressive_entry": -1.0}),
 )
 
 _MEMORY_CASH_NUDGES: tuple[tuple[str, float], ...] = (
@@ -263,6 +269,7 @@ _MEMORY_RUNTIME_NUDGES: tuple[tuple[str, dict[str, float]], ...] = (
     ),
     ("落账已达上限", {"max_applied_trades_per_day": 3.0}),
     ("评估已达上限", {"max_trade_evaluations_per_symbol": 10.0}),
+    ("达进攻阈值未落账", {"trade_min_scans": 2.0}),
 )
 
 _MEMORY_FORECAST_NUDGES: tuple[tuple[str, dict[str, float]], ...] = (
@@ -429,6 +436,14 @@ def threshold_default(settings: dict[str, Any], key: str) -> float:
 
 def min_cash_ratio_default(settings: dict[str, Any]) -> float:
     return threshold_default(settings, "min_cash_ratio")
+
+
+def aggressive_entry_default(settings: dict[str, Any]) -> float:
+    return threshold_default(settings, "aggressive_entry")
+
+
+def macro_veto_default(settings: dict[str, Any]) -> float:
+    return threshold_default(settings, "macro_veto")
 
 
 def resolve_harness_base_thresholds(

@@ -33,6 +33,9 @@ def intraday_to_harness_evidence(payload: dict[str, Any]) -> dict[str, Any]:
 
     if mss is not None:
         memory.append(f"盘中 {scan_id} {name} MSS={mss} trend={trend or '—'}")
+    verdict_reason = str(scan.get("verdict_reasoning") or scan.get("reasoning") or "")
+    if "达进攻阈值" in verdict_reason:
+        playbook.append(f"盘中 {scan_id} {name} MSS 达进攻阈值（harness aggressive_entry 进化项）")
     if lookback is not None:
         memory.append(f"Lookback MSS={float(lookback):.0f}（{scan_id}）")
 
@@ -67,6 +70,10 @@ def intraday_to_harness_evidence(payload: dict[str, Any]) -> dict[str, Any]:
             if "评估已达上限" in reasoning:
                 memory.append(
                     "评估已达上限：单标的 T 槽不足，下日放宽 max_trade_evaluations_per_symbol"
+                )
+            if "达进攻阈值" in reasoning and action in (None, "hold", "skip"):
+                memory.append(
+                    "达进攻阈值未落账：MSS 达标但未成交，下日检查 trade_min_scans/落账上限/friction"
                 )
             if decision.get("blocked") and "macro" in reasoning.lower():
                 memory.append("宏观一票否决生效：维持高现金，禁止接飞刀")

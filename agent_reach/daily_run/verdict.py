@@ -58,10 +58,14 @@ def compute_verdict(snapshot: dict[str, Any], settings: dict[str, Any]) -> Verdi
     thresholds = settings.get("thresholds", {})
     trading = settings.get("trading", {})
 
-    from agent_reach.daily_run.harness_policy import threshold_default
+    from agent_reach.daily_run.harness_policy import (
+        aggressive_entry_default,
+        macro_veto_default,
+        threshold_default,
+    )
 
-    macro_veto = float(thresholds.get("macro_veto", threshold_default(settings, "macro_veto")))
-    aggressive = float(thresholds.get("aggressive_entry", threshold_default(settings, "aggressive_entry")))
+    macro_veto = macro_veto_default(settings)
+    aggressive = aggressive_entry_default(settings)
     high_pos = float(thresholds.get("high_position_20d", threshold_default(settings, "high_position_20d")))
     min_vol_ratio = float(thresholds.get("min_volume_ratio", threshold_default(settings, "min_volume_ratio")))
     max_vwap_dev = float(

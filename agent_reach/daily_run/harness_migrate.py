@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agent_reach.daily_run.harness_policy import (
+    EVOLVED_BACKTEST_KEYS,
     EVOLVED_CONFIG_KEYS_BY_SECTION,
     EVOLVED_TOP_LEVEL_KEYS,
     harness_evolution_mode,
@@ -38,6 +39,13 @@ def strip_evolved_keys(settings: dict[str, Any]) -> tuple[dict[str, Any], list[s
         if key in cleaned:
             del cleaned[key]
             removed.append(key)
+
+    backtest = cleaned.get("backtest")
+    if isinstance(backtest, dict):
+        for key in EVOLVED_BACKTEST_KEYS:
+            if key in backtest:
+                del backtest[key]
+                removed.append(f"backtest.{key}")
 
     return cleaned, removed
 
