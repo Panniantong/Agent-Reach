@@ -162,6 +162,43 @@ _PNL_TARGET_NEUTRAL: dict[str, float] = {
     "miss_recovery_factor": 0.8,
 }
 
+_EVOLVED_TREND_SCALAR_KEYS: tuple[str, ...] = (
+    "trend_min_points",
+    "trend_delta_threshold",
+)
+
+_TREND_NEUTRAL: dict[str, float] = {
+    "trend_min_points": 2.0,
+    "trend_delta_threshold": 1.0,
+}
+
+_DEFAULT_BUY_TRENDS: tuple[str, ...] = ("rising", "turning_up")
+_DEFAULT_SELL_TRENDS: tuple[str, ...] = ("falling", "turning_down")
+
+_EVOLVED_EXPECTED_RETURN_KEYS: tuple[str, ...] = (
+    "exp_return_base",
+    "exp_return_slope",
+    "exp_return_veto",
+    "exp_return_neutral",
+)
+
+_EXPECTED_RETURN_NEUTRAL: dict[str, float] = {
+    "exp_return_base": 0.015,
+    "exp_return_slope": 0.001,
+    "exp_return_veto": -0.02,
+    "exp_return_neutral": 0.005,
+}
+
+_EVOLVED_INTRADAY_AUDIT_KEYS: tuple[str, ...] = (
+    "intraday_block_on_audit_fail",
+    "min_quote_coverage_pct",
+)
+
+_INTRADAY_AUDIT_NEUTRAL: dict[str, float] = {
+    "intraday_block_on_audit_fail": 0.0,
+    "min_quote_coverage_pct": 0.8,
+}
+
 _SYMBOL_BIAS_CODE_RE = re.compile(r"(?<!\d)(\d{6})(?!\d)")
 
 _SYMBOL_BIAS_NEGATIVE: tuple[str, ...] = (
@@ -253,6 +290,12 @@ HARNESS_CONSUMER_HELPERS: dict[str, str] = {
     "min_target_cny": "pnl_target_policy_default(settings, 'min_target_cny')",
     "streak_bonus_pct": "pnl_target_policy_default(settings, 'streak_bonus_pct')",
     "miss_recovery_factor": "pnl_target_policy_default(settings, 'miss_recovery_factor')",
+    "trend_min_points": "trend_policy_default(settings, 'trend_min_points')",
+    "trend_delta_threshold": "trend_policy_default(settings, 'trend_delta_threshold')",
+    "exp_return_base": "expected_return_policy_default(settings, 'exp_return_base')",
+    "intraday_block_on_audit_fail": (
+        "intraday_audit_policy_default(settings, 'intraday_block_on_audit_fail')"
+    ),
 }
 
 
@@ -1357,6 +1400,31 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
     pnl_target_meta = harness_pnl_target_overlay_meta(base_pnl_target, effective_pnl_target)
     if pnl_target_meta:
         harness_meta["pnl_target_overlay"] = pnl_target_meta
+    base_trend = resolve_harness_base_trend_policy(cfg)
+    effective_trend = resolve_harness_trend_policy(state, settings=cfg)
+    harness_meta["trend_policy"] = effective_trend
+    trend_meta = harness_trend_overlay_meta(base_trend, effective_trend)
+    if trend_meta:
+        harness_meta["trend_overlay"] = trend_meta
+    base_exp_return = resolve_harness_base_expected_return_policy(cfg)
+    effective_exp_return = resolve_harness_expected_return_policy(state, settings=cfg)
+    harness_meta["expected_return_policy"] = effective_exp_return
+    exp_meta = harness_expected_return_overlay_meta(base_exp_return, effective_exp_return)
+    if exp_meta:
+        harness_meta["expected_return_overlay"] = exp_meta
+    base_intraday_audit = resolve_harness_base_intraday_audit_policy(cfg)
+    effective_intraday_audit = resolve_harness_intraday_audit_policy(state, settings=cfg)
+    harness_meta["intraday_audit_policy"] = effective_intraday_audit
+    intraday_audit_meta = harness_intraday_audit_overlay_meta(base_intraday_audit, effective_intraday_audit)
+    if intraday_audit_meta:
+        harness_meta["intraday_audit_overlay"] = intraday_audit_meta
+    audit_block = effective_intraday_audit.get("intraday_block_on_audit_fail", 0.0) > 0.5
+    data_audit = dict(cfg.get("data_audit") or {})
+    data_audit["intraday_block_on_audit_fail"] = audit_block
+    data_audit["min_quote_coverage_pct"] = float(
+        effective_intraday_audit.get("min_quote_coverage_pct", data_audit.get("min_quote_coverage_pct", 0.8))
+    )
+    cfg["data_audit"] = data_audit
     harness_meta["trade_signals"] = {
         k: trade_signals[k]
         for k in (
@@ -1782,6 +1850,277 @@ def _pnl_target_policy(settings: dict[str, Any]) -> dict[str, float]:
 
 def pnl_target_policy_default(settings: dict[str, Any], key: str) -> float:
     return float(_pnl_target_policy(settings).get(key, _PNL_TARGET_NEUTRAL.get(key, 0.0)))
+
+
+def _intraday_cfg(settings: dict[str, Any]) -> dict[str, Any]:
+    return dict(settings.get("intraday") or {})
+
+
+def trend_policy_base(settings: dict[str, Any], key: str) -> float:
+    cfg = _intraday_cfg(settings)
+    if key == "trend_min_points":
+        return float(cfg.get("trend_min_points", _TREND_NEUTRAL[key]))
+    if key == "trend_delta_threshold":
+        return float(cfg.get("trend_delta_threshold", _TREND_NEUTRAL[key]))
+    return float(_TREND_NEUTRAL.get(key, 0.0))
+
+
+def _default_buy_trends(settings: dict[str, Any]) -> list[str]:
+    raw = _intraday_cfg(settings).get("buy_trends")
+    if isinstance(raw, list) and raw:
+        return [str(x) for x in raw]
+    return list(_DEFAULT_BUY_TRENDS)
+
+
+def _default_sell_trends(settings: dict[str, Any]) -> list[str]:
+    raw = _intraday_cfg(settings).get("sell_trends")
+    if isinstance(raw, list) and raw:
+        return [str(x) for x in raw]
+    return list(_DEFAULT_SELL_TRENDS)
+
+
+def resolve_harness_base_trend_policy(settings: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **{key: trend_policy_base(settings, key) for key in _EVOLVED_TREND_SCALAR_KEYS},
+        "buy_trends": _default_buy_trends(settings),
+        "sell_trends": _default_sell_trends(settings),
+    }
+
+
+def _apply_trend_policy_evolution(
+    merged: dict[str, Any],
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, Any]:
+    signals = resolve_harness_trade_signals(state, settings=settings)
+    buy_trends = list(merged.get("buy_trends") or _DEFAULT_BUY_TRENDS)
+    sell_trends = list(merged.get("sell_trends") or _DEFAULT_SELL_TRENDS)
+    if signals.get("defensive_trim") or signals.get("pnl_target_miss"):
+        merged["trend_delta_threshold"] = max(
+            float(merged.get("trend_delta_threshold", 1.0)), 1.5
+        )
+        buy_trends = [t for t in buy_trends if t in {"rising"}] or ["rising"]
+        sell_trends = list(dict.fromkeys([*sell_trends, "mixed", "flat"]))
+    elif signals.get("pnl_target_hit"):
+        merged["trend_delta_threshold"] = min(float(merged.get("trend_delta_threshold", 1.0)), 0.8)
+        if "turning_up" not in buy_trends:
+            buy_trends.append("turning_up")
+    if _overlay_has_phrase(state, "趋势误判", settings=settings):
+        merged["trend_delta_threshold"] = max(float(merged.get("trend_delta_threshold", 1.0)), 1.2)
+        buy_trends = [t for t in buy_trends if t != "turning_up"] or ["rising"]
+    if _overlay_has_phrase(state, "过早买入", settings=settings):
+        merged["trend_min_points"] = max(float(merged.get("trend_min_points", 2.0)), 3.0)
+        buy_trends = ["rising"]
+    if _overlay_has_phrase(state, "卖晚了", settings=settings) or _overlay_has_phrase(
+        state, "防御性减仓", settings=settings
+    ):
+        sell_trends = list(dict.fromkeys([*sell_trends, "turning_down", "mixed"]))
+    if _overlay_has_phrase(state, "达进攻阈值未落账", settings=settings):
+        merged["trend_delta_threshold"] = min(float(merged.get("trend_delta_threshold", 1.0)), 0.9)
+    merged["buy_trends"] = buy_trends
+    merged["sell_trends"] = sell_trends
+    return merged
+
+
+def resolve_harness_trend_policy(
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, Any]:
+    merged = resolve_harness_base_trend_policy(settings)
+    if not _overlay_enabled(settings):
+        return merged
+    merged = _apply_trend_policy_evolution(merged, state, settings=settings)
+    merged["trend_min_points"] = max(2.0, min(5.0, float(merged.get("trend_min_points", 2.0))))
+    merged["trend_delta_threshold"] = max(0.5, min(3.0, float(merged.get("trend_delta_threshold", 1.0))))
+    merged["buy_trends"] = list(merged.get("buy_trends") or _DEFAULT_BUY_TRENDS)
+    merged["sell_trends"] = list(merged.get("sell_trends") or _DEFAULT_SELL_TRENDS)
+    return merged
+
+
+def harness_trend_overlay_meta(
+    base_policy: dict[str, Any],
+    effective_policy: dict[str, Any],
+) -> dict[str, Any]:
+    changed: dict[str, Any] = {}
+    for key in _EVOLVED_TREND_SCALAR_KEYS:
+        base_val = float(base_policy.get(key, _TREND_NEUTRAL.get(key, 0.0)))
+        eff_val = float(effective_policy.get(key, base_val))
+        if abs(eff_val - base_val) >= 0.01:
+            changed[key] = {"base": base_val, "effective": eff_val}
+    if list(base_policy.get("buy_trends") or []) != list(effective_policy.get("buy_trends") or []):
+        changed["buy_trends"] = {
+            "base": list(base_policy.get("buy_trends") or []),
+            "effective": list(effective_policy.get("buy_trends") or []),
+        }
+    if list(base_policy.get("sell_trends") or []) != list(effective_policy.get("sell_trends") or []):
+        changed["sell_trends"] = {
+            "base": list(base_policy.get("sell_trends") or []),
+            "effective": list(effective_policy.get("sell_trends") or []),
+        }
+    return changed
+
+
+def trend_policy_default(settings: dict[str, Any], key: str) -> float:
+    policy = settings.get("harness_runtime", {}).get("trend_policy") or {}
+    if key in policy:
+        return float(policy[key])
+    return float(resolve_harness_base_trend_policy(settings).get(key, _TREND_NEUTRAL.get(key, 0.0)))
+
+
+def expected_return_policy_base(settings: dict[str, Any], key: str) -> float:
+    cfg = _intraday_cfg(settings)
+    exp = dict(cfg.get("expected_return") or {})
+    mapping = {
+        "exp_return_base": "base",
+        "exp_return_slope": "slope",
+        "exp_return_veto": "veto",
+        "exp_return_neutral": "neutral",
+    }
+    src = mapping.get(key, key)
+    if src in exp:
+        return float(exp[src])
+    return float(_EXPECTED_RETURN_NEUTRAL.get(key, 0.0))
+
+
+def resolve_harness_base_expected_return_policy(settings: dict[str, Any]) -> dict[str, float]:
+    return {key: expected_return_policy_base(settings, key) for key in _EVOLVED_EXPECTED_RETURN_KEYS}
+
+
+def _apply_expected_return_policy_evolution(
+    merged: dict[str, float],
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    signals = resolve_harness_trade_signals(state, settings=settings)
+    if _overlay_has_phrase(state, "摩擦成本过高", settings=settings) or _overlay_has_phrase(
+        state, "减少频繁调仓", settings=settings
+    ):
+        merged["exp_return_base"] = max(float(merged.get("exp_return_base", 0.015)), 0.018)
+        merged["exp_return_neutral"] = max(float(merged.get("exp_return_neutral", 0.005)), 0.008)
+    if _overlay_has_phrase(state, "达进攻阈值未落账", settings=settings):
+        merged["exp_return_base"] = min(float(merged.get("exp_return_base", 0.015)), 0.012)
+        merged["exp_return_slope"] = max(float(merged.get("exp_return_slope", 0.001)), 0.0012)
+    if signals.get("pnl_target_hit"):
+        merged["exp_return_base"] = max(float(merged.get("exp_return_base", 0.015)), 0.016)
+    if signals.get("defensive_trim"):
+        merged["exp_return_veto"] = min(float(merged.get("exp_return_veto", -0.02)), -0.025)
+    return merged
+
+
+def resolve_harness_expected_return_policy(
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    merged = resolve_harness_base_expected_return_policy(settings)
+    if not _overlay_enabled(settings):
+        return merged
+    merged = _apply_expected_return_policy_evolution(merged, state, settings=settings)
+    merged["exp_return_base"] = max(0.005, min(0.03, float(merged.get("exp_return_base", 0.015))))
+    merged["exp_return_slope"] = max(0.0005, min(0.003, float(merged.get("exp_return_slope", 0.001))))
+    merged["exp_return_veto"] = max(-0.05, min(-0.005, float(merged.get("exp_return_veto", -0.02))))
+    merged["exp_return_neutral"] = max(0.001, min(0.02, float(merged.get("exp_return_neutral", 0.005))))
+    return merged
+
+
+def harness_expected_return_overlay_meta(
+    base_policy: dict[str, float],
+    effective_policy: dict[str, float],
+) -> dict[str, Any]:
+    changed: dict[str, dict[str, float]] = {}
+    for key in _EVOLVED_EXPECTED_RETURN_KEYS:
+        base_val = float(base_policy.get(key, _EXPECTED_RETURN_NEUTRAL.get(key, 0.0)))
+        eff_val = float(effective_policy.get(key, base_val))
+        if abs(eff_val - base_val) >= 0.0005:
+            changed[key] = {"base": base_val, "effective": eff_val}
+    return changed
+
+
+def expected_return_policy_default(settings: dict[str, Any], key: str) -> float:
+    runtime = settings.get("harness_runtime") or {}
+    policy = runtime.get("expected_return_policy")
+    if policy and key in policy:
+        return float(policy[key])
+    return float(_EXPECTED_RETURN_NEUTRAL.get(key, 0.0))
+
+
+def intraday_audit_policy_base(settings: dict[str, Any], key: str) -> float:
+    audit = dict(settings.get("data_audit") or {})
+    if key == "intraday_block_on_audit_fail":
+        return 1.0 if audit.get("intraday_block_on_audit_fail") else 0.0
+    if key == "min_quote_coverage_pct":
+        return float(audit.get("min_quote_coverage_pct", _INTRADAY_AUDIT_NEUTRAL[key]))
+    return float(_INTRADAY_AUDIT_NEUTRAL.get(key, 0.0))
+
+
+def resolve_harness_base_intraday_audit_policy(settings: dict[str, Any]) -> dict[str, float]:
+    return {key: intraday_audit_policy_base(settings, key) for key in _EVOLVED_INTRADAY_AUDIT_KEYS}
+
+
+def _apply_intraday_audit_policy_evolution(
+    merged: dict[str, float],
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    if _overlay_has_phrase(state, "数据审计未通过", settings=settings) or _overlay_has_phrase(
+        state, "行情覆盖率", settings=settings
+    ):
+        merged["intraday_block_on_audit_fail"] = 1.0
+        merged["min_quote_coverage_pct"] = max(float(merged.get("min_quote_coverage_pct", 0.8)), 0.85)
+    if _overlay_has_phrase(state, "audit", settings=settings) and _overlay_has_phrase(
+        state, "quote", settings=settings
+    ):
+        merged["min_quote_coverage_pct"] = max(float(merged.get("min_quote_coverage_pct", 0.8)), 0.82)
+    signals = resolve_harness_trade_signals(state, settings=settings)
+    if signals.get("defensive_trim"):
+        merged["intraday_block_on_audit_fail"] = max(
+            float(merged.get("intraday_block_on_audit_fail", 0.0)), 1.0
+        )
+    return merged
+
+
+def resolve_harness_intraday_audit_policy(
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    merged = resolve_harness_base_intraday_audit_policy(settings)
+    if not _overlay_enabled(settings):
+        return merged
+    merged = _apply_intraday_audit_policy_evolution(merged, state, settings=settings)
+    merged["intraday_block_on_audit_fail"] = 1.0 if float(merged.get("intraday_block_on_audit_fail", 0.0)) > 0.5 else 0.0
+    merged["min_quote_coverage_pct"] = max(0.5, min(1.0, float(merged.get("min_quote_coverage_pct", 0.8))))
+    return merged
+
+
+def harness_intraday_audit_overlay_meta(
+    base_policy: dict[str, float],
+    effective_policy: dict[str, float],
+) -> dict[str, Any]:
+    changed: dict[str, dict[str, float]] = {}
+    for key in _EVOLVED_INTRADAY_AUDIT_KEYS:
+        base_val = float(base_policy.get(key, _INTRADAY_AUDIT_NEUTRAL.get(key, 0.0)))
+        eff_val = float(effective_policy.get(key, base_val))
+        if abs(eff_val - base_val) >= 0.01:
+            changed[key] = {"base": base_val, "effective": eff_val}
+    return changed
+
+
+def intraday_audit_policy_default(settings: dict[str, Any], key: str) -> float:
+    runtime = settings.get("harness_runtime") or {}
+    policy = runtime.get("intraday_audit_policy")
+    if policy and key in policy:
+        return float(policy[key])
+    audit = dict(settings.get("data_audit") or {})
+    if key == "intraday_block_on_audit_fail":
+        return 1.0 if audit.get("intraday_block_on_audit_fail") else 0.0
+    if key == "min_quote_coverage_pct":
+        return float(audit.get("min_quote_coverage_pct", _INTRADAY_AUDIT_NEUTRAL[key]))
+    return float(_INTRADAY_AUDIT_NEUTRAL.get(key, 0.0))
 
 
 def symbol_score_weight_base(settings: dict[str, Any], key: str) -> float:

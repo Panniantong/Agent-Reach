@@ -58,10 +58,12 @@ def intraday_to_harness_evidence(payload: dict[str, Any]) -> dict[str, Any]:
         if isinstance(decision, dict):
             action = decision.get("action")
             reasoning = str(decision.get("reasoning") or "")
+            trend_label = str(decision.get("trend") or trend or "")
             if action and action != "hold":
                 playbook.append(f"盘中 {scan_id} {action}：{reasoning[:120]}")
             if decision.get("friction_blocked"):
                 memory.append("减少频繁调仓：摩擦成本过高时提高 friction_min_return_pct")
+                policy.append("摩擦成本过高：提高 exp_return 门槛或 friction_min_return_pct")
             portfolio_msg = str(trade.get("portfolio_message") or "")
             if "落账已达上限" in portfolio_msg or "落账已达上限" in reasoning:
                 memory.append(
@@ -75,8 +77,22 @@ def intraday_to_harness_evidence(payload: dict[str, Any]) -> dict[str, Any]:
                 memory.append(
                     "达进攻阈值未落账：MSS 达标但未成交，下日检查 trade_min_scans/落账上限/friction"
                 )
+                policy.append("达进攻阈值未落账：放宽 trend_delta 或降低 exp_return 门槛")
             if decision.get("blocked") and "macro" in reasoning.lower():
                 memory.append("宏观一票否决生效：维持高现金，禁止接飞刀")
+            if action == "hold" and trend_label in ("mixed", "flat") and float(lookback or 0) >= 50:
+                policy.append("趋势误判：mixed/flat 时 MSS 达标但未买入，收紧 buy_trends")
+            if action == "buy" and trend_label == "turning_up" and decision.get("friction_blocked"):
+                policy.append("过早买入：turning_up 摩擦阻断，提高 trend_min_points")
+            if "Kronos 偏弱" in reasoning:
+                policy.append(f"Kronos 偏弱阻断买入：{name}({scan.get('code') or '?'})")
+            if "数据审计未通过" in reasoning or "行情覆盖率不足" in reasoning:
+                policy.append("数据审计未通过：盘中 block_on_audit_fail 生效")
+                plan.append(f"intraday：补全 {name} 行情/flow/sentiment 后再调仓")
+            if action == "sell" and "防御性减仓" in reasoning:
+                policy.append("防御性减仓：defensive_trim 触发卖出")
+            if action == "hold" and "防御性减仓" in reasoning:
+                policy.append("卖晚了：防御信号触发但深度套牢/锁仓阻断")
 
     if payload.get("skipped"):
         reason = str(payload.get("reason") or "")

@@ -10,6 +10,13 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agent_reach.daily_run.lookback import compute_lookback_mss, detect_mss_trend
+from agent_reach.daily_run.intraday_policy import (
+    estimate_expected_return,
+    intraday_audit_block_reason,
+    kronos_buy_block_reason,
+    trend_allows_buy,
+    trend_allows_defensive_sell,
+)
 from agent_reach.daily_run.pipeline import evaluate_snapshot, render_markdown
 from agent_reach.daily_run.plugins.loader import run_experts
 from agent_reach.daily_run.harness_policy import (
@@ -73,7 +80,7 @@ def explain_trade_skip_reason(
     if len(st.trades) >= eval_cap:
         return f"本标的调仓评估已达上限 T1–T{eval_cap}（含 hold 记录）"
 
-    trend = detect_mss_trend(st.scans)
+    trend = detect_mss_trend(st.scans, cfg)
     every_n = runtime_int_default(cfg, "schedule", "trade_every_n_scans")
     if trend in ("turning_up", "turning_down", "rising", "falling"):
         return "内部状态异常：趋势已变化但未触发评估"
@@ -226,7 +233,7 @@ def record_scan(
     save_state(st, state_path)
 
     lookback_mss, lookback_detail = compute_lookback_mss(st.scans, cfg)
-    trend = detect_mss_trend(st.scans)
+    trend = detect_mss_trend(st.scans, cfg)
 
     return {
         "scan": entry,
@@ -304,7 +311,7 @@ def record_scan_from_evaluation(
     save_state(st, resolved_path)
 
     lookback_mss, lookback_detail = compute_lookback_mss(st.scans, cfg)
-    trend = detect_mss_trend(st.scans)
+    trend = detect_mss_trend(st.scans, cfg)
 
     return {
         "scan": entry,
@@ -336,7 +343,7 @@ def should_evaluate_trade(
     if len(st.trades) >= max_trade_evaluations_per_symbol(cfg):
         return False
 
-    trend = detect_mss_trend(st.scans)
+    trend = detect_mss_trend(st.scans, cfg)
     if trend in ("turning_up", "turning_down", "rising", "falling"):
         return True
     every_n = runtime_int_default(cfg, "schedule", "trade_every_n_scans")
@@ -461,7 +468,7 @@ def evaluate_trade(
     verdict = evaluation["verdict"]
 
     lookback_mss, lookback_detail = compute_lookback_mss(st.scans, cfg)
-    trend = detect_mss_trend(st.scans)
+    trend = detect_mss_trend(st.scans, cfg)
     decision = _decide_trade(
         lookback_mss=lookback_mss,
         trend=trend,
@@ -709,10 +716,24 @@ def _decide_trade(
 
     exp_ret = expected_return_pct
     if exp_ret is None:
-        exp_ret = _estimate_expected_return(lookback_mss, aggressive, macro_veto)
+        exp_ret = estimate_expected_return(lookback_mss, aggressive, macro_veto, settings)
 
     friction_blocked = not _passes_friction(exp_ret, settings)
     blocked = verdict.blocked or report.get("blocked", False)
+
+    audit_block = intraday_audit_block_reason(settings, report)
+    if audit_block:
+        return TradeDecision(
+            action="hold",
+            trade_id=trade_id,
+            lookback_mss=lookback_mss,
+            lookback_detail=[],
+            trend=trend,
+            reasoning=f"{audit_block}{overlay_note}",
+            blocked=True,
+            friction_blocked=friction_blocked,
+            expected_return_pct=exp_ret,
+        )
 
     if lookback_mss < macro_veto:
         return TradeDecision(
@@ -742,7 +763,7 @@ def _decide_trade(
             expected_return_pct=exp_ret,
         )
 
-    if lookback_mss >= aggressive and trend in ("rising", "turning_up"):
+    if lookback_mss >= aggressive and trend_allows_buy(settings, trend):
         buy_block = None
         from agent_reach.daily_run.skill_rejected import trade_blocked_by_rejected
 
@@ -791,6 +812,19 @@ def _decide_trade(
                 friction_blocked=friction_blocked,
                 expected_return_pct=exp_ret,
             )
+        kronos_block = kronos_buy_block_reason(settings, symbol_code)
+        if kronos_block:
+            return TradeDecision(
+                action="hold",
+                trade_id=trade_id,
+                lookback_mss=lookback_mss,
+                lookback_detail=[],
+                trend=trend,
+                reasoning=f"{kronos_block}{overlay_note}",
+                blocked=True,
+                friction_blocked=friction_blocked,
+                expected_return_pct=exp_ret,
+            )
         if cash_ratio is not None and cash_ratio < min_cash:
             return TradeDecision(
                 action="hold",
@@ -831,7 +865,7 @@ def _decide_trade(
     trade_signals = runtime.get("trade_signals") or {}
     if (
         trade_signals.get("defensive_trim")
-        and trend in ("falling", "turning_down")
+        and trend_allows_defensive_sell(settings, trend)
         and lookback_mss >= macro_veto
     ):
         if _decision_symbol_sellable(snapshot, settings, report.get("code")):
@@ -878,14 +912,6 @@ def _decide_trade(
 
 def _passes_friction(expected_return_pct: float, settings: dict[str, Any]) -> bool:
     return expected_return_pct > friction_min_return_default(settings)
-
-
-def _estimate_expected_return(mss: float, aggressive: float, macro_veto: float) -> float:
-    if mss >= aggressive:
-        return 0.015 + (mss - aggressive) * 0.001
-    if mss <= macro_veto:
-        return -0.02
-    return 0.005
 
 
 def _holding_locked(snapshot: dict[str, Any], settings: dict[str, Any]) -> bool:

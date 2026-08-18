@@ -33,6 +33,21 @@
     "slippage_rate": 0.001
   },
 
+  "intraday": {
+    "harness_evolve": true,
+    "trend_min_points": 2,
+    "trend_delta_threshold": 1.0,
+    "buy_trends": ["rising", "turning_up"],
+    "sell_trends": ["falling", "turning_down"],
+    "kronos_bearish_block_buy": true,
+    "expected_return": {
+      "base": 0.015,
+      "slope": 0.001,
+      "veto": -0.02,
+      "neutral": 0.005
+    }
+  },
+
   "quality_gate": {
     "required_fields": [
       "verdict",

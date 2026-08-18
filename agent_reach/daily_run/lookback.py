@@ -47,28 +47,13 @@ def compute_lookback_mss(
     return round(final, 2), contributions
 
 
-def detect_mss_trend(scans: list[dict[str, Any]], *, min_points: int = 2) -> str:
+def detect_mss_trend(
+    scans: list[dict[str, Any]],
+    settings: dict[str, Any] | None = None,
+    *,
+    min_points: int | None = None,
+) -> str:
     """Simple trend label from recent scan MSS values."""
-    if len(scans) < min_points:
-        return "insufficient"
+    from agent_reach.daily_run.intraday_policy import detect_mss_trend as _detect
 
-    values = [float(s.get("mss_final", 0)) for s in scans[-3:]]
-    if len(values) >= 3:
-        d1 = values[-1] - values[-2]
-        d2 = values[-2] - values[-3]
-        if d1 > 1 and d2 > 0:
-            return "turning_up"
-        if d1 < -1 and d2 < 0:
-            return "turning_down"
-        if all(values[i] >= values[i - 1] for i in range(1, len(values))):
-            return "rising"
-        if all(values[i] <= values[i - 1] for i in range(1, len(values))):
-            return "falling"
-        return "mixed"
-
-    delta = values[-1] - values[-2]
-    if delta > 1:
-        return "rising"
-    if delta < -1:
-        return "falling"
-    return "flat"
+    return _detect(scans, settings, min_points=min_points)
