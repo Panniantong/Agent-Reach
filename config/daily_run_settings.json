@@ -388,6 +388,7 @@
   "schedule": {
     "executor": "local_cron",
     "symbols_mode": "all",
+    "close_symbols_mode": "holdings",
     "intraday_symbols_mode": "all",
     "intraday_gc_between_symbols": true,
     "symbol_push_mode": "merge_by_category",

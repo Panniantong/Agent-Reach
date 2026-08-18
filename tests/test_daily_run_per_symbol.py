@@ -85,6 +85,20 @@ class TestTargetSymbols:
             "000725",
         ]
 
+    def test_resolve_close_symbols_mode_holdings(self):
+        cfg = load_settings()
+        cfg = {
+            **cfg,
+            "schedule": {
+                **(cfg.get("schedule") or {}),
+                "symbols_mode": "all",
+                "close_symbols_mode": "holdings",
+            },
+        }
+        assert resolve_target_symbols(PORTFOLIO, cfg, workflow="close") == ["688008", "002273"]
+        assert len(resolve_target_symbols(PORTFOLIO, cfg)) == 4
+
+
 class TestPerSymbolSnapshot:
     def test_build_snapshot_uses_symbol_name_for_premarket(self):
         snap = build_snapshot(PORTFOLIO, report_type="premarket", primary_code="002273", enrich=False)

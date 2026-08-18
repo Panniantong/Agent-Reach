@@ -63,7 +63,7 @@ def run_morning_for_symbols(
 
     cfg = settings or load_settings()
     pf = load_portfolio()
-    targets = symbols or resolve_target_symbols(pf, cfg)
+    targets = symbols or resolve_target_symbols(pf, cfg, workflow="morning")
     primary = pf.get("primary_code")
     merge_push = _should_merge_push(cfg)
     defer_narrative = _defer_narrative_to_merge(cfg)
@@ -308,7 +308,7 @@ def run_close_for_symbols(
 
     cfg = settings or load_settings()
     pf = load_portfolio()
-    targets = symbols or resolve_target_symbols(pf, cfg)
+    targets = symbols or resolve_target_symbols(pf, cfg, workflow="close")
     merge_push = _should_merge_push(cfg)
     defer_narrative = _defer_narrative_to_merge(cfg)
     defer_harness_layer_b = _defer_harness_layer_b_to_merge(cfg)
