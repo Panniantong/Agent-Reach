@@ -252,7 +252,8 @@
       "enabled": true,
       "provider": "deepseek",
       "model": "deepseek-v4-flash",
-      "timeout_seconds": 60
+      "timeout_seconds": 45,
+      "max_output_tokens": 320
     }
   },
 
@@ -606,7 +607,14 @@
     "enabled": true,
     "provider": "deepseek",
     "model": "deepseek-v4-flash",
-    "timeout_seconds": 60,
+    "timeout_seconds": 45,
+    "max_output_tokens": 320,
+    "max_summary_chars": 72,
+    "max_focus_points": 3,
+    "max_divergence_notes": 2,
+    "max_risk_alerts": 2,
+    "max_item_chars": 48,
+    "max_context_chars": 1800,
     "jobs": {
       "morning": true,
       "close": true,

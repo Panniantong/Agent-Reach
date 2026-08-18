@@ -13,6 +13,111 @@ _JOB_LABELS = {
     "forecast": "周日预测",
 }
 
+_NARRATIVE_LIMITS_DEFAULT: dict[str, int] = {
+    "max_summary_chars": 72,
+    "max_focus_points": 3,
+    "max_divergence_notes": 2,
+    "max_risk_alerts": 2,
+    "max_item_chars": 48,
+    "max_context_chars": 1800,
+}
+
+
+def _narrative_limits(cfg: dict[str, Any]) -> dict[str, int]:
+    out = dict(_NARRATIVE_LIMITS_DEFAULT)
+    for key in out:
+        if key in cfg and cfg[key] is not None:
+            out[key] = max(1, int(cfg[key]))
+    return out
+
+
+def _trim_text(text: Any, limit: int) -> str:
+    raw = str(text or "").strip()
+    if len(raw) <= limit:
+        return raw
+    return raw[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _trim_string_list(items: Any, *, max_items: int, max_chars: int) -> list[str]:
+    out: list[str] = []
+    for raw in items or []:
+        line = _trim_text(raw, max_chars)
+        if line:
+            out.append(line)
+        if len(out) >= max_items:
+            break
+    return out
+
+
+def _compact_context(context: dict[str, Any], limits: dict[str, int]) -> dict[str, Any]:
+    """Shrink user JSON to cut prompt tokens."""
+
+    def _walk(value: Any, depth: int = 0) -> Any:
+        if depth > 4:
+            return None
+        if isinstance(value, str):
+            return _trim_text(value, 160 if depth <= 1 else 96)
+        if isinstance(value, (int, float, bool)) or value is None:
+            return value
+        if isinstance(value, list):
+            return [_walk(item, depth + 1) for item in value[:6]]
+        if isinstance(value, dict):
+            trimmed: dict[str, Any] = {}
+            for idx, (key, item) in enumerate(value.items()):
+                if idx >= 12:
+                    break
+                trimmed[str(key)] = _walk(item, depth + 1)
+            return trimmed
+        return str(value)[:96]
+
+    compact = _walk(context)
+    if not isinstance(compact, dict):
+        compact = dict(context)
+    blob = json.dumps(compact, ensure_ascii=False)
+    cap = limits["max_context_chars"]
+    if len(blob) <= cap:
+        return compact
+    compact["summary_hint"] = _trim_text(context.get("summary") or context.get("verify_summary"), 120)
+    compact.pop("mss_breakdown", None)
+    compact.pop("experience_snippets", None)
+    compact.pop("news_events", None)
+    return compact
+
+
+def _compact_narrative_payload(payload: dict[str, Any], limits: dict[str, int]) -> dict[str, Any]:
+    out = dict(payload)
+    out["summary"] = _trim_text(out.get("summary"), limits["max_summary_chars"])
+    out["focus_points"] = _trim_string_list(
+        out.get("focus_points"),
+        max_items=limits["max_focus_points"],
+        max_chars=limits["max_item_chars"],
+    )
+    out["divergence_notes"] = _trim_string_list(
+        out.get("divergence_notes"),
+        max_items=limits["max_divergence_notes"],
+        max_chars=limits["max_item_chars"],
+    )
+    out["risk_alerts"] = _trim_string_list(
+        out.get("risk_alerts"),
+        max_items=limits["max_risk_alerts"],
+        max_chars=limits["max_item_chars"],
+    )
+    return out
+
+
+def _narrative_system_prompt(job: str, *, limits: dict[str, int]) -> str:
+    label = _JOB_LABELS.get(job, job)
+    return (
+        f"你是 A 股量化助手 {label} AI 解读员。基于已给数据输出 JSON："
+        '{"summary":"...","focus_points":["..."],'
+        '"divergence_notes":[],"risk_alerts":[]}。'
+        f"summary 一句总结今日/本周关注点，≤{limits['max_summary_chars']}字；"
+        f"focus_points 最多 {limits['max_focus_points']} 条、每条 ≤{limits['max_item_chars']}字；"
+        f"divergence_notes 仅实质分歧时填，最多 {limits['max_divergence_notes']} 条；"
+        f"risk_alerts 最多 {limits['max_risk_alerts']} 条。"
+        "禁止编造未提供数字；禁止复述输入；省略废话；中文。"
+    )
+
 
 def _narrative_cfg(settings: Optional[dict[str, Any]], job: str) -> dict[str, Any]:
     root = dict((settings or {}).get("llm_narrative") or {})
@@ -35,6 +140,10 @@ def _narrative_cfg(settings: Optional[dict[str, Any]], job: str) -> dict[str, An
     return root
 
 
+def _morning_focus_hint() -> str:
+    return "优先 verdict、MSS 变化、现金比例。"
+
+
 def _generate_narrative(
     job: str,
     context: dict[str, Any],
@@ -47,18 +156,26 @@ def _generate_narrative(
     if cfg.get("enabled") is False:
         return {"skipped": True, "reason": "llm_narrative disabled", "job": job}
 
+    limits = _narrative_limits(cfg)
+    compact_context = _compact_context(context, limits)
+    base_system = _narrative_system_prompt(job, limits=limits)
+    hint = system.strip()
+    use_system = f"{base_system} {hint}".strip() if hint else base_system
+
     from agent_reach.daily_run.llm_chat import chat_json, resolve_chat_provider
 
     provider = str(cfg.get("provider") or "auto")
     if resolve_chat_provider(provider):
         payload = chat_json(
-            system=system,
-            user=json.dumps(context, ensure_ascii=False),
+            system=use_system,
+            user=json.dumps(compact_context, ensure_ascii=False),
             provider=provider,
             model=cfg.get("model") or None,
             timeout=int(cfg.get("timeout_seconds") or 60),
+            max_tokens=int(cfg.get("max_output_tokens") or 320),
         )
         if isinstance(payload, dict) and payload.get("summary"):
+            payload = _compact_narrative_payload(payload, limits)
             payload["planner"] = "llm"
             payload["skipped"] = False
             payload["job"] = job
@@ -68,19 +185,20 @@ def _generate_narrative(
         out = deterministic_fn(context)
     else:
         out = _default_deterministic(context, job)
+    out = _compact_narrative_payload(out, limits)
     out["skipped"] = False
     out["job"] = job
     return out
 
 
 def _default_deterministic(context: dict[str, Any], job: str) -> dict[str, Any]:
-    focus = list(context.get("focus_points") or [])[:5]
-    risks = list(context.get("risk_alerts") or [])[:4]
-    summary = str(context.get("summary") or f"{_JOB_LABELS.get(job, job)} 解读")
+    focus = list(context.get("focus_points") or [])[:3]
+    risks = list(context.get("risk_alerts") or [])[:2]
+    summary = str(context.get("summary") or f"{_JOB_LABELS.get(job, job)} 关注点")
     return {
         "summary": summary,
         "focus_points": focus or ["按 MSS 与宏观一票否决规则执行"],
-        "divergence_notes": list(context.get("divergence_notes") or [])[:5],
+        "divergence_notes": list(context.get("divergence_notes") or [])[:2],
         "risk_alerts": risks,
         "planner": "deterministic",
     }
@@ -100,32 +218,29 @@ def render_narrative_markdown(narrative: dict[str, Any], *, job: str = "") -> st
     lines = [f"## 🧠 AI 解读（{sub}）", ""]
     if narrative.get("summary"):
         lines.append(str(narrative["summary"]))
-        lines.append("")
     label_focus = {
-        "morning": "今日关注",
-        "close": "收盘要点",
-        "weekly": "本周关注",
-        "forecast": "本周关注",
-    }.get(use_job, "关注")
+        "morning": "关注点",
+        "close": "关注点",
+        "weekly": "关注点",
+        "forecast": "关注点",
+    }.get(use_job, "关注点")
     if narrative.get("focus_points"):
+        if narrative.get("summary"):
+            lines.append("")
         lines.append(f"**{label_focus}**")
         for item in narrative["focus_points"]:
             lines.append(f"- {item}")
-        lines.append("")
     if narrative.get("divergence_notes"):
-        title = "**分歧 / 异常**" if use_job != "forecast" else "**Kronos / MC 分歧**"
+        lines.append("")
+        title = "**分歧**" if use_job != "forecast" else "**Kronos 分歧**"
         lines.append(title)
         for item in narrative["divergence_notes"]:
             lines.append(f"- {item}")
-        lines.append("")
     if narrative.get("risk_alerts"):
-        lines.append("**风险提示**")
+        lines.append("")
+        lines.append("**风险**")
         for item in narrative["risk_alerts"]:
             lines.append(f"- {item}")
-    planner = narrative.get("planner")
-    if planner:
-        lines.append("")
-        lines.append(f"_解读来源：{planner}_")
     return "\n".join(lines).strip()
 
 
@@ -147,13 +262,13 @@ def build_morning_context(
         "prior_close_mss": report.get("prior_close_mss"),
         "prior_close_delta": report.get("prior_close_delta"),
         "confidence": report.get("confidence"),
-        "reasoning": (report.get("reasoning") or "")[:300],
-        "macro_summary": (snapshot.get("macro_summary") or "")[:200],
+        "reasoning": (report.get("reasoning") or "")[:160],
+        "macro_summary": (snapshot.get("macro_summary") or "")[:120],
         "change_pct": snapshot.get("change_pct"),
         "cash_ratio": pf.get("cash_ratio"),
         "holdings_count": len(holdings),
         "mss_breakdown": snapshot.get("mss_breakdown") or {},
-        "invalidation": (report.get("invalidation") or "")[:200],
+        "invalidation": (report.get("invalidation") or "")[:120],
     }
 
 
@@ -178,9 +293,9 @@ def _morning_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
         summary += f"，MSS {mss}"
     return {
         "summary": summary,
-        "focus_points": focus[:5],
+        "focus_points": focus[:3],
         "divergence_notes": [],
-        "risk_alerts": risks[:4],
+        "risk_alerts": risks[:2],
         "planner": "deterministic",
     }
 
@@ -196,12 +311,7 @@ def generate_morning_narrative(
         "morning",
         context,
         settings=settings,
-        system=(
-            "你是 A 股量化助手早报解读员。基于已算好的 MSS 决策输出 JSON："
-            '{"summary":"...","focus_points":["..."],'
-            '"divergence_notes":["..."], "risk_alerts":["..."]}。'
-            "禁止编造未提供的数值；重点解读 verdict、MSS 变化、现金比例与失效条件；中文简洁。"
-        ),
+        system=_morning_focus_hint(),
         deterministic_fn=_morning_deterministic,
     )
 
@@ -221,16 +331,16 @@ def build_close_context(
         "job": "close",
         "name": snapshot.get("name"),
         "code": snapshot.get("code"),
-        "verify_summary": (verify.get("summary") or "")[:200],
+        "verify_summary": (verify.get("summary") or "")[:120],
         "verdict_current": verify.get("verdict_current"),
         "mss_delta": verify.get("mss_delta"),
-        "deviations": (verify.get("deviations") or [])[:5],
-        "recommendations": (verify.get("recommendations") or [])[:3],
+        "deviations": (verify.get("deviations") or [])[:3],
+        "recommendations": (verify.get("recommendations") or [])[:2],
         "portfolio_daily_pnl": (portfolio_summary or {}).get("daily_pnl"),
         "portfolio_daily_pnl_pct": (portfolio_summary or {}).get("daily_pnl_pct"),
         "curve_trend": (curve or {}).get("trend"),
         "forecast_review_accuracy": (forecast_review or {}).get("accuracy"),
-        "macro_summary": (snapshot.get("macro_summary") or "")[:200],
+        "macro_summary": (snapshot.get("macro_summary") or "")[:120],
     }
 
 
@@ -254,9 +364,9 @@ def _close_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
         summary += f"，当日盈亏 ¥{float(pnl):,.0f}"
     return {
         "summary": summary,
-        "focus_points": focus[:5],
+        "focus_points": focus[:3],
         "divergence_notes": [],
-        "risk_alerts": risks[:4],
+        "risk_alerts": risks[:2],
         "planner": "deterministic",
     }
 
@@ -281,12 +391,7 @@ def generate_close_narrative(
         "close",
         context,
         settings=settings,
-        system=(
-            "你是 A 股量化助手收盘复盘解读员。基于 verify 与组合盈亏输出 JSON："
-            '{"summary":"...","focus_points":["..."],'
-            '"divergence_notes":["..."], "risk_alerts":["..."]}。'
-            "禁止编造数字；重点解读当日盈亏、偏差项、明日建议与预测校准；中文简洁。"
-        ),
+        system="优先当日盈亏、偏差项、明日一条建议。",
         deterministic_fn=_close_deterministic,
     )
 
@@ -311,7 +416,7 @@ def build_weekly_context(report: dict[str, Any]) -> dict[str, Any]:
             "detail": (i.get("detail") or "")[:100],
             "action": (i.get("action") or "")[:100],
         }
-        for i in (report.get("process_improvements") or [])[:6]
+        for i in (report.get("process_improvements") or [])[:3]
     ]
     return {
         "job": "weekly",
@@ -325,7 +430,7 @@ def build_weekly_context(report: dict[str, Any]) -> dict[str, Any]:
         "holdings": holdings,
         "hot_sectors": (report.get("hot_sectors") or [])[:5],
         "process_improvements": improvements,
-        "experience_snippets": (report.get("experience_snippets") or [])[:5],
+        "experience_snippets": (report.get("experience_snippets") or [])[:3],
         "notes": report.get("notes") or [],
     }
 
@@ -361,7 +466,7 @@ def _weekly_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
         summary += f"，净值 {float(pnl):+,.0f} 元"
     return {
         "summary": summary,
-        "focus_points": focus[:5] or ["复盘本周盈亏与流程改进项"],
+        "focus_points": focus[:3] or ["复盘本周盈亏与流程改进项"],
         "divergence_notes": [],
         "risk_alerts": risks[:4],
         "planner": "deterministic",
@@ -378,12 +483,7 @@ def generate_weekly_narrative(
         "weekly",
         context,
         settings=settings,
-        system=(
-            "你是 A 股量化助手周六周报解读员。基于已生成的周报数据输出 JSON："
-            '{"summary":"...","focus_points":["..."],'
-            '"divergence_notes":["..."], "risk_alerts":["..."]}。'
-            "禁止编造数字；重点解读本周盈亏分解、热点板块、流程改进与经验片段；中文简洁。"
-        ),
+        system="优先本周盈亏分解、一条流程改进、一条经验教训。",
         deterministic_fn=_weekly_deterministic,
     )
 
@@ -423,7 +523,7 @@ def build_forecast_context(forecast: dict[str, Any]) -> dict[str, Any]:
     ]
     news = [
         {"title": ev.get("title"), "summary": (ev.get("summary") or "")[:120]}
-        for ev in (forecast.get("news_events") or [])[:6]
+        for ev in (forecast.get("news_events") or [])[:3]
     ]
     return {
         "job": "forecast",
@@ -461,9 +561,9 @@ def _forecast_deterministic(context: dict[str, Any]) -> dict[str, Any]:
     summary = f"下周 {context.get('week_start')}~{context.get('week_end')} 预测解读"
     return {
         "summary": summary,
-        "focus_points": focus[:5] or ["关注 Kronos 路径与 MSS 区间"],
-        "divergence_notes": divergences[:5],
-        "risk_alerts": risks[:4],
+        "focus_points": focus[:3] or ["关注 Kronos 路径与 MSS 区间"],
+        "divergence_notes": divergences[:2],
+        "risk_alerts": risks[:2],
         "planner": "deterministic",
     }
 
@@ -478,12 +578,7 @@ def generate_forecast_narrative(
         "forecast",
         context,
         settings=settings,
-        system=(
-            "你是 A 股量化助手 forecast 解读员。基于 Kronos+MC 数值路径输出 JSON："
-            '{"summary":"...","focus_points":["..."],'
-            '"divergence_notes":["..."], "risk_alerts":["..."]}。'
-            "禁止编造数字；重点解释 Kronos/MC 分歧、MSS 区间与新闻影响；中文简洁。"
-        ),
+        system="优先 Kronos 强弱、一条 MSS 区间判断、一条新闻影响。",
         deterministic_fn=_forecast_deterministic,
     )
 

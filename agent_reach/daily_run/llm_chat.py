@@ -83,6 +83,7 @@ def chat_json(
     model: Optional[str] = None,
     temperature: float = 0.2,
     timeout: int = 45,
+    max_tokens: Optional[int] = None,
 ) -> Optional[dict[str, Any]]:
     """Call chat completions and parse a JSON object from the assistant reply."""
     resolved = resolve_chat_provider(provider)
@@ -108,6 +109,8 @@ def chat_json(
             {"role": "user", "content": user},
         ],
     }
+    if max_tokens is not None and int(max_tokens) > 0:
+        payload["max_tokens"] = int(max_tokens)
     req = urllib.request.Request(
         endpoint,
         data=json.dumps(payload).encode("utf-8"),
