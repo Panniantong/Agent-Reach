@@ -229,6 +229,20 @@ def validate_finance_statements_forge(
     return ForgeGateResult(job="finance_statements", passed=not violations, violations=violations)
 
 
+def validate_finance_ledger_prep_forge(
+    domain: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> ForgeGateResult:
+    violations: list[str] = []
+    prep = domain.get("prep") or {}
+    for flag in prep.get("blocking_flags") or []:
+        violations.append(str(flag))
+    if prep and prep.get("ready_for_journal") is False and not violations:
+        violations.append("ledger prep not ready")
+    return ForgeGateResult(job="finance_ledger_prep", passed=not violations, violations=violations)
+
+
 def validate_finance_research_forge(
     domain: dict[str, Any],
     *,
@@ -247,6 +261,7 @@ _FORGE_JOBS = frozenset(
         "forecast_calibrate",
         "finance_close",
         "finance_ledger",
+        "finance_ledger_prep",
         "optimize",
         "finance_variance",
         "finance_close_plan",
@@ -283,6 +298,8 @@ def evaluate_forge_gate(
         return validate_finance_close_forge(domain, settings=settings)
     if job == "finance_ledger":
         return validate_finance_ledger_forge(domain, settings=settings)
+    if job == "finance_ledger_prep":
+        return validate_finance_ledger_prep_forge(domain, settings=settings)
     if job == "optimize":
         return validate_optimize_forge(domain, settings=settings)
     if job == "finance_variance":

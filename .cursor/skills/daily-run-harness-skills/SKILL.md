@@ -28,6 +28,7 @@ description: >-
 | `pnl_overview` | `pnl_overview_harness.py` | 收盘 FIFO 已实现 + 浮动盈亏总览 |
 | `pnl_target` | `pnl_target_harness.py` | 下一交易日总盈亏目标 + 达成奖励/未达处罚 |
 | `finance_close` | `finance_close_harness.py` | 收盘 dsh-finance 对账/风控/variance bridge |
+| `finance_ledger_prep` | `finance_ledger_prep_harness.py` | 收盘 journal-entry-prep（approval matrix / memo） |
 | `finance_ledger` | `finance_ledger_harness.py` | 收盘 trade ledger 分录校验（journal-entry check） |
 | `finance_variance` | `finance_variance_harness.py` | 周六 weekly 盈亏 waterfall（stock/cash bridge） |
 | `finance_statements` | `finance_statements_harness.py` | 周六 weekly 三表骨架（损益/资产负债/现金流） |
@@ -36,7 +37,7 @@ description: >-
 
 ## 收盘自动
 
-`run_close()` → `run_close_harness_refinements()` 依次 refine verify / close_improve / data_audit / **pnl_overview** / **pnl_target** / **finance_close** / **finance_ledger**；
+`run_close()` → `run_close_harness_refinements()` 依次 refine verify / close_improve / data_audit / **pnl_overview** / **pnl_target** / **finance_close** / **finance_ledger_prep** / **finance_ledger**；
 `append_experience_entry()` → experience harness（harness 模式下 rules 同步进 memory/policy）；
 随后 `run_close_layer_a_refinement()` 只写入组合盈亏等 residual。
 
@@ -199,11 +200,15 @@ python3 -m agent_reach.cli daily-run harness restore-snapshot --path ~/.agent-re
 |------|------------------|------|
 | `dsh-finance` portfolio_risk / reconcile / variance_bridge | `harness_finance.py` + `finance_close_harness.py` | 收盘组合风控、净值对账、variance bridge → harness memory/policy |
 | `dsh-finance` journal-entry check | `harness_finance.py` + `finance_ledger_harness.py` | trade ledger 分录平衡（amount vs shares×price、买卖借贷、cost_basis / trade_cash_flow） |
+| `dsh-finance` journal-entry-prep | `harness_finance.py` + `finance_ledger_prep_harness.py` | approval matrix、material buy memo、preparer/approver 分离 |
 | `dsh-finance` reconciliation snapshot | `harness_finance.py` + `finance_close_harness.py` | 收盘未平项账龄 / stale / sign-off readiness |
 | `dsh-finance` financial-statements | `harness_finance.py` + `finance_statements_harness.py` | 周六 weekly 三表 + materiality tie-out |
+| `dsh-finance` finance_research_workflow | `harness_finance.py` + `finance_research_harness.py` | sources/queries/evidence_gaps → harness plan |
 | `dsh-rigorquant` 四重校验电池 | `harness_rigor_check.py` | closure / invariant / boundary / evidence；默认仅 **optimize** 失败时 block refine |
-| `dsh-rigorquant` study.json schema | `harness_rigor_schema.py` | optimize domain 必须含 objective/metrics/best_params |
+| `dsh-rigorquant` study.json schema | `harness_rigor_schema.py` + `harness_study_registry.py` | optimize 试验登记到 `study_registry.json` |
+| `dsh-memory-evolve` git 分支感知 | `harness_git.py` | 非 main 分支 harness 状态隔离到 `harness/branches/<slug>/` |
 | `dsh-context-doctor` 去重 | `harness_context_doctor.py` | Layer A apply 前按相似度剔除重复 memory/policy/playbook/plan |
+| `dsh-context-doctor` 冲突检测 | `harness_context_doctor.py` | policy 偏防御 vs playbook 激进等跨 kind 冲突拦截 |
 | forge 扩展 | `harness_forge_gates.py` | 新增 `finance_close`、`finance_ledger`、`optimize` 数值 sanity |
 
 ```json

@@ -804,6 +804,124 @@ def _ledger_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
     return dict((settings or {}).get("finance_ledger") or {})
 
 
+def _ledger_prep_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
+    block = dict((settings or {}).get("finance_ledger_prep") or {})
+    ledger = _ledger_cfg(settings)
+    return {
+        "materiality_cny": float(block.get("materiality_cny") or ledger.get("prep_materiality_cny") or 5000),
+        "require_reasoning_on_buy": block.get("require_reasoning_on_buy", True) is not False,
+        "require_trade_id": bool(block.get("require_trade_id", ledger.get("require_trade_id"))),
+        "block_same_preparer_approver": block.get("block_same_preparer_approver", True) is not False,
+    }
+
+
+@dataclass
+class JournalEntryPrepResult:
+    period: Optional[str]
+    entries_checked: int
+    actions_checked: int
+    approval_matrix: list[dict[str, Any]]
+    blocking_flags: list[str] = field(default_factory=list)
+    review_flags: list[str] = field(default_factory=list)
+    ready_for_journal: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "period": self.period,
+            "entries_checked": self.entries_checked,
+            "actions_checked": self.actions_checked,
+            "approval_matrix": list(self.approval_matrix),
+            "blocking_flags": list(self.blocking_flags),
+            "review_flags": list(self.review_flags),
+            "ready_for_journal": self.ready_for_journal,
+        }
+
+
+def check_ledger_entry_prep(
+    trades: list[dict[str, Any]],
+    *,
+    portfolio_summary: Optional[dict[str, Any]] = None,
+    settings: Optional[dict[str, Any]] = None,
+) -> JournalEntryPrepResult:
+    """Port of dsh-finance journal-entry-prep for trade ledger documentation."""
+    cfg = _ledger_prep_cfg(settings)
+    blocking: list[str] = []
+    review: list[str] = []
+    matrix: list[dict[str, Any]] = []
+    actions_checked = 0
+    period = str((portfolio_summary or {}).get("as_of") or "")[:10] or None
+    seen_trade_ids: set[str] = set()
+
+    for entry_idx, entry in enumerate(trades or []):
+        entry_at = str(entry.get("at") or "")
+        if not period and entry_at:
+            period = entry_at[:10]
+        trade_id = str(entry.get("trade_id") or "").strip()
+        if trade_id:
+            if trade_id in seen_trade_ids:
+                blocking.append(f"entry {entry_idx + 1} duplicate trade_id {trade_id}")
+            seen_trade_ids.add(trade_id)
+        elif cfg["require_trade_id"]:
+            review.append(f"entry {entry_idx + 1} missing trade_id")
+
+        for action_idx, action in enumerate(entry.get("actions") or []):
+            actions_checked += 1
+            line_no = f"entry {entry_idx + 1} action {action_idx + 1}"
+            side = str(action.get("side") or "").lower()
+            amount = float(action.get("amount") or 0)
+            reasoning = str(action.get("reasoning") or "").strip()
+            preparer = str(action.get("prepared_by") or action.get("operator") or "").strip()
+            approver = str(action.get("approved_by") or action.get("reviewer") or "").strip()
+
+            rule = {
+                "line": line_no,
+                "side": side,
+                "amount": _round(amount),
+                "needs_reasoning": side == "buy" and amount >= cfg["materiality_cny"],
+                "needs_approver": amount >= cfg["materiality_cny"],
+            }
+            matrix.append(rule)
+
+            if side == "buy" and cfg["require_reasoning_on_buy"] and amount >= cfg["materiality_cny"]:
+                if not reasoning:
+                    review.append(f"{line_no} buy ≥{cfg['materiality_cny']:.0f} missing reasoning")
+            if side == "sell" and float(action.get("cost_basis") or 0) <= 0.01:
+                review.append(f"{line_no} sell prep missing cost_basis hint")
+            if cfg["block_same_preparer_approver"] and preparer and approver and preparer == approver:
+                review.append(f"{line_no} preparer equals approver")
+            if rule["needs_approver"] and not approver:
+                review.append(f"{line_no} material amount missing approved_by")
+
+    ready = not blocking and not review
+    return JournalEntryPrepResult(
+        period=period,
+        entries_checked=len(trades or []),
+        actions_checked=actions_checked,
+        approval_matrix=matrix,
+        blocking_flags=blocking,
+        review_flags=review,
+        ready_for_journal=ready,
+    )
+
+
+def run_finance_ledger_prep_checks(
+    portfolio_summary: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    trades = list(portfolio_summary.get("trades") or [])
+    prep = check_ledger_entry_prep(
+        trades,
+        portfolio_summary=portfolio_summary,
+        settings=settings,
+    )
+    return {
+        "prep": prep.to_dict(),
+        "passed": prep.ready_for_journal,
+        "blocking_flags": list(prep.blocking_flags),
+    }
+
+
 @dataclass
 class JournalEntryCheckResult:
     period: Optional[str]

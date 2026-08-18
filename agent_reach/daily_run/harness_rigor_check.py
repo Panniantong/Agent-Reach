@@ -43,6 +43,7 @@ def _rigor_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
         job_set = {
             "finance_close",
             "finance_ledger",
+            "finance_ledger_prep",
             "finance_variance",
             "finance_close_plan",
             "finance_statements",
@@ -143,6 +144,13 @@ def _check_evidence(domain: dict[str, Any], *, job: str, settings: Optional[dict
         if journal.get("actions_checked", 0) <= 0:
             return RigorCheck("evidence", False, "no ledger actions")
         return RigorCheck("evidence", True, f"actions={journal.get('actions_checked')}")
+    if job == "finance_ledger_prep":
+        prep = domain.get("prep") or {}
+        if not prep.get("actions_checked") and not (domain.get("trades") or []):
+            return RigorCheck("evidence", True, "no ledger trades")
+        if prep.get("ready_for_journal") is False:
+            return RigorCheck("evidence", False, "ledger prep not ready")
+        return RigorCheck("evidence", True, f"prep actions={prep.get('actions_checked')}")
     if job == "optimize":
         result = domain
         if not result.get("trials"):

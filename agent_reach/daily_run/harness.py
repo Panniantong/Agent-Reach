@@ -747,6 +747,7 @@ def refine_after_job(
     from agent_reach.daily_run.harness_context_doctor import (
         context_doctor_cfg,
         dedupe_kind_texts_against_state,
+        filter_cross_kind_conflicts,
     )
 
     dedupe_meta: dict[str, Any] = {}
@@ -758,7 +759,14 @@ def refine_after_job(
                 kind,
                 settings=cfg,
             )
-    injection_meta: dict[str, Any] = {"gate_skipped": gate_skipped, "context_doctor": dedupe_meta}
+        kind_texts, conflict_meta = filter_cross_kind_conflicts(kind_texts, state, settings=cfg)
+    else:
+        conflict_meta = {"enabled": False}
+    injection_meta: dict[str, Any] = {
+        "gate_skipped": gate_skipped,
+        "context_doctor": dedupe_meta,
+        "context_doctor_conflicts": conflict_meta,
+    }
     bounded: dict[str, list[str]] = {}
     for kind in _KINDS:
         bounded[kind], injection_meta[kind] = bound_kind_texts(kind_texts[kind], settings=cfg)

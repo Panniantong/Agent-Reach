@@ -105,6 +105,7 @@ HARNESS_CONTEXT_DOCTOR_DEFAULTS: dict[str, Any] = {
     "enabled": True,
     "similarity_threshold": 0.86,
     "min_chars": 12,
+    "detect_conflicts": True,
 }
 
 HARNESS_RIGOR_SCHEMA_DEFAULTS: dict[str, Any] = {
@@ -132,6 +133,7 @@ HARNESS_RIGOR_CHECK_DEFAULTS: dict[str, Any] = {
     "jobs": {
         "finance_close": True,
         "finance_ledger": True,
+        "finance_ledger_prep": True,
         "finance_variance": True,
         "finance_close_plan": True,
         "finance_statements": True,

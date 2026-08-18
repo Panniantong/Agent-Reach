@@ -19,6 +19,72 @@ def context_doctor_cfg(settings: Optional[dict[str, Any]] = None) -> dict[str, A
         "enabled": raw.get("enabled", True) is not False,
         "similarity_threshold": float(raw.get("similarity_threshold") or 0.86),
         "min_chars": int(raw.get("min_chars") or 12),
+        "detect_conflicts": raw.get("detect_conflicts", True) is not False,
+    }
+
+
+_DEFENSIVE_MARKERS = ("偏防御", "保守", "减仓", "谨慎", "防御", "禁止 aggressive", "勿激进")
+_AGGRESSIVE_MARKERS = ("激进", "进攻", "加仓", "高仓位", "aggressive", "适度进攻")
+
+
+def _stance(text: str) -> Optional[str]:
+    lowered = normalize_harness_text(text)
+    if any(marker in lowered for marker in _DEFENSIVE_MARKERS):
+        return "defensive"
+    if any(marker in lowered for marker in _AGGRESSIVE_MARKERS):
+        return "aggressive"
+    return None
+
+
+def _collect_existing_by_kind(state: Any) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    for kind in ("memory", "policy", "playbook", "plan"):
+        out[kind] = _collect_existing_contents(state, kind)
+    return out
+
+
+def filter_cross_kind_conflicts(
+    kind_texts: dict[str, list[str]],
+    state: Any,
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> tuple[dict[str, list[str]], dict[str, Any]]:
+    """Drop incoming lines that contradict existing harness stance (policy vs playbook)."""
+    cfg = context_doctor_cfg(settings)
+    if not cfg.get("detect_conflicts"):
+        return dict(kind_texts), {"enabled": False}
+
+    existing = _collect_existing_by_kind(state)
+    corpus = [line for lines in existing.values() for line in lines]
+    existing_def = any(_stance(line) == "defensive" for line in corpus)
+    existing_agg = any(_stance(line) == "aggressive" for line in corpus)
+
+    filtered = {kind: list(kind_texts.get(kind) or []) for kind in kind_texts}
+    dropped: list[str] = []
+
+    for kind in ("policy", "playbook", "plan"):
+        kept: list[str] = []
+        for line in filtered.get(kind) or []:
+            stance = _stance(line)
+            conflict = False
+            if stance == "aggressive" and existing_def:
+                conflict = True
+            if stance == "defensive" and existing_agg:
+                conflict = True
+            if kind == "playbook" and stance == "aggressive" and existing_def:
+                conflict = True
+            if conflict:
+                dropped.append(f"{kind}:{line[:72]}")
+            else:
+                kept.append(line)
+        filtered[kind] = kept
+
+    return filtered, {
+        "enabled": True,
+        "dropped_count": len(dropped),
+        "dropped_preview": dropped[:6],
+        "existing_defensive": existing_def,
+        "existing_aggressive": existing_agg,
     }
 
 

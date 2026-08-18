@@ -113,6 +113,7 @@ def build_weekly_harness_narrative(
     rigor_blocks = 0
     snapshots = 0
     context_doctor_drops = 0
+    context_conflict_drops = 0
     finance_jobs = 0
     branches: Counter[str] = Counter()
 
@@ -143,6 +144,9 @@ def build_weekly_harness_narrative(
             for kind_meta in doctor.values():
                 if isinstance(kind_meta, dict):
                     context_doctor_drops += int(kind_meta.get("dropped_count") or 0)
+        conflicts = injection.get("context_doctor_conflicts") or {}
+        if isinstance(conflicts, dict):
+            context_conflict_drops += int(conflicts.get("dropped_count") or 0)
         branch = str(row.get("git_branch") or "")
         if branch:
             branches[branch] += 1
@@ -180,6 +184,7 @@ def build_weekly_harness_narrative(
         "layer_b_skips": layer_b_skips,
         "snapshots": snapshots,
         "context_doctor_drops": context_doctor_drops,
+        "context_conflict_drops": context_conflict_drops,
         "finance_jobs": finance_jobs,
         "study_registry_entries": len(study_rows),
         "git_branches": dict(branches.most_common(4)),
@@ -221,6 +226,8 @@ def format_weekly_harness_narrative_markdown(
         lines.append(f"- Layer B Admission 拒绝 **{int(narrative['admission_rejects'])}** 条 edits")
     if narrative.get("context_doctor_drops"):
         lines.append(f"- Context doctor 去重 **{int(narrative['context_doctor_drops'])}** 条")
+    if narrative.get("context_conflict_drops"):
+        lines.append(f"- Context doctor 冲突拦截 **{int(narrative['context_conflict_drops'])}** 条")
     if narrative.get("finance_jobs"):
         lines.append(f"- Finance harness job **{int(narrative['finance_jobs'])}** 次")
     if narrative.get("study_registry_entries"):

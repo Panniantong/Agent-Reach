@@ -135,6 +135,14 @@
     "require_reasoning": false
   },
 
+  "finance_ledger_prep": {
+    "enabled": true,
+    "harness_evolve": true,
+    "materiality_cny": 5000,
+    "require_reasoning_on_buy": true,
+    "block_same_preparer_approver": true
+  },
+
   "quote_fetch": {
     "sources": ["eastmoney", "akshare", "xueqiu"],
     "max_retries": 2
@@ -654,7 +662,8 @@
     "context_doctor": {
       "enabled": true,
       "similarity_threshold": 0.86,
-      "min_chars": 12
+      "min_chars": 12,
+      "detect_conflicts": true
     },
     "rigor_schema": {
       "enabled": true,
@@ -680,6 +689,7 @@
       "jobs": {
         "finance_close": true,
         "finance_ledger": true,
+        "finance_ledger_prep": true,
         "finance_variance": true,
         "finance_close_plan": true,
         "finance_statements": true,
@@ -712,9 +722,10 @@
       "pnl_target": true,
       "finance_close": true,
       "finance_ledger": true,
+      "finance_ledger_prep": true,
       "finance_variance": true,
-        "finance_statements": true,
-        "finance_research": true,
+      "finance_statements": true,
+      "finance_research": true,
         "finance_close_plan": true
     },
     "llm_refine": {
