@@ -22,6 +22,8 @@ _EVOLVED_THRESHOLD_KEYS: tuple[str, ...] = (
 _EVOLVED_RUNTIME_KEYS: tuple[str, ...] = (
     "trade_min_scans",
     "trade_every_n_scans",
+    "max_applied_trades_per_day",
+    "max_trade_evaluations_per_symbol",
     "max_holdings",
     "max_total_symbols",
     "holding_lock_days",
@@ -61,6 +63,8 @@ _FIXED_FALLBACKS: dict[str, float] = {
 _RUNTIME_NEUTRAL: dict[str, float] = {
     "trade_min_scans": 3.0,
     "trade_every_n_scans": 2.0,
+    "max_applied_trades_per_day": 5.0,
+    "max_trade_evaluations_per_symbol": 8.0,
     "max_holdings": 10.0,
     "max_total_symbols": 15.0,
     "holding_lock_days": 1.0,
@@ -85,6 +89,8 @@ _LOOKBACK_DEFENSIVE: list[float] = [0.55, 0.28, 0.17]
 _RUNTIME_SECTIONS: dict[str, str] = {
     "trade_min_scans": "schedule",
     "trade_every_n_scans": "schedule",
+    "max_applied_trades_per_day": "schedule",
+    "max_trade_evaluations_per_symbol": "schedule",
     "max_holdings": "portfolio",
     "max_total_symbols": "portfolio",
     "holding_lock_days": "trading",
@@ -95,7 +101,12 @@ _RUNTIME_SECTIONS: dict[str, str] = {
 # Public catalog for config walkthrough / stale-key detection (harness evolution).
 EVOLVED_CONFIG_KEYS_BY_SECTION: dict[str, tuple[str, ...]] = {
     "thresholds": _EVOLVED_THRESHOLD_KEYS,
-    "schedule": ("trade_min_scans", "trade_every_n_scans"),
+    "schedule": (
+        "trade_min_scans",
+        "trade_every_n_scans",
+        "max_applied_trades_per_day",
+        "max_trade_evaluations_per_symbol",
+    ),
     "portfolio": ("max_holdings", "max_total_symbols"),
     "trading": ("holding_lock_days", "stop_loss_ma20_pct", "friction_min_return_pct"),
     "mss_forecast": _EVOLVED_FORECAST_KEYS,
@@ -112,6 +123,12 @@ HARNESS_CONSUMER_HELPERS: dict[str, str] = {
     "max_vwap_deviation_pct": "threshold_default(settings, 'max_vwap_deviation_pct')",
     "trade_min_scans": "runtime_int_default(settings, 'schedule', 'trade_min_scans')",
     "trade_every_n_scans": "runtime_int_default(settings, 'schedule', 'trade_every_n_scans')",
+    "max_applied_trades_per_day": (
+        "runtime_int_default(settings, 'schedule', 'max_applied_trades_per_day')"
+    ),
+    "max_trade_evaluations_per_symbol": (
+        "runtime_int_default(settings, 'schedule', 'max_trade_evaluations_per_symbol')"
+    ),
     "max_holdings": "runtime_int_default(settings, 'portfolio', 'max_holdings')",
     "max_total_symbols": "runtime_int_default(settings, 'portfolio', 'max_total_symbols')",
     "holding_lock_days": "runtime_int_default(settings, 'trading', 'holding_lock_days')",
@@ -168,7 +185,8 @@ _APPLIED_CONFIG_RE = re.compile(
     r"(?:(?:thresholds|mss_forecast|trading)\.)?"
     r"(macro_veto|aggressive_entry|min_cash_ratio|max_price_deviation_pct|"
     r"high_position_20d|min_volume_ratio|max_vwap_deviation_pct|"
-    r"trade_min_scans|trade_every_n_scans|max_holdings|max_total_symbols|"
+    r"trade_min_scans|trade_every_n_scans|max_applied_trades_per_day|"
+    r"max_trade_evaluations_per_symbol|max_holdings|max_total_symbols|"
     r"holding_lock_days|stop_loss_ma20_pct|friction_min_return_pct|"
     r"base_spread|vol_multiplier)\s*[:=]\s*(\d+(?:\.\d+)?)",
     re.I,
@@ -180,7 +198,8 @@ _KEY_VALUE_RE = re.compile(
     r"\b("
     r"macro_veto|aggressive_entry|min_cash_ratio|max_price_deviation_pct|"
     r"high_position_20d|min_volume_ratio|max_vwap_deviation_pct|"
-    r"trade_min_scans|trade_every_n_scans|max_holdings|max_total_symbols|"
+    r"trade_min_scans|trade_every_n_scans|max_applied_trades_per_day|"
+    r"max_trade_evaluations_per_symbol|max_holdings|max_total_symbols|"
     r"holding_lock_days|stop_loss_ma20_pct|friction_min_return_pct|"
     r"base_spread|vol_multiplier"
     r")\s*[=：]\s*(\d+(?:\.\d+)?)",
@@ -188,7 +207,8 @@ _KEY_VALUE_RE = re.compile(
 )
 _FLAT_CONFIG_RE = re.compile(
     r"(?:(?:schedule|portfolio|trading|thresholds|mss_forecast)\.)?"
-    r"(trade_min_scans|trade_every_n_scans|max_holdings|max_total_symbols|"
+    r"(trade_min_scans|trade_every_n_scans|max_applied_trades_per_day|"
+    r"max_trade_evaluations_per_symbol|max_holdings|max_total_symbols|"
     r"holding_lock_days|stop_loss_ma20_pct|friction_min_return_pct|"
     r"high_position_20d|min_volume_ratio|max_vwap_deviation_pct|"
     r"base_spread|vol_multiplier)\s*[:=]\s*(\d+(?:\.\d+)?)",
@@ -226,9 +246,23 @@ _MEMORY_RUNTIME_NUDGES: tuple[tuple[str, dict[str, float]], ...] = (
     ("缩窄仓位", {"max_holdings": 5.0, "max_total_symbols": 10.0}),
     ("扫描偏少", {"trade_min_scans": 2.0}),
     ("盘中扫描偏少", {"trade_min_scans": 2.0}),
-    ("进攻期", {"trade_every_n_scans": 1.0, "holding_lock_days": 1.0, "stop_loss_ma20_pct": 0.03}),
+    (
+        "进攻期",
+        {
+            "trade_every_n_scans": 1.0,
+            "holding_lock_days": 1.0,
+            "stop_loss_ma20_pct": 0.03,
+            "max_applied_trades_per_day": 6.0,
+            "max_trade_evaluations_per_symbol": 10.0,
+        },
+    ),
     ("维持高现金", {"holding_lock_days": 2.0}),
-    ("减少频繁调仓", {"friction_min_return_pct": 0.008}),
+    (
+        "减少频繁调仓",
+        {"friction_min_return_pct": 0.008, "max_applied_trades_per_day": 3.0},
+    ),
+    ("落账已达上限", {"max_applied_trades_per_day": 3.0}),
+    ("评估已达上限", {"max_trade_evaluations_per_symbol": 10.0}),
 )
 
 _MEMORY_FORECAST_NUDGES: tuple[tuple[str, dict[str, float]], ...] = (
@@ -447,6 +481,12 @@ def _clamp_flat_values(values: dict[str, float]) -> dict[str, float]:
         out["trade_min_scans"] = float(max(2, min(5, int(out["trade_min_scans"]))))
     if "trade_every_n_scans" in out:
         out["trade_every_n_scans"] = float(max(1, min(3, int(out["trade_every_n_scans"]))))
+    if "max_applied_trades_per_day" in out:
+        out["max_applied_trades_per_day"] = float(max(2, min(8, int(out["max_applied_trades_per_day"]))))
+    if "max_trade_evaluations_per_symbol" in out:
+        out["max_trade_evaluations_per_symbol"] = float(
+            max(5, min(12, int(out["max_trade_evaluations_per_symbol"])))
+        )
     if "max_holdings" in out:
         out["max_holdings"] = float(max(3, min(12, int(out["max_holdings"]))))
     if "max_total_symbols" in out:
@@ -698,6 +738,16 @@ def _apply_runtime_signal_evolution(
         merged["holding_lock_days"] = max(float(merged.get("holding_lock_days", 1.0)), 2.0)
     if evolution_mode(settings, "trade_min_scans") == "harness":
         merged["trade_min_scans"] = min(float(merged.get("trade_min_scans", 3.0)), 2.0)
+    if evolution_mode(settings, "max_applied_trades_per_day") == "harness":
+        merged["max_applied_trades_per_day"] = min(
+            float(merged.get("max_applied_trades_per_day", 5.0)),
+            3.0,
+        )
+    if evolution_mode(settings, "max_trade_evaluations_per_symbol") == "harness":
+        merged["max_trade_evaluations_per_symbol"] = min(
+            float(merged.get("max_trade_evaluations_per_symbol", 8.0)),
+            6.0,
+        )
     return merged
 
 
@@ -830,6 +880,16 @@ def _apply_pnl_target_signal_evolution(
             merged["macro_veto"] = max(float(merged.get("macro_veto", 40.0)), 38.0)
         if evolution_mode(settings, "trade_min_scans") == "harness":
             merged["trade_min_scans"] = min(float(merged.get("trade_min_scans", 3.0)), 2.0)
+        if evolution_mode(settings, "max_applied_trades_per_day") == "harness":
+            merged["max_applied_trades_per_day"] = max(
+                float(merged.get("max_applied_trades_per_day", 5.0)),
+                6.0,
+            )
+        if evolution_mode(settings, "max_trade_evaluations_per_symbol") == "harness":
+            merged["max_trade_evaluations_per_symbol"] = max(
+                float(merged.get("max_trade_evaluations_per_symbol", 8.0)),
+                10.0,
+            )
     elif signals.get("pnl_target_miss"):
         if threshold_mode(settings, "aggressive_entry") == "harness":
             merged["aggressive_entry"] = min(float(merged.get("aggressive_entry", 50.0)), 45.0)
@@ -837,6 +897,11 @@ def _apply_pnl_target_signal_evolution(
             merged["min_cash_ratio"] = max(float(merged.get("min_cash_ratio", 0.0)), 0.45)
         if evolution_mode(settings, "max_holdings") == "harness":
             merged["max_holdings"] = min(float(merged.get("max_holdings", 10.0)), 5.0)
+        if evolution_mode(settings, "max_applied_trades_per_day") == "harness":
+            merged["max_applied_trades_per_day"] = min(
+                float(merged.get("max_applied_trades_per_day", 5.0)),
+                3.0,
+            )
     return merged
 
 
@@ -1073,6 +1138,10 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
     schedule = dict(cfg.get("schedule") or {})
     schedule["trade_min_scans"] = int(effective_flat["trade_min_scans"])
     schedule["trade_every_n_scans"] = int(effective_flat["trade_every_n_scans"])
+    schedule["max_applied_trades_per_day"] = int(effective_flat["max_applied_trades_per_day"])
+    schedule["max_trade_evaluations_per_symbol"] = int(
+        effective_flat["max_trade_evaluations_per_symbol"]
+    )
     cfg["schedule"] = schedule
 
     portfolio = dict(cfg.get("portfolio") or {})

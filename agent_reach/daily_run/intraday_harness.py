@@ -59,6 +59,15 @@ def intraday_to_harness_evidence(payload: dict[str, Any]) -> dict[str, Any]:
                 playbook.append(f"盘中 {scan_id} {action}：{reasoning[:120]}")
             if decision.get("friction_blocked"):
                 memory.append("减少频繁调仓：摩擦成本过高时提高 friction_min_return_pct")
+            portfolio_msg = str(trade.get("portfolio_message") or "")
+            if "落账已达上限" in portfolio_msg or "落账已达上限" in reasoning:
+                memory.append(
+                    "落账已达上限：全组合 paper apply 次数过多，下日收紧 max_applied_trades_per_day"
+                )
+            if "评估已达上限" in reasoning:
+                memory.append(
+                    "评估已达上限：单标的 T 槽不足，下日放宽 max_trade_evaluations_per_symbol"
+                )
             if decision.get("blocked") and "macro" in reasoning.lower():
                 memory.append("宏观一票否决生效：维持高现金，禁止接飞刀")
 

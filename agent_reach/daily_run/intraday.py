@@ -29,18 +29,12 @@ MAX_TRADES = 5  # legacy alias; prefer max_applied_trades_per_day / max_trade_ev
 
 def max_applied_trades_per_day(settings: Optional[dict[str, Any]] = None) -> int:
     cfg = effective_settings(settings or load_settings())
-    raw = (cfg.get("schedule") or {}).get("max_applied_trades_per_day")
-    if raw is None:
-        return MAX_TRADES
-    return max(1, int(raw))
+    return max(1, runtime_int_default(cfg, "schedule", "max_applied_trades_per_day"))
 
 
 def max_trade_evaluations_per_symbol(settings: Optional[dict[str, Any]] = None) -> int:
     cfg = effective_settings(settings or load_settings())
-    raw = (cfg.get("schedule") or {}).get("max_trade_evaluations_per_symbol")
-    if raw is None:
-        return MAX_TRADES
-    return max(1, int(raw))
+    return max(1, runtime_int_default(cfg, "schedule", "max_trade_evaluations_per_symbol"))
 
 
 def append_trade_skip_note(markdown: str, reason: str) -> str:

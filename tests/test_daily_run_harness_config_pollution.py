@@ -27,3 +27,4 @@ def test_evolved_catalog_covers_all_runtime_sections():
     assert "thresholds" in EVOLVED_CONFIG_KEYS_BY_SECTION
     assert "trading" in EVOLVED_CONFIG_KEYS_BY_SECTION
     assert "holding_lock_days" in EVOLVED_CONFIG_KEYS_BY_SECTION["trading"]
+    assert "max_applied_trades_per_day" in EVOLVED_CONFIG_KEYS_BY_SECTION["schedule"]

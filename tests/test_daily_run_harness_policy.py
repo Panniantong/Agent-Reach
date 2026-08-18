@@ -229,6 +229,8 @@ class TestHarnessPolicyOverlay:
         )
         assert flat["trade_min_scans"] == 3.0
         assert flat["trade_every_n_scans"] == 2.0
+        assert flat["max_applied_trades_per_day"] == 5.0
+        assert flat["max_trade_evaluations_per_symbol"] == 8.0
         assert flat["max_holdings"] == 10.0
         assert flat["max_total_symbols"] == 15.0
         assert flat["holding_lock_days"] == 1.0
@@ -257,6 +259,49 @@ class TestHarnessPolicyOverlay:
         assert flat["holding_lock_days"] == 2.0
         assert flat["stop_loss_ma20_pct"] == 0.05
         assert flat["trade_min_scans"] == 2.0
+        assert flat["max_applied_trades_per_day"] == 3.0
+        assert flat["max_trade_evaluations_per_symbol"] == 6.0
+
+    def test_offensive_memory_raises_trade_limits(self):
+        state = HarnessState()
+        state.entries["memory"]["offense"] = HarnessEntry(
+            id="offense",
+            kind="memory",
+            title="进攻期",
+            content="宏观回暖进入进攻期，适度提高落账与评估槽",
+            source="deterministic",
+            job="weekly",
+            evidence="weekly",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        flat = resolve_harness_flat_overrides(
+            state,
+            {"max_snapshot_age_hours": 24},
+            settings=_harness_settings(),
+        )
+        assert flat["max_applied_trades_per_day"] == 6.0
+        assert flat["max_trade_evaluations_per_symbol"] == 10.0
+
+    def test_applied_cap_memory_tightens_limit(self):
+        state = HarnessState()
+        state.entries["memory"]["cap"] = HarnessEntry(
+            id="cap",
+            kind="memory",
+            title="落账",
+            content="落账已达上限：全组合 paper apply 次数过多",
+            source="deterministic",
+            job="intraday",
+            evidence="intraday",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        flat = resolve_harness_flat_overrides(
+            state,
+            {"max_snapshot_age_hours": 24},
+            settings=_harness_settings(),
+        )
+        assert flat["max_applied_trades_per_day"] == 3.0
 
     def test_scan_sparse_lookback_weights(self):
         state = HarnessState()
@@ -295,6 +340,8 @@ class TestHarnessPolicyOverlay:
         assert cfg["portfolio"]["max_holdings"] == 5
         assert cfg["trading"]["holding_lock_days"] == 2
         assert cfg["schedule"]["trade_min_scans"] == 3
+        assert cfg["schedule"]["max_applied_trades_per_day"] == 5
+        assert cfg["schedule"]["max_trade_evaluations_per_symbol"] == 8
         assert "runtime_overlay" in cfg.get("harness_runtime", {})
 
 

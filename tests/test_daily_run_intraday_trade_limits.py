@@ -59,6 +59,25 @@ def _scan(mss: float, scan_id: str = "S1") -> dict:
 
 
 class TestTradeLimitHelpers:
+    def test_harness_neutral_defaults(self):
+        from agent_reach.daily_run.harness_policy import runtime_int_default
+        from agent_reach.daily_run.settings import effective_settings
+
+        cfg = effective_settings(
+            {
+                "harness": {
+                    "enabled": True,
+                    "runtime_overlay": True,
+                    "threshold_evolution_mode": "harness",
+                },
+                "thresholds": {"max_snapshot_age_hours": 24},
+            }
+        )
+        assert runtime_int_default(cfg, "schedule", "max_applied_trades_per_day") == 5
+        assert runtime_int_default(cfg, "schedule", "max_trade_evaluations_per_symbol") == 8
+        assert max_applied_trades_per_day(cfg) == 5
+        assert max_trade_evaluations_per_symbol(cfg) == 8
+
     def test_defaults(self, settings_trade_limits):
         assert max_applied_trades_per_day(settings_trade_limits) == 5
         assert max_trade_evaluations_per_symbol(settings_trade_limits) == 8

@@ -389,8 +389,6 @@
     "symbol_push_mode": "merge_by_category",
     "symbol_push_interval_seconds": 0.5,
     "intraday_trade_enabled": true,
-    "max_applied_trades_per_day": 5,
-    "max_trade_evaluations_per_symbol": 8,
     "morning_doctor": true,
     "alert_after_consecutive_failures": 3,
     "intraday_push_mode": "smart",
