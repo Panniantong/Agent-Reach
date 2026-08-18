@@ -23,6 +23,8 @@ case "$JOB" in
 esac
 
 export TZ="${TZ:-Asia/Shanghai}"
+# Cron redirects stdout to a file; unbuffered so progress appears in cron-YYYY-MM-DD.log
+export PYTHONUNBUFFERED=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"

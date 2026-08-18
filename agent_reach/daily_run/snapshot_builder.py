@@ -632,17 +632,24 @@ def build_snapshot(
     else:
         snapshot["mss_range"] = pf.get("mss_range") or daily_cache.get("mss_range")
 
+    macro_cache_payload = {
+        "macro_ctx": {
+            "mss_breakdown": mss_breakdown,
+            "sources": sources,
+            "macro_summary": snapshot.get("macro_summary"),
+            "macro_signals": macro_ctx.get("macro_signals"),
+        },
+        "technicals": cached_technicals,
+        "mss_range": snapshot.get("mss_range"),
+    }
     if enrich_level == "full":
+        save_daily_cache(macro_cache_payload)
+    elif enrich_level == "quotes" and not daily_cache.get("macro_ctx"):
+        # First intraday scan of the day: persist macro so per-symbol loops skip RedFox/60s.
         save_daily_cache(
             {
-                "macro_ctx": {
-                    "mss_breakdown": mss_breakdown,
-                    "sources": sources,
-                    "macro_summary": snapshot.get("macro_summary"),
-                    "macro_signals": macro_ctx.get("macro_signals"),
-                },
-                "technicals": cached_technicals,
-                "mss_range": snapshot.get("mss_range"),
+                "macro_ctx": macro_cache_payload["macro_ctx"],
+                "mss_range": macro_cache_payload["mss_range"],
             }
         )
 

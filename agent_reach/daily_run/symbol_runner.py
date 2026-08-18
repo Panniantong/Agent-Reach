@@ -75,6 +75,7 @@ def run_morning_for_symbols(
 
     for i, code in enumerate(targets):
         name = symbol_display_name(pf, code)
+        print(f"[daily-run] morning {i + 1}/{len(targets)} {code} {name}", flush=True)
         try:
             snap, path = build_and_save(
                 report_type="premarket",
@@ -198,9 +199,11 @@ def run_intraday_for_symbols(
     scan_id: Optional[str] = None
     errors: list[str] = []
 
-    for code in targets:
+    total = len(targets)
+    for idx, code in enumerate(targets, start=1):
         pf = load_portfolio()
         name = symbol_display_name(pf, code)
+        print(f"[daily-run] intraday {idx}/{total} {code} {name}", flush=True)
         state_path = default_state_path(code)
         state = load_state(state_path)
 
@@ -318,9 +321,11 @@ def run_close_for_symbols(
     errors: list[str] = []
     shared_state = load_state()
 
-    for code in targets:
+    total = len(targets)
+    for idx, code in enumerate(targets, start=1):
         pf = load_portfolio()
         name = symbol_display_name(pf, code)
+        print(f"[daily-run] close {idx}/{total} {code} {name}", flush=True)
         try:
             baseline = load_morning_baseline(code=code)
             snap, path = build_and_save(
