@@ -80,6 +80,27 @@ def apply_skill_refinement(
         evaluate_forge_gate,
         strip_forge_domain,
     )
+    from agent_reach.daily_run.harness_rigor_check import evaluate_rigor_battery, rigor_blocks_refine
+
+    rigor_domain = evidence.get("rigor_domain") or evidence.get("forge_domain") or {}
+    rigor = evaluate_rigor_battery(job, rigor_domain, settings=cfg)
+    if rigor is not None and rigor_blocks_refine(rigor, settings=cfg):
+        from agent_reach.daily_run.harness_apply_gate import record_apply_audit
+
+        record_apply_audit(
+            job=job,
+            status="skipped",
+            reason="rigor_check_failed",
+            layer="a",
+            changes=0,
+            admission={"rigor_check": rigor.to_dict()},
+        )
+        return {
+            "skipped": True,
+            "reason": "rigor_check_failed",
+            "job": job,
+            "rigor_check": rigor.to_dict(),
+        }
 
     forge = evaluate_forge_gate(job, evidence, settings=cfg)
     if forge is not None and not forge.passed:
@@ -101,6 +122,8 @@ def apply_skill_refinement(
         }
 
     result = refine_after_job(job, evidence=strip_forge_domain(evidence), settings=cfg)
+    if rigor is not None:
+        result["rigor_check"] = rigor.to_dict()
     if forge is not None:
         result["forge_gate"] = forge.to_dict()
     result["job"] = job

@@ -58,6 +58,7 @@ def apply_forecast_calibrate_harness_refinement(
         "week_start": forecast.get("week_start"),
         "week_end": forecast.get("week_end"),
     }
+    evidence["rigor_domain"] = dict(evidence["forge_domain"])
     wf_cfg = (settings or {}).get("week_forecast") or {}
     if wf_cfg.get("harness_evolve", True) is False:
         return {"skipped": True, "reason": "week_forecast.harness_evolve disabled", "job": "forecast_calibrate"}

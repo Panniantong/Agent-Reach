@@ -27,10 +27,11 @@ description: >-
 | `forecast_calibrate` | `forecast_calibrate_harness.py` | 周日 forecast MSS/校准 |
 | `pnl_overview` | `pnl_overview_harness.py` | 收盘 FIFO 已实现 + 浮动盈亏总览 |
 | `pnl_target` | `pnl_target_harness.py` | 下一交易日总盈亏目标 + 达成奖励/未达处罚 |
+| `finance_close` | `finance_close_harness.py` | 收盘 dsh-finance 对账/风控/variance bridge |
 
 ## 收盘自动
 
-`run_close()` → `run_close_harness_refinements()` 依次 refine verify / close_improve / data_audit / **pnl_overview** / **pnl_target**；
+`run_close()` → `run_close_harness_refinements()` 依次 refine verify / close_improve / data_audit / **pnl_overview** / **pnl_target** / **finance_close**；
 `append_experience_entry()` → experience harness（harness 模式下 rules 同步进 memory/policy）；
 随后 `run_close_layer_a_refinement()` 只写入组合盈亏等 residual。
 
@@ -186,6 +187,34 @@ python3 -m agent_reach.cli daily-run harness restore-snapshot --path ~/.agent-re
 
 - Forge / Layer B 拒绝也会写入 audit，周六周度叙事会统计 `forge_blocks` 与 `layer_b_skips`。
 
+### dsh-finance + dsh-rigorquant 移植（方案 2）
+
+| 来源 | Agent Reach 模块 | 行为 |
+|------|------------------|------|
+| `dsh-finance` portfolio_risk / reconcile / variance_bridge | `harness_finance.py` + `finance_close_harness.py` | 收盘组合风控、净值对账、variance bridge → harness memory/policy |
+| `dsh-rigorquant` 四重校验电池 | `harness_rigor_check.py` | closure / invariant / boundary / evidence；默认仅 **optimize** 失败时 block refine |
+| forge 扩展 | `harness_forge_gates.py` | 新增 `finance_close`、`optimize` 数值 sanity |
+
+```json
+"finance_close": {
+  "enabled": true,
+  "harness_evolve": true,
+  "max_position_pct": 35,
+  "min_cash_pct": 5
+},
+"harness": {
+  "rigor_check": {
+    "enabled": true,
+    "block_on_fail": { "optimize": true },
+    "jobs": { "finance_close": true, "optimize": true }
+  },
+  "jobs": { "finance_close": true }
+}
+```
+
+- `finance_close` 对账/bridge 失败仍会写入 playbook（rigor 仅记录，不 block）。
+- `optimize` rigor 或 forge 失败 → `reason=rigor_check_failed` / `forge_gate_failed`，不写 harness。
+
 ### Feishu Harness 摘要卡
 
 | 开关 | 行为 |
@@ -225,5 +254,5 @@ python3 -m agent_reach.cli daily-run harness sync-settings
 ## 测试
 
 ```bash
-python3 -m pytest tests/test_daily_run_harness_p6.py tests/test_daily_run_harness_p5.py tests/test_daily_run_harness_p4.py tests/test_daily_run_harness_p3.py tests/test_daily_run_harness_p2.py tests/test_daily_run_harness_p1.py -q
+python3 -m pytest tests/test_daily_run_harness_p7.py tests/test_daily_run_harness_p6.py tests/test_daily_run_harness_p5.py tests/test_daily_run_harness_p4.py tests/test_daily_run_harness_p3.py tests/test_daily_run_harness_p2.py tests/test_daily_run_harness_p1.py -q
 ```

@@ -109,6 +109,7 @@ def apply_pnl_target_harness_refinement(
         "evaluated": run.get("evaluated"),
         "next_target": run.get("next_target"),
     }
+    evidence["rigor_domain"] = dict(evidence["forge_domain"])
     refine = apply_skill_refinement(
         "pnl_target",
         evidence,

@@ -79,6 +79,18 @@
     "penalty_plan": "pnl_target：目标未达，下日 verify 偏防御"
   },
 
+  "finance_close": {
+    "enabled": true,
+    "harness_evolve": true,
+    "max_position_pct": 35,
+    "max_sector_pct": 50,
+    "max_gross_exposure_pct": 100,
+    "min_cash_pct": 5,
+    "reconcile_tolerance_cny": 1.0,
+    "variance_tolerance_cny": 1.0,
+    "variance_materiality_cny": 500
+  },
+
   "quote_fetch": {
     "sources": ["eastmoney", "akshare", "xueqiu"],
     "max_retries": 2
@@ -595,6 +607,18 @@
       "append_to_weekly_card": true,
       "audit_days": 7
     },
+    "rigor_check": {
+      "enabled": true,
+      "block_on_fail": {
+        "optimize": true
+      },
+      "jobs": {
+        "finance_close": true,
+        "optimize": true,
+        "pnl_target": true,
+        "forecast_calibrate": true
+      }
+    },
     "render_format": "xml",
     "jobs": {
       "close": true,
@@ -615,7 +639,8 @@
       "watchlist_adjust": true,
       "forecast_calibrate": true,
       "pnl_overview": true,
-      "pnl_target": true
+      "pnl_target": true,
+      "finance_close": true
     },
     "llm_refine": {
       "enabled": true,

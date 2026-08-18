@@ -20,6 +20,7 @@ class CloseHarnessSkillsReport:
     watchlist_adjust: dict[str, Any] = field(default_factory=dict)
     pnl_overview: dict[str, Any] = field(default_factory=dict)
     pnl_target: dict[str, Any] = field(default_factory=dict)
+    finance_close: dict[str, Any] = field(default_factory=dict)
     close_layer_a: dict[str, Any] = field(default_factory=dict)
     effective_overlay: dict[str, Any] = field(default_factory=dict)
 
@@ -31,6 +32,7 @@ class CloseHarnessSkillsReport:
             "watchlist_adjust": self.watchlist_adjust,
             "pnl_overview": self.pnl_overview,
             "pnl_target": self.pnl_target,
+            "finance_close": self.finance_close,
             "close_layer_a": self.close_layer_a,
             "effective_overlay": self.effective_overlay,
             "total_changes": sum(
@@ -42,6 +44,7 @@ class CloseHarnessSkillsReport:
                     self.watchlist_adjust,
                     self.pnl_overview,
                     self.pnl_target,
+                    self.finance_close,
                     self.close_layer_a,
                 )
                 if not (block or {}).get("skipped")
@@ -108,6 +111,13 @@ def run_close_harness_refinements(
             portfolio_summary,
             settings=cfg,
             cycle=pnl_target_cycle,
+        )
+
+        from agent_reach.daily_run.finance_close_harness import apply_finance_close_harness_refinement
+
+        report.finance_close = apply_finance_close_harness_refinement(
+            portfolio_summary,
+            settings=cfg,
         )
 
     report.effective_overlay = effective_overlay_snapshot(cfg)

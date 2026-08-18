@@ -101,6 +101,17 @@ HARNESS_WEEKLY_NARRATIVE_DEFAULTS: dict[str, Any] = {
     "audit_days": 7,
 }
 
+HARNESS_RIGOR_CHECK_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "block_on_fail": {"optimize": True},
+    "jobs": {
+        "finance_close": True,
+        "optimize": True,
+        "pnl_target": True,
+        "forecast_calibrate": True,
+    },
+}
+
 
 def sync_user_harness_keys(
     *,
@@ -130,6 +141,7 @@ def sync_user_harness_keys(
         ("layer_b_admission", HARNESS_LAYER_B_ADMISSION_DEFAULTS),
         ("forge_gates", HARNESS_FORGE_GATES_DEFAULTS),
         ("weekly_narrative", HARNESS_WEEKLY_NARRATIVE_DEFAULTS),
+        ("rigor_check", HARNESS_RIGOR_CHECK_DEFAULTS),
     ):
         block = dict(harness.get(nested_key) or {})
         default_block = dict(default_harness.get(nested_key) or nested_defaults)

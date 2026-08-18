@@ -50,10 +50,11 @@ def forge_gates_cfg(settings: Optional[dict[str, Any]] = None) -> dict[str, Any]
 
 
 def strip_forge_domain(evidence: dict[str, Any]) -> dict[str, Any]:
-    if not evidence or "forge_domain" not in evidence:
+    if not evidence:
         return evidence
     cleaned = dict(evidence)
     cleaned.pop("forge_domain", None)
+    cleaned.pop("rigor_domain", None)
     return cleaned
 
 
@@ -137,7 +138,42 @@ def validate_forecast_calibrate_forge(
     return ForgeGateResult(job="forecast_calibrate", passed=not violations, violations=violations)
 
 
-_FORGE_JOBS = frozenset({"pnl_target", "forecast_calibrate"})
+def validate_finance_close_forge(
+    domain: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> ForgeGateResult:
+    violations: list[str] = []
+    summary = domain.get("portfolio_summary") or {}
+    end_total = summary.get("end_total")
+    if end_total is None:
+        violations.append("missing end_total")
+    elif float(end_total) <= 0:
+        violations.append("end_total must be positive")
+    return ForgeGateResult(job="finance_close", passed=not violations, violations=violations)
+
+
+def validate_optimize_forge(
+    domain: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> ForgeGateResult:
+    violations: list[str] = []
+    params = domain.get("best_params") or {}
+    for key in ("macro_veto", "aggressive_entry"):
+        val = params.get(key)
+        if val is None:
+            continue
+        fval = float(val)
+        if fval < 10 or fval > 100:
+            violations.append(f"{key} {fval} outside [10, 100]")
+    score = domain.get("best_score")
+    if score is not None and not (-1.0 <= float(score) <= 10.0):
+        violations.append(f"best_score {score} out of sanity range")
+    return ForgeGateResult(job="optimize", passed=not violations, violations=violations)
+
+
+_FORGE_JOBS = frozenset({"pnl_target", "forecast_calibrate", "finance_close", "optimize"})
 
 
 def evaluate_forge_gate(
@@ -163,6 +199,10 @@ def evaluate_forge_gate(
         return validate_pnl_target_forge(domain, settings=settings)
     if job == "forecast_calibrate":
         return validate_forecast_calibrate_forge(domain, settings=settings)
+    if job == "finance_close":
+        return validate_finance_close_forge(domain, settings=settings)
+    if job == "optimize":
+        return validate_optimize_forge(domain, settings=settings)
     return None
 
 
