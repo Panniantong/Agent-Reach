@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
+import json
 import re
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -77,34 +77,114 @@ def _rule_summarize_block(block: str) -> str:
     return compact[:120] if compact else "（无摘要）"
 
 
+def _archive_summary_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
+    return dict((settings or {}).get("weekly_report") or {})
+
+
+def _archive_llm_provider(settings: Optional[dict[str, Any]]) -> str:
+    cfg = _archive_summary_cfg(settings)
+    if cfg.get("skill_archive_provider"):
+        return str(cfg["skill_archive_provider"])
+    return str(((settings or {}).get("llm_narrative") or {}).get("provider") or "auto")
+
+
 def summarize_archived_block(
     block: str,
     *,
     settings: Optional[dict[str, Any]] = None,
 ) -> str:
     """LLM summary when configured; else deterministic rule summary."""
-    cfg = (settings or {}).get("weekly_report") or {}
+    cfg = _archive_summary_cfg(settings)
     if cfg.get("skill_archive_llm_summary", True) is False:
         return _rule_summarize_block(block)
 
     from agent_reach.daily_run.llm_chat import chat_json, resolve_chat_provider
 
-    provider = str(((settings or {}).get("llm_narrative") or {}).get("provider") or "auto")
+    provider = _archive_llm_provider(settings)
     if not resolve_chat_provider(provider):
         return _rule_summarize_block(block)
 
     try:
         payload = chat_json(
-            system='你是 daily-run skill compaction 助手。输出 JSON：{"summary":"一句中文摘要，≤120字，含盈亏方向与1条教训"}',
+            system=(
+                '你是 daily-run skill compaction 助手。输出 JSON：'
+                '{"summary":"一句中文摘要，≤120字，含盈亏方向与1条教训"}'
+            ),
             user=block[:3500],
             provider=provider,
             timeout=int(cfg.get("skill_archive_summary_timeout") or 30),
+            max_tokens=int(cfg.get("skill_archive_summary_max_tokens") or 160),
         )
         if isinstance(payload, dict) and payload.get("summary"):
             return str(payload["summary"]).strip()[:280]
         return _rule_summarize_block(block)
     except Exception:
         return _rule_summarize_block(block)
+
+
+def summarize_archived_blocks_batch(
+    entries: list[tuple[str, str]],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> list[tuple[str, str]]:
+    """Summarize multiple archived weeks in one LLM call when batch mode is on."""
+    if not entries:
+        return []
+
+    cfg = _archive_summary_cfg(settings)
+    if cfg.get("skill_archive_llm_summary", True) is False:
+        return [(label, _rule_summarize_block(block)) for label, block in entries]
+
+    use_batch = cfg.get("skill_archive_batch_summary", True) is not False and len(entries) > 1
+    if not use_batch:
+        return [(label, summarize_archived_block(block, settings=settings)) for label, block in entries]
+
+    from agent_reach.daily_run.llm_chat import chat_json, resolve_chat_provider
+
+    provider = _archive_llm_provider(settings)
+    if not resolve_chat_provider(provider):
+        return [(label, _rule_summarize_block(block)) for label, block in entries]
+
+    max_blocks = max(1, int(cfg.get("skill_archive_batch_max_blocks") or 4))
+    max_block_chars = max(200, int(cfg.get("skill_archive_batch_block_chars") or 1200))
+    batch = entries[:max_blocks]
+    tail = entries[max_blocks:]
+
+    user_payload = {
+        "weeks": [
+            {"label": label, "content": block[:max_block_chars]}
+            for label, block in batch
+        ]
+    }
+    try:
+        payload = chat_json(
+            system=(
+                "你是 daily-run skill compaction 助手。基于多周归档内容输出 JSON："
+                '{"summaries":[{"label":"周标签","summary":"≤120字中文，含盈亏方向与1条教训"}]}。'
+                "每个 label 必须对应输入 weeks 里的 label；summary 简明，禁止复述全文。"
+            ),
+            user=json.dumps(user_payload, ensure_ascii=False),
+            provider=provider,
+            timeout=int(cfg.get("skill_archive_summary_timeout") or 45),
+            max_tokens=int(cfg.get("skill_archive_batch_max_tokens") or 480),
+        )
+        by_label: dict[str, str] = {}
+        if isinstance(payload, dict):
+            for row in payload.get("summaries") or []:
+                if not isinstance(row, dict):
+                    continue
+                label = str(row.get("label") or "").strip()
+                summary = str(row.get("summary") or "").strip()
+                if label and summary:
+                    by_label[label] = summary[:280]
+        out: list[tuple[str, str]] = []
+        for label, block in batch:
+            out.append((label, by_label.get(label) or _rule_summarize_block(block)))
+        if tail:
+            out.extend(summarize_archived_blocks_batch(tail, settings=settings))
+        return out
+    except Exception:
+        return [(label, _rule_summarize_block(block)) for label, block in entries]
 
 
 def _upsert_archive_summary_section(text: str, rows: list[tuple[str, str]]) -> str:
@@ -153,7 +233,7 @@ def compact_experience_sections(
 
     to_archive = headers[: len(headers) - keep]
     archived_paths: list[str] = []
-    summary_rows: list[tuple[str, str]] = []
+    archive_blocks: list[tuple[str, str]] = []
     new_text = text
 
     _ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
@@ -170,9 +250,10 @@ def compact_experience_sections(
             out_path.write_text(block, encoding="utf-8")
         archived_paths.append(str(out_path))
         label = _week_label_from_block(block, f"{ws}~{we}")
-        summary_rows.append((label, summarize_archived_block(block, settings=settings)))
+        archive_blocks.append((label, block))
         new_text = (new_text[: bounds[0]] + new_text[bounds[1] :]).strip() + "\n"
 
+    summary_rows = summarize_archived_blocks_batch(archive_blocks, settings=settings)
     if summary_rows:
         new_text = _upsert_archive_summary_section(new_text, summary_rows)
 
