@@ -28,12 +28,13 @@ description: >-
 | `pnl_overview` | `pnl_overview_harness.py` | 收盘 FIFO 已实现 + 浮动盈亏总览 |
 | `pnl_target` | `pnl_target_harness.py` | 下一交易日总盈亏目标 + 达成奖励/未达处罚 |
 | `finance_close` | `finance_close_harness.py` | 收盘 dsh-finance 对账/风控/variance bridge |
+| `finance_ledger` | `finance_ledger_harness.py` | 收盘 trade ledger 分录校验（journal-entry check） |
 | `finance_variance` | `finance_variance_harness.py` | 周六 weekly 盈亏 waterfall（stock/cash bridge） |
 | `finance_close_plan` | `finance_close_plan_harness.py` | 周六 T+1~T+5 下周 close 日历 |
 
 ## 收盘自动
 
-`run_close()` → `run_close_harness_refinements()` 依次 refine verify / close_improve / data_audit / **pnl_overview** / **pnl_target** / **finance_close**；
+`run_close()` → `run_close_harness_refinements()` 依次 refine verify / close_improve / data_audit / **pnl_overview** / **pnl_target** / **finance_close** / **finance_ledger**；
 `append_experience_entry()` → experience harness（harness 模式下 rules 同步进 memory/policy）；
 随后 `run_close_layer_a_refinement()` 只写入组合盈亏等 residual。
 
@@ -194,8 +195,9 @@ python3 -m agent_reach.cli daily-run harness restore-snapshot --path ~/.agent-re
 | 来源 | Agent Reach 模块 | 行为 |
 |------|------------------|------|
 | `dsh-finance` portfolio_risk / reconcile / variance_bridge | `harness_finance.py` + `finance_close_harness.py` | 收盘组合风控、净值对账、variance bridge → harness memory/policy |
+| `dsh-finance` journal-entry check | `harness_finance.py` + `finance_ledger_harness.py` | trade ledger 分录平衡（amount vs shares×price、买卖借贷、cost_basis / trade_cash_flow） |
 | `dsh-rigorquant` 四重校验电池 | `harness_rigor_check.py` | closure / invariant / boundary / evidence；默认仅 **optimize** 失败时 block refine |
-| forge 扩展 | `harness_forge_gates.py` | 新增 `finance_close`、`optimize` 数值 sanity |
+| forge 扩展 | `harness_forge_gates.py` | 新增 `finance_close`、`finance_ledger`、`optimize` 数值 sanity |
 
 ```json
 "finance_close": {
@@ -208,9 +210,9 @@ python3 -m agent_reach.cli daily-run harness restore-snapshot --path ~/.agent-re
   "rigor_check": {
     "enabled": true,
     "block_on_fail": { "optimize": true },
-    "jobs": { "finance_close": true, "optimize": true }
+    "jobs": { "finance_close": true, "finance_ledger": true, "optimize": true }
   },
-  "jobs": { "finance_close": true }
+  "jobs": { "finance_close": true, "finance_ledger": true }
 }
 ```
 
@@ -230,8 +232,11 @@ python3 -m agent_reach.cli daily-run harness restore-snapshot --path ~/.agent-re
   "variance_materiality_cny": 1000,
   "percent_materiality": 1.0
 },
-"finance_close_plan": { "enabled": true, "calendar_days": 5 },
-"harness": { "jobs": { "finance_variance": true, "finance_close_plan": true } }
+"finance_ledger": {
+  "enabled": true,
+  "amount_tolerance_cny": 1.0,
+  "require_trade_id": false
+}
 ```
 
 ### Feishu Harness 摘要卡

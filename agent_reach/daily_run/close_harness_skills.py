@@ -21,6 +21,7 @@ class CloseHarnessSkillsReport:
     pnl_overview: dict[str, Any] = field(default_factory=dict)
     pnl_target: dict[str, Any] = field(default_factory=dict)
     finance_close: dict[str, Any] = field(default_factory=dict)
+    finance_ledger: dict[str, Any] = field(default_factory=dict)
     close_layer_a: dict[str, Any] = field(default_factory=dict)
     effective_overlay: dict[str, Any] = field(default_factory=dict)
 
@@ -33,6 +34,7 @@ class CloseHarnessSkillsReport:
             "pnl_overview": self.pnl_overview,
             "pnl_target": self.pnl_target,
             "finance_close": self.finance_close,
+            "finance_ledger": self.finance_ledger,
             "close_layer_a": self.close_layer_a,
             "effective_overlay": self.effective_overlay,
             "total_changes": sum(
@@ -45,6 +47,7 @@ class CloseHarnessSkillsReport:
                     self.pnl_overview,
                     self.pnl_target,
                     self.finance_close,
+                    self.finance_ledger,
                     self.close_layer_a,
                 )
                 if not (block or {}).get("skipped")
@@ -116,6 +119,13 @@ def run_close_harness_refinements(
         from agent_reach.daily_run.finance_close_harness import apply_finance_close_harness_refinement
 
         report.finance_close = apply_finance_close_harness_refinement(
+            portfolio_summary,
+            settings=cfg,
+        )
+
+        from agent_reach.daily_run.finance_ledger_harness import apply_finance_ledger_harness_refinement
+
+        report.finance_ledger = apply_finance_ledger_harness_refinement(
             portfolio_summary,
             settings=cfg,
         )

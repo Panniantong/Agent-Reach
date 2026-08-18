@@ -436,3 +436,175 @@ def run_finance_close_checks(
         "passed": not blocking,
         "blocking_flags": blocking,
     }
+
+
+def _ledger_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
+    return dict((settings or {}).get("finance_ledger") or {})
+
+
+@dataclass
+class JournalEntryCheckResult:
+    period: Optional[str]
+    entries_checked: int
+    actions_checked: int
+    total_debit: float
+    total_credit: float
+    difference: float
+    balanced: bool
+    ready_for_review: bool
+    blocking_flags: list[str] = field(default_factory=list)
+    review_flags: list[str] = field(default_factory=list)
+    posting_authorized: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "period": self.period,
+            "entries_checked": self.entries_checked,
+            "actions_checked": self.actions_checked,
+            "total_debit": self.total_debit,
+            "total_credit": self.total_credit,
+            "difference": self.difference,
+            "balanced": self.balanced,
+            "ready_for_review": self.ready_for_review,
+            "blocking_flags": list(self.blocking_flags),
+            "review_flags": list(self.review_flags),
+            "posting_authorized": self.posting_authorized,
+        }
+
+
+def check_trade_ledger_journal(
+    trades: list[dict[str, Any]],
+    *,
+    portfolio_summary: Optional[dict[str, Any]] = None,
+    settings: Optional[dict[str, Any]] = None,
+) -> JournalEntryCheckResult:
+    """Port of dsh-finance finance_journal_entry_check for trade ledger lines."""
+    cfg = _ledger_cfg(settings)
+    tolerance = float(cfg.get("amount_tolerance_cny", 1.0))
+    pct_tol = float(cfg.get("amount_tolerance_pct", 0.02))
+    require_trade_id = bool(cfg.get("require_trade_id"))
+    require_reasoning = bool(cfg.get("require_reasoning"))
+
+    blocking: list[str] = []
+    review: list[str] = []
+    total_debit = 0.0
+    total_credit = 0.0
+    actions_checked = 0
+    period = None
+    if portfolio_summary:
+        period = str(portfolio_summary.get("as_of") or "")[:10] or None
+
+    for entry_idx, entry in enumerate(trades or []):
+        entry_at = str(entry.get("at") or "")
+        if not period and entry_at:
+            period = entry_at[:10]
+        trade_id = entry.get("trade_id")
+        if require_trade_id and not str(trade_id or "").strip():
+            review.append(f"entry {entry_idx + 1} missing trade_id")
+        actions = entry.get("actions") or []
+        if not actions:
+            blocking.append(f"entry {entry_idx + 1} has no actions")
+            continue
+        for action_idx, action in enumerate(actions):
+            actions_checked += 1
+            line_no = f"entry {entry_idx + 1} action {action_idx + 1}"
+            side = str(action.get("side") or "").lower()
+            if side not in {"buy", "sell"}:
+                blocking.append(f"{line_no} invalid side")
+                continue
+            code = str(action.get("code") or "").strip()
+            if not code:
+                blocking.append(f"{line_no} missing code")
+            shares = int(action.get("shares") or 0)
+            if shares <= 0:
+                blocking.append(f"{line_no} shares must be positive")
+                continue
+            price = float(action.get("price") or 0)
+            amount = float(action.get("amount") or 0)
+            commission = float(action.get("commission") or 0)
+            if price <= 0 and amount <= 0:
+                blocking.append(f"{line_no} missing price/amount")
+            implied = shares * price if price > 0 else amount
+            if implied > 0 and amount > 0:
+                diff = abs(amount - implied)
+                limit = max(tolerance, implied * pct_tol)
+                if diff > limit:
+                    blocking.append(
+                        f"{line_no} amount {amount:.2f} vs shares*price {implied:.2f} (Δ{diff:.2f})"
+                    )
+            if require_reasoning and not str(action.get("reasoning") or "").strip():
+                review.append(f"{line_no} missing reasoning/memo")
+
+            if side == "buy":
+                debit = credit = amount + commission
+            else:
+                cost_basis = float(action.get("cost_basis") or 0)
+                realized = action.get("realized_pnl")
+                proceeds = amount - commission
+                if cost_basis <= 0.01:
+                    review.append(f"{line_no} sell missing cost_basis — run pnl backfill")
+                    credit = proceeds
+                    debit = proceeds
+                else:
+                    realized_f = float(realized if realized is not None else proceeds - cost_basis)
+                    debit = proceeds
+                    credit = cost_basis + realized_f
+                    if abs(debit - credit) > tolerance:
+                        blocking.append(
+                            f"{line_no} sell journal out of balance by {abs(debit - credit):.2f}"
+                        )
+            total_debit += debit
+            total_credit += credit
+
+    pf = portfolio_summary or {}
+    pf_trades = pf.get("trades") or []
+    if pf_trades and not trades:
+        blocking.append("portfolio has trades but empty ledger input")
+    if trades and pf.get("trade_cash_flow") is not None:
+        from agent_reach.daily_run.realized_pnl import compute_trade_cash_flow
+
+        ledger_flow = compute_trade_cash_flow(trades)
+        pf_flow = float(pf["trade_cash_flow"])
+        if abs(ledger_flow - pf_flow) > tolerance:
+            review.append(
+                f"trade_cash_flow ledger {ledger_flow:+,.2f} vs portfolio {pf_flow:+,.2f}"
+            )
+
+    difference = _round(total_debit - total_credit)
+    balanced = abs(difference) <= tolerance and not blocking
+    ready = balanced and not review
+    return JournalEntryCheckResult(
+        period=period,
+        entries_checked=len(trades or []),
+        actions_checked=actions_checked,
+        total_debit=_round(total_debit),
+        total_credit=_round(total_credit),
+        difference=difference,
+        balanced=balanced,
+        ready_for_review=ready,
+        blocking_flags=blocking,
+        review_flags=review,
+    )
+
+
+def run_finance_ledger_checks(
+    portfolio_summary: dict[str, Any],
+    *,
+    trades: Optional[list[dict[str, Any]]] = None,
+    settings: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    day_trades = trades if trades is not None else list(portfolio_summary.get("trades") or [])
+    journal = check_trade_ledger_journal(
+        day_trades,
+        portfolio_summary=portfolio_summary,
+        settings=settings,
+    )
+    blocking = list(journal.blocking_flags)
+    if not day_trades and (portfolio_summary.get("intraday_trades") or portfolio_summary.get("realized_sells")):
+        review_note = "有成交摘要但 ledger 为空"
+        journal.review_flags.append(review_note)
+    return {
+        "journal": journal.to_dict(),
+        "passed": journal.balanced and not blocking,
+        "blocking_flags": blocking,
+    }

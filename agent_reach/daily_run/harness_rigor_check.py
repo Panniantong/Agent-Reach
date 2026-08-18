@@ -42,6 +42,7 @@ def _rigor_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
     if jobs is None:
         job_set = {
             "finance_close",
+            "finance_ledger",
             "finance_variance",
             "finance_close_plan",
             "optimize",
@@ -67,6 +68,10 @@ def _rigor_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _check_closure(domain: dict[str, Any]) -> RigorCheck:
+    journal = domain.get("journal") or {}
+    if journal:
+        ok = bool(journal.get("balanced"))
+        return RigorCheck("closure", ok, f"ledger diff={journal.get('difference')}")
     variance = domain.get("variance") or {}
     reconcile = domain.get("reconcile") or {}
     if variance:
@@ -129,6 +134,13 @@ def _check_evidence(domain: dict[str, Any], *, job: str) -> RigorCheck:
         if not report.get("week_start") or not report.get("week_end"):
             return RigorCheck("evidence", False, "missing week range")
         return RigorCheck("evidence", True, "weekly report present")
+    if job == "finance_ledger":
+        journal = domain.get("journal") or {}
+        if not journal.get("actions_checked") and not (domain.get("trades") or []):
+            return RigorCheck("evidence", True, "no ledger trades")
+        if journal.get("actions_checked", 0) <= 0:
+            return RigorCheck("evidence", False, "no ledger actions")
+        return RigorCheck("evidence", True, f"actions={journal.get('actions_checked')}")
     if job == "optimize":
         result = domain
         if not result.get("trials"):

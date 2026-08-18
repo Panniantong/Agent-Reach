@@ -153,6 +153,20 @@ def validate_finance_close_forge(
     return ForgeGateResult(job="finance_close", passed=not violations, violations=violations)
 
 
+def validate_finance_ledger_forge(
+    domain: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> ForgeGateResult:
+    violations: list[str] = []
+    journal = domain.get("journal") or {}
+    for flag in journal.get("blocking_flags") or []:
+        violations.append(str(flag))
+    if journal and journal.get("balanced") is False and not violations:
+        violations.append("ledger journal not balanced")
+    return ForgeGateResult(job="finance_ledger", passed=not violations, violations=violations)
+
+
 def validate_optimize_forge(
     domain: dict[str, Any],
     *,
@@ -200,7 +214,17 @@ def validate_finance_close_plan_forge(
     return ForgeGateResult(job="finance_close_plan", passed=not violations, violations=violations)
 
 
-_FORGE_JOBS = frozenset({"pnl_target", "forecast_calibrate", "finance_close", "optimize", "finance_variance", "finance_close_plan"})
+_FORGE_JOBS = frozenset(
+    {
+        "pnl_target",
+        "forecast_calibrate",
+        "finance_close",
+        "finance_ledger",
+        "optimize",
+        "finance_variance",
+        "finance_close_plan",
+    }
+)
 
 
 def evaluate_forge_gate(
@@ -228,6 +252,8 @@ def evaluate_forge_gate(
         return validate_forecast_calibrate_forge(domain, settings=settings)
     if job == "finance_close":
         return validate_finance_close_forge(domain, settings=settings)
+    if job == "finance_ledger":
+        return validate_finance_ledger_forge(domain, settings=settings)
     if job == "optimize":
         return validate_optimize_forge(domain, settings=settings)
     if job == "finance_variance":

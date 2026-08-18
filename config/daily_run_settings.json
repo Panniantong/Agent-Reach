@@ -105,6 +105,15 @@
     "calendar_days": 5
   },
 
+  "finance_ledger": {
+    "enabled": true,
+    "harness_evolve": true,
+    "amount_tolerance_cny": 1.0,
+    "amount_tolerance_pct": 0.02,
+    "require_trade_id": false,
+    "require_reasoning": false
+  },
+
   "quote_fetch": {
     "sources": ["eastmoney", "akshare", "xueqiu"],
     "max_retries": 2
@@ -628,6 +637,7 @@
       },
       "jobs": {
         "finance_close": true,
+        "finance_ledger": true,
         "finance_variance": true,
         "finance_close_plan": true,
         "optimize": true,
@@ -657,6 +667,7 @@
       "pnl_overview": true,
       "pnl_target": true,
       "finance_close": true,
+      "finance_ledger": true,
       "finance_variance": true,
       "finance_close_plan": true
     },
