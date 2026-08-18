@@ -56,6 +56,97 @@ HARNESS_SYNC_KEYS: tuple[str, ...] = (
 )
 
 
+HARNESS_APPLY_GATE_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "block_policy_on_audit_fail": True,
+    "block_policy_on_structured_incomplete": True,
+    "block_playbook_on_morning_gate_fail": True,
+}
+
+HARNESS_INJECTION_DEFAULTS: dict[str, Any] = {
+    "max_per_kind_per_job": 8,
+    "max_chars_per_line": 240,
+    "max_overlay_claims": 3,
+    "max_overlay_chars": 1200,
+    "enforce_claim_decisions": True,
+}
+
+HARNESS_SNAPSHOT_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "max_keep": 20,
+}
+
+HARNESS_LAYER_B_ADMISSION_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "max_edits": 8,
+    "max_score_drift": 15,
+    "max_ratio_drift": 0.25,
+    "block_threshold_literals": True,
+}
+
+HARNESS_FORGE_GATES_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "pnl_target": {
+        "max_target_pct": 3.0,
+        "max_target_cny": 50000,
+    },
+    "forecast_calibrate": {
+        "use_week_forecast_bounds": True,
+    },
+}
+
+HARNESS_WEEKLY_NARRATIVE_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "append_to_weekly_card": True,
+    "audit_days": 7,
+}
+
+HARNESS_CONTEXT_DOCTOR_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "similarity_threshold": 0.86,
+    "min_chars": 12,
+    "detect_conflicts": True,
+}
+
+HARNESS_RIGOR_SCHEMA_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "jobs": ["optimize"],
+    "min_trials": 1,
+    "require_metrics": ["total_return", "max_drawdown"],
+}
+
+HARNESS_BRANCH_OVERLAY_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "use_root_for_main": True,
+    "main_names": ["main", "master"],
+}
+
+HARNESS_STUDY_REGISTRY_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "max_entries": 200,
+    "jobs": ["optimize", "backtest"],
+}
+
+HARNESS_RIGOR_CHECK_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "block_on_fail": {"optimize": True},
+    "jobs": {
+        "finance_close": True,
+        "finance_ledger": True,
+        "finance_ledger_prep": True,
+        "finance_variance": True,
+        "finance_close_plan": True,
+        "finance_statements": True,
+        "finance_research": True,
+        "expert_consensus": True,
+        "expert_consensus_weekly": True,
+        "optimize": True,
+        "pnl_target": True,
+        "forecast_calibrate": True,
+    },
+}
+
+
 def sync_user_harness_keys(
     *,
     path: Optional[Path] = None,
@@ -77,6 +168,47 @@ def sync_user_harness_keys(
             harness[key] = deepcopy(default_harness[key])
             added.append(f"harness.{key}")
 
+    for nested_key, nested_defaults in (
+        ("apply_gate", HARNESS_APPLY_GATE_DEFAULTS),
+        ("injection", HARNESS_INJECTION_DEFAULTS),
+        ("snapshots", HARNESS_SNAPSHOT_DEFAULTS),
+        ("layer_b_admission", HARNESS_LAYER_B_ADMISSION_DEFAULTS),
+        ("forge_gates", HARNESS_FORGE_GATES_DEFAULTS),
+        ("weekly_narrative", HARNESS_WEEKLY_NARRATIVE_DEFAULTS),
+        ("context_doctor", HARNESS_CONTEXT_DOCTOR_DEFAULTS),
+        ("rigor_schema", HARNESS_RIGOR_SCHEMA_DEFAULTS),
+        ("branch_overlay", HARNESS_BRANCH_OVERLAY_DEFAULTS),
+        ("study_registry", HARNESS_STUDY_REGISTRY_DEFAULTS),
+        ("rigor_check", HARNESS_RIGOR_CHECK_DEFAULTS),
+    ):
+        block = dict(harness.get(nested_key) or {})
+        default_block = dict(default_harness.get(nested_key) or nested_defaults)
+        for sub_key, sub_val in default_block.items():
+            if sub_key not in block:
+                block[sub_key] = deepcopy(sub_val)
+                added.append(f"harness.{nested_key}.{sub_key}")
+        if block:
+            harness[nested_key] = block
+
+    default_jobs = dict(default_harness.get("jobs") or {})
+    jobs = dict(harness.get("jobs") or {})
+    for job_key, job_val in default_jobs.items():
+        if job_key not in jobs:
+            jobs[job_key] = deepcopy(job_val)
+            added.append(f"harness.jobs.{job_key}")
+    if jobs:
+        harness["jobs"] = jobs
+
+    for section_key in ("expert_consensus",):
+        default_section = dict(defaults.get(section_key) or {})
+        section = dict(current.get(section_key) or {})
+        for sub_key, sub_val in default_section.items():
+            if sub_key not in section:
+                section[sub_key] = deepcopy(sub_val)
+                added.append(f"{section_key}.{sub_key}")
+        if section:
+            current[section_key] = section
+
     result: dict[str, Any] = {
         "dry_run": dry_run,
         "path": str(target),
@@ -93,6 +225,8 @@ def sync_user_harness_keys(
 
     merged = deepcopy(current)
     merged["harness"] = harness
+    if "expert_consensus" in current:
+        merged["expert_consensus"] = current["expert_consensus"]
     save_user_settings(merged, path=target)
     result["saved"] = True
     result["message"] = f"已新增 {len(added)} 个 harness 键"

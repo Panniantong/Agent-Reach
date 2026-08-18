@@ -12,18 +12,36 @@ from agent_reach.daily_run.settings import effective_settings, load_settings
 
 @dataclass
 class WeeklyHarnessSkillsReport:
+    finance_variance: dict[str, Any] = field(default_factory=dict)
+    finance_statements: dict[str, Any] = field(default_factory=dict)
+    finance_research: dict[str, Any] = field(default_factory=dict)
+    finance_close_plan: dict[str, Any] = field(default_factory=dict)
+    expert_consensus_weekly: dict[str, Any] = field(default_factory=dict)
     run_guard: dict[str, Any] = field(default_factory=dict)
     weekly_layer_a: dict[str, Any] = field(default_factory=dict)
     effective_overlay: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "finance_variance": self.finance_variance,
+            "finance_statements": self.finance_statements,
+            "finance_research": self.finance_research,
+            "finance_close_plan": self.finance_close_plan,
+            "expert_consensus_weekly": self.expert_consensus_weekly,
             "run_guard": self.run_guard,
             "weekly_layer_a": self.weekly_layer_a,
             "effective_overlay": self.effective_overlay,
             "total_changes": sum(
                 int((block or {}).get("changes") or 0)
-                for block in (self.run_guard, self.weekly_layer_a)
+                for block in (
+                    self.finance_variance,
+                    self.finance_statements,
+                    self.finance_research,
+                    self.finance_close_plan,
+                    self.expert_consensus_weekly,
+                    self.run_guard,
+                    self.weekly_layer_a,
+                )
                 if not (block or {}).get("skipped")
             ),
         }
@@ -41,11 +59,48 @@ def run_weekly_harness_refinements(
     *,
     settings: Optional[dict[str, Any]] = None,
     skip_run_guard: bool = False,
+    skill_writeback: Optional[dict[str, Any]] = None,
 ) -> WeeklyHarnessSkillsReport:
-    """Run run_guard harness when skill_closure is off (schedule gaps subset)."""
+    """Run weekly finance harness jobs and run_guard when skill_closure is off."""
     cfg = effective_settings(settings or load_settings())
     harness_cfg = cfg.get("harness") or {}
     out = WeeklyHarnessSkillsReport()
+
+    if _job_enabled(harness_cfg, "finance_variance"):
+        from agent_reach.daily_run.finance_variance_harness import apply_finance_variance_harness_refinement
+
+        out.finance_variance = apply_finance_variance_harness_refinement(report, settings=cfg)
+
+    if _job_enabled(harness_cfg, "finance_statements"):
+        from agent_reach.daily_run.finance_statements_harness import (
+            apply_finance_statements_harness_refinement,
+        )
+
+        out.finance_statements = apply_finance_statements_harness_refinement(report, settings=cfg)
+
+    if _job_enabled(harness_cfg, "finance_research"):
+        from agent_reach.daily_run.finance_research_harness import apply_finance_research_harness_refinement
+
+        out.finance_research = apply_finance_research_harness_refinement(report, settings=cfg)
+
+    if _job_enabled(harness_cfg, "finance_close_plan"):
+        from agent_reach.daily_run.finance_close_plan_harness import apply_finance_close_plan_harness_refinement
+
+        out.finance_close_plan = apply_finance_close_plan_harness_refinement(
+            report,
+            settings=cfg,
+            skill_writeback=skill_writeback,
+        )
+
+    if _job_enabled(harness_cfg, "expert_consensus_weekly"):
+        from agent_reach.daily_run.expert_consensus_weekly_harness import (
+            apply_expert_consensus_weekly_harness_refinement,
+        )
+
+        out.expert_consensus_weekly = apply_expert_consensus_weekly_harness_refinement(
+            report,
+            settings=cfg,
+        )
 
     if (
         not skip_run_guard

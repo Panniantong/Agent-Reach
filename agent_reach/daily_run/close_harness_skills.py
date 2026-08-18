@@ -18,6 +18,12 @@ class CloseHarnessSkillsReport:
     close_improve: dict[str, Any] = field(default_factory=dict)
     data_audit: dict[str, Any] = field(default_factory=dict)
     watchlist_adjust: dict[str, Any] = field(default_factory=dict)
+    pnl_overview: dict[str, Any] = field(default_factory=dict)
+    pnl_target: dict[str, Any] = field(default_factory=dict)
+    finance_close: dict[str, Any] = field(default_factory=dict)
+    finance_ledger_prep: dict[str, Any] = field(default_factory=dict)
+    finance_ledger: dict[str, Any] = field(default_factory=dict)
+    expert_consensus: dict[str, Any] = field(default_factory=dict)
     close_layer_a: dict[str, Any] = field(default_factory=dict)
     effective_overlay: dict[str, Any] = field(default_factory=dict)
 
@@ -27,6 +33,12 @@ class CloseHarnessSkillsReport:
             "close_improve": self.close_improve,
             "data_audit": self.data_audit,
             "watchlist_adjust": self.watchlist_adjust,
+            "pnl_overview": self.pnl_overview,
+            "pnl_target": self.pnl_target,
+            "finance_close": self.finance_close,
+            "finance_ledger_prep": self.finance_ledger_prep,
+            "finance_ledger": self.finance_ledger,
+            "expert_consensus": self.expert_consensus,
             "close_layer_a": self.close_layer_a,
             "effective_overlay": self.effective_overlay,
             "total_changes": sum(
@@ -36,6 +48,12 @@ class CloseHarnessSkillsReport:
                     self.close_improve,
                     self.data_audit,
                     self.watchlist_adjust,
+                    self.pnl_overview,
+                    self.pnl_target,
+                    self.finance_close,
+                    self.finance_ledger_prep,
+                    self.finance_ledger,
+                    self.expert_consensus,
                     self.close_layer_a,
                 )
                 if not (block or {}).get("skipped")
@@ -50,6 +68,9 @@ def run_close_harness_refinements(
     audit: Optional[AuditResult | dict[str, Any]] = None,
     forecast_review: Optional[dict[str, Any]] = None,
     watchlist_adjust: Optional[dict[str, Any]] = None,
+    portfolio_summary: Optional[dict[str, Any]] = None,
+    pnl_target_cycle: Optional[dict[str, Any]] = None,
+    snapshot: Optional[dict[str, Any]] = None,
     settings: Optional[dict[str, Any]] = None,
 ) -> CloseHarnessSkillsReport:
     """Run verify / close_improve / data_audit harness refinements after close."""
@@ -84,6 +105,52 @@ def run_close_harness_refinements(
         report.watchlist_adjust = apply_watchlist_adjust_harness_refinement(
             watchlist_adjust,
             settings=cfg,
+        )
+
+    if portfolio_summary is not None:
+        from agent_reach.daily_run.pnl_overview_harness import apply_pnl_overview_harness_refinement
+
+        report.pnl_overview = apply_pnl_overview_harness_refinement(
+            portfolio_summary,
+            settings=cfg,
+        )
+
+        from agent_reach.daily_run.pnl_target_harness import apply_pnl_target_harness_refinement
+
+        report.pnl_target = apply_pnl_target_harness_refinement(
+            portfolio_summary,
+            settings=cfg,
+            cycle=pnl_target_cycle,
+        )
+
+        from agent_reach.daily_run.finance_close_harness import apply_finance_close_harness_refinement
+
+        report.finance_close = apply_finance_close_harness_refinement(
+            portfolio_summary,
+            settings=cfg,
+        )
+
+        from agent_reach.daily_run.finance_ledger_prep_harness import apply_finance_ledger_prep_harness_refinement
+
+        report.finance_ledger_prep = apply_finance_ledger_prep_harness_refinement(
+            portfolio_summary,
+            settings=cfg,
+        )
+
+        from agent_reach.daily_run.finance_ledger_harness import apply_finance_ledger_harness_refinement
+
+        report.finance_ledger = apply_finance_ledger_harness_refinement(
+            portfolio_summary,
+            settings=cfg,
+        )
+
+    if snapshot is not None:
+        from agent_reach.daily_run.expert_consensus_harness import apply_expert_consensus_harness_refinement
+
+        report.expert_consensus = apply_expert_consensus_harness_refinement(
+            snapshot,
+            settings=cfg,
+            workflow="close",
         )
 
     report.effective_overlay = effective_overlay_snapshot(cfg)

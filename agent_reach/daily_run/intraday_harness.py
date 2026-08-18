@@ -86,4 +86,16 @@ def apply_intraday_harness_refinement(
     evidence = intraday_to_harness_evidence(payload)
     if not any(evidence.get(k) for k in ("memory", "policy", "playbook", "plan")):
         return {"skipped": True, "reason": "empty evidence", "job": "intraday"}
-    return apply_skill_refinement("intraday", evidence, settings=settings)
+    result = apply_skill_refinement("intraday", evidence, settings=settings)
+    enriched = payload.get("enriched") or payload.get("snapshot") or {}
+    if enriched.get("expert_results") or enriched.get("team_review"):
+        from agent_reach.daily_run.expert_consensus_harness import apply_expert_consensus_harness_refinement
+
+        expert = apply_expert_consensus_harness_refinement(
+            enriched,
+            settings=settings,
+            workflow="intraday",
+        )
+        if not expert.get("skipped"):
+            result["expert_consensus"] = expert
+    return result

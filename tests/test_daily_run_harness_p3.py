@@ -354,3 +354,4 @@ class TestHarnessSyncSettings:
         result = sync_user_harness_keys(path=user_file, dry_run=True)
         assert result["added"]
         assert any("push_summary_on_close" in key for key in result["added"])
+        assert any("expert_consensus_weekly" in key for key in result["added"])

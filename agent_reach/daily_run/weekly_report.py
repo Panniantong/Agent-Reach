@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-from collections import deque
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -539,85 +538,15 @@ def _holdings_shares_from_manifest(record: dict[str, Any]) -> dict[str, int]:
 
 
 def _compute_trade_cash_flow(trades: list[dict[str, Any]]) -> float:
-    """Net cash flow from ledger (sell proceeds − buy costs − commissions)."""
-    pnl = 0.0
-    for entry in trades:
-        for action in entry.get("actions") or []:
-            side = action.get("side")
-            amount = float(action.get("amount") or 0)
-            commission = float(action.get("commission") or 0)
-            if side == "sell":
-                pnl += amount - commission
-            elif side == "buy":
-                pnl -= amount + commission
-    return round(pnl, 2)
+    from agent_reach.daily_run.realized_pnl import compute_trade_cash_flow
+
+    return compute_trade_cash_flow(trades)
 
 
 def _compute_realized_pnl(trades: list[dict[str, Any]]) -> float:
-    """FIFO realized P&L on sell actions (buys alone do not count as loss)."""
-    lots: dict[str, deque[tuple[int, float]]] = {}
-    pnl = 0.0
+    from agent_reach.daily_run.realized_pnl import compute_realized_pnl
 
-    def _apply_buy(action: dict[str, Any]) -> None:
-        shares = int(action.get("shares") or 0)
-        amount = float(action.get("amount") or 0)
-        commission = float(action.get("commission") or 0)
-        if shares <= 0:
-            return
-        code = _normalize_code(str(action.get("code") or "__unknown__"))
-        cost_per = (amount + commission) / shares
-        lots.setdefault(code, deque()).append((shares, cost_per))
-
-    def _apply_sell(action: dict[str, Any]) -> None:
-        shares = int(action.get("shares") or 0)
-        amount = float(action.get("amount") or 0)
-        commission = float(action.get("commission") or 0)
-        if shares <= 0:
-            return
-        code = _normalize_code(str(action.get("code") or "__unknown__"))
-        proceeds_per = (amount - commission) / shares
-        remaining = shares
-        queue = lots.setdefault(code, deque())
-        while remaining > 0 and queue:
-            lot_shares, lot_cost = queue[0]
-            take = min(remaining, lot_shares)
-            pnl += take * (proceeds_per - lot_cost)
-            remaining -= take
-            if take >= lot_shares:
-                queue.popleft()
-            else:
-                queue[0] = (lot_shares - take, lot_cost)
-        if remaining > 0:
-            fallback_cost = float(action.get("price") or 0)
-            if fallback_cost > 0:
-                pnl += remaining * (proceeds_per - fallback_cost)
-
-    for entry in trades:
-        actions = list(entry.get("actions") or [])
-        if (
-            actions
-            and any(a.get("side") == "buy" for a in actions)
-            and any(a.get("side") == "sell" for a in actions)
-            and all(int(a.get("shares") or 0) <= 0 for a in actions)
-        ):
-            pnl += _compute_trade_cash_flow([entry])
-            continue
-        orphan_sells: list[dict[str, Any]] = []
-        for action in actions:
-            side = action.get("side")
-            if side == "buy":
-                _apply_buy(action)
-            elif side == "sell":
-                if int(action.get("shares") or 0) > 0:
-                    orphan_sells.append(action)
-                else:
-                    amount = float(action.get("amount") or 0)
-                    commission = float(action.get("commission") or 0)
-                    pnl += amount - commission
-        for action in orphan_sells:
-            _apply_sell(action)
-
-    return round(pnl, 2)
+    return compute_realized_pnl(trades)
 
 
 def _holding_pnl_rows(

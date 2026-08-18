@@ -1,7 +1,7 @@
 ---
 name: daily-run-harness-skills
 description: >-
-  Daily-run harness 自进化 skills 集合：verify、close_improve、data_audit、
+  Daily-run harness 自进化 skills 集合：verify、close_improve、data_audit、pnl_overview、
   skill_closure、experience、morning、intraday、run_guard。收盘/定时/周六/Agent 改代码后运行。
 ---
 
@@ -25,10 +25,21 @@ description: >-
 | `skill_gates` | `skill_gates_harness.py` | 周六 skill gate 失败 |
 | `watchlist_adjust` | `watchlist_adjust_harness.py` | 收盘/早盘观察池 adjust |
 | `forecast_calibrate` | `forecast_calibrate_harness.py` | 周日 forecast MSS/校准 |
+| `pnl_overview` | `pnl_overview_harness.py` | 收盘 FIFO 已实现 + 浮动盈亏总览 |
+| `pnl_target` | `pnl_target_harness.py` | 下一交易日总盈亏目标 + 达成奖励/未达处罚 |
+| `finance_close` | `finance_close_harness.py` | 收盘 dsh-finance 对账/风控/variance bridge |
+| `finance_ledger_prep` | `finance_ledger_prep_harness.py` | 收盘 journal-entry-prep（approval matrix / memo） |
+| `finance_ledger` | `finance_ledger_harness.py` | 收盘 trade ledger 分录校验（journal-entry check） |
+| `finance_variance` | `finance_variance_harness.py` | 周六 weekly 盈亏 waterfall（stock/cash bridge） |
+| `finance_statements` | `finance_statements_harness.py` | 周六 weekly 三表骨架（损益/资产负债/现金流） |
+| `finance_research` | `finance_research_harness.py` | 周六/周日 structured research workflow（sources/queries/gaps） |
+| `finance_close_plan` | `finance_close_plan_harness.py` | 周六 T+1~T+5 下周 close 日历 |
+| `expert_consensus` | `expert_consensus_harness.py` | 收盘/早盘/盘中 Team-First 专家共识 → policy/playbook |
+| `expert_consensus_weekly` | `expert_consensus_weekly_harness.py` | 周六汇总本周 expert_consensus audit → 周度 policy |
 
 ## 收盘自动
 
-`run_close()` → `run_close_harness_refinements()` 依次 refine verify / close_improve / data_audit；
+`run_close()` → `run_close_harness_refinements()` 依次 refine verify / close_improve / data_audit / **pnl_overview** / **pnl_target** / **finance_close** / **finance_ledger_prep** / **finance_ledger** / **expert_consensus**；
 `append_experience_entry()` → experience harness（harness 模式下 rules 同步进 memory/policy）；
 随后 `run_close_layer_a_refinement()` 只写入组合盈亏等 residual。
 
@@ -53,13 +64,17 @@ python3 -m agent_reach.cli daily-run harness migrate-settings
 
 **weekly 去重**：
 - `skill_closure` / `run_guard` 开启时，`weekly` layer_a 只写 PnL / experience_snippets / applied_config
-- 周六顺序：`apply_weekly_skill_closure` → `run_weekly_harness_refinements` → `run_weekly_layer_a_refinement`
+- 周六顺序：`apply_weekly_skill_closure` → `run_weekly_harness_refinements`（**finance_variance** / **finance_statements** / **finance_research** / **finance_close_plan** / **expert_consensus_weekly** / run_guard）→ `run_weekly_layer_a_refinement`
+- 周日 forecast：`run_forecast_harness_refinements` 在 `forecast_calibrate` 后可再跑 **finance_research**（`finance_research.run_on_forecast`）
 
 ## 手动运行
 
 ```bash
 # 收盘三件套（smoke）
 python3 .cursor/skills/daily-run-harness-skills/scripts/run_close_harness.py --json
+
+# 盈亏总览 harness
+python3 .cursor/skills/daily-run-pnl-overview/scripts/run_pnl_harness.py --json
 
 # 代码走读
 python3 .cursor/skills/daily-run-code-walk/scripts/run_walk.py
@@ -99,7 +114,9 @@ python3 .cursor/skills/daily-run-code-walk/scripts/run_walk.py
 ## 配置
 
 ```json
-"harness": { "jobs": { "verify": true, "close_improve": true, "data_audit": true, "skill_closure": true, "optimize": true, "experience": true, "morning": true, "intraday": true, "run_guard": true } },
+"harness": { "jobs": { "verify": true, "close_improve": true, "data_audit": true, "pnl_overview": true, "skill_closure": true, "optimize": true, "experience": true, "morning": true, "intraday": true, "run_guard": true } },
+"pnl_overview": { "harness_evolve": true },
+"pnl_target": { "enabled": true, "harness_evolve": true, "base_target_pct": 0.5 },
 "close_improvements": { "harness_evolve": true },
 "data_audit": { "harness_evolve": true },
 "optimizer": { "harness_evolve": true },
@@ -108,6 +125,156 @@ python3 .cursor/skills/daily-run-code-walk/scripts/run_walk.py
 ```
 
 ## P3/P4 运维
+
+### Apply gate（rule-evolve / memory-gate 模式）
+
+| 开关 | 行为 |
+|------|------|
+| `apply_gate.enabled` | 启用 verify-before-apply（默认 true） |
+| `apply_gate.block_policy_on_audit_fail` | 审计未通过时不写入 `policy`（memory/plan/playbook 仍写） |
+| `apply_gate.block_policy_on_structured_incomplete` | 结构化复核未完成时不写 `policy` |
+| `injection.max_per_kind_per_job` | 单次 refine 每 kind 最多写入条数（默认 8） |
+| `injection.max_overlay_claims` | runtime overlay 最多采纳 3 条 harness 声明 |
+| `injection.max_overlay_chars` | overlay 扫描总字符上限（默认 1200） |
+
+审计轨迹：`~/.agent-reach/daily_run/harness/apply_audit.jsonl`；Feishu harness 卡展示 verification_signals / 门控拦截。
+
+### 改前快照 + Layer B Admission（dsh-guard / self-evolving）
+
+| 能力 | 说明 |
+|------|------|
+| `snapshots.enabled` | 每次 refine 前写入 `harness/snapshots/*.json`（默认保留 20 份） |
+| `layer_b_admission.enabled` | Layer B / summarize 应用前过滤危险 edits（阈值漂移、超长、过多条数） |
+| claim 决策 | overlay 扫描输出 `adopted` / `verify` / `ignored` 写入 `injection_gate.claims` |
+
+```bash
+python3 -m agent_reach.cli daily-run harness list-snapshots
+python3 -m agent_reach.cli daily-run harness restore-snapshot --path ~/.agent-reach/daily_run/harness/snapshots/....json
+```
+
+```json
+"harness": {
+  "snapshots": { "enabled": true, "max_keep": 20 },
+  "layer_b_admission": {
+    "enabled": true,
+    "max_edits": 8,
+    "max_score_drift": 15,
+    "max_ratio_drift": 0.25
+  },
+  "forge_gates": {
+    "enabled": true,
+    "pnl_target": { "max_target_pct": 3.0, "max_target_cny": 50000 },
+    "forecast_calibrate": { "use_week_forecast_bounds": true }
+  },
+  "weekly_narrative": {
+    "enabled": true,
+    "append_to_weekly_card": true,
+    "audit_days": 7
+  }
+}
+```
+
+### Forge 数值门控 + 周度叙事（dsh-forge / period-report）
+
+| 能力 | 说明 |
+|------|------|
+| `forge_gates.enabled` | `pnl_target` / `forecast_calibrate` refine 前校验 domain 数值 |
+| `forge_gates.pnl_target.max_target_pct` | 下一日目标盈亏占比上限（默认 3%） |
+| `forge_gates.pnl_target.max_target_cny` | 下一日目标盈亏绝对值上限（默认 50000） |
+| `weekly_narrative.enabled` | 周六 harness 卡追加本周 apply_audit 聚合叙事 |
+| `weekly_narrative.append_to_weekly_card` | 嵌入 weekly Feishu harness 卡（默认 true） |
+
+- Forge 失败：`apply_skill_refinement` 返回 `reason=forge_gate_failed`，不写 harness。
+- 周度叙事：统计 audit 事件数、变更项、gate 拦截、Layer B 拒绝、job 分布。
+
+### 运行时 Claim  enforcement + 统一审计（round 4）
+
+| 开关 | 行为 |
+|------|------|
+| `injection.enforce_claim_decisions` | runtime overlay 仅采纳 `adopted` 声明；含「假设/待验证/TODO」的 `verify` 声明不生效 |
+| `apply_audit.jsonl` | 记录 Layer A/B/summarize 的 applied / skipped（forge、admission 拒绝） |
+
+- Forge / Layer B 拒绝也会写入 audit，周六周度叙事会统计 `forge_blocks` 与 `layer_b_skips`。
+
+### dsh-finance + dsh-rigorquant 移植（方案 2）
+
+| 来源 | Agent Reach 模块 | 行为 |
+|------|------------------|------|
+| `dsh-finance` portfolio_risk / reconcile / variance_bridge | `harness_finance.py` + `finance_close_harness.py` | 收盘组合风控、净值对账、variance bridge → harness memory/policy |
+| `dsh-finance` journal-entry check | `harness_finance.py` + `finance_ledger_harness.py` | trade ledger 分录平衡（amount vs shares×price、买卖借贷、cost_basis / trade_cash_flow） |
+| `dsh-finance` journal-entry-prep | `harness_finance.py` + `finance_ledger_prep_harness.py` | approval matrix、material buy memo、preparer/approver 分离 |
+| `dsh-finance` reconciliation snapshot | `harness_finance.py` + `finance_close_harness.py` | 收盘未平项账龄 / stale / sign-off readiness |
+| `dsh-finance` financial-statements | `harness_finance.py` + `finance_statements_harness.py` | 周六 weekly 三表 + materiality tie-out |
+| `dsh-finance` finance_research_workflow | `harness_finance.py` + `finance_research_harness.py` | sources/queries/evidence_gaps → harness plan |
+| `dsh-rigorquant` 四重校验电池 | `harness_rigor_check.py` | closure / invariant / boundary / evidence；默认仅 **optimize** 失败时 block refine |
+| `dsh-rigorquant` study.json schema | `harness_rigor_schema.py` + `harness_study_registry.py` | optimize 试验登记到 `study_registry.json` |
+| `dsh-memory-evolve` git 分支感知 | `harness_git.py` | 非 main 分支 harness 状态隔离到 `harness/branches/<slug>/` |
+| `dsh-context-doctor` 去重 | `harness_context_doctor.py` | Layer A apply 前按相似度剔除重复 memory/policy/playbook/plan |
+| `dsh-context-doctor` 冲突检测 | `harness_context_doctor.py` | policy 偏防御 vs playbook 激进等跨 kind 冲突拦截 |
+| Team-First 8 专家 / MSS 插件 | `harness_experts.py` + `expert_consensus_harness.py` | 共识/冲突/MSS drift/identifier block → harness policy/playbook |
+| forge 扩展 | `harness_forge_gates.py` | 新增 `finance_close`、`finance_ledger`、`optimize` 数值 sanity |
+
+```json
+"finance_close": {
+  "enabled": true,
+  "harness_evolve": true,
+  "max_position_pct": 35,
+  "min_cash_pct": 5
+},
+"harness": {
+  "rigor_check": {
+    "enabled": true,
+    "block_on_fail": { "optimize": true },
+    "jobs": { "finance_close": true, "finance_ledger": true, "optimize": true }
+  },
+  "jobs": { "finance_close": true, "finance_ledger": true }
+}
+```
+
+- `finance_close` 对账/bridge 失败仍会写入 playbook（rigor 仅记录，不 block）。
+- `optimize` rigor 或 forge 失败 → `reason=rigor_check_failed` / `forge_gate_failed`，不写 harness。
+
+**周六 weekly 扩展（dsh-finance variance-analysis / close-management）**
+
+| Job | 模块 | 行为 |
+|-----|------|------|
+| `finance_variance` | `finance_variance_harness.py` | 周盈亏 stock/cash bridge + materiality → harness |
+| `finance_close_plan` | `finance_close_plan_harness.py` | T+1~T+5 下周 close 任务日历（manifest/skill gates/blockers） |
+
+```json
+"finance_variance": {
+  "enabled": true,
+  "variance_materiality_cny": 1000,
+  "percent_materiality": 1.0
+},
+"finance_statements": {
+  "enabled": true,
+  "materiality_cny": 1000,
+  "tie_tolerance_cny": 5.0
+},
+"finance_reconcile": {
+  "stale_days": 3,
+  "materiality_cny": 500
+},
+"harness": {
+  "context_doctor": {
+    "enabled": true,
+    "similarity_threshold": 0.86
+  },
+  "rigor_schema": {
+    "enabled": true,
+    "jobs": ["optimize"]
+  },
+  "branch_overlay": {
+    "enabled": true,
+    "use_root_for_main": true
+  },
+  "study_registry": {
+    "enabled": true,
+    "jobs": ["optimize", "backtest"]
+  }
+}
+```
 
 ### Feishu Harness 摘要卡
 
@@ -148,5 +315,5 @@ python3 -m agent_reach.cli daily-run harness sync-settings
 ## 测试
 
 ```bash
-python3 -m pytest tests/test_daily_run_harness_p3.py tests/test_daily_run_harness_p2.py tests/test_daily_run_harness_p1.py -q
+python3 -m pytest tests/test_daily_run_harness_p8.py tests/test_daily_run_harness_p7.py tests/test_daily_run_harness_p6.py tests/test_daily_run_harness_p5.py tests/test_daily_run_harness_p4.py tests/test_daily_run_harness_p3.py tests/test_daily_run_harness_p2.py tests/test_daily_run_harness_p1.py -q
 ```

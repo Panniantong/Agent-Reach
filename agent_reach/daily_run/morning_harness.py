@@ -50,12 +50,24 @@ def morning_to_harness_evidence(run_result: dict[str, Any]) -> dict[str, Any]:
         playbook.append(f"早盘建议：{rec}")
 
     summary = f"morning {name} mss={mss} verdict={verdict}"
+    morning_gate_passed = None if gate is None else bool(gate.passed)
+    morning_audit_passed = None if audit is None else bool(audit.passed)
+    verification_signals: list[str] = []
+    if morning_gate_passed is False:
+        verification_signals.append("morning_gate_failed")
+    if morning_audit_passed is False:
+        verification_signals.append("morning_audit_failed")
+
     return {
         "memory": memory,
         "policy": policy,
         "playbook": playbook,
         "plan": plan,
         "summary": summary,
+        "morning_gate_passed": morning_gate_passed,
+        "morning_audit_passed": morning_audit_passed,
+        "audit_passed": morning_audit_passed,
+        "verification_signals": verification_signals,
     }
 
 
@@ -67,4 +79,16 @@ def apply_morning_harness_refinement(
     evidence = morning_to_harness_evidence(run_result)
     if not any(evidence.get(k) for k in ("memory", "policy", "playbook", "plan")):
         return {"skipped": True, "reason": "empty evidence", "job": "morning"}
-    return apply_skill_refinement("morning", evidence, settings=settings)
+    result = apply_skill_refinement("morning", evidence, settings=settings)
+    snapshot = run_result.get("snapshot") or {}
+    if snapshot.get("expert_results") or snapshot.get("team_review"):
+        from agent_reach.daily_run.expert_consensus_harness import apply_expert_consensus_harness_refinement
+
+        expert = apply_expert_consensus_harness_refinement(
+            snapshot,
+            settings=settings,
+            workflow="morning",
+        )
+        if not expert.get("skipped"):
+            result["expert_consensus"] = expert
+    return result

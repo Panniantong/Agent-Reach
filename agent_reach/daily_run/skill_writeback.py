@@ -47,6 +47,7 @@ def resolve_cursor_agent_skill_sources() -> list[Path]:
     for rel in (
         ".cursor/skills/daily-run-harness-skills/SKILL.md",
         ".cursor/skills/daily-run-code-walk/SKILL.md",
+        ".cursor/skills/daily-run-pnl-overview/SKILL.md",
     ):
         path = root / rel
         if path.is_file():

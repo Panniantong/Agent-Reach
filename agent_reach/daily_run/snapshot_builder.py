@@ -146,19 +146,125 @@ def _primary_row_fields(
 _TECHNICAL_KEYS = ("ma20", "ma5", "position_20d", "volume_ratio")
 
 
+try:
+    from loguru import logger
+except ImportError:  # pragma: no cover
+    import logging
+
+    logger = logging.getLogger("agent_reach.daily_run.snapshot_builder")
+
+
 def _technicals_patch(enriched: dict[str, Any]) -> dict[str, Any]:
     return {k: enriched.get(k) for k in _TECHNICAL_KEYS if enriched.get(k) is not None}
 
 
-def _attach_technicals(quote: dict[str, Any], code: str) -> dict[str, Any]:
+def _technicals_cost_fallback_enabled(settings: Optional[dict[str, Any]]) -> bool:
+    snap = (settings or {}).get("snapshot") or {}
+    return snap.get("technicals_cost_fallback", True) is not False
+
+
+def _estimate_position_20d(price: Any, ma20: Any) -> Optional[float]:
+    if price is None or ma20 is None:
+        return None
+    ma = float(ma20)
+    if ma <= 0:
+        return None
+    ratio = (float(price) - ma) / ma
+    return round(max(0.05, min(0.95, 0.5 + ratio * 2)), 4)
+
+
+def _source_rows_by_code(portfolio: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    rows: dict[str, dict[str, Any]] = {}
+    for row in (portfolio.get("holdings") or []) + (portfolio.get("watchlist") or []):
+        code = _normalize_code(str(row.get("code") or ""))
+        if code:
+            rows[code] = dict(row)
+    return rows
+
+
+def _fallback_technicals_patch(
+    code: str,
+    quote: dict[str, Any],
+    *,
+    row: Optional[dict[str, Any]] = None,
+    settings: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Seed ma20/position from portfolio row when AKShare hist is unavailable."""
+    src = row or {}
+    ma20 = src.get("ma20") if row else quote.get("ma20")
+    if ma20 is None and row and _technicals_cost_fallback_enabled(settings):
+        cost = row.get("cost")
+        if cost is not None:
+            ma20 = cost
+    if ma20 is None:
+        return {}
+
+    price = quote.get("price") if quote.get("price") is not None else src.get("price")
+    patch: dict[str, Any] = {"ma20": round(float(ma20), 2)}
+    pos = _estimate_position_20d(price, ma20)
+    if pos is not None:
+        patch["position_20d"] = pos
+    if row and row.get("volume_ratio") is not None and quote.get("volume_ratio") is None:
+        patch["volume_ratio"] = row["volume_ratio"]
+    return patch
+
+
+def _attach_technicals(
+    quote: dict[str, Any],
+    code: str,
+    *,
+    fallback_row: Optional[dict[str, Any]] = None,
+    settings: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
     out = dict(quote)
+    norm = _normalize_code(code)
     try:
         from agent_reach.daily_run.akshare_adapter import fetch_technicals
 
-        out.update(fetch_technicals(code))
-    except Exception:
-        pass
+        out.update(fetch_technicals(norm))
+    except Exception as exc:
+        logger.warning("akshare technicals failed for {}: {}", norm, exc)
+
+    if _technicals_patch(out).get("ma20") is None:
+        fb = _fallback_technicals_patch(norm, out, row=fallback_row, settings=settings)
+        if fb:
+            out.update(fb)
+            logger.info(
+                "technicals fallback for {}: ma20={} source={}",
+                norm,
+                fb.get("ma20"),
+                "portfolio" if (fallback_row or {}).get("ma20") is not None else "cost",
+            )
     return out
+
+
+def _ensure_cached_technicals(
+    codes: list[str],
+    quote_map: dict[str, dict[str, Any]],
+    cached_technicals: dict[str, Any],
+    source_rows: dict[str, dict[str, Any]],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    updated = dict(cached_technicals)
+    for code in dict.fromkeys(codes):
+        if code not in quote_map:
+            continue
+        have = updated.get(code) or {}
+        if isinstance(have, dict) and have.get("ma20") is not None:
+            continue
+        patch = _technicals_patch(quote_map[code])
+        if patch.get("ma20") is None:
+            patch = _fallback_technicals_patch(
+                code,
+                quote_map[code],
+                row=source_rows.get(code),
+                settings=settings,
+            )
+        if patch:
+            updated[code] = {**(have if isinstance(have, dict) else {}), **patch}
+            quote_map[code] = {**quote_map[code], **patch}
+    return updated
 
 
 def _apply_cached_technicals(
@@ -174,6 +280,9 @@ def _backfill_missing_technicals(
     codes: list[str],
     quote_map: dict[str, dict[str, Any]],
     cached_technicals: dict[str, Any],
+    *,
+    source_rows: Optional[dict[str, dict[str, Any]]] = None,
+    settings: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     """Fetch AKShare technicals for symbols still missing ma20 during intraday."""
     from agent_reach.daily_run.snapshot_cache import merge_technicals, save_daily_cache
@@ -186,7 +295,21 @@ def _backfill_missing_technicals(
         have = updated.get(code) or {}
         if isinstance(have, dict) and have.get("ma20") is not None:
             continue
-        patch = _technicals_patch(_attach_technicals(quote_map[code], code))
+        patch = _technicals_patch(
+            _attach_technicals(
+                quote_map[code],
+                code,
+                fallback_row=(source_rows or {}).get(code),
+                settings=settings,
+            )
+        )
+        if patch.get("ma20") is None:
+            patch = _fallback_technicals_patch(
+                code,
+                quote_map[code],
+                row=(source_rows or {}).get(code),
+                settings=settings,
+            )
         if patch:
             patches[code] = patch
             quote_map[code] = {**quote_map[code], **patch}
@@ -228,7 +351,7 @@ def enrich_holding(
             if quote.get(k) and not out.get(k):
                 out[k] = quote[k]
         if with_technicals:
-            enriched = _attach_technicals(quote, code)
+            enriched = _attach_technicals(quote, code, fallback_row=out)
             for k in _TECHNICAL_KEYS:
                 if enriched.get(k) is not None:
                     out[k] = enriched[k]
@@ -289,6 +412,7 @@ def build_snapshot(
         )
 
     pf = portfolio or load_portfolio()
+    source_rows_by_code = _source_rows_by_code(pf)
     code = primary_code or pf.get("primary_code") or "MARKET"
     if code == "MARKET" and pf.get("holdings"):
         code = str(pf["holdings"][0]["code"])
@@ -329,7 +453,13 @@ def build_snapshot(
     }
 
     if enrich_level == "quotes":
-        cached_technicals = _backfill_missing_technicals(all_codes, quote_map, cached_technicals)
+        cached_technicals = _backfill_missing_technicals(
+            all_codes,
+            quote_map,
+            cached_technicals,
+            source_rows=source_rows_by_code,
+            settings=cfg,
+        )
         _apply_cached_technicals(quote_map, cached_technicals)
 
     def _enrich_row(row: dict[str, Any], *, with_technicals: bool) -> dict[str, Any]:
@@ -365,11 +495,23 @@ def build_snapshot(
         for c in dict.fromkeys(all_codes):
             if c not in quote_map:
                 continue
-            enriched = _attach_technicals(quote_map[c], c)
+            enriched = _attach_technicals(
+                quote_map[c],
+                c,
+                fallback_row=source_rows_by_code.get(c),
+                settings=cfg,
+            )
             quote_map[c] = enriched
             patch = _technicals_patch(enriched)
             if patch:
                 cached_technicals[c] = patch
+        cached_technicals = _ensure_cached_technicals(
+            all_codes,
+            quote_map,
+            cached_technicals,
+            source_rows_by_code,
+            settings=cfg,
+        )
 
     # When live quotes fail, seed primary symbol from cost/holding row and retry technicals.
     if code_norm not in quote_map:
@@ -383,7 +525,12 @@ def build_snapshot(
                     "source": row.get("quote_source") or "cost_fallback",
                 }
                 if enrich_level == "full":
-                    quote_map[code_norm] = _attach_technicals(stub, code_norm)
+                    quote_map[code_norm] = _attach_technicals(
+                        stub,
+                        code_norm,
+                        fallback_row=source_rows_by_code.get(code_norm),
+                        settings=cfg,
+                    )
                 else:
                     quote_map[code_norm] = stub
                 break

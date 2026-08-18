@@ -415,6 +415,46 @@ class TestHarnessRuntimeExtensions:
         assert signals["mss_forecast_miss"] is True
         assert signals["defensive_trim"] is True
 
+    def test_pnl_target_miss_triggers_defensive_signals(self):
+        state = HarnessState()
+        state.entries["memory"]["pnl_miss"] = HarnessEntry(
+            id="pnl_miss",
+            kind="memory",
+            title="pnl_target",
+            content="盈亏目标未达：目标 +500 实际 -200（差 -700）",
+            source="deterministic",
+            job="pnl_target",
+            evidence="pnl_target miss",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        signals = resolve_harness_trade_signals(
+            state,
+            settings={"harness": {"runtime_overlay_sources": ["memory"]}},
+        )
+        assert signals["pnl_target_miss"] is True
+        assert signals["defensive_trim"] is True
+
+    def test_pnl_target_hit_relaxes_aggressive_entry(self):
+        state = HarnessState()
+        state.entries["memory"]["pnl_hit"] = HarnessEntry(
+            id="pnl_hit",
+            kind="memory",
+            title="pnl_target",
+            content="盈亏目标达成：目标 +500 实际 +800",
+            source="deterministic",
+            job="pnl_target",
+            evidence="pnl_target hit",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        flat = resolve_harness_flat_overrides(
+            state,
+            {"macro_veto": 40, "aggressive_entry": 50, "min_cash_ratio": 0.3},
+            settings=_harness_settings(),
+        )
+        assert flat["aggressive_entry"] >= 52.0
+
 
 class TestHarnessP2Evolution:
     def test_harness_mode_technical_neutral_defaults(self):

@@ -56,12 +56,27 @@ def audit_to_harness_evidence(audit: AuditResult | dict[str, Any]) -> dict[str, 
         memory.append("结构化复核未完成：标签上限「观察」，禁止激进买入")
 
     summary = f"data_audit passed={passed} issues={len(issues)} warnings={len(warnings)}"
+    verification_signals: list[str] = []
+    if not passed:
+        verification_signals.append("audit_failed")
+    if structured is False:
+        verification_signals.append("structured_review_incomplete")
+    if issues:
+        verification_signals.append(f"audit_issues={len(issues)}")
+    if warnings:
+        verification_signals.append(f"audit_warnings={len(warnings)}")
+
     return {
         "memory": memory,
         "policy": policy,
         "playbook": playbook,
         "plan": plan,
         "summary": summary,
+        "audit_passed": passed,
+        "structured_review_complete": structured,
+        "issues": issues,
+        "warnings": warnings,
+        "verification_signals": verification_signals,
     }
 
 

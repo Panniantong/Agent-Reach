@@ -58,6 +58,112 @@
     "harness_evolve": true
   },
 
+  "pnl_overview": {
+    "harness_evolve": true,
+    "large_unrealized_loss_cny": 5000,
+    "large_realized_loss_cny": 500,
+    "large_unrealized_loss_pct": 10
+  },
+
+  "pnl_target": {
+    "enabled": true,
+    "harness_evolve": true,
+    "base_target_pct": 0.5,
+    "base_target_cny": 0,
+    "min_target_cny": 100,
+    "streak_bonus_pct": 10,
+    "miss_recovery_factor": 0.8,
+    "evaluate_by_pct": false,
+    "history_limit": 120,
+    "reward_plan": "pnl_target：目标达成，维持策略并适度进攻",
+    "penalty_plan": "pnl_target：目标未达，下日 verify 偏防御"
+  },
+
+  "finance_close": {
+    "enabled": true,
+    "harness_evolve": true,
+    "max_position_pct": 35,
+    "max_sector_pct": 50,
+    "max_gross_exposure_pct": 100,
+    "min_cash_pct": 5,
+    "reconcile_tolerance_cny": 1.0,
+    "variance_tolerance_cny": 1.0,
+    "variance_materiality_cny": 500
+  },
+
+  "finance_variance": {
+    "enabled": true,
+    "harness_evolve": true,
+    "variance_tolerance_cny": 5.0,
+    "variance_materiality_cny": 1000,
+    "percent_materiality": 1.0
+  },
+
+  "finance_close_plan": {
+    "enabled": true,
+    "harness_evolve": true,
+    "calendar_days": 5
+  },
+
+  "finance_reconcile": {
+    "stale_days": 3,
+    "materiality_cny": 500
+  },
+
+  "finance_statements": {
+    "enabled": true,
+    "harness_evolve": true,
+    "materiality_cny": 1000,
+    "tie_tolerance_cny": 5.0
+  },
+
+  "finance_research": {
+    "enabled": true,
+    "harness_evolve": true,
+    "max_queries": 6,
+    "max_sources": 8,
+    "holding_materiality_cny": 2000,
+    "run_on_forecast": true
+  },
+
+  "finance_ledger": {
+    "enabled": true,
+    "harness_evolve": true,
+    "amount_tolerance_cny": 1.0,
+    "amount_tolerance_pct": 0.02,
+    "require_trade_id": false,
+    "require_reasoning": false
+  },
+
+  "finance_ledger_prep": {
+    "enabled": true,
+    "harness_evolve": true,
+    "materiality_cny": 5000,
+    "require_reasoning_on_buy": true,
+    "block_same_preparer_approver": true
+  },
+
+  "expert_consensus": {
+    "enabled": true,
+    "harness_evolve": true,
+    "mss_drift_threshold": 12,
+    "low_score_cutoff": 42,
+    "high_score_cutoff": 62,
+    "max_mss_drift_flags": 4,
+    "weekly_rollup": true,
+    "weekly": {
+      "enabled": true,
+      "audit_days": 7,
+      "high_conflict_runs": 3,
+      "high_drift_runs": 4
+    },
+    "workflows": {
+      "morning": true,
+      "intraday": true,
+      "close": true
+    }
+  },
+
   "quote_fetch": {
     "sources": ["eastmoney", "akshare", "xueqiu"],
     "max_retries": 2
@@ -535,6 +641,86 @@
     "auto_rollback_on_bad_trade": true,
     "bad_trade_pnl_pct": -1.0,
     "bad_trade_weekly_pnl_pct": -2.0,
+    "apply_gate": {
+      "enabled": true,
+      "block_policy_on_audit_fail": true,
+      "block_policy_on_structured_incomplete": true,
+      "block_playbook_on_morning_gate_fail": true
+    },
+    "injection": {
+      "max_per_kind_per_job": 8,
+      "max_chars_per_line": 240,
+      "max_overlay_claims": 3,
+      "max_overlay_chars": 1200,
+      "enforce_claim_decisions": true
+    },
+    "snapshots": {
+      "enabled": true,
+      "max_keep": 20
+    },
+    "layer_b_admission": {
+      "enabled": true,
+      "max_edits": 8,
+      "max_score_drift": 15,
+      "max_ratio_drift": 0.25,
+      "block_threshold_literals": true
+    },
+    "forge_gates": {
+      "enabled": true,
+      "pnl_target": {
+        "max_target_pct": 3.0,
+        "max_target_cny": 50000
+      },
+      "forecast_calibrate": {
+        "use_week_forecast_bounds": true
+      }
+    },
+    "weekly_narrative": {
+      "enabled": true,
+      "append_to_weekly_card": true,
+      "audit_days": 7
+    },
+    "context_doctor": {
+      "enabled": true,
+      "similarity_threshold": 0.86,
+      "min_chars": 12,
+      "detect_conflicts": true
+    },
+    "rigor_schema": {
+      "enabled": true,
+      "jobs": ["optimize"],
+      "min_trials": 1,
+      "require_metrics": ["total_return", "max_drawdown"]
+    },
+    "branch_overlay": {
+      "enabled": true,
+      "use_root_for_main": true,
+      "main_names": ["main", "master"]
+    },
+    "study_registry": {
+      "enabled": true,
+      "max_entries": 200,
+      "jobs": ["optimize", "backtest"]
+    },
+    "rigor_check": {
+      "enabled": true,
+      "block_on_fail": {
+        "optimize": true
+      },
+      "jobs": {
+        "finance_close": true,
+        "finance_ledger": true,
+        "finance_ledger_prep": true,
+        "finance_variance": true,
+        "finance_close_plan": true,
+        "finance_statements": true,
+        "finance_research": true,
+        "expert_consensus": true,
+        "optimize": true,
+        "pnl_target": true,
+        "forecast_calibrate": true
+      }
+    },
     "render_format": "xml",
     "jobs": {
       "close": true,
@@ -553,7 +739,18 @@
       "rejected_strategies": true,
       "skill_gates": true,
       "watchlist_adjust": true,
-      "forecast_calibrate": true
+      "forecast_calibrate": true,
+      "pnl_overview": true,
+      "pnl_target": true,
+      "finance_close": true,
+      "finance_ledger": true,
+      "finance_ledger_prep": true,
+      "finance_variance": true,
+      "finance_statements": true,
+      "finance_research": true,
+      "finance_close_plan": true,
+      "expert_consensus": true,
+      "expert_consensus_weekly": true
     },
     "llm_refine": {
       "enabled": true,

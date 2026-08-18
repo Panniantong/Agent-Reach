@@ -110,6 +110,27 @@ def enrich_morning_baseline(snapshot: dict[str, Any]) -> dict[str, Any]:
     cfg_holdings = list(pf_cfg.get("holdings") or [])
     merged = _merge_holdings_for_baseline(snap_holdings, cfg_holdings)
     holdings = _holdings_baseline_snapshot(merged)
+    missing_codes = [
+        str(h.get("code") or "")
+        for h in holdings
+        if h.get("code") and h.get("price") is None
+    ]
+    if missing_codes:
+        from agent_reach.daily_run.quote_fetch import fetch_quotes_map
+        from agent_reach.daily_run.settings import load_settings
+
+        quotes = fetch_quotes_map(missing_codes, settings=load_settings()).quotes
+        for h in holdings:
+            code = str(h.get("code") or "")
+            q = quotes.get(code) or {}
+            if h.get("price") is None and q.get("price") is not None:
+                h["price"] = q["price"]
+            if h.get("change_pct") is None and q.get("change_pct") is not None:
+                h["change_pct"] = q["change_pct"]
+            shares = h.get("shares")
+            price = h.get("price")
+            if shares is not None and price is not None and h.get("market_value") is None:
+                h["market_value"] = round(int(shares) * float(price), 2)
 
     pf_work: dict[str, Any] = {
         "total": pf_block.get("total") if pf_block.get("total") is not None else pf_cfg.get("total"),
@@ -371,6 +392,8 @@ def _push_harness_summary_card(
     template: Optional[str] = None,
     harness_errors: Optional[list[str]] = None,
     body: Optional[str] = None,
+    week_start: Optional[str] = None,
+    week_end: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     from agent_reach.daily_run.harness import format_harness_push_markdown
     from agent_reach.daily_run.report_push import ReportSection, push_report_sections
@@ -379,6 +402,9 @@ def _push_harness_summary_card(
         harness_result,
         job=report_kind,
         harness_errors=harness_errors,
+        week_start=week_start,
+        week_end=week_end,
+        settings=settings,
     )
     if not harness_md.strip():
         return None
@@ -595,6 +621,10 @@ def run_close(
         if not experts_already_ran:
             enriched = run_team_first(enriched, cfg, names=plugin_names)
         team_md = render_team_markdown(enriched)
+    elif mss_experts_enabled(cfg, workflow="close") and not experts_already_ran:
+        from agent_reach.daily_run.plugins.loader import MSS_EXPERT_NAMES, run_experts
+
+        enriched = run_experts(dict(enriched), cfg, names=plugin_names or MSS_EXPERT_NAMES)
 
     if verify_dict is not None:
         from agent_reach.daily_run.verify import verify_from_dict
@@ -742,6 +772,7 @@ def run_close(
 
     portfolio_md = ""
     portfolio_summary_obj = None
+    pnl_target_cycle: dict[str, Any] | None = None
     if portfolio_summary:
         from agent_reach.daily_run.close_portfolio_summary import (
             build_close_portfolio_summary,
@@ -756,7 +787,22 @@ def run_close(
             watchlist_adjust=watchlist_adjust,
             settings=cfg,
         )
-        portfolio_md = render_close_portfolio_markdown(portfolio_summary_obj)
+        from agent_reach.daily_run.pnl_target import run_pnl_target_close_cycle
+
+        pnl_target_cycle = run_pnl_target_close_cycle(
+            portfolio_summary_obj.to_dict(),
+            settings=cfg,
+        )
+        portfolio_md = render_close_portfolio_markdown(
+            portfolio_summary_obj,
+            pnl_target_cycle=pnl_target_cycle,
+        )
+        from agent_reach.daily_run.daily_pnl_history import append_daily_pnl
+
+        append_daily_pnl(
+            portfolio_summary_obj.to_dict(),
+            source="close",
+        )
 
     from agent_reach.daily_run.auditor import run_data_audit
 
@@ -771,6 +817,9 @@ def run_close(
             audit=audit,
             forecast_review=forecast_review.to_dict() if forecast_review else None,
             watchlist_adjust=watchlist_adjust,
+            portfolio_summary=portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
+            pnl_target_cycle=pnl_target_cycle,
+            snapshot=enriched,
             settings=cfg,
         )
         enriched["harness_skills"] = harness_skills_report.to_dict()
@@ -1212,7 +1261,13 @@ def run_weekly(
             run_weekly_layer_a_refinement,
         )
 
-        weekly_skills_report = run_weekly_harness_refinements(report.to_dict(), settings=cfg)
+        weekly_skills_report = run_weekly_harness_refinements(
+            report.to_dict(),
+            settings=cfg,
+            skill_writeback=skill_writeback,
+        )
+        harness_result["finance_variance"] = weekly_skills_report.finance_variance
+        harness_result["finance_close_plan"] = weekly_skills_report.finance_close_plan
         harness_result["run_guard"] = weekly_skills_report.run_guard
 
         weekly_evidence = {
@@ -1327,6 +1382,8 @@ def run_weekly(
             config=cfg_obj,
             report_kind="weekly",
             harness_errors=harness_errors,
+            week_start=str(report.week_start or ""),
+            week_end=str(report.week_end or ""),
         ):
             steps.append("push_harness_summary")
         steps.extend(

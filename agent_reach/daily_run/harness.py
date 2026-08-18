@@ -19,15 +19,33 @@ _SCHEMA_VERSION = 1
 
 
 def harness_dir() -> Path:
-    return Path.home() / ".agent-reach" / "daily_run" / "harness"
+    try:
+        from agent_reach.daily_run.harness_git import resolve_harness_paths
+        from agent_reach.daily_run.settings import load_settings
+
+        return resolve_harness_paths(load_settings())["root"]
+    except Exception:
+        return Path.home() / ".agent-reach" / "daily_run" / "harness"
 
 
 def _state_path() -> Path:
-    return harness_dir() / "harness_state.json"
+    try:
+        from agent_reach.daily_run.harness_git import resolve_harness_state_path
+        from agent_reach.daily_run.settings import load_settings
+
+        return resolve_harness_state_path(load_settings())
+    except Exception:
+        return harness_dir() / "harness_state.json"
 
 
 def _refinements_path() -> Path:
-    return harness_dir() / "refinements.jsonl"
+    try:
+        from agent_reach.daily_run.harness_git import resolve_harness_paths
+        from agent_reach.daily_run.settings import load_settings
+
+        return resolve_harness_paths(load_settings())["refinements"]
+    except Exception:
+        return harness_dir() / "refinements.jsonl"
 
 
 def _now_iso() -> str:
@@ -282,7 +300,7 @@ class HarnessState:
 
 
 def load_harness() -> HarnessState:
-    return HarnessState.load()
+    return HarnessState.load(_state_path())
 
 
 def save_harness(state: HarnessState) -> Path:
@@ -499,7 +517,7 @@ def _close_specialized_jobs_enabled(cfg: dict[str, Any]) -> bool:
     jobs = cfg.get("jobs") or {}
     if not isinstance(jobs, dict):
         return False
-    return bool(jobs.get("verify")) or bool(jobs.get("close_improve"))
+    return bool(jobs.get("verify")) or bool(jobs.get("close_improve")) or bool(jobs.get("pnl_overview"))
 
 
 def _weekly_specialized_jobs_enabled(cfg: dict[str, Any]) -> bool:
@@ -550,10 +568,15 @@ def _evidence_from_close(
     pf = evidence.get("portfolio_summary") or {}
     pnl = pf.get("daily_pnl")
     pct = pf.get("daily_pnl_pct")
+    jobs = cfg.get("jobs") or {}
+    pnl_job = isinstance(jobs, dict) and jobs.get("pnl_overview")
     if pnl is not None:
         sign = "+" if float(pnl) >= 0 else ""
         pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
-        memory.append(f"{name} 收盘组合盈亏 {sign}¥{float(pnl):,.0f}{pct_s}".strip())
+        if pnl_job:
+            memory.append(f"收盘日PnL {sign}¥{float(pnl):,.0f}{pct_s}（明细见 pnl_overview job）")
+        else:
+            memory.append(f"{name} 收盘组合盈亏 {sign}¥{float(pnl):,.0f}{pct_s}".strip())
 
     if not specialized:
         for rec in (verify.get("recommendations") or [])[:2]:
@@ -703,15 +726,62 @@ def refine_after_job(
         plan = [str(x) for x in (evidence.get("plan") or []) if str(x).strip()]
         ev_summary = str(evidence.get("summary") or job)
 
+    from agent_reach.daily_run.harness_apply_gate import (
+        apply_kind_gate,
+        bound_kind_texts,
+        evaluate_apply_gate,
+        record_apply_audit,
+    )
+
+    gate = evaluate_apply_gate(job, evidence, settings=cfg)
+    kind_texts, gate_skipped = apply_kind_gate(
+        {
+            "memory": memory,
+            "policy": policy,
+            "playbook": playbook,
+            "plan": plan,
+        },
+        gate,
+    )
     state = load_harness()
+    from agent_reach.daily_run.harness_context_doctor import (
+        context_doctor_cfg,
+        dedupe_kind_texts_against_state,
+        filter_cross_kind_conflicts,
+    )
+
+    dedupe_meta: dict[str, Any] = {}
+    if context_doctor_cfg(cfg).get("enabled"):
+        for kind in _KINDS:
+            kind_texts[kind], dedupe_meta[kind] = dedupe_kind_texts_against_state(
+                kind_texts[kind],
+                state,
+                kind,
+                settings=cfg,
+            )
+        kind_texts, conflict_meta = filter_cross_kind_conflicts(kind_texts, state, settings=cfg)
+    else:
+        conflict_meta = {"enabled": False}
+    injection_meta: dict[str, Any] = {
+        "gate_skipped": gate_skipped,
+        "context_doctor": dedupe_meta,
+        "context_doctor_conflicts": conflict_meta,
+    }
+    bounded: dict[str, list[str]] = {}
+    for kind in _KINDS:
+        bounded[kind], injection_meta[kind] = bound_kind_texts(kind_texts[kind], settings=cfg)
+
+    from agent_reach.daily_run.harness_snapshot import save_pre_apply_snapshot
+
+    snapshot_path = save_pre_apply_snapshot(state, job=job, trigger="layer_a", settings=cfg)
     all_edits: list[RefinementEdit] = []
     all_changes: list[str] = []
 
     for kind, texts in (
-        ("memory", memory),
-        ("policy", policy),
-        ("playbook", playbook),
-        ("plan", plan),
+        ("memory", bounded["memory"]),
+        ("policy", bounded["policy"]),
+        ("playbook", bounded["playbook"]),
+        ("plan", bounded["plan"]),
     ):
         changes, edits = _upsert_texts(
             state,
@@ -735,12 +805,28 @@ def refine_after_job(
         edits=all_edits,
     )
     path = state.save()
+    audit_event = record_apply_audit(
+        job=job,
+        refinement_id=event.id,
+        gate=gate,
+        injection_meta=injection_meta,
+        skipped_kinds=gate_skipped,
+        changes=len(all_changes),
+        snapshot_path=str(snapshot_path) if snapshot_path else None,
+    )
+    gate_dict = gate.to_dict()
+    if snapshot_path:
+        gate_dict["snapshot_path"] = str(snapshot_path)
     return {
         "skipped": False,
         "job": job,
         "refinement_id": event.id,
         "changes": len(all_changes),
         "state_path": str(path),
+        "apply_gate": gate_dict,
+        "injection": injection_meta,
+        "apply_audit_at": audit_event.get("at"),
+        "snapshot_path": str(snapshot_path) if snapshot_path else None,
     }
 
 
@@ -1170,6 +1256,14 @@ def refine_after_job_llm(
         return {"skipped": True, "reason": review.get("rationale") or "review rejected", "review": review}
 
     baseline = state.clone()
+    from agent_reach.daily_run.harness_apply_gate import (
+        evaluate_layer_b_admission,
+        filter_proposal_for_admission,
+        record_apply_audit,
+    )
+    from agent_reach.daily_run.harness_snapshot import save_pre_apply_snapshot
+
+    snapshot_path = save_pre_apply_snapshot(baseline, job=job, trigger="layer_b", settings=cfg)
     proposal = plan_harness_refinement(
         job,
         evidence,
@@ -1177,6 +1271,26 @@ def refine_after_job_llm(
         settings=settings,
         instructions=str(review.get("instructions") or ""),
     )
+    admission = evaluate_layer_b_admission(proposal, settings=settings)
+    if not admission.passed:
+        audit_event = record_apply_audit(
+            job=job,
+            status="skipped",
+            reason="layer_b_admission_rejected",
+            layer="b",
+            admission=admission.to_dict(),
+            snapshot_path=str(snapshot_path) if snapshot_path else None,
+            changes=0,
+        )
+        return {
+            "skipped": True,
+            "reason": "layer_b_admission_rejected",
+            "review": review,
+            "admission": admission.to_dict(),
+            "snapshot_path": str(snapshot_path) if snapshot_path else None,
+            "apply_audit_at": audit_event.get("at"),
+        }
+    proposal = filter_proposal_for_admission(proposal, admission)
     _, _, _, _, ev_summary = _evidence_from_job(job, evidence, settings=settings)
     edits, changes = apply_harness_proposal(
         state,
@@ -1198,6 +1312,15 @@ def refine_after_job_llm(
         edits=edits,
     )
     path = state.save()
+    audit_event = record_apply_audit(
+        job=job,
+        refinement_id=event.id,
+        status="applied",
+        layer="b",
+        admission=admission.to_dict(),
+        snapshot_path=str(snapshot_path) if snapshot_path else None,
+        changes=len(changes),
+    )
     return {
         "skipped": False,
         "job": job,
@@ -1207,6 +1330,10 @@ def refine_after_job_llm(
         "proposal_summary": proposal.get("summary"),
         "planner": proposal.get("planner") or "deterministic",
         "state_path": str(path),
+        "admission": admission.to_dict(),
+        "snapshot_path": str(snapshot_path) if snapshot_path else None,
+        "apply_audit_at": audit_event.get("at"),
+        "layer": "b",
     }
 
 
@@ -1243,6 +1370,14 @@ def refine_after_job_llm_summarize(
         return {"skipped": True, "reason": "llm summarize cooldown active", "job": job}
 
     baseline = state.clone()
+    from agent_reach.daily_run.harness_apply_gate import (
+        evaluate_layer_b_admission,
+        filter_proposal_for_admission,
+        record_apply_audit,
+    )
+    from agent_reach.daily_run.harness_snapshot import save_pre_apply_snapshot
+
+    snapshot_path = save_pre_apply_snapshot(baseline, job=job, trigger="summarize", settings=cfg)
     instructions = (
         "Layer A 已写入原子事实；仅补充不重复的综合 playbook/policy edits，"
         "最多 4 条；禁止改写阈值数字；content 必须中文且可执行。"
@@ -1261,6 +1396,27 @@ def refine_after_job_llm_summarize(
             "job": job,
             "proposal": proposal,
         }
+
+    admission = evaluate_layer_b_admission(proposal, settings=settings)
+    if not admission.passed:
+        audit_event = record_apply_audit(
+            job=job,
+            status="skipped",
+            reason="layer_b_admission_rejected",
+            layer="summarize",
+            admission=admission.to_dict(),
+            snapshot_path=str(snapshot_path) if snapshot_path else None,
+            changes=0,
+        )
+        return {
+            "skipped": True,
+            "reason": "layer_b_admission_rejected",
+            "job": job,
+            "admission": admission.to_dict(),
+            "snapshot_path": str(snapshot_path) if snapshot_path else None,
+            "apply_audit_at": audit_event.get("at"),
+        }
+    proposal = filter_proposal_for_admission(proposal, admission)
 
     _, _, _, _, ev_summary = _evidence_from_job(job, evidence, settings=settings)
     edits, changes = apply_harness_proposal(
@@ -1288,6 +1444,15 @@ def refine_after_job_llm_summarize(
         edits=edits,
     )
     path = state.save()
+    audit_event = record_apply_audit(
+        job=job,
+        refinement_id=event.id,
+        status="applied",
+        layer="summarize",
+        admission=admission.to_dict(),
+        snapshot_path=str(snapshot_path) if snapshot_path else None,
+        changes=len(changes),
+    )
     return {
         "skipped": False,
         "job": job,
@@ -1297,6 +1462,9 @@ def refine_after_job_llm_summarize(
         "planner": "llm",
         "layer": "summarize",
         "state_path": str(path),
+        "admission": admission.to_dict(),
+        "snapshot_path": str(snapshot_path) if snapshot_path else None,
+        "apply_audit_at": audit_event.get("at"),
     }
 
 
@@ -1380,8 +1548,19 @@ def format_harness_push_markdown(
     *,
     job: str = "close",
     harness_errors: Optional[list[str]] = None,
+    week_start: Optional[str] = None,
+    week_end: Optional[str] = None,
+    settings: Optional[dict[str, Any]] = None,
 ) -> str:
     """Markdown card summarizing harness refinements for Feishu push."""
+    from agent_reach.daily_run.harness_apply_gate import format_gate_markdown
+    from agent_reach.daily_run.harness_forge_gates import format_forge_gate_markdown
+    from agent_reach.daily_run.harness_weekly_narrative import (
+        build_weekly_harness_narrative,
+        format_weekly_harness_narrative_markdown,
+        weekly_narrative_cfg,
+    )
+
     layers = _collect_harness_refinement_layers(harness_result)
     rollback = harness_result.get("auto_rollback") or {}
     errors_md = format_harness_errors_markdown(list(harness_errors or []))
@@ -1417,6 +1596,12 @@ def format_harness_push_markdown(
         line = f"- `{rid}` · {planner} · {changes} 项变更"
         if summary:
             line += f" · {summary[:80]}"
+        gate_md = format_gate_markdown(layer.get("apply_gate") or {})
+        if gate_md:
+            line += f"\n  {gate_md.replace(chr(10), chr(10) + '  ')}"
+        forge_md = format_forge_gate_markdown(layer.get("forge_gate") or {})
+        if forge_md:
+            line += f"\n  {forge_md}"
         lines.append(line)
     if harness_result.get("skipped") and harness_result.get("error"):
         lines.append(f"- ⚠️ 部分跳过：{harness_result['error']}")
@@ -1428,6 +1613,18 @@ def format_harness_push_markdown(
         )
     lines.append(f"\n合计 **{total_changes}** 项 harness 变更")
     body = "\n".join(lines)
+    if job == "weekly":
+        wn_cfg = weekly_narrative_cfg(settings)
+        if wn_cfg.get("enabled") and wn_cfg.get("append_to_weekly_card"):
+            narrative = build_weekly_harness_narrative(
+                week_start=week_start,
+                week_end=week_end,
+                harness_result=harness_result,
+                settings=settings,
+            )
+            narrative_md = format_weekly_harness_narrative_markdown(narrative, settings=settings)
+            if narrative_md:
+                body += narrative_md
     if errors_md:
         body += f"\n\n{errors_md}"
     return body
@@ -1575,6 +1772,10 @@ def build_manifest_harness_summary(payload: dict[str, Any]) -> dict[str, Any]:
                             "reason": obj.get("reason"),
                             "planner": obj.get("planner"),
                             "layer": obj.get("layer"),
+                            "apply_gate": obj.get("apply_gate"),
+                            "verification_signals": (obj.get("apply_gate") or {}).get(
+                                "verification_signals"
+                            ),
                         }
                     )
             for value in obj.values():

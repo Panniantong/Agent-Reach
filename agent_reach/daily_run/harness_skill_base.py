@@ -76,9 +76,70 @@ def apply_skill_refinement(
     if not any(evidence.get(k) for k in ("memory", "policy", "playbook", "plan")):
         return {"skipped": True, "reason": "empty evidence", "job": job}
 
-    result = refine_after_job(job, evidence=evidence, settings=cfg)
+    from agent_reach.daily_run.harness_forge_gates import (
+        evaluate_forge_gate,
+        strip_forge_domain,
+    )
+    from agent_reach.daily_run.harness_rigor_check import evaluate_rigor_battery, rigor_blocks_refine
+
+    rigor_domain = evidence.get("rigor_domain") or evidence.get("forge_domain") or {}
+    rigor = evaluate_rigor_battery(job, rigor_domain, settings=cfg)
+    if rigor is not None and rigor_blocks_refine(rigor, settings=cfg):
+        from agent_reach.daily_run.harness_apply_gate import record_apply_audit
+
+        record_apply_audit(
+            job=job,
+            status="skipped",
+            reason="rigor_check_failed",
+            layer="a",
+            changes=0,
+            admission={"rigor_check": rigor.to_dict()},
+        )
+        return {
+            "skipped": True,
+            "reason": "rigor_check_failed",
+            "job": job,
+            "rigor_check": rigor.to_dict(),
+        }
+
+    forge = evaluate_forge_gate(job, evidence, settings=cfg)
+    if forge is not None and not forge.passed:
+        from agent_reach.daily_run.harness_apply_gate import record_apply_audit
+
+        record_apply_audit(
+            job=job,
+            status="skipped",
+            reason="forge_gate_failed",
+            layer="a",
+            forge_gate=forge.to_dict(),
+            changes=0,
+        )
+        return {
+            "skipped": True,
+            "reason": "forge_gate_failed",
+            "job": job,
+            "forge_gate": forge.to_dict(),
+        }
+
+    result = refine_after_job(job, evidence=strip_forge_domain(evidence), settings=cfg)
+    if rigor is not None:
+        result["rigor_check"] = rigor.to_dict()
+    if forge is not None:
+        result["forge_gate"] = forge.to_dict()
     result["job"] = job
     if not result.get("skipped"):
+        domain = rigor_domain if isinstance(rigor_domain, dict) else {}
+        if job in {"optimize", "backtest"} and domain:
+            from agent_reach.daily_run.harness_study_registry import register_study
+
+            study = register_study(
+                job,
+                domain,
+                settings=cfg,
+                refinement_id=str(result.get("refinement_id") or ""),
+            )
+            if study:
+                result["study_registry"] = study
         try:
             from agent_reach.daily_run.harness import refine_after_job_llm_summarize
 

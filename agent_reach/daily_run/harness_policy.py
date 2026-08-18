@@ -203,6 +203,8 @@ _MEMORY_ENTRY_NUDGES: tuple[tuple[str, dict[str, float]], ...] = (
     ("调低进攻阈值", {"aggressive_entry": -2.0}),
     ("缩窄仓位", {"aggressive_entry": -1.0}),
     ("MSS 预测偏离", {"aggressive_entry": -2.0}),
+    ("盈亏目标奖励", {"aggressive_entry": 2.0}),
+    ("盈亏目标未达", {"aggressive_entry": -2.0}),
 )
 
 _MEMORY_CASH_NUDGES: tuple[tuple[str, float], ...] = (
@@ -747,7 +749,7 @@ def _apply_forecast_signal_evolution(
 def _blob_has_phrase(state: Any, phrase: str, *, settings: dict[str, Any]) -> bool:
     sources = _overlay_sources(settings)
     for kind in ("memory", "playbook"):
-        for blob in _collect_text_blobs(state, sources=sources, kind=kind):
+        for blob in _collect_text_blobs(state, sources=sources, kind=kind, settings=settings):
             if phrase in blob:
                 return True
     return False
@@ -778,17 +780,33 @@ def resolve_harness_lookback_weights(
     return list(_LOOKBACK_NEUTRAL)
 
 
-def _collect_text_blobs(state: Any, *, sources: set[str], kind: str) -> list[str]:
+def _collect_text_blobs(
+    state: Any,
+    *,
+    sources: set[str],
+    kind: str,
+    settings: Optional[dict[str, Any]] = None,
+    bounded: bool = True,
+) -> list[str]:
     if kind not in sources:
         return []
     entries = list((getattr(state, "entries", {}) or {}).get(kind, {}).values())
     entries.sort(key=_entry_sort_key, reverse=True)
-    return [f"{getattr(e, 'title', '')} {getattr(e, 'content', '')}" for e in entries[:30]]
+    raw = [f"{getattr(e, 'title', '')} {getattr(e, 'content', '')}" for e in entries[:30]]
+    if not bounded:
+        return raw
+    from agent_reach.daily_run.harness_apply_gate import bound_overlay_blobs, enforce_overlay_claims
+
+    if not bounded:
+        return raw
+    bounded_raw, _bound_meta = bound_overlay_blobs(raw, settings=settings)
+    adopted, _claim_meta = enforce_overlay_claims(bounded_raw, settings=settings)
+    return adopted
 
 
-def _has_deviation_signal(state: Any, *, sources: set[str]) -> bool:
-    blobs = _collect_text_blobs(state, sources=sources, kind="memory")
-    blobs += _collect_text_blobs(state, sources=sources, kind="policy")
+def _has_deviation_signal(state: Any, *, sources: set[str], settings: Optional[dict[str, Any]] = None) -> bool:
+    blobs = _collect_text_blobs(state, sources=sources, kind="memory", settings=settings)
+    blobs += _collect_text_blobs(state, sources=sources, kind="policy", settings=settings)
     for blob in blobs:
         if any(p in blob for p in _DEVIATION_PHRASES):
             return True
@@ -796,6 +814,30 @@ def _has_deviation_signal(state: Any, *, sources: set[str]) -> bool:
             return True
     policy = (getattr(state, "entries", {}) or {}).get("policy", {})
     return "forecast_policy_mss_weight_update" in policy
+
+
+def _apply_pnl_target_signal_evolution(
+    merged: dict[str, float],
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    signals = resolve_harness_trade_signals(state, settings=settings)
+    if signals.get("pnl_target_hit"):
+        if threshold_mode(settings, "aggressive_entry") == "harness":
+            merged["aggressive_entry"] = max(float(merged.get("aggressive_entry", 50.0)), 52.0)
+        if threshold_mode(settings, "macro_veto") == "harness":
+            merged["macro_veto"] = max(float(merged.get("macro_veto", 40.0)), 38.0)
+        if evolution_mode(settings, "trade_min_scans") == "harness":
+            merged["trade_min_scans"] = min(float(merged.get("trade_min_scans", 3.0)), 2.0)
+    elif signals.get("pnl_target_miss"):
+        if threshold_mode(settings, "aggressive_entry") == "harness":
+            merged["aggressive_entry"] = min(float(merged.get("aggressive_entry", 50.0)), 45.0)
+        if threshold_mode(settings, "min_cash_ratio") == "harness":
+            merged["min_cash_ratio"] = max(float(merged.get("min_cash_ratio", 0.0)), 0.45)
+        if evolution_mode(settings, "max_holdings") == "harness":
+            merged["max_holdings"] = min(float(merged.get("max_holdings", 10.0)), 5.0)
+    return merged
 
 
 def resolve_harness_flat_overrides(
@@ -819,6 +861,7 @@ def resolve_harness_flat_overrides(
     merged = _apply_technical_signal_evolution(merged, state, settings=cfg)
     merged = _apply_forecast_signal_evolution(merged, state, settings=cfg)
     merged = _apply_cash_signal_evolution(merged, state, settings=cfg)
+    merged = _apply_pnl_target_signal_evolution(merged, state, settings=cfg)
     return _clamp_flat_values(merged)
 
 
@@ -843,7 +886,7 @@ def resolve_harness_mss_weights(
     if not weights:
         return weights
     sources = _overlay_sources(settings or {})
-    if not _has_deviation_signal(state, sources=sources):
+    if not _has_deviation_signal(state, sources=sources, settings=settings):
         return weights
 
     scaled = dict(weights)
@@ -905,19 +948,24 @@ def resolve_harness_trade_signals(
 ) -> dict[str, Any]:
     """Runtime trade flags derived from harness memory/policy."""
     sources = _overlay_sources(settings or {})
-    blobs = _collect_text_blobs(state, sources=sources, kind="memory")
-    blobs += _collect_text_blobs(state, sources=sources, kind="policy")
+    cfg = settings or {}
+    blobs = _collect_text_blobs(state, sources=sources, kind="memory", settings=cfg)
+    blobs += _collect_text_blobs(state, sources=sources, kind="policy", settings=cfg)
 
     mss_miss = any(any(p in blob for p in _MSS_MISS_PHRASES) for blob in blobs)
-    deviation = _has_deviation_signal(state, sources=sources)
+    deviation = _has_deviation_signal(state, sources=sources, settings=cfg)
     bullish, bearish = resolve_harness_kronos_bias(state, settings=settings)
+    pnl_hit = any("盈亏目标达成" in blob for blob in blobs)
+    pnl_miss = any("盈亏目标未达" in blob for blob in blobs)
 
     return {
         "mss_forecast_miss": mss_miss,
-        "defensive_trim": mss_miss or deviation,
+        "defensive_trim": mss_miss or deviation or pnl_miss,
         "deviation_active": deviation,
         "kronos_bullish": bullish,
         "kronos_bearish": bearish,
+        "pnl_target_hit": pnl_hit,
+        "pnl_target_miss": pnl_miss,
     }
 
 
@@ -1071,10 +1119,31 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
         harness_meta["kronos_bearish"] = trade_signals["kronos_bearish"]
     harness_meta["trade_signals"] = {
         k: trade_signals[k]
-        for k in ("mss_forecast_miss", "defensive_trim", "deviation_active")
+        for k in (
+            "mss_forecast_miss",
+            "defensive_trim",
+            "deviation_active",
+            "pnl_target_hit",
+            "pnl_target_miss",
+        )
     }
 
+    try:
+        from agent_reach.daily_run.harness_apply_gate import build_overlay_injection_audit
+
+        injection_audit = build_overlay_injection_audit(state, settings=cfg)
+        if injection_audit.get("kept_count") or injection_audit.get("ignored_count"):
+            harness_meta["injection_gate"] = injection_audit
+    except Exception:
+        pass
+
     if harness_meta:
+        try:
+            from agent_reach.daily_run.harness_git import detect_git_branch
+
+            harness_meta["git_branch"] = detect_git_branch()
+        except Exception:
+            pass
         cfg["harness_runtime"] = harness_meta
     return cfg
 

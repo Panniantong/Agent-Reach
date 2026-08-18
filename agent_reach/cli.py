@@ -293,6 +293,71 @@ def main():
     p_dr_h_sync.add_argument("--dry-run", action="store_true", help="Report only, do not write")
     p_dr_h_sync.add_argument("--path", default=None, help="Settings file path")
     p_dr_h_sync.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_h_snap_list = p_dr_harness_sub.add_parser("list-snapshots", help="List pre-apply harness snapshots")
+    p_dr_h_snap_list.add_argument("--limit", type=int, default=10, help="Max snapshots")
+    p_dr_h_snap_list.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_h_snap_restore = p_dr_harness_sub.add_parser("restore-snapshot", help="Restore harness state from snapshot")
+    p_dr_h_snap_restore.add_argument("--path", required=True, help="Snapshot file path")
+    p_dr_h_snap_restore.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_capital = p_daily_sub.add_parser(
+        "capital",
+        help="Record external deposits/withdrawals for accurate daily P&L",
+    )
+    p_dr_capital_sub = p_dr_capital.add_subparsers(dest="capital_action", required=True)
+    p_dr_cap_dep = p_dr_capital_sub.add_parser("deposit", help="Record a capital deposit")
+    p_dr_cap_dep.add_argument("--amount", type=float, required=True, help="Deposit amount (CNY)")
+    p_dr_cap_dep.add_argument("--note", default="", help="Optional note")
+    p_dr_cap_dep.add_argument("--date", default="", help="Event date YYYY-MM-DD (default: today)")
+    p_dr_cap_wd = p_dr_capital_sub.add_parser("withdraw", help="Record a capital withdrawal")
+    p_dr_cap_wd.add_argument("--amount", type=float, required=True, help="Withdrawal amount (CNY)")
+    p_dr_cap_wd.add_argument("--note", default="", help="Optional note")
+    p_dr_cap_wd.add_argument("--date", default="", help="Event date YYYY-MM-DD (default: today)")
+    p_dr_cap_list = p_dr_capital_sub.add_parser("list", help="List capital events")
+    p_dr_cap_list.add_argument("--date", default="", help="Filter by date YYYY-MM-DD")
+    p_dr_cap_list.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_pnl = p_daily_sub.add_parser("pnl", help="Realized/unrealized P&L overview")
+    p_dr_pnl_sub = p_dr_pnl.add_subparsers(dest="pnl_action", required=True)
+    p_dr_pnl_show = p_dr_pnl_sub.add_parser("overview", help="Show P&L overview")
+    p_dr_pnl_show.add_argument(
+        "--period",
+        default="all",
+        choices=["day", "week", "month", "all"],
+        help="Aggregation period (default: all)",
+    )
+    p_dr_pnl_show.add_argument("--date", default="", help="End date YYYY-MM-DD (default: today)")
+    p_dr_pnl_show.add_argument(
+        "--portfolio", "-p", default="",
+        help="Portfolio JSON (default: ~/.agent-reach/daily_run/portfolio.json)",
+    )
+    p_dr_pnl_show.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_pnl_bf = p_dr_pnl_sub.add_parser(
+        "backfill",
+        help="Backfill realized_pnl on sell actions in trade ledger",
+    )
+    p_dr_pnl_bf.add_argument("--dry-run", action="store_true", help="Report only")
+    p_dr_pnl_hist = p_dr_pnl_sub.add_parser("history", help="Daily P&L history and charts")
+    p_dr_pnl_hist.add_argument("--days", type=int, default=30, help="Show last N days (default: 30)")
+    p_dr_pnl_hist.add_argument(
+        "--chart",
+        default="ascii",
+        choices=["ascii", "svg", "both", "none"],
+        help="Chart format (default: ascii)",
+    )
+    p_dr_pnl_hist.add_argument(
+        "--series",
+        default="both",
+        choices=["daily", "cumulative", "both"],
+        help="Which series to chart (default: both)",
+    )
+    p_dr_pnl_hist.add_argument(
+        "--output", "-o", default="", help="Write SVG chart to file (requires --chart svg|both)"
+    )
+    p_dr_pnl_hist.add_argument(
+        "--backfill", action="store_true", help="Import missing days from close manifests"
+    )
+    p_dr_pnl_hist.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_pnl_target = p_dr_pnl_sub.add_parser("target", help="Next trading day P&L target")
+    p_dr_pnl_target.add_argument("--json", action="store_true", help="JSON output")
 
     # ── doctor ──
     p_doctor = sub.add_parser("doctor", help="Check platform availability")
@@ -2121,13 +2186,244 @@ def _cmd_daily_run(args):
                     print("\n(dry-run — re-run without --dry-run to apply)")
             return
 
-        print("Usage: agent-reach daily-run harness {show|list-refinements|rollback|refine|migrate-settings|sync-settings}")
+        if action == "list-snapshots":
+            from agent_reach.daily_run.harness_snapshot import list_snapshots
+
+            rows = list_snapshots(limit=args.limit)
+            if args.json:
+                print(_json.dumps(rows, ensure_ascii=False, indent=2))
+            else:
+                for row in rows:
+                    print(
+                        f"{row.get('name')} · {row.get('job')} · {row.get('trigger')} · "
+                        f"{str(row.get('saved_at', ''))[:19]}"
+                    )
+            return
+
+        if action == "restore-snapshot":
+            from agent_reach.daily_run.harness_snapshot import restore_snapshot
+
+            try:
+                result = restore_snapshot(args.path)
+            except (FileNotFoundError, ValueError) as exc:
+                print(f"❌ {exc}")
+                sys.exit(1)
+            if args.json:
+                print(_json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print(f"✅ Restored from {result.get('restored_from')}")
+                if result.get("pre_restore_snapshot"):
+                    print(f"   pre-restore backup: {result.get('pre_restore_snapshot')}")
+            return
+
+        print("Usage: agent-reach daily-run harness {show|list-refinements|rollback|refine|migrate-settings|sync-settings|list-snapshots|restore-snapshot}")
+        sys.exit(1)
+
+    if args.daily_action == "capital":
+        import json as _json
+        from datetime import date as _date
+
+        from agent_reach.daily_run.capital_events import (
+            append_capital_event,
+            load_capital_events,
+            net_capital_flow,
+        )
+
+        action = args.capital_action
+
+        def _parse_event_date(raw: str) -> _date:
+            if not raw:
+                from agent_reach.daily_run.trade_calendar import today_shanghai
+
+                return today_shanghai()
+            try:
+                return _date.fromisoformat(raw)
+            except ValueError as exc:
+                raise ValueError(f"invalid date: {raw}") from exc
+
+        if action in ("deposit", "withdraw"):
+            try:
+                event_date = _parse_event_date(args.date)
+                event = append_capital_event(
+                    action,
+                    args.amount,
+                    note=args.note,
+                    event_date=event_date,
+                )
+            except ValueError as exc:
+                print(f"❌ {exc}")
+                sys.exit(1)
+            label = "入金" if action == "deposit" else "出金"
+            print(
+                f"✅ 已记录{label} ¥{event.amount:,.2f} · {event.date}"
+                + (f" · {event.note}" if event.note else "")
+            )
+            net = net_capital_flow(event_date)
+            if abs(net) >= 0.01:
+                print(f"   当日净入出金: {net:+,.2f}")
+            return
+
+        if action == "list":
+            if args.date:
+                try:
+                    day = _parse_event_date(args.date)
+                except ValueError as exc:
+                    print(f"❌ {exc}")
+                    sys.exit(1)
+                events = load_capital_events(start=day, end=day)
+            else:
+                events = load_capital_events()
+            rows = [e.to_dict() for e in events]
+            if args.json:
+                print(_json.dumps(rows, ensure_ascii=False, indent=2))
+            elif not rows:
+                print("（暂无入出金记录）")
+            else:
+                for row in rows:
+                    kind = "入金" if row["kind"] == "deposit" else "出金"
+                    note = f" · {row['note']}" if row.get("note") else ""
+                    print(f"{row['date']} · {kind} ¥{float(row['amount']):,.2f}{note}")
+            return
+
+        print("Usage: agent-reach daily-run capital {deposit|withdraw|list}")
+        sys.exit(1)
+
+    if args.daily_action == "pnl":
+        import json as _json
+        from datetime import date as _date, timedelta as _timedelta
+
+        from agent_reach.daily_run.realized_pnl import (
+            backfill_ledger_realized_pnl,
+            build_pnl_overview,
+            render_pnl_overview_markdown,
+        )
+        from agent_reach.daily_run.snapshot_builder import load_portfolio
+
+        action = args.pnl_action
+
+        if action == "backfill":
+            result = backfill_ledger_realized_pnl(dry_run=args.dry_run)
+            print(_json.dumps(result, ensure_ascii=False, indent=2))
+            if result.get("updated"):
+                print(f"\n✅ Backfilled {result['updated']} ledger entries")
+            elif args.dry_run:
+                print("\n(dry-run — re-run without --dry-run to apply)")
+            else:
+                print("\n✅ Ledger already up to date")
+            return
+
+        if action == "overview":
+            try:
+                end = _date.fromisoformat(args.date) if args.date else None
+            except ValueError as exc:
+                print(f"❌ invalid date: {exc}")
+                sys.exit(1)
+            from agent_reach.daily_run.trade_calendar import today_shanghai
+
+            end = end or today_shanghai()
+            if args.period == "day":
+                start = end
+            elif args.period == "week":
+                start = end - _timedelta(days=6)
+            elif args.period == "month":
+                start = end - _timedelta(days=29)
+            else:
+                start = _date(1970, 1, 1)
+
+            pf_path = Path(args.portfolio).expanduser() if args.portfolio else None
+            portfolio = load_portfolio(pf_path)
+            overview = build_pnl_overview(portfolio, start=start, end=end)
+            if args.json:
+                print(_json.dumps(overview.to_dict(), ensure_ascii=False, indent=2))
+            else:
+                print(render_pnl_overview_markdown(overview))
+            return
+
+        if action == "history":
+            from agent_reach.daily_run.daily_pnl_history import (
+                attach_cumulative_pnl,
+                backfill_from_manifests,
+                load_daily_pnl_history,
+                render_pnl_history_markdown,
+                render_pnl_line_chart_ascii,
+                render_pnl_line_chart_svg,
+            )
+            from agent_reach.daily_run.trade_calendar import today_shanghai
+
+            end = today_shanghai()
+            start = end - _timedelta(days=max(int(args.days), 1) - 1)
+            if args.backfill:
+                bf = backfill_from_manifests(start=start, end=end)
+                if not args.json:
+                    print(f"✅ backfill imported {bf.get('imported', 0)} days → {bf.get('path')}")
+
+            rows = load_daily_pnl_history(start=start, end=end)
+            attach_cumulative_pnl(rows)
+
+            if args.json:
+                print(
+                    _json.dumps(
+                        [r.to_dict() for r in rows],
+                        ensure_ascii=False,
+                        indent=2,
+                    )
+                )
+                return
+
+            print(render_pnl_history_markdown(rows, days=int(args.days)))
+
+            chart_mode = args.chart
+            if chart_mode in ("ascii", "both"):
+                if args.series in ("daily", "both"):
+                    print("\n" + render_pnl_line_chart_ascii(rows, value_key="daily_pnl", title="每日盈亏"))
+                if args.series in ("cumulative", "both"):
+                    print("\n" + render_pnl_line_chart_ascii(rows, value_key="cumulative_pnl", title="累计盈亏"))
+            if chart_mode in ("svg", "both"):
+                svg_parts: list[str] = []
+                if args.series in ("daily", "both"):
+                    svg_parts.append(
+                        render_pnl_line_chart_svg(rows, value_key="daily_pnl", title="每日盈亏")
+                    )
+                if args.series in ("cumulative", "both"):
+                    svg_parts.append(
+                        render_pnl_line_chart_svg(rows, value_key="cumulative_pnl", title="累计盈亏")
+                    )
+                svg_doc = "\n".join(svg_parts)
+                if args.output:
+                    out_path = Path(args.output).expanduser()
+                    out_path.parent.mkdir(parents=True, exist_ok=True)
+                    out_path.write_text(svg_doc, encoding="utf-8")
+                    print(f"\n✅ SVG saved: {out_path}")
+                elif chart_mode == "svg":
+                    print("\n" + svg_doc)
+            return
+
+        if action == "target":
+            from agent_reach.daily_run.pnl_target import (
+                load_pnl_target_state,
+                render_pnl_target_markdown,
+            )
+
+            state = load_pnl_target_state()
+            if args.json:
+                print(_json.dumps(state, ensure_ascii=False, indent=2))
+            else:
+                print(
+                    render_pnl_target_markdown(
+                        pending=state.get("pending"),
+                        last_result=state.get("last_result"),
+                        next_target=state.get("pending"),
+                    )
+                )
+            return
+
+        print("Usage: agent-reach daily-run pnl {overview|backfill|history|target}")
         sys.exit(1)
 
     if args.daily_action not in ("evaluate", "push"):
         print(
             "Usage: agent-reach daily-run "
-            "{morning|close|intraday|build-snapshot|schedule|hot-news|harness|evaluate|push|fetch|verify|backtest|optimize|plugins|sample} ..."
+            "{morning|close|intraday|build-snapshot|schedule|hot-news|harness|capital|pnl|evaluate|push|fetch|verify|backtest|optimize|plugins|sample} ..."
         )
         sys.exit(1)
 
