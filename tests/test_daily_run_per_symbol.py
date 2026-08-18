@@ -265,3 +265,70 @@ class TestSymbolRunner:
         pushed_sections = mock_push.call_args[0][0]
         assert any(sec.category == "ai_narrative" for sec in pushed_sections)
         assert sum(1 for sec in pushed_sections if sec.category == "ai_narrative") == 1
+
+    @patch("agent_reach.daily_run.workflows.run_merged_close_harness_layer_b")
+    @patch("agent_reach.daily_run.report_push.push_report_sections", return_value={"mode": "split"})
+    @patch("agent_reach.daily_run.symbol_runner.build_and_save")
+    @patch("agent_reach.daily_run.symbol_runner.load_portfolio")
+    @patch("agent_reach.daily_run.workflows.run_close")
+    @patch("agent_reach.daily_run.intraday.load_state")
+    @patch("agent_reach.daily_run.workflows.load_morning_baseline")
+    def test_merge_mode_single_merged_harness_layer_b(
+        self,
+        mock_baseline,
+        mock_load_state,
+        mock_run_close,
+        mock_pf,
+        mock_build,
+        mock_push,
+        mock_merged_harness,
+        tmp_path,
+    ):
+        from agent_reach.daily_run.intraday import IntradayState
+
+        mock_pf.return_value = PORTFOLIO
+        mock_baseline.return_value = {"code": "688008"}
+        mock_load_state.return_value = IntradayState(date="2026-08-18")
+        mock_build.side_effect = [
+            ({"code": "688008", "name": "澜起科技"}, tmp_path / "a.json"),
+            ({"code": "002273", "name": "水晶光电"}, tmp_path / "b.json"),
+        ]
+        mock_run_close.side_effect = [
+            {
+                "snapshot": {"code": "688008", "portfolio": {"holdings": PORTFOLIO["holdings"]}},
+                "verify": {"summary": "a"},
+                "harness": {"layer_a": {"changes": 1}, "layer_b": {"skipped": True, "reason": "deferred"}},
+            },
+            {
+                "snapshot": {"code": "002273"},
+                "verify": {"summary": "b"},
+                "harness": {"layer_a": {"changes": 1}, "layer_b": {"skipped": True, "reason": "deferred"}},
+            },
+        ]
+        mock_merged_harness.return_value = {
+            "layer_a": {"merged": True, "symbol_count": 2},
+            "layer_b": {"changes": 1, "planner": "llm"},
+        }
+        cfg = load_settings()
+        cfg = {
+            **cfg,
+            "schedule": {
+                **(cfg.get("schedule") or {}),
+                "symbols_mode": "holdings",
+                "symbol_push_mode": "merge_by_category",
+            },
+            "harness": {
+                **(cfg.get("harness") or {}),
+                "push_summary_on_close": True,
+                "llm_refine": {
+                    **((cfg.get("harness") or {}).get("llm_refine") or {}),
+                    "merge_single_call": True,
+                },
+            },
+        }
+        from agent_reach.daily_run.symbol_runner import run_close_for_symbols
+
+        run_close_for_symbols(settings=cfg, push=True, symbols=["688008", "002273"])
+        assert mock_merged_harness.call_count == 1
+        for call in mock_run_close.call_args_list:
+            assert call.kwargs.get("skip_harness_layer_b") is True

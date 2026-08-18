@@ -360,6 +360,30 @@ def append_merged_narrative_section(
     return out
 
 
+def append_merged_harness_section(
+    sections: list[ReportSection],
+    harness_markdown: str,
+    *,
+    report_kind: str,
+    symbol_count: int,
+) -> list[ReportSection]:
+    """Append one portfolio-level Harness card and refresh section titles."""
+    if not (harness_markdown or "").strip():
+        return sections
+    out = list(sections)
+    out.append(ReportSection(category="harness", title="", body=harness_markdown.strip()))
+    total = len(out)
+    for i, sec in enumerate(out, start=1):
+        sec.title = merged_category_title(
+            report_kind=report_kind,
+            category=sec.category,
+            index=i,
+            total=total,
+            symbol_count=1 if sec.category == "daily_portfolio" else symbol_count,
+        )
+    return out
+
+
 def merge_sections_by_category(
     groups: list[tuple[str, list[ReportSection]]],
     *,

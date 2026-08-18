@@ -565,6 +565,16 @@ def _evidence_from_close(
     if not specialized and verify.get("summary"):
         memory.append(str(verify["summary"]))
 
+    if evidence.get("portfolio_scope") == "merged":
+        for sym in (evidence.get("symbols") or [])[:6]:
+            label = sym.get("name") or sym.get("code") or "标的"
+            if sym.get("verify_summary"):
+                memory.append(f"{label}: {sym['verify_summary']}")
+            for rec in sym.get("recommendations") or []:
+                playbook.append(f"{label} 明日：{rec}")
+                if len(playbook) >= 4:
+                    break
+
     pf = evidence.get("portfolio_summary") or {}
     pnl = pf.get("daily_pnl")
     pct = pf.get("daily_pnl_pct")
@@ -584,6 +594,9 @@ def _evidence_from_close(
             plan.append(f"假设：{rec}（待明日 verify）")
 
     summary = f"close {name or verify.get('code', '')}".strip()
+    if evidence.get("portfolio_scope") == "merged":
+        count = int(evidence.get("symbol_count") or len(evidence.get("symbols") or []))
+        summary = f"close merged {count} symbols"
     if specialized:
         summary = f"{summary} residual".strip()
     return memory, policy, playbook, plan, summary
@@ -835,6 +848,198 @@ def _llm_refine_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
     return dict(cfg.get("llm_refine") or {})
 
 
+_LLM_REFINE_LIMITS_DEFAULT: dict[str, int] = {
+    "max_output_tokens": 512,
+    "max_context_chars": 2400,
+    "max_refinement_items": 5,
+    "max_overview_entries": 6,
+    "max_string_chars": 160,
+    "max_layer_a_items": 8,
+}
+
+
+def merge_harness_single_call(settings: Optional[dict[str, Any]]) -> bool:
+    """When merge_by_category push is on, one Layer B LLM round for close."""
+    llm_cfg = _llm_refine_cfg(settings)
+    if "merge_single_call" in llm_cfg:
+        return bool(llm_cfg["merge_single_call"])
+    return True
+
+
+def _llm_refine_limits(llm_cfg: dict[str, Any]) -> dict[str, int]:
+    out = dict(_LLM_REFINE_LIMITS_DEFAULT)
+    for key in out:
+        if key in llm_cfg and llm_cfg[key] is not None:
+            out[key] = max(1, int(llm_cfg[key]))
+    return out
+
+
+def _trim_harness_text(text: Any, limit: int) -> str:
+    raw = str(text or "").strip()
+    if len(raw) <= limit:
+        return raw
+    return raw[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _compact_text_list(items: Any, *, max_items: int, max_chars: int) -> list[str]:
+    out: list[str] = []
+    for raw in items or []:
+        line = _trim_harness_text(raw, max_chars)
+        if line:
+            out.append(line)
+        if len(out) >= max_items:
+            break
+    return out
+
+
+def _compact_refinement_events(events: Any, *, limits: dict[str, int]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for event in list(events or [])[-limits["max_refinement_items"] :]:
+        if not isinstance(event, dict):
+            continue
+        row = {
+            "job": event.get("job"),
+            "trigger": event.get("trigger"),
+            "summary": _trim_harness_text(event.get("summary"), limits["max_string_chars"]),
+        }
+        changes = event.get("changes") or []
+        if changes:
+            row["changes"] = [
+                _trim_harness_text(c, limits["max_string_chars"]) for c in changes[:3]
+            ]
+        out.append(row)
+    return out
+
+
+def _compact_harness_overview(overview: Any, *, limits: dict[str, int]) -> str:
+    text = str(overview or "")
+    cap = limits["max_string_chars"] * limits["max_overview_entries"]
+    return _trim_harness_text(text, max(cap, 480))
+
+
+def _compact_llm_user_payload(payload: dict[str, Any], limits: dict[str, int]) -> dict[str, Any]:
+    compact = dict(payload)
+    layer_a = compact.get("layer_a")
+    if isinstance(layer_a, dict):
+        compact["layer_a"] = {
+            key: _compact_text_list(
+                layer_a.get(key),
+                max_items=limits["max_layer_a_items"],
+                max_chars=limits["max_string_chars"],
+            )
+            for key in ("memory", "policy", "playbook", "plan")
+        }
+    if "signals" in compact:
+        compact["signals"] = _compact_text_list(
+            compact["signals"],
+            max_items=6,
+            max_chars=limits["max_string_chars"],
+        )
+    if "recent_refinements" in compact:
+        compact["recent_refinements"] = _compact_refinement_events(
+            compact["recent_refinements"],
+            limits=limits,
+        )
+    if "harness_overview" in compact:
+        compact["harness_overview"] = _compact_harness_overview(
+            compact["harness_overview"],
+            limits=limits,
+        )
+    if "instructions" in compact:
+        compact["instructions"] = _trim_harness_text(compact["instructions"], limits["max_string_chars"])
+    if "evidence_summary" in compact:
+        compact["evidence_summary"] = _trim_harness_text(
+            compact["evidence_summary"],
+            limits["max_string_chars"],
+        )
+
+    blob = json.dumps(compact, ensure_ascii=False)
+    cap = limits["max_context_chars"]
+    if len(blob) <= cap:
+        return compact
+    compact.pop("recent_refinements", None)
+    compact["harness_overview"] = _trim_harness_text(compact.get("harness_overview"), 640)
+    blob = json.dumps(compact, ensure_ascii=False)
+    if len(blob) <= cap:
+        return compact
+    compact["layer_a"] = {
+        key: _compact_text_list(
+            (compact.get("layer_a") or {}).get(key),
+            max_items=4,
+            max_chars=max(48, limits["max_string_chars"] // 2),
+        )
+        for key in ("memory", "policy", "playbook", "plan")
+    }
+    compact["signals"] = _compact_text_list(
+        compact.get("signals"),
+        max_items=3,
+        max_chars=max(48, limits["max_string_chars"] // 2),
+    )
+    blob = json.dumps(compact, ensure_ascii=False)
+    if len(blob) <= cap:
+        return compact
+    compact["harness_overview"] = _trim_harness_text(compact.get("harness_overview"), 240)
+    blob = json.dumps(compact, ensure_ascii=False)
+    if len(blob) <= cap:
+        return compact
+    return {
+        "job": compact.get("job"),
+        "instructions": _trim_harness_text(compact.get("instructions"), 96),
+        "evidence_summary": _trim_harness_text(compact.get("evidence_summary"), 120),
+        "signals": _compact_text_list(compact.get("signals"), max_items=2, max_chars=48),
+        "truncated": True,
+    }
+
+
+def build_merged_close_harness_evidence(
+    symbol_results: list[dict[str, Any]],
+    *,
+    primary_snapshot: dict[str, Any],
+    portfolio_summary: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    symbols: list[dict[str, Any]] = []
+    for row in symbol_results:
+        inner = row.get("result") or {}
+        verify = inner.get("verify") or {}
+        symbols.append(
+            {
+                "name": row.get("name") or inner.get("snapshot", {}).get("name"),
+                "code": row.get("code") or inner.get("snapshot", {}).get("code"),
+                "verify_summary": _trim_harness_text(verify.get("summary"), 96),
+                "recommendations": _compact_text_list(
+                    verify.get("recommendations"),
+                    max_items=2,
+                    max_chars=72,
+                ),
+                "deviations": _compact_text_list(
+                    verify.get("deviations"),
+                    max_items=2,
+                    max_chars=72,
+                ),
+                "mss_delta": verify.get("mss_delta"),
+            }
+        )
+    primary_inner = (symbol_results[0].get("result") if symbol_results else {}) or {}
+    curve = primary_inner.get("curve")
+    if curve is not None and hasattr(curve, "to_dict"):
+        curve = curve.to_dict()
+    return {
+        "portfolio_scope": "merged",
+        "symbol_count": len(symbols),
+        "symbols": symbols,
+        "snapshot": {
+            "name": primary_snapshot.get("name"),
+            "code": primary_snapshot.get("code"),
+            "macro_summary": _trim_harness_text(primary_snapshot.get("macro_summary"), 120),
+        },
+        "verify": primary_inner.get("verify") or {},
+        "name": "全持仓",
+        "portfolio_summary": portfolio_summary,
+        "curve": curve,
+        "forecast_review": primary_inner.get("forecast_review"),
+    }
+
+
 def _llm_job_enabled(llm_cfg: dict[str, Any], job: str) -> bool:
     jobs = llm_cfg.get("jobs") or {}
     if isinstance(jobs, dict) and job in jobs:
@@ -909,6 +1114,10 @@ def _within_llm_cooldown(state: HarnessState, llm_cfg: dict[str, Any]) -> bool:
 def _collect_refine_signals(job: str, evidence: dict[str, Any]) -> list[str]:
     signals: list[str] = []
     if job == "close":
+        if evidence.get("portfolio_scope") == "merged":
+            count = int(evidence.get("symbol_count") or len(evidence.get("symbols") or []))
+            if count > 1:
+                signals.append(f"全持仓 {count} 只收盘复盘")
         pf = evidence.get("portfolio_summary") or {}
         pct = pf.get("daily_pnl_pct")
         if pct is not None and abs(float(pct)) >= 0.5:
@@ -967,28 +1176,31 @@ def review_harness_refine(
         return {"should_refine": False, "rationale": "no actionable signals"}
 
     instructions = "优先合并重复 memory、将流程改进写入 playbook、policy 仅保留可执行参数。"
+    limits = _llm_refine_limits(llm_cfg)
     if llm_cfg.get("use_llm_review"):
         from agent_reach.daily_run.llm_chat import chat_json, resolve_chat_provider
 
         if resolve_chat_provider(str(llm_cfg.get("provider") or "auto")):
+            review_payload = _compact_llm_user_payload(
+                {
+                    "job": job,
+                    "signals": signals,
+                    "harness_overview": state.overview(entry_limit=limits["max_overview_entries"]),
+                    "recent_refinements": [e.to_dict() for e in state.refinements[-limits["max_refinement_items"] :]],
+                },
+                limits,
+            )
             payload = chat_json(
                 system=(
                     "你是 daily-run harness 审查员。仅输出 JSON："
                     '{"should_refine": bool, "rationale": "...", "instructions": "..."}。'
-                    "仅在出现可沉淀的模式/流程改进/预测校准时 should_refine=true。"
+                    "仅在出现可沉淀的模式/流程改进/预测校准时 should_refine=true；rationale/instructions 简明。"
                 ),
-                user=json.dumps(
-                    {
-                        "job": job,
-                        "signals": signals,
-                        "harness_overview": state.overview(entry_limit=4),
-                        "recent_refinements": [e.to_dict() for e in state.refinements[-5:]],
-                    },
-                    ensure_ascii=False,
-                ),
+                user=json.dumps(review_payload, ensure_ascii=False),
                 provider=str(llm_cfg.get("provider") or "auto"),
                 model=llm_cfg.get("model") or None,
                 timeout=int(llm_cfg.get("timeout_seconds") or 45),
+                max_tokens=int(limits["max_output_tokens"]),
             )
             if isinstance(payload, dict) and "should_refine" in payload:
                 return {
@@ -1122,30 +1334,33 @@ def plan_harness_refinement(
     from agent_reach.daily_run.llm_chat import chat_json, resolve_chat_provider
 
     provider = str(llm_cfg.get("provider") or "auto")
+    limits = _llm_refine_limits(llm_cfg)
     if resolve_chat_provider(provider):
         memory, policy, playbook, plan, ev_summary = _evidence_from_job(job, evidence, settings=settings)
+        plan_payload = _compact_llm_user_payload(
+            {
+                "job": job,
+                "instructions": instructions,
+                "evidence_summary": ev_summary,
+                "layer_a": {"memory": memory, "policy": policy, "playbook": playbook, "plan": plan},
+                "harness_overview": state.overview(entry_limit=limits["max_overview_entries"]),
+                "recent_refinements": [e.to_dict() for e in state.refinements[-limits["max_refinement_items"] :]],
+            },
+            limits,
+        )
         payload = chat_json(
             system=(
                 "你是 daily-run harness 规划器。输出 JSON："
                 '{"summary":"...", "rationale":"...", "edits":[{'
                 '"action":"create|update|delete", "kind":"memory|policy|playbook|plan", '
                 '"entry_id":"optional", "title":"...", "content":"..."}]}。'
-                "每次最多 8 条 edits；content 必须中文且可执行；避免与 Layer A 完全重复。"
+                "每次最多 8 条 edits；content 必须中文且可执行；避免与 Layer A 完全重复；summary/rationale 简明。"
             ),
-            user=json.dumps(
-                {
-                    "job": job,
-                    "instructions": instructions,
-                    "evidence_summary": ev_summary,
-                    "layer_a": {"memory": memory, "policy": policy, "playbook": playbook, "plan": plan},
-                    "harness_overview": state.overview(entry_limit=8),
-                    "recent_refinements": [e.to_dict() for e in state.refinements[-8:]],
-                },
-                ensure_ascii=False,
-            ),
+            user=json.dumps(plan_payload, ensure_ascii=False),
             provider=provider,
             model=llm_cfg.get("model") or None,
             timeout=int(llm_cfg.get("timeout_seconds") or 60),
+            max_tokens=int(limits["max_output_tokens"]),
         )
         if isinstance(payload, dict) and isinstance(payload.get("edits"), list):
             payload["planner"] = "llm"
