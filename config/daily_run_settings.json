@@ -105,6 +105,18 @@
     "calendar_days": 5
   },
 
+  "finance_reconcile": {
+    "stale_days": 3,
+    "materiality_cny": 500
+  },
+
+  "finance_statements": {
+    "enabled": true,
+    "harness_evolve": true,
+    "materiality_cny": 1000,
+    "tie_tolerance_cny": 5.0
+  },
+
   "finance_ledger": {
     "enabled": true,
     "harness_evolve": true,
@@ -630,6 +642,17 @@
       "append_to_weekly_card": true,
       "audit_days": 7
     },
+    "context_doctor": {
+      "enabled": true,
+      "similarity_threshold": 0.86,
+      "min_chars": 12
+    },
+    "rigor_schema": {
+      "enabled": true,
+      "jobs": ["optimize"],
+      "min_trials": 1,
+      "require_metrics": ["total_return", "max_drawdown"]
+    },
     "rigor_check": {
       "enabled": true,
       "block_on_fail": {
@@ -640,6 +663,7 @@
         "finance_ledger": true,
         "finance_variance": true,
         "finance_close_plan": true,
+        "finance_statements": true,
         "optimize": true,
         "pnl_target": true,
         "forecast_calibrate": true
@@ -669,6 +693,7 @@
       "finance_close": true,
       "finance_ledger": true,
       "finance_variance": true,
+      "finance_statements": true,
       "finance_close_plan": true
     },
     "llm_refine": {

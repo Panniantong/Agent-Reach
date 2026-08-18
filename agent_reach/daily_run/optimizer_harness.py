@@ -62,6 +62,7 @@ def apply_optimizer_harness_refinement(
         "best_score": result.best_score,
         "trials": result.trials,
         "metrics": result.metrics,
+        "objective": result.objective,
     }
     evidence["rigor_domain"] = dict(evidence["forge_domain"])
     return apply_skill_refinement("optimize", evidence, settings=settings, enabled_flag="optimizer")

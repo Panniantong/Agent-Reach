@@ -30,6 +30,7 @@ description: >-
 | `finance_close` | `finance_close_harness.py` | 收盘 dsh-finance 对账/风控/variance bridge |
 | `finance_ledger` | `finance_ledger_harness.py` | 收盘 trade ledger 分录校验（journal-entry check） |
 | `finance_variance` | `finance_variance_harness.py` | 周六 weekly 盈亏 waterfall（stock/cash bridge） |
+| `finance_statements` | `finance_statements_harness.py` | 周六 weekly 三表骨架（损益/资产负债/现金流） |
 | `finance_close_plan` | `finance_close_plan_harness.py` | 周六 T+1~T+5 下周 close 日历 |
 
 ## 收盘自动
@@ -59,7 +60,7 @@ python3 -m agent_reach.cli daily-run harness migrate-settings
 
 **weekly 去重**：
 - `skill_closure` / `run_guard` 开启时，`weekly` layer_a 只写 PnL / experience_snippets / applied_config
-- 周六顺序：`apply_weekly_skill_closure` → `run_weekly_harness_refinements`（**finance_variance** / **finance_close_plan** / run_guard）→ `run_weekly_layer_a_refinement`
+- 周六顺序：`apply_weekly_skill_closure` → `run_weekly_harness_refinements`（**finance_variance** / **finance_statements** / **finance_close_plan** / run_guard）→ `run_weekly_layer_a_refinement`
 
 ## 手动运行
 
@@ -196,7 +197,11 @@ python3 -m agent_reach.cli daily-run harness restore-snapshot --path ~/.agent-re
 |------|------------------|------|
 | `dsh-finance` portfolio_risk / reconcile / variance_bridge | `harness_finance.py` + `finance_close_harness.py` | 收盘组合风控、净值对账、variance bridge → harness memory/policy |
 | `dsh-finance` journal-entry check | `harness_finance.py` + `finance_ledger_harness.py` | trade ledger 分录平衡（amount vs shares×price、买卖借贷、cost_basis / trade_cash_flow） |
+| `dsh-finance` reconciliation snapshot | `harness_finance.py` + `finance_close_harness.py` | 收盘未平项账龄 / stale / sign-off readiness |
+| `dsh-finance` financial-statements | `harness_finance.py` + `finance_statements_harness.py` | 周六 weekly 三表 + materiality tie-out |
 | `dsh-rigorquant` 四重校验电池 | `harness_rigor_check.py` | closure / invariant / boundary / evidence；默认仅 **optimize** 失败时 block refine |
+| `dsh-rigorquant` study.json schema | `harness_rigor_schema.py` | optimize domain 必须含 objective/metrics/best_params |
+| `dsh-context-doctor` 去重 | `harness_context_doctor.py` | Layer A apply 前按相似度剔除重复 memory/policy/playbook/plan |
 | forge 扩展 | `harness_forge_gates.py` | 新增 `finance_close`、`finance_ledger`、`optimize` 数值 sanity |
 
 ```json
@@ -232,10 +237,24 @@ python3 -m agent_reach.cli daily-run harness restore-snapshot --path ~/.agent-re
   "variance_materiality_cny": 1000,
   "percent_materiality": 1.0
 },
-"finance_ledger": {
+"finance_statements": {
   "enabled": true,
-  "amount_tolerance_cny": 1.0,
-  "require_trade_id": false
+  "materiality_cny": 1000,
+  "tie_tolerance_cny": 5.0
+},
+"finance_reconcile": {
+  "stale_days": 3,
+  "materiality_cny": 500
+},
+"harness": {
+  "context_doctor": {
+    "enabled": true,
+    "similarity_threshold": 0.86
+  },
+  "rigor_schema": {
+    "enabled": true,
+    "jobs": ["optimize"]
+  }
 }
 ```
 

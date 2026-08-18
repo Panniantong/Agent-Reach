@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any, Literal, Optional
 
 
@@ -59,6 +60,26 @@ class ReconciliationResult:
             "adjusted_book": self.adjusted_book,
             "adjusted_source": self.adjusted_source,
             "flags": list(self.flags),
+            "sign_off_ready": self.sign_off_ready,
+        }
+
+
+@dataclass
+class ReconciliationSnapshotResult:
+    """dsh-finance finance_reconciliation_snapshot style open-item aging."""
+
+    open_items: list[dict[str, Any]] = field(default_factory=list)
+    category_totals: dict[str, float] = field(default_factory=dict)
+    aging_buckets: dict[str, int] = field(default_factory=dict)
+    stale_flags: list[str] = field(default_factory=list)
+    sign_off_ready: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "open_items": list(self.open_items),
+            "category_totals": dict(self.category_totals),
+            "aging_buckets": dict(self.aging_buckets),
+            "stale_flags": list(self.stale_flags),
             "sign_off_ready": self.sign_off_ready,
         }
 
@@ -217,6 +238,140 @@ def reconcile_close_portfolio(
         adjusted_source=_round(source),
         flags=flags,
         sign_off_ready=reconciled,
+    )
+
+
+def _parse_day(value: Any) -> Optional[date]:
+    text = str(value or "")[:10]
+    if not text:
+        return None
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _reconcile_snapshot_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
+    block = dict((settings or {}).get("finance_reconcile") or {})
+    close = _finance_cfg(settings)
+    return {
+        "stale_days": int(block.get("stale_days") or close.get("reconcile_stale_days") or 3),
+        "materiality_cny": float(block.get("materiality_cny") or close.get("reconcile_materiality_cny") or 500),
+    }
+
+
+def analyze_reconciliation_snapshot(
+    portfolio_summary: dict[str, Any],
+    reconcile: ReconciliationResult | dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> ReconciliationSnapshotResult:
+    """Open-item aging / stale flags for close reconcile (finance_reconciliation_snapshot)."""
+    cfg = _reconcile_snapshot_cfg(settings)
+    as_of = _parse_day(portfolio_summary.get("as_of")) or date.today()
+    rec = reconcile if isinstance(reconcile, ReconciliationResult) else ReconciliationResult(
+        reconciled=bool(reconcile.get("reconciled")),
+        difference=float(reconcile.get("difference") or 0),
+        adjusted_book=float(reconcile.get("adjusted_book") or 0),
+        adjusted_source=float(reconcile.get("adjusted_source") or 0),
+        flags=list(reconcile.get("flags") or []),
+        sign_off_ready=bool(reconcile.get("sign_off_ready")),
+    )
+
+    open_items: list[dict[str, Any]] = []
+    category_totals: dict[str, float] = {}
+    aging_buckets: dict[str, int] = {"0d": 0, "1-3d": 0, "4-7d": 0, "8d+": 0}
+    stale_flags: list[str] = []
+
+    def _add_item(
+        category: str,
+        label: str,
+        *,
+        amount: float = 0.0,
+        item_date: Optional[date] = None,
+        severity: str = "review",
+    ) -> None:
+        age_days = max(0, (as_of - item_date).days) if item_date else 0
+        if age_days == 0:
+            aging_buckets["0d"] += 1
+        elif age_days <= 3:
+            aging_buckets["1-3d"] += 1
+        elif age_days <= 7:
+            aging_buckets["4-7d"] += 1
+        else:
+            aging_buckets["8d+"] += 1
+        category_totals[category] = category_totals.get(category, 0.0) + abs(amount)
+        open_items.append(
+            {
+                "category": category,
+                "label": label,
+                "amount": _round(amount),
+                "age_days": age_days,
+                "severity": severity,
+            }
+        )
+        if age_days >= cfg["stale_days"] and abs(amount) >= cfg["materiality_cny"]:
+            stale_flags.append(f"stale {category}: {label} ({age_days}d)")
+
+    if not rec.reconciled:
+        _add_item(
+            "nav_gap",
+            f"NAV 对账差 {rec.difference:+,.2f} 元",
+            amount=rec.difference,
+            item_date=as_of,
+            severity="blocking",
+        )
+
+    capital = float(portfolio_summary.get("capital_net_flow") or 0)
+    if abs(capital) >= cfg["materiality_cny"]:
+        _add_item(
+            "capital_flow",
+            f"当日入出金 {capital:+,.0f} 元待复核",
+            amount=capital,
+            item_date=as_of,
+        )
+
+    for entry in portfolio_summary.get("trades") or []:
+        entry_day = _parse_day(entry.get("at"))
+        for action in entry.get("actions") or []:
+            side = str(action.get("side") or "").lower()
+            code = str(action.get("code") or "")
+            if side == "sell" and float(action.get("cost_basis") or 0) <= 0.01:
+                _add_item(
+                    "missing_cost_basis",
+                    f"{code} 卖出缺 cost_basis",
+                    amount=float(action.get("amount") or 0),
+                    item_date=entry_day,
+                )
+            if side == "buy" and not str(action.get("reasoning") or "").strip():
+                _add_item(
+                    "missing_memo",
+                    f"{code} 买入缺 reasoning",
+                    amount=float(action.get("amount") or 0),
+                    item_date=entry_day,
+                )
+
+    for row in portfolio_summary.get("holdings") or []:
+        shares = float(row.get("shares") or 0)
+        price = row.get("week_end_price") or row.get("price")
+        if shares > 0 and (price is None or float(price) <= 0):
+            code = str(row.get("code") or "")
+            _add_item(
+                "missing_price",
+                f"{code} 持仓缺市价",
+                amount=0.0,
+                item_date=as_of,
+            )
+
+    sign_off_ready = rec.reconciled and not stale_flags and not any(
+        i.get("severity") == "blocking" for i in open_items
+    )
+    return ReconciliationSnapshotResult(
+        open_items=open_items,
+        category_totals={k: _round(v) for k, v in category_totals.items()},
+        aging_buckets=aging_buckets,
+        stale_flags=stale_flags,
+        sign_off_ready=sign_off_ready,
     )
 
 
@@ -424,17 +579,90 @@ def run_finance_close_checks(
     risk = analyze_portfolio_risk(portfolio_summary, settings=settings)
     reconcile = reconcile_close_portfolio(portfolio_summary, settings=settings)
     variance = analyze_close_variance_bridge(portfolio_summary, settings=settings)
+    snapshot = analyze_reconciliation_snapshot(portfolio_summary, reconcile, settings=settings)
     blocking = [
         *([f"risk:{f}" for f in risk.flags]),
         *([f"reconcile:{f}" for f in reconcile.flags if not reconcile.reconciled]),
         *([f"variance:{f}" for f in variance.flags if not variance.reconciled]),
+        *([f"snapshot:{f}" for f in snapshot.stale_flags]),
     ]
     return {
         "risk": risk.to_dict(),
         "reconcile": reconcile.to_dict(),
+        "reconcile_snapshot": snapshot.to_dict(),
         "variance": variance.to_dict(),
         "passed": not blocking,
         "blocking_flags": blocking,
+    }
+
+
+def _statements_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
+    return dict((settings or {}).get("finance_statements") or {})
+
+
+def build_weekly_financial_statements(
+    report: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Weekly income / balance / cash-flow skeleton (dsh-finance financial-statements)."""
+    cfg = _statements_cfg(settings)
+    materiality = float(cfg.get("materiality_cny") or 1000)
+
+    end_total = report.get("end_total")
+    start_total = report.get("start_total")
+    cash = float(report.get("cash") or 0)
+    weekly_pnl = float(report.get("weekly_pnl") or 0) if report.get("weekly_pnl") is not None else None
+    stock_pnl = float(report.get("stock_pnl") or 0) if report.get("stock_pnl") is not None else None
+    cash_pnl = float(report.get("cash_pnl") or 0) if report.get("cash_pnl") is not None else None
+
+    holdings_mv = 0.0
+    for row in report.get("holdings") or []:
+        shares = float(row.get("shares") or 0)
+        price = row.get("week_end_price") or row.get("price")
+        if shares > 0 and price is not None:
+            holdings_mv += shares * float(price)
+    if end_total is not None and holdings_mv <= 0:
+        holdings_mv = max(0.0, float(end_total) - cash)
+
+    income_statement = {
+        "period": f"{report.get('week_start')}~{report.get('week_end')}",
+        "revenue": weekly_pnl,
+        "stock_pnl": stock_pnl,
+        "cash_pnl": cash_pnl,
+        "net_income": weekly_pnl,
+        "material": abs(weekly_pnl or 0) >= materiality if weekly_pnl is not None else False,
+    }
+    balance_sheet = {
+        "as_of": report.get("week_end"),
+        "assets_total": end_total,
+        "cash": _round(cash),
+        "investments": _round(holdings_mv),
+        "equity": end_total,
+        "start_equity": start_total,
+    }
+    cash_flow = {
+        "operating": weekly_pnl,
+        "investing": stock_pnl,
+        "financing": report.get("capital_net_flow"),
+        "net_change": weekly_pnl,
+    }
+
+    flags: list[str] = []
+    if start_total is None or end_total is None:
+        flags.append("缺少周初/周末净值")
+    if weekly_pnl is not None and start_total and float(start_total) > 0:
+        implied = float(end_total or 0) - float(start_total)
+        if abs(implied - weekly_pnl) > float(cfg.get("tie_tolerance_cny") or 5.0):
+            flags.append(f"损益与净值变动差 {abs(implied - weekly_pnl):,.2f} 元")
+
+    return {
+        "income_statement": income_statement,
+        "balance_sheet": balance_sheet,
+        "cash_flow": cash_flow,
+        "material": bool(income_statement.get("material")),
+        "flags": flags,
+        "reconciled": not flags,
     }
 
 

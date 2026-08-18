@@ -214,6 +214,21 @@ def validate_finance_close_plan_forge(
     return ForgeGateResult(job="finance_close_plan", passed=not violations, violations=violations)
 
 
+def validate_finance_statements_forge(
+    domain: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> ForgeGateResult:
+    violations: list[str] = []
+    report = domain.get("report") or {}
+    if report.get("end_total") is None:
+        violations.append("missing end_total")
+    statements = domain.get("statements") or {}
+    if not statements.get("income_statement"):
+        violations.append("missing income_statement")
+    return ForgeGateResult(job="finance_statements", passed=not violations, violations=violations)
+
+
 _FORGE_JOBS = frozenset(
     {
         "pnl_target",
@@ -223,6 +238,7 @@ _FORGE_JOBS = frozenset(
         "optimize",
         "finance_variance",
         "finance_close_plan",
+        "finance_statements",
     }
 )
 
@@ -260,6 +276,8 @@ def evaluate_forge_gate(
         return validate_finance_variance_forge(domain, settings=settings)
     if job == "finance_close_plan":
         return validate_finance_close_plan_forge(domain, settings=settings)
+    if job == "finance_statements":
+        return validate_finance_statements_forge(domain, settings=settings)
     return None
 
 

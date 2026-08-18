@@ -725,12 +725,26 @@ def refine_after_job(
         },
         gate,
     )
-    injection_meta: dict[str, Any] = {"gate_skipped": gate_skipped}
+    state = load_harness()
+    from agent_reach.daily_run.harness_context_doctor import (
+        context_doctor_cfg,
+        dedupe_kind_texts_against_state,
+    )
+
+    dedupe_meta: dict[str, Any] = {}
+    if context_doctor_cfg(cfg).get("enabled"):
+        for kind in _KINDS:
+            kind_texts[kind], dedupe_meta[kind] = dedupe_kind_texts_against_state(
+                kind_texts[kind],
+                state,
+                kind,
+                settings=cfg,
+            )
+    injection_meta: dict[str, Any] = {"gate_skipped": gate_skipped, "context_doctor": dedupe_meta}
     bounded: dict[str, list[str]] = {}
     for kind in _KINDS:
         bounded[kind], injection_meta[kind] = bound_kind_texts(kind_texts[kind], settings=cfg)
 
-    state = load_harness()
     from agent_reach.daily_run.harness_snapshot import save_pre_apply_snapshot
 
     snapshot_path = save_pre_apply_snapshot(state, job=job, trigger="layer_a", settings=cfg)

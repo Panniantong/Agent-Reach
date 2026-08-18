@@ -26,6 +26,7 @@ def finance_close_to_harness_evidence(
     risk = checks.get("risk") or {}
     reconcile = checks.get("reconcile") or {}
     variance = checks.get("variance") or {}
+    snapshot = checks.get("reconcile_snapshot") or {}
 
     if risk.get("largest_position"):
         pos = risk["largest_position"]
@@ -46,6 +47,22 @@ def finance_close_to_harness_evidence(
             memory.append(f"对账：{flag}")
             playbook.append("收盘后核对 ledger / capital / 净值口径")
             plan.append("finance_close：补全入出金或 ledger 后再 refine")
+
+    open_count = len(snapshot.get("open_items") or [])
+    if open_count:
+        memory.append(f"reconcile 未平项 {open_count} 条")
+        buckets = snapshot.get("aging_buckets") or {}
+        if buckets:
+            memory.append(
+                "账龄 "
+                + " · ".join(f"{k}={v}" for k, v in buckets.items() if v)
+            )
+    for flag in snapshot.get("stale_flags") or []:
+        memory.append(f"stale：{flag}")
+        playbook.append("reconcile：清理 stale 未平项后再 sign-off")
+        plan.append("finance_close：处理 stale open items")
+    if snapshot.get("sign_off_ready"):
+        memory.append("reconcile sign-off ready")
 
     if variance.get("material"):
         memory.append(
@@ -96,6 +113,7 @@ def apply_finance_close_harness_refinement(
         "portfolio_summary": portfolio_summary,
         "risk": checks.get("risk"),
         "reconcile": checks.get("reconcile"),
+        "reconcile_snapshot": checks.get("reconcile_snapshot"),
         "variance": checks.get("variance"),
     }
     evidence["rigor_domain"] = {

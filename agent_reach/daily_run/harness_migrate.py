@@ -101,6 +101,19 @@ HARNESS_WEEKLY_NARRATIVE_DEFAULTS: dict[str, Any] = {
     "audit_days": 7,
 }
 
+HARNESS_CONTEXT_DOCTOR_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "similarity_threshold": 0.86,
+    "min_chars": 12,
+}
+
+HARNESS_RIGOR_SCHEMA_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "jobs": ["optimize"],
+    "min_trials": 1,
+    "require_metrics": ["total_return", "max_drawdown"],
+}
+
 HARNESS_RIGOR_CHECK_DEFAULTS: dict[str, Any] = {
     "enabled": True,
     "block_on_fail": {"optimize": True},
@@ -109,6 +122,7 @@ HARNESS_RIGOR_CHECK_DEFAULTS: dict[str, Any] = {
         "finance_ledger": True,
         "finance_variance": True,
         "finance_close_plan": True,
+        "finance_statements": True,
         "optimize": True,
         "pnl_target": True,
         "forecast_calibrate": True,
@@ -144,6 +158,8 @@ def sync_user_harness_keys(
         ("layer_b_admission", HARNESS_LAYER_B_ADMISSION_DEFAULTS),
         ("forge_gates", HARNESS_FORGE_GATES_DEFAULTS),
         ("weekly_narrative", HARNESS_WEEKLY_NARRATIVE_DEFAULTS),
+        ("context_doctor", HARNESS_CONTEXT_DOCTOR_DEFAULTS),
+        ("rigor_schema", HARNESS_RIGOR_SCHEMA_DEFAULTS),
         ("rigor_check", HARNESS_RIGOR_CHECK_DEFAULTS),
     ):
         block = dict(harness.get(nested_key) or {})

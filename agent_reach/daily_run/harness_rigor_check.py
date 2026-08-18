@@ -45,6 +45,7 @@ def _rigor_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
             "finance_ledger",
             "finance_variance",
             "finance_close_plan",
+            "finance_statements",
             "optimize",
             "pnl_target",
             "forecast_calibrate",
@@ -121,7 +122,7 @@ def _check_boundary(domain: dict[str, Any], *, job: str) -> RigorCheck:
     return RigorCheck("boundary", True, "default ok")
 
 
-def _check_evidence(domain: dict[str, Any], *, job: str) -> RigorCheck:
+def _check_evidence(domain: dict[str, Any], *, job: str, settings: Optional[dict[str, Any]] = None) -> RigorCheck:
     if job == "finance_close":
         summary = domain.get("portfolio_summary") or {}
         required = ("as_of", "end_total")
@@ -129,7 +130,7 @@ def _check_evidence(domain: dict[str, Any], *, job: str) -> RigorCheck:
         if missing:
             return RigorCheck("evidence", False, f"missing {','.join(missing)}")
         return RigorCheck("evidence", True, "portfolio fields present")
-    if job in {"finance_variance", "finance_close_plan"}:
+    if job in {"finance_variance", "finance_close_plan", "finance_statements"}:
         report = domain.get("report") or {}
         if not report.get("week_start") or not report.get("week_end"):
             return RigorCheck("evidence", False, "missing week range")
@@ -147,6 +148,12 @@ def _check_evidence(domain: dict[str, Any], *, job: str) -> RigorCheck:
             return RigorCheck("evidence", False, "no optimizer trials")
         if result.get("best_score") is None:
             return RigorCheck("evidence", False, "missing best_score")
+        from agent_reach.daily_run.harness_rigor_schema import validate_optimize_study_schema
+
+        schema = validate_optimize_study_schema(result, settings=settings)
+        if not schema.passed:
+            detail = "; ".join(schema.violations[:4])
+            return RigorCheck("evidence", False, f"study_schema: {detail}")
         return RigorCheck("evidence", True, f"trials={result.get('trials')}")
     return RigorCheck("evidence", True, "default ok")
 
@@ -165,7 +172,7 @@ def evaluate_rigor_battery(
         _check_closure(domain),
         _check_invariant(domain),
         _check_boundary(domain, job=job),
-        _check_evidence(domain, job=job),
+        _check_evidence(domain, job=job, settings=settings),
     ]
     blocking = [f"{c.name}:{c.detail}" for c in checks if not c.passed and c.detail]
     return RigorBatteryResult(
