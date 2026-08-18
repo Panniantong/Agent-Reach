@@ -23,7 +23,66 @@ from agent_reach.daily_run.trade_calendar import today_shanghai
 
 
 from agent_reach.daily_run.schedule import INTRADAY_MAX_SCANS as MAX_SCANS
-MAX_TRADES = 5
+
+MAX_TRADES = 5  # legacy alias; prefer max_applied_trades_per_day / max_trade_evaluations_per_symbol
+
+
+def max_applied_trades_per_day(settings: Optional[dict[str, Any]] = None) -> int:
+    cfg = effective_settings(settings or load_settings())
+    raw = (cfg.get("schedule") or {}).get("max_applied_trades_per_day")
+    if raw is None:
+        return MAX_TRADES
+    return max(1, int(raw))
+
+
+def max_trade_evaluations_per_symbol(settings: Optional[dict[str, Any]] = None) -> int:
+    cfg = effective_settings(settings or load_settings())
+    raw = (cfg.get("schedule") or {}).get("max_trade_evaluations_per_symbol")
+    if raw is None:
+        return MAX_TRADES
+    return max(1, int(raw))
+
+
+def append_trade_skip_note(markdown: str, reason: str) -> str:
+    text = str(reason or "").strip()
+    if not text:
+        return markdown
+    note = f"⚠️ **本轮未调仓评估：** {text}"
+    if not markdown.strip():
+        return note
+    return markdown.rstrip() + "\n\n" + note
+
+
+def explain_trade_skip_reason(
+    state: Optional[IntradayState] = None,
+    settings: Optional[dict[str, Any]] = None,
+    *,
+    state_path: Optional[Path] = None,
+) -> str:
+    """Human-readable reason when should_evaluate_trade is False."""
+    cfg = effective_settings(settings or load_settings())
+    sched = cfg.get("schedule") or {}
+    if sched.get("intraday_trade_enabled", True) is not True:
+        return "盘中调仓已关闭（schedule.intraday_trade_enabled=false）"
+
+    st = state or load_state(state_path)
+    min_scans = runtime_int_default(cfg, "schedule", "trade_min_scans")
+    if len(st.scans) < min_scans:
+        return f"扫描次数不足（需 ≥{min_scans} 次，当前 {len(st.scans)} 次）"
+
+    eval_cap = max_trade_evaluations_per_symbol(cfg)
+    if len(st.trades) >= eval_cap:
+        return f"本标的调仓评估已达上限 T1–T{eval_cap}（含 hold 记录）"
+
+    trend = detect_mss_trend(st.scans)
+    every_n = runtime_int_default(cfg, "schedule", "trade_every_n_scans")
+    if trend in ("turning_up", "turning_down", "rising", "falling"):
+        return "内部状态异常：趋势已变化但未触发评估"
+
+    return (
+        f"未命中调仓评估节奏（趋势 {trend}，每 {every_n} 次扫描评估一次；"
+        f"当前 S{len(st.scans)}）"
+    )
 
 
 @dataclass
@@ -266,7 +325,7 @@ def should_evaluate_trade(
     *,
     state_path: Optional[Path] = None,
 ) -> bool:
-    """Heuristic: trade after ≥3 scans, <5 trades, on trend shift or every 2nd scan."""
+    """Heuristic: trade after ≥ trade_min_scans scans, on trend shift or every N scans."""
     cfg = effective_settings(settings)
     sched = cfg.get("schedule", {})
     if not sched.get("intraday_trade_enabled", True):
@@ -275,12 +334,7 @@ def should_evaluate_trade(
     st = state or load_state(state_path)
     if len(st.scans) < runtime_int_default(cfg, "schedule", "trade_min_scans"):
         return False
-    if len(st.trades) >= MAX_TRADES:
-        return False
-
-    from agent_reach.daily_run.portfolio_manager import global_trades_today
-
-    if global_trades_today() >= MAX_TRADES:
+    if len(st.trades) >= max_trade_evaluations_per_symbol(cfg):
         return False
 
     trend = detect_mss_trend(st.scans)
@@ -332,6 +386,18 @@ def apply_paper_trade(
         merged_watchlist.append(item)
     snap["watchlist"] = merged_watchlist
 
+    action = decision.action
+    applied_cap = max_applied_trades_per_day(cfg)
+    if action in ("buy", "sell") and global_trades_today() >= applied_cap:
+        return ApplyResult(
+            applied=False,
+            portfolio=pf,
+            message=(
+                f"今日全组合落账已达上限 {applied_cap} 次，"
+                f"{'买入' if action == 'buy' else '卖出'}信号仅记录不落账"
+            ),
+        )
+
     result = apply_auto_adjust(pf, decision, snap, cfg, allow_watchlist_changes=False)
     if result.applied:
         if not register_applied_trade(result.actions):
@@ -367,12 +433,11 @@ def evaluate_trade(
     cfg = effective_settings(settings)
     st = state or load_state(state_path)
 
-    from agent_reach.daily_run.portfolio_manager import global_trades_today
-
-    if len(st.trades) >= MAX_TRADES:
-        raise RuntimeError(f"今日调仓已达上限 {MAX_TRADES} 次（T1-T{MAX_TRADES}）")
-    if global_trades_today() >= MAX_TRADES:
-        raise RuntimeError(f"今日全组合调仓已达上限 {MAX_TRADES} 次")
+    eval_cap = max_trade_evaluations_per_symbol(cfg)
+    if len(st.trades) >= eval_cap:
+        raise RuntimeError(
+            f"今日调仓评估已达上限 {eval_cap} 次（T1-T{eval_cap}）"
+        )
     if not st.scans:
         raise RuntimeError("尚无扫描记录，请先运行 daily-run intraday scan")
 
@@ -466,10 +531,14 @@ def run_intraday(
     )
     steps.append("scan")
 
+    st_after_scan = IntradayState.from_dict(scan_result["state"])
+    do_trade = trade or should_evaluate_trade(st_after_scan, cfg, state_path=state_path)
+    if not do_trade:
+        skip_reason = explain_trade_skip_reason(st_after_scan, cfg, state_path=state_path)
+        scan_result["markdown"] = append_trade_skip_note(scan_result.get("markdown") or "", skip_reason)
+        scan_result["trade_skip_reason"] = skip_reason
+
     trade_result = None
-    do_trade = trade or should_evaluate_trade(
-        IntradayState.from_dict(scan_result["state"]), cfg, state_path=state_path
-    )
     if do_trade and not trade:
         steps.append("trade_auto")
 

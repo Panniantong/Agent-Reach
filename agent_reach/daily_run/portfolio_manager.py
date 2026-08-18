@@ -323,7 +323,14 @@ def apply_auto_adjust(
     if action == "sell":
         return _apply_sell(pf, enriched, settings, decision, allow_watchlist_changes=allow_watchlist_changes)
     if action == "buy":
-        return _apply_buy(pf, enriched, settings, allow_watchlist_changes=allow_watchlist_changes)
+        prefer_code = _normalize_code(str(snapshot.get("code") or ""))
+        return _apply_buy(
+            pf,
+            enriched,
+            settings,
+            allow_watchlist_changes=allow_watchlist_changes,
+            prefer_code=prefer_code or None,
+        )
 
     return ApplyResult(applied=False, portfolio=portfolio, message=f"未知决策 {action}")
 
@@ -398,6 +405,7 @@ def _apply_buy(
     settings: dict[str, Any],
     *,
     allow_watchlist_changes: bool = False,
+    prefer_code: Optional[str] = None,
 ) -> ApplyResult:
     holdings = list(pf.get("holdings") or [])
     held_codes = {_normalize_code(str(h.get("code", ""))) for h in holdings}
@@ -424,7 +432,12 @@ def _apply_buy(
         return ApplyResult(applied=False, portfolio=pf, message="观察池无可买入标的（或缺少报价）")
 
     candidates.sort(key=lambda x: _symbol_score(x, None, settings), reverse=True)
-    target = candidates[0]
+    prefer = _normalize_code(str(prefer_code or ""))
+    if prefer:
+        preferred = [c for c in candidates if _normalize_code(str(c.get("code", ""))) == prefer]
+        target = preferred[0] if preferred else candidates[0]
+    else:
+        target = candidates[0]
     code = _normalize_code(str(target["code"]))
 
     from agent_reach.daily_run.skill_rejected import trade_blocked_by_rejected
