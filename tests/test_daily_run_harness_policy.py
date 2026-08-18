@@ -6,7 +6,9 @@ from agent_reach.daily_run.harness_policy import (
     aggressive_entry_default,
     apply_harness_policy_overlay,
     harness_symbol_score,
+    harness_buy_budget,
     kronos_score_adjustment,
+    resolve_harness_position_policy,
     resolve_harness_symbol_bias,
     resolve_harness_symbol_score_weights,
     resolve_harness_flat_overrides,
@@ -484,6 +486,42 @@ class TestHarnessRuntimeExtensions:
         weak = harness_symbol_score({"code": "002583", "change_pct": 2.0}, settings)
         strong = harness_symbol_score({"code": "600584", "change_pct": 2.0}, settings)
         assert weak < strong
+
+    def test_position_policy_evolve_on_defensive_trim(self):
+        state = HarnessState()
+        state.entries["memory"]["miss"] = HarnessEntry(
+            id="miss",
+            kind="memory",
+            title="MSS 预测偏离",
+            content="MSS 预测偏离：下日调低进攻阈值或缩窄仓位",
+            source="deterministic",
+            job="close",
+            evidence="close",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        settings = {"harness": {"runtime_overlay_sources": ["memory"]}}
+        policy = resolve_harness_position_policy(state, settings=settings)
+        assert policy["deploy_ratio"] == 0.25
+        assert policy["max_position_pct"] == 25.0
+
+    def test_harness_buy_budget_caps_by_max_position_pct(self):
+        settings = {
+            "harness_runtime": {
+                "position_policy": {"deploy_ratio": 1.0, "max_position_pct": 35.0},
+            }
+        }
+        budget = harness_buy_budget(total=100_000, deployable=60_000, settings=settings)
+        assert budget == 35_000
+
+    def test_harness_buy_budget_scales_deploy_ratio(self):
+        settings = {
+            "harness_runtime": {
+                "position_policy": {"deploy_ratio": 0.25, "max_position_pct": 35.0},
+            }
+        }
+        budget = harness_buy_budget(total=100_000, deployable=60_000, settings=settings)
+        assert budget == 15_000
 
     def test_defensive_trim_decision(self):
         settings = {

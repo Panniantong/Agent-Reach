@@ -106,6 +106,16 @@ _SYMBOL_SCORE_NEUTRAL: dict[str, float] = {
     "symbol_bias_boost": 8.0,
 }
 
+_EVOLVED_POSITION_KEYS: tuple[str, ...] = (
+    "deploy_ratio",
+    "max_position_pct",
+)
+
+_POSITION_NEUTRAL: dict[str, float] = {
+    "deploy_ratio": 1.0,
+    "max_position_pct": 35.0,
+}
+
 _SYMBOL_BIAS_CODE_RE = re.compile(r"(?<!\d)(\d{6})(?!\d)")
 
 _SYMBOL_BIAS_NEGATIVE: tuple[str, ...] = (
@@ -179,6 +189,8 @@ HARNESS_CONSUMER_HELPERS: dict[str, str] = {
     "vol_multiplier": "forecast_int_default(settings, 'vol_multiplier')",
     "days_held": "effective_days_held(holding, settings=settings)",
     "lookback_weights": "lookback_weights_default(settings)",
+    "deploy_ratio": "position_policy_default(settings, 'deploy_ratio')",
+    "max_position_pct": "position_policy_default(settings, 'max_position_pct')",
 }
 
 
@@ -1250,6 +1262,12 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
     symbol_bias = resolve_harness_symbol_bias(state, settings=cfg, weights=effective_score_weights)
     if symbol_bias:
         harness_meta["symbol_bias"] = symbol_bias
+    base_position = resolve_harness_base_position_policy(cfg)
+    effective_position = resolve_harness_position_policy(state, settings=cfg)
+    harness_meta["position_policy"] = effective_position
+    position_meta = harness_position_overlay_meta(base_position, effective_position)
+    if position_meta:
+        harness_meta["position_overlay"] = position_meta
     harness_meta["trade_signals"] = {
         k: trade_signals[k]
         for k in (
@@ -1279,6 +1297,121 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
             pass
         cfg["harness_runtime"] = harness_meta
     return cfg
+
+
+def position_policy_base(settings: dict[str, Any], key: str) -> float:
+    if evolution_mode(settings, key) == "fixed":
+        block = settings.get("position") or {}
+        if key in block:
+            return float(block[key])
+        pf = settings.get("portfolio") or {}
+        if key == "max_position_pct" and "max_position_pct" in pf:
+            return float(pf["max_position_pct"])
+        finance = settings.get("finance_close") or {}
+        if key == "max_position_pct" and "max_position_pct" in finance:
+            return float(finance["max_position_pct"])
+    return float(_POSITION_NEUTRAL.get(key, 0.0))
+
+
+def resolve_harness_base_position_policy(settings: dict[str, Any]) -> dict[str, float]:
+    return {key: position_policy_base(settings, key) for key in _EVOLVED_POSITION_KEYS}
+
+
+def _apply_position_signal_evolution(
+    merged: dict[str, float],
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    signals = resolve_harness_trade_signals(state, settings=settings)
+    if signals.get("defensive_trim"):
+        if evolution_mode(settings, "deploy_ratio") == "harness":
+            merged["deploy_ratio"] = min(float(merged.get("deploy_ratio", 1.0)), 0.25)
+        if evolution_mode(settings, "max_position_pct") == "harness":
+            merged["max_position_pct"] = min(float(merged.get("max_position_pct", 35.0)), 25.0)
+    elif signals.get("pnl_target_miss"):
+        if evolution_mode(settings, "deploy_ratio") == "harness":
+            merged["deploy_ratio"] = min(float(merged.get("deploy_ratio", 1.0)), 0.35)
+        if evolution_mode(settings, "max_position_pct") == "harness":
+            merged["max_position_pct"] = min(float(merged.get("max_position_pct", 35.0)), 28.0)
+    if signals.get("pnl_target_hit"):
+        if evolution_mode(settings, "deploy_ratio") == "harness":
+            merged["deploy_ratio"] = max(float(merged.get("deploy_ratio", 1.0)), 0.55)
+        if evolution_mode(settings, "max_position_pct") == "harness":
+            merged["max_position_pct"] = max(float(merged.get("max_position_pct", 35.0)), 40.0)
+    if _blob_has_phrase(state, "进攻期", settings=settings):
+        if evolution_mode(settings, "deploy_ratio") == "harness":
+            merged["deploy_ratio"] = max(float(merged.get("deploy_ratio", 1.0)), 0.5)
+        if evolution_mode(settings, "max_position_pct") == "harness":
+            merged["max_position_pct"] = max(float(merged.get("max_position_pct", 35.0)), 38.0)
+    if _blob_has_phrase(state, "维持高现金", settings=settings):
+        if evolution_mode(settings, "deploy_ratio") == "harness":
+            merged["deploy_ratio"] = min(float(merged.get("deploy_ratio", 1.0)), 0.3)
+        if evolution_mode(settings, "max_position_pct") == "harness":
+            merged["max_position_pct"] = min(float(merged.get("max_position_pct", 35.0)), 25.0)
+    if signals.get("mss_forecast_miss") and not signals.get("defensive_trim"):
+        if evolution_mode(settings, "deploy_ratio") == "harness":
+            merged["deploy_ratio"] = float(merged.get("deploy_ratio", 1.0)) * 0.7
+    return merged
+
+
+def resolve_harness_position_policy(
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    merged = resolve_harness_base_position_policy(settings)
+    if not _overlay_enabled(settings):
+        return merged
+    merged = _apply_position_signal_evolution(merged, state, settings=settings)
+    merged["deploy_ratio"] = max(0.05, min(1.0, float(merged.get("deploy_ratio", 1.0))))
+    merged["max_position_pct"] = max(5.0, min(100.0, float(merged.get("max_position_pct", 35.0))))
+    return merged
+
+
+def harness_position_overlay_meta(
+    base_policy: dict[str, float],
+    effective_policy: dict[str, float],
+) -> dict[str, Any]:
+    changed: dict[str, dict[str, float]] = {}
+    for key in _EVOLVED_POSITION_KEYS:
+        base_val = float(base_policy.get(key, _POSITION_NEUTRAL.get(key, 0.0)))
+        eff_val = float(effective_policy.get(key, base_val))
+        if abs(eff_val - base_val) >= 0.01:
+            changed[key] = {"base": base_val, "effective": eff_val}
+    return changed
+
+
+def _position_policy(settings: dict[str, Any]) -> dict[str, float]:
+    runtime = settings.get("harness_runtime") or {}
+    policy = runtime.get("position_policy")
+    if policy:
+        return dict(policy)
+    if _overlay_enabled(settings):
+        from agent_reach.daily_run.harness import load_harness
+
+        return resolve_harness_position_policy(load_harness(), settings=settings)
+    return dict(_POSITION_NEUTRAL)
+
+
+def position_policy_default(settings: dict[str, Any], key: str) -> float:
+    return float(_position_policy(settings).get(key, _POSITION_NEUTRAL.get(key, 0.0)))
+
+
+def harness_buy_budget(
+    *,
+    total: float,
+    deployable: float,
+    settings: dict[str, Any],
+) -> float:
+    """Gross buy budget (before commission) from harness-evolved position policy."""
+    policy = _position_policy(settings)
+    deploy_ratio = max(0.0, min(1.0, float(policy.get("deploy_ratio", 1.0))))
+    max_pct = max(0.0, float(policy.get("max_position_pct", 35.0)))
+    budget = max(0.0, float(deployable)) * deploy_ratio
+    if total > 0 and max_pct > 0:
+        budget = min(budget, total * max_pct / 100.0)
+    return max(0.0, budget)
 
 
 def symbol_score_weight_base(settings: dict[str, Any], key: str) -> float:

@@ -10,7 +10,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agent_reach.daily_run import trade_calendar
-from agent_reach.daily_run.harness_policy import min_cash_ratio_default, runtime_int_default, runtime_float_default
+from agent_reach.daily_run.harness_policy import (
+    harness_buy_budget,
+    min_cash_ratio_default,
+    runtime_int_default,
+    runtime_float_default,
+)
 from agent_reach.daily_run.settings import effective_settings
 from agent_reach.daily_run.snapshot_builder import _normalize_code
 from agent_reach.daily_run.symbols import build_enriched_symbols, copy_portfolio
@@ -505,8 +510,8 @@ def _apply_buy(
         )
 
     commission_rate = float(settings.get("trading", {}).get("commission_rate", 0.0015))
-    # No per-position cap — use all deployable cash minus commission headroom
-    budget = deployable / (1 + commission_rate)
+    budget_gross = harness_buy_budget(total=total, deployable=deployable, settings=settings)
+    budget = budget_gross / (1 + commission_rate)
     shares = _round_lot(code, int(budget // price))
     if shares <= 0:
         return ApplyResult(applied=False, portfolio=pf, message=f"现金不足以买入 {code} 最小单位")
