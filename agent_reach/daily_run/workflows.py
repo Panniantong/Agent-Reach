@@ -183,6 +183,7 @@ def run_morning(
     team_first: Optional[bool] = None,
     push: bool = True,
     start_notify: bool = True,
+    skip_narrative: bool = False,
     title: Optional[str] = None,
     config=None,
 ) -> dict[str, Any]:
@@ -262,9 +263,11 @@ def run_morning(
 
     team_md = render_team_markdown(enriched) if expert_card_enabled(cfg, workflow="morning") else ""
     report_md = render_markdown(report)
-    from agent_reach.daily_run.report_narrative import generate_morning_narrative
+    morning_narrative: dict[str, Any] = {"skipped": True, "reason": "deferred"}
+    if not skip_narrative:
+        from agent_reach.daily_run.report_narrative import generate_morning_narrative
 
-    morning_narrative = generate_morning_narrative(enriched, report, settings=cfg)
+        morning_narrative = generate_morning_narrative(enriched, report, settings=cfg)
     push_harness_summary = _harness_push_summary_enabled(cfg, report_kind="morning")
     harness_md = ""
     if push_harness_summary:
@@ -589,6 +592,7 @@ def run_close(
     plugin_names: Optional[list[str]] = None,
     team_first: Optional[bool] = None,
     push: bool = True,
+    skip_narrative: bool = False,
     title: Optional[str] = None,
     config=None,
     intraday_scans: Optional[list[dict[str, Any]]] = None,
@@ -855,16 +859,18 @@ def run_close(
     )
 
     curve_payload = curve.to_dict() if curve is not None and hasattr(curve, "to_dict") else curve
-    from agent_reach.daily_run.report_narrative import generate_close_narrative
+    close_narrative: dict[str, Any] = {"skipped": True, "reason": "deferred"}
+    if not skip_narrative:
+        from agent_reach.daily_run.report_narrative import generate_close_narrative
 
-    close_narrative = generate_close_narrative(
-        snapshot=enriched,
-        verify=verify_dict,
-        portfolio_summary=portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
-        curve=curve_payload,
-        forecast_review=forecast_review.to_dict() if forecast_review else None,
-        settings=cfg,
-    )
+        close_narrative = generate_close_narrative(
+            snapshot=enriched,
+            verify=verify_dict,
+            portfolio_summary=portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
+            curve=curve_payload,
+            forecast_review=forecast_review.to_dict() if forecast_review else None,
+            settings=cfg,
+        )
 
     push_harness_summary = _harness_push_summary_enabled(cfg, report_kind="close")
     harness_result: dict[str, Any] = {}

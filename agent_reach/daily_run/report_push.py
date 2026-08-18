@@ -331,6 +331,35 @@ def render_merged_decision_markdown(
     return "\n".join(lines).strip()
 
 
+def append_merged_narrative_section(
+    sections: list[ReportSection],
+    narrative: Optional[dict[str, Any]],
+    *,
+    report_kind: str,
+    symbol_count: int,
+) -> list[ReportSection]:
+    """Append one portfolio-level AI narrative card and refresh section titles."""
+    if not narrative or narrative.get("skipped"):
+        return sections
+    from agent_reach.daily_run.report_narrative import render_narrative_markdown
+
+    ai_md = render_narrative_markdown(narrative, job=report_kind)
+    if not ai_md.strip():
+        return sections
+    out = list(sections)
+    out.append(ReportSection(category="ai_narrative", title="", body=ai_md.strip()))
+    total = len(out)
+    for i, sec in enumerate(out, start=1):
+        sec.title = merged_category_title(
+            report_kind=report_kind,
+            category=sec.category,
+            index=i,
+            total=total,
+            symbol_count=1 if sec.category == "daily_portfolio" else symbol_count,
+        )
+    return out
+
+
 def merge_sections_by_category(
     groups: list[tuple[str, list[ReportSection]]],
     *,

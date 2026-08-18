@@ -32,6 +32,12 @@ def _should_merge_push(settings: dict[str, Any]) -> bool:
     return symbol_push_mode(settings) == "merge_by_category"
 
 
+def _defer_narrative_to_merge(settings: dict[str, Any]) -> bool:
+    from agent_reach.daily_run.report_narrative import merge_narrative_single_call
+
+    return _should_merge_push(settings) and merge_narrative_single_call(settings)
+
+
 def run_morning_for_symbols(
     *,
     settings: Optional[dict[str, Any]] = None,
@@ -54,6 +60,7 @@ def run_morning_for_symbols(
     targets = symbols or resolve_target_symbols(pf, cfg)
     primary = pf.get("primary_code")
     merge_push = _should_merge_push(cfg)
+    defer_narrative = _defer_narrative_to_merge(cfg)
     symbol_results: list[dict[str, Any]] = []
     section_groups: list[tuple[str, list]] = []
     expert_snapshots: list[tuple[str, str, dict[str, Any]]] = []
@@ -75,6 +82,7 @@ def run_morning_for_symbols(
                 doctor_channels=doctor_channels,
                 push=push and not merge_push,
                 start_notify=push and not merge_push and i == 0,
+                skip_narrative=defer_narrative,
                 config=config,
             )
             baseline_path = save_morning_baseline(
@@ -119,6 +127,23 @@ def run_morning_for_symbols(
             expert_snapshots=expert_snapshots or None,
             decision_entries=decision_entries or None,
         )
+        if defer_narrative and decision_entries:
+            from agent_reach.daily_run.report_narrative import generate_merged_morning_narrative
+            from agent_reach.daily_run.report_push import append_merged_narrative_section
+
+            primary_snap = symbol_results[0]["result"]["snapshot"]
+            narrative = generate_merged_morning_narrative(
+                decision_entries,
+                primary_snapshot=primary_snap,
+                settings=cfg,
+            )
+            merged = append_merged_narrative_section(
+                merged,
+                narrative,
+                report_kind="morning",
+                symbol_count=len(decision_entries),
+            )
+            symbol_results[0]["result"]["llm_narrative"] = narrative
         feishu_result = push_report_sections(
             merged,
             settings=cfg,
@@ -279,6 +304,7 @@ def run_close_for_symbols(
     pf = load_portfolio()
     targets = symbols or resolve_target_symbols(pf, cfg)
     merge_push = _should_merge_push(cfg)
+    defer_narrative = _defer_narrative_to_merge(cfg)
     symbol_results: list[dict[str, Any]] = []
     section_groups: list[tuple[str, list]] = []
     expert_snapshots: list[tuple[str, str, dict[str, Any]]] = []
@@ -306,6 +332,7 @@ def run_close_for_symbols(
                 baseline,
                 settings=cfg,
                 push=push and not merge_push,
+                skip_narrative=defer_narrative,
                 config=config,
                 intraday_trades=state.trades,
                 portfolio_summary=not merge_push,
@@ -390,6 +417,39 @@ def run_close_for_symbols(
             merged.append(
                 ReportSection(category="daily_portfolio", title="", body=portfolio_md.strip())
             )
+        if defer_narrative and symbol_results:
+            from agent_reach.daily_run.report_narrative import generate_merged_close_narrative
+            from agent_reach.daily_run.report_push import append_merged_narrative_section
+
+            primary_inner = symbol_results[0]["result"]
+            portfolio_summary_dict = None
+            if portfolio_md.strip():
+                portfolio_summary_dict = build_close_portfolio_summary(
+                    primary_snap,
+                    morning_bl,
+                    trades=shared_state.trades,
+                    intraday_trades=shared_state.trades,
+                    watchlist_adjust=wl_result.to_dict() if wl_result else None,
+                    settings=cfg,
+                ).to_dict()
+            curve_payload = primary_inner.get("curve")
+            if curve_payload is not None and hasattr(curve_payload, "to_dict"):
+                curve_payload = curve_payload.to_dict()
+            narrative = generate_merged_close_narrative(
+                symbol_results,
+                portfolio_summary=portfolio_summary_dict,
+                curve=curve_payload,
+                forecast_review=primary_inner.get("forecast_review"),
+                settings=cfg,
+            )
+            merged = append_merged_narrative_section(
+                merged,
+                narrative,
+                report_kind="close",
+                symbol_count=len(symbol_results),
+            )
+            symbol_results[0]["result"]["llm_narrative"] = narrative
+        elif portfolio_md.strip():
             total = len(merged)
             for i, sec in enumerate(merged, start=1):
                 sec.title = merged_category_title(

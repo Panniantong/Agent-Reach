@@ -316,6 +316,88 @@ def generate_morning_narrative(
     )
 
 
+def merge_narrative_single_call(settings: Optional[dict[str, Any]]) -> bool:
+    """When merge_by_category push is on, one LLM call for the whole portfolio."""
+    cfg = (settings or {}).get("llm_narrative") or {}
+    if "merge_single_call" in cfg:
+        return bool(cfg["merge_single_call"])
+    return True
+
+
+def build_merged_morning_context(
+    entries: list[tuple[str, str, dict[str, Any]]],
+    *,
+    primary_snapshot: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    symbols: list[dict[str, Any]] = []
+    for name, code, report in entries:
+        symbols.append(
+            {
+                "name": name,
+                "code": code,
+                "verdict": report.get("verdict"),
+                "mss_final": report.get("mss_final"),
+                "prior_close_delta": report.get("prior_close_delta"),
+                "confidence": report.get("confidence"),
+            }
+        )
+    pf = (primary_snapshot or {}).get("portfolio") or {}
+    return {
+        "job": "morning",
+        "portfolio_scope": "merged",
+        "symbol_count": len(symbols),
+        "symbols": symbols,
+        "cash_ratio": pf.get("cash_ratio"),
+        "holdings_count": len(pf.get("holdings") or []),
+        "macro_summary": ((primary_snapshot or {}).get("macro_summary") or "")[:120],
+    }
+
+
+def _merged_morning_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
+    symbols = ctx.get("symbols") or []
+    focus: list[str] = []
+    risks: list[str] = []
+    n = int(ctx.get("symbol_count") or len(symbols))
+    verdicts = [str(s.get("verdict")) for s in symbols if s.get("verdict")]
+    mss_vals = [float(s["mss_final"]) for s in symbols if s.get("mss_final") is not None]
+    if verdicts:
+        dominant = max(set(verdicts), key=verdicts.count)
+        focus.append(f"{n}只标的，主导结论 **{dominant}**")
+    if mss_vals:
+        focus.append(f"MSS 区间 {min(mss_vals):.1f}~{max(mss_vals):.1f}")
+    cash = ctx.get("cash_ratio")
+    if cash is not None:
+        focus.append(f"组合现金 {float(cash):.0%}")
+    if mss_vals and min(mss_vals) < 40:
+        risks.append("部分标的 MSS 低于宏观否决线")
+    summary = f"早盘全持仓 {n} 只"
+    if mss_vals:
+        summary += f"，MSS {min(mss_vals):.1f}~{max(mss_vals):.1f}"
+    return {
+        "summary": summary,
+        "focus_points": focus[:3] or ["按 MSS 与宏观一票否决规则执行"],
+        "divergence_notes": [],
+        "risk_alerts": risks[:2],
+        "planner": "deterministic",
+    }
+
+
+def generate_merged_morning_narrative(
+    entries: list[tuple[str, str, dict[str, Any]]],
+    *,
+    primary_snapshot: Optional[dict[str, Any]] = None,
+    settings: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    context = build_merged_morning_context(entries, primary_snapshot=primary_snapshot)
+    return _generate_narrative(
+        "morning",
+        context,
+        settings=settings,
+        system=f"{_morning_focus_hint()} 全组合视角，跨标的归纳，勿逐只复述。",
+        deterministic_fn=_merged_morning_deterministic,
+    )
+
+
 # --- Close ---
 
 
@@ -393,6 +475,92 @@ def generate_close_narrative(
         settings=settings,
         system="优先当日盈亏、偏差项、明日一条建议。",
         deterministic_fn=_close_deterministic,
+    )
+
+
+def build_merged_close_context(
+    symbol_results: list[dict[str, Any]],
+    *,
+    portfolio_summary: Optional[dict[str, Any]] = None,
+    curve: Optional[dict[str, Any]] = None,
+    forecast_review: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    symbols: list[dict[str, Any]] = []
+    for row in symbol_results:
+        inner = row.get("result") or {}
+        verify = inner.get("verify") or {}
+        symbols.append(
+            {
+                "name": row.get("name") or inner.get("snapshot", {}).get("name"),
+                "code": row.get("code") or inner.get("snapshot", {}).get("code"),
+                "verify_summary": (verify.get("summary") or "")[:96],
+                "verdict_current": verify.get("verdict_current"),
+                "mss_delta": verify.get("mss_delta"),
+            }
+        )
+    return {
+        "job": "close",
+        "portfolio_scope": "merged",
+        "symbol_count": len(symbols),
+        "symbols": symbols,
+        "portfolio_daily_pnl": (portfolio_summary or {}).get("daily_pnl"),
+        "portfolio_daily_pnl_pct": (portfolio_summary or {}).get("daily_pnl_pct"),
+        "curve_trend": (curve or {}).get("trend"),
+        "forecast_review_accuracy": (forecast_review or {}).get("accuracy"),
+    }
+
+
+def _merged_close_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
+    focus: list[str] = []
+    risks: list[str] = []
+    n = int(ctx.get("symbol_count") or len(ctx.get("symbols") or []))
+    pnl = ctx.get("portfolio_daily_pnl")
+    pct = ctx.get("portfolio_daily_pnl_pct")
+    if pnl is not None:
+        sign = "+" if float(pnl) >= 0 else ""
+        pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
+        focus.append(f"组合当日盈亏 {sign}¥{float(pnl):,.0f}{pct_s}")
+    for sym in ctx.get("symbols") or []:
+        if sym.get("verify_summary"):
+            focus.append(f"{sym.get('name') or sym.get('code')}：{sym['verify_summary'][:72]}")
+        if len(focus) >= 3:
+            break
+    for sym in ctx.get("symbols") or []:
+        delta = sym.get("mss_delta")
+        if delta is not None and abs(float(delta)) >= 5:
+            risks.append(f"{sym.get('name') or sym.get('code')} MSS Δ {float(delta):+.1f}")
+    summary = f"收盘全持仓 {n} 只复盘"
+    if pnl is not None:
+        summary += f"，当日盈亏 ¥{float(pnl):,.0f}"
+    return {
+        "summary": summary,
+        "focus_points": focus[:3] or ["复盘组合盈亏与明日执行"],
+        "divergence_notes": [],
+        "risk_alerts": risks[:2],
+        "planner": "deterministic",
+    }
+
+
+def generate_merged_close_narrative(
+    symbol_results: list[dict[str, Any]],
+    *,
+    portfolio_summary: Optional[dict[str, Any]] = None,
+    curve: Optional[dict[str, Any]] = None,
+    forecast_review: Optional[dict[str, Any]] = None,
+    settings: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    context = build_merged_close_context(
+        symbol_results,
+        portfolio_summary=portfolio_summary,
+        curve=curve,
+        forecast_review=forecast_review,
+    )
+    return _generate_narrative(
+        "close",
+        context,
+        settings=settings,
+        system="全组合视角；优先当日盈亏、跨标的偏差、明日一条建议；勿逐只复述。",
+        deterministic_fn=_merged_close_deterministic,
     )
 
 

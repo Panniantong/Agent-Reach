@@ -615,6 +615,7 @@
     "max_risk_alerts": 2,
     "max_item_chars": 48,
     "max_context_chars": 1800,
+    "merge_single_call": true,
     "jobs": {
       "morning": true,
       "close": true,

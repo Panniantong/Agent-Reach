@@ -204,3 +204,64 @@ class TestSymbolRunner:
         result = run_morning_for_symbols(settings=cfg, push=False, symbols=["688008", "002273"])
         assert len(result["symbol_results"]) == 2
         assert mock_run.call_count == 2
+
+    @patch("agent_reach.daily_run.report_narrative.generate_merged_morning_narrative")
+    @patch("agent_reach.daily_run.report_push.push_report_sections", return_value={"mode": "split"})
+    @patch("agent_reach.daily_run.intraday.record_morning_scan", return_value={"scan": {"scan_id": "S1"}})
+    @patch("agent_reach.daily_run.workflows.run_morning")
+    @patch("agent_reach.daily_run.symbol_runner.build_and_save")
+    @patch("agent_reach.daily_run.symbol_runner.load_portfolio")
+    def test_merge_mode_single_merged_narrative(
+        self,
+        mock_pf,
+        mock_build,
+        mock_run,
+        mock_morning_scan,
+        mock_push,
+        mock_merged_narrative,
+        tmp_path,
+    ):
+        mock_pf.return_value = PORTFOLIO
+        mock_build.side_effect = [
+            ({"code": "688008", "name": "澜起科技", "portfolio": {"cash_ratio": 0.5}}, tmp_path / "a.json"),
+            ({"code": "002273", "name": "水晶光电"}, tmp_path / "b.json"),
+        ]
+        mock_run.side_effect = [
+            {
+                "snapshot": {"code": "688008", "portfolio": {"cash_ratio": 0.5}},
+                "evaluation": {"report": {"verdict": "观察", "mss_final": 42}},
+                "team_markdown": "",
+                "report_markdown": "r1",
+                "llm_narrative": {"skipped": True, "reason": "deferred"},
+            },
+            {
+                "snapshot": {"code": "002273"},
+                "evaluation": {"report": {"verdict": "观察", "mss_final": 40}},
+                "team_markdown": "",
+                "report_markdown": "r2",
+                "llm_narrative": {"skipped": True, "reason": "deferred"},
+            },
+        ]
+        mock_merged_narrative.return_value = {
+            "summary": "组合早报",
+            "focus_points": ["A"],
+            "job": "morning",
+            "planner": "llm",
+        }
+        cfg = load_settings()
+        cfg = {
+            **cfg,
+            "schedule": {
+                **(cfg.get("schedule") or {}),
+                "symbols_mode": "holdings",
+                "symbol_push_mode": "merge_by_category",
+            },
+            "llm_narrative": {**(cfg.get("llm_narrative") or {}), "merge_single_call": True},
+        }
+        run_morning_for_symbols(settings=cfg, push=True, symbols=["688008", "002273"])
+        assert mock_merged_narrative.call_count == 1
+        for call in mock_run.call_args_list:
+            assert call.kwargs.get("skip_narrative") is True
+        pushed_sections = mock_push.call_args[0][0]
+        assert any(sec.category == "ai_narrative" for sec in pushed_sections)
+        assert sum(1 for sec in pushed_sections if sec.category == "ai_narrative") == 1

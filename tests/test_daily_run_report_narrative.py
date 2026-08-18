@@ -1,6 +1,7 @@
 # -*- coding: utf-8
 """Tests for report LLM narrative cards."""
 
+import json
 from unittest.mock import patch
 
 from agent_reach.daily_run.report_narrative import (
@@ -139,3 +140,54 @@ def test_render_narrative_markdown_is_concise():
     )
     assert "关注点" in md
     assert "解读来源" not in md
+
+
+def test_merged_morning_narrative_deterministic():
+    from agent_reach.daily_run.report_narrative import generate_merged_morning_narrative
+
+    entries = [
+        ("澜起科技", "688008", {"verdict": "观察", "mss_final": 42.5}),
+        ("水晶光电", "002273", {"verdict": "观察", "mss_final": 40.0}),
+    ]
+    with patch("agent_reach.daily_run.llm_chat.resolve_chat_provider", return_value=None):
+        narrative = generate_merged_morning_narrative(
+            entries,
+            primary_snapshot={"portfolio": {"cash_ratio": 0.46}},
+            settings={"llm_narrative": {"enabled": True}},
+        )
+    assert narrative["planner"] == "deterministic"
+    assert "2只" in narrative["summary"] or "2只" in " ".join(narrative.get("focus_points") or [])
+
+
+def test_merged_close_narrative_uses_portfolio_pnl():
+    from agent_reach.daily_run.report_narrative import generate_merged_close_narrative
+
+    symbol_results = [
+        {
+            "code": "688008",
+            "name": "澜起科技",
+            "result": {"verify": {"summary": "宏观否决"}, "snapshot": {"name": "澜起科技"}},
+        }
+    ]
+    with patch("agent_reach.daily_run.llm_chat.resolve_chat_provider", return_value=None):
+        narrative = generate_merged_close_narrative(
+            symbol_results,
+            portfolio_summary={"daily_pnl": -90, "daily_pnl_pct": -0.1},
+            settings={"llm_narrative": {"enabled": True}},
+        )
+    joined = " ".join(narrative.get("focus_points") or []) + narrative.get("summary", "")
+    assert "90" in joined or "盈亏" in joined
+
+
+def test_append_merged_narrative_section():
+    from agent_reach.daily_run.report_push import ReportSection, append_merged_narrative_section
+
+    sections = [ReportSection("decision", "t", "body")]
+    out = append_merged_narrative_section(
+        sections,
+        {"summary": "组合总览", "focus_points": ["A"], "job": "morning"},
+        report_kind="morning",
+        symbol_count=2,
+    )
+    assert out[-1].category == "ai_narrative"
+    assert "2只" in out[-1].title
