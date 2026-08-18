@@ -373,12 +373,24 @@ def enforce_overlay_claims(
 _THRESHOLD_LITERAL_RE = re.compile(
     r"(macro_veto|aggressive_entry|min_cash_ratio|max_price_deviation_pct|"
     r"high_position_20d|min_volume_ratio|max_vwap_deviation_pct|"
-    r"trade_min_scans|max_holdings|stop_loss_ma20_pct|friction_min_return_pct|"
+    r"trade_min_scans|max_applied_trades_per_day|max_trade_evaluations_per_symbol|"
+    r"max_holdings|stop_loss_ma20_pct|friction_min_return_pct|"
     r"base_spread|vol_multiplier)\s*(?:=|→|->|:)\s*([0-9]+(?:\.[0-9]+)?)",
     re.IGNORECASE,
 )
 
-_SCORE_KEYS = frozenset({"macro_veto", "aggressive_entry", "base_spread", "vol_multiplier", "trade_min_scans", "max_holdings"})
+_SCORE_KEYS = frozenset(
+    {
+        "macro_veto",
+        "aggressive_entry",
+        "base_spread",
+        "vol_multiplier",
+        "trade_min_scans",
+        "max_applied_trades_per_day",
+        "max_trade_evaluations_per_symbol",
+        "max_holdings",
+    }
+)
 _RATIO_KEYS = frozenset(
     {
         "min_cash_ratio",
@@ -400,6 +412,8 @@ _NEUTRAL_DEFAULTS: dict[str, float] = {
     "min_volume_ratio": 1.0,
     "max_vwap_deviation_pct": 0.04,
     "trade_min_scans": 3.0,
+    "max_applied_trades_per_day": 5.0,
+    "max_trade_evaluations_per_symbol": 8.0,
     "max_holdings": 10.0,
     "stop_loss_ma20_pct": 0.04,
     "friction_min_return_pct": 0.005,

@@ -64,6 +64,134 @@ def test_pnl_overview_maps_sell_loss_to_policy():
     assert "海能达" in blob
     assert "500股" in blob
     assert ev["plan"]
+    assert any("深度套牢" in p for p in ev["policy"])
+
+
+def test_pnl_overview_uses_harness_tier_multiplier():
+    ev = pnl_overview_to_harness_evidence(
+        {
+            "realized_pnl": 0,
+            "unrealized_pnl": -7000.0,
+            "total_pnl": -7000.0,
+            "holdings": [
+                {
+                    "name": "测试",
+                    "code": "000001",
+                    "shares": 100,
+                    "cost": 10.0,
+                    "price": 3.0,
+                    "unrealized_pnl": -700.0,
+                    "unrealized_pnl_pct": -70.0,
+                }
+            ],
+        },
+        settings={
+            "pnl_overview": {
+                "large_unrealized_loss_cny": 5000,
+                "deep_loss_tier_multiplier": 1.2,
+            },
+        },
+    )
+    assert not any("深度套牢" in p for p in ev["policy"])
+
+    ev_deep = pnl_overview_to_harness_evidence(
+        {
+            "realized_pnl": 0,
+            "unrealized_pnl": -7000.0,
+            "total_pnl": -7000.0,
+            "holdings": [
+                {
+                    "name": "测试",
+                    "code": "000001",
+                    "shares": 1000,
+                    "cost": 10.0,
+                    "price": 3.0,
+                    "unrealized_pnl": -7000.0,
+                    "unrealized_pnl_pct": -70.0,
+                }
+            ],
+        },
+        settings={
+            "pnl_overview": {
+                "large_unrealized_loss_cny": 5000,
+                "deep_loss_tier_multiplier": 1.2,
+            },
+        },
+    )
+    assert any("深度套牢" in p for p in ev_deep["policy"])
+
+
+def test_pnl_overview_win_rate_and_loss_streak_policy():
+    ev = pnl_overview_to_harness_evidence(
+        {
+            "realized_pnl": -500,
+            "unrealized_pnl": 0,
+            "total_pnl": -500,
+            "win_count": 1,
+            "loss_count": 4,
+            "realized_sells": [
+                {"realized_pnl": -100, "shares": 100, "cost_basis": 1000},
+                {"realized_pnl": -80, "shares": 100, "cost_basis": 1000},
+                {"realized_pnl": -50, "shares": 100, "cost_basis": 1000},
+            ],
+        },
+        settings={"pnl_overview": {"win_rate_min": 0.33, "loss_streak_max": 3}},
+    )
+    assert any("卖出胜率偏低" in p for p in ev["policy"])
+    assert any("连亏警戒" in p for p in ev["policy"])
+
+
+def test_pnl_overview_realized_gain_threshold():
+    ev = pnl_overview_to_harness_evidence(
+        {
+            "realized_pnl": 600,
+            "unrealized_pnl": 0,
+            "total_pnl": 600,
+            "realized_sells": [
+                {
+                    "name": "测试",
+                    "code": "000001",
+                    "shares": 100,
+                    "cost_basis": 1000,
+                    "realized_pnl": 600,
+                }
+            ],
+        },
+        settings={
+            "pnl_overview": {
+                "large_realized_loss_cny": 500,
+                "large_realized_gain_cny": 800,
+            },
+            "harness_runtime": {
+                "deep_loss_policy": {
+                    "realized_loss_threshold": 500,
+                    "realized_gain_threshold": 500,
+                }
+            },
+        },
+    )
+    assert any("止盈参考" in p for p in ev["playbook"])
+
+
+def test_pnl_overview_ledger_cost_policy():
+    ev = pnl_overview_to_harness_evidence(
+        {
+            "realized_pnl": 0,
+            "unrealized_pnl": 0,
+            "total_pnl": 0,
+            "realized_sells": [
+                {
+                    "name": "测试",
+                    "code": "000001",
+                    "shares": 100,
+                    "cost_basis": 0,
+                    "realized_pnl": 10,
+                }
+            ],
+        },
+        settings={"pnl_overview": {"ledger_cost_tolerance_cny": 0.01}},
+    )
+    assert any("ledger 缺买入成本" in p for p in ev["policy"])
 
 
 def test_apply_pnl_overview_writes_harness(tmp_path, monkeypatch):

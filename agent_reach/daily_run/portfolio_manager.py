@@ -10,7 +10,17 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agent_reach.daily_run import trade_calendar
-from agent_reach.daily_run.harness_policy import min_cash_ratio_default, runtime_int_default, runtime_float_default
+from agent_reach.daily_run.harness_policy import (
+    deep_loss_policy_default,
+    harness_buy_budget,
+    min_cash_ratio_default,
+    runtime_int_default,
+    runtime_float_default,
+)
+from agent_reach.daily_run.pnl_execution_guard import (
+    pnl_buy_block_reason,
+    pnl_symbol_ledger_block_reason,
+)
 from agent_reach.daily_run.settings import effective_settings
 from agent_reach.daily_run.snapshot_builder import _normalize_code
 from agent_reach.daily_run.symbols import build_enriched_symbols, copy_portfolio
@@ -264,6 +274,189 @@ def holding_is_sellable(
     return effective_days_held(holding, as_of=as_of, settings=settings) >= lock_days
 
 
+def _pnl_overview_cfg(settings: dict[str, Any]) -> dict[str, Any]:
+    return dict(settings.get("pnl_overview") or {})
+
+
+def deep_loss_policy(settings: dict[str, Any]) -> dict[str, float]:
+    from agent_reach.daily_run.harness_policy import _deep_loss_policy
+
+    return _deep_loss_policy(settings)
+
+
+def _holding_unrealized_pnl(
+    holding: dict[str, Any],
+    enriched: dict[str, dict[str, Any]],
+) -> tuple[float, Optional[float]]:
+    code = _normalize_code(str(holding.get("code", "")))
+    row = {**holding, **enriched.get(code, {})}
+    shares = int(row.get("shares") or 0)
+    cost = float(row.get("cost") or 0)
+    price = _price_for(row, enriched) or cost
+    cost_basis = shares * cost
+    if cost_basis <= 0:
+        return 0.0, None
+    unrealized = round(shares * price - cost_basis, 2)
+    pct = round(unrealized / cost_basis * 100, 2)
+    return unrealized, pct
+
+
+def is_deep_loss_holding(
+    holding: dict[str, Any],
+    enriched: dict[str, dict[str, Any]],
+    settings: dict[str, Any],
+) -> bool:
+    """True when unrealized loss exceeds harness-evolved deep-loss thresholds."""
+    unrealized, pct = _holding_unrealized_pnl(holding, enriched)
+    if unrealized >= -0.01:
+        return False
+    loss_abs = abs(unrealized)
+    loss_cny_thr = deep_loss_policy_default(settings, "loss_cny_threshold")
+    loss_pct_thr = deep_loss_policy_default(settings, "loss_pct_threshold")
+    if loss_abs >= loss_cny_thr:
+        return True
+    return pct is not None and abs(pct) >= loss_pct_thr
+
+
+def resolve_deep_loss_sell_shares(
+    total_shares: int,
+    code: str,
+    settings: dict[str, Any],
+    *,
+    is_deep_loss: bool,
+) -> int:
+    """Shares to sell — harness sell_ratio applies to deep-loss positions only."""
+    if total_shares <= 0:
+        return 0
+    if not is_deep_loss:
+        return total_shares
+    ratio = deep_loss_policy_default(settings, "sell_ratio")
+    if ratio >= 0.999:
+        return total_shares
+    sold = _round_lot(code, int(total_shares * ratio))
+    if sold <= 0:
+        return 0
+    return min(sold, total_shares)
+
+
+def deep_loss_sell_analysis(
+    pf: dict[str, Any],
+    holding: dict[str, Any],
+    enriched: dict[str, dict[str, Any]],
+    settings: dict[str, Any],
+) -> dict[str, Any]:
+    """Harness deep-loss sell gate: thresholds, cover requirement, sell ratio."""
+    policy = deep_loss_policy(settings)
+    unrealized, pct = _holding_unrealized_pnl(holding, enriched)
+    deep = is_deep_loss_holding(holding, enriched, settings)
+    loss_abs = abs(unrealized) if unrealized < -0.01 else 0.0
+    cover_ratio = float(policy.get("cover_ratio", 1.0))
+    coverable = portfolio_coverable_gains(
+        pf,
+        enriched,
+        settings,
+        exclude_code=str(holding.get("code") or ""),
+    )
+    required_cover = round(loss_abs * cover_ratio, 2) if deep and cover_ratio > 0 else 0.0
+    code = _normalize_code(str(holding.get("code") or ""))
+    total_shares = int(holding.get("shares") or 0)
+    sell_shares = resolve_deep_loss_sell_shares(
+        total_shares,
+        code,
+        settings,
+        is_deep_loss=deep,
+    )
+    allowed = True
+    block_reason: Optional[str] = None
+    if deep and cover_ratio > 0 and loss_abs > 0 and coverable < required_cover:
+        allowed = False
+        name = holding.get("name") or code or "?"
+        pct_part = f" / {abs(pct):.1f}%" if pct is not None else ""
+        block_reason = (
+            f"{name} 深度套牢（浮亏 ¥{loss_abs:,.0f}{pct_part}），"
+            f"需覆盖 ¥{required_cover:,.0f}（cover_ratio={cover_ratio:.0%}），"
+            f"组合可覆盖收益 ¥{coverable:,.0f} 不足，暂不卖"
+        )
+    elif deep and sell_shares <= 0:
+        allowed = False
+        name = holding.get("name") or code or "?"
+        block_reason = f"{name} 深度套牢，sell_ratio={policy.get('sell_ratio', 1.0):.0%} 不足一手，暂不卖"
+    return {
+        "is_deep_loss": deep,
+        "loss_abs": loss_abs,
+        "coverable": coverable,
+        "required_cover": required_cover,
+        "cover_ratio": cover_ratio,
+        "sell_ratio": float(policy.get("sell_ratio", 1.0)),
+        "sell_shares": sell_shares,
+        "allowed": allowed,
+        "block_reason": block_reason,
+        "policy": policy,
+    }
+
+
+def deep_loss_sell_block_reason(
+    pf: dict[str, Any],
+    holding: dict[str, Any],
+    enriched: dict[str, dict[str, Any]],
+    settings: dict[str, Any],
+) -> Optional[str]:
+    """Return block message when harness deep-loss sell conditions fail."""
+    return deep_loss_sell_analysis(pf, holding, enriched, settings).get("block_reason")
+
+
+def portfolio_coverable_gains(
+    pf: dict[str, Any],
+    enriched: dict[str, dict[str, Any]],
+    settings: dict[str, Any],
+    *,
+    exclude_code: str,
+) -> float:
+    """Positive unrealized from other holdings + positive cumulative realized PnL."""
+    exclude = _normalize_code(exclude_code)
+    coverable = 0.0
+    for holding in pf.get("holdings") or []:
+        code = _normalize_code(str(holding.get("code", "")))
+        if code == exclude:
+            continue
+        unrealized, _ = _holding_unrealized_pnl(holding, enriched)
+        if unrealized > 0:
+            coverable += unrealized
+
+    from agent_reach.daily_run.realized_pnl import compute_realized_pnl, load_ledger_entries
+
+    realized = compute_realized_pnl(load_ledger_entries())
+    if realized > 0:
+        weight = deep_loss_policy_default(settings, "coverable_realized_weight")
+        coverable += realized * max(0.0, min(1.0, weight))
+    return round(coverable, 2)
+
+
+def decision_symbol_sellable(
+    snapshot: dict[str, Any],
+    settings: dict[str, Any],
+    code: str,
+    *,
+    as_of: Optional[date] = None,
+    enriched: Optional[dict[str, dict[str, Any]]] = None,
+) -> bool:
+    """True when the decision symbol is held, past lock, and deep-loss cover check passes."""
+    target = _normalize_code(str(code or ""))
+    if not target:
+        return False
+    pf = snapshot.get("portfolio") or {}
+    symbol_enriched = enriched if enriched is not None else build_enriched_symbols(snapshot, settings)
+    for holding in pf.get("holdings") or []:
+        if _normalize_code(str(holding.get("code", ""))) != target:
+            continue
+        if not holding_is_sellable(holding, settings, as_of=as_of):
+            return False
+        if pnl_symbol_ledger_block_reason(settings, target, pf):
+            return False
+        return deep_loss_sell_block_reason(pf, holding, symbol_enriched, settings) is None
+    return False
+
+
 def sync_portfolio_holding_days(
     portfolio: dict[str, Any],
     *,
@@ -321,9 +514,24 @@ def apply_auto_adjust(
     enriched = build_enriched_symbols(snapshot)
 
     if action == "sell":
-        return _apply_sell(pf, enriched, settings, decision, allow_watchlist_changes=allow_watchlist_changes)
+        prefer_code = _normalize_code(str(snapshot.get("code") or ""))
+        return _apply_sell(
+            pf,
+            enriched,
+            settings,
+            decision,
+            allow_watchlist_changes=allow_watchlist_changes,
+            prefer_code=prefer_code or None,
+        )
     if action == "buy":
-        return _apply_buy(pf, enriched, settings, allow_watchlist_changes=allow_watchlist_changes)
+        prefer_code = _normalize_code(str(snapshot.get("code") or ""))
+        return _apply_buy(
+            pf,
+            enriched,
+            settings,
+            allow_watchlist_changes=allow_watchlist_changes,
+            prefer_code=prefer_code or None,
+        )
 
     return ApplyResult(applied=False, portfolio=portfolio, message=f"未知决策 {action}")
 
@@ -335,30 +543,39 @@ def _apply_sell(
     decision: Any,
     *,
     allow_watchlist_changes: bool = False,
+    prefer_code: Optional[str] = None,
 ) -> ApplyResult:
     holdings = list(pf.get("holdings") or [])
     if not holdings:
         return ApplyResult(applied=False, portfolio=pf, message="无持仓可卖")
 
     lock_days = runtime_int_default(settings, "trading", "holding_lock_days")
-    sellable = []
+    code = _normalize_code(str(prefer_code or ""))
+    if not code:
+        return ApplyResult(applied=False, portfolio=pf, message="卖出决策缺少标的代码")
+
+    target = None
     for h in holdings:
-        code = _normalize_code(str(h.get("code", "")))
-        if not holding_is_sellable(h, settings):
-            continue
-        row = dict(h)
-        row.update(enriched.get(code, {}))
-        sellable.append(row)
+        if _normalize_code(str(h.get("code", ""))) == code:
+            target = dict(h)
+            break
 
-    if not sellable:
-        return ApplyResult(applied=False, portfolio=pf, message=f"持仓均在 {lock_days} 天锁定期内")
+    if target is None:
+        return ApplyResult(applied=False, portfolio=pf, message=f"{code} 不在持仓中，跳过卖出")
 
-    # Sell weakest position first (lowest change_pct, then lowest score)
-    sellable.sort(key=lambda x: (_symbol_score(x, decision, settings), x.get("change_pct") or 0))
+    if not holding_is_sellable(target, settings):
+        return ApplyResult(applied=False, portfolio=pf, message=f"{code} 在 {lock_days} 天锁定期内，无法卖出")
 
-    target = sellable[0]
-    code = _normalize_code(str(target["code"]))
-    shares = int(target.get("shares") or 0)
+    ledger_block = pnl_symbol_ledger_block_reason(settings, code, pf)
+    if ledger_block:
+        return ApplyResult(applied=False, portfolio=pf, message=ledger_block)
+
+    target.update(enriched.get(code, {}))
+    sell_analysis = deep_loss_sell_analysis(pf, target, enriched, settings)
+    if not sell_analysis["allowed"]:
+        return ApplyResult(applied=False, portfolio=pf, message=str(sell_analysis["block_reason"]))
+
+    shares = int(sell_analysis["sell_shares"] or 0)
     price = _price_for(target, enriched)
     if shares <= 0 or price is None or price <= 0:
         return ApplyResult(applied=False, portfolio=pf, message=f"{code} 无法卖出（股数或价格无效）")
@@ -368,16 +585,31 @@ def _apply_sell(
     commission = round(gross * commission_rate, 2)
     proceeds = gross - commission
 
-    pf["holdings"] = [h for h in holdings if _normalize_code(str(h.get("code", ""))) != code]
+    total_shares = int(target.get("shares") or 0)
+    if shares >= total_shares:
+        pf["holdings"] = [h for h in holdings if _normalize_code(str(h.get("code", ""))) != code]
+    else:
+        updated: list[dict[str, Any]] = []
+        for h in holdings:
+            if _normalize_code(str(h.get("code", ""))) != code:
+                updated.append(h)
+                continue
+            row = dict(h)
+            row["shares"] = total_shares - shares
+            updated.append(row)
+        pf["holdings"] = updated
     pf["cash"] = round(float(pf.get("cash") or 0) + proceeds, 2)
 
     if allow_watchlist_changes and portfolio_settings(settings).get("add_sold_to_watchlist", True):
         watchlist = list(pf.get("watchlist") or [])
         codes = {_normalize_code(str(w.get("code", ""))) for w in watchlist}
-        if code not in codes and unique_symbol_count(pf) < max_total_symbols(settings):
+        if shares >= total_shares and code not in codes and unique_symbol_count(pf) < max_total_symbols(settings):
             watchlist.append({"code": code, "name": target.get("name", code)})
             pf["watchlist"] = watchlist
 
+    sell_note = ""
+    if sell_analysis.get("is_deep_loss") and float(sell_analysis.get("sell_ratio") or 1.0) < 0.999:
+        sell_note = f"（深度套牢分批 sell_ratio={float(sell_analysis['sell_ratio']):.0%}）"
     trade = TradeAction(
         side="sell",
         code=code,
@@ -386,7 +618,7 @@ def _apply_sell(
         price=price,
         amount=round(gross, 2),
         commission=commission,
-        reasoning=_decision_reason(decision, f"卖出 {target.get('name', code)} {shares} 股"),
+        reasoning=_decision_reason(decision, f"卖出 {target.get('name', code)} {shares} 股{sell_note}"),
     )
     _recalc_totals(pf, enriched)
     return ApplyResult(applied=True, portfolio=pf, actions=[trade], message=trade.reasoning)
@@ -398,34 +630,63 @@ def _apply_buy(
     settings: dict[str, Any],
     *,
     allow_watchlist_changes: bool = False,
+    prefer_code: Optional[str] = None,
 ) -> ApplyResult:
     holdings = list(pf.get("holdings") or [])
     held_codes = {_normalize_code(str(h.get("code", ""))) for h in holdings}
-    candidates = []
-    for w in pf.get("watchlist") or []:
-        code = _normalize_code(str(w.get("code", "")))
-        if code in held_codes:
-            continue
-        row = dict(w)
-        row.update(enriched.get(code, {}))
-        price = _price_for(row, enriched)
-        if price is None or price <= 0:
-            continue
-        candidates.append(row)
+    prefer = _normalize_code(str(prefer_code or ""))
 
-    if not candidates:
-        max_t = max_total_symbols(settings)
-        if unique_symbol_count(pf) >= max_t:
-            return ApplyResult(
-                applied=False,
-                portfolio=pf,
-                message=f"持仓+观察池已达合计上限 {max_t} 只，且无观察池可买标的",
-            )
-        return ApplyResult(applied=False, portfolio=pf, message="观察池无可买入标的（或缺少报价）")
+    budget_ctx = _buy_budget_context(pf, enriched, settings, holdings)
+    if isinstance(budget_ctx, ApplyResult):
+        return budget_ctx
+    total, cash, deployable, min_deploy, min_cash_ratio, commission_rate = budget_ctx
 
-    candidates.sort(key=lambda x: _symbol_score(x, None, settings), reverse=True)
-    target = candidates[0]
+    buy_block = pnl_buy_block_reason(settings, pf)
+    if buy_block:
+        return ApplyResult(applied=False, portfolio=pf, message=buy_block)
+
+    target: Optional[dict[str, Any]] = None
+    if prefer:
+        prefer_row = _resolve_buy_row(prefer, pf, enriched)
+        if prefer_row is not None:
+            prefer_price = float(_price_for(prefer_row, enriched))
+            if _can_afford_min_lot(
+                prefer,
+                prefer_price,
+                deployable=deployable,
+                commission_rate=commission_rate,
+                min_deploy=min_deploy,
+                total=total,
+                settings=settings,
+            ):
+                target = prefer_row
+
+    if target is None:
+        candidates = _watchlist_buy_candidates(pf, enriched, held_codes)
+        if not candidates:
+            max_t = max_total_symbols(settings)
+            if unique_symbol_count(pf) >= max_t:
+                return ApplyResult(
+                    applied=False,
+                    portfolio=pf,
+                    message=f"持仓+观察池已达合计上限 {max_t} 只，且无观察池可买标的",
+                )
+            if prefer:
+                return ApplyResult(
+                    applied=False,
+                    portfolio=pf,
+                    message=f"决策标的 {prefer} 资金不足一手，且观察池无可买入标的（或缺少报价）",
+                )
+            return ApplyResult(applied=False, portfolio=pf, message="观察池无可买入标的（或缺少报价）")
+
+        candidates.sort(key=lambda x: _symbol_score(x, None, settings), reverse=True)
+        target = candidates[0]
+
     code = _normalize_code(str(target["code"]))
+
+    ledger_block = pnl_symbol_ledger_block_reason(settings, code, pf)
+    if ledger_block:
+        return ApplyResult(applied=False, portfolio=pf, message=ledger_block)
 
     from agent_reach.daily_run.skill_rejected import trade_blocked_by_rejected
 
@@ -443,30 +704,8 @@ def _apply_buy(
         )
 
     price = float(_price_for(target, enriched))
-
-    thresholds = settings.get("thresholds", {})
-    min_cash_ratio = float(thresholds.get("min_cash_ratio", min_cash_ratio_default(settings)))
-    total = float(pf.get("total") or 0)
-    cash = float(pf.get("cash") or 0)
-    if total <= 0:
-        total = cash + sum(
-            int(h.get("shares") or 0) * float(enriched.get(_normalize_code(str(h.get("code", ""))), {}).get("price") or h.get("cost") or 0)
-            for h in holdings
-        )
-
-    min_cash = total * min_cash_ratio
-    deployable = cash - min_cash
-    min_deploy = float(portfolio_settings(settings).get("min_deploy_cash", 1000))
-    if deployable < min_deploy:
-        return ApplyResult(
-            applied=False,
-            portfolio=pf,
-            message=f"可部署现金 {deployable:.0f} 不足（需保留 {min_cash_ratio:.0%} 现金）",
-        )
-
-    commission_rate = float(settings.get("trading", {}).get("commission_rate", 0.0015))
-    # No per-position cap — use all deployable cash minus commission headroom
-    budget = deployable / (1 + commission_rate)
+    budget_gross = harness_buy_budget(total=total, deployable=deployable, settings=settings)
+    budget = budget_gross / (1 + commission_rate)
     shares = _round_lot(code, int(budget // price))
     if shares <= 0:
         return ApplyResult(applied=False, portfolio=pf, message=f"现金不足以买入 {code} 最小单位")
@@ -483,15 +722,12 @@ def _apply_buy(
         total_cost = gross + commission
 
     pf["cash"] = round(cash - total_cost, 2)
-    holdings.append(
-        {
-            "code": code,
-            "name": target.get("name", code),
-            "shares": shares,
-            "cost": round(price, 4),
-            "days_held": 0,
-            "acquired_date": trade_calendar.today_shanghai().isoformat(),
-        }
+    _add_bought_shares(
+        holdings,
+        code=code,
+        name=str(target.get("name", code)),
+        shares=shares,
+        price=price,
     )
     pf["holdings"] = holdings
 
@@ -512,6 +748,135 @@ def _apply_buy(
     )
     _recalc_totals(pf, enriched)
     return ApplyResult(applied=True, portfolio=pf, actions=[trade], message=trade.reasoning)
+
+
+def _buy_budget_context(
+    pf: dict[str, Any],
+    enriched: dict[str, dict[str, Any]],
+    settings: dict[str, Any],
+    holdings: list[dict[str, Any]],
+) -> tuple[float, float, float, float, float, float] | ApplyResult:
+    thresholds = settings.get("thresholds", {})
+    min_cash_ratio = float(thresholds.get("min_cash_ratio", min_cash_ratio_default(settings)))
+    total = float(pf.get("total") or 0)
+    cash = float(pf.get("cash") or 0)
+    if total <= 0:
+        total = cash + sum(
+            int(h.get("shares") or 0)
+            * float(enriched.get(_normalize_code(str(h.get("code", ""))), {}).get("price") or h.get("cost") or 0)
+            for h in holdings
+        )
+
+    min_cash = total * min_cash_ratio
+    deployable = cash - min_cash
+    min_deploy = float(portfolio_settings(settings).get("min_deploy_cash", 1000))
+    if deployable < min_deploy:
+        return ApplyResult(
+            applied=False,
+            portfolio=pf,
+            message=f"可部署现金 {deployable:.0f} 不足（需保留 {min_cash_ratio:.0%} 现金）",
+        )
+
+    commission_rate = float(settings.get("trading", {}).get("commission_rate", 0.0015))
+    return total, cash, deployable, min_deploy, min_cash_ratio, commission_rate
+
+
+def _resolve_buy_row(
+    code: str,
+    pf: dict[str, Any],
+    enriched: dict[str, dict[str, Any]],
+) -> Optional[dict[str, Any]]:
+    code = _normalize_code(code)
+    if not code:
+        return None
+
+    row: dict[str, Any] = {}
+    for h in pf.get("holdings") or []:
+        if _normalize_code(str(h.get("code", ""))) == code:
+            row = dict(h)
+            break
+    for w in pf.get("watchlist") or []:
+        if _normalize_code(str(w.get("code", ""))) == code:
+            row = {**row, **dict(w)}
+            break
+    row = {**row, **enriched.get(code, {})}
+    row["code"] = code
+    if not row.get("name"):
+        row["name"] = enriched.get(code, {}).get("name", code)
+    if _price_for(row, enriched) is None:
+        return None
+    return row
+
+
+def _watchlist_buy_candidates(
+    pf: dict[str, Any],
+    enriched: dict[str, dict[str, Any]],
+    held_codes: set[str],
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    for w in pf.get("watchlist") or []:
+        code = _normalize_code(str(w.get("code", "")))
+        if code in held_codes:
+            continue
+        row = dict(w)
+        row.update(enriched.get(code, {}))
+        if _price_for(row, enriched) is None:
+            continue
+        candidates.append(row)
+    return candidates
+
+
+def _min_lot(code: str) -> int:
+    text = str(code).zfill(6)
+    return 200 if text.startswith("688") else 100
+
+
+def _can_afford_min_lot(
+    code: str,
+    price: float,
+    *,
+    deployable: float,
+    commission_rate: float,
+    min_deploy: float,
+    total: float,
+    settings: dict[str, Any],
+) -> bool:
+    if price <= 0 or deployable < min_deploy:
+        return False
+    budget_gross = harness_buy_budget(total=total, deployable=deployable, settings=settings)
+    budget = budget_gross / (1 + commission_rate)
+    shares = _round_lot(code, int(budget // price))
+    return shares >= _min_lot(code)
+
+
+def _add_bought_shares(
+    holdings: list[dict[str, Any]],
+    *,
+    code: str,
+    name: str,
+    shares: int,
+    price: float,
+) -> None:
+    code = _normalize_code(code)
+    for row in holdings:
+        if _normalize_code(str(row.get("code", ""))) == code:
+            old_shares = int(row.get("shares") or 0)
+            old_cost = float(row.get("cost") or price)
+            new_shares = old_shares + shares
+            row["shares"] = new_shares
+            row["cost"] = round((old_shares * old_cost + shares * price) / new_shares, 4)
+            return
+
+    holdings.append(
+        {
+            "code": code,
+            "name": name,
+            "shares": shares,
+            "cost": round(price, 4),
+            "days_held": 0,
+            "acquired_date": trade_calendar.today_shanghai().isoformat(),
+        }
+    )
 
 
 def _recalc_totals(pf: dict[str, Any], enriched: dict[str, dict[str, Any]]) -> None:
@@ -543,25 +908,10 @@ def _price_for(row: dict[str, Any], enriched: dict[str, dict[str, Any]]) -> Opti
 
 
 def _symbol_score(row: dict[str, Any], decision: Any, settings: dict[str, Any]) -> float:
-    """Rank symbols: higher = better buy candidate / lower sell priority."""
-    base = 50.0
-    if decision is not None:
-        lb = getattr(decision, "lookback_mss", None)
-        if lb is None and isinstance(decision, dict):
-            lb = decision.get("lookback_mss")
-        if lb is not None:
-            base = float(lb)
-    chg = row.get("change_pct")
-    if chg is not None:
-        base += float(chg) * 0.5
-    pos = row.get("position_20d")
-    if pos is not None:
-        base += (0.5 - float(pos)) * 10
-    from agent_reach.daily_run.harness_policy import kronos_score_adjustment
+    """Rank symbols: higher = better buy candidate."""
+    from agent_reach.daily_run.harness_policy import harness_symbol_score
 
-    code = _normalize_code(str(row.get("code", "")))
-    base += kronos_score_adjustment(code, settings)
-    return base
+    return harness_symbol_score(row, settings, decision=decision)
 
 
 def _round_lot(code: str, shares: int) -> int:

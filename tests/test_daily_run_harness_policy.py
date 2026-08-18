@@ -3,8 +3,14 @@
 
 from agent_reach.daily_run.harness import HarnessEntry, HarnessState
 from agent_reach.daily_run.harness_policy import (
+    aggressive_entry_default,
     apply_harness_policy_overlay,
+    harness_symbol_score,
+    harness_buy_budget,
     kronos_score_adjustment,
+    resolve_harness_position_policy,
+    resolve_harness_symbol_bias,
+    resolve_harness_symbol_score_weights,
     resolve_harness_flat_overrides,
     resolve_harness_kronos_bias,
     resolve_harness_lookback_weights,
@@ -229,6 +235,8 @@ class TestHarnessPolicyOverlay:
         )
         assert flat["trade_min_scans"] == 3.0
         assert flat["trade_every_n_scans"] == 2.0
+        assert flat["max_applied_trades_per_day"] == 5.0
+        assert flat["max_trade_evaluations_per_symbol"] == 8.0
         assert flat["max_holdings"] == 10.0
         assert flat["max_total_symbols"] == 15.0
         assert flat["holding_lock_days"] == 1.0
@@ -257,6 +265,73 @@ class TestHarnessPolicyOverlay:
         assert flat["holding_lock_days"] == 2.0
         assert flat["stop_loss_ma20_pct"] == 0.05
         assert flat["trade_min_scans"] == 2.0
+        assert flat["max_applied_trades_per_day"] == 3.0
+        assert flat["max_trade_evaluations_per_symbol"] == 6.0
+
+    def test_offensive_memory_raises_trade_limits(self):
+        state = HarnessState()
+        state.entries["memory"]["offense"] = HarnessEntry(
+            id="offense",
+            kind="memory",
+            title="进攻期",
+            content="宏观回暖进入进攻期，适度提高落账与评估槽",
+            source="deterministic",
+            job="weekly",
+            evidence="weekly",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        flat = resolve_harness_flat_overrides(
+            state,
+            {"max_snapshot_age_hours": 24},
+            settings=_harness_settings(),
+        )
+        assert flat["max_applied_trades_per_day"] == 6.0
+        assert flat["max_trade_evaluations_per_symbol"] == 10.0
+
+    def test_applied_cap_memory_tightens_limit(self):
+        state = HarnessState()
+        state.entries["memory"]["cap"] = HarnessEntry(
+            id="cap",
+            kind="memory",
+            title="落账",
+            content="落账已达上限：全组合 paper apply 次数过多",
+            source="deterministic",
+            job="intraday",
+            evidence="intraday",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        flat = resolve_harness_flat_overrides(
+            state,
+            {"max_snapshot_age_hours": 24},
+            settings=_harness_settings(),
+        )
+        assert flat["max_applied_trades_per_day"] == 3.0
+
+    def test_aggressive_entry_miss_memory_lowers_threshold(self):
+        state = HarnessState()
+        state.entries["memory"]["miss"] = HarnessEntry(
+            id="miss",
+            kind="memory",
+            title="未落账",
+            content="达进攻阈值未落账：MSS 达标但未成交",
+            source="deterministic",
+            job="intraday",
+            evidence="intraday",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        flat = resolve_harness_flat_overrides(
+            state,
+            {"max_snapshot_age_hours": 24},
+            settings=_harness_settings(),
+        )
+        assert flat["aggressive_entry"] == 49.0
+        assert flat["trade_min_scans"] == 2.0
+
+    def test_aggressive_entry_default_helper(self):
+        assert aggressive_entry_default(_harness_settings()) == 50.0
 
     def test_scan_sparse_lookback_weights(self):
         state = HarnessState()
@@ -295,6 +370,8 @@ class TestHarnessPolicyOverlay:
         assert cfg["portfolio"]["max_holdings"] == 5
         assert cfg["trading"]["holding_lock_days"] == 2
         assert cfg["schedule"]["trade_min_scans"] == 3
+        assert cfg["schedule"]["max_applied_trades_per_day"] == 5
+        assert cfg["schedule"]["max_trade_evaluations_per_symbol"] == 8
         assert "runtime_overlay" in cfg.get("harness_runtime", {})
 
 
@@ -354,6 +431,98 @@ class TestHarnessRuntimeExtensions:
         plain = _symbol_score({"code": "603501", "change_pct": 0}, None, settings)
         assert bull > plain
 
+    def test_symbol_score_weights_evolve_on_defensive_trim(self):
+        state = HarnessState()
+        state.entries["memory"]["miss"] = HarnessEntry(
+            id="miss",
+            kind="memory",
+            title="MSS 预测偏离",
+            content="MSS 预测偏离：下日调低进攻阈值或缩窄仓位",
+            source="deterministic",
+            job="close",
+            evidence="close",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        settings = {"harness": {"runtime_overlay_sources": ["memory"]}}
+        weights = resolve_harness_symbol_score_weights(state, settings=settings)
+        assert weights["change_pct_weight"] == 0.25
+        assert weights["position_20d_weight"] == 12.5
+
+    def test_symbol_bias_from_harness_policy(self):
+        state = HarnessState()
+        state.entries["policy"]["deep_loss"] = HarnessEntry(
+            id="deep_loss",
+            kind="policy",
+            title="深浮亏 海能达",
+            content="深浮亏 002583：禁止接飞刀加仓，优先 verify 回避/减仓",
+            source="deterministic",
+            job="pnl_overview",
+            evidence="pnl",
+            created_at="2026-08-18T00:00:00+00:00",
+            updated_at="2026-08-18T00:00:00+00:00",
+        )
+        bias = resolve_harness_symbol_bias(
+            state,
+            settings={"harness": {"runtime_overlay_sources": ["policy"]}},
+        )
+        assert bias["002583"] < 0
+
+    def test_harness_symbol_score_applies_bias_and_change_weight(self):
+        settings = {
+            "harness_runtime": {
+                "symbol_score_weights": {
+                    "base_mss": 50.0,
+                    "change_pct_weight": 0.25,
+                    "position_20d_weight": 10.0,
+                    "kronos_bullish_mult": 2.0,
+                    "kronos_bearish_mult": 1.5,
+                    "symbol_bias_penalty": 15.0,
+                    "symbol_bias_boost": 8.0,
+                },
+                "symbol_bias": {"002583": -20.0},
+            }
+        }
+        weak = harness_symbol_score({"code": "002583", "change_pct": 2.0}, settings)
+        strong = harness_symbol_score({"code": "600584", "change_pct": 2.0}, settings)
+        assert weak < strong
+
+    def test_position_policy_evolve_on_defensive_trim(self):
+        state = HarnessState()
+        state.entries["memory"]["miss"] = HarnessEntry(
+            id="miss",
+            kind="memory",
+            title="MSS 预测偏离",
+            content="MSS 预测偏离：下日调低进攻阈值或缩窄仓位",
+            source="deterministic",
+            job="close",
+            evidence="close",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        settings = {"harness": {"runtime_overlay_sources": ["memory"]}}
+        policy = resolve_harness_position_policy(state, settings=settings)
+        assert policy["deploy_ratio"] == 0.25
+        assert policy["max_position_pct"] == 25.0
+
+    def test_harness_buy_budget_caps_by_max_position_pct(self):
+        settings = {
+            "harness_runtime": {
+                "position_policy": {"deploy_ratio": 1.0, "max_position_pct": 35.0},
+            }
+        }
+        budget = harness_buy_budget(total=100_000, deployable=60_000, settings=settings)
+        assert budget == 35_000
+
+    def test_harness_buy_budget_scales_deploy_ratio(self):
+        settings = {
+            "harness_runtime": {
+                "position_policy": {"deploy_ratio": 0.25, "max_position_pct": 35.0},
+            }
+        }
+        budget = harness_buy_budget(total=100_000, deployable=60_000, settings=settings)
+        assert budget == 15_000
+
     def test_defensive_trim_decision(self):
         settings = {
             "thresholds": {"macro_veto": 30, "aggressive_entry": 45, "min_cash_ratio": 0.5},
@@ -387,6 +556,250 @@ class TestHarnessRuntimeExtensions:
         )
         assert decision.action == "sell"
         assert "防御性减仓" in decision.reasoning
+
+    def test_defensive_trim_hold_when_decision_symbol_not_sellable(self):
+        settings = {
+            "thresholds": {"macro_veto": 30, "aggressive_entry": 45, "min_cash_ratio": 0.5},
+            "trading": {"commission_rate": 0.0015, "slippage_rate": 0.001, "holding_lock_days": 3},
+            "harness_runtime": {"trade_signals": {"defensive_trim": True}},
+        }
+        verdict = VerdictResult(
+            verdict="观察",
+            confidence="中",
+            mss_final=54,
+            entry_price=None,
+            stop_loss_price=None,
+            invalidation="",
+            reasoning="",
+            blocked=False,
+        )
+        decision = _decide_trade(
+            lookback_mss=54.0,
+            trend="falling",
+            verdict=verdict,
+            report={"code": "688008", "name": "澜起科技", "blocked": False},
+            snapshot={
+                "portfolio": {
+                    "cash_ratio": 0.75,
+                    "holdings": [
+                        {"code": "688008", "days_held": 0},
+                        {"code": "002583", "days_held": 5},
+                    ],
+                }
+            },
+            settings=settings,
+            trade_index=1,
+            expected_return_pct=0.01,
+        )
+        assert decision.action == "hold"
+        assert "防御性减仓" not in decision.reasoning
+
+    def test_defensive_trim_hold_when_deep_loss_not_covered(self, tmp_path, monkeypatch):
+        ledger = tmp_path / "trade_ledger.jsonl"
+        ledger.write_text("", encoding="utf-8")
+        monkeypatch.setattr("agent_reach.daily_run.realized_pnl.default_ledger_path", lambda: ledger)
+
+        settings = {
+            "thresholds": {"macro_veto": 30, "aggressive_entry": 45, "min_cash_ratio": 0.5},
+            "trading": {"commission_rate": 0.0015, "slippage_rate": 0.001, "holding_lock_days": 1},
+            "pnl_overview": {"deep_loss_sell_require_cover": True, "large_unrealized_loss_cny": 5000},
+            "harness_runtime": {"trade_signals": {"defensive_trim": True}},
+        }
+        verdict = VerdictResult(
+            verdict="观察",
+            confidence="中",
+            mss_final=54,
+            entry_price=None,
+            stop_loss_price=None,
+            invalidation="",
+            reasoning="",
+            blocked=False,
+        )
+        decision = _decide_trade(
+            lookback_mss=54.0,
+            trend="falling",
+            verdict=verdict,
+            report={"code": "002583", "name": "海能达", "blocked": False},
+            snapshot={
+                "code": "002583",
+                "price": 8.32,
+                "portfolio": {
+                    "cash_ratio": 0.75,
+                    "holdings": [
+                        {
+                            "code": "002583",
+                            "name": "海能达",
+                            "shares": 1000,
+                            "cost": 19.38,
+                            "price": 8.32,
+                            "days_held": 30,
+                        },
+                        {
+                            "code": "600584",
+                            "name": "长电科技",
+                            "shares": 800,
+                            "cost": 80.8,
+                            "price": 85.0,
+                            "days_held": 5,
+                        },
+                    ],
+                },
+            },
+            settings=settings,
+            trade_index=1,
+            expected_return_pct=0.01,
+        )
+        assert decision.action == "hold"
+        assert "深度套牢" in decision.reasoning
+        assert "不足" in decision.reasoning
+
+    def test_deep_loss_policy_evolve_on_defensive_trim(self):
+        from agent_reach.daily_run.harness import HarnessState
+        from agent_reach.daily_run.harness_policy import resolve_harness_deep_loss_policy
+
+        state = HarnessState()
+        settings = {"harness": {"runtime_overlay_sources": ["memory"]}}
+        base = resolve_harness_deep_loss_policy(state, settings=settings)
+        assert base["sell_ratio"] == 1.0
+
+        state.entries["memory"]["miss"] = HarnessEntry(
+            id="miss",
+            kind="memory",
+            title="MSS 预测偏离",
+            content="MSS 预测偏离：下日调低进攻阈值或缩窄仓位",
+            source="deterministic",
+            job="close",
+            evidence="close",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        from agent_reach.daily_run.harness_policy import resolve_harness_trade_signals
+
+        signals = resolve_harness_trade_signals(state, settings=settings)
+        assert signals.get("defensive_trim")
+        policy = resolve_harness_deep_loss_policy(state, settings=settings)
+        assert policy["sell_ratio"] == 0.5
+        assert policy["cover_ratio"] >= 1.0
+
+    def test_deep_loss_policy_from_pnl_harness_phrase(self):
+        from agent_reach.daily_run.harness import HarnessEntry, HarnessState
+        from agent_reach.daily_run.harness_policy import resolve_harness_deep_loss_policy
+
+        state = HarnessState()
+        state.entries["policy"]["trap"] = HarnessEntry(
+            id="trap",
+            kind="policy",
+            title="深度套牢 海能达",
+            content="深度套牢 002583：cover_ratio≥1.0，sell_ratio≤0.5，卖出前需组合盈利覆盖浮亏",
+            source="deterministic",
+            job="pnl_overview",
+            evidence="pnl",
+            created_at="2026-08-18T00:00:00+00:00",
+            updated_at="2026-08-18T00:00:00+00:00",
+        )
+        policy = resolve_harness_deep_loss_policy(
+            state,
+            settings={"harness": {"runtime_overlay_sources": ["policy"]}},
+        )
+        assert policy["loss_cny_threshold"] <= 4000
+        assert policy["sell_ratio"] <= 0.5
+
+    def test_deep_loss_realized_loss_phrase_tightens_cover(self):
+        from agent_reach.daily_run.harness import HarnessEntry, HarnessState
+        from agent_reach.daily_run.harness_policy import resolve_harness_deep_loss_policy
+
+        state = HarnessState()
+        state.entries["policy"]["realized"] = HarnessEntry(
+            id="realized",
+            kind="policy",
+            title="已实现亏损较大",
+            content="已实现亏损较大：澜起科技 卖出后复盘入场/止损纪律",
+            source="deterministic",
+            job="pnl_overview",
+            evidence="pnl",
+            created_at="2026-08-18T00:00:00+00:00",
+            updated_at="2026-08-18T00:00:00+00:00",
+        )
+        policy = resolve_harness_deep_loss_policy(
+            state,
+            settings={"harness": {"runtime_overlay_sources": ["policy"]}},
+        )
+        assert policy["cover_ratio"] >= 1.05
+        assert policy["realized_loss_threshold"] <= 400
+
+    def test_portfolio_loss_phrase_tightens_position_policy(self):
+        from agent_reach.daily_run.harness import HarnessEntry, HarnessState
+        from agent_reach.daily_run.harness_policy import (
+            resolve_harness_deep_loss_policy,
+            resolve_harness_position_policy,
+        )
+
+        state = HarnessState()
+        state.entries["policy"]["pf_loss"] = HarnessEntry(
+            id="pf_loss",
+            kind="policy",
+            title="组合浮亏",
+            content="浮动亏损主导净值：维持高现金，减少新开仓",
+            source="deterministic",
+            job="pnl_overview",
+            evidence="pnl",
+            created_at="2026-08-18T00:00:00+00:00",
+            updated_at="2026-08-18T00:00:00+00:00",
+        )
+        settings = {"harness": {"runtime_overlay_sources": ["policy"]}}
+        pos = resolve_harness_position_policy(state, settings=settings)
+        deep = resolve_harness_deep_loss_policy(state, settings=settings)
+        assert pos["deploy_ratio"] <= 0.25
+        assert deep["portfolio_loss_cny_threshold"] <= 4000
+
+    def test_win_rate_phrase_evolves_deep_loss_and_position(self):
+        from agent_reach.daily_run.harness import HarnessEntry, HarnessState
+        from agent_reach.daily_run.harness_policy import (
+            resolve_harness_deep_loss_policy,
+            resolve_harness_position_policy,
+        )
+
+        state = HarnessState()
+        state.entries["policy"]["winrate"] = HarnessEntry(
+            id="winrate",
+            kind="policy",
+            title="卖出胜率",
+            content="卖出胜率偏低：1盈/4亏（<33%）",
+            source="deterministic",
+            job="pnl_overview",
+            evidence="pnl",
+            created_at="2026-08-18T00:00:00+00:00",
+            updated_at="2026-08-18T00:00:00+00:00",
+        )
+        settings = {"harness": {"runtime_overlay_sources": ["policy"]}}
+        deep = resolve_harness_deep_loss_policy(state, settings=settings)
+        pos = resolve_harness_position_policy(state, settings=settings)
+        assert deep["cover_ratio"] >= 1.1
+        assert deep["coverable_realized_weight"] <= 0.75
+        assert pos["deploy_ratio"] <= 0.35
+
+    def test_loss_streak_phrase_evolves_policy(self):
+        from agent_reach.daily_run.harness import HarnessEntry, HarnessState
+        from agent_reach.daily_run.harness_policy import resolve_harness_deep_loss_policy
+
+        state = HarnessState()
+        state.entries["policy"]["streak"] = HarnessEntry(
+            id="streak",
+            kind="policy",
+            title="连亏",
+            content="连亏警戒：连续3笔卖出亏损",
+            source="deterministic",
+            job="pnl_overview",
+            evidence="pnl",
+            created_at="2026-08-18T00:00:00+00:00",
+            updated_at="2026-08-18T00:00:00+00:00",
+        )
+        policy = resolve_harness_deep_loss_policy(
+            state,
+            settings={"harness": {"runtime_overlay_sources": ["policy"]}},
+        )
+        assert policy["cover_ratio"] >= 1.15
+        assert policy["sell_ratio"] <= 0.4
 
     def test_rejected_blocks_buy(self, tmp_path, monkeypatch):
         rej = tmp_path / "rejected_strategies.jsonl"
@@ -454,6 +867,44 @@ class TestHarnessRuntimeExtensions:
             settings=_harness_settings(),
         )
         assert flat["aggressive_entry"] >= 52.0
+
+    def test_pnl_target_policy_evolution_on_miss(self):
+        from agent_reach.daily_run.harness import HarnessEntry, HarnessState
+        from agent_reach.daily_run.harness_policy import resolve_harness_pnl_target_policy
+
+        state = HarnessState()
+        state.entries["memory"]["pnl_miss"] = HarnessEntry(
+            id="pnl_miss",
+            kind="memory",
+            title="pnl_target",
+            content="盈亏目标未达：目标 +500 实际 -200（差 -700）",
+            source="deterministic",
+            job="pnl_target",
+            evidence="pnl_target miss",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        policy = resolve_harness_pnl_target_policy(
+            state,
+            settings={
+                "harness": {"runtime_overlay_sources": ["memory"]},
+                "pnl_target": {"base_target_pct": 0.5, "min_target_cny": 100},
+            },
+        )
+        assert policy["base_target_pct"] <= 0.4
+        assert policy["min_target_cny"] <= 80
+
+    def test_realized_gain_threshold_separate_from_loss(self):
+        from agent_reach.daily_run.harness_policy import deep_loss_policy_base
+
+        settings = {
+            "pnl_overview": {
+                "large_realized_loss_cny": 500,
+                "large_realized_gain_cny": 800,
+            }
+        }
+        assert deep_loss_policy_base(settings, "realized_loss_threshold") == 500
+        assert deep_loss_policy_base(settings, "realized_gain_threshold") == 800
 
 
 class TestHarnessP2Evolution:

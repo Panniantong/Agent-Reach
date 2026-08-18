@@ -73,6 +73,7 @@ class TestWatchlistPolicy:
         snapshot["portfolio"]["holdings"].append(
             {"code": "002273", "name": "水晶光电", "price": 32.04, "change_pct": -6.23}
         )
+        snapshot["code"] = "002273"
         before = len(portfolio["watchlist"])
         decision = TradeDecision(
             action="sell",

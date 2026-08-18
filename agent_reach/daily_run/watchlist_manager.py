@@ -154,7 +154,7 @@ def adjust_watchlist(
             )
             continue
         chg = row.get("change_pct")
-        score = _symbol_score(row, base_mss=base_mss)
+        score = _symbol_score(row, base_mss=base_mss, settings=settings)
         if chg is not None and float(chg) <= -8:
             changes.append(
                 WatchlistChange("remove", code, str(w.get("name", code)), f"跌幅 {float(chg):.1f}% 过大")
@@ -541,6 +541,7 @@ def _add_candidates(
                 key=lambda c: _symbol_score(
                     enriched.get(_normalize_code(str(c.get("code", ""))), {}),
                     base_mss=base_mss,
+                    settings=settings,
                 ),
                 reverse=True,
             )
@@ -633,6 +634,7 @@ def _trim_by_score(
             _symbol_score(
                 {**w, **enriched.get(_normalize_code(str(w.get("code", ""))), {})},
                 base_mss=base_mss,
+                settings=settings,
             ),
             w,
         )
@@ -661,7 +663,17 @@ def _snapshot_base_mss(snapshot: dict[str, Any], settings: dict[str, Any]) -> fl
     return 50.0
 
 
-def _symbol_score(row: dict[str, Any], *, base_mss: Optional[float] = None) -> float:
+def _symbol_score(
+    row: dict[str, Any],
+    *,
+    base_mss: Optional[float] = None,
+    settings: Optional[dict[str, Any]] = None,
+    decision: Any = None,
+) -> float:
+    if settings is not None:
+        from agent_reach.daily_run.harness_policy import harness_symbol_score
+
+        return harness_symbol_score(row, settings, decision=decision, base_mss=base_mss)
     base = float(base_mss if base_mss is not None else 50)
     chg = row.get("change_pct")
     if chg is not None:

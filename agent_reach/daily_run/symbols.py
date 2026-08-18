@@ -116,7 +116,9 @@ def resolve_target_symbols(
       - holdings: 仅持仓
       - watchlist: 仅观察池
       - primary: 主标的
-    Falls back to schedule.symbols_mode when intraday_symbols_mode is unset.
+    close_symbols_mode (when workflow=close):
+      - same values as intraday; defaults to schedule.symbols_mode when unset
+    Falls back to schedule.symbols_mode when workflow-specific mode is unset.
     """
     sched = settings.get("schedule") or {}
     if workflow == "intraday":
@@ -124,6 +126,12 @@ def resolve_target_symbols(
             sched.get("intraday_symbols_mode") or sched.get("symbols_mode", "primary")
         ).lower()
         # Shorthand: scan holdings + 观察池 (same as mode=all, excludes duplicate codes)
+        if mode in ("holdings+watchlist", "holdings_watchlist"):
+            mode = "all"
+    elif workflow == "close":
+        mode = str(
+            sched.get("close_symbols_mode") or sched.get("symbols_mode", "primary")
+        ).lower()
         if mode in ("holdings+watchlist", "holdings_watchlist"):
             mode = "all"
     else:

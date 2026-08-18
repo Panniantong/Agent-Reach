@@ -183,6 +183,7 @@ def run_morning(
     team_first: Optional[bool] = None,
     push: bool = True,
     start_notify: bool = True,
+    skip_narrative: bool = False,
     title: Optional[str] = None,
     config=None,
 ) -> dict[str, Any]:
@@ -262,9 +263,11 @@ def run_morning(
 
     team_md = render_team_markdown(enriched) if expert_card_enabled(cfg, workflow="morning") else ""
     report_md = render_markdown(report)
-    from agent_reach.daily_run.report_narrative import generate_morning_narrative
+    morning_narrative: dict[str, Any] = {"skipped": True, "reason": "deferred"}
+    if not skip_narrative:
+        from agent_reach.daily_run.report_narrative import generate_morning_narrative
 
-    morning_narrative = generate_morning_narrative(enriched, report, settings=cfg)
+        morning_narrative = generate_morning_narrative(enriched, report, settings=cfg)
     push_harness_summary = _harness_push_summary_enabled(cfg, report_kind="morning")
     harness_md = ""
     if push_harness_summary:
@@ -530,6 +533,7 @@ def _run_close_harness_layer_ab(
     settings: dict[str, Any],
     harness_skills_report: Any = None,
     experience_harness: Optional[dict[str, Any]] = None,
+    skip_layer_b: bool = False,
 ) -> dict[str, Any]:
     from agent_reach.daily_run.close_harness_skills import run_close_layer_a_refinement
     from agent_reach.daily_run.harness import refine_after_job_llm
@@ -544,7 +548,10 @@ def _run_close_harness_layer_ab(
         "portfolio_summary": portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
     }
     layer_a = run_close_layer_a_refinement(close_evidence, settings=settings)
-    layer_b = refine_after_job_llm("close", evidence=close_evidence, settings=settings)
+    if skip_layer_b:
+        layer_b: dict[str, Any] = {"skipped": True, "reason": "deferred"}
+    else:
+        layer_b = refine_after_job_llm("close", evidence=close_evidence, settings=settings)
     harness_result = {"layer_a": layer_a, "layer_b": layer_b}
     _attach_close_session_refinements(
         harness_result,
@@ -554,6 +561,53 @@ def _run_close_harness_layer_ab(
     if harness_skills_report is not None:
         harness_skills_report.close_layer_a = layer_a
         enriched["harness_skills"] = harness_skills_report.to_dict()
+    return harness_result
+
+
+def run_merged_close_harness_layer_b(
+    *,
+    symbol_results: list[dict[str, Any]],
+    primary_snapshot: dict[str, Any],
+    portfolio_summary_obj: Any,
+    settings: dict[str, Any],
+) -> dict[str, Any]:
+    """Portfolio-level close Harness Layer B after merge_by_category symbol runs."""
+    from agent_reach.daily_run.harness import build_merged_close_harness_evidence, refine_after_job_llm
+
+    layer_a_parts: list[dict[str, Any]] = []
+    close_skills: list[dict[str, Any]] = []
+    experience_harness: Optional[dict[str, Any]] = None
+    for row in symbol_results:
+        inner = row.get("result") or {}
+        harness = inner.get("harness") or {}
+        part = harness.get("layer_a")
+        if isinstance(part, dict) and not part.get("skipped"):
+            layer_a_parts.append(part)
+        skills = harness.get("close_skills")
+        if isinstance(skills, dict):
+            close_skills.append(skills)
+        exp = harness.get("experience")
+        if isinstance(exp, dict) and exp.get("refinement_id") and experience_harness is None:
+            experience_harness = exp
+
+    evidence = build_merged_close_harness_evidence(
+        symbol_results,
+        primary_snapshot=primary_snapshot,
+        portfolio_summary=portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
+    )
+    layer_b = refine_after_job_llm("close", evidence=evidence, settings=settings)
+    harness_result: dict[str, Any] = {
+        "layer_a": {
+            "merged": True,
+            "symbol_count": len(symbol_results),
+            "parts": layer_a_parts[:6],
+        },
+        "layer_b": layer_b,
+    }
+    if close_skills:
+        harness_result["close_skills"] = {"merged": True, "parts": close_skills[:6]}
+    if experience_harness:
+        harness_result["experience"] = experience_harness
     return harness_result
 
 
@@ -589,6 +643,8 @@ def run_close(
     plugin_names: Optional[list[str]] = None,
     team_first: Optional[bool] = None,
     push: bool = True,
+    skip_narrative: bool = False,
+    skip_harness_layer_b: bool = False,
     title: Optional[str] = None,
     config=None,
     intraday_scans: Optional[list[dict[str, Any]]] = None,
@@ -855,16 +911,18 @@ def run_close(
     )
 
     curve_payload = curve.to_dict() if curve is not None and hasattr(curve, "to_dict") else curve
-    from agent_reach.daily_run.report_narrative import generate_close_narrative
+    close_narrative: dict[str, Any] = {"skipped": True, "reason": "deferred"}
+    if not skip_narrative:
+        from agent_reach.daily_run.report_narrative import generate_close_narrative
 
-    close_narrative = generate_close_narrative(
-        snapshot=enriched,
-        verify=verify_dict,
-        portfolio_summary=portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
-        curve=curve_payload,
-        forecast_review=forecast_review.to_dict() if forecast_review else None,
-        settings=cfg,
-    )
+        close_narrative = generate_close_narrative(
+            snapshot=enriched,
+            verify=verify_dict,
+            portfolio_summary=portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
+            curve=curve_payload,
+            forecast_review=forecast_review.to_dict() if forecast_review else None,
+            settings=cfg,
+        )
 
     push_harness_summary = _harness_push_summary_enabled(cfg, report_kind="close")
     harness_result: dict[str, Any] = {}
@@ -880,13 +938,15 @@ def run_close(
                 settings=cfg,
                 harness_skills_report=harness_skills_report,
                 experience_harness=experience_harness,
+                skip_layer_b=skip_harness_layer_b,
             )
-            harness_md = _finalize_close_harness(
-                harness_result,
-                portfolio_summary_obj=portfolio_summary_obj,
-                settings=cfg,
-                harness_errors=harness_errors,
-            )
+            if not skip_harness_layer_b:
+                harness_md = _finalize_close_harness(
+                    harness_result,
+                    portfolio_summary_obj=portfolio_summary_obj,
+                    settings=cfg,
+                    harness_errors=harness_errors,
+                )
         except Exception as exc:
             _workflow_harness_error(harness_errors, "close_harness_layer_ab", exc)
             harness_result = {"skipped": True, "error": str(exc)}
@@ -937,25 +997,27 @@ def run_close(
                 settings=cfg,
                 harness_skills_report=harness_skills_report,
                 experience_harness=experience_harness,
+                skip_layer_b=skip_harness_layer_b,
             )
         except Exception as exc:
             _workflow_harness_error(harness_errors, "close_harness_layer_ab", exc)
             harness_result = {"skipped": True, "error": str(exc)}
         else:
-            rollback = None
-            try:
-                from agent_reach.daily_run.harness import auto_rollback_on_bad_trade
+            if not skip_harness_layer_b:
+                rollback = None
+                try:
+                    from agent_reach.daily_run.harness import auto_rollback_on_bad_trade
 
-                rollback = auto_rollback_on_bad_trade(
-                    portfolio_summary=portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
-                    harness_result=harness_result,
-                    settings=cfg,
-                    job="close",
-                )
-            except Exception as exc:
-                _workflow_harness_error(harness_errors, "close_harness_auto_rollback", exc)
-            if rollback and rollback.get("triggered"):
-                harness_result["auto_rollback"] = rollback
+                    rollback = auto_rollback_on_bad_trade(
+                        portfolio_summary=portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
+                        harness_result=harness_result,
+                        settings=cfg,
+                        job="close",
+                    )
+                except Exception as exc:
+                    _workflow_harness_error(harness_errors, "close_harness_auto_rollback", exc)
+                if rollback and rollback.get("triggered"):
+                    harness_result["auto_rollback"] = rollback
 
     followup_steps = push_harness_followups(
         settings=cfg,

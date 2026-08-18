@@ -115,3 +115,21 @@ class TestPnlTarget:
             settings={"pnl_target": {"evaluate_by_pct": True}},
         )
         assert result.hit is False
+
+    def test_compute_target_uses_harness_runtime_policy(self):
+        target = compute_next_day_target(
+            _summary("2026-08-17", 500, start=100000, end=100500),
+            settings={
+                "pnl_target": {"base_target_pct": 0.5, "min_target_cny": 0},
+                "harness_runtime": {
+                    "pnl_target_policy": {
+                        "base_target_pct": 0.8,
+                        "base_target_cny": 0,
+                        "min_target_cny": 0,
+                        "streak_bonus_pct": 0,
+                        "miss_recovery_factor": 1.0,
+                    }
+                },
+            },
+        )
+        assert target.target_pnl_cny == pytest.approx(804.0, abs=0.01)

@@ -2,10 +2,12 @@
 """Tests for skill archive / compaction helpers."""
 
 from pathlib import Path
+from unittest.mock import patch
 
 from agent_reach.daily_run.skill_archive import (
     annotate_experience_refinement_id,
     compact_experience_sections,
+    summarize_archived_blocks_batch,
 )
 from agent_reach.daily_run.skill_learning import (
     dedupe_skill_learning_items,
@@ -55,6 +57,43 @@ class TestSkillArchive:
         assert "2026-08-17 ~ 2026-08-21" in out
         assert "2026-08-03 ~ 2026-08-07" not in out
         assert len(archived) == 2
+
+    @patch("agent_reach.daily_run.llm_chat.chat_json")
+    @patch("agent_reach.daily_run.llm_chat.resolve_chat_provider", return_value="deepseek")
+    def test_batch_summary_single_llm_call(self, mock_provider, mock_chat_json, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "agent_reach.daily_run.skill_archive._ARCHIVE_DIR",
+            tmp_path / "archives",
+        )
+        mock_chat_json.return_value = {
+            "summaries": [
+                {"label": "2026-08-03~2026-08-07", "summary": "第一周摘要"},
+                {"label": "2026-08-10~2026-08-14", "summary": "第二周摘要"},
+            ]
+        }
+        out, archived = compact_experience_sections(
+            SAMPLE,
+            settings={
+                "weekly_report": {
+                    "skill_archive_keep_weeks": 1,
+                    "skill_archive_batch_summary": True,
+                }
+            },
+        )
+        assert mock_chat_json.call_count == 1
+        assert "第一周摘要" in out
+        assert "第二周摘要" in out
+        assert len(archived) == 2
+
+    def test_batch_summary_rule_fallback_without_provider(self):
+        entries = [
+            ("2026-08-03~2026-08-07", "### 📅 2026-08-03 ~ 2026-08-07 周复盘\n* **情况说明：** 持平"),
+            ("2026-08-10~2026-08-14", "### 📅 2026-08-10 ~ 2026-08-14 周复盘\n* **盈亏：** -1%"),
+        ]
+        with patch("agent_reach.daily_run.llm_chat.resolve_chat_provider", return_value=None):
+            rows = summarize_archived_blocks_batch(entries, settings={"weekly_report": {}})
+        assert len(rows) == 2
+        assert all(summary for _, summary in rows)
 
     def test_annotate_refinement_id(self):
         text = SAMPLE.replace("newest week", "newest week\n")

@@ -458,8 +458,11 @@ def _review_harness_evolution(
 
     from agent_reach.daily_run.harness import load_harness
     from agent_reach.daily_run.harness_policy import (
+        aggressive_entry_default,
         harness_evolution_mode,
         list_static_config_pollution,
+        macro_veto_default,
+        min_cash_ratio_default,
         resolve_harness_trade_signals,
     )
     from agent_reach.daily_run.settings import effective_settings, load_settings
@@ -501,9 +504,9 @@ def _review_harness_evolution(
     runtime = effective.get("harness_runtime") or {}
 
     if signals.get("defensive_trim"):
-        macro = float(thresholds.get("macro_veto", 40))
-        aggressive = float(thresholds.get("aggressive_entry", 50))
-        min_cash = float(thresholds.get("min_cash_ratio", 0))
+        macro = macro_veto_default(effective)
+        aggressive = aggressive_entry_default(effective)
+        min_cash = min_cash_ratio_default(effective)
         lock_days = int(trading.get("holding_lock_days", 1))
         if macro > 32:
             out.findings.append(
@@ -572,7 +575,9 @@ def _review_intraday_state(
     trades: list[dict[str, Any]],
     settings: dict[str, Any],
 ) -> None:
-    from agent_reach.daily_run.intraday import MAX_SCANS, MAX_TRADES
+    from agent_reach.daily_run.intraday import MAX_SCANS, max_trade_evaluations_per_symbol
+
+    eval_cap = max_trade_evaluations_per_symbol(settings)
 
     if not scans and not trades:
         return
@@ -598,13 +603,13 @@ def _review_intraday_state(
             )
         )
 
-    if len(trades) > MAX_TRADES:
+    if len(trades) > eval_cap:
         out.findings.append(
             CodeFinding(
                 "intraday",
                 "medium",
-                f"调仓次数 {len(trades)} 超过 MAX_TRADES={MAX_TRADES}",
-                "检查 trade_every_n_scans 配置",
+                f"调仓评估次数 {len(trades)} 超过上限 {eval_cap}",
+                "检查 trade_every_n_scans 或 max_trade_evaluations_per_symbol 配置",
             )
         )
 

@@ -9,6 +9,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
+from agent_reach.daily_run.harness_policy import pnl_target_policy_default
 from agent_reach.daily_run.trade_calendar import next_trading_day, today_shanghai
 
 
@@ -116,6 +117,13 @@ def compute_next_day_target(
     prev_result: Optional[PnlTargetResult | dict[str, Any]] = None,
 ) -> PnlTarget:
     cfg = _pnl_target_cfg(settings)
+    policy = {key: pnl_target_policy_default(settings or {}, key) for key in (
+        "base_target_pct",
+        "base_target_cny",
+        "min_target_cny",
+        "streak_bonus_pct",
+        "miss_recovery_factor",
+    )}
     as_of = str(portfolio_summary.get("as_of") or today_shanghai().isoformat())[:10]
     day = date.fromisoformat(as_of)
     next_day = next_trading_day(day, settings=settings or {})
@@ -125,9 +133,9 @@ def compute_next_day_target(
         end_total = portfolio_summary.get("start_total")
     baseline = float(end_total or 0)
 
-    base_pct = float(cfg.get("base_target_pct", 0.5))
-    base_cny = float(cfg.get("base_target_cny", 0))
-    min_cny = float(cfg.get("min_target_cny", 0))
+    base_pct = float(policy["base_target_pct"])
+    base_cny = float(policy["base_target_cny"])
+    min_cny = float(policy["min_target_cny"])
 
     if base_cny > 0:
         target_cny = base_cny
@@ -144,11 +152,11 @@ def compute_next_day_target(
         prev_hit = bool(data.get("hit"))
         prev_miss = not prev_hit
 
-    if prev_hit and cfg.get("streak_bonus_pct") is not None:
-        target_cny = round(target_cny * (1 + float(cfg["streak_bonus_pct"]) / 100), 2)
+    if prev_hit and policy["streak_bonus_pct"] > 0:
+        target_cny = round(target_cny * (1 + float(policy["streak_bonus_pct"]) / 100), 2)
 
-    if prev_miss and cfg.get("miss_recovery_factor") is not None:
-        target_cny = round(target_cny * float(cfg["miss_recovery_factor"]), 2)
+    if prev_miss and policy["miss_recovery_factor"] > 0:
+        target_cny = round(target_cny * float(policy["miss_recovery_factor"]), 2)
 
     target_pct = round(target_cny / baseline * 100, 2) if baseline > 0 else None
     return PnlTarget(

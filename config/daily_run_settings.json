@@ -62,7 +62,17 @@
     "harness_evolve": true,
     "large_unrealized_loss_cny": 5000,
     "large_realized_loss_cny": 500,
-    "large_unrealized_loss_pct": 10
+    "large_realized_gain_cny": 500,
+    "large_unrealized_loss_pct": 10,
+    "deep_loss_sell_require_cover": true,
+    "deep_loss_cover_ratio": 1.0,
+    "deep_loss_sell_ratio": 1.0,
+    "deep_loss_tier_multiplier": 2.0,
+    "portfolio_loss_cny_threshold": 5000,
+    "coverable_realized_weight": 1.0,
+    "win_rate_min": 0.33,
+    "loss_streak_max": 3,
+    "ledger_cost_tolerance_cny": 0.01
   },
 
   "pnl_target": {
@@ -213,6 +223,11 @@
     "skill_archive": true,
     "skill_archive_keep_weeks": 2,
     "skill_archive_llm_summary": true,
+    "skill_archive_batch_summary": true,
+    "skill_archive_batch_max_blocks": 4,
+    "skill_archive_batch_block_chars": 1200,
+    "skill_archive_batch_max_tokens": 480,
+    "skill_archive_summary_max_tokens": 160,
     "exa_skill_research": true,
     "max_skill_queries": 2,
     "max_skill_items": 8,
@@ -252,7 +267,8 @@
       "enabled": true,
       "provider": "deepseek",
       "model": "deepseek-v4-flash",
-      "timeout_seconds": 60
+      "timeout_seconds": 45,
+      "max_output_tokens": 320
     }
   },
 
@@ -294,9 +310,7 @@
 
   "backtest": {
     "default_initial_capital": 100000,
-    "commission_rate": 0.0015,
-    "macro_veto": 40,
-    "aggressive_entry": 50
+    "commission_rate": 0.0015
   },
 
   "optimizer": {
@@ -384,6 +398,7 @@
   "schedule": {
     "executor": "local_cron",
     "symbols_mode": "all",
+    "close_symbols_mode": "holdings",
     "intraday_symbols_mode": "all",
     "intraday_gc_between_symbols": true,
     "symbol_push_mode": "merge_by_category",
@@ -608,7 +623,15 @@
     "enabled": true,
     "provider": "deepseek",
     "model": "deepseek-v4-flash",
-    "timeout_seconds": 60,
+    "timeout_seconds": 45,
+    "max_output_tokens": 320,
+    "max_summary_chars": 72,
+    "max_focus_points": 3,
+    "max_divergence_notes": 2,
+    "max_risk_alerts": 2,
+    "max_item_chars": 48,
+    "max_context_chars": 1800,
+    "merge_single_call": true,
     "jobs": {
       "morning": true,
       "close": true,
@@ -759,6 +782,9 @@
       "use_llm_review": true,
       "cooldown_hours": 24,
       "timeout_seconds": 60,
+      "max_output_tokens": 512,
+      "max_context_chars": 2400,
+      "merge_single_call": true,
       "summarize_enabled": true,
       "summarize_jobs": ["skill_closure", "code_walk"],
       "summarize_cooldown_hours": 24,

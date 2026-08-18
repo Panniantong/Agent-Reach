@@ -413,3 +413,58 @@ class TestManifestHarnessSummary:
         assert len(summary["refinements"]) == 2
         assert summary["errors"] == ["run_guard:dedupe: boom"]
         assert any(r.get("planner") == "llm" for r in summary["refinements"])
+
+
+class TestHarnessLlmCompact:
+    def test_compact_llm_user_payload_caps_size(self):
+        from agent_reach.daily_run.harness import _compact_llm_user_payload, _llm_refine_limits
+
+        limits = _llm_refine_limits({"max_context_chars": 400})
+        payload = _compact_llm_user_payload(
+            {
+                "job": "close",
+                "signals": ["x" * 200],
+                "layer_a": {"memory": ["a" * 300], "policy": [], "playbook": [], "plan": []},
+                "harness_overview": "o" * 900,
+                "recent_refinements": [{"summary": "s" * 200, "changes": ["c" * 200]}],
+            },
+            limits,
+        )
+        assert len(__import__("json").dumps(payload, ensure_ascii=False)) <= 500
+
+    def test_build_merged_close_harness_evidence(self):
+        from agent_reach.daily_run.harness import build_merged_close_harness_evidence
+
+        evidence = build_merged_close_harness_evidence(
+            [
+                {
+                    "code": "688008",
+                    "name": "澜起科技",
+                    "result": {"verify": {"summary": "宏观否决", "recommendations": ["维持高现金"]}},
+                },
+                {
+                    "code": "002273",
+                    "name": "水晶光电",
+                    "result": {"verify": {"summary": "观察", "recommendations": []}},
+                },
+            ],
+            primary_snapshot={"code": "688008", "name": "澜起科技"},
+            portfolio_summary={"daily_pnl": -90, "daily_pnl_pct": -0.1},
+        )
+        assert evidence["portfolio_scope"] == "merged"
+        assert evidence["symbol_count"] == 2
+        assert evidence["portfolio_summary"]["daily_pnl"] == -90
+
+    def test_merged_close_signals(self):
+        from agent_reach.daily_run.harness import _collect_refine_signals
+
+        signals = _collect_refine_signals(
+            "close",
+            {
+                "portfolio_scope": "merged",
+                "symbol_count": 2,
+                "portfolio_summary": {"daily_pnl_pct": 0.6},
+                "verify": {"recommendations": ["维持"]},
+            },
+        )
+        assert any("全持仓" in s for s in signals)
