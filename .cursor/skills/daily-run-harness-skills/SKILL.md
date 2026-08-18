@@ -177,6 +177,15 @@ python3 -m agent_reach.cli daily-run harness restore-snapshot --path ~/.agent-re
 - Forge 失败：`apply_skill_refinement` 返回 `reason=forge_gate_failed`，不写 harness。
 - 周度叙事：统计 audit 事件数、变更项、gate 拦截、Layer B 拒绝、job 分布。
 
+### 运行时 Claim  enforcement + 统一审计（round 4）
+
+| 开关 | 行为 |
+|------|------|
+| `injection.enforce_claim_decisions` | runtime overlay 仅采纳 `adopted` 声明；含「假设/待验证/TODO」的 `verify` 声明不生效 |
+| `apply_audit.jsonl` | 记录 Layer A/B/summarize 的 applied / skipped（forge、admission 拒绝） |
+
+- Forge / Layer B 拒绝也会写入 audit，周六周度叙事会统计 `forge_blocks` 与 `layer_b_skips`。
+
 ### Feishu Harness 摘要卡
 
 | 开关 | 行为 |
@@ -216,5 +225,5 @@ python3 -m agent_reach.cli daily-run harness sync-settings
 ## 测试
 
 ```bash
-python3 -m pytest tests/test_daily_run_harness_p3.py tests/test_daily_run_harness_p2.py tests/test_daily_run_harness_p1.py -q
+python3 -m pytest tests/test_daily_run_harness_p6.py tests/test_daily_run_harness_p5.py tests/test_daily_run_harness_p4.py tests/test_daily_run_harness_p3.py tests/test_daily_run_harness_p2.py tests/test_daily_run_harness_p1.py -q
 ```

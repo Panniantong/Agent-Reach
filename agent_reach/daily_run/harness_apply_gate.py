@@ -73,6 +73,7 @@ def injection_cfg(settings: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         "max_chars_per_line": int(raw.get("max_chars_per_line") or 240),
         "max_overlay_claims": int(raw.get("max_overlay_claims") or 3),
         "max_overlay_chars": int(raw.get("max_overlay_chars") or 1200),
+        "enforce_claim_decisions": raw.get("enforce_claim_decisions", True) is not False,
     }
 
 
@@ -320,6 +321,52 @@ def classify_overlay_claims(
     return claims
 
 
+def enforce_overlay_claims(
+    blobs: list[str],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> tuple[list[str], dict[str, Any]]:
+    """Return only adopted overlay blobs for runtime effective settings."""
+    limits = injection_cfg(settings)
+    if not limits.get("enforce_claim_decisions"):
+        kept, meta = bound_overlay_blobs(blobs, settings=settings)
+        meta["enforce_claim_decisions"] = False
+        return kept, meta
+
+    max_claims = max(1, limits["max_overlay_claims"])
+    max_chars = max(200, limits["max_overlay_chars"])
+    adopted: list[str] = []
+    verify_count = 0
+    ignored_count = 0
+    kept_chars = 0
+    for blob in blobs:
+        text = str(blob or "").strip()
+        if not text:
+            continue
+        slot_used = len(adopted) + verify_count
+        if slot_used >= max_claims:
+            ignored_count += 1
+            continue
+        if kept_chars + len(text) > max_chars and slot_used > 0:
+            ignored_count += 1
+            continue
+        if any(marker in text for marker in _VERIFY_MARKERS):
+            verify_count += 1
+            kept_chars += len(text)
+            continue
+        adopted.append(text)
+        kept_chars += len(text)
+    return adopted, {
+        "input_count": len(blobs),
+        "kept_count": len(adopted),
+        "adopted_count": len(adopted),
+        "verify_count": verify_count,
+        "ignored_count": ignored_count,
+        "total_chars": kept_chars,
+        "enforce_claim_decisions": True,
+    }
+
+
 _THRESHOLD_LITERAL_RE = re.compile(
     r"(macro_veto|aggressive_entry|min_cash_ratio|max_price_deviation_pct|"
     r"high_position_20d|min_volume_ratio|max_vwap_deviation_pct|"
@@ -491,24 +538,35 @@ def build_overlay_injection_audit(
 def record_apply_audit(
     *,
     job: str,
-    refinement_id: str,
-    gate: ApplyGateResult,
-    injection_meta: dict[str, Any],
-    skipped_kinds: list[str],
-    changes: int,
+    refinement_id: Optional[str] = None,
+    gate: Optional[Any] = None,
+    injection_meta: Optional[dict[str, Any]] = None,
+    skipped_kinds: Optional[list[str]] = None,
+    changes: int = 0,
     snapshot_path: Optional[str] = None,
     admission: Optional[dict[str, Any]] = None,
+    status: str = "applied",
+    reason: str = "",
+    layer: str = "a",
+    forge_gate: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
+    gate_dict: dict[str, Any] = {}
+    if gate is not None:
+        gate_dict = gate.to_dict() if hasattr(gate, "to_dict") else dict(gate)
     event = {
         "at": _now_iso(),
         "job": job,
+        "status": status,
+        "reason": reason,
+        "layer": layer,
         "refinement_id": refinement_id,
-        "gate": gate.to_dict(),
-        "injection": injection_meta,
-        "skipped_kinds": skipped_kinds,
+        "gate": gate_dict,
+        "injection": injection_meta or {},
+        "skipped_kinds": list(skipped_kinds or []),
         "changes": changes,
         "snapshot_path": snapshot_path,
         "admission": admission,
+        "forge_gate": forge_gate,
     }
     path = _audit_path()
     path.parent.mkdir(parents=True, exist_ok=True)

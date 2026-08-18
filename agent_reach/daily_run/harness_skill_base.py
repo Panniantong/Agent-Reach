@@ -83,6 +83,16 @@ def apply_skill_refinement(
 
     forge = evaluate_forge_gate(job, evidence, settings=cfg)
     if forge is not None and not forge.passed:
+        from agent_reach.daily_run.harness_apply_gate import record_apply_audit
+
+        record_apply_audit(
+            job=job,
+            status="skipped",
+            reason="forge_gate_failed",
+            layer="a",
+            forge_gate=forge.to_dict(),
+            changes=0,
+        )
         return {
             "skipped": True,
             "reason": "forge_gate_failed",

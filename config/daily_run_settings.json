@@ -566,7 +566,8 @@
       "max_per_kind_per_job": 8,
       "max_chars_per_line": 240,
       "max_overlay_claims": 3,
-      "max_overlay_chars": 1200
+      "max_overlay_chars": 1200,
+      "enforce_claim_decisions": true
     },
     "snapshots": {
       "enabled": true,

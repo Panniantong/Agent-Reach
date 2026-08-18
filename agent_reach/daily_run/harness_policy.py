@@ -795,10 +795,13 @@ def _collect_text_blobs(
     raw = [f"{getattr(e, 'title', '')} {getattr(e, 'content', '')}" for e in entries[:30]]
     if not bounded:
         return raw
-    from agent_reach.daily_run.harness_apply_gate import bound_overlay_blobs
+    from agent_reach.daily_run.harness_apply_gate import bound_overlay_blobs, enforce_overlay_claims
 
-    blobs, _meta = bound_overlay_blobs(raw, settings=settings)
-    return blobs
+    if not bounded:
+        return raw
+    bounded_raw, _bound_meta = bound_overlay_blobs(raw, settings=settings)
+    adopted, _claim_meta = enforce_overlay_claims(bounded_raw, settings=settings)
+    return adopted
 
 
 def _has_deviation_signal(state: Any, *, sources: set[str], settings: Optional[dict[str, Any]] = None) -> bool:

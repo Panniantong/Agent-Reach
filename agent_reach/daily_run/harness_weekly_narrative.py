@@ -108,12 +108,19 @@ def build_weekly_harness_narrative(
     total_changes = 0
     gate_blocks = 0
     admission_rejects = 0
+    forge_blocks = 0
+    layer_b_skips = 0
     snapshots = 0
 
     for row in audit_rows:
         job = str(row.get("job") or "unknown")
         job_counts[job] += 1
         total_changes += int(row.get("changes") or 0)
+        reason = str(row.get("reason") or "")
+        if reason == "forge_gate_failed":
+            forge_blocks += 1
+        if reason == "layer_b_admission_rejected":
+            layer_b_skips += 1
         gate = row.get("gate") or {}
         if gate.get("blocked_kinds"):
             gate_blocks += 1
@@ -139,6 +146,8 @@ def build_weekly_harness_narrative(
         "session_layers": session_layers,
         "gate_blocks": gate_blocks,
         "admission_rejects": admission_rejects,
+        "forge_blocks": forge_blocks,
+        "layer_b_skips": layer_b_skips,
         "snapshots": snapshots,
         "jobs": dict(top_jobs),
     }
@@ -168,6 +177,10 @@ def format_weekly_harness_narrative_markdown(
         lines.append(f"- 本周 session refine **{int(narrative['session_layers'])}** 层")
     if narrative.get("gate_blocks"):
         lines.append(f"- Apply gate 拦截 **{int(narrative['gate_blocks'])}** 次")
+    if narrative.get("forge_blocks"):
+        lines.append(f"- Forge 门控拦截 **{int(narrative['forge_blocks'])}** 次")
+    if narrative.get("layer_b_skips"):
+        lines.append(f"- Layer B 拒绝 **{int(narrative['layer_b_skips'])}** 次")
     if narrative.get("admission_rejects"):
         lines.append(f"- Layer B Admission 拒绝 **{int(narrative['admission_rejects'])}** 条 edits")
     if narrative.get("snapshots"):

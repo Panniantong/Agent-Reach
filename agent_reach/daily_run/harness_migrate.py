@@ -68,6 +68,7 @@ HARNESS_INJECTION_DEFAULTS: dict[str, Any] = {
     "max_chars_per_line": 240,
     "max_overlay_claims": 3,
     "max_overlay_chars": 1200,
+    "enforce_claim_decisions": True,
 }
 
 HARNESS_SNAPSHOT_DEFAULTS: dict[str, Any] = {

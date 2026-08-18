@@ -1219,6 +1219,7 @@ def refine_after_job_llm(
     from agent_reach.daily_run.harness_apply_gate import (
         evaluate_layer_b_admission,
         filter_proposal_for_admission,
+        record_apply_audit,
     )
     from agent_reach.daily_run.harness_snapshot import save_pre_apply_snapshot
 
@@ -1232,12 +1233,22 @@ def refine_after_job_llm(
     )
     admission = evaluate_layer_b_admission(proposal, settings=settings)
     if not admission.passed:
+        audit_event = record_apply_audit(
+            job=job,
+            status="skipped",
+            reason="layer_b_admission_rejected",
+            layer="b",
+            admission=admission.to_dict(),
+            snapshot_path=str(snapshot_path) if snapshot_path else None,
+            changes=0,
+        )
         return {
             "skipped": True,
             "reason": "layer_b_admission_rejected",
             "review": review,
             "admission": admission.to_dict(),
             "snapshot_path": str(snapshot_path) if snapshot_path else None,
+            "apply_audit_at": audit_event.get("at"),
         }
     proposal = filter_proposal_for_admission(proposal, admission)
     _, _, _, _, ev_summary = _evidence_from_job(job, evidence, settings=settings)
@@ -1261,6 +1272,15 @@ def refine_after_job_llm(
         edits=edits,
     )
     path = state.save()
+    audit_event = record_apply_audit(
+        job=job,
+        refinement_id=event.id,
+        status="applied",
+        layer="b",
+        admission=admission.to_dict(),
+        snapshot_path=str(snapshot_path) if snapshot_path else None,
+        changes=len(changes),
+    )
     return {
         "skipped": False,
         "job": job,
@@ -1272,6 +1292,7 @@ def refine_after_job_llm(
         "state_path": str(path),
         "admission": admission.to_dict(),
         "snapshot_path": str(snapshot_path) if snapshot_path else None,
+        "apply_audit_at": audit_event.get("at"),
         "layer": "b",
     }
 
@@ -1312,6 +1333,7 @@ def refine_after_job_llm_summarize(
     from agent_reach.daily_run.harness_apply_gate import (
         evaluate_layer_b_admission,
         filter_proposal_for_admission,
+        record_apply_audit,
     )
     from agent_reach.daily_run.harness_snapshot import save_pre_apply_snapshot
 
@@ -1337,12 +1359,22 @@ def refine_after_job_llm_summarize(
 
     admission = evaluate_layer_b_admission(proposal, settings=settings)
     if not admission.passed:
+        audit_event = record_apply_audit(
+            job=job,
+            status="skipped",
+            reason="layer_b_admission_rejected",
+            layer="summarize",
+            admission=admission.to_dict(),
+            snapshot_path=str(snapshot_path) if snapshot_path else None,
+            changes=0,
+        )
         return {
             "skipped": True,
             "reason": "layer_b_admission_rejected",
             "job": job,
             "admission": admission.to_dict(),
             "snapshot_path": str(snapshot_path) if snapshot_path else None,
+            "apply_audit_at": audit_event.get("at"),
         }
     proposal = filter_proposal_for_admission(proposal, admission)
 
@@ -1372,6 +1404,15 @@ def refine_after_job_llm_summarize(
         edits=edits,
     )
     path = state.save()
+    audit_event = record_apply_audit(
+        job=job,
+        refinement_id=event.id,
+        status="applied",
+        layer="summarize",
+        admission=admission.to_dict(),
+        snapshot_path=str(snapshot_path) if snapshot_path else None,
+        changes=len(changes),
+    )
     return {
         "skipped": False,
         "job": job,
@@ -1383,6 +1424,7 @@ def refine_after_job_llm_summarize(
         "state_path": str(path),
         "admission": admission.to_dict(),
         "snapshot_path": str(snapshot_path) if snapshot_path else None,
+        "apply_audit_at": audit_event.get("at"),
     }
 
 
