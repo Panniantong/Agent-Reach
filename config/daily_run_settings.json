@@ -556,6 +556,17 @@
     "auto_rollback_on_bad_trade": true,
     "bad_trade_pnl_pct": -1.0,
     "bad_trade_weekly_pnl_pct": -2.0,
+    "apply_gate": {
+      "enabled": true,
+      "block_policy_on_audit_fail": true,
+      "block_policy_on_structured_incomplete": true
+    },
+    "injection": {
+      "max_per_kind_per_job": 8,
+      "max_chars_per_line": 240,
+      "max_overlay_claims": 3,
+      "max_overlay_chars": 1200
+    },
     "render_format": "xml",
     "jobs": {
       "close": true,

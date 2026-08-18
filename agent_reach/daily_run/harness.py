@@ -708,15 +708,37 @@ def refine_after_job(
         plan = [str(x) for x in (evidence.get("plan") or []) if str(x).strip()]
         ev_summary = str(evidence.get("summary") or job)
 
+    from agent_reach.daily_run.harness_apply_gate import (
+        apply_kind_gate,
+        bound_kind_texts,
+        evaluate_apply_gate,
+        record_apply_audit,
+    )
+
+    gate = evaluate_apply_gate(job, evidence, settings=cfg)
+    kind_texts, gate_skipped = apply_kind_gate(
+        {
+            "memory": memory,
+            "policy": policy,
+            "playbook": playbook,
+            "plan": plan,
+        },
+        gate,
+    )
+    injection_meta: dict[str, Any] = {"gate_skipped": gate_skipped}
+    bounded: dict[str, list[str]] = {}
+    for kind in _KINDS:
+        bounded[kind], injection_meta[kind] = bound_kind_texts(kind_texts[kind], settings=cfg)
+
     state = load_harness()
     all_edits: list[RefinementEdit] = []
     all_changes: list[str] = []
 
     for kind, texts in (
-        ("memory", memory),
-        ("policy", policy),
-        ("playbook", playbook),
-        ("plan", plan),
+        ("memory", bounded["memory"]),
+        ("policy", bounded["policy"]),
+        ("playbook", bounded["playbook"]),
+        ("plan", bounded["plan"]),
     ):
         changes, edits = _upsert_texts(
             state,
@@ -740,12 +762,23 @@ def refine_after_job(
         edits=all_edits,
     )
     path = state.save()
+    audit_event = record_apply_audit(
+        job=job,
+        refinement_id=event.id,
+        gate=gate,
+        injection_meta=injection_meta,
+        skipped_kinds=gate_skipped,
+        changes=len(all_changes),
+    )
     return {
         "skipped": False,
         "job": job,
         "refinement_id": event.id,
         "changes": len(all_changes),
         "state_path": str(path),
+        "apply_gate": gate.to_dict(),
+        "injection": injection_meta,
+        "apply_audit_at": audit_event.get("at"),
     }
 
 
@@ -1387,6 +1420,8 @@ def format_harness_push_markdown(
     harness_errors: Optional[list[str]] = None,
 ) -> str:
     """Markdown card summarizing harness refinements for Feishu push."""
+    from agent_reach.daily_run.harness_apply_gate import format_gate_markdown
+
     layers = _collect_harness_refinement_layers(harness_result)
     rollback = harness_result.get("auto_rollback") or {}
     errors_md = format_harness_errors_markdown(list(harness_errors or []))
@@ -1422,6 +1457,9 @@ def format_harness_push_markdown(
         line = f"- `{rid}` · {planner} · {changes} 项变更"
         if summary:
             line += f" · {summary[:80]}"
+        gate_md = format_gate_markdown(layer.get("apply_gate") or {})
+        if gate_md:
+            line += f"\n  {gate_md.replace(chr(10), chr(10) + '  ')}"
         lines.append(line)
     if harness_result.get("skipped") and harness_result.get("error"):
         lines.append(f"- ⚠️ 部分跳过：{harness_result['error']}")
@@ -1580,6 +1618,10 @@ def build_manifest_harness_summary(payload: dict[str, Any]) -> dict[str, Any]:
                             "reason": obj.get("reason"),
                             "planner": obj.get("planner"),
                             "layer": obj.get("layer"),
+                            "apply_gate": obj.get("apply_gate"),
+                            "verification_signals": (obj.get("apply_gate") or {}).get(
+                                "verification_signals"
+                            ),
                         }
                     )
             for value in obj.values():

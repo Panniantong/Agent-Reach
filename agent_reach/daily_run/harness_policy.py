@@ -749,7 +749,7 @@ def _apply_forecast_signal_evolution(
 def _blob_has_phrase(state: Any, phrase: str, *, settings: dict[str, Any]) -> bool:
     sources = _overlay_sources(settings)
     for kind in ("memory", "playbook"):
-        for blob in _collect_text_blobs(state, sources=sources, kind=kind):
+        for blob in _collect_text_blobs(state, sources=sources, kind=kind, settings=settings):
             if phrase in blob:
                 return True
     return False
@@ -780,17 +780,30 @@ def resolve_harness_lookback_weights(
     return list(_LOOKBACK_NEUTRAL)
 
 
-def _collect_text_blobs(state: Any, *, sources: set[str], kind: str) -> list[str]:
+def _collect_text_blobs(
+    state: Any,
+    *,
+    sources: set[str],
+    kind: str,
+    settings: Optional[dict[str, Any]] = None,
+    bounded: bool = True,
+) -> list[str]:
     if kind not in sources:
         return []
     entries = list((getattr(state, "entries", {}) or {}).get(kind, {}).values())
     entries.sort(key=_entry_sort_key, reverse=True)
-    return [f"{getattr(e, 'title', '')} {getattr(e, 'content', '')}" for e in entries[:30]]
+    raw = [f"{getattr(e, 'title', '')} {getattr(e, 'content', '')}" for e in entries[:30]]
+    if not bounded:
+        return raw
+    from agent_reach.daily_run.harness_apply_gate import bound_overlay_blobs
+
+    blobs, _meta = bound_overlay_blobs(raw, settings=settings)
+    return blobs
 
 
-def _has_deviation_signal(state: Any, *, sources: set[str]) -> bool:
-    blobs = _collect_text_blobs(state, sources=sources, kind="memory")
-    blobs += _collect_text_blobs(state, sources=sources, kind="policy")
+def _has_deviation_signal(state: Any, *, sources: set[str], settings: Optional[dict[str, Any]] = None) -> bool:
+    blobs = _collect_text_blobs(state, sources=sources, kind="memory", settings=settings)
+    blobs += _collect_text_blobs(state, sources=sources, kind="policy", settings=settings)
     for blob in blobs:
         if any(p in blob for p in _DEVIATION_PHRASES):
             return True
@@ -870,7 +883,7 @@ def resolve_harness_mss_weights(
     if not weights:
         return weights
     sources = _overlay_sources(settings or {})
-    if not _has_deviation_signal(state, sources=sources):
+    if not _has_deviation_signal(state, sources=sources, settings=settings):
         return weights
 
     scaled = dict(weights)
@@ -932,11 +945,12 @@ def resolve_harness_trade_signals(
 ) -> dict[str, Any]:
     """Runtime trade flags derived from harness memory/policy."""
     sources = _overlay_sources(settings or {})
-    blobs = _collect_text_blobs(state, sources=sources, kind="memory")
-    blobs += _collect_text_blobs(state, sources=sources, kind="policy")
+    cfg = settings or {}
+    blobs = _collect_text_blobs(state, sources=sources, kind="memory", settings=cfg)
+    blobs += _collect_text_blobs(state, sources=sources, kind="policy", settings=cfg)
 
     mss_miss = any(any(p in blob for p in _MSS_MISS_PHRASES) for blob in blobs)
-    deviation = _has_deviation_signal(state, sources=sources)
+    deviation = _has_deviation_signal(state, sources=sources, settings=cfg)
     bullish, bearish = resolve_harness_kronos_bias(state, settings=settings)
     pnl_hit = any("盈亏目标达成" in blob for blob in blobs)
     pnl_miss = any("盈亏目标未达" in blob for blob in blobs)
@@ -1110,6 +1124,15 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
             "pnl_target_miss",
         )
     }
+
+    try:
+        from agent_reach.daily_run.harness_apply_gate import build_overlay_injection_audit
+
+        injection_audit = build_overlay_injection_audit(state, settings=cfg)
+        if injection_audit.get("kept_count") or injection_audit.get("ignored_count"):
+            harness_meta["injection_gate"] = injection_audit
+    except Exception:
+        pass
 
     if harness_meta:
         cfg["harness_runtime"] = harness_meta

@@ -50,12 +50,24 @@ def morning_to_harness_evidence(run_result: dict[str, Any]) -> dict[str, Any]:
         playbook.append(f"早盘建议：{rec}")
 
     summary = f"morning {name} mss={mss} verdict={verdict}"
+    morning_gate_passed = None if gate is None else bool(gate.passed)
+    morning_audit_passed = None if audit is None else bool(audit.passed)
+    verification_signals: list[str] = []
+    if morning_gate_passed is False:
+        verification_signals.append("morning_gate_failed")
+    if morning_audit_passed is False:
+        verification_signals.append("morning_audit_failed")
+
     return {
         "memory": memory,
         "policy": policy,
         "playbook": playbook,
         "plan": plan,
         "summary": summary,
+        "morning_gate_passed": morning_gate_passed,
+        "morning_audit_passed": morning_audit_passed,
+        "audit_passed": morning_audit_passed,
+        "verification_signals": verification_signals,
     }
 
 

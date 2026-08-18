@@ -56,6 +56,20 @@ HARNESS_SYNC_KEYS: tuple[str, ...] = (
 )
 
 
+HARNESS_APPLY_GATE_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "block_policy_on_audit_fail": True,
+    "block_policy_on_structured_incomplete": True,
+}
+
+HARNESS_INJECTION_DEFAULTS: dict[str, Any] = {
+    "max_per_kind_per_job": 8,
+    "max_chars_per_line": 240,
+    "max_overlay_claims": 3,
+    "max_overlay_chars": 1200,
+}
+
+
 def sync_user_harness_keys(
     *,
     path: Optional[Path] = None,
@@ -76,6 +90,19 @@ def sync_user_harness_keys(
         if key not in harness and key in default_harness:
             harness[key] = deepcopy(default_harness[key])
             added.append(f"harness.{key}")
+
+    for nested_key, nested_defaults in (
+        ("apply_gate", HARNESS_APPLY_GATE_DEFAULTS),
+        ("injection", HARNESS_INJECTION_DEFAULTS),
+    ):
+        block = dict(harness.get(nested_key) or {})
+        default_block = dict(default_harness.get(nested_key) or nested_defaults)
+        for sub_key, sub_val in default_block.items():
+            if sub_key not in block:
+                block[sub_key] = deepcopy(sub_val)
+                added.append(f"harness.{nested_key}.{sub_key}")
+        if block:
+            harness[nested_key] = block
 
     result: dict[str, Any] = {
         "dry_run": dry_run,

@@ -116,6 +116,34 @@ python3 .cursor/skills/daily-run-code-walk/scripts/run_walk.py
 
 ## P3/P4 运维
 
+### Apply gate（rule-evolve / memory-gate 模式）
+
+| 开关 | 行为 |
+|------|------|
+| `apply_gate.enabled` | 启用 verify-before-apply（默认 true） |
+| `apply_gate.block_policy_on_audit_fail` | 审计未通过时不写入 `policy`（memory/plan/playbook 仍写） |
+| `apply_gate.block_policy_on_structured_incomplete` | 结构化复核未完成时不写 `policy` |
+| `injection.max_per_kind_per_job` | 单次 refine 每 kind 最多写入条数（默认 8） |
+| `injection.max_overlay_claims` | runtime overlay 最多采纳 3 条 harness 声明 |
+| `injection.max_overlay_chars` | overlay 扫描总字符上限（默认 1200） |
+
+审计轨迹：`~/.agent-reach/daily_run/harness/apply_audit.jsonl`；Feishu harness 卡展示 verification_signals / 门控拦截。
+
+```json
+"harness": {
+  "apply_gate": {
+    "enabled": true,
+    "block_policy_on_audit_fail": true,
+    "block_policy_on_structured_incomplete": true
+  },
+  "injection": {
+    "max_per_kind_per_job": 8,
+    "max_overlay_claims": 3,
+    "max_overlay_chars": 1200
+  }
+}
+```
+
 ### Feishu Harness 摘要卡
 
 | 开关 | 行为 |
