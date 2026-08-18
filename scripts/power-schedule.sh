@@ -58,12 +58,17 @@ esac
 
 log "slot=$SLOT wake=$WAKE starting rtcwake+poweroff"
 
-if ! sudo -n true 2>/dev/null; then
-  log "ERROR: passwordless sudo missing — run: sudo bash ${SCRIPT_DIR}/install-power-schedule-sudo.sh"
+RTCWAKE="$(command -v rtcwake || true)"
+if [ -z "$RTCWAKE" ]; then
+  log "ERROR: rtcwake not found — install util-linux / linux-tools"
   exit 1
 fi
 
-RTCWAKE="$(command -v rtcwake)"
+# sudoers only whitelists rtcwake/shutdown/poweroff — not bare `sudo true`.
+if ! sudo -n "$RTCWAKE" -m show >>"$LOG_FILE" 2>&1; then
+  log "ERROR: passwordless sudo missing for rtcwake — run: sudo bash ${SCRIPT_DIR}/install-power-schedule-sudo.sh"
+  exit 1
+fi
 
 if sudo -n "$RTCWAKE" -m off --date "$WAKE" >>"$LOG_FILE" 2>&1; then
   log "rtcwake -m off --date '$WAKE' OK (system powering off)"
