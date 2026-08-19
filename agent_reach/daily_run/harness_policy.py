@@ -275,6 +275,8 @@ _RUNTIME_SECTIONS: dict[str, str] = {
 }
 
 # Public catalog for config walkthrough / stale-key detection (harness evolution).
+_EVOLVED_SELL_RATIO_KEYS: tuple[str, ...] = ("sell_ratio",)
+
 EVOLVED_CONFIG_KEYS_BY_SECTION: dict[str, tuple[str, ...]] = {
     "thresholds": _EVOLVED_THRESHOLD_KEYS,
     "schedule": (
@@ -286,7 +288,8 @@ EVOLVED_CONFIG_KEYS_BY_SECTION: dict[str, tuple[str, ...]] = {
     "portfolio": ("max_holdings", "max_total_symbols"),
     "trading": ("holding_lock_days", "stop_loss_ma20_pct", "friction_min_return_pct"),
     "mss_forecast": _EVOLVED_FORECAST_KEYS,
-    "harness": _EVOLVED_BAD_TRADE_KEYS,
+    "harness": _EVOLVED_BAD_TRADE_KEYS + _EVOLVED_SELL_RATIO_KEYS,
+    "pnl_overview": ("deep_loss_sell_ratio",),
 }
 EVOLVED_TOP_LEVEL_KEYS: tuple[str, ...] = ("lookback_weights",)
 EVOLVED_BACKTEST_KEYS: tuple[str, ...] = ("macro_veto", "aggressive_entry")
@@ -1463,6 +1466,9 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
     deep_loss_meta = harness_deep_loss_overlay_meta(base_deep_loss, effective_deep_loss)
     if deep_loss_meta:
         harness_meta["deep_loss_overlay"] = deep_loss_meta
+    pnl_overview = dict(cfg.get("pnl_overview") or {})
+    pnl_overview["deep_loss_sell_ratio"] = float(effective_deep_loss["sell_ratio"])
+    cfg["pnl_overview"] = pnl_overview
     base_pnl_target = resolve_harness_base_pnl_target_policy(cfg)
     effective_pnl_target = resolve_harness_pnl_target_policy(state, settings=cfg)
     harness_meta["pnl_target_policy"] = effective_pnl_target
@@ -1741,28 +1747,37 @@ def _apply_deep_loss_signal_evolution(
     settings: dict[str, Any],
 ) -> dict[str, float]:
     signals = resolve_harness_trade_signals(state, settings=settings)
+
+    def _tighten_sell_ratio(ceiling: float) -> None:
+        if evolution_mode(settings, "sell_ratio") == "harness":
+            merged["sell_ratio"] = min(float(merged.get("sell_ratio", 1.0)), ceiling)
+
+    def _relax_sell_ratio(floor: float) -> None:
+        if evolution_mode(settings, "sell_ratio") == "harness":
+            merged["sell_ratio"] = max(float(merged.get("sell_ratio", 1.0)), floor)
+
     if signals.get("defensive_trim"):
-        merged["sell_ratio"] = min(float(merged.get("sell_ratio", 1.0)), 0.5)
+        _tighten_sell_ratio(0.5)
         merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.0)
     if signals.get("pnl_target_miss"):
         merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.2)
-        merged["sell_ratio"] = min(float(merged.get("sell_ratio", 1.0)), 0.35)
+        _tighten_sell_ratio(0.35)
     if signals.get("pnl_target_hit"):
-        merged["sell_ratio"] = max(float(merged.get("sell_ratio", 1.0)), 0.6)
+        _relax_sell_ratio(0.6)
     if _overlay_has_phrase(state, "深浮亏", settings=settings) or _overlay_has_phrase(
         state, "深度套牢", settings=settings
     ):
         merged["loss_cny_threshold"] = min(float(merged.get("loss_cny_threshold", 5000.0)), 4000.0)
         merged["loss_pct_threshold"] = min(float(merged.get("loss_pct_threshold", 10.0)), 8.0)
         merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.0)
-        merged["sell_ratio"] = min(float(merged.get("sell_ratio", 1.0)), 0.5)
+        _tighten_sell_ratio(0.5)
     if _overlay_has_phrase(state, "浮亏警示", settings=settings):
         merged["loss_cny_threshold"] = min(float(merged.get("loss_cny_threshold", 5000.0)), 4500.0)
     if _overlay_has_phrase(state, "维持高现金", settings=settings) or _overlay_has_phrase(
         state, "浮动亏损主导净值", settings=settings
     ):
         merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.1)
-        merged["sell_ratio"] = min(float(merged.get("sell_ratio", 1.0)), 0.4)
+        _tighten_sell_ratio(0.4)
         merged["portfolio_loss_cny_threshold"] = min(
             float(merged.get("portfolio_loss_cny_threshold", 5000.0)), 4000.0
         )
@@ -1772,15 +1787,15 @@ def _apply_deep_loss_signal_evolution(
             float(merged.get("realized_loss_threshold", 500.0)), 400.0
         )
     if _overlay_has_phrase(state, "止盈参考", settings=settings):
-        merged["sell_ratio"] = max(float(merged.get("sell_ratio", 1.0)), 0.55)
+        _relax_sell_ratio(0.55)
         merged["realized_gain_threshold"] = min(
             float(merged.get("realized_gain_threshold", 500.0)), 400.0
         )
     if _overlay_has_phrase(state, "已实现盈利但浮亏拖累", settings=settings):
         merged["cover_ratio"] = min(float(merged.get("cover_ratio", 1.0)), 0.85)
-        merged["sell_ratio"] = min(float(merged.get("sell_ratio", 1.0)), 0.6)
+        _tighten_sell_ratio(0.6)
     if _overlay_has_phrase(state, "优先 verify 回避/减仓", settings=settings):
-        merged["sell_ratio"] = min(float(merged.get("sell_ratio", 1.0)), 0.5)
+        _tighten_sell_ratio(0.5)
     if _overlay_has_phrase(state, "卖出胜率偏低", settings=settings):
         merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.1)
         merged["coverable_realized_weight"] = min(
@@ -1790,7 +1805,7 @@ def _apply_deep_loss_signal_evolution(
             merged["win_rate_min"] = min(float(merged["win_rate_min"]), 0.4)
     if _overlay_has_phrase(state, "连亏警戒", settings=settings):
         merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.15)
-        merged["sell_ratio"] = min(float(merged.get("sell_ratio", 1.0)), 0.4)
+        _tighten_sell_ratio(0.4)
         if float(merged.get("loss_streak_max") or 0) > 0:
             merged["loss_streak_max"] = max(2.0, float(merged["loss_streak_max"]) - 1.0)
     if _overlay_has_phrase(state, "ledger 缺买入成本", settings=settings):
@@ -1815,7 +1830,10 @@ def resolve_harness_deep_loss_policy(
     merged["loss_cny_threshold"] = max(1000.0, float(merged.get("loss_cny_threshold", 5000.0)))
     merged["loss_pct_threshold"] = max(5.0, min(50.0, float(merged.get("loss_pct_threshold", 10.0))))
     merged["cover_ratio"] = max(0.0, min(2.0, float(merged.get("cover_ratio", 1.0))))
-    merged["sell_ratio"] = max(0.1, min(1.0, float(merged.get("sell_ratio", 1.0))))
+    if evolution_mode(settings, "sell_ratio") == "harness":
+        merged["sell_ratio"] = max(0.1, min(1.0, float(merged.get("sell_ratio", 1.0))))
+    else:
+        merged["sell_ratio"] = deep_loss_policy_base(settings, "sell_ratio")
     merged["realized_loss_threshold"] = max(
         100.0, float(merged.get("realized_loss_threshold", 500.0))
     )
