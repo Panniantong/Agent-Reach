@@ -617,8 +617,13 @@ def min_cash_ratio_base(settings: dict[str, Any], base_thresholds: dict[str, Any
 
 
 def threshold_default(settings: dict[str, Any], key: str) -> float:
-    """Fallback for consumers reading ``thresholds`` before/without overlay."""
+    """Effective threshold; harness-evolved keys ignore static ``thresholds.*`` pollution."""
     thresholds = settings.get("thresholds") or {}
+    if key in _EVOLVED_THRESHOLD_KEYS and threshold_mode(settings, key) == "harness":
+        from agent_reach.daily_run.settings import effective_settings
+
+        eff = effective_settings(settings)
+        return float((eff.get("thresholds") or {}).get(key, _HARNESS_NEUTRAL[key]))
     if key in thresholds:
         return float(thresholds[key])
     return threshold_base(settings, key, thresholds)
@@ -633,7 +638,8 @@ def aggressive_entry_default(settings: dict[str, Any]) -> float:
 
 
 def macro_veto_default(settings: dict[str, Any]) -> float:
-    return threshold_default(settings, "macro_veto")
+    """Harness-evolved macro veto line (defensive_trim → ≤30, 进攻期/pnl_hit → ≥38)."""
+    return max(25.0, min(50.0, threshold_default(settings, "macro_veto")))
 
 
 def resolve_harness_base_thresholds(

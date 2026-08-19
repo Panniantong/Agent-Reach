@@ -8,6 +8,7 @@ from agent_reach.daily_run.harness_policy import (
     harness_symbol_score,
     harness_buy_budget,
     kronos_score_adjustment,
+    macro_veto_default,
     resolve_harness_position_policy,
     resolve_harness_symbol_bias,
     resolve_harness_symbol_score_weights,
@@ -221,10 +222,39 @@ class TestHarnessPolicyOverlay:
         )
         assert cfg["thresholds"]["macro_veto"] == 40
 
-    def test_threshold_default_before_overlay(self):
+    def test_threshold_default_before_overlay(self, monkeypatch):
+        from agent_reach.daily_run.harness import HarnessState
+
+        monkeypatch.setattr(
+            "agent_reach.daily_run.harness.load_harness",
+            lambda: HarnessState(),
+        )
         settings = _harness_settings()
         assert threshold_default(settings, "macro_veto") == 40.0
         assert threshold_default(settings, "max_price_deviation_pct") == 0.08
+
+    def test_threshold_default_ignores_static_macro_veto_when_harness_evolved(self, monkeypatch):
+        state = HarnessState()
+        state.entries["memory"]["dev"] = HarnessEntry(
+            id="dev",
+            kind="memory",
+            title="偏差",
+            content="偏差：价格变动 23.7% 超过锚点阈值 8.0%",
+            source="deterministic",
+            job="forecast",
+            evidence="forecast",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.harness.load_harness",
+            lambda: state,
+        )
+        settings = _harness_settings(
+            thresholds={"macro_veto": 40, "aggressive_entry": 50, "max_snapshot_age_hours": 24},
+        )
+        assert threshold_default(settings, "macro_veto") == 30.0
+        assert macro_veto_default(settings) == 30.0
 
     def test_harness_mode_runtime_neutral_defaults(self):
         state = HarnessState()
@@ -330,7 +360,11 @@ class TestHarnessPolicyOverlay:
         assert flat["aggressive_entry"] == 49.0
         assert flat["trade_min_scans"] == 2.0
 
-    def test_aggressive_entry_default_helper(self):
+    def test_aggressive_entry_default_helper(self, monkeypatch):
+        monkeypatch.setattr(
+            "agent_reach.daily_run.harness.load_harness",
+            lambda: HarnessState(),
+        )
         assert aggressive_entry_default(_harness_settings()) == 50.0
 
     def test_scan_sparse_lookback_weights(self):
