@@ -281,28 +281,34 @@ class TestIntradayWorkflow:
         state = IntradayState.from_dict(result["scan"]["state"])
         assert len(state.scans) == 1
 
-    def test_run_intraday_appends_morning_narrative_footer(
+    def test_run_intraday_pushes_separate_morning_narrative_card(
         self, intraday_snapshot, tmp_path, monkeypatch
     ):
         state_path = tmp_path / "intraday.json"
         reset_state(state_path)
-        footer = "\n\n---\n\n## 🧠 AI 解读（决策摘要）\n\n早盘摘要"
-        monkeypatch.setattr(
-            "agent_reach.daily_run.report_narrative.render_morning_narrative_footer",
-            lambda settings, code=None: footer,
-        )
-        captured: dict[str, str] = {}
+        sends: list[tuple[str, str]] = []
 
-        def _fake_send(_cfg, _title, body, template="blue"):
-            captured["body"] = body
+        def _fake_send(_cfg, title, body, template="blue"):
+            sends.append((title, body))
             return {"code": 0}
 
         monkeypatch.setattr("agent_reach.integrations.feishu.send_card", _fake_send)
-        run_intraday(
+        monkeypatch.setattr(
+            "agent_reach.daily_run.report_narrative.push_morning_narrative_card",
+            lambda config, settings, **kw: (
+                _fake_send(config, "🤖 早盘 AI 解读 · S1 · 1只", "早盘摘要", "orange")
+                if kw.get("scan_id")
+                else None
+            ),
+        )
+        result = run_intraday(
             intraday_snapshot,
             settings=load_settings(),
             push=True,
             trade=False,
             state_path=state_path,
         )
-        assert "早盘摘要" in captured.get("body", "")
+        assert len(sends) >= 2
+        assert "早盘摘要" not in sends[0][1]
+        assert any("AI 解读" in t for t, _ in sends)
+        assert result.get("narrative_feishu") is not None

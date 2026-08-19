@@ -271,15 +271,11 @@ def run_intraday_for_symbols(
         raise RuntimeError(errors[0])
 
     feishu_result = None
+    narrative_feishu = None
     if push and merge_push and scan_bodies:
         from agent_reach.config import Config
 
         body = "\n\n---\n\n".join(f"## {name}\n\n{content}" for name, content in scan_bodies)
-        from agent_reach.daily_run.report_narrative import render_morning_narrative_footer
-
-        footer = render_morning_narrative_footer(cfg)
-        if footer:
-            body = body + footer
         title = merged_category_title(
             report_kind="intraday",
             category="scan",
@@ -293,6 +289,14 @@ def run_intraday_for_symbols(
         from agent_reach.integrations.feishu import send_card
 
         feishu_result = send_card(config or Config(), title, body, template=tpl)
+        from agent_reach.daily_run.report_narrative import push_morning_narrative_card
+
+        narrative_feishu = push_morning_narrative_card(
+            config or Config(),
+            cfg,
+            scan_id=scan_id,
+            symbol_count=len(scan_bodies),
+        )
 
     return {
         "job": "intraday",
@@ -301,6 +305,7 @@ def run_intraday_for_symbols(
         "symbol_results": symbol_results,
         "errors": errors,
         "feishu": feishu_result or next((r.get("feishu") for r in reversed(symbol_results) if r.get("feishu")), None),
+        "narrative_feishu": narrative_feishu if push and merge_push and scan_bodies else None,
     }
 
 

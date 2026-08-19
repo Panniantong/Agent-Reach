@@ -504,7 +504,7 @@ def render_morning_narrative_footer(
     *,
     code: Optional[str] = None,
 ) -> str:
-    """Markdown block for intraday Feishu cards: morning AI 决策摘要."""
+    """Legacy inline footer (prefer push_morning_narrative_card for separate card)."""
     narrative = load_today_morning_narrative(settings, code=code)
     if not narrative:
         return ""
@@ -512,6 +512,40 @@ def render_morning_narrative_footer(
     if not md.strip():
         return ""
     return "\n\n---\n\n" + md
+
+
+def morning_narrative_card_title(
+    *,
+    scan_id: Optional[str] = None,
+    symbol_count: int = 1,
+) -> str:
+    if scan_id:
+        return f"🤖 早盘 AI 解读 · {scan_id} · {symbol_count}只"
+    return f"🤖 早盘 AI 解读 · {symbol_count}只"
+
+
+def push_morning_narrative_card(
+    config,
+    settings: dict[str, Any],
+    *,
+    scan_id: Optional[str] = None,
+    symbol_count: int = 1,
+    code: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
+    """Push morning AI narrative as a separate Feishu card (always last)."""
+    if not intraday_append_morning_narrative(settings):
+        return None
+    narrative = load_today_morning_narrative(settings, code=code)
+    if not narrative:
+        return None
+    md = render_narrative_markdown(narrative, job="morning")
+    if not md.strip():
+        return None
+    from agent_reach.integrations.feishu import send_card
+
+    tpl = (settings.get("report") or {}).get("feishu_template_premarket", "orange")
+    title = morning_narrative_card_title(scan_id=scan_id, symbol_count=symbol_count)
+    return send_card(config, title, md, template=tpl)
 
 
 # --- Close ---

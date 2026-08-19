@@ -567,6 +567,7 @@ def run_intraday(
             steps.append("portfolio_apply")
 
     feishu_result = None
+    narrative_feishu = None
     push_error: Optional[str] = None
     if push:
         from agent_reach.config import Config
@@ -589,17 +590,20 @@ def run_intraday(
             md_parts.insert(0, "\n".join(warn_lines) + "\n\n---\n\n")
         if trade_result:
             md_parts.append("\n---\n\n" + trade_result["markdown"])
-        from agent_reach.daily_run.report_narrative import render_morning_narrative_footer
-
-        footer = render_morning_narrative_footer(
-            cfg,
-            code=str(scan_result["scan"].get("code") or snapshot.get("code") or ""),
-        )
-        if footer:
-            md_parts.append(footer)
         try:
             feishu_result = send_card(cfg_obj, card_title, "\n".join(md_parts), template=tpl)
             steps.append("push")
+            from agent_reach.daily_run.report_narrative import push_morning_narrative_card
+
+            narrative_feishu = push_morning_narrative_card(
+                cfg_obj,
+                cfg,
+                scan_id=scan_id,
+                symbol_count=1,
+                code=str(scan_result["scan"].get("code") or snapshot.get("code") or ""),
+            )
+            if narrative_feishu:
+                steps.append("narrative_push")
         except FeishuError as exc:
             push_error = str(exc)
 
@@ -608,6 +612,7 @@ def run_intraday(
         "scan": scan_result,
         "trade": trade_result,
         "feishu": feishu_result,
+        "narrative_feishu": narrative_feishu if push else None,
         "scan_count": len(scan_result.get("state", {}).get("scans") or []),
     }
     if push_error:
