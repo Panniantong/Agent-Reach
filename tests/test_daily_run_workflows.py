@@ -193,6 +193,40 @@ class TestCloseWorkflow:
         assert loaded["portfolio"]["holdings"][0]["code"] == "688008"
         assert loaded["portfolio"]["holdings"][0]["shares"] == 100
 
+    def test_enrich_baseline_prefers_live_portfolio_over_stale_snapshot(self, monkeypatch):
+        pf = {
+            "total": 191633.79,
+            "cash": 98990.79,
+            "cash_ratio": 0.5166,
+            "holdings": [
+                {
+                    "code": "600584",
+                    "name": "长电科技",
+                    "shares": 800,
+                    "cost": 80.8,
+                    "price": 85.38,
+                },
+                {"code": "002415", "name": "海康威视", "shares": 700, "cost": 34.77, "price": 35.0},
+            ],
+        }
+        stale_portfolio = {
+            "total": 84528.0,
+            "cash": 48673,
+            "holdings": [
+                {"code": "688008", "name": "澜起科技", "shares": 100, "price": 199.71},
+            ],
+        }
+        monkeypatch.setattr(
+            "agent_reach.daily_run.snapshot_builder.load_portfolio",
+            lambda path=None: pf,
+        )
+        enriched = enrich_morning_baseline({"code": "688008", "portfolio": stale_portfolio})
+        assert enriched["portfolio"]["cash"] == pytest.approx(98990.79)
+        assert enriched["portfolio"]["total"] == pytest.approx(191794.79)
+        codes = [h["code"] for h in enriched["portfolio"]["holdings"]]
+        assert codes == ["600584", "002415"]
+        assert "688008" not in codes
+
     def test_enrich_baseline_from_portfolio_config(self, morning_snapshot, monkeypatch):
         pf = {
             "total": 87323.27,

@@ -82,18 +82,28 @@ def _merge_holdings_for_baseline(
     snap_holdings: list[dict[str, Any]],
     cfg_holdings: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
+    """Merge morning snapshot quotes onto live portfolio.json holdings."""
     from agent_reach.daily_run.snapshot_builder import _normalize_code
 
-    by_code: dict[str, dict[str, Any]] = {}
-    for h in cfg_holdings:
-        code = _normalize_code(str(h.get("code", "")))
-        if code:
-            by_code[code] = dict(h)
+    snap_by_code: dict[str, dict[str, Any]] = {}
     for h in snap_holdings:
         code = _normalize_code(str(h.get("code", "")))
         if code:
-            by_code[code] = {**by_code.get(code, {}), **h}
-    return list(by_code.values())
+            snap_by_code[code] = dict(h)
+
+    merged: list[dict[str, Any]] = []
+    for h in cfg_holdings:
+        code = _normalize_code(str(h.get("code", "")))
+        if not code:
+            continue
+        row = dict(h)
+        snap = snap_by_code.get(code)
+        if snap:
+            for key in ("price", "change_pct", "market_value", "quote_source"):
+                if snap.get(key) is not None:
+                    row[key] = snap[key]
+        merged.append(row)
+    return merged
 
 
 def enrich_morning_baseline(snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -133,12 +143,12 @@ def enrich_morning_baseline(snapshot: dict[str, Any]) -> dict[str, Any]:
                 h["market_value"] = round(int(shares) * float(price), 2)
 
     pf_work: dict[str, Any] = {
-        "total": pf_block.get("total") if pf_block.get("total") is not None else pf_cfg.get("total"),
-        "cash": pf_block.get("cash") if pf_block.get("cash") is not None else pf_cfg.get("cash"),
+        "total": pf_cfg.get("total") if pf_cfg.get("total") is not None else pf_block.get("total"),
+        "cash": pf_cfg.get("cash") if pf_cfg.get("cash") is not None else pf_block.get("cash"),
         "cash_ratio": (
-            pf_block.get("cash_ratio")
-            if pf_block.get("cash_ratio") is not None
-            else pf_cfg.get("cash_ratio")
+            pf_cfg.get("cash_ratio")
+            if pf_cfg.get("cash_ratio") is not None
+            else pf_block.get("cash_ratio")
         ),
         "holdings": holdings,
     }
