@@ -184,11 +184,23 @@ def _compact_narrative_payload(payload: dict[str, Any], limits: dict[str, int]) 
         max_items=limits["max_risk_alerts"],
         max_chars=limits["max_item_chars"],
     )
+    if out.get("trade_operations"):
+        out["trade_operations"] = _trim_string_list(
+            out.get("trade_operations"),
+            max_items=12,
+            max_chars=160,
+        )
     return out
 
 
 def _narrative_system_prompt(job: str, *, limits: dict[str, int]) -> str:
     label = _JOB_LABELS.get(job, job)
+    trade_hint = ""
+    if job == "close":
+        trade_hint = (
+            '若有 trade_operations 输入，summary 须概括当日买卖与已实现盈亏；'
+            'focus_points 可含明日建议；禁止编造未提供的成交价/股数。'
+        )
     return (
         f"你是 A 股量化助手 {label} AI 解读员。基于已给数据输出 JSON："
         '{"summary":"...","focus_points":["..."],'
@@ -197,6 +209,7 @@ def _narrative_system_prompt(job: str, *, limits: dict[str, int]) -> str:
         f"focus_points 最多 {limits['max_focus_points']} 条、每条 ≤{limits['max_item_chars']}字；"
         f"divergence_notes 仅实质分歧时填，最多 {limits['max_divergence_notes']} 条；"
         f"risk_alerts 最多 {limits['max_risk_alerts']} 条。"
+        f"{trade_hint}"
         "禁止编造未提供数字；禁止复述输入；省略废话；中文。"
     )
 
@@ -327,6 +340,11 @@ def render_narrative_markdown(narrative: dict[str, Any], *, job: str = "") -> st
         lines.append("")
         lines.append("**风险**")
         for item in narrative["risk_alerts"]:
+            lines.append(f"- {item}")
+    if narrative.get("trade_operations"):
+        lines.append("")
+        lines.append("**当日买卖**")
+        for item in narrative["trade_operations"]:
             lines.append(f"- {item}")
     return "\n".join(lines).strip()
 
@@ -847,6 +865,9 @@ def build_close_context(
     curve: Optional[dict[str, Any]] = None,
     forecast_review: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
+    from agent_reach.daily_run.close_portfolio_summary import extract_close_trade_operations
+
+    trade_ops = extract_close_trade_operations(portfolio_summary)
     return {
         "job": "close",
         "name": snapshot.get("name"),
@@ -858,10 +879,27 @@ def build_close_context(
         "recommendations": (verify.get("recommendations") or [])[:2],
         "portfolio_daily_pnl": (portfolio_summary or {}).get("daily_pnl"),
         "portfolio_daily_pnl_pct": (portfolio_summary or {}).get("daily_pnl_pct"),
+        "realized_pnl": (portfolio_summary or {}).get("realized_pnl"),
+        "trade_operations": trade_ops,
         "curve_trend": (curve or {}).get("trend"),
         "forecast_review_accuracy": (forecast_review or {}).get("accuracy"),
         "macro_summary": (snapshot.get("macro_summary") or "")[:120],
     }
+
+
+def _attach_close_trade_operations(
+    narrative: dict[str, Any],
+    context: dict[str, Any],
+) -> dict[str, Any]:
+    from agent_reach.daily_run.close_portfolio_summary import format_trade_operations_narrative_lines
+
+    ops = format_trade_operations_narrative_lines(
+        list(context.get("trade_operations") or []),
+        realized_pnl_total=context.get("realized_pnl"),
+    )
+    if ops:
+        narrative["trade_operations"] = ops
+    return narrative
 
 
 def _close_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
@@ -875,6 +913,18 @@ def _close_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
         sign = "+" if float(pnl) >= 0 else ""
         pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
         focus.append(f"组合当日盈亏 {sign}¥{float(pnl):,.0f}{pct_s}")
+    trade_ops = list(ctx.get("trade_operations") or [])
+    if trade_ops:
+        buys = sum(1 for op in trade_ops if op.get("side") == "buy")
+        sells = sum(1 for op in trade_ops if op.get("side") == "sell")
+        realized = ctx.get("realized_pnl")
+        trade_bits = [f"买入 {buys} 笔" if buys else "", f"卖出 {sells} 笔" if sells else ""]
+        trade_summary = " · ".join(bit for bit in trade_bits if bit)
+        if realized is not None and abs(float(realized)) >= 0.01:
+            sign = "+" if float(realized) >= 0 else ""
+            trade_summary += f" · 已实现 {sign}¥{float(realized):,.0f}"
+        if trade_summary:
+            focus.append(f"当日成交：{trade_summary}")
     for rec in ctx.get("recommendations") or []:
         focus.append(f"明日：{rec}")
     for dev in ctx.get("deviations") or []:
@@ -882,9 +932,11 @@ def _close_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
     summary = f"收盘 {ctx.get('name') or ctx.get('code')} 复盘"
     if pnl is not None:
         summary += f"，当日盈亏 ¥{float(pnl):,.0f}"
+    if trade_ops:
+        summary += f"，成交 {len(trade_ops)} 笔"
     return {
         "summary": summary,
-        "focus_points": focus[:3],
+        "focus_points": focus[:4],
         "divergence_notes": [],
         "risk_alerts": risks[:2],
         "planner": "deterministic",
@@ -907,12 +959,15 @@ def generate_close_narrative(
         curve=curve,
         forecast_review=forecast_review,
     )
-    return _generate_narrative(
-        "close",
+    return _attach_close_trade_operations(
+        _generate_narrative(
+            "close",
+            context,
+            settings=settings,
+            system="优先当日盈亏、成交买卖、偏差项、明日一条建议。",
+            deterministic_fn=_close_deterministic,
+        ),
         context,
-        settings=settings,
-        system="优先当日盈亏、偏差项、明日一条建议。",
-        deterministic_fn=_close_deterministic,
     )
 
 
@@ -923,6 +978,8 @@ def build_merged_close_context(
     curve: Optional[dict[str, Any]] = None,
     forecast_review: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
+    from agent_reach.daily_run.close_portfolio_summary import extract_close_trade_operations
+
     symbols: list[dict[str, Any]] = []
     for row in symbol_results:
         inner = row.get("result") or {}
@@ -936,6 +993,7 @@ def build_merged_close_context(
                 "mss_delta": verify.get("mss_delta"),
             }
         )
+    trade_ops = extract_close_trade_operations(portfolio_summary)
     return {
         "job": "close",
         "portfolio_scope": "merged",
@@ -943,6 +1001,8 @@ def build_merged_close_context(
         "symbols": symbols,
         "portfolio_daily_pnl": (portfolio_summary or {}).get("daily_pnl"),
         "portfolio_daily_pnl_pct": (portfolio_summary or {}).get("daily_pnl_pct"),
+        "realized_pnl": (portfolio_summary or {}).get("realized_pnl"),
+        "trade_operations": trade_ops,
         "curve_trend": (curve or {}).get("trend"),
         "forecast_review_accuracy": (forecast_review or {}).get("accuracy"),
     }
@@ -958,10 +1018,22 @@ def _merged_close_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
         sign = "+" if float(pnl) >= 0 else ""
         pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
         focus.append(f"组合当日盈亏 {sign}¥{float(pnl):,.0f}{pct_s}")
+    trade_ops = list(ctx.get("trade_operations") or [])
+    if trade_ops:
+        buys = sum(1 for op in trade_ops if op.get("side") == "buy")
+        sells = sum(1 for op in trade_ops if op.get("side") == "sell")
+        realized = ctx.get("realized_pnl")
+        trade_bits = [f"买入 {buys} 笔" if buys else "", f"卖出 {sells} 笔" if sells else ""]
+        trade_summary = " · ".join(bit for bit in trade_bits if bit)
+        if realized is not None and abs(float(realized)) >= 0.01:
+            sign = "+" if float(realized) >= 0 else ""
+            trade_summary += f" · 已实现 {sign}¥{float(realized):,.0f}"
+        if trade_summary:
+            focus.append(f"当日成交：{trade_summary}")
     for sym in ctx.get("symbols") or []:
         if sym.get("verify_summary"):
             focus.append(f"{sym.get('name') or sym.get('code')}：{sym['verify_summary'][:72]}")
-        if len(focus) >= 3:
+        if len(focus) >= 4:
             break
     for sym in ctx.get("symbols") or []:
         delta = sym.get("mss_delta")
@@ -970,9 +1042,11 @@ def _merged_close_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
     summary = f"收盘全持仓 {n} 只复盘"
     if pnl is not None:
         summary += f"，当日盈亏 ¥{float(pnl):,.0f}"
+    if trade_ops:
+        summary += f"，成交 {len(trade_ops)} 笔"
     return {
         "summary": summary,
-        "focus_points": focus[:3] or ["复盘组合盈亏与明日执行"],
+        "focus_points": focus[:4] or ["复盘组合盈亏与明日执行"],
         "divergence_notes": [],
         "risk_alerts": risks[:2],
         "planner": "deterministic",
@@ -993,12 +1067,15 @@ def generate_merged_close_narrative(
         curve=curve,
         forecast_review=forecast_review,
     )
-    return _generate_narrative(
-        "close",
+    return _attach_close_trade_operations(
+        _generate_narrative(
+            "close",
+            context,
+            settings=settings,
+            system="全组合视角；优先当日盈亏、成交买卖、跨标的偏差、明日一条建议。",
+            deterministic_fn=_merged_close_deterministic,
+        ),
         context,
-        settings=settings,
-        system="全组合视角；优先当日盈亏、跨标的偏差、明日一条建议；勿逐只复述。",
-        deterministic_fn=_merged_close_deterministic,
     )
 
 

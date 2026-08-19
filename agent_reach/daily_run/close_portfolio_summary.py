@@ -204,6 +204,130 @@ def _format_ledger_trade_lines(trades: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def _ledger_action_to_operation(action: dict[str, Any], *, at: str = "") -> dict[str, Any]:
+    """Normalize one ledger action for close AI narrative."""
+    side = str(action.get("side") or "")
+    time_s = ""
+    if at:
+        time_s = str(at).replace("T", " ")[:16]
+    return {
+        "side": side,
+        "name": action.get("name") or action.get("code") or "?",
+        "code": action.get("code") or "?",
+        "shares": action.get("shares"),
+        "price": action.get("price"),
+        "amount": action.get("amount"),
+        "commission": action.get("commission"),
+        "realized_pnl": action.get("realized_pnl"),
+        "realized_pnl_pct": action.get("realized_pnl_pct"),
+        "time": time_s,
+    }
+
+
+def extract_close_trade_operations(portfolio_summary: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Structured buy/sell rows for the close-day AI narrative."""
+    if not portfolio_summary:
+        return []
+    ops: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+
+    def _append(op: dict[str, Any]) -> None:
+        key = (
+            op.get("side"),
+            op.get("code"),
+            op.get("shares"),
+            op.get("price"),
+            op.get("time"),
+        )
+        if key in seen:
+            return
+        seen.add(key)
+        ops.append(op)
+
+    for entry in portfolio_summary.get("trades") or []:
+        at = str(entry.get("at") or "")
+        for action in entry.get("actions") or []:
+            side = action.get("side")
+            if side not in ("buy", "sell"):
+                continue
+            _append(_ledger_action_to_operation(action, at=at))
+
+    for entry in portfolio_summary.get("intraday_trades") or []:
+        action = entry.get("action")
+        if action not in ("buy", "sell"):
+            for act in entry.get("portfolio_actions") or []:
+                if act.get("side") in ("buy", "sell"):
+                    _append(_ledger_action_to_operation(act, at=str(entry.get("as_of") or "")))
+            continue
+        side = "buy" if action == "buy" else "sell"
+        op = {
+            "side": side,
+            "name": entry.get("name") or entry.get("code") or "?",
+            "code": entry.get("code") or "?",
+            "shares": entry.get("shares"),
+            "price": entry.get("price"),
+            "amount": None,
+            "commission": None,
+            "realized_pnl": entry.get("realized_pnl"),
+            "realized_pnl_pct": entry.get("realized_pnl_pct"),
+            "time": str(entry.get("as_of") or "").replace("T", " ")[:16],
+            "portfolio_applied": entry.get("portfolio_applied", True),
+        }
+        if op.get("shares") and op.get("price"):
+            op["amount"] = round(float(op["shares"]) * float(op["price"]), 2)
+        _append(op)
+        for act in entry.get("portfolio_actions") or []:
+            if act.get("side") in ("buy", "sell"):
+                _append(_ledger_action_to_operation(act, at=str(entry.get("as_of") or "")))
+
+    return ops
+
+
+def format_trade_operation_line(op: dict[str, Any]) -> str:
+    """One human-readable buy/sell line for close AI narrative."""
+    side = "买入" if op.get("side") == "buy" else "卖出"
+    name = op.get("name") or op.get("code") or "?"
+    code = op.get("code") or "?"
+    shares = op.get("shares")
+    price = op.get("price")
+    time_s = str(op.get("time") or "").strip()
+    line = f"{side} **{name}** ({code})"
+    if shares is not None and price is not None:
+        line += f" {int(shares)}股 @ ¥{float(price):.2f}"
+    if op.get("amount") is not None:
+        line += f" · 成交额 ¥{float(op['amount']):,.0f}"
+    commission = op.get("commission")
+    if commission is not None and float(commission) > 0:
+        line += f" · 手续费 ¥{float(commission):.2f}"
+    if op.get("side") == "sell" and op.get("realized_pnl") is not None:
+        pnl = float(op["realized_pnl"])
+        pct = op.get("realized_pnl_pct")
+        pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
+        line += f" · 已实现盈亏 **{pnl:+,.0f}**{pct_s}"
+    if op.get("portfolio_applied") is False:
+        line += "（未落账）"
+    if time_s:
+        line = f"{time_s} {line}"
+    return line
+
+
+def format_trade_operations_narrative_lines(
+    operations: list[dict[str, Any]],
+    *,
+    realized_pnl_total: Optional[float] = None,
+) -> list[str]:
+    """Markdown bullet lines for close AI narrative trade section."""
+    if not operations:
+        return []
+    lines = [format_trade_operation_line(op) for op in operations]
+    if realized_pnl_total is not None and abs(float(realized_pnl_total)) >= 0.01:
+        sign = "+" if float(realized_pnl_total) >= 0 else ""
+        lines.append(
+            f"合计已实现盈亏 **{sign}¥{float(realized_pnl_total):,.0f}**（{len(operations)} 笔）"
+        )
+    return lines
+
+
 def _format_intraday_trade_lines(trades: list[dict[str, Any]]) -> list[str]:
     lines: list[str] = []
     for entry in trades:

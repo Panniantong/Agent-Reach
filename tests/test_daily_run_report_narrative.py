@@ -258,6 +258,87 @@ def test_merged_close_narrative_uses_portfolio_pnl():
     assert "90" in joined or "盈亏" in joined
 
 
+def test_close_narrative_includes_trade_operations():
+    from agent_reach.daily_run.report_narrative import generate_close_narrative, render_narrative_markdown
+
+    portfolio_summary = {
+        "daily_pnl": 1200.0,
+        "daily_pnl_pct": 0.6,
+        "realized_pnl": 3496.54,
+        "trades": [
+            {
+                "at": "2026-08-19T01:02:56+00:00",
+                "decision_action": "sell",
+                "actions": [
+                    {
+                        "side": "sell",
+                        "code": "600584",
+                        "name": "长电科技",
+                        "shares": 800,
+                        "price": 85.42,
+                        "amount": 68336.0,
+                        "commission": 102.5,
+                        "realized_pnl": 3496.54,
+                        "realized_pnl_pct": 5.4,
+                    }
+                ],
+            }
+        ],
+    }
+    with patch("agent_reach.daily_run.llm_chat.resolve_chat_provider", return_value=None):
+        narrative = generate_close_narrative(
+            snapshot={"name": "组合"},
+            verify={"summary": "宏观否决", "recommendations": ["维持高现金"]},
+            portfolio_summary=portfolio_summary,
+            settings={"llm_narrative": {"enabled": True}},
+        )
+    md = render_narrative_markdown(narrative, job="close")
+    assert "当日买卖" in md
+    assert "长电科技" in md
+    assert "800股" in md
+    assert "85.42" in md
+    assert "3497" in md.replace(",", "") or "3496" in md.replace(",", "")
+    assert any("成交" in item for item in narrative.get("focus_points") or [])
+
+
+def test_format_trade_operation_line_buy_and_sell():
+    from agent_reach.daily_run.close_portfolio_summary import format_trade_operation_line
+
+    buy = format_trade_operation_line(
+        {
+            "side": "buy",
+            "name": "长电科技",
+            "code": "600584",
+            "shares": 800,
+            "price": 80.8,
+            "amount": 64640.0,
+            "commission": 96.96,
+            "time": "2026-08-17 09:54",
+        }
+    )
+    assert "买入" in buy
+    assert "800股" in buy
+    assert "80.80" in buy
+    assert "64640" in buy.replace(",", "")
+
+    sell = format_trade_operation_line(
+        {
+            "side": "sell",
+            "name": "京东方A",
+            "code": "000725",
+            "shares": 1400,
+            "price": 6.47,
+            "amount": 9058.0,
+            "commission": 13.59,
+            "realized_pnl": -1471.34,
+            "realized_pnl_pct": -13.99,
+        }
+    )
+    assert "卖出" in sell
+    assert "1400股" in sell
+    assert "1471" in sell.replace(",", "")
+
+
 def test_append_merged_narrative_section():
     from agent_reach.daily_run.report_push import ReportSection, append_merged_narrative_section
 
