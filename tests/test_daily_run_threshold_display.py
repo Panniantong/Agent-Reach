@@ -64,6 +64,17 @@ class TestThresholdDisplay:
         assert "- 价格锚点偏差上限: 8%" in lines
         assert not any("_aggressive_ref" in line for line in lines)
 
+    def test_format_mss_breakdown_shows_macro_baseline_ref(self):
+        lines = format_mss_breakdown_lines(
+            {
+                "fx": 40.0,
+                "flow": 50.0,
+                "_macro_baseline_ref": 45.0,
+            }
+        )
+        assert "- fx: 40.0" in lines
+        assert "- 宏观因子基准: 45" in lines
+
     def test_pipeline_wrapper_matches_harness_display(self):
         lines = _format_mss_breakdown_lines(
             {"fx": 51.0, "_aggressive_ref": 45.0, "_macro_veto_ref": 30.0}

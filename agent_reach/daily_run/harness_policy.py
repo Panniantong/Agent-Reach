@@ -2449,6 +2449,19 @@ def _apply_symbol_score_signal_evolution(
     if signals.get("mss_forecast_miss") and not signals.get("defensive_trim"):
         if evolution_mode(settings, "change_pct_weight") == "harness":
             merged["change_pct_weight"] = float(merged.get("change_pct_weight", 0.5)) * 0.75
+    if signals.get("defensive_trim"):
+        if evolution_mode(settings, "base_mss") == "harness":
+            merged["base_mss"] = min(float(merged.get("base_mss", 50.0)), 45.0)
+    elif signals.get("pnl_target_hit"):
+        if evolution_mode(settings, "base_mss") == "harness":
+            merged["base_mss"] = max(float(merged.get("base_mss", 50.0)), 52.0)
+    if _overlay_has_phrase(state, "进攻期", settings=settings):
+        if evolution_mode(settings, "base_mss") == "harness":
+            merged["base_mss"] = max(float(merged.get("base_mss", 50.0)), 51.0)
+    if signals.get("mss_forecast_miss") and not signals.get("defensive_trim"):
+        if evolution_mode(settings, "base_mss") == "harness":
+            merged["base_mss"] = min(float(merged.get("base_mss", 50.0)), 48.0)
+    merged["base_mss"] = max(35.0, min(65.0, float(merged.get("base_mss", 50.0))))
     return merged
 
 
@@ -2518,6 +2531,15 @@ def _symbol_score_weights(settings: dict[str, Any]) -> dict[str, float]:
 
         return resolve_harness_symbol_score_weights(load_harness(), settings=settings)
     return dict(_SYMBOL_SCORE_NEUTRAL)
+
+
+def macro_factor_baseline_default(settings: dict[str, Any]) -> float:
+    """Harness-evolved neutral anchor for macro factor scores (fx/flow/global/sentiment)."""
+    from agent_reach.daily_run.settings import effective_settings
+
+    eff = effective_settings(settings)
+    weights = _symbol_score_weights(eff)
+    return max(35.0, min(65.0, float(weights.get("base_mss", 50.0))))
 
 
 def _kronos_score_delta(code: str, settings: dict[str, Any], weights: dict[str, float]) -> float:

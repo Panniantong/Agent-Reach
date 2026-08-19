@@ -19,8 +19,10 @@ class QuantExpert(ExpertPlugin):
         fx = float(breakdown.get("fx", 50))
         vol = _f(snap.get("volume_ratio"))
         change = _f(snap.get("change_pct"))
+        from agent_reach.daily_run.harness_policy import macro_factor_baseline_default
 
-        score = flow * 0.45 + fx * 0.25 + 50 * 0.3
+        neutral = macro_factor_baseline_default(context.settings)
+        score = flow * 0.45 + fx * 0.25 + neutral * 0.3
         notes: list[str] = [f"资金流因子 {flow:.0f}"]
 
         if vol is not None:

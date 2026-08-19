@@ -676,7 +676,9 @@ def _symbol_score(
         from agent_reach.daily_run.harness_policy import harness_symbol_score
 
         return harness_symbol_score(row, settings, decision=decision, base_mss=base_mss)
-    base = float(base_mss if base_mss is not None else 50)
+    from agent_reach.daily_run.harness_policy import macro_factor_baseline_default
+
+    base = float(base_mss if base_mss is not None else macro_factor_baseline_default(settings or {}))
     chg = row.get("change_pct")
     if chg is not None:
         base += float(chg) * 0.5

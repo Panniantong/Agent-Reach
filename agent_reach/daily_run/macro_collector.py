@@ -18,9 +18,9 @@ def collect_macro_context(
 
     Priority: live APIs → portfolio overrides → static defaults.
     """
-    from agent_reach.daily_run.settings import load_settings
+    from agent_reach.daily_run.settings import effective_settings, load_settings
 
-    cfg = settings or load_settings()
+    cfg = effective_settings(settings or load_settings())
     collector_cfg = cfg.get("macro_collector", {})
     overrides = portfolio.get("sources_overrides") or {}
     base_breakdown = dict(portfolio.get("mss_breakdown") or {})
@@ -180,23 +180,26 @@ def _derive_mss_breakdown(
 ) -> dict[str, float]:
     """Map live signals to MSS factor scores 0-100."""
 
-    fx = float(base.get("fx", 50))
-    flow = float(base.get("flow", 50))
-    global_score = float(base.get("global", 50))
-    sentiment = float(base.get("sentiment", 50))
+    from agent_reach.daily_run.harness_policy import macro_factor_baseline_default
+
+    baseline = macro_factor_baseline_default(settings)
+    fx = float(base.get("fx", baseline))
+    flow = float(base.get("flow", baseline))
+    global_score = float(base.get("global", baseline))
+    sentiment = float(base.get("sentiment", baseline))
 
     idx = signals.get("index_change_pct")
     if idx is not None:
-        global_score = _clamp(50 + float(idx) * 8)
-        fx = _clamp(50 + float(idx) * 5)
+        global_score = _clamp(baseline + float(idx) * 8)
+        fx = _clamp(baseline + float(idx) * 5)
 
     nb = signals.get("northbound_flow_yi")
     if nb is not None:
-        flow = _clamp(50 + float(nb) * 2.5)
+        flow = _clamp(baseline + float(nb) * 2.5)
 
     posts = signals.get("sentiment_posts") or []
     if posts:
-        sentiment = _clamp(50 + len(posts) * 3)
+        sentiment = _clamp(baseline + len(posts) * 3)
 
     hot_cfg = settings.get("hot_news") or {}
     hot_hits = int(signals.get("hot_topic_hits") or 0)
@@ -215,6 +218,7 @@ def _derive_mss_breakdown(
         "flow": round(flow, 1),
         "global": round(global_score, 1),
         "sentiment": round(sentiment, 1),
+        "_macro_baseline_ref": round(baseline, 1),
     }
     breakdown.update(threshold_refs_for_display(settings))
     return breakdown

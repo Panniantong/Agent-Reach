@@ -19,6 +19,7 @@ THRESHOLD_REF_SPECS: tuple[tuple[str, str, str, ThresholdFormat], ...] = (
 )
 
 MSS_BREAKDOWN_LABELS: dict[str, str] = {spec[1]: spec[2] for spec in THRESHOLD_REF_SPECS}
+MSS_BREAKDOWN_LABELS["_macro_baseline_ref"] = "宏观因子基准"
 
 _POLICY_LABELS: dict[str, str] = {spec[0]: spec[2] for spec in THRESHOLD_REF_SPECS}
 
@@ -74,6 +75,9 @@ def format_mss_breakdown_lines(breakdown: dict[str, Any]) -> list[str]:
             _policy_key, _ref_key, label, fmt = spec
             ref_lines.append(f"- {label}: {format_threshold_display(float(value), fmt)}")
         elif str(key).startswith("_"):
+            label = MSS_BREAKDOWN_LABELS.get(key)
+            if label:
+                ref_lines.append(f"- {label}: {format_threshold_display(float(value), 'int')}")
             continue
         else:
             lines.append(f"- {key}: {value}")

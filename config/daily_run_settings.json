@@ -670,6 +670,7 @@
     "threshold_evolution_mode": "harness",
     "lookback_weights_mode": "harness",
     "mss_weights_mode": "harness",
+    "base_mss_mode": "harness",
     "max_memory": 80,
     "max_policy": 30,
     "max_playbook": 20,

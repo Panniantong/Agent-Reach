@@ -446,6 +446,25 @@ class TestHarnessRuntimeExtensions:
         assert effective["technical"] < base["technical"]
         assert abs(sum(effective.values()) - 1.0) < 0.001
 
+    def test_base_mss_defensive_trim_lowers_macro_baseline(self):
+        state = HarnessState()
+        state.entries["memory"]["miss"] = HarnessEntry(
+            id="miss",
+            kind="memory",
+            title="盈亏目标未达",
+            content="盈亏目标未达：目标 +100 实际 +0",
+            source="deterministic",
+            job="close",
+            evidence="close",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        weights = resolve_harness_symbol_score_weights(
+            state,
+            settings={"harness": {"runtime_overlay_sources": ["memory"]}},
+        )
+        assert weights["base_mss"] == 45.0
+
     def test_kronos_playbook_parsing(self):
         state = HarnessState()
         state.entries["playbook"]["kronos_bull"] = HarnessEntry(

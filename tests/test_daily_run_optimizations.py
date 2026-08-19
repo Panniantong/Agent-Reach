@@ -94,3 +94,33 @@ class TestMacroCollector:
         ctx = collect_macro_context(pf, settings=load_settings())
         assert "flow" in ctx["sources"]
         assert ctx["mss_breakdown"]["flow"] > 50
+        assert "_macro_baseline_ref" in ctx["mss_breakdown"]
+
+    @patch("agent_reach.daily_run.hot_news_collector.collect_hot_news")
+    @patch("agent_reach.daily_run.macro_collector._fetch_index_change", return_value=0.0)
+    @patch("agent_reach.daily_run.macro_collector._fetch_northbound_flow", return_value=None)
+    @patch("agent_reach.daily_run.macro_collector._fetch_xueqiu_sentiment", return_value=("", []))
+    def test_macro_baseline_uses_harness_evolution(self, mock_xq, mock_nb, mock_idx, mock_hot, monkeypatch):
+        from agent_reach.daily_run.harness import HarnessState, HarnessEntry
+        from agent_reach.daily_run.hot_news_collector import HotNewsResult
+        from agent_reach.daily_run.macro_collector import collect_macro_context
+
+        state = HarnessState()
+        state.entries["memory"]["miss"] = HarnessEntry(
+            id="miss",
+            kind="memory",
+            title="盈亏目标未达",
+            content="盈亏目标未达：目标 +100 实际 +0",
+            source="deterministic",
+            job="close",
+            evidence="close",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        monkeypatch.setattr("agent_reach.daily_run.harness.load_harness", lambda: state)
+        mock_hot.return_value = HotNewsResult()
+        settings = load_settings()
+        settings.setdefault("harness", {})["runtime_overlay_sources"] = ["memory"]
+        ctx = collect_macro_context({}, settings=settings)
+        assert ctx["mss_breakdown"]["_macro_baseline_ref"] == 45.0
+        assert ctx["mss_breakdown"]["global"] == 45.0
