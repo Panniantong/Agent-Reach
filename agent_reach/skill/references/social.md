@@ -2,6 +2,8 @@
 
 小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram。
 
+> 失败信号与 Retry budget → [errors.md](errors.md)
+
 ## 小红书 / XiaoHongShu（多后端）
 
 小红书有三个后端，**先跑 `agent-reach doctor --json` 看 xiaohongshu 的 `active_backend` 是哪个**，再用对应命令组。
@@ -273,3 +275,15 @@ opencli instagram saved --limit 20 -f yaml
 ```
 
 > 要求 Chrome 打开且装了 OpenCLI 扩展，并已登录 instagram.com。`instagram search` 是用户搜索；读帖子需要先确定 username，再用 `instagram user USERNAME`。若出现 429 / login required，先让用户在 Chrome 里重新登录并降低频率。
+
+## 重试链（按平台顺序）
+
+| 平台 | 首选失败动作 | 备用 |
+|------|-------------|------|
+| 小红书 | 换 OpenCLI ↔ MCP；查登录 | Cookie-Editor；**禁止** Cloud 扫码 |
+| Twitter | 更新 Cookie → `twitter feed` 验登录 | 降 `-n` |
+| Reddit | OpenCLI ↔ rdt-cli | 必须登录，无匿名 |
+| B站 | `bili search` | OpenCLI bilibili |
+| Facebook/IG | Chrome 重登 | 降频率 |
+
+完整信号表 → [errors.md](errors.md)

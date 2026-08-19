@@ -2,6 +2,8 @@
 
 通用网页、RSS。
 
+> 失败信号 → [errors.md](errors.md)
+
 ## 通用网页 (Jina Reader)
 
 ```bash
@@ -48,3 +50,13 @@ for e in feedparser.parse('FEED_URL').entries[:5]:
 | 通用网页 | Jina Reader (`curl r.jina.ai`) |
 | 需要图片/格式控制 | web-reader MCP |
 | RSS 订阅 | feedparser |
+
+## 失败处理
+
+| 信号 | 动作 |
+|------|------|
+| Jina 空/403 | 换 Exa `crawling_exa` 或原站 curl |
+| MCP web-reader 超时 | 换 Jina；缩 `return_format` |
+| feedparser 解析失败 | 检查 URL 是否 RSS/Atom |
+
+Retry budget：同一 URL 最多 2 次不同工具，仍失败则换搜索找镜像。

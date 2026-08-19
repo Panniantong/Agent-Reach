@@ -1,5 +1,6 @@
 ---
 name: daily_run_skill
+version: "1.5.0"
 description: >
   股票大师每日复盘与热门标的分析技能。
   使用 agent-reach 和网页抓取能力（Jina Reader、V2EX API 等）分析国内外时事政治与政策、热点产业新闻、相关舆情，
@@ -9,6 +10,9 @@ description: >
   **全流程实时推送铁律：** 早盘分析、盘中高频数据收集、Lookback 审视过程、量化调仓交易以及每日收盘深度复盘的所有过程数据、决策逻辑和资产净值，系统必须在执行完毕的第一时间，自动、主动将精美的富文本 Markdown 卡片简报推送到指定的飞书群聊中，实现 100% 实时、透明的主动监控。
   每日收盘后自动执行深度复盘，使用 Exa 技能对热点公司、竞品、市场、财报及关键人物 LinkedIn 进行深度调研，为明天的早盘给出高置信度指导建议，并将量化经验写入 skill 外链片段（`~/.agent-reach/daily_run/skill/`）。
   **Agent 优先顺序：** 先读 `skill/playbook.md` 与 `skill/experience_latest.md`，再读 canonical skill stub；选手工 CLI 或依赖 cron。周日 forecast 参考 Phase-2.5 Kronos；收盘四卡复盘参考 Phase-2.6；跨平台舆情参考 Phase-2.7 redfox-community（可选 REDFOX_API_KEY）。
+description_zh: "股票大师每日复盘：cron 早盘/盘中/收盘/周报，MSS 决策与飞书推送"
+description_en: "Daily stock analysis skill — morning/intraday/close cron, MSS decisions, Feishu cards"
+allowed-tools: Bash, Read, Grep, Glob
 triggers:
   - analyze: 股票大师/每日复盘/股票分析/大盘复盘/热门方向/分析股票/分析市场/复盘/分析/盘后分析/龙虎榜/市场情绪/涨停/炸板
   - stock: 股票/个股/板块/技术面/K线/均线
@@ -32,7 +36,38 @@ metadata:
    - **自动化（推荐）**：本地 cron 已安装 → 仅监控 / 补跑，不要手工替代全流程。
    - **手工单次**：用下方 `python3 -m agent_reach.cli` 或 `scripts/daily-run-local-cron.sh`。
 4. **推送铁律**：任一阶段完成后必须飞书推送；失败先 `doctor` + 查 `~/.agent-reach/daily_run/logs/`。
-5. **禁止**：跳过数据审计 Gate、在 MSS<macro_veto 时强行买入、删除 cron/脚本。
+5. **禁止**：跳过数据审计 Gate、在 MSS<macro_veto 时强行买入、删除 cron/脚本（见下方 FORBIDDEN）。
+
+### ⛔ FORBIDDEN
+
+| 禁止 | 原因 |
+|------|------|
+| 删除 / 覆盖 `crontab` daily-run 块 | 用 `schedule install` 管理 |
+| 手工删 `~/.agent-reach/daily_run/locks/*.lock` 且进程仍存活 | 先确认 PID 已退出 |
+| lock 存在时并行跑 intraday（不加 `--force`） | 会 skip 或 corrupt 状态 |
+| cron 已装仍手工重跑 morning/intraday/close **全流程** | 仅 `manual-ok` 单次补跑 |
+| 盘中对 8 票重复拉 Exa 全量 | 遵守 exa_cache；见数据源表 |
+| Harness cooldown 内 `harness refine --force` | 除非用户明确要求 |
+| 修改上游 channel 源码 | Agent Reach 只做 glue |
+
+### 📡 数据源与缓存（provenance）
+
+| 数据 | 来源 | 盘中 intraday | 收盘 close |
+|------|------|---------------|------------|
+| 实时报价 | AKShare / quotes enrich | ✅ 仅刷新 quotes | ✅ |
+| 宏观 / 技术 | 日缓存 macro/technicals | 复用缓存 | 可刷新 |
+| 热点新闻 | 60s API（8787 优先） | 随 macro 缓存 | ✅ |
+| Exa 调研 | mcporter exa.* | ❌ 默认不拉 | ✅ TTL 86400s |
+| 舆情 optional | redfox（需 KEY） | ❌ | `research-ok` |
+| AI 解读 | 本次 job 结果 LLM/规则 | 盘中小结卡 | 收盘/周报卡 |
+
+**工具门禁（调 Exa / 60s 前）：** 同 query 24h 不重复 Exa；60s 先 `http://127.0.0.1:8787` 再 fallback 公网；多票调研按 symbol 拆分 query，勿一条塞 8 只。
+
+### 📋 用户可见合规脚注（飞书 AI 卡末尾）
+
+AI 解读卡（盘中小结 / 收盘 / 周报）**默认在末尾附加**：
+
+> 以上内容基于自动化模型与公开数据整理，不构成投资建议。模拟/paper 交易仅供研究。
 
 ### 本地命令前缀（Cloud / cron 通用）
 
@@ -84,7 +119,7 @@ ${PY} -m agent_reach.cli doctor --json
 | 层级 | 内容 | 何时读 |
 |------|------|--------|
 | **L0 常驻** | ⚡ 入口、外链 playbook/experience、Harness 摘要、本表 | 每次触发必读 |
-| **L1 按需** | [references/phase1-quality.md](daily_run/references/phase1-quality.md)、[schedule-ops.md](daily_run/references/schedule-ops.md) | 手工补跑 / Gate 失败 / cron 排查 |
+| **L1 按需** | [phase1-quality.md](daily_run/references/phase1-quality.md)、[schedule-ops.md](daily_run/references/schedule-ops.md)、[errors.md](daily_run/references/errors.md) | 手工补跑 / Gate 失败 / cron 排查 |
 | **L2 任务** | Phase-2.x references（Kronos / 四卡 / redfox 等） | 仅对应 job：`forecast` / `close` / 调研 |
 
 索引：[references/README.md](daily_run/references/README.md)

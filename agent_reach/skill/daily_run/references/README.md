@@ -12,3 +12,4 @@ Agent **禁止通读** canonical skill 全文；仅 L0 常驻段 + 本目录对�
 | 插件化 / Grid Search | [phase3-plugins.md](phase3-plugins.md) |
 | cron / snapshot / 定时表 | [schedule-ops.md](schedule-ops.md) |
 | MSS / Lookback / 决策模型 | [decision-model.md](decision-model.md) |
+| 补跑 / lock / Feishu / 工具门禁 | [errors.md](errors.md) |

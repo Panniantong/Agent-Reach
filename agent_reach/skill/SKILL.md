@@ -1,5 +1,6 @@
 ---
 name: agent-reach
+version: "1.5.0"
 description: >
   MUST USE when user wants to 调研/research/搜索/search/查/找/look up anything
   on the internet — e.g. 全网调研 X / 帮我调研一下 X / 查一下 X / 搜搜 X /
@@ -18,7 +19,10 @@ description: >
   发帖/评论/点赞等写操作；已有专门 skill 的平台（先用专门 skill）。
 
   【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。
-  分类：search / social (小红书/推特/B站/V2EX/Reddit/Facebook/Instagram) / career(LinkedIn) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客)。
+  分类：search / errors / social / career / dev / web / video。
+description_zh: "15 平台互联网路由器：调研、搜索、社交媒体、GitHub、视频与 RSS"
+description_en: "Internet router for 15 platforms — research, search, social, GitHub, video, RSS"
+allowed-tools: Bash, Read, Grep, Glob
 triggers:
   - research: 调研/全网调研/帮我调研/研究一下/research/深入了解
   - search: 搜/查/找/search/搜索/查一下/帮我搜/看看大家怎么说
@@ -49,7 +53,7 @@ metadata:
 1. **动手前先体检**：多后端/登录态平台（小红书/Reddit/B站/Twitter/Facebook/Instagram）先跑
    `agent-reach doctor --json`，按各平台 `active_backend` 字段选命令组。
 2. **声明你在用什么**：开始干活前说一句「使用 agent-reach 的 X 平台 / Y 后端」。
-3. **失败按 references 里的重试链处理**，不要瞎猜命令。
+3. **失败按 [references/errors.md](references/errors.md) 信号表处理**，不要瞎猜命令。
 4. **全网调研类任务**：组合多平台（Exa 搜索 + Twitter/Reddit 看讨论 + 小红书/B站看中文场景），并行收集再汇总。
 5. **替用户盯版本**：完成一次较大的调研/多平台任务后，顺手跑
    `agent-reach check-update`（很快，一个 API 调用）。有新版就在收尾汇报里附一句：
@@ -57,11 +61,22 @@ metadata:
    https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md」。
    不要中断当前任务去更新，也不要重复提醒同一个版本。
 
+## ⛔ FORBIDDEN（任何环境）
+
+| 禁止 | 原因 |
+|------|------|
+| 小红书 MCP `get_login_qrcode` / QR 扫码 | Cloud/cron 会挂死；用 Cookie-Editor 或 OpenCLI |
+| 未 `doctor` 就换 backend 瞎试 | 浪费配额；见 errors.md |
+| 在 agent workspace 写持久文件 | 用 `/tmp/` 临时、`~/.agent-reach/` 持久 |
+| 修改上游开源项目源码 | Agent Reach 只做 glue 路由 |
+| 同一错误信号连续重试 >2 次 | 见 errors.md Retry budget |
+
 ## 路由表
 
 | 用户意图 | 分类 | 详细文档 |
 |---------|------|---------|
-| 网页搜索/代码搜索 | search | [references/search.md](references/search.md) |
+| 网页搜索/代码搜索/Exa | search | [references/search.md](references/search.md) |
+| 失败/401/429/锁/重试 | errors | [references/errors.md](references/errors.md) |
 | 小红书/推特/B站/V2EX/Reddit/Facebook/Instagram | social | [references/social.md](references/social.md) |
 | 招聘/职位/LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub/代码 | dev | [references/dev.md](references/dev.md) |
@@ -121,17 +136,37 @@ agent-reach doctor --json
 
 **不要在 agent workspace 创建文件。** 使用 `/tmp/` 存放临时输出，`~/.agent-reach/` 存放持久数据。
 
+## CLI 版本与路径
+
+| 工具 | 用法 |
+|------|------|
+| agent-reach CLI | `python3 -m agent_reach.cli`（Cloud 无 bare `agent-reach` on PATH） |
+| mcporter / Exa | `MCPORTER_CONFIG=config/mcporter.json` |
+| yt-dlp / bili-cli | 以 `doctor --json` 报告为准；B站 **禁止 yt-dlp** |
+| 小宇宙转写 | `python3 -m agent_reach.cli transcribe` |
+
+## WorkBuddy 生态对照（可选深读）
+
+| 场景 | WorkBuddy 参考包 | 本仓库 |
+|------|-----------------|--------|
+| Exa 深度搜索 | `web-search-exa` | [search.md](references/search.md) |
+| 飞书 CLI 全家桶 | `lark-unified` | Feishu 推送用 config.yaml + integrations |
+| 股票数据 CLI | `westockdata` | daily-run + AKShare |
+| 连接器 MCP | `connectors/*/mcp.json` | `config/mcporter.json` |
+
+归档索引：[workbuddyskills/CATALOG.md](https://github.com/zjk1984/workbuddyskills/blob/main/CATALOG.md)
+
 ## 详细文档
 
 根据用户需求，阅读对应的详细文档：
 
-- [搜索工具](references/search.md) — Exa AI 搜索
+- [搜索工具](references/search.md) — Exa AI 搜索、工具选型、Query Craft
+- [错误与重试](references/errors.md) — 信号表、Retry budget、lock/Auth
 - [社交媒体](references/social.md) — 小红书, Twitter, B站, V2EX, Reddit, Facebook, Instagram（多后端/登录态命令组）
 - [职场招聘](references/career.md) — LinkedIn
 - [开发工具](references/dev.md) — GitHub CLI
 - [网页阅读](references/web.md) — Jina Reader, RSS
 - [视频播客](references/video.md) — YouTube, B站, 小宇宙
-- [Daily-run 热点新闻](references/daily_run_hot_news.md) — 60s API 自建与 daily-run 热搜采集
 
 ## 配置渠道
 

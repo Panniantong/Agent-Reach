@@ -2,6 +2,8 @@
 
 YouTube、B站、小宇宙播客的字幕和转录。
 
+> 失败信号 → [errors.md](errors.md) · **B站禁止 yt-dlp**（412 风控）
+
 ## YouTube (yt-dlp)
 
 ### 获取视频元数据
@@ -129,3 +131,20 @@ agent-reach doctor
 | B站字幕 | opencli bilibili subtitle |
 | 播客转录 | 小宇宙 transcribe.sh |
 | 无字幕音视频 | agent-reach transcribe（B站音频先 `bili audio`） |
+
+## CLI 版本建议
+
+| 工具 | 建议 |
+|------|------|
+| yt-dlp | 用 `python3 -m agent_reach.cli doctor` 检测 PATH；优先 pip 最新稳定版 |
+| bili-cli | `pipx install bilibili-cli`；只读无需登录 |
+| transcribe | `python3 -m agent_reach.cli transcribe`（Groq/OpenAI key） |
+
+## 失败处理
+
+| 信号 | 动作 |
+|------|------|
+| B站 + yt-dlp | **停止** — 改用 bili-cli / OpenCLI |
+| yt-dlp 无字幕 | `agent-reach transcribe` |
+| bili 412/风控 | OpenCLI bilibili 或搜索 API 兜底 |
+| 小宇宙转写失败 | 检查 ffmpeg + Groq key |
