@@ -421,11 +421,9 @@ def build_snapshot(
     holdings = [dict(h) for h in (pf.get("holdings") or [])]
     watchlist = [dict(w) for w in (pf.get("watchlist") or [])]
 
-    daily_cache = load_daily_cache() if enrich_level == "quotes" else {}
+    daily_cache = load_daily_cache() if enrich_level in ("full", "quotes") else {}
     macro_ctx: dict[str, Any] = {}
-    if enrich_level == "full":
-        macro_ctx = collect_macro_context(pf, config=config, settings=cfg, workflow=report_type)
-    elif daily_cache.get("macro_ctx"):
+    if daily_cache.get("macro_ctx"):
         macro_ctx = dict(daily_cache["macro_ctx"])
     else:
         macro_ctx = collect_macro_context(pf, config=config, settings=cfg, workflow=report_type)
