@@ -8,6 +8,8 @@ import pytest
 from agent_reach.daily_run.harness_display import (
     apply_threshold_refs,
     format_effective_thresholds_markdown,
+    format_lookback_overlay_markdown,
+    format_lookback_weights_pct,
     format_mss_breakdown_lines,
     threshold_refs_for_display,
 )
@@ -104,6 +106,25 @@ class TestThresholdDisplay:
         assert "基准 50" in md
         assert "宏观否决线: 30" in md
         assert "最低现金比例: 50%" in md
+
+    def test_format_lookback_weights_pct(self):
+        assert format_lookback_weights_pct([0.6, 0.25, 0.15]) == "60%/25%/15%"
+
+    def test_format_lookback_overlay_markdown(self):
+        settings = {
+            "harness_runtime": {
+                "lookback_overlay": {
+                    "lookback_weights": {
+                        "base": [0.5, 0.3, 0.2],
+                        "effective": [0.6, 0.25, 0.15],
+                    }
+                }
+            }
+        }
+        md = format_lookback_overlay_markdown(settings)
+        assert "Lookback 权重（harness 有效值）" in md
+        assert "60%/25%/15%" in md
+        assert "基准 50%/30%/20%" in md
 
 
 class TestVerdictEffectiveThresholds:

@@ -362,16 +362,31 @@ class TestHarnessPolicyOverlay:
             title="宏观一票否决执行规则",
             content="维持现金比例≥50%",
         )
+        state.entries["playbook"]["scan_sparse"] = HarnessEntry(
+            id="scan_sparse",
+            kind="playbook",
+            title="扫描偏少",
+            content="1 天盘中扫描偏少 — intraday 次数 <5",
+            source="deterministic",
+            job="weekly",
+            evidence="weekly",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        settings = _harness_settings()
+        settings["harness"]["runtime_overlay_sources"] = ["policy", "playbook"]
         monkeypatch.setattr(
             "agent_reach.daily_run.harness.load_harness",
             lambda: state,
         )
-        cfg = effective_settings(_harness_settings())
+        cfg = effective_settings(settings)
         assert cfg["portfolio"]["max_holdings"] == 5
         assert cfg["trading"]["holding_lock_days"] == 2
         assert cfg["schedule"]["trade_min_scans"] == 3
         assert cfg["schedule"]["max_applied_trades_per_day"] == 5
         assert cfg["schedule"]["max_trade_evaluations_per_symbol"] == 8
+        assert cfg["lookback_weights"] == [0.6, 0.25, 0.15]
+        assert "lookback_overlay" in cfg.get("harness_runtime", {})
         assert "runtime_overlay" in cfg.get("harness_runtime", {})
 
 

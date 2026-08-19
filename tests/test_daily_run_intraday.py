@@ -40,8 +40,15 @@ def intraday_snapshot():
 
 
 class TestLookback:
-    def test_compute_lookback_mss_three_scans(self):
+    def test_compute_lookback_mss_three_scans(self, monkeypatch):
+        from agent_reach.daily_run.harness import HarnessState
+
+        monkeypatch.setattr(
+            "agent_reach.daily_run.harness.load_harness",
+            lambda: HarnessState(),
+        )
         settings = load_settings()
+        settings.setdefault("harness", {})["runtime_overlay"] = False
         scans = [
             {"scan_id": "S1", "mss_final": 40.0},
             {"scan_id": "S2", "mss_final": 45.0},
@@ -52,8 +59,45 @@ class TestLookback:
         assert len(detail) == 3
         assert detail[0]["scan_id"] == "S3"
 
-    def test_compute_lookback_single_scan(self):
+    def test_compute_lookback_mss_uses_harness_evolved_weights(self, monkeypatch):
+        from agent_reach.daily_run.harness import HarnessState, HarnessEntry
+
+        state = HarnessState()
+        state.entries["playbook"]["scan"] = HarnessEntry(
+            id="scan",
+            kind="playbook",
+            title="扫描偏少",
+            content="1 天盘中扫描偏少 — intraday 次数 <5",
+            source="deterministic",
+            job="weekly",
+            evidence="weekly",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.harness.load_harness",
+            lambda: state,
+        )
         settings = load_settings()
+        settings.setdefault("harness", {})["runtime_overlay_sources"] = ["playbook"]
+        scans = [
+            {"scan_id": "S1", "mss_final": 40.0},
+            {"scan_id": "S2", "mss_final": 45.0},
+            {"scan_id": "S3", "mss_final": 50.0},
+        ]
+        mss, detail = compute_lookback_mss(scans, settings)
+        assert detail[0]["weight"] == pytest.approx(0.6, abs=0.01)
+        assert mss == pytest.approx(47.25, abs=0.1)
+
+    def test_compute_lookback_single_scan(self, monkeypatch):
+        from agent_reach.daily_run.harness import HarnessState
+
+        monkeypatch.setattr(
+            "agent_reach.daily_run.harness.load_harness",
+            lambda: HarnessState(),
+        )
+        settings = load_settings()
+        settings.setdefault("harness", {})["runtime_overlay"] = False
         mss, detail = compute_lookback_mss([{"scan_id": "S1", "mss_final": 42.0}], settings)
         assert mss == 42.0
         assert len(detail) == 1

@@ -110,6 +110,36 @@ def format_effective_thresholds_markdown(settings: dict[str, Any]) -> str:
     return "\n".join(lines) if len(lines) > 1 else ""
 
 
+def format_lookback_weights_pct(weights: list[float]) -> str:
+    """Render lookback weight triple as 60%/25%/15%."""
+    if not weights:
+        return ""
+    return "/".join(f"{int(round(float(w) * 100))}%" for w in weights)
+
+
+def format_lookback_overlay_markdown(settings: dict[str, Any]) -> str:
+    """Harness-effective lookback weights for intraday report footers."""
+    from agent_reach.daily_run.settings import effective_settings
+
+    eff = effective_settings(settings)
+    overlay = (eff.get("harness_runtime") or {}).get("lookback_overlay") or {}
+    block = overlay.get("lookback_weights")
+    if not isinstance(block, dict):
+        return ""
+    base = block.get("base")
+    eff_w = block.get("effective")
+    if not base or not eff_w:
+        return ""
+    base_vals = [round(float(x), 4) for x in base]
+    eff_vals = [round(float(x), 4) for x in eff_w]
+    if base_vals == eff_vals:
+        return ""
+    return (
+        f"**Lookback 权重（harness 有效值）：** "
+        f"{format_lookback_weights_pct(eff_vals)}（基准 {format_lookback_weights_pct(base_vals)}）"
+    )
+
+
 def effective_policy_settings(settings: dict[str, Any] | None = None) -> dict[str, Any]:
     """Settings with harness overlay — use for any user-visible policy display."""
     from agent_reach.daily_run.settings import effective_settings, load_settings

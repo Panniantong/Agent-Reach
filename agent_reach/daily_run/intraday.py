@@ -255,7 +255,7 @@ def record_scan(
         "lookback_detail": lookback_detail,
         "trend": trend,
         "markdown": render_intraday_scan_markdown(
-            entry, lookback_mss, lookback_detail, trend, report, scan_count=len(st.scans)
+            entry, lookback_mss, lookback_detail, trend, report, scan_count=len(st.scans), settings=cfg
         ),
     }
 
@@ -331,7 +331,7 @@ def record_scan_from_evaluation(
         "lookback_detail": lookback_detail,
         "trend": trend,
         "markdown": render_intraday_scan_markdown(
-            entry, lookback_mss, lookback_detail, trend, report, scan_count=len(st.scans)
+            entry, lookback_mss, lookback_detail, trend, report, scan_count=len(st.scans), settings=cfg
         ),
     }
 
@@ -509,7 +509,7 @@ def evaluate_trade(
 
     from agent_reach.daily_run.portfolio_manager import render_apply_markdown
 
-    markdown = render_intraday_trade_markdown(decision, lookback_detail, report, st.scans)
+    markdown = render_intraday_trade_markdown(decision, lookback_detail, report, st.scans, settings=cfg)
     markdown = markdown + "\n\n---\n\n" + render_apply_markdown(apply_result)
 
     return {
@@ -638,6 +638,7 @@ def render_intraday_scan_markdown(
     report: dict[str, Any],
     *,
     scan_count: Optional[int] = None,
+    settings: Optional[dict[str, Any]] = None,
 ) -> str:
     trend_map = {
         "rising": "上升",
@@ -664,6 +665,12 @@ def render_intraday_scan_markdown(
                 f"- {item['scan_id']}: MSS {item['mss_final']} × {item['weight']:.0%} "
                 f"= {item['weighted']}"
             )
+    if settings is not None:
+        from agent_reach.daily_run.harness_display import format_lookback_overlay_markdown
+
+        lookback_md = format_lookback_overlay_markdown(settings)
+        if lookback_md:
+            lines.extend(["", lookback_md])
     if report.get("reasoning"):
         lines.extend(["", f"**研判：** {report['reasoning']}"])
     return "\n".join(lines)
@@ -674,6 +681,8 @@ def render_intraday_trade_markdown(
     lookback_detail: list[dict[str, Any]],
     report: dict[str, Any],
     scans: list[dict[str, Any]],
+    *,
+    settings: Optional[dict[str, Any]] = None,
 ) -> str:
     action_map = {"buy": "买入", "sell": "卖出", "hold": "观望", "skip": "跳过"}
     lines = [
@@ -697,6 +706,12 @@ def render_intraday_trade_markdown(
             lines.append(
                 f"- {item['scan_id']}: {item['mss_final']} × {item['weight']:.0%} = {item['weighted']}"
             )
+        if settings is not None:
+            from agent_reach.daily_run.harness_display import format_lookback_overlay_markdown
+
+            lookback_md = format_lookback_overlay_markdown(settings)
+            if lookback_md:
+                lines.append(lookback_md)
 
     if report.get("invalidation"):
         lines.extend(["", f"**失效条件：** {report['invalidation']}"])

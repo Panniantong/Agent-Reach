@@ -13,15 +13,18 @@ def compute_lookback_mss(
     """
     Weighted MSS from the last up-to-3 scans (newest first).
 
-    Default weights: 50% / 30% / 20% for S_n, S_n-1, S_n-2.
+    Default weights come from harness-evolved ``lookback_weights`` (via
+    ``effective_settings``); neutral baseline is 50% / 30% / 20% for S_n … S_n-2.
     Partial weights are re-normalized when fewer than 3 scans exist.
     """
     if not scans:
         return 0.0, []
 
     from agent_reach.daily_run.harness_policy import lookback_weights_default
+    from agent_reach.daily_run.settings import effective_settings
 
-    weights = lookback_weights_default(settings)
+    cfg = effective_settings(settings)
+    weights = lookback_weights_default(cfg)
     recent = list(reversed(scans[-3:]))  # newest → oldest
     used = weights[: len(recent)]
     total_w = sum(used)
