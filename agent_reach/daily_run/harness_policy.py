@@ -162,6 +162,16 @@ _PNL_TARGET_NEUTRAL: dict[str, float] = {
     "miss_recovery_factor": 0.8,
 }
 
+_EVOLVED_BAD_TRADE_KEYS: tuple[str, ...] = (
+    "bad_trade_pnl_pct",
+    "bad_trade_weekly_pnl_pct",
+)
+
+_BAD_TRADE_NEUTRAL: dict[str, float] = {
+    "bad_trade_pnl_pct": -1.0,
+    "bad_trade_weekly_pnl_pct": -2.0,
+}
+
 _EVOLVED_TREND_SCALAR_KEYS: tuple[str, ...] = (
     "trend_min_points",
     "trend_delta_threshold",
@@ -276,6 +286,7 @@ EVOLVED_CONFIG_KEYS_BY_SECTION: dict[str, tuple[str, ...]] = {
     "portfolio": ("max_holdings", "max_total_symbols"),
     "trading": ("holding_lock_days", "stop_loss_ma20_pct", "friction_min_return_pct"),
     "mss_forecast": _EVOLVED_FORECAST_KEYS,
+    "harness": _EVOLVED_BAD_TRADE_KEYS,
 }
 EVOLVED_TOP_LEVEL_KEYS: tuple[str, ...] = ("lookback_weights",)
 EVOLVED_BACKTEST_KEYS: tuple[str, ...] = ("macro_veto", "aggressive_entry")
@@ -323,6 +334,8 @@ HARNESS_CONSUMER_HELPERS: dict[str, str] = {
     "min_target_cny": "pnl_target_policy_default(settings, 'min_target_cny')",
     "streak_bonus_pct": "pnl_target_policy_default(settings, 'streak_bonus_pct')",
     "miss_recovery_factor": "pnl_target_policy_default(settings, 'miss_recovery_factor')",
+    "bad_trade_pnl_pct": "bad_trade_policy_default(settings, 'bad_trade_pnl_pct')",
+    "bad_trade_weekly_pnl_pct": "bad_trade_policy_default(settings, 'bad_trade_weekly_pnl_pct')",
     "trend_min_points": "trend_policy_default(settings, 'trend_min_points')",
     "trend_delta_threshold": "trend_policy_default(settings, 'trend_delta_threshold')",
     "exp_return_base": "expected_return_policy_default(settings, 'exp_return_base')",
@@ -1506,6 +1519,16 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
     defensive_meta = harness_defensive_trim_overlay_meta(base_defensive_trim, effective_defensive_trim)
     if defensive_meta:
         harness_meta["defensive_trim_overlay"] = defensive_meta
+    base_bad_trade = resolve_harness_base_bad_trade_policy(cfg)
+    effective_bad_trade = resolve_harness_bad_trade_policy(state, settings=cfg)
+    harness_meta["bad_trade_policy"] = effective_bad_trade
+    bad_trade_meta = harness_bad_trade_overlay_meta(base_bad_trade, effective_bad_trade)
+    if bad_trade_meta:
+        harness_meta["bad_trade_overlay"] = bad_trade_meta
+    harness_block = dict(cfg.get("harness") or {})
+    harness_block["bad_trade_pnl_pct"] = float(effective_bad_trade["bad_trade_pnl_pct"])
+    harness_block["bad_trade_weekly_pnl_pct"] = float(effective_bad_trade["bad_trade_weekly_pnl_pct"])
+    cfg["harness"] = harness_block
     harness_meta["trade_signals"] = {
         k: trade_signals[k]
         for k in (
@@ -1931,6 +1954,131 @@ def _pnl_target_policy(settings: dict[str, Any]) -> dict[str, float]:
 
 def pnl_target_policy_default(settings: dict[str, Any], key: str) -> float:
     return float(_pnl_target_policy(settings).get(key, _PNL_TARGET_NEUTRAL.get(key, 0.0)))
+
+
+def bad_trade_policy_base(settings: dict[str, Any], key: str) -> float:
+    if evolution_mode(settings, key) == "fixed":
+        harness = _harness_cfg(settings)
+        if key in harness:
+            return float(harness[key])
+        return float(_BAD_TRADE_NEUTRAL[key])
+    return float(_BAD_TRADE_NEUTRAL[key])
+
+
+def resolve_harness_base_bad_trade_policy(settings: dict[str, Any]) -> dict[str, float]:
+    return {key: bad_trade_policy_base(settings, key) for key in _EVOLVED_BAD_TRADE_KEYS}
+
+
+def _apply_bad_trade_policy_evolution(
+    merged: dict[str, float],
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    signals = resolve_harness_trade_signals(state, settings=settings)
+
+    def _tighten_daily(floor: float) -> None:
+        if evolution_mode(settings, "bad_trade_pnl_pct") == "harness":
+            merged["bad_trade_pnl_pct"] = max(float(merged.get("bad_trade_pnl_pct", -1.0)), floor)
+
+    def _relax_daily(ceiling: float) -> None:
+        if evolution_mode(settings, "bad_trade_pnl_pct") == "harness":
+            merged["bad_trade_pnl_pct"] = min(float(merged.get("bad_trade_pnl_pct", -1.0)), ceiling)
+
+    def _tighten_weekly(floor: float) -> None:
+        if evolution_mode(settings, "bad_trade_weekly_pnl_pct") == "harness":
+            merged["bad_trade_weekly_pnl_pct"] = max(
+                float(merged.get("bad_trade_weekly_pnl_pct", -2.0)), floor
+            )
+
+    def _relax_weekly(ceiling: float) -> None:
+        if evolution_mode(settings, "bad_trade_weekly_pnl_pct") == "harness":
+            merged["bad_trade_weekly_pnl_pct"] = min(
+                float(merged.get("bad_trade_weekly_pnl_pct", -2.0)), ceiling
+            )
+
+    if signals.get("defensive_trim") or signals.get("pnl_target_miss"):
+        _tighten_daily(-0.8)
+        _tighten_weekly(-1.5)
+    elif signals.get("pnl_target_hit") or _overlay_has_phrase(state, "进攻期", settings=settings):
+        _relax_daily(-1.5)
+        _relax_weekly(-3.0)
+
+    if _overlay_has_phrase(state, "连亏警戒", settings=settings) or _overlay_has_phrase(
+        state, "卖出胜率偏低", settings=settings
+    ):
+        _tighten_daily(-0.7)
+        _tighten_weekly(-1.2)
+
+    if _overlay_has_phrase(state, "浮动亏损主导净值", settings=settings):
+        _tighten_daily(-0.8)
+        _tighten_weekly(-1.5)
+
+    if _overlay_has_phrase(state, "已实现盈利但浮亏拖累", settings=settings):
+        _relax_daily(-1.2)
+        _relax_weekly(-2.5)
+
+    if _overlay_has_phrase(state, "坏交易回滚", settings=settings):
+        _tighten_daily(-0.75)
+        _tighten_weekly(-1.4)
+
+    return merged
+
+
+def resolve_harness_bad_trade_policy(
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    merged = resolve_harness_base_bad_trade_policy(settings)
+    if not _overlay_enabled(settings):
+        return merged
+    merged = _apply_bad_trade_policy_evolution(merged, state, settings=settings)
+    if evolution_mode(settings, "bad_trade_pnl_pct") == "harness":
+        merged["bad_trade_pnl_pct"] = max(-5.0, min(-0.3, float(merged["bad_trade_pnl_pct"])))
+    else:
+        merged["bad_trade_pnl_pct"] = bad_trade_policy_base(settings, "bad_trade_pnl_pct")
+    if evolution_mode(settings, "bad_trade_weekly_pnl_pct") == "harness":
+        merged["bad_trade_weekly_pnl_pct"] = max(
+            -10.0, min(-0.5, float(merged["bad_trade_weekly_pnl_pct"]))
+        )
+    else:
+        merged["bad_trade_weekly_pnl_pct"] = bad_trade_policy_base(
+            settings, "bad_trade_weekly_pnl_pct"
+        )
+    return merged
+
+
+def harness_bad_trade_overlay_meta(
+    base_policy: dict[str, float],
+    effective_policy: dict[str, float],
+) -> dict[str, Any]:
+    changed: dict[str, dict[str, float]] = {}
+    for key in _EVOLVED_BAD_TRADE_KEYS:
+        base_val = float(base_policy.get(key, _BAD_TRADE_NEUTRAL.get(key, 0.0)))
+        eff_val = float(effective_policy.get(key, base_val))
+        if abs(eff_val - base_val) >= 0.01:
+            changed[key] = {"base": base_val, "effective": eff_val}
+    return changed
+
+
+def _bad_trade_policy(settings: dict[str, Any]) -> dict[str, float]:
+    runtime = settings.get("harness_runtime") or {}
+    policy = runtime.get("bad_trade_policy")
+    if policy:
+        return dict(policy)
+    if _overlay_enabled(settings):
+        from agent_reach.daily_run.harness import load_harness
+
+        return resolve_harness_bad_trade_policy(load_harness(), settings=settings)
+    harness = _harness_cfg(settings)
+    return {
+        key: float(harness.get(key, _BAD_TRADE_NEUTRAL[key])) for key in _EVOLVED_BAD_TRADE_KEYS
+    }
+
+
+def bad_trade_policy_default(settings: dict[str, Any], key: str) -> float:
+    return float(_bad_trade_policy(settings).get(key, _BAD_TRADE_NEUTRAL.get(key, -1.0)))
 
 
 def _intraday_cfg(settings: dict[str, Any]) -> dict[str, Any]:

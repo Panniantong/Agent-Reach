@@ -1900,7 +1900,11 @@ def auto_rollback_on_bad_trade(
     job: str = "close",
 ) -> dict[str, Any]:
     """Rollback session harness refinements when PnL breaches configured threshold."""
-    cfg = _harness_cfg(settings)
+    from agent_reach.daily_run.harness_policy import bad_trade_policy_default
+    from agent_reach.daily_run.settings import effective_settings, load_settings
+
+    eff = effective_settings(settings or load_settings())
+    cfg = _harness_cfg(eff)
     if not cfg.get("auto_rollback_on_bad_trade"):
         return {"skipped": True, "reason": "disabled"}
 
@@ -1908,17 +1912,13 @@ def auto_rollback_on_bad_trade(
         return {"skipped": True, "reason": "forecast has no rollback threshold"}
 
     if job == "weekly":
-        threshold = float(
-            cfg.get("bad_trade_weekly_pnl_pct")
-            if cfg.get("bad_trade_weekly_pnl_pct") is not None
-            else -2.0
-        )
+        threshold = bad_trade_policy_default(eff, "bad_trade_weekly_pnl_pct")
         pct = (portfolio_summary or {}).get("weekly_pnl_pct")
         if pct is None:
             pct = (portfolio_summary or {}).get("daily_pnl_pct")
         pnl_label = "周PnL"
     else:
-        threshold = float(cfg.get("bad_trade_pnl_pct") if cfg.get("bad_trade_pnl_pct") is not None else -1.0)
+        threshold = bad_trade_policy_default(eff, "bad_trade_pnl_pct")
         pct = (portfolio_summary or {}).get("daily_pnl_pct")
         pnl_label = "日PnL"
 

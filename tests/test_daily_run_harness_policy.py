@@ -993,6 +993,38 @@ class TestHarnessRuntimeExtensions:
         assert policy["base_target_pct"] <= 0.4
         assert policy["min_target_cny"] <= 80
 
+    def test_bad_trade_policy_evolution_on_miss(self):
+        from agent_reach.daily_run.harness_policy import (
+            bad_trade_policy_default,
+            resolve_harness_bad_trade_policy,
+        )
+
+        state = HarnessState()
+        state.entries["memory"]["pnl_miss"] = HarnessEntry(
+            id="pnl_miss",
+            kind="memory",
+            title="pnl_target",
+            content="盈亏目标未达：目标 +500 实际 -200（差 -700）",
+            source="deterministic",
+            job="pnl_target",
+            evidence="pnl_target miss",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        settings = {
+            "harness": {
+                "runtime_overlay_sources": ["memory"],
+                "bad_trade_pnl_pct_mode": "harness",
+                "bad_trade_weekly_pnl_pct_mode": "harness",
+            },
+        }
+        policy = resolve_harness_bad_trade_policy(state, settings=settings)
+        assert policy["bad_trade_pnl_pct"] == -0.8
+        assert policy["bad_trade_weekly_pnl_pct"] == -1.5
+        eff = apply_harness_policy_overlay({**settings, "thresholds": {}})
+        assert eff["harness"]["bad_trade_pnl_pct"] == -0.8
+        assert bad_trade_policy_default(eff, "bad_trade_pnl_pct") == -0.8
+
     def test_realized_gain_threshold_separate_from_loss(self):
         from agent_reach.daily_run.harness_policy import deep_loss_policy_base
 

@@ -212,6 +212,59 @@ class TestAutoRollbackOnBadTrade:
         assert result["skipped"] is True
         assert result["reason"] == "pnl above threshold"
 
+    def test_auto_rollback_uses_harness_evolved_threshold(self, harness_tmp):
+        from agent_reach.daily_run.harness import HarnessEntry, HarnessState, refine_after_job
+        from agent_reach.daily_run.harness_policy import apply_harness_policy_overlay
+        from agent_reach.daily_run.settings import effective_settings
+
+        state = HarnessState()
+        state.entries["memory"]["pnl_miss"] = HarnessEntry(
+            id="pnl_miss",
+            kind="memory",
+            title="pnl_target",
+            content="盈亏目标未达：目标 +500 实际 -200（差 -700）",
+            source="deterministic",
+            job="pnl_target",
+            evidence="pnl_target miss",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        state.save()
+        settings = effective_settings(
+            apply_harness_policy_overlay(
+                {
+                    "harness": {
+                        "enabled": True,
+                        "auto_rollback_on_bad_trade": True,
+                        "bad_trade_pnl_pct_mode": "harness",
+                        "runtime_overlay_sources": ["memory"],
+                    }
+                }
+            )
+        )
+        created = refine_after_job(
+            "close",
+            evidence={"rules": ["规则A"]},
+            settings={"harness": {"enabled": True}},
+        )
+        skipped = auto_rollback_on_bad_trade(
+            portfolio_summary={"daily_pnl_pct": -0.75},
+            harness_result={"layer_a": created},
+            settings=settings,
+            job="close",
+        )
+        assert skipped["skipped"] is True
+        assert skipped["threshold"] == -0.8
+
+        triggered = auto_rollback_on_bad_trade(
+            portfolio_summary={"daily_pnl_pct": -0.9},
+            harness_result={"layer_a": created},
+            settings=settings,
+            job="close",
+        )
+        assert triggered.get("triggered") is True
+        assert triggered["threshold"] == -0.8
+
     def test_weekly_uses_weekly_threshold(self, harness_tmp):
         created = refine_after_job(
             "weekly",
