@@ -319,4 +319,4 @@ Agent Reach는 XiaoHongShu 로그인을 대신 수행하거나 브라우저 cook
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Panniantong/Agent-Reach&type=Date&v=20260309)](https://star-history.com/#Panniantong/Agent-Reach&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=Panniantong/Agent-Reach&type=Date&v=20260309)](https://star-history.dera.page/#Panniantong/Agent-Reach&type=Date)

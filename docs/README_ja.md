@@ -314,4 +314,4 @@ Agent Reach は小紅書へのログインを代行せず、ブラウザ Cookie 
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Panniantong/Agent-Reach&type=Date&v=20260309)](https://star-history.com/#Panniantong/Agent-Reach&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=Panniantong/Agent-Reach&type=Date&v=20260309)](https://star-history.dera.page/#Panniantong/Agent-Reach&type=Date)
