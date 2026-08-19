@@ -327,12 +327,11 @@ def resolve_deep_loss_sell_shares(
     *,
     is_deep_loss: bool,
 ) -> int:
-    """Shares to sell — harness sell_ratio applies to deep-loss positions only."""
+    """Shares to sell using harness-evolved sell_ratio (deep vs non-deep)."""
     if total_shares <= 0:
         return 0
-    if not is_deep_loss:
-        return total_shares
-    ratio = deep_loss_policy_default(settings, "sell_ratio")
+    ratio_key = "sell_ratio" if is_deep_loss else "non_deep_loss_sell_ratio"
+    ratio = deep_loss_policy_default(settings, ratio_key)
     if ratio >= 0.999:
         return total_shares
     sold = _round_lot(code, int(total_shares * ratio))
@@ -368,6 +367,8 @@ def deep_loss_sell_analysis(
         settings,
         is_deep_loss=deep,
     )
+    ratio_key = "sell_ratio" if deep else "non_deep_loss_sell_ratio"
+    effective_sell_ratio = float(policy.get(ratio_key, deep_loss_policy_default(settings, ratio_key)))
     allowed = True
     block_reason: Optional[str] = None
     if deep and cover_ratio > 0 and loss_abs > 0 and coverable < required_cover:
@@ -379,17 +380,24 @@ def deep_loss_sell_analysis(
             f"需覆盖 ¥{required_cover:,.0f}（cover_ratio={cover_ratio:.0%}），"
             f"组合可覆盖收益 ¥{coverable:,.0f} 不足，暂不卖"
         )
-    elif deep and sell_shares <= 0:
+    elif sell_shares <= 0:
         allowed = False
         name = holding.get("name") or code or "?"
-        block_reason = f"{name} 深度套牢，sell_ratio={policy.get('sell_ratio', 1.0):.0%} 不足一手，暂不卖"
+        if deep:
+            block_reason = (
+                f"{name} 深度套牢，sell_ratio={effective_sell_ratio:.0%} 不足一手，暂不卖"
+            )
+        else:
+            block_reason = (
+                f"{name} 非深亏减仓，non_deep_loss_sell_ratio={effective_sell_ratio:.0%} 不足一手，暂不卖"
+            )
     return {
         "is_deep_loss": deep,
         "loss_abs": loss_abs,
         "coverable": coverable,
         "required_cover": required_cover,
         "cover_ratio": cover_ratio,
-        "sell_ratio": float(policy.get("sell_ratio", 1.0)),
+        "sell_ratio": effective_sell_ratio,
         "sell_shares": sell_shares,
         "allowed": allowed,
         "block_reason": block_reason,
@@ -610,8 +618,10 @@ def _apply_sell(
             pf["watchlist"] = watchlist
 
     sell_note = ""
-    if sell_analysis.get("is_deep_loss") and float(sell_analysis.get("sell_ratio") or 1.0) < 0.999:
-        sell_note = f"（深度套牢分批 sell_ratio={float(sell_analysis['sell_ratio']):.0%}）"
+    sell_ratio = float(sell_analysis.get("sell_ratio") or 1.0)
+    if sell_ratio < 0.999:
+        label = "深度套牢分批" if sell_analysis.get("is_deep_loss") else "非深亏分批"
+        sell_note = f"（{label} sell_ratio={sell_ratio:.0%}）"
     trade = TradeAction(
         side="sell",
         code=code,

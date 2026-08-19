@@ -90,7 +90,20 @@ class TestApplyAutoAdjust:
         assert result.applied is False
         assert len(result.actions) == 0
 
-    def test_sell_decision_symbol_only(self, portfolio, snapshot, settings_enabled):
+    def test_sell_decision_symbol_only(self, portfolio, snapshot, settings_enabled, monkeypatch):
+        settings_enabled["harness_runtime"] = {
+            "deep_loss_policy": {
+                "loss_cny_threshold": 5000,
+                "loss_pct_threshold": 10,
+                "cover_ratio": 0.0,
+                "sell_ratio": 1.0,
+                "non_deep_loss_sell_ratio": 1.0,
+            }
+        }
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager.effective_settings",
+            lambda s: s,
+        )
         decision = TradeDecision(
             action="sell",
             trade_id="T1",
@@ -127,7 +140,20 @@ class TestApplyAutoAdjust:
         assert "不在持仓中" in result.message
         assert len(result.portfolio["holdings"]) == 2
 
-    def test_sell_adds_watchlist_when_allowed(self, portfolio, snapshot, settings_enabled):
+    def test_sell_adds_watchlist_when_allowed(self, portfolio, snapshot, settings_enabled, monkeypatch):
+        settings_enabled["harness_runtime"] = {
+            "deep_loss_policy": {
+                "loss_cny_threshold": 5000,
+                "loss_pct_threshold": 10,
+                "cover_ratio": 0.0,
+                "sell_ratio": 1.0,
+                "non_deep_loss_sell_ratio": 1.0,
+            }
+        }
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager.effective_settings",
+            lambda s: s,
+        )
         decision = TradeDecision(
             action="sell",
             trade_id="T1",
@@ -279,6 +305,58 @@ class TestApplyAutoAdjust:
         assert result.actions[0].shares == 500
         remaining = next(h for h in result.portfolio["holdings"] if h["code"] == "002583")
         assert remaining["shares"] == 500
+
+    def test_sell_non_deep_loss_partial_when_ratio_below_one(self, settings_enabled, tmp_path, monkeypatch):
+        portfolio = {
+            "total": 100000,
+            "cash": 50000,
+            "holdings": [
+                {
+                    "code": "600584",
+                    "name": "长电科技",
+                    "shares": 800,
+                    "cost": 80.8,
+                    "price": 85.0,
+                    "days_held": 5,
+                },
+            ],
+            "watchlist": [],
+        }
+        snapshot = {
+            "code": "600584",
+            "price": 85.0,
+            "portfolio": portfolio,
+            "watchlist": [],
+        }
+        settings_enabled["harness_runtime"] = {
+            "deep_loss_policy": {
+                "loss_cny_threshold": 5000,
+                "loss_pct_threshold": 10,
+                "non_deep_loss_sell_ratio": 0.5,
+            }
+        }
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager.effective_settings",
+            lambda s: s,
+        )
+        ledger = tmp_path / "trade_ledger.jsonl"
+        ledger.write_text("", encoding="utf-8")
+        monkeypatch.setattr("agent_reach.daily_run.realized_pnl.default_ledger_path", lambda: ledger)
+
+        decision = TradeDecision(
+            action="sell",
+            trade_id="T1",
+            lookback_mss=35.0,
+            lookback_detail=[],
+            trend="falling",
+            reasoning="防御性减仓",
+        )
+        result = apply_auto_adjust(portfolio, decision, snapshot, settings_enabled)
+        assert result.applied is True
+        assert result.actions[0].code == "600584"
+        assert result.actions[0].shares == 400
+        assert len(result.portfolio["holdings"]) == 1
+        assert result.portfolio["holdings"][0]["shares"] == 400
 
     def test_coverable_gains_uses_realized_weight(self, tmp_path, monkeypatch):
         from agent_reach.daily_run.portfolio_manager import portfolio_coverable_gains

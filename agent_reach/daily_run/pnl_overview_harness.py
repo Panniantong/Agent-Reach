@@ -39,6 +39,7 @@ def _pnl_thresholds(settings: Optional[dict[str, Any]]) -> dict[str, float]:
         "tier_multiplier": deep_loss_policy_default(cfg, "deep_loss_tier_multiplier"),
         "cover_ratio": deep_loss_policy_default(cfg, "cover_ratio"),
         "sell_ratio": deep_loss_policy_default(cfg, "sell_ratio"),
+        "non_deep_loss_sell_ratio": deep_loss_policy_default(cfg, "non_deep_loss_sell_ratio"),
         "coverable_realized_weight": deep_loss_policy_default(cfg, "coverable_realized_weight"),
         "win_rate_min": deep_loss_policy_default(cfg, "win_rate_min"),
         "loss_streak_max": deep_loss_policy_default(cfg, "loss_streak_max"),

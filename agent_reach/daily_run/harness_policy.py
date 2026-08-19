@@ -121,6 +121,7 @@ _EVOLVED_DEEP_LOSS_KEYS: tuple[str, ...] = (
     "loss_pct_threshold",
     "cover_ratio",
     "sell_ratio",
+    "non_deep_loss_sell_ratio",
     "realized_loss_threshold",
     "realized_gain_threshold",
     "deep_loss_tier_multiplier",
@@ -136,6 +137,7 @@ _DEEP_LOSS_NEUTRAL: dict[str, float] = {
     "loss_pct_threshold": 10.0,
     "cover_ratio": 1.0,
     "sell_ratio": 1.0,
+    "non_deep_loss_sell_ratio": 1.0,
     "realized_loss_threshold": 500.0,
     "realized_gain_threshold": 500.0,
     "deep_loss_tier_multiplier": 2.0,
@@ -275,7 +277,7 @@ _RUNTIME_SECTIONS: dict[str, str] = {
 }
 
 # Public catalog for config walkthrough / stale-key detection (harness evolution).
-_EVOLVED_SELL_RATIO_KEYS: tuple[str, ...] = ("sell_ratio",)
+_EVOLVED_SELL_RATIO_KEYS: tuple[str, ...] = ("sell_ratio", "non_deep_loss_sell_ratio")
 
 EVOLVED_CONFIG_KEYS_BY_SECTION: dict[str, tuple[str, ...]] = {
     "thresholds": _EVOLVED_THRESHOLD_KEYS,
@@ -289,7 +291,7 @@ EVOLVED_CONFIG_KEYS_BY_SECTION: dict[str, tuple[str, ...]] = {
     "trading": ("holding_lock_days", "stop_loss_ma20_pct", "friction_min_return_pct"),
     "mss_forecast": _EVOLVED_FORECAST_KEYS,
     "harness": _EVOLVED_BAD_TRADE_KEYS + _EVOLVED_SELL_RATIO_KEYS,
-    "pnl_overview": ("deep_loss_sell_ratio",),
+    "pnl_overview": ("deep_loss_sell_ratio", "non_deep_loss_sell_ratio"),
 }
 EVOLVED_TOP_LEVEL_KEYS: tuple[str, ...] = ("lookback_weights",)
 EVOLVED_BACKTEST_KEYS: tuple[str, ...] = ("macro_veto", "aggressive_entry")
@@ -325,6 +327,7 @@ HARNESS_CONSUMER_HELPERS: dict[str, str] = {
     "loss_pct_threshold": "deep_loss_policy_default(settings, 'loss_pct_threshold')",
     "cover_ratio": "deep_loss_policy_default(settings, 'cover_ratio')",
     "sell_ratio": "deep_loss_policy_default(settings, 'sell_ratio')",
+    "non_deep_loss_sell_ratio": "deep_loss_policy_default(settings, 'non_deep_loss_sell_ratio')",
     "realized_loss_threshold": "deep_loss_policy_default(settings, 'realized_loss_threshold')",
     "realized_gain_threshold": "deep_loss_policy_default(settings, 'realized_gain_threshold')",
     "deep_loss_tier_multiplier": "deep_loss_policy_default(settings, 'deep_loss_tier_multiplier')",
@@ -1468,6 +1471,9 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
         harness_meta["deep_loss_overlay"] = deep_loss_meta
     pnl_overview = dict(cfg.get("pnl_overview") or {})
     pnl_overview["deep_loss_sell_ratio"] = float(effective_deep_loss["sell_ratio"])
+    pnl_overview["non_deep_loss_sell_ratio"] = float(
+        effective_deep_loss["non_deep_loss_sell_ratio"]
+    )
     cfg["pnl_overview"] = pnl_overview
     base_pnl_target = resolve_harness_base_pnl_target_policy(cfg)
     effective_pnl_target = resolve_harness_pnl_target_policy(state, settings=cfg)
@@ -1707,6 +1713,8 @@ def deep_loss_policy_base(settings: dict[str, Any], key: str) -> float:
         return float(cfg.get("deep_loss_cover_ratio", _DEEP_LOSS_NEUTRAL[key]))
     if key == "sell_ratio":
         return float(cfg.get("deep_loss_sell_ratio", _DEEP_LOSS_NEUTRAL[key]))
+    if key == "non_deep_loss_sell_ratio":
+        return float(cfg.get("non_deep_loss_sell_ratio", _DEEP_LOSS_NEUTRAL[key]))
     if key == "realized_loss_threshold":
         return float(cfg.get("large_realized_loss_cny", _DEEP_LOSS_NEUTRAL[key]))
     if key == "realized_gain_threshold":
@@ -1756,14 +1764,29 @@ def _apply_deep_loss_signal_evolution(
         if evolution_mode(settings, "sell_ratio") == "harness":
             merged["sell_ratio"] = max(float(merged.get("sell_ratio", 1.0)), floor)
 
+    def _tighten_non_deep_sell_ratio(ceiling: float) -> None:
+        if evolution_mode(settings, "non_deep_loss_sell_ratio") == "harness":
+            merged["non_deep_loss_sell_ratio"] = min(
+                float(merged.get("non_deep_loss_sell_ratio", 1.0)), ceiling
+            )
+
+    def _relax_non_deep_sell_ratio(floor: float) -> None:
+        if evolution_mode(settings, "non_deep_loss_sell_ratio") == "harness":
+            merged["non_deep_loss_sell_ratio"] = max(
+                float(merged.get("non_deep_loss_sell_ratio", 1.0)), floor
+            )
+
     if signals.get("defensive_trim"):
         _tighten_sell_ratio(0.5)
+        _tighten_non_deep_sell_ratio(0.7)
         merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.0)
     if signals.get("pnl_target_miss"):
         merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.2)
         _tighten_sell_ratio(0.35)
+        _tighten_non_deep_sell_ratio(0.5)
     if signals.get("pnl_target_hit"):
         _relax_sell_ratio(0.6)
+        _relax_non_deep_sell_ratio(0.85)
     if _overlay_has_phrase(state, "深浮亏", settings=settings) or _overlay_has_phrase(
         state, "深度套牢", settings=settings
     ):
@@ -1771,6 +1794,7 @@ def _apply_deep_loss_signal_evolution(
         merged["loss_pct_threshold"] = min(float(merged.get("loss_pct_threshold", 10.0)), 8.0)
         merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.0)
         _tighten_sell_ratio(0.5)
+        _tighten_non_deep_sell_ratio(0.65)
     if _overlay_has_phrase(state, "浮亏警示", settings=settings):
         merged["loss_cny_threshold"] = min(float(merged.get("loss_cny_threshold", 5000.0)), 4500.0)
     if _overlay_has_phrase(state, "维持高现金", settings=settings) or _overlay_has_phrase(
@@ -1778,6 +1802,7 @@ def _apply_deep_loss_signal_evolution(
     ):
         merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.1)
         _tighten_sell_ratio(0.4)
+        _tighten_non_deep_sell_ratio(0.6)
         merged["portfolio_loss_cny_threshold"] = min(
             float(merged.get("portfolio_loss_cny_threshold", 5000.0)), 4000.0
         )
@@ -1788,14 +1813,17 @@ def _apply_deep_loss_signal_evolution(
         )
     if _overlay_has_phrase(state, "止盈参考", settings=settings):
         _relax_sell_ratio(0.55)
+        _relax_non_deep_sell_ratio(0.9)
         merged["realized_gain_threshold"] = min(
             float(merged.get("realized_gain_threshold", 500.0)), 400.0
         )
     if _overlay_has_phrase(state, "已实现盈利但浮亏拖累", settings=settings):
         merged["cover_ratio"] = min(float(merged.get("cover_ratio", 1.0)), 0.85)
         _tighten_sell_ratio(0.6)
+        _tighten_non_deep_sell_ratio(0.7)
     if _overlay_has_phrase(state, "优先 verify 回避/减仓", settings=settings):
         _tighten_sell_ratio(0.5)
+        _tighten_non_deep_sell_ratio(0.65)
     if _overlay_has_phrase(state, "卖出胜率偏低", settings=settings):
         merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.1)
         merged["coverable_realized_weight"] = min(
@@ -1806,6 +1834,7 @@ def _apply_deep_loss_signal_evolution(
     if _overlay_has_phrase(state, "连亏警戒", settings=settings):
         merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.15)
         _tighten_sell_ratio(0.4)
+        _tighten_non_deep_sell_ratio(0.55)
         if float(merged.get("loss_streak_max") or 0) > 0:
             merged["loss_streak_max"] = max(2.0, float(merged["loss_streak_max"]) - 1.0)
     if _overlay_has_phrase(state, "ledger 缺买入成本", settings=settings):
@@ -1834,6 +1863,14 @@ def resolve_harness_deep_loss_policy(
         merged["sell_ratio"] = max(0.1, min(1.0, float(merged.get("sell_ratio", 1.0))))
     else:
         merged["sell_ratio"] = deep_loss_policy_base(settings, "sell_ratio")
+    if evolution_mode(settings, "non_deep_loss_sell_ratio") == "harness":
+        merged["non_deep_loss_sell_ratio"] = max(
+            0.1, min(1.0, float(merged.get("non_deep_loss_sell_ratio", 1.0)))
+        )
+    else:
+        merged["non_deep_loss_sell_ratio"] = deep_loss_policy_base(
+            settings, "non_deep_loss_sell_ratio"
+        )
     merged["realized_loss_threshold"] = max(
         100.0, float(merged.get("realized_loss_threshold", 500.0))
     )

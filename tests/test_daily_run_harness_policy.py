@@ -626,7 +626,16 @@ class TestHarnessRuntimeExtensions:
         settings = {
             "thresholds": {"macro_veto": 30, "aggressive_entry": 45, "min_cash_ratio": 0.5},
             "trading": {"commission_rate": 0.0015, "slippage_rate": 0.001, "holding_lock_days": 3},
-            "harness_runtime": {"trade_signals": {"defensive_trim": True}},
+            "harness_runtime": {
+                "trade_signals": {"defensive_trim": True},
+                "deep_loss_policy": {
+                    "loss_cny_threshold": 5000,
+                    "loss_pct_threshold": 10,
+                    "cover_ratio": 0.0,
+                    "sell_ratio": 1.0,
+                    "non_deep_loss_sell_ratio": 1.0,
+                },
+            },
         }
         verdict = VerdictResult(
             verdict="观察",
@@ -646,8 +655,18 @@ class TestHarnessRuntimeExtensions:
             snapshot={
                 "portfolio": {
                     "cash_ratio": 0.75,
-                    "holdings": [{"code": "688008", "days_held": 5}],
-                }
+                    "holdings": [
+                        {
+                            "code": "688008",
+                            "name": "澜起科技",
+                            "shares": 200,
+                            "cost": 255.87,
+                            "price": 260.0,
+                            "days_held": 5,
+                        }
+                    ],
+                },
+                "symbols": [{"code": "688008", "price": 260.0, "name": "澜起科技"}],
             },
             settings=settings,
             trade_index=1,
@@ -1083,6 +1102,65 @@ class TestHarnessRuntimeExtensions:
         }
         policy = resolve_harness_deep_loss_policy(state, settings=settings)
         assert policy["sell_ratio"] == 0.8
+
+    def test_non_deep_loss_sell_ratio_harness_evolution_on_defensive_trim(self):
+        from agent_reach.daily_run.harness import HarnessEntry, HarnessState
+        from agent_reach.daily_run.harness_policy import (
+            apply_harness_policy_overlay,
+            deep_loss_policy_default,
+            resolve_harness_deep_loss_policy,
+        )
+
+        state = HarnessState()
+        state.entries["memory"]["miss"] = HarnessEntry(
+            id="miss",
+            kind="memory",
+            title="MSS 预测偏离",
+            content="MSS 预测偏离：下日调低进攻阈值或缩窄仓位",
+            source="deterministic",
+            job="close",
+            evidence="close",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        settings = {
+            "harness": {
+                "runtime_overlay_sources": ["memory"],
+                "non_deep_loss_sell_ratio_mode": "harness",
+            },
+            "pnl_overview": {"non_deep_loss_sell_ratio": 1.0},
+        }
+        policy = resolve_harness_deep_loss_policy(state, settings=settings)
+        assert policy["non_deep_loss_sell_ratio"] == 0.7
+        eff = apply_harness_policy_overlay({**settings, "thresholds": {}})
+        assert eff["pnl_overview"]["non_deep_loss_sell_ratio"] == 0.7
+        assert deep_loss_policy_default(eff, "non_deep_loss_sell_ratio") == 0.7
+
+    def test_non_deep_loss_sell_ratio_fixed_mode_skips_evolution(self):
+        from agent_reach.daily_run.harness import HarnessEntry, HarnessState
+        from agent_reach.daily_run.harness_policy import resolve_harness_deep_loss_policy
+
+        state = HarnessState()
+        state.entries["memory"]["miss"] = HarnessEntry(
+            id="miss",
+            kind="memory",
+            title="MSS 预测偏离",
+            content="MSS 预测偏离：下日调低进攻阈值或缩窄仓位",
+            source="deterministic",
+            job="close",
+            evidence="close",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        settings = {
+            "harness": {
+                "runtime_overlay_sources": ["memory"],
+                "non_deep_loss_sell_ratio_mode": "fixed",
+            },
+            "pnl_overview": {"non_deep_loss_sell_ratio": 0.85},
+        }
+        policy = resolve_harness_deep_loss_policy(state, settings=settings)
+        assert policy["non_deep_loss_sell_ratio"] == 0.85
 
     def test_realized_gain_threshold_separate_from_loss(self):
         from agent_reach.daily_run.harness_policy import deep_loss_policy_base
