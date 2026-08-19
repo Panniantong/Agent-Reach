@@ -281,7 +281,7 @@ class TestIntradayWorkflow:
         state = IntradayState.from_dict(result["scan"]["state"])
         assert len(state.scans) == 1
 
-    def test_run_intraday_pushes_separate_morning_narrative_card(
+    def test_run_intraday_pushes_separate_intraday_narrative_card(
         self, intraday_snapshot, tmp_path, monkeypatch
     ):
         state_path = tmp_path / "intraday.json"
@@ -293,14 +293,6 @@ class TestIntradayWorkflow:
             return {"code": 0}
 
         monkeypatch.setattr("agent_reach.integrations.feishu.send_card", _fake_send)
-        monkeypatch.setattr(
-            "agent_reach.daily_run.report_narrative.push_morning_narrative_card",
-            lambda config, settings, **kw: (
-                _fake_send(config, "🤖 早盘 AI 解读 · S1 · 1只", "早盘摘要", "orange")
-                if kw.get("scan_id")
-                else None
-            ),
-        )
         result = run_intraday(
             intraday_snapshot,
             settings=load_settings(),
@@ -309,6 +301,8 @@ class TestIntradayWorkflow:
             state_path=state_path,
         )
         assert len(sends) >= 2
-        assert "早盘摘要" not in sends[0][1]
-        assert any("AI 解读" in t for t, _ in sends)
+        assert "S1 数据收集完成" in sends[0][1] or "数据收集完成" in sends[0][1]
+        assert any("盘中 AI 解读" in t for t, _ in sends)
+        assert any("盘中小结" in body for _, body in sends)
+        assert not any("早盘全持仓" in body for _, body in sends)
         assert result.get("narrative_feishu") is not None

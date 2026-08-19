@@ -9,6 +9,7 @@ from typing import Any, Optional
 
 _JOB_LABELS = {
     "morning": "早报",
+    "intraday": "盘中扫描",
     "close": "收盘复盘",
     "weekly": "周六周报",
     "forecast": "周日预测",
@@ -22,6 +23,24 @@ _NARRATIVE_LIMITS_DEFAULT: dict[str, int] = {
     "max_item_chars": 48,
     "max_context_chars": 1800,
 }
+
+_INTRADAY_RISK_LIMITS: dict[str, int] = {
+    "max_risk_alerts": 6,
+    "max_item_chars": 72,
+}
+
+_RISK_SUFFIXES = (
+    "摩擦惩罚阻断，预期收益不足以覆盖交易成本",
+    "摩擦惩罚阻断",
+    "MSS 低于 macro_veto 区间，维持高现金防守",
+    "MSS 低于 macro_veto 区间",
+)
+
+_COMPLIANCE_FOOTER = (
+    "以上内容基于自动化模型与公开数据整理，不构成投资建议。模拟/paper 交易仅供研究。"
+)
+
+_DAILY_RUN_NARRATIVE_JOBS = frozenset({"morning", "intraday", "close", "weekly", "forecast"})
 
 
 def _narrative_limits(cfg: dict[str, Any]) -> dict[str, int]:
@@ -85,6 +104,74 @@ def _compact_context(context: dict[str, Any], limits: dict[str, int]) -> dict[st
     return compact
 
 
+def _format_grouped_symbol_risk(label: str, names: list[str], *, max_show: int = 3) -> str:
+    clean = [str(n).strip() for n in names if str(n or "").strip()]
+    if not clean:
+        return label
+    n = len(clean)
+    if n == 1:
+        return f"{clean[0]}：{label}"
+    if n <= max_show:
+        return f"{'、'.join(clean)}：{label}"
+    head = "、".join(clean[:max_show])
+    return f"{head}等{n}只：{label}"
+
+
+def _split_symbol_risk_line(text: str) -> tuple[str, str] | None:
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+    if "：" in raw:
+        prefix, label = raw.split("：", 1)
+        prefix = prefix.strip()
+        label = label.strip()
+        if prefix and label:
+            return prefix, label
+    for suffix in _RISK_SUFFIXES:
+        if raw.endswith(suffix):
+            name = raw[: -len(suffix)].strip()
+            if name:
+                return name, suffix
+    return None
+
+
+def _merge_duplicate_risk_alerts(alerts: list[str] | None) -> list[str]:
+    """Merge repeated risk labels (e.g. friction block on many symbols) into one line."""
+    groups: dict[str, list[str]] = {}
+    passthrough: list[str] = []
+    for item in alerts or []:
+        parsed = _split_symbol_risk_line(str(item or ""))
+        if parsed is None:
+            text = str(item or "").strip()
+            if text:
+                passthrough.append(text)
+            continue
+        name, label = parsed
+        groups.setdefault(label, []).append(name)
+    merged = [_format_grouped_symbol_risk(label, names) for label, names in groups.items()]
+    return passthrough + merged
+
+
+def _collect_merged_intraday_risks(symbols: list[dict[str, Any]]) -> list[str]:
+    friction: list[str] = []
+    macro: list[str] = []
+    for sym in symbols:
+        name = str(sym.get("name") or sym.get("code") or "").strip()
+        if not name:
+            continue
+        if sym.get("friction_blocked"):
+            friction.append(name)
+        mss = sym.get("mss_final")
+        if mss is not None and float(mss) < 40:
+            macro.append(name)
+    risks: list[str] = []
+    if friction:
+        risks.append(_format_grouped_symbol_risk("摩擦惩罚阻断", friction))
+    if macro:
+        risks.append(_format_grouped_symbol_risk("MSS 低于 macro_veto 区间", macro))
+    return risks
+
+
 def _compact_narrative_payload(payload: dict[str, Any], limits: dict[str, int]) -> dict[str, Any]:
     out = dict(payload)
     out["summary"] = _trim_text(out.get("summary"), limits["max_summary_chars"])
@@ -99,7 +186,7 @@ def _compact_narrative_payload(payload: dict[str, Any], limits: dict[str, int]) 
         max_chars=limits["max_item_chars"],
     )
     out["risk_alerts"] = _trim_string_list(
-        out.get("risk_alerts"),
+        _merge_duplicate_risk_alerts(out.get("risk_alerts")),
         max_items=limits["max_risk_alerts"],
         max_chars=limits["max_item_chars"],
     )
@@ -158,6 +245,10 @@ def _generate_narrative(
         return {"skipped": True, "reason": "llm_narrative disabled", "job": job}
 
     limits = _narrative_limits(cfg)
+    if job == "intraday":
+        limits = dict(limits)
+        for key, val in _INTRADAY_RISK_LIMITS.items():
+            limits[key] = max(int(limits.get(key, 0)), int(val))
     compact_context = _compact_context(context, limits)
     base_system = _narrative_system_prompt(job, limits=limits)
     hint = system.strip()
@@ -212,6 +303,7 @@ def render_narrative_markdown(narrative: dict[str, Any], *, job: str = "") -> st
     subtitles = {
         "forecast": "数值路径不变",
         "morning": "决策摘要",
+        "intraday": "盘中小结",
         "close": "复盘摘要",
         "weekly": "周报摘要",
     }
@@ -242,6 +334,8 @@ def render_narrative_markdown(narrative: dict[str, Any], *, job: str = "") -> st
         lines.append("**风险**")
         for item in narrative["risk_alerts"]:
             lines.append(f"- {item}")
+    if use_job in _DAILY_RUN_NARRATIVE_JOBS:
+        lines.extend(["", f"> {_COMPLIANCE_FOOTER}"])
     return "\n".join(lines).strip()
 
 
@@ -495,8 +589,16 @@ def load_today_morning_narrative(
     return None
 
 
+def intraday_append_narrative(settings: Optional[dict[str, Any]] = None) -> bool:
+    intraday = (settings or {}).get("intraday") or {}
+    if "append_narrative" in intraday:
+        return intraday["append_narrative"] is not False
+    return intraday.get("append_morning_narrative", True) is not False
+
+
 def intraday_append_morning_narrative(settings: Optional[dict[str, Any]] = None) -> bool:
-    return (settings or {}).get("intraday", {}).get("append_morning_narrative", True) is not False
+    """Backward-compatible alias for intraday_append_narrative."""
+    return intraday_append_narrative(settings)
 
 
 def render_morning_narrative_footer(
@@ -504,7 +606,7 @@ def render_morning_narrative_footer(
     *,
     code: Optional[str] = None,
 ) -> str:
-    """Legacy inline footer (prefer push_morning_narrative_card for separate card)."""
+    """Legacy inline footer from cached morning narrative."""
     narrative = load_today_morning_narrative(settings, code=code)
     if not narrative:
         return ""
@@ -514,37 +616,231 @@ def render_morning_narrative_footer(
     return "\n\n---\n\n" + md
 
 
-def morning_narrative_card_title(
+def _intraday_row_context(row: dict[str, Any]) -> dict[str, Any]:
+    inner = row.get("result") or {}
+    scan_wrap = inner.get("scan") or {}
+    scan = scan_wrap.get("scan") or {}
+    evaluation = scan_wrap.get("evaluation") or {}
+    report = evaluation.get("report") or {}
+    trade = inner.get("trade") or {}
+    decision = trade.get("decision") or {}
+    return {
+        "name": row.get("name") or scan.get("name"),
+        "code": row.get("code") or scan.get("code"),
+        "scan_id": scan.get("scan_id"),
+        "mss_final": scan.get("mss_final"),
+        "verdict": scan.get("verdict"),
+        "lookback_mss": scan_wrap.get("lookback_mss"),
+        "trend": scan_wrap.get("trend"),
+        "reasoning": (report.get("reasoning") or "")[:96],
+        "trade_action": decision.get("action"),
+        "trade_reasoning": (decision.get("reasoning") or "")[:96],
+        "friction_blocked": decision.get("friction_blocked"),
+    }
+
+
+def build_intraday_context(
+    *,
+    scan_result: dict[str, Any],
+    trade_result: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    scan = scan_result.get("scan") or {}
+    evaluation = scan_result.get("evaluation") or {}
+    report = evaluation.get("report") or {}
+    decision = (trade_result or {}).get("decision") or {}
+    lookback_detail = [
+        {
+            "scan_id": item.get("scan_id"),
+            "mss_final": item.get("mss_final"),
+            "weight": item.get("weight"),
+        }
+        for item in (scan_result.get("lookback_detail") or [])[:3]
+    ]
+    return {
+        "job": "intraday",
+        "scan_id": scan.get("scan_id"),
+        "name": scan.get("name"),
+        "code": scan.get("code"),
+        "mss_final": scan.get("mss_final"),
+        "verdict": scan.get("verdict"),
+        "lookback_mss": scan_result.get("lookback_mss"),
+        "trend": scan_result.get("trend"),
+        "reasoning": (report.get("reasoning") or "")[:120],
+        "lookback_detail": lookback_detail,
+        "trade_action": decision.get("action"),
+        "trade_reasoning": (decision.get("reasoning") or "")[:120],
+        "friction_blocked": decision.get("friction_blocked"),
+        "trade_skip_reason": scan_result.get("trade_skip_reason"),
+    }
+
+
+def _intraday_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
+    focus: list[str] = []
+    risks: list[str] = []
+    scan_id = ctx.get("scan_id") or "S?"
+    verdict = ctx.get("verdict") or "—"
+    mss = ctx.get("mss_final")
+    lookback = ctx.get("lookback_mss")
+    if lookback is not None:
+        focus.append(f"Lookback MSS {lookback}" + (f"，趋势 {ctx.get('trend')}" if ctx.get("trend") else ""))
+    if ctx.get("trade_action"):
+        action = str(ctx["trade_action"])
+        action_map = {"buy": "买入", "sell": "卖出", "hold": "观望", "skip": "跳过"}
+        focus.append(f"调仓建议 {action_map.get(action, action)}")
+        if ctx.get("trade_reasoning"):
+            focus.append(str(ctx["trade_reasoning"])[:72])
+    elif ctx.get("trade_skip_reason"):
+        focus.append(str(ctx["trade_skip_reason"])[:72])
+    if ctx.get("reasoning"):
+        focus.append(str(ctx["reasoning"])[:72])
+    if ctx.get("friction_blocked"):
+        risks.append("摩擦惩罚阻断，预期收益不足以覆盖交易成本")
+    if mss is not None and float(mss) < 40:
+        risks.append("MSS 低于 macro_veto 区间，维持高现金防守")
+    summary = f"{scan_id} {ctx.get('name') or ctx.get('code')}：{verdict}"
+    if mss is not None:
+        summary += f"，MSS {mss}"
+    return {
+        "summary": summary,
+        "focus_points": focus[:3] or [f"{scan_id} 扫描完成，按 MSS 规则执行"],
+        "divergence_notes": [],
+        "risk_alerts": risks[:2],
+        "planner": "deterministic",
+    }
+
+
+def generate_intraday_narrative(
+    *,
+    scan_result: dict[str, Any],
+    trade_result: Optional[dict[str, Any]] = None,
+    settings: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    context = build_intraday_context(scan_result=scan_result, trade_result=trade_result)
+    return _generate_narrative(
+        "intraday",
+        context,
+        settings=settings,
+        system="解读本次盘中扫描与调仓评估结果；优先 MSS、Lookback、调仓动作。",
+        deterministic_fn=_intraday_deterministic,
+    )
+
+
+def build_merged_intraday_context(
+    symbol_results: list[dict[str, Any]],
+    *,
+    scan_id: Optional[str] = None,
+) -> dict[str, Any]:
+    symbols = [_intraday_row_context(row) for row in symbol_results if not row.get("skipped")]
+    return {
+        "job": "intraday",
+        "portfolio_scope": "merged",
+        "scan_id": scan_id or (symbols[0].get("scan_id") if symbols else None),
+        "symbol_count": len(symbols),
+        "symbols": symbols,
+    }
+
+
+def _merged_intraday_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
+    focus: list[str] = []
+    risks: list[str] = []
+    symbols = ctx.get("symbols") or []
+    n = int(ctx.get("symbol_count") or len(symbols))
+    scan_id = ctx.get("scan_id") or "S?"
+    mss_vals = [float(s["mss_final"]) for s in symbols if s.get("mss_final") is not None]
+    verdicts = [str(s.get("verdict") or "") for s in symbols if s.get("verdict")]
+    dominant = max(set(verdicts), key=verdicts.count) if verdicts else "—"
+    if mss_vals:
+        focus.append(f"MSS 区间 {min(mss_vals):.1f}~{max(mss_vals):.1f}")
+    focus.append(f"{n} 只标的，主导结论 {dominant}")
+    trade_actions = [str(s.get("trade_action") or "") for s in symbols if s.get("trade_action")]
+    if trade_actions:
+        holds = sum(1 for a in trade_actions if a == "hold")
+        focus.append(f"调仓评估 {len(trade_actions)} 只：观望 {holds} 只")
+    risks = _collect_merged_intraday_risks(symbols)
+    summary = f"{scan_id} 全持仓 {n} 只扫描"
+    if mss_vals:
+        summary += f"，MSS {min(mss_vals):.1f}~{max(mss_vals):.1f}"
+    return {
+        "summary": summary,
+        "focus_points": focus[:3] or [f"{scan_id} 扫描完成"],
+        "divergence_notes": [],
+        "risk_alerts": risks,
+        "planner": "deterministic",
+    }
+
+
+def generate_merged_intraday_narrative(
+    symbol_results: list[dict[str, Any]],
+    *,
+    scan_id: Optional[str] = None,
+    settings: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    context = build_merged_intraday_context(symbol_results, scan_id=scan_id)
+    return _generate_narrative(
+        "intraday",
+        context,
+        settings=settings,
+        system="解读本次定时盘中任务的整体扫描与调仓结论；禁止复述早报。",
+        deterministic_fn=_merged_intraday_deterministic,
+    )
+
+
+def intraday_narrative_card_title(
     *,
     scan_id: Optional[str] = None,
     symbol_count: int = 1,
 ) -> str:
     if scan_id:
-        return f"🤖 早盘 AI 解读 · {scan_id} · {symbol_count}只"
-    return f"🤖 早盘 AI 解读 · {symbol_count}只"
+        return f"🤖 盘中 AI 解读 · {scan_id} · {symbol_count}只"
+    return f"🤖 盘中 AI 解读 · {symbol_count}只"
 
 
-def push_morning_narrative_card(
+def push_intraday_narrative_card(
     config,
     settings: dict[str, Any],
     *,
     scan_id: Optional[str] = None,
     symbol_count: int = 1,
-    code: Optional[str] = None,
+    scan_result: Optional[dict[str, Any]] = None,
+    trade_result: Optional[dict[str, Any]] = None,
+    symbol_results: Optional[list[dict[str, Any]]] = None,
 ) -> Optional[dict[str, Any]]:
-    """Push morning AI narrative as a separate Feishu card (always last)."""
-    if not intraday_append_morning_narrative(settings):
+    """Push AI interpretation of this intraday scheduled run (always last)."""
+    if not intraday_append_narrative(settings):
         return None
-    narrative = load_today_morning_narrative(settings, code=code)
-    if not narrative:
+    if symbol_results and len(symbol_results) > 1:
+        narrative = generate_merged_intraday_narrative(
+            symbol_results,
+            scan_id=scan_id,
+            settings=settings,
+        )
+    elif scan_result:
+        narrative = generate_intraday_narrative(
+            scan_result=scan_result,
+            trade_result=trade_result,
+            settings=settings,
+        )
+    elif symbol_results:
+        row = next((r for r in symbol_results if not r.get("skipped")), None)
+        if not row:
+            return None
+        inner = row.get("result") or {}
+        narrative = generate_intraday_narrative(
+            scan_result=inner.get("scan") or {},
+            trade_result=inner.get("trade"),
+            settings=settings,
+        )
+    else:
         return None
-    md = render_narrative_markdown(narrative, job="morning")
+    if narrative.get("skipped"):
+        return None
+    md = render_narrative_markdown(narrative, job="intraday")
     if not md.strip():
         return None
     from agent_reach.integrations.feishu import send_card
 
-    tpl = (settings.get("report") or {}).get("feishu_template_premarket", "orange")
-    title = morning_narrative_card_title(scan_id=scan_id, symbol_count=symbol_count)
+    tpl = (settings.get("report") or {}).get("feishu_template_intraday", "orange")
+    title = intraday_narrative_card_title(scan_id=scan_id, symbol_count=symbol_count)
     return send_card(config, title, md, template=tpl)
 
 

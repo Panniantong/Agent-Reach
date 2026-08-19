@@ -104,3 +104,26 @@ class TestThresholdDisplay:
         assert "基准 50" in md
         assert "宏观否决线: 30" in md
         assert "最低现金比例: 50%" in md
+
+
+class TestVerdictEffectiveThresholds:
+    def test_reasoning_uses_harness_effective_aggressive(self):
+        from agent_reach.daily_run.settings import effective_settings, load_settings
+        from agent_reach.daily_run.verdict import compute_verdict
+
+        settings = load_settings()
+        eff = effective_settings(settings)
+        aggressive = float((eff.get("thresholds") or {}).get("aggressive_entry", 50))
+        snap = {
+            "code": "688008",
+            "name": "澜起科技",
+            "price": 255.87,
+            "ma20": 260.0,
+            "position_20d": 0.55,
+            "volume_ratio": 1.2,
+            "mss_final": aggressive - 2,
+            "structured_review_complete": True,
+        }
+        v = compute_verdict(snap, settings)
+        assert f"{aggressive:.0f}" in v.reasoning
+        assert "50" not in v.reasoning or f"{aggressive:.0f}" == "50"

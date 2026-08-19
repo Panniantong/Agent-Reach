@@ -593,14 +593,15 @@ def run_intraday(
         try:
             feishu_result = send_card(cfg_obj, card_title, "\n".join(md_parts), template=tpl)
             steps.append("push")
-            from agent_reach.daily_run.report_narrative import push_morning_narrative_card
+            from agent_reach.daily_run.report_narrative import push_intraday_narrative_card
 
-            narrative_feishu = push_morning_narrative_card(
+            narrative_feishu = push_intraday_narrative_card(
                 cfg_obj,
                 cfg,
                 scan_id=scan_id,
                 symbol_count=1,
-                code=str(scan_result["scan"].get("code") or snapshot.get("code") or ""),
+                scan_result=scan_result,
+                trade_result=trade_result,
             )
             if narrative_feishu:
                 steps.append("narrative_push")

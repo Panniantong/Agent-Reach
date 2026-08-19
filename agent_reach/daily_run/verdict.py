@@ -55,18 +55,15 @@ def compute_verdict(snapshot: dict[str, Any], settings: dict[str, Any]) -> Verdi
     watch_label = labels.get("watch", "观察")
     avoid_label = labels.get("avoid", "回避")
 
-    from agent_reach.daily_run.harness_policy import (
-        aggressive_entry_default,
-        macro_veto_default,
-        min_cash_ratio_default,
-        threshold_default,
-    )
+    from agent_reach.daily_run.harness_policy import threshold_default
+    from agent_reach.daily_run.settings import effective_settings
 
-    macro_veto = macro_veto_default(settings)
-    aggressive = aggressive_entry_default(settings)
-    high_pos = float(threshold_default(settings, "high_position_20d"))
-    min_vol_ratio = float(threshold_default(settings, "min_volume_ratio"))
-    max_vwap_dev = float(threshold_default(settings, "max_vwap_deviation_pct"))
+    eff = effective_settings(settings)
+    macro_veto = threshold_default(eff, "macro_veto")
+    aggressive = threshold_default(eff, "aggressive_entry")
+    high_pos = float(threshold_default(eff, "high_position_20d"))
+    min_vol_ratio = float(threshold_default(eff, "min_volume_ratio"))
+    max_vwap_dev = float(threshold_default(eff, "max_vwap_deviation_pct"))
 
     breakdown = snapshot.get("mss_breakdown") or {}
     mss = snapshot.get("mss_final")

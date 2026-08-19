@@ -142,6 +142,85 @@ def test_render_narrative_markdown_is_concise():
     assert "解读来源" not in md
 
 
+def test_intraday_narrative_deterministic_from_scan():
+    from agent_reach.daily_run.report_narrative import generate_intraday_narrative
+
+    scan_result = {
+        "scan": {"scan_id": "S5", "name": "澜起科技", "code": "688008", "mss_final": 46.7, "verdict": "观察"},
+        "lookback_mss": 47.16,
+        "trend": "falling",
+        "evaluation": {"report": {"reasoning": "MSS 低于进攻阈值，维持观望"}},
+        "lookback_detail": [{"scan_id": "S5", "mss_final": 46.7, "weight": 0.5}],
+    }
+    with patch("agent_reach.daily_run.llm_chat.resolve_chat_provider", return_value=None):
+        narrative = generate_intraday_narrative(
+            scan_result=scan_result,
+            settings={"llm_narrative": {"enabled": True}},
+        )
+    assert narrative["planner"] == "deterministic"
+    assert "S5" in narrative["summary"]
+    assert "46.7" in narrative["summary"] or "47.16" in " ".join(narrative.get("focus_points") or [])
+
+
+def test_merged_intraday_narrative_deterministic():
+    from agent_reach.daily_run.report_narrative import generate_merged_intraday_narrative
+
+    symbol_results = [
+        {
+            "code": "688008",
+            "name": "澜起科技",
+            "result": {
+                "scan": {
+                    "scan": {"scan_id": "S5", "mss_final": 46.7, "verdict": "观察"},
+                    "lookback_mss": 47.0,
+                    "trend": "falling",
+                },
+                "trade": {"decision": {"action": "hold", "reasoning": "维持观望", "friction_blocked": True}},
+            },
+        },
+        {
+            "code": "002273",
+            "name": "水晶光电",
+            "result": {
+                "scan": {
+                    "scan": {"scan_id": "S5", "mss_final": 49.6, "verdict": "观察"},
+                    "lookback_mss": 49.0,
+                    "trend": "rising",
+                },
+                "trade": {"decision": {"action": "hold", "friction_blocked": True}},
+            },
+        },
+    ]
+    with patch("agent_reach.daily_run.llm_chat.resolve_chat_provider", return_value=None):
+        narrative = generate_merged_intraday_narrative(
+            symbol_results,
+            scan_id="S5",
+            settings={"llm_narrative": {"enabled": True}},
+        )
+    assert narrative["planner"] == "deterministic"
+    assert "S5" in narrative["summary"]
+    assert "2" in narrative["summary"] or "2" in " ".join(narrative.get("focus_points") or [])
+    assert len(narrative.get("risk_alerts") or []) == 1
+    assert "等2只" in narrative["risk_alerts"][0] or "澜起科技" in narrative["risk_alerts"][0]
+    assert "摩擦惩罚阻断" in narrative["risk_alerts"][0]
+
+
+def test_merge_duplicate_risk_alerts():
+    from agent_reach.daily_run.report_narrative import _merge_duplicate_risk_alerts
+
+    merged = _merge_duplicate_risk_alerts(
+        [
+            "澜起科技 摩擦惩罚阻断",
+            "水晶光电 摩擦惩罚阻断",
+            "海能达 摩擦惩罚阻断",
+            "中际旭创 MSS 低于 macro_veto 区间",
+        ]
+    )
+    assert len(merged) == 2
+    assert "等3只：摩擦惩罚阻断" in merged[0] or "澜起科技、水晶光电、海能达：摩擦惩罚阻断" in merged[0]
+    assert "中际旭创" in merged[1]
+
+
 def test_merged_morning_narrative_deterministic():
     from agent_reach.daily_run.report_narrative import generate_merged_morning_narrative
 

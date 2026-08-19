@@ -289,13 +289,14 @@ def run_intraday_for_symbols(
         from agent_reach.integrations.feishu import send_card
 
         feishu_result = send_card(config or Config(), title, body, template=tpl)
-        from agent_reach.daily_run.report_narrative import push_morning_narrative_card
+        from agent_reach.daily_run.report_narrative import push_intraday_narrative_card
 
-        narrative_feishu = push_morning_narrative_card(
+        narrative_feishu = push_intraday_narrative_card(
             config or Config(),
             cfg,
             scan_id=scan_id,
             symbol_count=len(scan_bodies),
+            symbol_results=symbol_results,
         )
 
     return {
