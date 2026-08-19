@@ -15,7 +15,7 @@ from agent_reach.daily_run.plugins.quant_expert import QuantExpert
 from agent_reach.daily_run.plugins.risk_expert import RiskExpert
 from agent_reach.daily_run.plugins.sentiment_expert import SentimentExpert
 from agent_reach.daily_run.plugins.technical_expert import TechnicalExpert
-from agent_reach.daily_run.settings import load_settings
+from agent_reach.daily_run.settings import effective_settings, load_settings
 from agent_reach.daily_run.verdict import compute_mss
 
 TEAM_EXPERT_NAMES: list[str] = [
@@ -90,7 +90,7 @@ def run_experts(
     parallel: bool | None = None,
 ) -> dict[str, Any]:
     """Run expert plugins (parallel by default) and merge scores into snapshot."""
-    cfg = settings or load_settings()
+    cfg = effective_settings(settings or load_settings())
     plugin_cfg = cfg.get("plugins", {})
     use_parallel = parallel if parallel is not None else plugin_cfg.get("parallel", True)
 

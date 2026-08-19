@@ -15,12 +15,9 @@ class IdentifierExpert(ExpertPlugin):
     def run(self, context: PluginContext) -> PluginResult:
         snap = context.snapshot
         settings = context.settings
-        thresholds = settings.get("thresholds", {})
         from agent_reach.daily_run.harness_policy import threshold_default
 
-        max_dev = float(
-            thresholds.get("max_price_deviation_pct", threshold_default(settings, "max_price_deviation_pct"))
-        )
+        max_dev = float(threshold_default(settings, "max_price_deviation_pct"))
 
         code = snap.get("code")
         name = snap.get("name")

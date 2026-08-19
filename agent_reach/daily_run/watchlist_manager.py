@@ -99,6 +99,9 @@ def adjust_watchlist(
     sold_codes: Optional[list[dict[str, Any]]] = None,
 ) -> WatchlistAdjustResult:
     """Update watchlist membership — only valid for morning or close."""
+    from agent_reach.daily_run.harness_display import effective_policy_settings
+
+    settings = effective_policy_settings(settings)
     if not can_adjust_watchlist(phase):
         return WatchlistAdjustResult(
             applied=False,
@@ -111,10 +114,9 @@ def adjust_watchlist(
     pf = copy_portfolio(portfolio)
     enriched = build_enriched_symbols(snapshot)
     changes: list[WatchlistChange] = []
-    from agent_reach.daily_run.harness_policy import threshold_default
+    from agent_reach.daily_run.harness_policy import macro_veto_default
 
-    thresholds = settings.get("thresholds", {})
-    macro_veto = float(thresholds.get("macro_veto", threshold_default(settings, "macro_veto")))
+    macro_veto = macro_veto_default(settings)
     held_codes = {_normalize_code(str(h.get("code", ""))) for h in pf.get("holdings") or []}
     base_mss = _snapshot_base_mss(snapshot, settings)
     wl_cfg = watchlist_settings(settings)

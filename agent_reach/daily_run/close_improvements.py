@@ -212,17 +212,13 @@ def _improve_portfolio(
     settings: dict[str, Any],
 ) -> None:
     from agent_reach.daily_run.harness_policy import min_cash_ratio_default, runtime_int_default
-    from agent_reach.daily_run.portfolio_manager import effective_days_held
+    from agent_reach.daily_run.portfolio_manager import effective_days_held, max_total_symbols
 
     pf = current.get("portfolio") or {}
     holdings = pf.get("holdings") or []
     cash_ratio = pf.get("cash_ratio")
-    min_cash = float(thresholds.get("min_cash_ratio", min_cash_ratio_default(settings)))
-    max_t = int(
-        portfolio_cfg["max_total_symbols"]
-        if "max_total_symbols" in portfolio_cfg
-        else portfolio_cfg.get("max_holdings", 10)
-    )
+    min_cash = min_cash_ratio_default(settings)
+    max_t = max_total_symbols(settings)
     watchlist = current.get("watchlist") or []
     held_codes = {str(h.get("code", "")).zfill(6)[-6:] for h in holdings}
     wl_only = [
@@ -370,6 +366,7 @@ def _improve_schedule(
     schedule_cfg: dict[str, Any],
     settings: dict[str, Any],
 ) -> None:
+    from agent_reach.daily_run.harness_policy import runtime_int_default
     from agent_reach.daily_run.intraday import MAX_SCANS
 
     expected = expected_scan_slots()
@@ -429,7 +426,7 @@ def _improve_schedule(
             "8:00 全量早盘应写入 S2；检查 run_scheduled(morning) 是否调用 record_morning_scan",
         )
 
-    min_scans = int(schedule_cfg.get("trade_min_scans", 3))
+    min_scans = runtime_int_default(settings, "schedule", "trade_min_scans")
     if n >= min_scans and not trades:
         out.add(
             "schedule",

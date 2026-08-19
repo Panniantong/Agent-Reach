@@ -162,22 +162,15 @@ def collect_macro_context(
 
 
 def threshold_refs_for_display(settings: dict[str, Any]) -> dict[str, float]:
-    """Effective macro veto / aggressive entry refs for reports (harness overlay aware)."""
-    from agent_reach.daily_run.harness_policy import aggressive_entry_default, macro_veto_default
-    from agent_reach.daily_run.settings import effective_settings
+    from agent_reach.daily_run.harness_display import threshold_refs_for_display as _refs
 
-    eff = effective_settings(settings)
-    return {
-        "_macro_veto_ref": macro_veto_default(eff),
-        "_aggressive_ref": aggressive_entry_default(eff),
-    }
+    return _refs(settings)
 
 
 def apply_threshold_refs(breakdown: dict[str, Any], settings: dict[str, Any]) -> dict[str, Any]:
-    """Refresh _macro_veto_ref / _aggressive_ref on an existing breakdown (e.g. daily cache)."""
-    out = dict(breakdown or {})
-    out.update(threshold_refs_for_display(settings))
-    return out
+    from agent_reach.daily_run.harness_display import apply_threshold_refs as _apply
+
+    return _apply(breakdown, settings)
 
 
 def _derive_mss_breakdown(

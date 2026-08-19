@@ -89,9 +89,7 @@ def verify_snapshots(
 
     cfg = effective_settings(settings)
     thresholds = cfg.get("thresholds", {})
-    max_price_dev = float(
-        thresholds.get("max_price_deviation_pct", threshold_default(cfg, "max_price_deviation_pct"))
-    )
+    max_dev = float(threshold_default(cfg, "max_price_deviation_pct"))
 
     code = current.get("code") or baseline.get("code")
     name = current.get("name") or baseline.get("name")
@@ -133,8 +131,8 @@ def verify_snapshots(
                     f"MSS 实际 {mc:.1f} 高于预测上沿 {high:.1f}（偏差 {mc - high:.1f}）"
                 )
 
-    if price_delta is not None and abs(price_delta) > max_price_dev:
-        deviations.append(f"价格变动 {price_delta:.1%} 超过锚点阈值 {max_price_dev:.1%}")
+    if price_delta is not None and abs(price_delta) > max_dev:
+        deviations.append(f"价格变动 {price_delta:.1%} 超过锚点阈值 {max_dev:.1%}")
 
     if vb != vc:
         deviations.append(f"标签由「{vb}」变为「{vc}」")

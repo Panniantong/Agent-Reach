@@ -302,6 +302,9 @@ def generate_weekly_improvements(
     hot_sectors: list[dict[str, Any]],
 ) -> list[InsightItem]:
     """Actionable process improvement suggestions based on the full trading week."""
+    from agent_reach.daily_run.harness_display import effective_policy_settings
+
+    settings = effective_policy_settings(settings)
     cfg = settings.get("weekly_report") or {}
     if cfg.get("process_improvements", True) is False:
         return []
@@ -406,12 +409,15 @@ def generate_weekly_improvements(
     if not trades and len(mss_summary) >= 5:
         mss_vals = [float(x["mss_final"]) for x in mss_summary if x.get("mss_final") is not None]
         if mss_vals and max(mss_vals) - min(mss_vals) >= 10:
+            from agent_reach.daily_run.harness_policy import runtime_int_default
+
+            min_scans = runtime_int_default(settings, "schedule", "trade_min_scans")
             items.append(
                 InsightItem(
                     "workflow",
                     "medium",
                     "MSS 波动大但本周无成交",
-                    f"振幅 {max(mss_vals) - min(mss_vals):.0f} 分，trade_min_scans={schedule_cfg.get('trade_min_scans', 3)} 可能过严",
+                    f"振幅 {max(mss_vals) - min(mss_vals):.0f} 分，trade_min_scans={min_scans} 可能过严",
                     action="评估降低 trade_every_n_scans 或在波动日手动 daily-run intraday --trade",
                 )
             )
@@ -452,8 +458,9 @@ def generate_weekly_improvements(
 
     from agent_reach.daily_run.harness_policy import min_cash_ratio_default
 
-    min_cash = float(thresholds.get("min_cash_ratio", min_cash_ratio_default(cfg)))
-    if cfg.get("skill_writeback", True) is False:
+    min_cash = min_cash_ratio_default(settings)
+    weekly_cfg = settings.get("weekly_report") or {}
+    if weekly_cfg.get("skill_writeback", True) is False:
         items.append(
             InsightItem(
                 "workflow",

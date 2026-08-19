@@ -10,33 +10,14 @@ from typing import Any, Optional
 from agent_reach.daily_run.auditor import AuditResult, run_data_audit
 from agent_reach.daily_run.quality_gate import GateResult, validate_report
 from agent_reach.daily_run.settings import effective_settings, load_settings
+from agent_reach.daily_run.harness_display import format_mss_breakdown_lines
 from agent_reach.daily_run.verdict import VerdictResult, compute_verdict, fuse_verdict_with_team
 
-_MSS_BREAKDOWN_LABELS: dict[str, str] = {
-    "_macro_veto_ref": "宏观否决线",
-    "_aggressive_ref": "进攻阈值",
-}
+_MSS_BREAKDOWN_LABELS = {}  # backward compat for tests importing pipeline labels
 
 
 def _format_mss_breakdown_lines(breakdown: dict[str, Any]) -> list[str]:
-    """Render MSS factor lines; threshold refs use friendly Chinese labels."""
-    lines: list[str] = []
-    refs: list[tuple[str, Any]] = []
-    for key, value in breakdown.items():
-        if key in _MSS_BREAKDOWN_LABELS:
-            refs.append((_MSS_BREAKDOWN_LABELS[key], value))
-        elif str(key).startswith("_"):
-            continue
-        else:
-            lines.append(f"- {key}: {value}")
-    for label, value in refs:
-        if isinstance(value, float) and label == "宏观否决线":
-            lines.append(f"- {label}: {value:.0f}")
-        elif isinstance(value, float):
-            lines.append(f"- {label}: {value:.0f}")
-        else:
-            lines.append(f"- {label}: {value}")
-    return lines
+    return format_mss_breakdown_lines(breakdown)
 
 
 def evaluate_snapshot(
@@ -93,6 +74,9 @@ def build_report(
 
     breakdown = snapshot.get("mss_breakdown") or {}
     breakdown_lines = _format_mss_breakdown_lines(breakdown)
+    from agent_reach.daily_run.harness_display import format_effective_thresholds_markdown
+
+    threshold_policy_md = format_effective_thresholds_markdown(settings)
 
     prior_close_mss = snapshot.get("prior_close_mss")
     prior_close_delta = None
@@ -123,6 +107,7 @@ def build_report(
         "audit_warnings": audit.warnings,
         "evidence_chain": "\n".join(evidence) if evidence else snapshot.get("evidence_chain", ""),
         "mss_breakdown_text": "\n".join(breakdown_lines),
+        "threshold_policy_md": threshold_policy_md,
         "portfolio": snapshot.get("portfolio"),
         "watchlist": snapshot.get("watchlist"),
         "macro_summary": snapshot.get("macro_summary"),
@@ -144,6 +129,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         lines.extend(["", prior_line])
     if report.get("mss_breakdown_text"):
         lines.extend(["", "**MSS 拆解：**", report["mss_breakdown_text"]])
+    if report.get("threshold_policy_md"):
+        lines.extend(["", report["threshold_policy_md"]])
 
     lines.extend([
         "",

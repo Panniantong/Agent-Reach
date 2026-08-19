@@ -17,10 +17,10 @@ class RiskExpert(ExpertPlugin):
         settings = context.settings
         thresholds = settings.get("thresholds", {})
         trading = settings.get("trading", {})
-        from agent_reach.daily_run.harness_policy import min_cash_ratio_default, runtime_float_default, threshold_default
+        from agent_reach.daily_run.harness_policy import macro_veto_default, min_cash_ratio_default, runtime_float_default, threshold_default
 
-        macro_veto = float(thresholds.get("macro_veto", threshold_default(settings, "macro_veto")))
-        min_cash = float(thresholds.get("min_cash_ratio", min_cash_ratio_default(settings)))
+        macro_veto = macro_veto_default(settings)
+        min_cash = min_cash_ratio_default(settings)
 
         breakdown = snap.get("mss_breakdown") or {}
         mss = snap.get("mss_final")
