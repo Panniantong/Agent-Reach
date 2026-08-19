@@ -36,12 +36,6 @@ _RISK_SUFFIXES = (
     "MSS 低于 macro_veto 区间",
 )
 
-_COMPLIANCE_FOOTER = (
-    "以上内容基于自动化模型与公开数据整理，不构成投资建议。模拟/paper 交易仅供研究。"
-)
-
-_DAILY_RUN_NARRATIVE_JOBS = frozenset({"morning", "intraday", "close", "weekly", "forecast"})
-
 
 def _narrative_limits(cfg: dict[str, Any]) -> dict[str, int]:
     out = dict(_NARRATIVE_LIMITS_DEFAULT)
@@ -334,8 +328,6 @@ def render_narrative_markdown(narrative: dict[str, Any], *, job: str = "") -> st
         lines.append("**风险**")
         for item in narrative["risk_alerts"]:
             lines.append(f"- {item}")
-    if use_job in _DAILY_RUN_NARRATIVE_JOBS:
-        lines.extend(["", f"> {_COMPLIANCE_FOOTER}"])
     return "\n".join(lines).strip()
 
 
