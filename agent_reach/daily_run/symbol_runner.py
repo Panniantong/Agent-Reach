@@ -151,6 +151,9 @@ def run_morning_for_symbols(
                 symbol_count=len(decision_entries),
             )
             symbol_results[0]["result"]["llm_narrative"] = narrative
+            from agent_reach.daily_run.report_narrative import persist_morning_narrative
+
+            persist_morning_narrative(narrative)
         feishu_result = push_report_sections(
             merged,
             settings=cfg,
@@ -159,6 +162,14 @@ def run_morning_for_symbols(
             fallback_title="🌅 早盘 · 全持仓",
             split=split_push_enabled(cfg, report_kind="morning"),
         )
+
+    if not defer_narrative:
+        from agent_reach.daily_run.report_narrative import persist_morning_narrative
+
+        for row in symbol_results:
+            row_narrative = (row.get("result") or {}).get("llm_narrative")
+            if row_narrative and not row_narrative.get("skipped"):
+                persist_morning_narrative(row_narrative, code=row.get("code"))
 
     return {
         "job": "morning",
@@ -266,6 +277,11 @@ def run_intraday_for_symbols(
         from agent_reach.config import Config
 
         body = "\n\n---\n\n".join(f"## {name}\n\n{content}" for name, content in scan_bodies)
+        from agent_reach.daily_run.report_narrative import render_morning_narrative_footer
+
+        footer = render_morning_narrative_footer(cfg)
+        if footer:
+            body = body + footer
         title = merged_category_title(
             report_kind="intraday",
             category="scan",

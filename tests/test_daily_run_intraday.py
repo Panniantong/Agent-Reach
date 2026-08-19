@@ -280,3 +280,29 @@ class TestIntradayWorkflow:
         assert "push" not in result["steps"]
         state = IntradayState.from_dict(result["scan"]["state"])
         assert len(state.scans) == 1
+
+    def test_run_intraday_appends_morning_narrative_footer(
+        self, intraday_snapshot, tmp_path, monkeypatch
+    ):
+        state_path = tmp_path / "intraday.json"
+        reset_state(state_path)
+        footer = "\n\n---\n\n## 🧠 AI 解读（决策摘要）\n\n早盘摘要"
+        monkeypatch.setattr(
+            "agent_reach.daily_run.report_narrative.render_morning_narrative_footer",
+            lambda settings, code=None: footer,
+        )
+        captured: dict[str, str] = {}
+
+        def _fake_send(_cfg, _title, body, template="blue"):
+            captured["body"] = body
+            return {"code": 0}
+
+        monkeypatch.setattr("agent_reach.integrations.feishu.send_card", _fake_send)
+        run_intraday(
+            intraday_snapshot,
+            settings=load_settings(),
+            push=True,
+            trade=False,
+            state_path=state_path,
+        )
+        assert "早盘摘要" in captured.get("body", "")

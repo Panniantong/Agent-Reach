@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any, Optional
 
 _JOB_LABELS = {
@@ -396,6 +397,121 @@ def generate_merged_morning_narrative(
         system=f"{_morning_focus_hint()} 全组合视角，跨标的归纳，勿逐只复述。",
         deterministic_fn=_merged_morning_deterministic,
     )
+
+
+def _morning_narrative_cache_path(d: Optional[Any] = None) -> Path:
+    from agent_reach.daily_run.trade_calendar import today_shanghai
+
+    day = d.isoformat() if d is not None and hasattr(d, "isoformat") else today_shanghai().isoformat()
+    return Path.home() / ".agent-reach" / "daily_run" / "cache" / f"morning_narrative_{day}.json"
+
+
+def persist_morning_narrative(narrative: dict[str, Any], *, code: Optional[str] = None) -> None:
+    """Cache today's morning AI narrative for intraday cards (portfolio or per-symbol)."""
+    if not narrative or narrative.get("skipped"):
+        return
+    path = _morning_narrative_cache_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload: dict[str, Any] = {}
+    if path.is_file():
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            payload = {}
+    if code:
+        from agent_reach.daily_run.snapshot_builder import _normalize_code
+
+        payload["by_code"] = dict(payload.get("by_code") or {})
+        payload["by_code"][_normalize_code(code)] = narrative
+    else:
+        payload["portfolio"] = narrative
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def load_today_morning_narrative(
+    settings: Optional[dict[str, Any]] = None,
+    *,
+    code: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
+    """Load today's morning llm_narrative (cache first, then run manifest)."""
+    from agent_reach.daily_run.run_manifest import runs_dir
+    from agent_reach.daily_run.trade_calendar import today_shanghai
+
+    if not intraday_append_morning_narrative(settings):
+        return None
+
+    today = today_shanghai().isoformat()
+    cache_path = _morning_narrative_cache_path(today_shanghai())
+    if cache_path.is_file():
+        try:
+            cached = json.loads(cache_path.read_text(encoding="utf-8"))
+            if code:
+                from agent_reach.daily_run.snapshot_builder import _normalize_code
+
+                by_code = cached.get("by_code") or {}
+                hit = by_code.get(_normalize_code(code))
+                if isinstance(hit, dict) and not hit.get("skipped"):
+                    return hit
+            portfolio = cached.get("portfolio")
+            if isinstance(portfolio, dict) and not portfolio.get("skipped"):
+                return portfolio
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    out_dir = runs_dir() / today
+    if not out_dir.is_dir():
+        return None
+
+    for path in sorted(out_dir.glob("morning_*.json"), reverse=True):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        payload = data.get("payload") or {}
+        if payload.get("skipped"):
+            continue
+
+        symbol_results = payload.get("symbol_results") or []
+        if symbol_results:
+            if code:
+                from agent_reach.daily_run.snapshot_builder import _normalize_code
+
+                norm = _normalize_code(code)
+                for row in symbol_results:
+                    if _normalize_code(str(row.get("code") or "")) != norm:
+                        continue
+                    narrative = (row.get("result") or {}).get("llm_narrative")
+                    if isinstance(narrative, dict) and not narrative.get("skipped"):
+                        return narrative
+            for row in symbol_results:
+                narrative = (row.get("result") or {}).get("llm_narrative")
+                if isinstance(narrative, dict) and not narrative.get("skipped"):
+                    return narrative
+            continue
+
+        narrative = (payload.get("result") or {}).get("llm_narrative")
+        if isinstance(narrative, dict) and not narrative.get("skipped"):
+            return narrative
+    return None
+
+
+def intraday_append_morning_narrative(settings: Optional[dict[str, Any]] = None) -> bool:
+    return (settings or {}).get("intraday", {}).get("append_morning_narrative", True) is not False
+
+
+def render_morning_narrative_footer(
+    settings: Optional[dict[str, Any]] = None,
+    *,
+    code: Optional[str] = None,
+) -> str:
+    """Markdown block for intraday Feishu cards: morning AI 决策摘要."""
+    narrative = load_today_morning_narrative(settings, code=code)
+    if not narrative:
+        return ""
+    md = render_narrative_markdown(narrative, job="morning")
+    if not md.strip():
+        return ""
+    return "\n\n---\n\n" + md
 
 
 # --- Close ---

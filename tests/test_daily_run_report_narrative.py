@@ -191,3 +191,36 @@ def test_append_merged_narrative_section():
     )
     assert out[-1].category == "ai_narrative"
     assert "2只" in out[-1].title
+
+
+def test_persist_and_load_morning_narrative(tmp_path, monkeypatch):
+    from agent_reach.daily_run.report_narrative import (
+        load_today_morning_narrative,
+        persist_morning_narrative,
+        render_morning_narrative_footer,
+    )
+
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setattr(
+        "agent_reach.daily_run.report_narrative._morning_narrative_cache_path",
+        lambda d=None: cache_dir / "morning_narrative_2026-08-19.json",
+    )
+
+    narrative = {
+        "summary": "早盘全持仓 10 只",
+        "focus_points": ["主导结论 观察"],
+        "divergence_notes": [],
+        "risk_alerts": [],
+        "planner": "deterministic",
+        "skipped": False,
+        "job": "morning",
+    }
+    persist_morning_narrative(narrative)
+    loaded = load_today_morning_narrative({})
+    assert loaded is not None
+    assert loaded["summary"] == narrative["summary"]
+
+    footer = render_morning_narrative_footer({})
+    assert "AI 解读" in footer
+    assert "决策摘要" in footer
+    assert footer.startswith("\n\n---\n\n")

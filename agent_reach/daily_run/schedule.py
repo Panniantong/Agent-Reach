@@ -451,6 +451,11 @@ def _run_job_body(
             from agent_reach.daily_run.intraday import record_morning_scan
 
             scan_result = record_morning_scan(run_result, settings=settings)
+            from agent_reach.daily_run.report_narrative import persist_morning_narrative
+
+            morning_narrative = run_result.get("llm_narrative")
+            if morning_narrative and not morning_narrative.get("skipped"):
+                persist_morning_narrative(morning_narrative)
             result = {
                 "job": job,
                 "snapshot_path": str(path),
