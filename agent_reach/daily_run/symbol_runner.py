@@ -88,7 +88,7 @@ def run_morning_for_symbols(
                 settings=cfg,
                 doctor_channels=doctor_channels,
                 push=push and not merge_push,
-                start_notify=push and not merge_push and i == 0,
+                start_notify=False,
                 skip_narrative=defer_narrative,
                 config=config,
             )
@@ -125,9 +125,7 @@ def run_morning_for_symbols(
     feishu_result = None
     if push and merge_push and section_groups:
         from agent_reach.config import Config
-        from agent_reach.daily_run.workflows import _send_start_notification
 
-        _send_start_notification(config, cfg)
         merged = merge_sections_by_category(
             section_groups,
             report_kind="morning",

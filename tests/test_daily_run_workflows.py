@@ -86,6 +86,67 @@ class TestMorningWorkflow:
         assert mock_start.called
 
 
+class TestScheduledStartNotification:
+    @patch("agent_reach.integrations.feishu.send_card")
+    def test_send_intraday_start_includes_scan_and_symbol_count(self, mock_send):
+        from agent_reach.daily_run.workflows import send_scheduled_job_start_notification
+
+        settings = load_settings()
+        send_scheduled_job_start_notification(
+            "intraday",
+            None,
+            settings,
+            symbol_count=10,
+            scan_id="S3",
+        )
+        mock_send.assert_called_once()
+        title = mock_send.call_args[0][1]
+        body = mock_send.call_args[0][2]
+        assert "S3" in title
+        assert "10只" in title
+        assert "Lookback MSS" in body
+
+    @patch("agent_reach.integrations.feishu.send_card")
+    def test_send_close_start(self, mock_send):
+        from agent_reach.daily_run.workflows import send_scheduled_job_start_notification
+
+        send_scheduled_job_start_notification("close", None, load_settings(), symbol_count=5)
+        title = mock_send.call_args[0][1]
+        assert "收盘复盘" in title
+        assert "5只" in title
+
+    @patch("agent_reach.daily_run.workflows.send_scheduled_job_start_notification")
+    @patch("agent_reach.daily_run.schedule._uses_per_symbol_jobs", return_value=False)
+    @patch("agent_reach.daily_run.snapshot_builder.load_portfolio")
+    @patch("agent_reach.daily_run.intraday.record_morning_scan", return_value={"scan": {"scan_id": "S2"}})
+    @patch("agent_reach.daily_run.trade_calendar.is_trading_day", return_value=(True, ""))
+    @patch("agent_reach.daily_run.workflows.save_morning_baseline")
+    @patch("agent_reach.daily_run.workflows.run_morning")
+    @patch("agent_reach.daily_run.snapshot_builder.build_and_save")
+    def test_run_scheduled_sends_start_once(
+        self,
+        mock_build,
+        mock_morning,
+        mock_save_baseline,
+        mock_trading_day,
+        mock_morning_scan,
+        mock_load,
+        mock_per_symbol,
+        mock_start,
+        portfolio,
+        tmp_path,
+    ):
+        mock_load.return_value = portfolio
+        mock_build.return_value = ({"code": "688008"}, tmp_path / "snap.json")
+        mock_morning.return_value = {"snapshot": {"code": "688008"}, "evaluation": {"report": {}}}
+
+        from agent_reach.daily_run.schedule import run_scheduled
+
+        run_scheduled("morning", push=True)
+        mock_start.assert_called_once()
+        assert mock_start.call_args[0][0] == "morning"
+
+
 class TestCloseWorkflow:
     @patch("agent_reach.daily_run.market_review.get_or_collect_market_review", return_value=None)
     def test_run_close_dry(self, _mock_mr, morning_snapshot):

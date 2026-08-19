@@ -369,6 +369,33 @@ def _uses_per_symbol_jobs(settings: dict) -> bool:
     return mode != "primary"
 
 
+def _maybe_send_scheduled_start_notification(
+    job: str,
+    *,
+    push: bool,
+    config,
+    settings: dict,
+) -> None:
+    from agent_reach.daily_run.workflows import (
+        scheduled_start_context,
+        scheduled_start_notify_enabled,
+        send_scheduled_job_start_notification,
+    )
+
+    if not push or not scheduled_start_notify_enabled(settings):
+        return
+    ctx = scheduled_start_context(job, settings)
+    if ctx.get("skip"):
+        return
+    send_scheduled_job_start_notification(
+        job,
+        config,
+        settings,
+        symbol_count=int(ctx.get("symbol_count") or 1),
+        scan_id=ctx.get("scan_id"),
+    )
+
+
 def _run_job_body(
     job: str,
     *,
@@ -387,6 +414,8 @@ def _run_job_body(
         save_portfolio(
             __import__("json").loads(example_portfolio_path().read_text(encoding="utf-8"))
         )
+
+    _maybe_send_scheduled_start_notification(job, push=push, config=config, settings=settings)
 
     per_symbol = job in ("morning", "intraday", "close") and _uses_per_symbol_jobs(settings)
 
@@ -442,7 +471,7 @@ def _run_job_body(
                 settings=settings,
                 doctor_channels=doctor,
                 push=push,
-                start_notify=push,
+                start_notify=False,
                 config=config,
             )
             from agent_reach.daily_run.workflows import save_morning_baseline

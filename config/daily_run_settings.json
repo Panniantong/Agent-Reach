@@ -417,6 +417,7 @@
 
   "schedule": {
     "executor": "local_cron",
+    "start_notify": true,
     "symbols_mode": "all",
     "close_symbols_mode": "holdings",
     "intraday_symbols_mode": "all",

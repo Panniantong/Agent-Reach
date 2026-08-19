@@ -1248,20 +1248,119 @@ def _push_markdown(
     return send_card(cfg_obj, title, markdown, template=tpl)
 
 
-def _send_start_notification(config, settings: dict[str, Any]) -> None:
+def scheduled_start_notify_enabled(settings: dict[str, Any]) -> bool:
+    sched = settings.get("schedule") or {}
+    return sched.get("start_notify", True) is not False
+
+
+def _scheduled_start_duration_hint(job: str, *, symbol_count: int = 1) -> str:
+    if symbol_count <= 1:
+        hints = {
+            "morning": "1–3 分钟",
+            "intraday": "3–8 分钟",
+            "close": "5–15 分钟",
+            "weekly": "2–5 分钟",
+            "forecast": "2–5 分钟",
+        }
+        return hints.get(job, "1–5 分钟")
+    low = max(1, int(symbol_count * 0.4))
+    high = max(low + 1, int(symbol_count * 1.3))
+    return f"约 {low}–{high} 分钟"
+
+
+def scheduled_start_context(job: str, settings: dict[str, Any]) -> dict[str, Any]:
+    """Build symbol_count / scan_id for scheduled start cards; skip=True when job won't run."""
+    from agent_reach.daily_run.snapshot_builder import load_portfolio
+    from agent_reach.daily_run.symbols import resolve_target_symbols
+
+    pf = load_portfolio()
+    symbol_count = 1
+    scan_id: Optional[str] = None
+    targets: list[str] = []
+
+    if job in ("morning", "intraday", "close"):
+        targets = resolve_target_symbols(pf, settings, workflow=job)
+        symbol_count = len(targets) or 1
+
+    if job == "intraday":
+        from agent_reach.daily_run.intraday import load_state
+        from agent_reach.daily_run.schedule import INTRADAY_MAX_SCANS
+
+        first_code = targets[0] if targets else None
+        if first_code in (None, "MARKET"):
+            state = load_state()
+        else:
+            state = load_state(code=first_code)
+        if len(state.scans) >= INTRADAY_MAX_SCANS:
+            return {"skip": True}
+        scan_id = f"S{len(state.scans) + 1}"
+
+    return {"symbol_count": symbol_count, "scan_id": scan_id}
+
+
+def send_scheduled_job_start_notification(
+    job: str,
+    config,
+    settings: dict[str, Any],
+    *,
+    symbol_count: int = 1,
+    scan_id: Optional[str] = None,
+) -> None:
     from agent_reach.config import Config
     from agent_reach.integrations.feishu import send_card
 
     cfg = config or Config()
-    tpl = settings.get("report", {}).get("feishu_template_premarket", "orange")
-    send_card(
-        cfg,
-        "🌅 早盘分析已启动",
+    templates = settings.get("report", {})
+    template_keys = {
+        "morning": "feishu_template_premarket",
+        "intraday": "feishu_template_intraday",
+        "close": "feishu_template_close",
+        "weekly": "feishu_template_weekly",
+        "forecast": "feishu_template_forecast",
+    }
+    default_templates = {
+        "morning": "orange",
+        "intraday": "blue",
+        "close": "purple",
+        "weekly": "blue",
+        "forecast": "blue",
+    }
+    tpl_key = template_keys.get(job, "feishu_template_premarket")
+    tpl = templates.get(tpl_key, default_templates.get(job, "blue"))
+    duration = _scheduled_start_duration_hint(job, symbol_count=symbol_count)
+    symbol_suffix = f" · {symbol_count}只" if symbol_count > 1 else ""
+
+    if job == "morning":
+        title = "🌅 早盘分析已启动" + symbol_suffix
+        pipeline = "**数据审计** → **MSS 决策** → 飞书推送"
+    elif job == "intraday":
+        scan_label = scan_id or "S?"
+        title = f"📊 盘中 {scan_label} 已启动{symbol_suffix}"
+        pipeline = "**数据收集** → **Lookback MSS** → 飞书推送"
+    elif job == "close":
+        title = "🌆 收盘复盘已启动" + symbol_suffix
+        pipeline = "**验证** → **深度复盘** → 飞书推送"
+    elif job == "weekly":
+        title = "📅 周报已启动"
+        pipeline = "**本周 PnL** → **持仓/观察池** → 飞书推送"
+    elif job == "forecast":
+        title = "🔮 下周预测已启动"
+        pipeline = "**宏观/板块** → **下周展望** → 飞书推送"
+    else:
+        title = f"⏱️ {job} 已启动"
+        pipeline = "定时任务执行中"
+
+    body = (
         "**股票大师 daily_run_skill**\n\n"
-        "正在执行：**数据审计** → **MSS 决策** → 飞书推送\n\n"
-        "预计完成时间：**1–3 分钟**",
-        template=tpl,
+        f"正在执行：{pipeline}\n\n"
+        f"预计完成时间：**{duration}**"
     )
+    send_card(cfg, title, body, template=tpl)
+
+
+def _send_start_notification(config, settings: dict[str, Any]) -> None:
+    """Backward-compatible morning-only alias (manual CLI)."""
+    send_scheduled_job_start_notification("morning", config, settings)
 
 
 def run_weekly(
