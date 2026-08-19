@@ -16,6 +16,7 @@ from agent_reach.daily_run.weekly_report import (
     _watchlist_rows,
 )
 from agent_reach.daily_run.realized_pnl import (
+    compute_day_realized_pnl,
     compute_realized_pnl,
     compute_trade_cash_flow,
     replay_realized_sells,
@@ -320,10 +321,18 @@ def format_trade_operations_narrative_lines(
     if not operations:
         return []
     lines = [format_trade_operation_line(op) for op in operations]
-    if realized_pnl_total is not None and abs(float(realized_pnl_total)) >= 0.01:
-        sign = "+" if float(realized_pnl_total) >= 0 else ""
+    sell_pnls = [
+        float(op["realized_pnl"])
+        for op in operations
+        if op.get("side") == "sell" and op.get("realized_pnl") is not None
+    ]
+    total = realized_pnl_total
+    if sell_pnls and (total is None or abs(float(total or 0) - sum(sell_pnls)) > 0.5):
+        total = round(sum(sell_pnls), 2)
+    if total is not None and abs(float(total)) >= 0.01:
+        sign = "+" if float(total) >= 0 else ""
         lines.append(
-            f"合计已实现盈亏 **{sign}¥{float(realized_pnl_total):,.0f}**（{len(operations)} 笔）"
+            f"合计已实现盈亏 **{sign}¥{float(total):,.0f}**（{len(operations)} 笔）"
         )
     return lines
 
@@ -736,7 +745,9 @@ def build_close_portfolio_summary(
             max_weight = max(max_weight or 0.0, float(weight))
 
     ledger_trades = _load_trade_ledger_range(day, day)
-    realized = compute_realized_pnl(ledger_trades)
+    all_through_day = _load_trade_ledger_range(date(2000, 1, 1), day)
+    prior_trades = all_through_day[: max(0, len(all_through_day) - len(ledger_trades))]
+    realized = compute_day_realized_pnl(ledger_trades, prior_trades=prior_trades)
     trade_cash_flow = compute_trade_cash_flow(ledger_trades)
     realized_sells = [r.to_dict() for r in replay_realized_sells(ledger_trades)]
     intraday_list = list(intraday_trades or [])

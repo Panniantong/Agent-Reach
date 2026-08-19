@@ -7,12 +7,14 @@ from pathlib import Path
 from agent_reach.daily_run.realized_pnl import (
     backfill_ledger_realized_pnl,
     build_pnl_overview,
+    compute_day_realized_pnl,
     compute_realized_pnl,
     compute_trade_cash_flow,
     enrich_sell_actions,
     format_buy_trade_line,
     format_sell_trade_line,
     replay_realized_sells,
+    sum_stored_realized_pnl,
     render_pnl_overview_markdown,
 )
 
@@ -154,3 +156,51 @@ def test_backfill_ledger(tmp_path: Path):
     rows = [json.loads(ln) for ln in ledger.read_text(encoding="utf-8").splitlines() if ln.strip()]
     sell = rows[1]["actions"][0]
     assert sell["realized_pnl"] == -76.76
+
+
+def test_compute_day_realized_pnl_prefers_stored_sell_fields():
+    prior = [
+        {
+            "at": "2026-08-17T01:54:08+00:00",
+            "actions": [
+                {
+                    "side": "buy",
+                    "code": "600584",
+                    "shares": 800,
+                    "amount": 64640.0,
+                    "commission": 96.96,
+                }
+            ],
+        }
+    ]
+    day_trades = [
+        {
+            "at": "2026-08-19T01:02:56+00:00",
+            "actions": [
+                {
+                    "side": "sell",
+                    "code": "600584",
+                    "shares": 800,
+                    "price": 85.42,
+                    "amount": 68336.0,
+                    "commission": 102.5,
+                    "cost_basis": 64736.96,
+                    "realized_pnl": 3496.54,
+                },
+                {
+                    "side": "sell",
+                    "code": "000725",
+                    "shares": 1400,
+                    "price": 6.47,
+                    "amount": 9058.0,
+                    "commission": 13.59,
+                    "cost_basis": 10515.75,
+                    "realized_pnl": -1471.34,
+                },
+            ],
+        }
+    ]
+    assert sum_stored_realized_pnl(day_trades) == 2025.2
+    assert compute_day_realized_pnl(day_trades, prior_trades=prior) == 2025.2
+    # Day-only FIFO replay without stored fields would miss buy history.
+    assert compute_realized_pnl(day_trades) != 2025.2

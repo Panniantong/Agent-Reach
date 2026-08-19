@@ -441,6 +441,42 @@ def compute_realized_pnl(trades: list[dict[str, Any]]) -> float:
     return round(sum(r.realized_pnl for r in replay_realized_sells(trades)), 2)
 
 
+def sum_stored_realized_pnl(trades: list[dict[str, Any]]) -> Optional[float]:
+    """Sum ``realized_pnl`` stamped on sell actions at persist time (authoritative when present)."""
+    total = 0.0
+    found = False
+    for entry in trades:
+        for action in entry.get("actions") or []:
+            if action.get("side") != "sell":
+                continue
+            if action.get("realized_pnl") is None:
+                continue
+            total += float(action["realized_pnl"])
+            found = True
+    return round(total, 2) if found else None
+
+
+def compute_day_realized_pnl(
+    day_trades: list[dict[str, Any]],
+    *,
+    prior_trades: Optional[list[dict[str, Any]]] = None,
+) -> float:
+    """Day realized P&L: prefer stored sell fields, else FIFO replay with buy history."""
+    stored = sum_stored_realized_pnl(day_trades)
+    if stored is not None:
+        return stored
+    merged = list(prior_trades or []) + list(day_trades or [])
+    if not merged:
+        return 0.0
+    day_s = str(day_trades[0].get("at") or "")[:10] if day_trades else ""
+    if not day_s and day_trades:
+        day_s = ""
+    rows = replay_realized_sells(merged)
+    if day_s:
+        rows = [r for r in rows if r.date == day_s]
+    return round(sum(r.realized_pnl for r in rows), 2)
+
+
 def enrich_sell_actions(
     prior_entries: list[dict[str, Any]],
     actions: list[dict[str, Any]],
