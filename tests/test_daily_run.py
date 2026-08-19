@@ -77,13 +77,29 @@ class TestAuditor:
 
 
 class TestVerdict:
-    def test_compute_mss(self, settings):
+    def test_compute_mss(self, settings, monkeypatch):
+        from agent_reach.daily_run.harness import HarnessState
+
+        monkeypatch.setattr(
+            "agent_reach.daily_run.harness.load_harness",
+            lambda: HarnessState(),
+        )
+        settings = dict(settings)
+        settings.setdefault("harness", {})["runtime_overlay"] = False
         macro_weights = {"fx": 0.25, "flow": 0.25, "global": 0.25, "sentiment": 0.25}
         cfg = {**settings, "mss_weights": macro_weights}
         score = compute_mss({"fx": 40, "flow": 40, "global": 40, "sentiment": 40}, cfg)
         assert score == 40.0
 
-    def test_compute_mss_with_expert_dims(self, settings):
+    def test_compute_mss_with_expert_dims(self, settings, monkeypatch):
+        from agent_reach.daily_run.harness import HarnessState
+
+        monkeypatch.setattr(
+            "agent_reach.daily_run.harness.load_harness",
+            lambda: HarnessState(),
+        )
+        settings = dict(settings)
+        settings.setdefault("harness", {})["runtime_overlay"] = False
         breakdown = {
             "fx": 35,
             "flow": 48,
@@ -96,14 +112,67 @@ class TestVerdict:
         score = compute_mss(breakdown, settings)
         assert score != 42.5
 
-    def test_macro_veto_avoid(self, settings, base_snapshot):
+    def test_compute_mss_uses_harness_effective_weights(self, monkeypatch):
+        from agent_reach.daily_run.harness import HarnessState, HarnessEntry
+
+        state = HarnessState()
+        state.entries["memory"]["dev"] = HarnessEntry(
+            id="dev",
+            kind="memory",
+            title="偏差",
+            content="偏差：价格变动 23.7% 超过锚点阈值 8.0%",
+            source="deterministic",
+            job="forecast",
+            evidence="forecast",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.harness.load_harness",
+            lambda: state,
+        )
+        settings = load_settings()
+        settings.setdefault("harness", {})["runtime_overlay_sources"] = ["memory"]
+        breakdown = {
+            "fx": 40,
+            "flow": 40,
+            "global": 40,
+            "sentiment": 40,
+            "technical": 80,
+            "quant": 80,
+            "risk": 40,
+        }
+        neutral = compute_mss(
+            breakdown,
+            {**settings, "harness": {**settings.get("harness", {}), "runtime_overlay": False}},
+        )
+        evolved = compute_mss(breakdown, settings)
+        assert evolved != neutral
+
+    def test_macro_veto_avoid(self, settings, base_snapshot, monkeypatch):
+        from agent_reach.daily_run.harness import HarnessState
+
+        monkeypatch.setattr(
+            "agent_reach.daily_run.harness.load_harness",
+            lambda: HarnessState(),
+        )
+        settings = dict(settings)
+        settings.setdefault("harness", {})["runtime_overlay"] = False
         base_snapshot["mss_breakdown"] = {"fx": 30, "flow": 30, "global": 30, "sentiment": 30}
         base_snapshot["mss_final"] = 30.0
         v = compute_verdict(base_snapshot, settings)
         assert v.verdict == "回避"
         assert v.blocked is True
 
-    def test_aggressive_buy(self, settings, base_snapshot):
+    def test_aggressive_buy(self, settings, base_snapshot, monkeypatch):
+        from agent_reach.daily_run.harness import HarnessState
+
+        monkeypatch.setattr(
+            "agent_reach.daily_run.harness.load_harness",
+            lambda: HarnessState(),
+        )
+        settings = dict(settings)
+        settings.setdefault("harness", {})["runtime_overlay"] = False
         base_snapshot["mss_breakdown"] = {"fx": 55, "flow": 55, "global": 55, "sentiment": 55}
         base_snapshot["mss_final"] = 55.0
         v = compute_verdict(base_snapshot, settings)

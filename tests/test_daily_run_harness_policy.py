@@ -415,6 +415,37 @@ class TestHarnessRuntimeExtensions:
         assert eff_share < base_share
         assert effective["quant"] / sum(effective.values()) < base["quant"] / sum(base.values())
 
+    def test_mss_weights_defensive_trim_boosts_macro(self):
+        state = HarnessState()
+        state.entries["memory"]["miss"] = HarnessEntry(
+            id="miss",
+            kind="memory",
+            title="盈亏目标未达",
+            content="盈亏目标未达：目标 +100 实际 +0",
+            source="deterministic",
+            job="close",
+            evidence="close",
+            created_at="2026-08-17T00:00:00+00:00",
+            updated_at="2026-08-17T00:00:00+00:00",
+        )
+        base = {
+            "fx": 0.2,
+            "flow": 0.2,
+            "global": 0.15,
+            "sentiment": 0.15,
+            "technical": 0.15,
+            "quant": 0.1,
+            "risk": 0.05,
+        }
+        effective = resolve_harness_mss_weights(
+            state,
+            base,
+            settings={"harness": {"runtime_overlay_sources": ["memory"]}},
+        )
+        assert effective["fx"] > base["fx"]
+        assert effective["technical"] < base["technical"]
+        assert abs(sum(effective.values()) - 1.0) < 0.001
+
     def test_kronos_playbook_parsing(self):
         state = HarnessState()
         state.entries["playbook"]["kronos_bull"] = HarnessEntry(

@@ -1166,19 +1166,36 @@ def resolve_harness_mss_weights(
     *,
     settings: Optional[dict[str, Any]] = None,
 ) -> dict[str, float]:
-    """Down-weight technical/quant when harness sees repeated forecast deviation."""
+    """Evolve MSS factor weights from harness deviation / regime signals."""
     weights = {k: float(v) for k, v in (base_weights or {}).items()}
     if not weights:
         return weights
-    sources = _overlay_sources(settings or {})
-    if not _has_deviation_signal(state, sources=sources, settings=settings):
-        return weights
 
+    cfg = settings or {}
+    sources = _overlay_sources(cfg)
+    signals = resolve_harness_trade_signals(state, settings=cfg)
     scaled = dict(weights)
-    for key in _MSS_WEIGHT_SCALE_KEYS:
-        if key in scaled:
-            scaled[key] = round(float(scaled[key]) * _MSS_WEIGHT_SCALE, 4)
-    return _renormalize_weights(scaled)
+
+    if _has_deviation_signal(state, sources=sources, settings=cfg):
+        for key in _MSS_WEIGHT_SCALE_KEYS:
+            if key in scaled:
+                scaled[key] = round(float(scaled[key]) * _MSS_WEIGHT_SCALE, 4)
+
+    if signals.get("defensive_trim"):
+        for key in ("fx", "flow", "global", "sentiment"):
+            if key in scaled:
+                scaled[key] = round(float(scaled[key]) * 1.1, 4)
+        for key in _MSS_WEIGHT_SCALE_KEYS:
+            if key in scaled:
+                scaled[key] = round(float(scaled[key]) * 0.85, 4)
+    elif signals.get("pnl_target_hit") or _overlay_has_phrase(state, "进攻期", settings=cfg):
+        for key in _MSS_WEIGHT_SCALE_KEYS:
+            if key in scaled:
+                scaled[key] = round(float(scaled[key]) * 1.1, 4)
+
+    if scaled != weights:
+        return _renormalize_weights(scaled)
+    return weights
 
 
 def _parse_kronos_side(text: str, *, bullish: bool) -> dict[str, float]:

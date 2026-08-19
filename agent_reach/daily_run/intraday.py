@@ -666,11 +666,17 @@ def render_intraday_scan_markdown(
                 f"= {item['weighted']}"
             )
     if settings is not None:
-        from agent_reach.daily_run.harness_display import format_lookback_overlay_markdown
+        from agent_reach.daily_run.harness_display import (
+            format_lookback_overlay_markdown,
+            format_mss_weights_overlay_markdown,
+        )
 
         lookback_md = format_lookback_overlay_markdown(settings)
         if lookback_md:
             lines.extend(["", lookback_md])
+        mss_weights_md = format_mss_weights_overlay_markdown(settings)
+        if mss_weights_md:
+            lines.extend(["", mss_weights_md])
     if report.get("reasoning"):
         lines.extend(["", f"**研判：** {report['reasoning']}"])
     return "\n".join(lines)

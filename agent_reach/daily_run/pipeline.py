@@ -74,9 +74,13 @@ def build_report(
 
     breakdown = snapshot.get("mss_breakdown") or {}
     breakdown_lines = _format_mss_breakdown_lines(breakdown)
-    from agent_reach.daily_run.harness_display import format_effective_thresholds_markdown
+    from agent_reach.daily_run.harness_display import (
+        format_effective_thresholds_markdown,
+        format_mss_weights_overlay_markdown,
+    )
 
     threshold_policy_md = format_effective_thresholds_markdown(settings)
+    mss_weights_policy_md = format_mss_weights_overlay_markdown(settings)
 
     prior_close_mss = snapshot.get("prior_close_mss")
     prior_close_delta = None
@@ -108,6 +112,7 @@ def build_report(
         "evidence_chain": "\n".join(evidence) if evidence else snapshot.get("evidence_chain", ""),
         "mss_breakdown_text": "\n".join(breakdown_lines),
         "threshold_policy_md": threshold_policy_md,
+        "mss_weights_policy_md": mss_weights_policy_md,
         "portfolio": snapshot.get("portfolio"),
         "watchlist": snapshot.get("watchlist"),
         "macro_summary": snapshot.get("macro_summary"),
@@ -131,6 +136,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         lines.extend(["", "**MSS 拆解：**", report["mss_breakdown_text"]])
     if report.get("threshold_policy_md"):
         lines.extend(["", report["threshold_policy_md"]])
+    if report.get("mss_weights_policy_md"):
+        lines.extend(["", report["mss_weights_policy_md"]])
 
     lines.extend([
         "",

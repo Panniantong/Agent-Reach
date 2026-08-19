@@ -10,6 +10,7 @@ from agent_reach.daily_run.harness_display import (
     format_effective_thresholds_markdown,
     format_lookback_overlay_markdown,
     format_lookback_weights_pct,
+    format_mss_weights_overlay_markdown,
     format_mss_breakdown_lines,
     threshold_refs_for_display,
 )
@@ -125,6 +126,20 @@ class TestThresholdDisplay:
         assert "Lookback 权重（harness 有效值）" in md
         assert "60%/25%/15%" in md
         assert "基准 50%/30%/20%" in md
+
+    def test_format_mss_weights_overlay_markdown(self):
+        settings = {
+            "harness_runtime": {
+                "mss_weights_overlay": {
+                    "technical": {"base": 0.15, "effective": 0.1263},
+                    "fx": {"base": 0.2, "effective": 0.2105},
+                }
+            }
+        }
+        md = format_mss_weights_overlay_markdown(settings)
+        assert "MSS 权重（harness 有效值）" in md
+        assert "技术面" in md
+        assert "汇率" in md
 
 
 class TestVerdictEffectiveThresholds:

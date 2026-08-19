@@ -140,6 +140,58 @@ def format_lookback_overlay_markdown(settings: dict[str, Any]) -> str:
     )
 
 
+_MSS_WEIGHT_LABELS: dict[str, str] = {
+    "fx": "汇率",
+    "flow": "资金流",
+    "global": "全球",
+    "sentiment": "舆情",
+    "technical": "技术面",
+    "quant": "量化",
+    "risk": "风控",
+}
+
+
+def format_mss_weight_display(value: float) -> str:
+    return f"{float(value):.0%}"
+
+
+def format_mss_weights_line(weights: dict[str, float]) -> str:
+    parts: list[str] = []
+    for key, val in weights.items():
+        label = _MSS_WEIGHT_LABELS.get(key, key)
+        parts.append(f"{label} {format_mss_weight_display(val)}")
+    return " · ".join(parts)
+
+
+def format_mss_weights_overlay_markdown(settings: dict[str, Any]) -> str:
+    """Harness-effective MSS factor weights for report footers."""
+    from agent_reach.daily_run.settings import effective_settings
+
+    eff = effective_settings(settings)
+    overlay = (eff.get("harness_runtime") or {}).get("mss_weights_overlay") or {}
+    if not overlay:
+        return ""
+
+    changed: list[str] = []
+    for key, change in overlay.items():
+        if not isinstance(change, dict):
+            continue
+        base = change.get("base")
+        eff_val = change.get("effective")
+        if base is None or eff_val is None:
+            continue
+        if abs(float(eff_val) - float(base)) < 0.0001:
+            continue
+        label = _MSS_WEIGHT_LABELS.get(key, key)
+        changed.append(
+            f"- {label}: {format_mss_weight_display(float(eff_val))}"
+            f"（基准 {format_mss_weight_display(float(base))}）"
+        )
+    if not changed:
+        return ""
+    return "**MSS 权重（harness 有效值）：**\n" + "\n".join(changed)
+
+
 def effective_policy_settings(settings: dict[str, Any] | None = None) -> dict[str, Any]:
     """Settings with harness overlay — use for any user-visible policy display."""
     from agent_reach.daily_run.settings import effective_settings, load_settings

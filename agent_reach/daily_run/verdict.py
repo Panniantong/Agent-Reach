@@ -36,7 +36,10 @@ class VerdictResult:
 
 
 def compute_mss(breakdown: dict[str, float], settings: dict[str, Any]) -> float:
-    weights = settings.get("mss_weights", {})
+    from agent_reach.daily_run.settings import effective_settings
+
+    cfg = effective_settings(settings)
+    weights = cfg.get("mss_weights", {})
     total = 0.0
     weight_sum = 0.0
     for key, weight in weights.items():
@@ -68,7 +71,7 @@ def compute_verdict(snapshot: dict[str, Any], settings: dict[str, Any]) -> Verdi
     breakdown = snapshot.get("mss_breakdown") or {}
     mss = snapshot.get("mss_final")
     if mss is None:
-        mss = compute_mss(breakdown, settings)
+        mss = compute_mss(breakdown, eff)
     mss = float(mss)
 
     price = _optional_float(snapshot.get("price"))
