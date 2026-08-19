@@ -24,6 +24,15 @@ EOF
 chmod 440 "$SUDOERS"
 visudo -cf "$SUDOERS"
 
+RTCWAKE="$(command -v rtcwake || true)"
+if [ -z "$RTCWAKE" ]; then
+  echo "⚠️  rtcwake not on PATH; sudoers installed but wake scheduling may fail" >&2
+elif ! sudo -u "${USER_NAME}" sudo -n "$RTCWAKE" -m show >/dev/null 2>&1; then
+  echo "❌ visudo OK but passwordless rtcwake failed for ${USER_NAME}" >&2
+  echo "   Check ${SUDOERS} and re-run this script" >&2
+  exit 1
+fi
+
 echo "✅ Sudoers: ${SUDOERS}"
-echo "   Test as ${USER_NAME}: sudo -n ${SCHEDULE_SCRIPT} lunch  # will power off — don't run now"
-echo "   Verify: sudo -n rtcwake -m show"
+echo "   Verified: sudo -n rtcwake -m show (as ${USER_NAME})"
+echo "   Do not test lunch/midnight here — those power off the machine"
