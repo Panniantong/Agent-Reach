@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
+import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
@@ -216,6 +218,56 @@ def _future_timestamps(trading_days: list[date]) -> Any:
     )
 
 
+def kronos_cache_dir() -> Path:
+    return Path.home() / ".agent-reach" / "daily_run" / "cache" / "kronos"
+
+
+def _kronos_cache_path(code: str, trading_days: list[date]) -> Path:
+    from agent_reach.daily_run.trade_calendar import today_shanghai
+
+    sym, _ = normalize_symbol(code)
+    day_key = today_shanghai().isoformat()
+    span_key = f"{trading_days[0].isoformat()}_{trading_days[-1].isoformat()}_{len(trading_days)}"
+    return kronos_cache_dir() / f"{day_key}_{sym}_{span_key}.json"
+
+
+def load_kronos_daily_cache(
+    code: str,
+    trading_days: list[date],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> Optional[dict[str, Any]]:
+    cfg = kronos_cfg(settings)
+    ttl = int(cfg.get("daily_cache_ttl_seconds", 86400))
+    path = _kronos_cache_path(code, trading_days)
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    if time.time() - float(data.get("ts") or 0) > ttl:
+        return None
+    result = data.get("result")
+    return result if isinstance(result, dict) else None
+
+
+def save_kronos_daily_cache(
+    code: str,
+    trading_days: list[date],
+    result: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> Path:
+    path = _kronos_cache_path(code, trading_days)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"ts": time.time(), "result": result}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
 def predict_symbol_paths(
     code: str,
     trading_days: list[date],
@@ -233,6 +285,11 @@ def predict_symbol_paths(
         return None
     if not trading_days:
         return None
+
+    if cfg.get("daily_cache", True) is not False:
+        cached = load_kronos_daily_cache(code, trading_days, settings=settings)
+        if cached is not None:
+            return cached
 
     try:
         lookback = int(cfg.get("lookback_window", 90))
@@ -281,7 +338,7 @@ def predict_symbol_paths(
         cum = (closes[-1] - anchor) / anchor * 100 if anchor else 0.0
         lo = min(changes) if changes else 0.0
         hi = max(changes) if changes else 0.0
-        return {
+        result = {
             "available": True,
             "backend": str(cfg.get("predictor_model", "NeoQuasar/Kronos-small")),
             "code": normalize_symbol(code)[0],
@@ -293,6 +350,9 @@ def predict_symbol_paths(
             "sample_count": int(cfg.get("inference_sample_count", 5)),
             "days": days,
         }
+        if cfg.get("daily_cache", True) is not False:
+            save_kronos_daily_cache(code, trading_days, result, settings=settings)
+        return result
     except (KronosError, AKShareError, OSError, ValueError, RuntimeError) as exc:
         if cfg.get("log_errors", True):
             from loguru import logger

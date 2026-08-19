@@ -12,6 +12,7 @@ else
 fi
 
 export PATH="${HOME}/.local/node/bin:${PATH}"
+export PYTHONUNBUFFERED=1
 
 LOG_DIR="${HOME}/.agent-reach/daily_run/logs"
 mkdir -p "$LOG_DIR"

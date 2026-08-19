@@ -346,6 +346,7 @@ def run_close_for_symbols(
                 push=push and not merge_push,
                 skip_narrative=defer_narrative,
                 skip_harness_layer_b=defer_harness_layer_b,
+                skip_exa_research=merge_push and idx > 1,
                 config=config,
                 intraday_trades=state.trades,
                 portfolio_summary=not merge_push,

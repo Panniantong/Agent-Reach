@@ -645,6 +645,7 @@ def run_close(
     push: bool = True,
     skip_narrative: bool = False,
     skip_harness_layer_b: bool = False,
+    skip_exa_research: bool = False,
     title: Optional[str] = None,
     config=None,
     intraday_scans: Optional[list[dict[str, Any]]] = None,
@@ -704,8 +705,11 @@ def run_close(
         )
         curve_md = render_curve_markdown(curve)
 
-    research_results = run_exa_research(enriched, cfg)
-    research_md = render_research_markdown(enriched, research_results=research_results, settings=cfg) or ""
+    research_results: list[dict[str, Any]] = []
+    research_md = ""
+    if not skip_exa_research:
+        research_results = run_exa_research(enriched, cfg)
+        research_md = render_research_markdown(enriched, research_results=research_results, settings=cfg) or ""
 
     extra_parts: list[str] = []
     if watchlist_adjust is not None:
