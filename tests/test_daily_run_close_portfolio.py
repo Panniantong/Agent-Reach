@@ -411,6 +411,58 @@ class TestClosePortfolioSummary:
         assert summary.daily_pnl is None
         assert "基线无持仓快照" in summary.position_change
 
+    def test_total_return_includes_cumulative_realized_and_unrealized(self):
+        ledger = [
+            {
+                "at": "2026-08-01T00:00:00+00:00",
+                "actions": [
+                    {
+                        "side": "buy",
+                        "code": "688008",
+                        "shares": 100,
+                        "amount": 25587.0,
+                        "commission": 38.38,
+                    }
+                ],
+            },
+            {
+                "at": "2026-08-17T00:00:00+00:00",
+                "actions": [
+                    {
+                        "side": "sell",
+                        "code": "688008",
+                        "shares": 50,
+                        "price": 260.0,
+                        "amount": 13000.0,
+                        "commission": 19.5,
+                        "realized_pnl": 150.0,
+                    }
+                ],
+            },
+        ]
+
+        def _load_range(start, end):
+            return ledger
+
+        with patch(
+            "agent_reach.daily_run.close_portfolio_summary._load_trade_ledger_range",
+            side_effect=_load_range,
+        ):
+            summary = _build_summary(_close_snapshot(), _morning_baseline())
+        from agent_reach.daily_run.realized_pnl import compute_realized_pnl
+
+        expected_cumulative = compute_realized_pnl(ledger)
+        assert summary.cumulative_realized_pnl == expected_cumulative
+        assert summary.total_unrealized is not None
+        assert summary.total_return_pnl == round(
+            expected_cumulative + float(summary.total_unrealized), 2
+        )
+        md = render_close_portfolio_markdown(summary)
+        assert "**总收益**" in md
+        assert "历史已实现" in md
+        assert "当前持股" in md
+        assert any("总收益" in line for line in summary.reason_lines)
+
 
 class TestHoldingLine:
     def test_shows_cost_and_price(self):

@@ -880,6 +880,9 @@ def build_close_context(
         "portfolio_daily_pnl": (portfolio_summary or {}).get("daily_pnl"),
         "portfolio_daily_pnl_pct": (portfolio_summary or {}).get("daily_pnl_pct"),
         "realized_pnl": (portfolio_summary or {}).get("realized_pnl"),
+        "cumulative_realized_pnl": (portfolio_summary or {}).get("cumulative_realized_pnl"),
+        "total_unrealized": (portfolio_summary or {}).get("total_unrealized"),
+        "total_return_pnl": (portfolio_summary or {}).get("total_return_pnl"),
         "trade_operations": trade_ops,
         "curve_trend": (curve or {}).get("trend"),
         "forecast_review_accuracy": (forecast_review or {}).get("accuracy"),
@@ -913,6 +916,15 @@ def _close_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
         sign = "+" if float(pnl) >= 0 else ""
         pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
         focus.append(f"组合当日盈亏 {sign}¥{float(pnl):,.0f}{pct_s}")
+    total_return = ctx.get("total_return_pnl")
+    if total_return is not None:
+        cumulative = ctx.get("cumulative_realized_pnl")
+        unrealized = ctx.get("total_unrealized")
+        focus.append(
+            f"总收益 {float(total_return):+,.0f}元"
+            f"（历史已实现 {float(cumulative or 0):+,.0f}"
+            f" + 当前持股 {float(unrealized or 0):+,.0f}）"
+        )
     trade_ops = list(ctx.get("trade_operations") or [])
     if trade_ops:
         buys = sum(1 for op in trade_ops if op.get("side") == "buy")
@@ -1002,6 +1014,9 @@ def build_merged_close_context(
         "portfolio_daily_pnl": (portfolio_summary or {}).get("daily_pnl"),
         "portfolio_daily_pnl_pct": (portfolio_summary or {}).get("daily_pnl_pct"),
         "realized_pnl": (portfolio_summary or {}).get("realized_pnl"),
+        "cumulative_realized_pnl": (portfolio_summary or {}).get("cumulative_realized_pnl"),
+        "total_unrealized": (portfolio_summary or {}).get("total_unrealized"),
+        "total_return_pnl": (portfolio_summary or {}).get("total_return_pnl"),
         "trade_operations": trade_ops,
         "curve_trend": (curve or {}).get("trend"),
         "forecast_review_accuracy": (forecast_review or {}).get("accuracy"),
@@ -1018,6 +1033,15 @@ def _merged_close_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
         sign = "+" if float(pnl) >= 0 else ""
         pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
         focus.append(f"组合当日盈亏 {sign}¥{float(pnl):,.0f}{pct_s}")
+    total_return = ctx.get("total_return_pnl")
+    if total_return is not None:
+        cumulative = ctx.get("cumulative_realized_pnl")
+        unrealized = ctx.get("total_unrealized")
+        focus.append(
+            f"总收益 {float(total_return):+,.0f}元"
+            f"（历史已实现 {float(cumulative or 0):+,.0f}"
+            f" + 当前持股 {float(unrealized or 0):+,.0f}）"
+        )
     trade_ops = list(ctx.get("trade_operations") or [])
     if trade_ops:
         buys = sum(1 for op in trade_ops if op.get("side") == "buy")

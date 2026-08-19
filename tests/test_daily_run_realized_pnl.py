@@ -135,6 +135,9 @@ def test_build_pnl_overview(tmp_path: Path):
     assert overview.holdings[0]["buy_shares"] == 800
     md = render_pnl_overview_markdown(overview)
     assert "盈亏总览" in md
+    assert "总收益" in md
+    assert "历史已实现" in md
+    assert "当前持股" in md
     assert "买入记录" in md
     assert "800股" in md
     assert "80.80" in md

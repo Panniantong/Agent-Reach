@@ -44,6 +44,8 @@ class ClosePortfolioSummary:
     flat: int = 0
     day_mv_change: Optional[float] = None
     total_unrealized: Optional[float] = None
+    cumulative_realized_pnl: Optional[float] = None
+    total_return_pnl: Optional[float] = None
     position_change: str = "无调仓"
     holdings: list[dict[str, Any]] = field(default_factory=list)
     watchlist: list[dict[str, Any]] = field(default_factory=list)
@@ -79,6 +81,8 @@ class ClosePortfolioSummary:
             "flat": self.flat,
             "day_mv_change": self.day_mv_change,
             "total_unrealized": self.total_unrealized,
+            "cumulative_realized_pnl": self.cumulative_realized_pnl,
+            "total_return_pnl": self.total_return_pnl,
             "position_change": self.position_change,
             "holdings": self.holdings,
             "watchlist": self.watchlist,
@@ -628,11 +632,35 @@ def _build_reason_lines(data: dict[str, Any]) -> list[str]:
         elif cr <= 0.25:
             lines.append(f"现金占比 **{cr:.1%}**，仓位偏重。")
 
+    total_return = data.get("total_return_pnl")
+    cumulative = data.get("cumulative_realized_pnl")
     total_unrealized = data.get("total_unrealized")
-    if total_unrealized is not None and abs(float(total_unrealized)) >= 1000:
+    if total_return is not None:
+        lines.append(
+            f"总收益 **¥{float(total_return):+,.0f}**"
+            f"（历史已实现 {float(cumulative or 0):+,.0f}"
+            f" + 当前持股 {float(total_unrealized or 0):+,.0f}）。"
+        )
+    elif total_unrealized is not None and abs(float(total_unrealized)) >= 1000:
         lines.append(f"累计浮盈浮亏 **¥{float(total_unrealized):+,.0f}**（成本口径）。")
 
     return lines
+
+
+def format_total_return_line(data: dict[str, Any]) -> Optional[str]:
+    """Markdown line: total return = cumulative realized + current unrealized."""
+    total = data.get("total_return_pnl")
+    if total is None:
+        return None
+    cumulative = data.get("cumulative_realized_pnl")
+    unrealized = data.get("total_unrealized")
+    sign = "+" if float(total) >= 0 else ""
+    cum_s = f"{float(cumulative):+,.0f}" if cumulative is not None else "—"
+    unrl_s = f"{float(unrealized):+,.0f}" if unrealized is not None else "—"
+    return (
+        f"- **总收益** **{sign}¥{float(total):,.0f}** "
+        f"= 历史已实现 **{cum_s}** + 当前持股 **{unrl_s}**"
+    )
 
 
 def build_close_portfolio_summary(
@@ -748,6 +776,8 @@ def build_close_portfolio_summary(
     all_through_day = _load_trade_ledger_range(date(2000, 1, 1), day)
     prior_trades = all_through_day[: max(0, len(all_through_day) - len(ledger_trades))]
     realized = compute_day_realized_pnl(ledger_trades, prior_trades=prior_trades)
+    cumulative_realized = compute_realized_pnl(all_through_day)
+    total_return = round(cumulative_realized + total_unrealized, 2)
     trade_cash_flow = compute_trade_cash_flow(ledger_trades)
     realized_sells = [r.to_dict() for r in replay_realized_sells(ledger_trades)]
     intraday_list = list(intraday_trades or [])
@@ -781,6 +811,8 @@ def build_close_portfolio_summary(
         flat=flat,
         day_mv_change=stock_pnl,
         total_unrealized=round(total_unrealized, 2) if holdings else None,
+        cumulative_realized_pnl=round(cumulative_realized, 2),
+        total_return_pnl=total_return,
         position_change=_describe_position_change(morning_pf, close_pf),
         holdings=holdings,
         watchlist=watchlist,
@@ -843,6 +875,10 @@ def render_close_portfolio_markdown(
         lines.append(
             f"- 仓位：股票 **{float(stock_ratio):.1%}** / 现金 **{float(cash_ratio):.1%}**"
         )
+    total_return_line = format_total_return_line(data)
+    if total_return_line:
+        lines.append(total_return_line)
+
     if data.get("realized_pnl") is not None and abs(float(data["realized_pnl"])) > 0.01:
         realized = float(data["realized_pnl"])
         sign = "+" if realized >= 0 else ""

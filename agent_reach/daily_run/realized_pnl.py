@@ -623,7 +623,7 @@ def render_pnl_overview_markdown(overview: PnlOverview | dict[str, Any]) -> str:
     unrealized = float(data.get("unrealized_pnl") or 0)
     total = float(data.get("total_pnl") or 0)
     lines.append(
-        f"- **已实现** {realized:+,.0f} · **浮动** {unrealized:+,.0f} · **合计** {total:+,.0f}"
+        f"- **总收益** {total:+,.0f} = **历史已实现** {realized:+,.0f} + **当前持股** {unrealized:+,.0f}"
     )
     wins = int(data.get("win_count") or 0)
     losses = int(data.get("loss_count") or 0)
