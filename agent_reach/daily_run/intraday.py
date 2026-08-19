@@ -51,6 +51,15 @@ def max_trade_evaluations_per_symbol(settings: Optional[dict[str, Any]] = None) 
     return max(1, runtime_int_default(cfg, "schedule", "max_trade_evaluations_per_symbol"))
 
 
+def count_trade_evaluations(trades: list[dict[str, Any]] | None) -> int:
+    """Buy/sell evaluations toward per-symbol cap; hold/skip do not count."""
+    return sum(
+        1
+        for t in trades or []
+        if str(t.get("action") or "").strip().lower() not in ("", "hold", "skip")
+    )
+
+
 def append_trade_skip_note(markdown: str, reason: str) -> str:
     text = str(reason or "").strip()
     if not text:
@@ -79,8 +88,8 @@ def explain_trade_skip_reason(
         return f"扫描次数不足（需 ≥{min_scans} 次，当前 {len(st.scans)} 次）"
 
     eval_cap = max_trade_evaluations_per_symbol(cfg)
-    if len(st.trades) >= eval_cap:
-        return f"本标的调仓评估已达上限 T1–T{eval_cap}（含 hold 记录）"
+    if count_trade_evaluations(st.trades) >= eval_cap:
+        return f"本标的调仓评估已达上限（buy/sell 已 {eval_cap} 次，hold 不计入）"
 
     trend = detect_mss_trend(st.scans, cfg)
     every_n = runtime_int_default(cfg, "schedule", "trade_every_n_scans")
@@ -342,7 +351,7 @@ def should_evaluate_trade(
     st = state or load_state(state_path)
     if len(st.scans) < runtime_int_default(cfg, "schedule", "trade_min_scans"):
         return False
-    if len(st.trades) >= max_trade_evaluations_per_symbol(cfg):
+    if count_trade_evaluations(st.trades) >= max_trade_evaluations_per_symbol(cfg):
         return False
 
     trend = detect_mss_trend(st.scans, cfg)
@@ -442,9 +451,9 @@ def evaluate_trade(
     st = state or load_state(state_path)
 
     eval_cap = max_trade_evaluations_per_symbol(cfg)
-    if len(st.trades) >= eval_cap:
+    if count_trade_evaluations(st.trades) >= eval_cap:
         raise RuntimeError(
-            f"今日调仓评估已达上限 {eval_cap} 次（T1-T{eval_cap}）"
+            f"今日调仓评估已达上限 {eval_cap} 次（buy/sell，hold 不计入）"
         )
     if not st.scans:
         raise RuntimeError("尚无扫描记录，请先运行 daily-run intraday scan")

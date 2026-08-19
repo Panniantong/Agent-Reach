@@ -575,7 +575,11 @@ def _review_intraday_state(
     trades: list[dict[str, Any]],
     settings: dict[str, Any],
 ) -> None:
-    from agent_reach.daily_run.intraday import MAX_SCANS, max_trade_evaluations_per_symbol
+    from agent_reach.daily_run.intraday import (
+        MAX_SCANS,
+        count_trade_evaluations,
+        max_trade_evaluations_per_symbol,
+    )
 
     eval_cap = max_trade_evaluations_per_symbol(settings)
 
@@ -603,12 +607,13 @@ def _review_intraday_state(
             )
         )
 
-    if len(trades) > eval_cap:
+    applied_evals = count_trade_evaluations(trades)
+    if applied_evals > eval_cap:
         out.findings.append(
             CodeFinding(
                 "intraday",
                 "medium",
-                f"调仓评估次数 {len(trades)} 超过上限 {eval_cap}",
+                f"调仓评估次数 {applied_evals}（buy/sell）超过上限 {eval_cap}",
                 "检查 trade_every_n_scans 或 max_trade_evaluations_per_symbol 配置",
             )
         )

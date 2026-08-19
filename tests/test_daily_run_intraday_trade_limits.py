@@ -10,6 +10,7 @@ from agent_reach.daily_run.intraday import (
     TradeDecision,
     append_trade_skip_note,
     apply_paper_trade,
+    count_trade_evaluations,
     explain_trade_skip_reason,
     max_applied_trades_per_day,
     max_trade_evaluations_per_symbol,
@@ -39,6 +40,7 @@ def portfolio():
 @pytest.fixture
 def settings_trade_limits():
     s = load_settings()
+    s.setdefault("harness", {})["runtime_overlay"] = False
     s.setdefault("schedule", {})
     s["schedule"]["max_applied_trades_per_day"] = 5
     s["schedule"]["max_trade_evaluations_per_symbol"] = 8
@@ -59,10 +61,15 @@ def _scan(mss: float, scan_id: str = "S1") -> dict:
 
 
 class TestTradeLimitHelpers:
-    def test_harness_neutral_defaults(self):
+    def test_harness_neutral_defaults(self, monkeypatch):
+        from agent_reach.daily_run.harness import HarnessState
         from agent_reach.daily_run.harness_policy import runtime_int_default
         from agent_reach.daily_run.settings import effective_settings
 
+        monkeypatch.setattr(
+            "agent_reach.daily_run.harness.load_harness",
+            lambda: HarnessState(),
+        )
         cfg = effective_settings(
             {
                 "harness": {
@@ -89,17 +96,32 @@ class TestTradeLimitHelpers:
             trades=[{"trade_id": f"T{i}", "action": "hold"} for i in range(1, 6)],
         )
         save_daily_trade_state({"date": "2026-08-18", "fingerprints": [f"f{i}" for i in range(5)]})
+        assert count_trade_evaluations(st.trades) == 0
+        assert should_evaluate_trade(st, settings_trade_limits) is True
+
+    def test_should_evaluate_when_only_holds_even_at_high_count(self, settings_trade_limits):
+        st = IntradayState(
+            date="2026-08-18",
+            scans=[_scan(56, f"S{i}") for i in range(1, 15)],
+            trades=[{"trade_id": f"T{i}", "action": "hold"} for i in range(1, 16)],
+        )
+        assert count_trade_evaluations(st.trades) == 0
         assert should_evaluate_trade(st, settings_trade_limits) is True
 
     def test_should_not_evaluate_when_eval_cap_full(self, settings_trade_limits):
         st = IntradayState(
             date="2026-08-18",
             scans=[_scan(56, f"S{i}") for i in range(1, 10)],
-            trades=[{"trade_id": f"T{i}", "action": "hold"} for i in range(1, 9)],
+            trades=[
+                {"trade_id": f"T{i}", "action": "buy" if i % 2 else "sell"}
+                for i in range(1, 9)
+            ],
         )
+        assert count_trade_evaluations(st.trades) == 8
         assert should_evaluate_trade(st, settings_trade_limits) is False
         reason = explain_trade_skip_reason(st, settings_trade_limits)
         assert "评估已达上限" in reason
+        assert "hold 不计入" in reason
 
     def test_append_trade_skip_note(self):
         md = append_trade_skip_note("**S12 数据收集完成**", "今日全组合落账已达上限 5 次")
