@@ -737,7 +737,7 @@
       "require_metrics": ["total_return", "max_drawdown"]
     },
     "branch_overlay": {
-      "enabled": true,
+      "enabled": false,
       "use_root_for_main": true,
       "main_names": ["main", "master"]
     },
