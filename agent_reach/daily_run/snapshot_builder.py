@@ -572,7 +572,12 @@ def build_snapshot(
             "backend": "snapshot_builder",
         }
 
-    mss_breakdown = dict(macro_ctx.get("mss_breakdown") or pf.get("mss_breakdown") or {})
+    from agent_reach.daily_run.macro_collector import apply_threshold_refs
+
+    mss_breakdown = apply_threshold_refs(
+        macro_ctx.get("mss_breakdown") or pf.get("mss_breakdown") or {},
+        cfg,
+    )
     from agent_reach.daily_run.trade_calendar import today_shanghai
 
     today = today_shanghai().isoformat()

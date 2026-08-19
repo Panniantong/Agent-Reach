@@ -168,11 +168,12 @@ def run_expert_consensus_checks(
     if review is None:
         return {"passed": True, "skipped": True, "reason": "no expert data", "review": None}
 
-    from agent_reach.daily_run.harness_policy import threshold_default
+    from agent_reach.daily_run.harness_policy import aggressive_entry_default, macro_veto_default
+    from agent_reach.daily_run.settings import effective_settings
 
-    thresholds = (settings or {}).get("thresholds") or {}
-    macro_veto = float(thresholds.get("macro_veto", threshold_default(settings, "macro_veto")))
-    aggressive = float(thresholds.get("aggressive_entry", threshold_default(settings, "aggressive_entry")))
+    eff = effective_settings(settings)
+    macro_veto = macro_veto_default(eff)
+    aggressive = aggressive_entry_default(eff)
 
     blocking: list[str] = []
     if review.blocked:

@@ -161,17 +161,31 @@ def collect_macro_context(
     }
 
 
+def threshold_refs_for_display(settings: dict[str, Any]) -> dict[str, float]:
+    """Effective macro veto / aggressive entry refs for reports (harness overlay aware)."""
+    from agent_reach.daily_run.harness_policy import aggressive_entry_default, macro_veto_default
+    from agent_reach.daily_run.settings import effective_settings
+
+    eff = effective_settings(settings)
+    return {
+        "_macro_veto_ref": macro_veto_default(eff),
+        "_aggressive_ref": aggressive_entry_default(eff),
+    }
+
+
+def apply_threshold_refs(breakdown: dict[str, Any], settings: dict[str, Any]) -> dict[str, Any]:
+    """Refresh _macro_veto_ref / _aggressive_ref on an existing breakdown (e.g. daily cache)."""
+    out = dict(breakdown or {})
+    out.update(threshold_refs_for_display(settings))
+    return out
+
+
 def _derive_mss_breakdown(
     base: dict[str, Any],
     signals: dict[str, Any],
     settings: dict[str, Any],
 ) -> dict[str, float]:
     """Map live signals to MSS factor scores 0-100."""
-    from agent_reach.daily_run.harness_policy import threshold_default
-
-    thresholds = settings.get("thresholds", {})
-    macro_veto = float(thresholds.get("macro_veto", threshold_default(settings, "macro_veto")))
-    aggressive = float(thresholds.get("aggressive_entry", threshold_default(settings, "aggressive_entry")))
 
     fx = float(base.get("fx", 50))
     flow = float(base.get("flow", 50))
@@ -203,14 +217,14 @@ def _derive_mss_breakdown(
         boost = float(rf_cfg.get("sentiment_boost_per_hit", 1.5))
         sentiment = _clamp(sentiment + redfox_hits * boost)
 
-    return {
+    breakdown = {
         "fx": round(fx, 1),
         "flow": round(flow, 1),
         "global": round(global_score, 1),
         "sentiment": round(sentiment, 1),
-        "_macro_veto_ref": macro_veto,
-        "_aggressive_ref": aggressive,
     }
+    breakdown.update(threshold_refs_for_display(settings))
+    return breakdown
 
 
 def _fetch_index_change() -> Optional[float]:

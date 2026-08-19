@@ -12,6 +12,32 @@ from agent_reach.daily_run.quality_gate import GateResult, validate_report
 from agent_reach.daily_run.settings import effective_settings, load_settings
 from agent_reach.daily_run.verdict import VerdictResult, compute_verdict, fuse_verdict_with_team
 
+_MSS_BREAKDOWN_LABELS: dict[str, str] = {
+    "_macro_veto_ref": "宏观否决线",
+    "_aggressive_ref": "进攻阈值",
+}
+
+
+def _format_mss_breakdown_lines(breakdown: dict[str, Any]) -> list[str]:
+    """Render MSS factor lines; threshold refs use friendly Chinese labels."""
+    lines: list[str] = []
+    refs: list[tuple[str, Any]] = []
+    for key, value in breakdown.items():
+        if key in _MSS_BREAKDOWN_LABELS:
+            refs.append((_MSS_BREAKDOWN_LABELS[key], value))
+        elif str(key).startswith("_"):
+            continue
+        else:
+            lines.append(f"- {key}: {value}")
+    for label, value in refs:
+        if isinstance(value, float) and label == "宏观否决线":
+            lines.append(f"- {label}: {value:.0f}")
+        elif isinstance(value, float):
+            lines.append(f"- {label}: {value:.0f}")
+        else:
+            lines.append(f"- {label}: {value}")
+    return lines
+
 
 def evaluate_snapshot(
     snapshot: dict[str, Any],
@@ -66,9 +92,7 @@ def build_report(
             evidence.append(f"- **{cat}**: {detail}")
 
     breakdown = snapshot.get("mss_breakdown") or {}
-    breakdown_lines = [
-        f"- {k}: {v}" for k, v in breakdown.items()
-    ]
+    breakdown_lines = _format_mss_breakdown_lines(breakdown)
 
     prior_close_mss = snapshot.get("prior_close_mss")
     prior_close_delta = None
