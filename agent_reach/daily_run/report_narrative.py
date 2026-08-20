@@ -1,5 +1,5 @@
 # -*- coding: utf-8
-"""LLM narrative cards for morning / close / weekly / forecast reports."""
+"""Rule-based report narrative cards (optional LLM) for morning / close / weekly / forecast."""
 
 from __future__ import annotations
 
@@ -232,7 +232,13 @@ def _narrative_cfg(settings: Optional[dict[str, Any]], job: str) -> dict[str, An
     if not root.get("model") and harness_llm.get("model"):
         root["model"] = harness_llm["model"]
     root.setdefault("enabled", True)
+    root.setdefault("planner", "deterministic")
     return root
+
+
+def narrative_use_llm(cfg: dict[str, Any]) -> bool:
+    """``deterministic`` = code-only (no LLM tokens); ``llm`` = call provider when available."""
+    return str(cfg.get("planner") or "deterministic").strip().lower() == "llm"
 
 
 def _morning_focus_hint() -> str:
@@ -261,24 +267,25 @@ def _generate_narrative(
     hint = system.strip()
     use_system = f"{base_system} {hint}".strip() if hint else base_system
 
-    from agent_reach.daily_run.llm_chat import chat_json, resolve_chat_provider
+    if narrative_use_llm(cfg):
+        from agent_reach.daily_run.llm_chat import chat_json, resolve_chat_provider
 
-    provider = str(cfg.get("provider") or "auto")
-    if resolve_chat_provider(provider):
-        payload = chat_json(
-            system=use_system,
-            user=json.dumps(compact_context, ensure_ascii=False),
-            provider=provider,
-            model=cfg.get("model") or None,
-            timeout=int(cfg.get("timeout_seconds") or 60),
-            max_tokens=int(cfg.get("max_output_tokens") or 320),
-        )
-        if isinstance(payload, dict) and payload.get("summary"):
-            payload = _compact_narrative_payload(payload, limits)
-            payload["planner"] = "llm"
-            payload["skipped"] = False
-            payload["job"] = job
-            return payload
+        provider = str(cfg.get("provider") or "auto")
+        if resolve_chat_provider(provider):
+            payload = chat_json(
+                system=use_system,
+                user=json.dumps(compact_context, ensure_ascii=False),
+                provider=provider,
+                model=cfg.get("model") or None,
+                timeout=int(cfg.get("timeout_seconds") or 60),
+                max_tokens=int(cfg.get("max_output_tokens") or 320),
+            )
+            if isinstance(payload, dict) and payload.get("summary"):
+                payload = _compact_narrative_payload(payload, limits)
+                payload["planner"] = "llm"
+                payload["skipped"] = False
+                payload["job"] = job
+                return payload
 
     if deterministic_fn:
         out = deterministic_fn(context)
@@ -314,8 +321,8 @@ def render_narrative_markdown(narrative: dict[str, Any], *, job: str = "") -> st
         "close": "复盘摘要",
         "weekly": "周报摘要",
     }
-    sub = subtitles.get(use_job, "AI解读")
-    lines = [f"## 🧠 AI 解读（{sub}）", ""]
+    sub = subtitles.get(use_job, "规则解读")
+    lines = [f"## 📋 规则解读（{sub}）", ""]
     if narrative.get("summary"):
         lines.append(str(narrative["summary"]))
     label_focus = {
@@ -801,8 +808,8 @@ def intraday_narrative_card_title(
     symbol_count: int = 1,
 ) -> str:
     if scan_id:
-        return f"🤖 盘中 AI 解读 · {scan_id} · {symbol_count}只"
-    return f"🤖 盘中 AI 解读 · {symbol_count}只"
+        return f"📋 盘中规则解读 · {scan_id} · {symbol_count}只"
+    return f"📋 盘中规则解读 · {symbol_count}只"
 
 
 def push_intraday_narrative_card(
@@ -868,7 +875,8 @@ def build_close_context(
     from agent_reach.daily_run.close_portfolio_summary import extract_close_trade_operations
 
     trade_ops = extract_close_trade_operations(portfolio_summary)
-    return {
+    sell_rules_whatif = (portfolio_summary or {}).get("sell_rules_whatif")
+    ctx = {
         "job": "close",
         "name": snapshot.get("name"),
         "code": snapshot.get("code"),
@@ -884,10 +892,15 @@ def build_close_context(
         "total_unrealized": (portfolio_summary or {}).get("total_unrealized"),
         "total_return_pnl": (portfolio_summary or {}).get("total_return_pnl"),
         "trade_operations": trade_ops,
+        "sell_rules_whatif": sell_rules_whatif,
+        "buy_rules_whatif": (portfolio_summary or {}).get("buy_rules_whatif"),
+        "intraday_friction_whatif": (portfolio_summary or {}).get("intraday_friction_whatif"),
+        "intraday_sell_whatif": (portfolio_summary or {}).get("intraday_sell_whatif"),
         "curve_trend": (curve or {}).get("trend"),
         "forecast_review_accuracy": (forecast_review or {}).get("accuracy"),
         "macro_summary": (snapshot.get("macro_summary") or "")[:120],
     }
+    return ctx
 
 
 def _attach_close_trade_operations(
@@ -903,6 +916,114 @@ def _attach_close_trade_operations(
     if ops:
         narrative["trade_operations"] = ops
     return narrative
+
+
+def _append_trade_whatif_focus(focus: list[str], ctx: dict[str, Any], *, max_rows: int = 3) -> None:
+    sell = ctx.get("sell_rules_whatif") or {}
+    if sell and not sell.get("skipped") and sell.get("rows"):
+        deltas = [r for r in sell.get("rows") or [] if int(r.get("share_delta") or 0) != 0]
+        if deltas:
+            bits = []
+            for row in deltas[:max_rows]:
+                name = row.get("name") or row.get("code")
+                bits.append(
+                    f"{name} 基准{int(row.get('actual_sold') or 0)}股→自进化{int(row.get('hypothetical_sold') or 0)}股"
+                )
+            focus.append(f"卖出规则对比（基准值 vs 自进化）：{'；'.join(bits)}")
+        pnl_delta = sell.get("realized_pnl_delta")
+        if pnl_delta is not None and abs(float(pnl_delta)) >= 200:
+            if float(pnl_delta) <= -200:
+                focus.append(
+                    f"卖出 what-if 基准优于自进化（已实现差 {float(pnl_delta):+,.0f}），"
+                    "harness 将 step-up 卖出比例"
+                )
+            else:
+                focus.append(
+                    f"卖出 what-if 自进化优于基准（已实现差 {float(pnl_delta):+,.0f}），"
+                    "维持 partial sell 纪律"
+                )
+        elif pnl_delta is not None and abs(float(pnl_delta)) >= 0.01:
+            sign = "+" if float(pnl_delta) >= 0 else ""
+            focus.append(f"卖出自进化已实现差异 {sign}¥{float(pnl_delta):,.0f}")
+
+    buy = ctx.get("buy_rules_whatif") or {}
+    if buy and not buy.get("skipped") and buy.get("rows"):
+        deltas = [r for r in buy.get("rows") or [] if int(r.get("share_delta") or 0) != 0]
+        if deltas:
+            bits = []
+            for row in deltas[:max_rows]:
+                name = row.get("name") or row.get("code")
+                bits.append(
+                    f"{name} 基准{int(row.get('actual_bought') or 0)}股→自进化{int(row.get('hypothetical_bought') or 0)}股"
+                )
+            focus.append(f"买入规则对比（基准值 vs 自进化）：{'；'.join(bits)}")
+        notional_delta = buy.get("buy_notional_delta")
+        if notional_delta is not None and abs(float(notional_delta)) >= 5000:
+            if float(notional_delta) <= -5000:
+                focus.append(
+                    f"买入 what-if 基准优于自进化（成交额差 {float(notional_delta):+,.0f}），"
+                    "harness 可上调 deploy_ratio"
+                )
+            else:
+                focus.append(
+                    f"买入 what-if 自进化优于基准（成交额差 {float(notional_delta):+,.0f}），"
+                    "收紧 deploy 纪律"
+                )
+        elif notional_delta is not None and abs(float(notional_delta)) >= 0.01:
+            sign = "+" if float(notional_delta) >= 0 else ""
+            focus.append(f"买入自进化成交额差异 {sign}¥{float(notional_delta):,.0f}")
+
+    intraday = ctx.get("intraday_friction_whatif") or {}
+    if intraday and not intraday.get("skipped"):
+        rows = list(intraday.get("rows") or [])
+        friction_pass = int(intraday.get("friction_would_pass") or 0)
+        trend_miss = int(intraday.get("trend_mismatch") or 0)
+        if rows:
+            bits = []
+            for row in rows[:max_rows]:
+                name = row.get("name") or row.get("code")
+                bits.append(
+                    f"{name} 基准{row.get('actual_action') or '—'}"
+                    f"→自进化{row.get('evolved_action') or '—'}"
+                )
+            focus.append(f"盘中摩擦/趋势对比（基准值 vs 自进化）：{'；'.join(bits)}")
+        if friction_pass >= 2:
+            focus.append(
+                f"摩擦 what-if 自进化可放行 {friction_pass} 次，"
+                "harness 可略降 friction_min_return_pct"
+            )
+        elif friction_pass == 1:
+            focus.append("摩擦 what-if 自进化可放行 1 次")
+        if trend_miss >= 2:
+            focus.append(
+                f"趋势误判 {trend_miss} 次，harness 可调整 trend_min_points / trend_delta_threshold"
+            )
+        elif trend_miss == 1:
+            focus.append("趋势误判 1 次")
+
+    intraday_sell = ctx.get("intraday_sell_whatif") or {}
+    if intraday_sell and not intraday_sell.get("skipped"):
+        rows = list(intraday_sell.get("rows") or [])
+        missed = int(intraday_sell.get("missed_sell_signals") or 0)
+        delta = int(intraday_sell.get("sell_share_delta") or 0)
+        if rows:
+            bits = []
+            for row in rows[:max_rows]:
+                name = row.get("name") or row.get("code")
+                bits.append(
+                    f"{name} 基准{row.get('actual_action') or '—'}"
+                    f"→自进化{row.get('evolved_action') or '—'}"
+                )
+            focus.append(f"盘中卖出 scan replay（基准值 vs 自进化）：{'；'.join(bits)}")
+        if missed >= 2:
+            focus.append(
+                f"卖出 scan replay 自进化错失 {missed} 次，"
+                "harness 可 step-up sell_ratio / defensive_trim"
+            )
+        elif missed == 1:
+            focus.append("卖出 scan replay 自进化错失 1 次")
+        elif delta > 0:
+            focus.append(f"自进化卖出 scan 多卖 {delta} 股，维持 partial sell 纪律")
 
 
 def _close_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
@@ -937,6 +1058,7 @@ def _close_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
             trade_summary += f" · 已实现 {sign}¥{float(realized):,.0f}"
         if trade_summary:
             focus.append(f"当日成交：{trade_summary}")
+    _append_trade_whatif_focus(focus, ctx)
     for rec in ctx.get("recommendations") or []:
         focus.append(f"明日：{rec}")
     for dev in ctx.get("deviations") or []:
@@ -1018,6 +1140,10 @@ def build_merged_close_context(
         "total_unrealized": (portfolio_summary or {}).get("total_unrealized"),
         "total_return_pnl": (portfolio_summary or {}).get("total_return_pnl"),
         "trade_operations": trade_ops,
+        "sell_rules_whatif": (portfolio_summary or {}).get("sell_rules_whatif"),
+        "buy_rules_whatif": (portfolio_summary or {}).get("buy_rules_whatif"),
+        "intraday_friction_whatif": (portfolio_summary or {}).get("intraday_friction_whatif"),
+        "intraday_sell_whatif": (portfolio_summary or {}).get("intraday_sell_whatif"),
         "curve_trend": (curve or {}).get("trend"),
         "forecast_review_accuracy": (forecast_review or {}).get("accuracy"),
     }
@@ -1054,6 +1180,7 @@ def _merged_close_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
             trade_summary += f" · 已实现 {sign}¥{float(realized):,.0f}"
         if trade_summary:
             focus.append(f"当日成交：{trade_summary}")
+    _append_trade_whatif_focus(focus, ctx)
     for sym in ctx.get("symbols") or []:
         if sym.get("verify_summary"):
             focus.append(f"{sym.get('name') or sym.get('code')}：{sym['verify_summary'][:72]}")
@@ -1139,6 +1266,10 @@ def build_weekly_context(report: dict[str, Any]) -> dict[str, Any]:
         "process_improvements": improvements,
         "experience_snippets": (report.get("experience_snippets") or [])[:3],
         "notes": report.get("notes") or [],
+        "sell_rules_whatif": report.get("sell_rules_whatif"),
+        "buy_rules_whatif": report.get("buy_rules_whatif"),
+        "intraday_friction_whatif": report.get("intraday_friction_whatif"),
+        "intraday_sell_whatif": report.get("intraday_sell_whatif"),
     }
 
 
@@ -1165,6 +1296,7 @@ def _weekly_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
     for imp in ctx.get("process_improvements") or []:
         if imp.get("title"):
             focus.append(f"改进：{imp['title']}")
+    _append_trade_whatif_focus(focus, ctx)
     for snip in ctx.get("experience_snippets") or []:
         if "偏离" in snip or "否决" in snip:
             risks.append(str(snip)[:120])

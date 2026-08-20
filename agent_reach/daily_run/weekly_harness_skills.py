@@ -18,6 +18,10 @@ class WeeklyHarnessSkillsReport:
     finance_close_plan: dict[str, Any] = field(default_factory=dict)
     expert_consensus_weekly: dict[str, Any] = field(default_factory=dict)
     run_guard: dict[str, Any] = field(default_factory=dict)
+    sell_rules_whatif: dict[str, Any] = field(default_factory=dict)
+    harness_threshold: dict[str, Any] = field(default_factory=dict)
+    intraday_friction: dict[str, Any] = field(default_factory=dict)
+    intraday_sell: dict[str, Any] = field(default_factory=dict)
     weekly_layer_a: dict[str, Any] = field(default_factory=dict)
     effective_overlay: dict[str, Any] = field(default_factory=dict)
 
@@ -29,6 +33,10 @@ class WeeklyHarnessSkillsReport:
             "finance_close_plan": self.finance_close_plan,
             "expert_consensus_weekly": self.expert_consensus_weekly,
             "run_guard": self.run_guard,
+            "sell_rules_whatif": self.sell_rules_whatif,
+            "harness_threshold": self.harness_threshold,
+            "intraday_friction": self.intraday_friction,
+            "intraday_sell": self.intraday_sell,
             "weekly_layer_a": self.weekly_layer_a,
             "effective_overlay": self.effective_overlay,
             "total_changes": sum(
@@ -40,6 +48,10 @@ class WeeklyHarnessSkillsReport:
                     self.finance_close_plan,
                     self.expert_consensus_weekly,
                     self.run_guard,
+                    self.sell_rules_whatif,
+                    self.harness_threshold,
+                    self.intraday_friction,
+                    self.intraday_sell,
                     self.weekly_layer_a,
                 )
                 if not (block or {}).get("skipped")
@@ -98,6 +110,41 @@ def run_weekly_harness_refinements(
         )
 
         out.expert_consensus_weekly = apply_expert_consensus_weekly_harness_refinement(
+            report,
+            settings=cfg,
+        )
+
+    if _job_enabled(harness_cfg, "sell_rules_whatif"):
+        from agent_reach.daily_run.sell_rules_whatif_harness import (
+            apply_sell_rules_whatif_harness_refinement,
+        )
+
+        out.sell_rules_whatif = apply_sell_rules_whatif_harness_refinement(
+            report,
+            settings=cfg,
+        )
+
+    if _job_enabled(harness_cfg, "harness_threshold"):
+        from agent_reach.daily_run.harness_evolution_optimizers import apply_weekly_harness_llm_refinement
+
+        out.harness_threshold = apply_weekly_harness_llm_refinement(report, settings=cfg)
+
+    if _job_enabled(harness_cfg, "intraday_friction"):
+        from agent_reach.daily_run.intraday_friction_harness import (
+            apply_weekly_intraday_friction_harness_refinement,
+        )
+
+        out.intraday_friction = apply_weekly_intraday_friction_harness_refinement(
+            report,
+            settings=cfg,
+        )
+
+    if _job_enabled(harness_cfg, "intraday_sell"):
+        from agent_reach.daily_run.intraday_sell_harness import (
+            apply_weekly_intraday_sell_harness_refinement,
+        )
+
+        out.intraday_sell = apply_weekly_intraday_sell_harness_refinement(
             report,
             settings=cfg,
         )

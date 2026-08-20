@@ -5,7 +5,8 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from agent_reach.daily_run.harness_skill_base import apply_skill_refinement
+from agent_reach.daily_run.harness_evolution_optimizers import optimize_pnl_target_with_deepseek
+from agent_reach.daily_run.harness_skill_base import apply_skill_refinement, merge_harness_evidence
 from agent_reach.daily_run.pnl_target import (
     PnlTarget,
     PnlTargetResult,
@@ -110,16 +111,36 @@ def apply_pnl_target_harness_refinement(
         "next_target": run.get("next_target"),
     }
     evidence["rigor_domain"] = dict(evidence["forge_domain"])
+    llm_opt = optimize_pnl_target_with_deepseek(
+        run,
+        portfolio_summary=portfolio_summary,
+        settings=settings,
+    )
+    if not llm_opt.get("skipped") and llm_opt.get("evidence"):
+        evidence = merge_harness_evidence(evidence, llm_opt["evidence"])
+        if isinstance(evidence.get("rigor_domain"), dict):
+            evidence["rigor_domain"]["llm_optimal"] = llm_opt.get("optimal")
+            evidence["rigor_domain"]["llm_planner"] = llm_opt.get("planner")
     refine = apply_skill_refinement(
         "pnl_target",
         evidence,
         settings=settings,
         enabled_flag="pnl_target",
     )
-    return {
+    result = {
         **run,
         **refine,
         "job": "pnl_target",
         "evaluated": run.get("evaluated"),
         "next_target": run.get("next_target"),
     }
+    if not llm_opt.get("skipped"):
+        result["llm_optimize"] = {
+            "skipped": False,
+            "planner": llm_opt.get("planner"),
+            "optimal": llm_opt.get("optimal"),
+            "provider": llm_opt.get("provider"),
+        }
+    else:
+        result["llm_optimize"] = {"skipped": True, "reason": llm_opt.get("reason")}
+    return result

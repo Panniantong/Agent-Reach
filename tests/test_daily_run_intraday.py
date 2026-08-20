@@ -346,7 +346,7 @@ class TestIntradayWorkflow:
         )
         assert len(sends) >= 2
         assert "S1 数据收集完成" in sends[0][1] or "数据收集完成" in sends[0][1]
-        assert any("盘中 AI 解读" in t for t, _ in sends)
+        assert any("盘中规则解读" in t for t, _ in sends)
         assert any("盘中小结" in body for _, body in sends)
         assert not any("早盘全持仓" in body for _, body in sends)
         assert result.get("narrative_feishu") is not None

@@ -20,6 +20,8 @@ class CloseHarnessSkillsReport:
     watchlist_adjust: dict[str, Any] = field(default_factory=dict)
     pnl_overview: dict[str, Any] = field(default_factory=dict)
     pnl_target: dict[str, Any] = field(default_factory=dict)
+    intraday_friction: dict[str, Any] = field(default_factory=dict)
+    intraday_sell: dict[str, Any] = field(default_factory=dict)
     finance_close: dict[str, Any] = field(default_factory=dict)
     finance_ledger_prep: dict[str, Any] = field(default_factory=dict)
     finance_ledger: dict[str, Any] = field(default_factory=dict)
@@ -35,6 +37,8 @@ class CloseHarnessSkillsReport:
             "watchlist_adjust": self.watchlist_adjust,
             "pnl_overview": self.pnl_overview,
             "pnl_target": self.pnl_target,
+            "intraday_friction": self.intraday_friction,
+            "intraday_sell": self.intraday_sell,
             "finance_close": self.finance_close,
             "finance_ledger_prep": self.finance_ledger_prep,
             "finance_ledger": self.finance_ledger,
@@ -50,6 +54,8 @@ class CloseHarnessSkillsReport:
                     self.watchlist_adjust,
                     self.pnl_overview,
                     self.pnl_target,
+                    self.intraday_friction,
+                    self.intraday_sell,
                     self.finance_close,
                     self.finance_ledger_prep,
                     self.finance_ledger,
@@ -122,6 +128,24 @@ def run_close_harness_refinements(
             settings=cfg,
             cycle=pnl_target_cycle,
         )
+
+        from agent_reach.daily_run.intraday_friction_harness import apply_intraday_friction_harness_refinement
+
+        harness_cfg = cfg.get("harness") or {}
+        jobs = harness_cfg.get("jobs") or {}
+        if jobs.get("intraday_friction", True):
+            report.intraday_friction = apply_intraday_friction_harness_refinement(
+                portfolio_summary,
+                settings=cfg,
+            )
+
+        from agent_reach.daily_run.intraday_sell_harness import apply_intraday_sell_harness_refinement
+
+        if jobs.get("intraday_sell", True):
+            report.intraday_sell = apply_intraday_sell_harness_refinement(
+                portfolio_summary,
+                settings=cfg,
+            )
 
         from agent_reach.daily_run.finance_close_harness import apply_finance_close_harness_refinement
 

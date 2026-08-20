@@ -5,7 +5,8 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from agent_reach.daily_run.harness_skill_base import apply_skill_refinement
+from agent_reach.daily_run.harness_evolution_optimizers import optimize_forecast_calibrate_with_deepseek
+from agent_reach.daily_run.harness_skill_base import apply_skill_refinement, merge_harness_evidence
 
 
 def forecast_to_harness_evidence(forecast: dict[str, Any]) -> dict[str, Any]:
@@ -62,4 +63,20 @@ def apply_forecast_calibrate_harness_refinement(
     wf_cfg = (settings or {}).get("week_forecast") or {}
     if wf_cfg.get("harness_evolve", True) is False:
         return {"skipped": True, "reason": "week_forecast.harness_evolve disabled", "job": "forecast_calibrate"}
-    return apply_skill_refinement("forecast_calibrate", evidence, settings=settings)
+    llm_opt = optimize_forecast_calibrate_with_deepseek(forecast, settings=settings)
+    if not llm_opt.get("skipped") and llm_opt.get("evidence"):
+        evidence = merge_harness_evidence(evidence, llm_opt["evidence"])
+        if isinstance(evidence.get("rigor_domain"), dict):
+            evidence["rigor_domain"]["llm_optimal"] = llm_opt.get("optimal")
+            evidence["rigor_domain"]["llm_planner"] = llm_opt.get("planner")
+    result = apply_skill_refinement("forecast_calibrate", evidence, settings=settings)
+    if not llm_opt.get("skipped"):
+        result["llm_optimize"] = {
+            "skipped": False,
+            "planner": llm_opt.get("planner"),
+            "optimal": llm_opt.get("optimal"),
+            "provider": llm_opt.get("provider"),
+        }
+    else:
+        result["llm_optimize"] = {"skipped": True, "reason": llm_opt.get("reason")}
+    return result

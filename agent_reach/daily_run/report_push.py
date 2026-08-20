@@ -17,7 +17,7 @@ class ReportSection:
 
 
 _CATEGORY_LABELS: dict[str, str] = {
-    "ai_narrative": "AI解读",
+    "ai_narrative": "规则解读",
     "experts": "专家共识",
     "decision": "MSS 决策",
     "intraday": "盘中曲线",
@@ -31,7 +31,7 @@ _CATEGORY_LABELS: dict[str, str] = {
     "weekly_track": "MSS·经验",
     "weekly_insights": "学习·改进",
     "forecast_mss": "MSS预测",
-    "forecast_narrative": "AI解读",
+    "forecast_narrative": "规则解读",
     "forecast_symbols": "个股路径",
     "forecast_news": "新闻热点",
     "harness": "Harness 进化",
@@ -179,7 +179,7 @@ def render_close_sections(
 
 
 _WEEKLY_CATEGORY_MAP = {
-    "AI解读": "weekly_narrative",
+    "规则解读": "weekly_narrative",
     "盈亏·持仓": "weekly_portfolio",
     "板块·热点": "weekly_market",
     "MSS·经验": "weekly_track",
@@ -209,7 +209,7 @@ def render_weekly_push_sections(report) -> list[ReportSection]:
 
 
 _FORECAST_CATEGORY_MAP = {
-    "AI解读": "forecast_narrative",
+    "规则解读": "forecast_narrative",
     "MSS预测": "forecast_mss",
     "个股路径": "forecast_symbols",
     "新闻热点": "forecast_news",

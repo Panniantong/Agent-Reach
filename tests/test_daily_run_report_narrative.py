@@ -26,7 +26,20 @@ def test_morning_narrative_deterministic():
         )
     assert narrative["planner"] == "deterministic"
     md = render_narrative_markdown(narrative, job="morning")
+    assert "规则解读" in md
     assert "决策摘要" in md
+
+
+def test_planner_deterministic_skips_llm_even_with_provider():
+    with patch("agent_reach.daily_run.llm_chat.resolve_chat_provider", return_value="deepseek"):
+        with patch("agent_reach.daily_run.llm_chat.chat_json") as mock_chat:
+            narrative = generate_morning_narrative(
+                {"name": "澜起科技", "code": "688008", "portfolio": {"cash_ratio": 0.46}},
+                {"name": "澜起科技", "verdict": "回避", "mss_final": 30.4},
+                settings={"llm_narrative": {"enabled": True, "planner": "deterministic"}},
+            )
+            mock_chat.assert_not_called()
+            assert narrative["planner"] == "deterministic"
 
 
 def test_morning_sections_include_ai_last():
@@ -66,7 +79,7 @@ def test_weekly_sections_include_ai_last():
         llm_narrative={"summary": "周报测试", "focus_points": ["C"], "job": "weekly"},
     )
     sections = render_weekly_sections(report)
-    assert sections[-1].label == "AI解读"
+    assert sections[-1].label == "规则解读"
 
 
 def test_weekly_narrative_with_pnl():
@@ -301,6 +314,63 @@ def test_close_narrative_includes_trade_operations():
     assert any("成交" in item for item in narrative.get("focus_points") or [])
 
 
+def test_close_narrative_includes_intraday_friction_whatif():
+    from agent_reach.daily_run.report_narrative import _append_trade_whatif_focus
+
+    focus: list[str] = []
+    _append_trade_whatif_focus(
+        focus,
+        {
+            "intraday_friction_whatif": {
+                "skipped": False,
+                "friction_would_pass": 2,
+                "trend_mismatch": 1,
+                "rows": [
+                    {
+                        "code": "000725",
+                        "name": "京东方A",
+                        "actual_action": "hold",
+                        "evolved_action": "buy",
+                    }
+                ],
+            }
+        },
+    )
+    joined = " ".join(focus)
+    assert "盘中摩擦/趋势对比" in joined
+    assert "京东方A" in joined
+    assert "可放行 2 次" in joined
+    assert "趋势误判 1 次" in joined
+
+
+def test_close_narrative_includes_intraday_sell_whatif():
+    from agent_reach.daily_run.report_narrative import _append_trade_whatif_focus
+
+    focus: list[str] = []
+    _append_trade_whatif_focus(
+        focus,
+        {
+            "intraday_sell_whatif": {
+                "skipped": False,
+                "missed_sell_signals": 2,
+                "sell_share_delta": 700,
+                "rows": [
+                    {
+                        "code": "000725",
+                        "name": "京东方A",
+                        "actual_action": "hold",
+                        "evolved_action": "sell",
+                    }
+                ],
+            }
+        },
+    )
+    joined = " ".join(focus)
+    assert "盘中卖出 scan replay" in joined
+    assert "京东方A" in joined
+    assert "错失 2 次" in joined
+
+
 def test_format_trade_operation_line_buy_and_sell():
     from agent_reach.daily_run.close_portfolio_summary import format_trade_operation_line
 
@@ -381,6 +451,6 @@ def test_persist_and_load_morning_narrative(tmp_path, monkeypatch):
     assert loaded["summary"] == narrative["summary"]
 
     footer = render_morning_narrative_footer({})
-    assert "AI 解读" in footer
+    assert "规则解读" in footer
     assert "决策摘要" in footer
     assert footer.startswith("\n\n---\n\n")

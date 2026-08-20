@@ -605,7 +605,7 @@ def render_forecast_sections(forecast: WeekForecast | dict[str, Any]) -> list[Fo
 
     narrative_md = render_narrative_markdown(data.get("llm_narrative") or {}, job="forecast")
     if narrative_md.strip():
-        sections.append(ForecastSection(label="AI解读", markdown=narrative_md))
+        sections.append(ForecastSection(label="规则解读", markdown=narrative_md))
     return sections
 
 

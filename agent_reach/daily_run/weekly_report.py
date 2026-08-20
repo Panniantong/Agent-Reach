@@ -52,6 +52,10 @@ class WeeklyReport:
     cash: Optional[float] = None
     cash_ratio: Optional[float] = None
     daily_totals: list[dict[str, Any]] = field(default_factory=list)
+    sell_rules_whatif: Optional[dict[str, Any]] = None
+    buy_rules_whatif: Optional[dict[str, Any]] = None
+    intraday_friction_whatif: Optional[dict[str, Any]] = None
+    intraday_sell_whatif: Optional[dict[str, Any]] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -88,6 +92,10 @@ class WeeklyReport:
             "cash": self.cash,
             "cash_ratio": self.cash_ratio,
             "daily_totals": self.daily_totals,
+            "sell_rules_whatif": self.sell_rules_whatif,
+            "buy_rules_whatif": self.buy_rules_whatif,
+            "intraday_friction_whatif": self.intraday_friction_whatif,
+            "intraday_sell_whatif": self.intraday_sell_whatif,
         }
 
 
@@ -1023,6 +1031,40 @@ def generate_weekly_report(
         week_start, week_end, settings=settings
     )
 
+    from agent_reach.daily_run.sell_rules_whatif import (
+        build_weekly_buy_rules_whatif,
+        build_weekly_intraday_friction_whatif,
+        build_weekly_intraday_sell_whatif,
+        build_weekly_sell_rules_whatif,
+    )
+
+    sell_rules_whatif = build_weekly_sell_rules_whatif(
+        week_start=week_start,
+        week_end=week_end,
+        trades=trades,
+        manifests=manifests,
+        settings=settings,
+    ).to_dict()
+    buy_rules_whatif = build_weekly_buy_rules_whatif(
+        week_start=week_start,
+        week_end=week_end,
+        trades=trades,
+        manifests=manifests,
+        settings=settings,
+    ).to_dict()
+    intraday_friction_whatif = build_weekly_intraday_friction_whatif(
+        week_start=week_start,
+        week_end=week_end,
+        manifests=manifests,
+        settings=settings,
+    ).to_dict()
+    intraday_sell_whatif = build_weekly_intraday_sell_whatif(
+        week_start=week_start,
+        week_end=week_end,
+        manifests=manifests,
+        settings=settings,
+    ).to_dict()
+
     return WeeklyReport(
         week_start=week_start,
         week_end=week_end,
@@ -1055,6 +1097,10 @@ def generate_weekly_report(
         cash=cash,
         cash_ratio=cash_ratio,
         daily_totals=daily_totals,
+        sell_rules_whatif=sell_rules_whatif,
+        buy_rules_whatif=buy_rules_whatif,
+        intraday_friction_whatif=intraday_friction_whatif,
+        intraday_sell_whatif=intraday_sell_whatif,
     )
 
 
@@ -1264,6 +1310,23 @@ def _render_pnl_lines(report: WeeklyReport) -> list[str]:
         lines.append(f"- **本周已实现盈亏（FIFO）：** {sign}¥{report.realized_pnl:,.2f}")
     if report.trades:
         lines.append(f"- 成交笔数：**{len(report.trades)}**")
+    if (
+        (report.sell_rules_whatif and not report.sell_rules_whatif.get("skipped"))
+        or (report.buy_rules_whatif and not report.buy_rules_whatif.get("skipped"))
+        or (report.intraday_friction_whatif and not report.intraday_friction_whatif.get("skipped"))
+        or (report.intraday_sell_whatif and not report.intraday_sell_whatif.get("skipped"))
+    ):
+        from agent_reach.daily_run.sell_rules_whatif import render_trade_rules_whatif_markdown
+
+        lines.append("")
+        lines.append(
+            render_trade_rules_whatif_markdown(
+                sell=report.sell_rules_whatif,
+                buy=report.buy_rules_whatif,
+                intraday=report.intraday_friction_whatif,
+                intraday_sell=report.intraday_sell_whatif,
+            )
+        )
     lines.extend(build_weekly_pnl_explanation(report))
     for note in report.notes:
         if not any(note in line for line in lines):
@@ -1473,7 +1536,7 @@ def render_weekly_sections(report: WeeklyReport) -> list[WeeklySection]:
 
     narrative_md = render_narrative_markdown(report.llm_narrative or {}, job="weekly")
     if narrative_md.strip():
-        sections.append(WeeklySection("AI解读", narrative_md))
+        sections.append(WeeklySection("规则解读", narrative_md))
 
     return sections
 

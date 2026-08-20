@@ -66,11 +66,11 @@ def test_deterministic_narrative_when_no_llm():
 def test_llm_narrative(mock_chat, mock_provider):
     narrative = generate_forecast_narrative(
         {"week_start": "2026-08-17", "week_end": "2026-08-21", "symbols": {}, "notes": []},
-        settings={"week_forecast": {"llm_narrative": {"enabled": True, "provider": "deepseek"}}},
+        settings={"week_forecast": {"llm_narrative": {"enabled": True, "provider": "deepseek", "planner": "llm"}}},
     )
     assert narrative["planner"] == "llm"
     md = render_forecast_narrative_markdown(narrative)
-    assert "AI 解读" in md
+    assert "规则解读" in md
     assert "下周偏防守" in md
 
 
@@ -89,5 +89,5 @@ def test_render_forecast_sections_puts_ai_last():
             "news_events": [],
         }
     )
-    assert sections[-1].label == "AI解读"
+    assert sections[-1].label == "规则解读"
     assert isinstance(sections[-1], ForecastSection)

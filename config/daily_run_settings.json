@@ -96,6 +96,72 @@
     "ledger_cost_tolerance_cny": 0.01
   },
 
+  "sell_rules_whatif": {
+    "llm_optimize": true,
+    "llm_provider": "deepseek",
+    "llm_timeout_seconds": 45,
+    "llm_temperature": 0.1
+  },
+
+  "buy_rules_whatif": {
+    "llm_optimize": true,
+    "llm_provider": "deepseek",
+    "llm_timeout_seconds": 45,
+    "llm_temperature": 0.1
+  },
+
+    "harness_evolution": {
+    "llm_optimize": true,
+    "llm_provider": "deepseek",
+    "llm_timeout_seconds": 45,
+    "llm_temperature": 0.1,
+    "weekly_threshold": {},
+    "pnl_target": {},
+    "forecast_calibrate": {}
+  },
+
+  "intraday_whatif": {
+    "llm_optimize": true,
+    "llm_provider": "deepseek",
+    "llm_timeout_seconds": 45,
+    "llm_temperature": 0.1
+  },
+
+  "friction_model": {
+    "llm_optimize": true,
+    "llm_provider": "deepseek",
+    "llm_timeout_seconds": 45,
+    "llm_temperature": 0.1
+  },
+
+  "deep_loss_threshold": {
+    "llm_optimize": true,
+    "llm_provider": "deepseek",
+    "llm_timeout_seconds": 45,
+    "llm_temperature": 0.1
+  },
+
+  "intraday_sell_whatif": {
+    "llm_optimize": true,
+    "llm_provider": "deepseek",
+    "llm_timeout_seconds": 45,
+    "llm_temperature": 0.1
+  },
+
+  "sell_threshold": {
+    "llm_optimize": true,
+    "llm_provider": "deepseek",
+    "llm_timeout_seconds": 45,
+    "llm_temperature": 0.1
+  },
+
+  "intraday_trends": {
+    "llm_optimize": true,
+    "llm_provider": "deepseek",
+    "llm_timeout_seconds": 45,
+    "llm_temperature": 0.1
+  },
+
   "pnl_target": {
     "enabled": true,
     "harness_evolve": true,
@@ -286,6 +352,7 @@
     "max_vol_scale": 1.6,
     "llm_narrative": {
       "enabled": true,
+      "planner": "deterministic",
       "provider": "deepseek",
       "model": "deepseek-v4-flash",
       "timeout_seconds": 45,
@@ -643,6 +710,7 @@
 
   "llm_narrative": {
     "enabled": true,
+    "planner": "deterministic",
     "provider": "deepseek",
     "model": "deepseek-v4-flash",
     "timeout_seconds": 45,
@@ -771,7 +839,12 @@
         "expert_consensus": true,
         "optimize": true,
         "pnl_target": true,
-        "forecast_calibrate": true
+        "forecast_calibrate": true,
+        "sell_rules_whatif": true,
+        "harness_threshold": true,
+        "intraday_friction": true,
+        "intraday_sell": true,
+        "pnl_overview": true
       }
     },
     "render_format": "xml",
@@ -803,7 +876,11 @@
       "finance_research": true,
       "finance_close_plan": true,
       "expert_consensus": true,
-      "expert_consensus_weekly": true
+      "expert_consensus_weekly": true,
+      "sell_rules_whatif": true,
+      "harness_threshold": true,
+      "intraday_friction": true,
+      "intraday_sell": true
     },
     "llm_refine": {
       "enabled": true,

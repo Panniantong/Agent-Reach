@@ -858,14 +858,55 @@ def run_close(
             settings=cfg,
         )
         from agent_reach.daily_run.pnl_target import run_pnl_target_close_cycle
+        from agent_reach.daily_run.sell_rules_whatif import (
+            build_buy_rules_whatif,
+            build_intraday_friction_whatif,
+            build_intraday_sell_whatif,
+            build_sell_rules_whatif,
+        )
 
         pnl_target_cycle = run_pnl_target_close_cycle(
             portfolio_summary_obj.to_dict(),
             settings=cfg,
         )
+        sell_rules_whatif = build_sell_rules_whatif(
+            summary=portfolio_summary_obj.to_dict(),
+            baseline=baseline,
+            current=enriched,
+            settings=cfg,
+        ).to_dict()
+        buy_rules_whatif = build_buy_rules_whatif(
+            summary=portfolio_summary_obj.to_dict(),
+            baseline=baseline,
+            current=enriched,
+            intraday_trades=intraday_trades,
+            settings=cfg,
+        ).to_dict()
+        intraday_friction_whatif = build_intraday_friction_whatif(
+            summary=portfolio_summary_obj.to_dict(),
+            baseline=baseline,
+            current=enriched,
+            intraday_trades=intraday_trades,
+            settings=cfg,
+        ).to_dict()
+        intraday_sell_whatif = build_intraday_sell_whatif(
+            summary=portfolio_summary_obj.to_dict(),
+            baseline=baseline,
+            current=enriched,
+            intraday_trades=intraday_trades,
+            settings=cfg,
+        ).to_dict()
+        portfolio_summary_obj.sell_rules_whatif = sell_rules_whatif
+        portfolio_summary_obj.buy_rules_whatif = buy_rules_whatif
+        portfolio_summary_obj.intraday_friction_whatif = intraday_friction_whatif
+        portfolio_summary_obj.intraday_sell_whatif = intraday_sell_whatif
         portfolio_md = render_close_portfolio_markdown(
             portfolio_summary_obj,
             pnl_target_cycle=pnl_target_cycle,
+            sell_rules_whatif=sell_rules_whatif,
+            buy_rules_whatif=buy_rules_whatif,
+            intraday_friction_whatif=intraday_friction_whatif,
+            intraday_sell_whatif=intraday_sell_whatif,
         )
         from agent_reach.daily_run.daily_pnl_history import append_daily_pnl
 

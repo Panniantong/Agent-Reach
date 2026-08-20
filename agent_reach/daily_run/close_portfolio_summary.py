@@ -59,6 +59,10 @@ class ClosePortfolioSummary:
     watchlist_min_size: int = 5
     notes: list[str] = field(default_factory=list)
     reason_lines: list[str] = field(default_factory=list)
+    sell_rules_whatif: Optional[dict[str, Any]] = None
+    buy_rules_whatif: Optional[dict[str, Any]] = None
+    intraday_friction_whatif: Optional[dict[str, Any]] = None
+    intraday_sell_whatif: Optional[dict[str, Any]] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -96,6 +100,10 @@ class ClosePortfolioSummary:
             "watchlist_min_size": self.watchlist_min_size,
             "notes": self.notes,
             "reason_lines": self.reason_lines,
+            "sell_rules_whatif": self.sell_rules_whatif,
+            "buy_rules_whatif": self.buy_rules_whatif,
+            "intraday_friction_whatif": self.intraday_friction_whatif,
+            "intraday_sell_whatif": self.intraday_sell_whatif,
         }
 
 
@@ -834,6 +842,10 @@ def render_close_portfolio_markdown(
     summary: ClosePortfolioSummary | dict[str, Any],
     *,
     pnl_target_cycle: Optional[dict[str, Any]] = None,
+    sell_rules_whatif: Optional[dict[str, Any]] = None,
+    buy_rules_whatif: Optional[dict[str, Any]] = None,
+    intraday_friction_whatif: Optional[dict[str, Any]] = None,
+    intraday_sell_whatif: Optional[dict[str, Any]] = None,
 ) -> str:
     """Portfolio close summary: overview + per-stock P&L + trades + watchlist."""
     data = summary.to_dict() if isinstance(summary, ClosePortfolioSummary) else summary
@@ -929,6 +941,26 @@ def render_close_portfolio_markdown(
         lines.extend(merged_trades)
     else:
         lines.append("- 今日无成交")
+
+    if (
+        sell_rules_whatif is not None
+        or buy_rules_whatif is not None
+        or intraday_friction_whatif is not None
+        or intraday_sell_whatif is not None
+        or data.get("intraday_friction_whatif")
+        or data.get("intraday_sell_whatif")
+    ):
+        from agent_reach.daily_run.sell_rules_whatif import render_trade_rules_whatif_markdown
+
+        lines.append("")
+        lines.append(
+            render_trade_rules_whatif_markdown(
+                sell=sell_rules_whatif,
+                buy=buy_rules_whatif or data.get("buy_rules_whatif"),
+                intraday=intraday_friction_whatif or data.get("intraday_friction_whatif"),
+                intraday_sell=intraday_sell_whatif or data.get("intraday_sell_whatif"),
+            )
+        )
 
     wl_min = int(data.get("watchlist_min_size") or 5)
     watchlist = data.get("watchlist") or []

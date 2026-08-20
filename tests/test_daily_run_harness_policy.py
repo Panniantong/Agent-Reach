@@ -1174,6 +1174,101 @@ class TestHarnessRuntimeExtensions:
         assert deep_loss_policy_base(settings, "realized_loss_threshold") == 500
         assert deep_loss_policy_base(settings, "realized_gain_threshold") == 800
 
+    def test_whatif_baseline_better_steps_up_sell_ratios(self):
+        from agent_reach.daily_run.harness import HarnessEntry, HarnessState
+        from agent_reach.daily_run.harness_policy import resolve_harness_deep_loss_policy
+
+        state = HarnessState()
+        state.entries["policy"]["whatif"] = HarnessEntry(
+            id="whatif",
+            kind="policy",
+            title="what-if",
+            content="基准优于自进化：调升 sell_ratio 进化上界",
+            source="deterministic",
+            job="sell_rules_whatif",
+            evidence="weekly",
+            created_at="2026-08-19T00:00:00+00:00",
+            updated_at="2026-08-19T00:00:00+00:00",
+        )
+        settings = {
+            "harness": {
+                "runtime_overlay_sources": ["policy"],
+                "sell_ratio_mode": "harness",
+                "non_deep_loss_sell_ratio_mode": "harness",
+            },
+            "pnl_overview": {
+                "deep_loss_sell_ratio": 0.35,
+                "non_deep_loss_sell_ratio": 0.5,
+            },
+        }
+        policy = resolve_harness_deep_loss_policy(state, settings=settings)
+        assert policy["sell_ratio"] == 0.55
+        assert policy["non_deep_loss_sell_ratio"] == 0.65
+        assert policy["sell_ratio"] < 1.0
+        assert policy["non_deep_loss_sell_ratio"] < 1.0
+
+    def test_whatif_full_clear_when_conditions_met(self):
+        from agent_reach.daily_run.harness import HarnessEntry, HarnessState
+        from agent_reach.daily_run.harness_policy import resolve_harness_deep_loss_policy
+
+        state = HarnessState()
+        state.entries["policy"]["whatif"] = HarnessEntry(
+            id="whatif",
+            kind="policy",
+            title="what-if",
+            content="基准优于自进化：调升 sell_ratio，条件允许允许全清",
+            source="deterministic",
+            job="sell_rules_whatif",
+            evidence="weekly",
+            created_at="2026-08-19T00:00:00+00:00",
+            updated_at="2026-08-19T00:00:00+00:00",
+        )
+        settings = {
+            "harness": {
+                "runtime_overlay_sources": ["policy"],
+                "sell_ratio_mode": "harness",
+                "non_deep_loss_sell_ratio_mode": "harness",
+            },
+            "pnl_overview": {
+                "deep_loss_sell_ratio": 0.35,
+                "non_deep_loss_sell_ratio": 0.5,
+            },
+        }
+        policy = resolve_harness_deep_loss_policy(state, settings=settings)
+        assert policy["sell_ratio"] == 1.0
+        assert policy["non_deep_loss_sell_ratio"] == 1.0
+
+    def test_whatif_evolved_better_tightens_partial_sell(self):
+        from agent_reach.daily_run.harness import HarnessEntry, HarnessState
+        from agent_reach.daily_run.harness_policy import resolve_harness_deep_loss_policy
+
+        state = HarnessState()
+        state.entries["policy"]["whatif"] = HarnessEntry(
+            id="whatif",
+            kind="policy",
+            title="what-if",
+            content="自进化优于基准：维持 partial sell_ratio harness 进化",
+            source="deterministic",
+            job="sell_rules_whatif",
+            evidence="weekly",
+            created_at="2026-08-19T00:00:00+00:00",
+            updated_at="2026-08-19T00:00:00+00:00",
+        )
+        settings = {
+            "harness": {
+                "runtime_overlay_sources": ["policy"],
+                "sell_ratio_mode": "harness",
+                "non_deep_loss_sell_ratio_mode": "harness",
+            },
+            "pnl_overview": {
+                "deep_loss_sell_ratio": 0.6,
+                "non_deep_loss_sell_ratio": 0.8,
+            },
+        }
+        policy = resolve_harness_deep_loss_policy(state, settings=settings)
+        assert policy["sell_ratio"] == 0.35
+        assert policy["non_deep_loss_sell_ratio"] == 0.5
+
 
 class TestHarnessP2Evolution:
     def test_harness_mode_technical_neutral_defaults(self):

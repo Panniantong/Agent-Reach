@@ -762,6 +762,140 @@ def _apply_buy(
     return ApplyResult(applied=True, portfolio=pf, actions=[trade], message=trade.reasoning)
 
 
+def simulate_buy_analysis(
+    pf: dict[str, Any],
+    enriched: dict[str, dict[str, Any]],
+    settings: dict[str, Any],
+    *,
+    prefer_code: Optional[str] = None,
+) -> dict[str, Any]:
+    """Dry-run buy sizing under current harness rules (no portfolio mutation)."""
+    from agent_reach.daily_run.harness_policy import _position_policy
+
+    holdings = list(pf.get("holdings") or [])
+    held_codes = {_normalize_code(str(h.get("code", ""))) for h in holdings}
+    prefer = _normalize_code(str(prefer_code or ""))
+    position = _position_policy(settings)
+
+    budget_ctx = _buy_budget_context(pf, enriched, settings, holdings)
+    if isinstance(budget_ctx, ApplyResult):
+        return {
+            "allowed": False,
+            "buy_shares": 0,
+            "block_reason": budget_ctx.message,
+            "deploy_ratio": float(position.get("deploy_ratio", 1.0)),
+            "max_position_pct": float(position.get("max_position_pct", 35.0)),
+        }
+
+    total, cash, deployable, _min_deploy, _min_cash_ratio, commission_rate = budget_ctx
+
+    buy_block = pnl_buy_block_reason(settings, pf)
+    if buy_block:
+        return {
+            "allowed": False,
+            "buy_shares": 0,
+            "block_reason": buy_block,
+            "deploy_ratio": float(position.get("deploy_ratio", 1.0)),
+            "max_position_pct": float(position.get("max_position_pct", 35.0)),
+        }
+
+    target: Optional[dict[str, Any]] = None
+    if prefer:
+        prefer_row = _resolve_buy_row(prefer, pf, enriched)
+        if prefer_row is not None:
+            prefer_price = float(_price_for(prefer_row, enriched))
+            if _can_afford_min_lot(
+                prefer,
+                prefer_price,
+                deployable=deployable,
+                commission_rate=commission_rate,
+                min_deploy=_min_deploy,
+                total=total,
+                settings=settings,
+            ):
+                target = prefer_row
+
+    if target is None:
+        candidates = _watchlist_buy_candidates(pf, enriched, held_codes)
+        if not candidates:
+            return {
+                "allowed": False,
+                "buy_shares": 0,
+                "block_reason": "观察池无可买入标的（或缺少报价）",
+                "deploy_ratio": float(position.get("deploy_ratio", 1.0)),
+                "max_position_pct": float(position.get("max_position_pct", 35.0)),
+            }
+        candidates.sort(key=lambda x: _symbol_score(x, None, settings), reverse=True)
+        target = candidates[0]
+
+    code = _normalize_code(str(target["code"]))
+
+    ledger_block = pnl_symbol_ledger_block_reason(settings, code, pf)
+    if ledger_block:
+        return {
+            "allowed": False,
+            "buy_shares": 0,
+            "block_reason": ledger_block,
+            "deploy_ratio": float(position.get("deploy_ratio", 1.0)),
+            "max_position_pct": float(position.get("max_position_pct", 35.0)),
+        }
+
+    from agent_reach.daily_run.skill_rejected import trade_blocked_by_rejected
+
+    rejected = trade_blocked_by_rejected(
+        "buy",
+        code=code,
+        name=str(target.get("name", code)),
+        settings=settings,
+    )
+    if rejected:
+        return {
+            "allowed": False,
+            "buy_shares": 0,
+            "block_reason": f"已证伪策略阻断买入：{rejected}",
+            "deploy_ratio": float(position.get("deploy_ratio", 1.0)),
+            "max_position_pct": float(position.get("max_position_pct", 35.0)),
+        }
+
+    price = float(_price_for(target, enriched))
+    budget_gross = harness_buy_budget(total=total, deployable=deployable, settings=settings)
+    budget = budget_gross / (1 + commission_rate)
+    shares = _round_lot(code, int(budget // price))
+    if shares <= 0:
+        return {
+            "allowed": False,
+            "buy_shares": 0,
+            "block_reason": f"现金不足以买入 {code} 最小单位",
+            "deploy_ratio": float(position.get("deploy_ratio", 1.0)),
+            "max_position_pct": float(position.get("max_position_pct", 35.0)),
+        }
+
+    gross = shares * price
+    commission = round(gross * commission_rate, 2)
+    total_cost = gross + commission
+    if total_cost > cash:
+        shares = _round_lot(code, int((cash / (1 + commission_rate)) // price))
+        if shares <= 0:
+            return {
+                "allowed": False,
+                "buy_shares": 0,
+                "block_reason": "现金不足",
+                "deploy_ratio": float(position.get("deploy_ratio", 1.0)),
+                "max_position_pct": float(position.get("max_position_pct", 35.0)),
+            }
+
+    return {
+        "allowed": True,
+        "buy_shares": shares,
+        "block_reason": None,
+        "code": code,
+        "name": str(target.get("name", code)),
+        "price": price,
+        "deploy_ratio": float(position.get("deploy_ratio", 1.0)),
+        "max_position_pct": float(position.get("max_position_pct", 35.0)),
+    }
+
+
 def _buy_budget_context(
     pf: dict[str, Any],
     enriched: dict[str, dict[str, Any]],

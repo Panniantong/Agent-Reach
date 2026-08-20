@@ -438,16 +438,6 @@ def run_close_for_symbols(
                 save_portfolio(pf_work)
                 sync_snapshot_portfolio(primary_snap, pf_work)
 
-        portfolio_md = render_close_portfolio_markdown(
-            build_close_portfolio_summary(
-                primary_snap,
-                morning_bl,
-                trades=shared_state.trades,
-                intraday_trades=shared_state.trades,
-                watchlist_adjust=wl_result.to_dict() if wl_result else None,
-                settings=cfg,
-            )
-        )
         portfolio_summary_obj = build_close_portfolio_summary(
             primary_snap,
             morning_bl,
@@ -455,6 +445,51 @@ def run_close_for_symbols(
             intraday_trades=shared_state.trades,
             watchlist_adjust=wl_result.to_dict() if wl_result else None,
             settings=cfg,
+        )
+        from agent_reach.daily_run.sell_rules_whatif import (
+            build_buy_rules_whatif,
+            build_intraday_friction_whatif,
+            build_intraday_sell_whatif,
+            build_sell_rules_whatif,
+        )
+
+        sell_rules_whatif = build_sell_rules_whatif(
+            summary=portfolio_summary_obj.to_dict(),
+            baseline=morning_bl,
+            current=primary_snap,
+            settings=cfg,
+        ).to_dict()
+        buy_rules_whatif = build_buy_rules_whatif(
+            summary=portfolio_summary_obj.to_dict(),
+            baseline=morning_bl,
+            current=primary_snap,
+            intraday_trades=shared_state.trades,
+            settings=cfg,
+        ).to_dict()
+        intraday_friction_whatif = build_intraday_friction_whatif(
+            summary=portfolio_summary_obj.to_dict(),
+            baseline=morning_bl,
+            current=primary_snap,
+            intraday_trades=shared_state.trades,
+            settings=cfg,
+        ).to_dict()
+        intraday_sell_whatif = build_intraday_sell_whatif(
+            summary=portfolio_summary_obj.to_dict(),
+            baseline=morning_bl,
+            current=primary_snap,
+            intraday_trades=shared_state.trades,
+            settings=cfg,
+        ).to_dict()
+        portfolio_summary_obj.sell_rules_whatif = sell_rules_whatif
+        portfolio_summary_obj.buy_rules_whatif = buy_rules_whatif
+        portfolio_summary_obj.intraday_friction_whatif = intraday_friction_whatif
+        portfolio_summary_obj.intraday_sell_whatif = intraday_sell_whatif
+        portfolio_md = render_close_portfolio_markdown(
+            portfolio_summary_obj,
+            sell_rules_whatif=sell_rules_whatif,
+            buy_rules_whatif=buy_rules_whatif,
+            intraday_friction_whatif=intraday_friction_whatif,
+            intraday_sell_whatif=intraday_sell_whatif,
         )
         if portfolio_md.strip():
             merged.append(

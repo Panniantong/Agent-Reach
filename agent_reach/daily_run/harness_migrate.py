@@ -151,6 +151,11 @@ HARNESS_RIGOR_CHECK_DEFAULTS: dict[str, Any] = {
         "optimize": True,
         "pnl_target": True,
         "forecast_calibrate": True,
+        "sell_rules_whatif": True,
+        "harness_threshold": True,
+        "intraday_friction": True,
+        "intraday_sell": True,
+        "pnl_overview": True,
     },
 }
 

@@ -52,6 +52,11 @@ def _rigor_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
             "optimize",
             "pnl_target",
             "forecast_calibrate",
+            "sell_rules_whatif",
+            "harness_threshold",
+            "intraday_friction",
+            "intraday_sell",
+            "pnl_overview",
         }
     elif isinstance(jobs, dict):
         job_set = {k for k, v in jobs.items() if v}
@@ -134,8 +139,8 @@ def _check_boundary(domain: dict[str, Any], *, job: str) -> RigorCheck:
             if abs(total - 1.0) > 0.05:
                 bad.append(f"mss_weights sum={total:.3f}")
         return RigorCheck("boundary", not bad, "; ".join(bad) if bad else "optimizer bounds ok")
-    if job in {"pnl_target", "forecast_calibrate"}:
-        return RigorCheck("boundary", True, "handled by forge_gates")
+    if job in {"pnl_target", "forecast_calibrate", "sell_rules_whatif", "harness_threshold", "intraday_friction", "intraday_sell", "pnl_overview"}:
+        return RigorCheck("boundary", True, "handled by forge_gates or numeric clamps")
     return RigorCheck("boundary", True, "default ok")
 
 

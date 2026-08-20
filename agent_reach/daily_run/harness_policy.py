@@ -1172,6 +1172,21 @@ def resolve_harness_flat_overrides(
     merged = _apply_forecast_signal_evolution(merged, state, settings=cfg)
     merged = _apply_cash_signal_evolution(merged, state, settings=cfg)
     merged = _apply_pnl_target_signal_evolution(merged, state, settings=cfg)
+    from agent_reach.daily_run.harness_evolution_optimizers import (
+        apply_forecast_llm_optimal_to_flat,
+        apply_threshold_llm_optimal_to_flat,
+    )
+
+    apply_threshold_llm_optimal_to_flat(merged, state, settings=cfg)
+    from agent_reach.daily_run.intraday_sell_whatif_optimizer import apply_intraday_sell_llm_optimal_to_flat
+    from agent_reach.daily_run.sell_threshold_optimizer import apply_sell_threshold_llm_optimal_to_flat
+
+    apply_intraday_sell_llm_optimal_to_flat(merged, state, settings=cfg)
+    apply_sell_threshold_llm_optimal_to_flat(merged, state, settings=cfg)
+    apply_forecast_llm_optimal_to_flat(merged, state, settings=cfg)
+    from agent_reach.daily_run.intraday_whatif_optimizer import apply_intraday_friction_llm_optimal_to_flat
+
+    apply_intraday_friction_llm_optimal_to_flat(merged, state, settings=cfg)
     return _clamp_flat_values(merged)
 
 
@@ -1639,6 +1654,18 @@ def _apply_position_signal_evolution(
     if signals.get("mss_forecast_miss") and not signals.get("defensive_trim"):
         if evolution_mode(settings, "deploy_ratio") == "harness":
             merged["deploy_ratio"] = float(merged.get("deploy_ratio", 1.0)) * 0.7
+    if _overlay_has_phrase(state, "基准买入优于自进化", settings=settings):
+        if evolution_mode(settings, "deploy_ratio") == "harness":
+            cur = float(merged.get("deploy_ratio", 1.0))
+            merged["deploy_ratio"] = min(1.0, max(cur + 0.1, 0.55))
+        if evolution_mode(settings, "max_position_pct") == "harness":
+            cur = float(merged.get("max_position_pct", 35.0))
+            merged["max_position_pct"] = min(50.0, max(cur + 5.0, 30.0))
+    if _overlay_has_phrase(state, "自进化买入优于基准", settings=settings):
+        if evolution_mode(settings, "deploy_ratio") == "harness":
+            merged["deploy_ratio"] = min(float(merged.get("deploy_ratio", 1.0)), 0.45)
+        if evolution_mode(settings, "max_position_pct") == "harness":
+            merged["max_position_pct"] = min(float(merged.get("max_position_pct", 35.0)), 28.0)
     return merged
 
 
@@ -1653,6 +1680,9 @@ def resolve_harness_position_policy(
     merged = _apply_position_signal_evolution(merged, state, settings=settings)
     merged["deploy_ratio"] = max(0.05, min(1.0, float(merged.get("deploy_ratio", 1.0))))
     merged["max_position_pct"] = max(5.0, min(100.0, float(merged.get("max_position_pct", 35.0))))
+    from agent_reach.daily_run.buy_rules_whatif_optimizer import apply_whatif_buy_llm_optimal_to_policy
+
+    apply_whatif_buy_llm_optimal_to_policy(merged, state, settings=settings)
     return merged
 
 
@@ -1844,6 +1874,31 @@ def _apply_deep_loss_signal_evolution(
         merged["ledger_cost_tolerance_cny"] = max(
             float(merged.get("ledger_cost_tolerance_cny", 0.01)), 50.0
         )
+    if _overlay_has_phrase(state, "条件允许允许全清", settings=settings):
+        if evolution_mode(settings, "sell_ratio") == "harness":
+            merged["sell_ratio"] = 1.0
+        if evolution_mode(settings, "non_deep_loss_sell_ratio") == "harness":
+            merged["non_deep_loss_sell_ratio"] = 1.0
+        merged["cover_ratio"] = min(float(merged.get("cover_ratio", 1.0)), 1.0)
+    elif _overlay_has_phrase(state, "基准优于自进化", settings=settings):
+        if evolution_mode(settings, "sell_ratio") == "harness":
+            cur = float(merged.get("sell_ratio", 1.0))
+            merged["sell_ratio"] = min(1.0, max(cur + 0.1, 0.55))
+        if evolution_mode(settings, "non_deep_loss_sell_ratio") == "harness":
+            cur = float(merged.get("non_deep_loss_sell_ratio", 1.0))
+            merged["non_deep_loss_sell_ratio"] = min(1.0, max(cur + 0.15, 0.65))
+        merged["cover_ratio"] = min(float(merged.get("cover_ratio", 1.0)), 1.05)
+    if _overlay_has_phrase(state, "自进化优于基准", settings=settings):
+        _tighten_sell_ratio(0.35)
+        _tighten_non_deep_sell_ratio(0.5)
+        merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.05)
+    from agent_reach.daily_run.sell_rules_whatif_optimizer import apply_whatif_llm_optimal_to_policy
+    from agent_reach.daily_run.deep_loss_threshold_optimizer import apply_deep_loss_threshold_llm_optimal_to_policy
+    from agent_reach.daily_run.intraday_sell_whatif_optimizer import apply_intraday_sell_llm_optimal_to_deep_loss
+
+    apply_whatif_llm_optimal_to_policy(merged, state, settings=settings)
+    apply_deep_loss_threshold_llm_optimal_to_policy(merged, state, settings=settings)
+    apply_intraday_sell_llm_optimal_to_deep_loss(merged, state, settings=settings)
     return merged
 
 
@@ -1974,6 +2029,9 @@ def resolve_harness_pnl_target_policy(
     if not _overlay_enabled(settings):
         return merged
     merged = _apply_pnl_target_policy_evolution(merged, state, settings=settings)
+    from agent_reach.daily_run.harness_evolution_optimizers import apply_pnl_target_llm_optimal_to_policy
+
+    apply_pnl_target_llm_optimal_to_policy(merged, state, settings=settings)
     merged["base_target_pct"] = max(0.05, min(5.0, float(merged.get("base_target_pct", 0.5))))
     merged["base_target_cny"] = max(0.0, float(merged.get("base_target_cny", 0.0)))
     merged["min_target_cny"] = max(0.0, float(merged.get("min_target_cny", 100.0)))
@@ -2228,6 +2286,11 @@ def resolve_harness_trend_policy(
     if not _overlay_enabled(settings):
         return merged
     merged = _apply_trend_policy_evolution(merged, state, settings=settings)
+    from agent_reach.daily_run.intraday_whatif_optimizer import apply_intraday_friction_llm_optimal_to_trend
+    from agent_reach.daily_run.intraday_trends_optimizer import apply_intraday_trends_llm_optimal_to_trend
+
+    apply_intraday_friction_llm_optimal_to_trend(merged, state, settings=settings)
+    apply_intraday_trends_llm_optimal_to_trend(merged, state, settings=settings)
     merged["trend_min_points"] = max(2.0, min(5.0, float(merged.get("trend_min_points", 2.0))))
     merged["trend_delta_threshold"] = max(0.5, min(3.0, float(merged.get("trend_delta_threshold", 1.0))))
     merged["buy_trends"] = list(merged.get("buy_trends") or _DEFAULT_BUY_TRENDS)
@@ -2529,6 +2592,9 @@ def resolve_harness_friction_model_policy(
     if not _overlay_enabled(settings):
         return merged
     merged = _apply_friction_model_policy_evolution(merged, state, settings=settings)
+    from agent_reach.daily_run.friction_model_optimizer import apply_friction_model_llm_optimal_to_policy
+
+    apply_friction_model_llm_optimal_to_policy(merged, state, settings=settings)
     merged["commission_rate"] = max(0.0005, min(0.003, float(merged.get("commission_rate", 0.0015))))
     merged["slippage_rate"] = max(0.0005, min(0.003, float(merged.get("slippage_rate", 0.001))))
     return merged

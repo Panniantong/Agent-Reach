@@ -643,6 +643,54 @@ def _evidence_from_weekly(
     for note in evidence.get("applied_config") or report.get("applied_config") or []:
         policy.append(f"已应用参数：{note}")
 
+    whatif = report.get("sell_rules_whatif") or {}
+    if whatif and not whatif.get("skipped") and whatif.get("rows"):
+        from agent_reach.daily_run.sell_rules_whatif import summarize_whatif_for_harness
+
+        wi = summarize_whatif_for_harness(
+            whatif,
+            weekly_pnl=pnl,
+            weekly_pnl_pct=pct,
+        )
+        memory.extend(wi.get("memory") or [])
+        policy.extend(wi.get("policy") or [])
+        playbook.extend(wi.get("playbook") or [])
+        plan.extend(wi.get("plan") or [])
+
+    buy_whatif = report.get("buy_rules_whatif") or {}
+    if buy_whatif and not buy_whatif.get("skipped") and buy_whatif.get("rows"):
+        from agent_reach.daily_run.sell_rules_whatif import summarize_buy_whatif_for_harness
+
+        bi = summarize_buy_whatif_for_harness(
+            buy_whatif,
+            weekly_pnl=pnl,
+            weekly_pnl_pct=pct,
+        )
+        memory.extend(bi.get("memory") or [])
+        policy.extend(bi.get("policy") or [])
+        playbook.extend(bi.get("playbook") or [])
+        plan.extend(bi.get("plan") or [])
+
+    friction = report.get("intraday_friction_whatif") or {}
+    if friction and not friction.get("skipped"):
+        from agent_reach.daily_run.sell_rules_whatif import summarize_intraday_friction_for_harness
+
+        fi = summarize_intraday_friction_for_harness(friction)
+        memory.extend(fi.get("memory") or [])
+        policy.extend(fi.get("policy") or [])
+        playbook.extend(fi.get("playbook") or [])
+        plan.extend(fi.get("plan") or [])
+
+    intraday_sell = report.get("intraday_sell_whatif") or {}
+    if intraday_sell and not intraday_sell.get("skipped"):
+        from agent_reach.daily_run.sell_rules_whatif import summarize_intraday_sell_for_harness
+
+        si = summarize_intraday_sell_for_harness(intraday_sell)
+        memory.extend(si.get("memory") or [])
+        policy.extend(si.get("policy") or [])
+        playbook.extend(si.get("playbook") or [])
+        plan.extend(si.get("plan") or [])
+
     ws = report.get("week_start") or ""
     we = report.get("week_end") or ""
     summary = f"weekly {ws}~{we}".strip()

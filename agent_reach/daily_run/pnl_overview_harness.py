@@ -6,7 +6,8 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, Optional
 
-from agent_reach.daily_run.harness_skill_base import apply_skill_refinement
+from agent_reach.daily_run.deep_loss_threshold_optimizer import optimize_deep_loss_threshold_with_deepseek
+from agent_reach.daily_run.harness_skill_base import apply_skill_refinement, merge_harness_evidence
 from agent_reach.daily_run.pnl_execution_guard import ledger_cost_missing, sell_loss_streak
 from agent_reach.daily_run.realized_pnl import (
     PnlOverview,
@@ -209,9 +210,22 @@ def apply_pnl_overview_harness_refinement(
         portfolio_summary=portfolio_summary,
         settings=settings,
     )
-    return apply_skill_refinement(
+    llm_opt = optimize_deep_loss_threshold_with_deepseek(portfolio_summary, settings=settings)
+    if not llm_opt.get("skipped") and llm_opt.get("evidence"):
+        evidence = merge_harness_evidence(evidence, llm_opt["evidence"])
+    refine = apply_skill_refinement(
         "pnl_overview",
         evidence,
         settings=settings,
         enabled_flag="pnl_overview",
     )
+    if not llm_opt.get("skipped"):
+        refine["deep_loss_llm_optimize"] = {
+            "skipped": False,
+            "planner": llm_opt.get("planner"),
+            "optimal": llm_opt.get("optimal"),
+            "provider": llm_opt.get("provider"),
+        }
+    else:
+        refine["deep_loss_llm_optimize"] = {"skipped": True, "reason": llm_opt.get("reason")}
+    return refine
