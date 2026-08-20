@@ -213,3 +213,54 @@ class TestMarketReviewFallback:
         assert "市场宽度数据拉取失败" not in md
         assert "降级" in md or "不可用" in md
         assert "全市场复盘" in md
+
+    @patch("agent_reach.daily_run.market_review._try_xueqiu_breadth_emotion")
+    @patch("agent_reach.daily_run.eastmoney_market.fetch_all_stocks")
+    @patch("agent_reach.daily_run.akshare_adapter.fetch_all_a_spot_stocks")
+    @patch("agent_reach.daily_run.eastmoney_market.fetch_indices")
+    @patch("agent_reach.daily_run.eastmoney_market.fetch_north_flow_resilient")
+    @patch("agent_reach.daily_run.eastmoney_market.fetch_lhb")
+    def test_collect_uses_xueqiu_when_clist_and_akshare_fail(
+        self,
+        mock_lhb,
+        mock_north,
+        mock_indices,
+        mock_ak,
+        mock_em_stocks,
+        mock_xq,
+    ):
+        from agent_reach.daily_run.market_breadth_collector import analyze_emotion_from_counts
+        from agent_reach.daily_run.market_review import collect_market_review
+
+        mock_em_stocks.side_effect = RuntimeError("clist blocked")
+        mock_ak.side_effect = RuntimeError("akshare blocked")
+        mock_indices.return_value = {"sh000001": {"change_pct": 0.5, "name": "上证指数"}}
+        mock_north.return_value = ({"net_yi": 10.0, "direction": "inflow"}, [])
+        mock_lhb.return_value = []
+        em = analyze_emotion_from_counts(3500, 1000, 90, {"net_yi": 10.0}).to_dict()
+        em["breadth_partial"] = True
+        mock_xq.return_value = (em, ["市场宽度改用雪球沪+深汇总"], {"up_count": 3500})
+
+        review = collect_market_review(settings={"market_review": {}}, review_date="2026-08-20")
+        assert "error" not in review
+        assert review["emotion"]["up_count"] == 3500
+        assert "xueqiu" in review.get("source", "")
+        mock_xq.assert_called_once()
+
+    def test_render_xueqiu_partial_breadth(self):
+        from agent_reach.daily_run.market_breadth_collector import analyze_emotion_from_counts
+        from agent_reach.daily_run.market_review import render_market_review_markdown
+
+        em = analyze_emotion_from_counts(3000, 1200, 80, {"net_yi": 5}).to_dict()
+        em["breadth_partial"] = True
+        md = render_market_review_markdown(
+            {
+                "date": "2026-08-20",
+                "emotion": em,
+                "sector_analysis": {"mainline_type": "多题材轮动", "reasoning": "test"},
+                "lhb_analysis": {},
+                "comparison": {},
+            }
+        )
+        assert "3000" in md
+        assert "雪球宽度无此项" in md or "不可用" in md

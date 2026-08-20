@@ -59,6 +59,65 @@ def analyze_emotion(
     limit_up = sum(1 for s in stocks if _pct(s) >= 9.8)
     limit_down = sum(1 for s in stocks if _pct(s) <= -9.8)
     near_limit = sum(1 for s in stocks if 8 <= _pct(s) < 9.8)
+    return _score_market_emotion(
+        up_count=up_count,
+        down_count=down_count,
+        flat_count=flat_count,
+        limit_up=limit_up,
+        limit_down=limit_down,
+        near_limit=near_limit,
+        north=north,
+        include_limit_scoring=True,
+    )
+
+
+def analyze_emotion_from_counts(
+    up_count: int,
+    down_count: int,
+    flat_count: int,
+    north: dict[str, Any],
+    *,
+    indices: Optional[dict[str, Any]] = None,
+    by_market: Optional[dict[str, Any]] = None,
+) -> MarketEmotion:
+    """Score emotion from aggregate rise/fall/flat (Xueqiu index detail fallback)."""
+    _ = indices
+    em = _score_market_emotion(
+        up_count=up_count,
+        down_count=down_count,
+        flat_count=flat_count,
+        limit_up=0,
+        limit_down=0,
+        near_limit=0,
+        north=north,
+        include_limit_scoring=False,
+    )
+    em.warnings.append("涨跌停/炸板率需 Eastmoney clist，当前为雪球宽度回退")
+    if by_market:
+        parts = []
+        for label, row in by_market.items():
+            if isinstance(row, dict):
+                parts.append(
+                    f"{label} {row.get('rise_count', 0)}:{row.get('fall_count', 0)}"
+                )
+        if parts:
+            em.reasons.insert(0, f"雪球宽度（{' · '.join(parts)}）")
+    else:
+        em.reasons.insert(0, "雪球宽度（沪+深涨跌平汇总）")
+    return em
+
+
+def _score_market_emotion(
+    *,
+    up_count: int,
+    down_count: int,
+    flat_count: int,
+    limit_up: int,
+    limit_down: int,
+    near_limit: int,
+    north: dict[str, Any],
+    include_limit_scoring: bool,
+) -> MarketEmotion:
     broken_rate = near_limit / (limit_up + near_limit) if (limit_up + near_limit) > 0 else 0.0
 
     score = 0
@@ -76,31 +135,32 @@ def analyze_emotion(
         score -= 2
         reasons.append(f"涨跌比 {up_count}:{down_count}，亏钱效应明显")
 
-    if limit_up >= 80:
-        score += 2
-        reasons.append(f"涨停 {limit_up} 家，情绪火爆")
-    elif limit_up >= 40:
-        score += 1
-        reasons.append(f"涨停 {limit_up} 家，情绪正常")
-    else:
-        reasons.append(f"涨停仅 {limit_up} 家")
+    if include_limit_scoring:
+        if limit_up >= 80:
+            score += 2
+            reasons.append(f"涨停 {limit_up} 家，情绪火爆")
+        elif limit_up >= 40:
+            score += 1
+            reasons.append(f"涨停 {limit_up} 家，情绪正常")
+        else:
+            reasons.append(f"涨停仅 {limit_up} 家")
 
-    if limit_down >= 50:
-        score -= 2
-        warnings.append(f"跌停 {limit_down} 家，恐慌蔓延")
-        reasons.append(f"跌停 {limit_down} 家")
-    elif limit_down >= 20:
-        score -= 1
-        reasons.append(f"跌停 {limit_down} 家，局部恐慌")
-    else:
-        reasons.append(f"跌停 {limit_down} 家")
+        if limit_down >= 50:
+            score -= 2
+            warnings.append(f"跌停 {limit_down} 家，恐慌蔓延")
+            reasons.append(f"跌停 {limit_down} 家")
+        elif limit_down >= 20:
+            score -= 1
+            reasons.append(f"跌停 {limit_down} 家，局部恐慌")
+        else:
+            reasons.append(f"跌停 {limit_down} 家")
 
-    if broken_rate > 0.3:
-        score -= 2
-        reasons.append(f"炸板率 {broken_rate * 100:.0f}%，追高意愿弱")
-    elif broken_rate > 0.2:
-        score -= 1
-        reasons.append(f"炸板率 {broken_rate * 100:.0f}%，封板一般")
+        if broken_rate > 0.3:
+            score -= 2
+            reasons.append(f"炸板率 {broken_rate * 100:.0f}%，追高意愿弱")
+        elif broken_rate > 0.2:
+            score -= 1
+            reasons.append(f"炸板率 {broken_rate * 100:.0f}%，封板一般")
 
     net = float(north.get("net_yi") or north.get("net_100m") or 0)
     if net > 50:

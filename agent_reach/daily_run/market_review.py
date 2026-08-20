@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agent_reach.daily_run.lhb_collector import analyze_lhb
-from agent_reach.daily_run.market_breadth_collector import analyze_emotion
+from agent_reach.daily_run.market_breadth_collector import analyze_emotion, analyze_emotion_from_counts
 from agent_reach.daily_run.sector_mainline import analyze_sectors
 from agent_reach.daily_run.trade_calendar import is_trading_day, today_shanghai
 
@@ -163,12 +163,48 @@ def _macro_breadth_fallback(
     return out
 
 
+def _try_xueqiu_breadth_emotion(
+    north: dict[str, Any],
+    indices: dict[str, Any],
+    *,
+    timeout: float,
+    enabled: bool = True,
+) -> tuple[Optional[dict[str, Any]], list[str], Optional[dict[str, Any]]]:
+    """Return (emotion_dict, warnings, breadth_meta) from Xueqiu SH+SZ detail."""
+    if not enabled:
+        return None, [], None
+    try:
+        from agent_reach.daily_run.xueqiu_breadth_collector import fetch_xueqiu_market_breadth
+
+        breadth = fetch_xueqiu_market_breadth(timeout=timeout)
+        em = analyze_emotion_from_counts(
+            int(breadth["up_count"]),
+            int(breadth["down_count"]),
+            int(breadth["flat_count"]),
+            north,
+            indices=indices,
+            by_market=breadth.get("by_market"),
+        )
+        out = em.to_dict()
+        out["breadth_source"] = "xueqiu"
+        out["breadth_partial"] = True
+        meta = {
+            "up_count": breadth["up_count"],
+            "down_count": breadth["down_count"],
+            "flat_count": breadth["flat_count"],
+            "by_market": breadth.get("by_market"),
+        }
+        return out, ["市场宽度改用雪球沪+深汇总"], meta
+    except Exception as exc:
+        return None, [f"xueqiu breadth: {exc}"], None
+
+
 def collect_market_review(
     *,
     review_date: Optional[str] = None,
     settings: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    """Fetch market data with Eastmoney → akshare → macro fallbacks."""
+    """Fetch market data with Eastmoney → akshare → xueqiu → macro fallbacks."""
     from agent_reach.daily_run.settings import load_settings
 
     cfg = settings or load_settings()
@@ -218,9 +254,23 @@ def collect_market_review(
         emotion = analyze_emotion(stocks, north, indices=indices).to_dict()
         if stock_source == "akshare":
             emotion.setdefault("warnings", []).append("宽度数据来自 akshare 回退")
+        breadth_meta = None
     else:
         limit_up_stocks = []
-        emotion = _macro_breadth_fallback(indices, north)
+        xq_enabled = mr_cfg.get("xueqiu_breadth_fallback", True) is not False
+        xq_emotion, xq_warns, breadth_meta = _try_xueqiu_breadth_emotion(
+            north,
+            indices,
+            timeout=timeout,
+            enabled=xq_enabled,
+        )
+        warnings.extend(xq_warns)
+        if xq_emotion:
+            emotion = xq_emotion
+            source_parts.append("xueqiu")
+        else:
+            emotion = _macro_breadth_fallback(indices, north)
+            breadth_meta = None
 
     sector = analyze_sectors(limit_up_stocks, industries=industries, concepts=concepts)
     lhb = analyze_lhb(lhb_raw)
@@ -244,7 +294,10 @@ def collect_market_review(
         "lhb_raw": lhb_raw[:30],
         "lhb_analysis": lhb.to_dict(),
     }
-    if not stocks and not indices:
+    if breadth_meta:
+        payload["breadth_meta"] = breadth_meta
+    has_counts = int((emotion or {}).get("up_count") or 0) + int((emotion or {}).get("down_count") or 0) > 0
+    if not stocks and not has_counts and not indices:
         payload["error"] = "市场宽度与指数均不可用"
     payload["comparison"] = compare_market_review(
         payload, yesterday=yesterday, last_week=last_week
@@ -296,7 +349,10 @@ def render_market_review_markdown(review: dict[str, Any]) -> str:
 
     em = review.get("emotion") or {}
     degraded = em.get("breadth_degraded") is True
-    has_breadth = not degraded and int(em.get("up_count") or 0) + int(em.get("down_count") or 0) > 0
+    partial = em.get("breadth_partial") is True
+    has_breadth = (
+        int(em.get("up_count") or 0) + int(em.get("down_count") or 0) > 0 and not degraded
+    )
 
     if review.get("error") and not has_breadth and not review.get("indices"):
         err = review.get("error", "未知错误")
@@ -333,12 +389,18 @@ def render_market_review_markdown(review: dict[str, Any]) -> str:
 
     lines.extend(["", "### 📊 市场宽度"])
     if has_breadth:
+        flat_note = f" / 平 **{em.get('flat_count', '—')}**" if em.get("flat_count") else ""
         lines.extend(
             [
-                f"- 上涨 **{em.get('up_count', '—')}** / 下跌 **{em.get('down_count', '—')}** · 涨跌比 **{em.get('ratio', '—')}**",
-                f"- 涨停 **{em.get('limit_up', '—')}** / 跌停 **{em.get('limit_down', '—')}** · 炸板率 **{float(em.get('broken_rate') or 0) * 100:.1f}%**",
+                f"- 上涨 **{em.get('up_count', '—')}** / 下跌 **{em.get('down_count', '—')}**{flat_note} · 涨跌比 **{em.get('ratio', '—')}**",
             ]
         )
+        if partial:
+            lines.append("- 涨停/跌停/炸板率 **不可用**（雪球宽度无此项）")
+        else:
+            lines.append(
+                f"- 涨停 **{em.get('limit_up', '—')}** / 跌停 **{em.get('limit_down', '—')}** · 炸板率 **{float(em.get('broken_rate') or 0) * 100:.1f}%**"
+            )
     else:
         lines.append("- 涨跌家数/涨跌停 **不可用**（已降级为指数+北向估算）")
     lines.append(f"- 北向 **{em.get('northbound_net_yi', '—')} 亿**")
