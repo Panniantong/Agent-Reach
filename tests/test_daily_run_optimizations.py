@@ -211,7 +211,13 @@ class TestIntradayMacroRefresh:
             "watchlist": [{"code": "603986", "name": "兆易创新"}],
         }
         mock_cache.return_value = {
-            "macro_ctx": {"mss_breakdown": {"fx": 50, "flow": 50, "global": 50, "sentiment": 60}},
+            "macro_ctx": {
+                "mss_breakdown": {"fx": 50, "flow": 50, "global": 50, "sentiment": 60},
+                "sources": {
+                    "flow": {"summary": "北向净流入", "backend": "macro_collector"},
+                    "sentiment": {"summary": "存储讨论", "backend": "xueqiu"},
+                },
+            },
             "technicals": {},
         }
         mock_resolve.return_value = {
@@ -227,12 +233,94 @@ class TestIntradayMacroRefresh:
             },
             sources_used=["xueqiu"],
         )
-        snap = build_snapshot(
-            portfolio,
-            report_type="intraday",
-            settings={"snapshot": {"intraday_enrich_level": "quotes", "intraday_refresh_macro": "flow_index"}},
-        )
+        with patch(
+            "agent_reach.daily_run.snapshot_builder._backfill_missing_technicals",
+            side_effect=lambda codes, quote_map, cached, **kwargs: cached,
+        ):
+            snap = build_snapshot(
+                portfolio,
+                report_type="intraday",
+                settings={"snapshot": {"intraday_enrich_level": "quotes", "intraday_refresh_macro": "flow_index"}},
+            )
         mock_resolve.assert_called_once()
         mock_collect.assert_not_called()
         assert snap["mss_breakdown"]["sentiment"] == 60
         assert snap["mss_breakdown"]["flow"] == 58
+
+    @patch("agent_reach.daily_run.snapshot_builder.fetch_quotes_result")
+    @patch("agent_reach.daily_run.snapshot_builder.collect_macro_context")
+    @patch("agent_reach.daily_run.snapshot_builder.load_daily_cache")
+    def test_incomplete_macro_cache_backfills_from_portfolio_overrides(
+        self, mock_cache, mock_collect, mock_fetch
+    ):
+        from agent_reach.daily_run.quote_fetch import QuoteFetchResult
+        from agent_reach.daily_run.snapshot_builder import build_snapshot
+
+        portfolio = {
+            "primary_code": "688008",
+            "holdings": [{"code": "688008", "name": "澜起科技", "shares": 100, "cost": 255.87}],
+            "watchlist": [],
+            "sources_overrides": {
+                "flow": {"summary": "北向资金净流入 12 亿"},
+                "sentiment": {"summary": "DDR5 讨论活跃"},
+            },
+        }
+        mock_cache.return_value = {
+            "macro_ctx": {
+                "mss_breakdown": {"fx": 40, "flow": 50, "global": 45, "sentiment": 48},
+                "sources": {
+                    "quote": {"summary": "澜起科技 260.0", "backend": "snapshot_builder"},
+                },
+            }
+        }
+        mock_collect.return_value = {
+            "mss_breakdown": {"fx": 41, "flow": 51, "global": 46, "sentiment": 49},
+            "sources": {"quote": {"summary": "上证 +0.5%", "backend": "macro_collector"}},
+            "macro_summary": "live macro",
+            "macro_signals": {"index_change_pct": 0.5},
+        }
+        mock_fetch.return_value = QuoteFetchResult(
+            quotes={"688008": {"code": "688008", "price": 260.0, "change_pct": 1.0, "source": "xueqiu"}},
+            sources_used=["xueqiu"],
+        )
+        with patch("agent_reach.daily_run.snapshot_builder.save_daily_cache") as mock_save:
+            snap = build_snapshot(
+                portfolio,
+                report_type="intraday",
+                settings={"snapshot": {"intraday_enrich_level": "quotes"}},
+            )
+        mock_collect.assert_not_called()
+        assert snap["sources"]["flow"]["summary"] == "北向资金净流入 12 亿"
+        assert snap["sources"]["sentiment"]["summary"] == "DDR5 讨论活跃"
+        assert snap["sources"]["quote"]["backend"] == "snapshot_builder"
+        mock_save.assert_called_once()
+
+
+class TestMacroSourceBackfill:
+    def test_enrich_macro_sources_uses_portfolio_overrides(self):
+        from agent_reach.daily_run.macro_collector import enrich_macro_sources, macro_ctx_needs_full_refresh
+
+        portfolio = {
+            "sources_overrides": {
+                "flow": {"summary": "北向资金净流入 12 亿"},
+                "sentiment": {"summary": "存储芯片讨论"},
+            }
+        }
+        enriched = enrich_macro_sources(portfolio, {"quote": {"summary": "上证 +1%"}})
+        assert enriched["flow"]["summary"].startswith("北向")
+        assert enriched["sentiment"]["summary"].startswith("存储")
+        assert macro_ctx_needs_full_refresh({"sources": {"quote": {"summary": "x"}}}, portfolio) is False
+        assert macro_ctx_needs_full_refresh({"sources": {"quote": {"summary": "x"}}}, {}) is True
+        assert (
+            macro_ctx_needs_full_refresh(
+                {
+                    "sources": {
+                        "flow": {"summary": "北向资金净流入 12 亿"},
+                        "sentiment": {"summary": "存储芯片讨论"},
+                    }
+                },
+                portfolio,
+                settings={"data_audit": {"required_source_categories": ["quote", "flow", "sentiment"]}},
+            )
+            is False
+        )

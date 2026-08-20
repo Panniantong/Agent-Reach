@@ -23,6 +23,79 @@ def intraday_refresh_macro_mode(settings: Optional[dict[str, Any]] = None) -> In
     return mode  # type: ignore[return-value]
 
 
+def required_source_categories(settings: Optional[dict[str, Any]] = None) -> list[str]:
+    audit = (settings or {}).get("data_audit") or {}
+    cats = audit.get("required_source_categories")
+    if cats:
+        return list(cats)
+    return ["quote", "flow", "sentiment"]
+
+
+def macro_sources_missing_raw(
+    sources: Optional[dict[str, Any]],
+    settings: Optional[dict[str, Any]] = None,
+) -> bool:
+    """Whether raw cached sources lack macro categories before portfolio backfill."""
+    macro_cats = [c for c in required_source_categories(settings) if c != "quote"]
+    present = set((sources or {}).keys())
+    return any(cat not in present for cat in macro_cats)
+
+
+def enrich_macro_sources(
+    portfolio: dict[str, Any],
+    sources: Optional[dict[str, Any]],
+    settings: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Fill missing macro source categories from portfolio overrides."""
+    out = dict(sources or {})
+    overrides = portfolio.get("sources_overrides") or {}
+    for cat, detail in overrides.items():
+        if not isinstance(detail, dict):
+            continue
+        summary = detail.get("summary", "")
+        if _is_placeholder(summary):
+            continue
+        existing = out.get(cat)
+        if cat not in out or (
+            isinstance(existing, dict) and _is_placeholder(existing.get("summary", ""))
+        ):
+            merged = dict(detail)
+            merged.setdefault("backend", "portfolio_override")
+            out[cat] = merged
+    return out
+
+
+def macro_sources_complete(
+    sources: Optional[dict[str, Any]],
+    portfolio: dict[str, Any],
+    settings: Optional[dict[str, Any]] = None,
+) -> bool:
+    """Whether cached macro sources satisfy audit categories (quote may come later)."""
+    enriched = enrich_macro_sources(portfolio, sources, settings)
+    macro_cats = [c for c in required_source_categories(settings) if c != "quote"]
+    for cat in macro_cats:
+        detail = enriched.get(cat)
+        if not isinstance(detail, dict):
+            return False
+        if _is_placeholder(detail.get("summary", "")):
+            return False
+    return True
+
+
+def macro_ctx_needs_full_refresh(
+    cached: Optional[dict[str, Any]],
+    portfolio: dict[str, Any],
+    settings: Optional[dict[str, Any]] = None,
+) -> bool:
+    """True when live macro collection is required (cache empty or overrides insufficient)."""
+    if not cached:
+        return True
+    if macro_sources_complete(cached.get("sources"), portfolio, settings):
+        return False
+    enriched = enrich_macro_sources(portfolio, cached.get("sources"), settings)
+    return not macro_sources_complete(enriched, portfolio, settings)
+
+
 def collect_macro_context(
     portfolio: dict[str, Any],
     *,

@@ -8,7 +8,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from agent_reach.daily_run.macro_collector import collect_macro_context, resolve_intraday_macro_context
+from agent_reach.daily_run.macro_collector import (
+    collect_macro_context,
+    enrich_macro_sources,
+    macro_ctx_needs_full_refresh,
+    macro_sources_missing_raw,
+    resolve_intraday_macro_context,
+)
 from agent_reach.daily_run.mss_forecast import forecast_mss_range
 from agent_reach.daily_run.snapshot_cache import load_daily_cache, load_last_snapshot, save_daily_cache
 
@@ -452,19 +458,34 @@ def build_snapshot(
     watchlist = [dict(w) for w in (pf.get("watchlist") or [])]
 
     daily_cache = load_daily_cache() if enrich_level in ("full", "quotes") else {}
+    cached_macro = daily_cache.get("macro_ctx")
+    needs_full_macro = macro_ctx_needs_full_refresh(cached_macro, pf, cfg)
     macro_ctx: dict[str, Any] = {}
-    if enrich_level == "quotes" and report_type == "intraday" and daily_cache.get("macro_ctx"):
+    if (
+        enrich_level == "quotes"
+        and report_type == "intraday"
+        and cached_macro
+        and not needs_full_macro
+    ):
         macro_ctx = resolve_intraday_macro_context(
             pf,
-            daily_cache["macro_ctx"],
+            cached_macro,
             config=config,
             settings=cfg,
             workflow=report_type,
         )
-    elif daily_cache.get("macro_ctx"):
-        macro_ctx = dict(daily_cache["macro_ctx"])
+    elif cached_macro and not needs_full_macro:
+        macro_ctx = dict(cached_macro)
     else:
-        macro_ctx = collect_macro_context(pf, config=config, settings=cfg, workflow=report_type)
+        macro_ctx = collect_macro_context(
+            pf,
+            config=config,
+            settings=cfg,
+            workflow=report_type,
+            scope="full",
+        )
+        macro_ctx = dict(macro_ctx)
+    macro_ctx["sources"] = enrich_macro_sources(pf, macro_ctx.get("sources"), cfg)
 
     primary_name = code_norm
     primary_price = None
@@ -603,7 +624,7 @@ def build_snapshot(
         "holdings": holdings,
     }
 
-    sources = dict(macro_ctx.get("sources") or {})
+    sources = enrich_macro_sources(pf, macro_ctx.get("sources"), cfg)
     if quote_summary_parts:
         sources["quote"] = {
             "summary": " · ".join(quote_summary_parts[:4]),
@@ -685,8 +706,12 @@ def build_snapshot(
     }
     if enrich_level == "full":
         save_daily_cache(macro_cache_payload)
-    elif enrich_level == "quotes" and not daily_cache.get("macro_ctx"):
-        # First intraday scan of the day: persist macro so per-symbol loops skip RedFox/60s.
+    elif enrich_level == "quotes" and (
+        not cached_macro
+        or needs_full_macro
+        or macro_sources_missing_raw((cached_macro or {}).get("sources"), cfg)
+    ):
+        # Seed or repair daily macro cache (e.g. backfill flow/sentiment from overrides).
         save_daily_cache(
             {
                 "macro_ctx": macro_cache_payload["macro_ctx"],
