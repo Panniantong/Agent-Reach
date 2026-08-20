@@ -9,7 +9,11 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agent_reach.daily_run.lhb_collector import analyze_lhb
-from agent_reach.daily_run.market_breadth_collector import analyze_emotion, analyze_emotion_from_counts
+from agent_reach.daily_run.market_breadth_collector import (
+    analyze_emotion,
+    analyze_emotion_from_counts,
+    enrich_emotion_with_limit_pools,
+)
 from agent_reach.daily_run.sector_mainline import analyze_sectors
 from agent_reach.daily_run.trade_calendar import is_trading_day, today_shanghai
 
@@ -199,6 +203,40 @@ def _try_xueqiu_breadth_emotion(
         return None, [f"xueqiu breadth: {exc}"], None
 
 
+def _try_limit_pool_enrichment(
+    emotion: dict[str, Any],
+    limit_up_stocks: list[dict[str, Any]],
+    north: dict[str, Any],
+    review_date: str,
+    *,
+    enabled: bool = True,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str], Optional[dict[str, Any]]]:
+    """Attach akshare limit pools when full A-share clist is unavailable."""
+    if not enabled:
+        return emotion, limit_up_stocks, [], None
+    try:
+        from agent_reach.daily_run.limit_pool_collector import fetch_akshare_limit_pools
+
+        pool = fetch_akshare_limit_pools(review_date)
+        em = enrich_emotion_with_limit_pools(emotion, pool, north)
+        out = em.to_dict()
+        for key in ("breadth_partial", "breadth_degraded", "breadth_source"):
+            if key in emotion:
+                out[key] = emotion[key]
+        out["limit_source"] = pool.get("source")
+        stocks = list(pool.get("limit_up_stocks") or limit_up_stocks)
+        meta = {
+            "limit_up": pool.get("limit_up"),
+            "limit_down": pool.get("limit_down"),
+            "broken_count": pool.get("broken_count"),
+            "broken_rate": pool.get("broken_rate"),
+            "source": pool.get("source"),
+        }
+        return out, stocks, [f"涨跌停改用 {pool.get('source')}"], meta
+    except Exception as exc:
+        return emotion, limit_up_stocks, [f"akshare limit pools: {exc}"], None
+
+
 def collect_market_review(
     *,
     review_date: Optional[str] = None,
@@ -249,6 +287,7 @@ def collect_market_review(
     warnings.extend(w)
     lhb_raw = em.fetch_lhb(ds, timeout=timeout)
 
+    limit_meta: Optional[dict[str, Any]] = None
     if stocks:
         limit_up_stocks = [s for s in stocks if float(s.get("change_pct") or 0) >= 9.8]
         emotion = analyze_emotion(stocks, north, indices=indices).to_dict()
@@ -271,6 +310,18 @@ def collect_market_review(
         else:
             emotion = _macro_breadth_fallback(indices, north)
             breadth_meta = None
+
+        limit_enabled = mr_cfg.get("akshare_limit_pool_fallback", True) is not False
+        emotion, limit_up_stocks, lp_warns, limit_meta = _try_limit_pool_enrichment(
+            emotion,
+            limit_up_stocks,
+            north,
+            ds,
+            enabled=limit_enabled,
+        )
+        warnings.extend(lp_warns)
+        if limit_meta:
+            source_parts.append(str(limit_meta.get("source") or "akshare_limit_pools"))
 
     sector = analyze_sectors(limit_up_stocks, industries=industries, concepts=concepts)
     lhb = analyze_lhb(lhb_raw)
@@ -296,6 +347,8 @@ def collect_market_review(
     }
     if breadth_meta:
         payload["breadth_meta"] = breadth_meta
+    if limit_meta:
+        payload["limit_pool_meta"] = limit_meta
     has_counts = int((emotion or {}).get("up_count") or 0) + int((emotion or {}).get("down_count") or 0) > 0
     if not stocks and not has_counts and not indices:
         payload["error"] = "市场宽度与指数均不可用"
@@ -350,6 +403,9 @@ def render_market_review_markdown(review: dict[str, Any]) -> str:
     em = review.get("emotion") or {}
     degraded = em.get("breadth_degraded") is True
     partial = em.get("breadth_partial") is True
+    has_limits = bool(em.get("limit_source")) or (
+        int(em.get("limit_up") or 0) + int(em.get("limit_down") or 0) > 0
+    )
     has_breadth = (
         int(em.get("up_count") or 0) + int(em.get("down_count") or 0) > 0 and not degraded
     )
@@ -395,14 +451,22 @@ def render_market_review_markdown(review: dict[str, Any]) -> str:
                 f"- 上涨 **{em.get('up_count', '—')}** / 下跌 **{em.get('down_count', '—')}**{flat_note} · 涨跌比 **{em.get('ratio', '—')}**",
             ]
         )
-        if partial:
+        if partial and not has_limits:
             lines.append("- 涨停/跌停/炸板率 **不可用**（雪球宽度无此项）")
-        else:
+        elif has_limits:
+            src_note = f" · _{em.get('limit_source')}_" if em.get("limit_source") else ""
             lines.append(
-                f"- 涨停 **{em.get('limit_up', '—')}** / 跌停 **{em.get('limit_down', '—')}** · 炸板率 **{float(em.get('broken_rate') or 0) * 100:.1f}%**"
+                f"- 涨停 **{em.get('limit_up', '—')}** / 跌停 **{em.get('limit_down', '—')}** · 炸板率 **{float(em.get('broken_rate') or 0) * 100:.1f}%**{src_note}"
             )
     else:
-        lines.append("- 涨跌家数/涨跌停 **不可用**（已降级为指数+北向估算）")
+        if has_limits:
+            src_note = f" · _{em.get('limit_source')}_" if em.get("limit_source") else ""
+            lines.append(
+                f"- 涨停 **{em.get('limit_up', '—')}** / 跌停 **{em.get('limit_down', '—')}** · 炸板率 **{float(em.get('broken_rate') or 0) * 100:.1f}%**{src_note}"
+            )
+            lines.append("- 涨跌家数 **不可用**（已降级为指数+北向估算）")
+        else:
+            lines.append("- 涨跌家数/涨跌停 **不可用**（已降级为指数+北向估算）")
     lines.append(f"- 北向 **{em.get('northbound_net_yi', '—')} 亿**")
 
     lines.extend(

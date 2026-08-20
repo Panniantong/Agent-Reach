@@ -68,7 +68,61 @@ def analyze_emotion(
         near_limit=near_limit,
         north=north,
         include_limit_scoring=True,
+        include_breadth_scoring=True,
     )
+
+
+def enrich_emotion_with_limit_pools(
+    emotion: MarketEmotion | dict[str, Any],
+    pool: dict[str, Any],
+    north: dict[str, Any],
+) -> MarketEmotion:
+    """Re-score emotion after attaching akshare limit pool stats."""
+    if isinstance(emotion, dict):
+        up_count = int(emotion.get("up_count") or 0)
+        down_count = int(emotion.get("down_count") or 0)
+        flat_count = int(emotion.get("flat_count") or 0)
+        prior_warnings = list(emotion.get("warnings") or [])
+        prior_reasons = list(emotion.get("reasons") or [])
+    else:
+        up_count = emotion.up_count
+        down_count = emotion.down_count
+        flat_count = emotion.flat_count
+        prior_warnings = list(emotion.warnings)
+        prior_reasons = list(emotion.reasons)
+
+    limit_up = int(pool.get("limit_up") or 0)
+    limit_down = int(pool.get("limit_down") or 0)
+    broken_count = int(pool.get("broken_count") or 0)
+    include_breadth = up_count + down_count > 0
+
+    em = _score_market_emotion(
+        up_count=up_count,
+        down_count=down_count,
+        flat_count=flat_count,
+        limit_up=limit_up,
+        limit_down=limit_down,
+        near_limit=broken_count,
+        north=north,
+        include_limit_scoring=True,
+        include_breadth_scoring=include_breadth,
+    )
+    limit_keywords = ("涨停", "跌停", "炸板率")
+    if not include_breadth:
+        limit_reasons = [r for r in em.reasons if any(k in r for k in limit_keywords)]
+        em.reasons = prior_reasons + limit_reasons
+    else:
+        prefix = [r for r in prior_reasons if "雪球宽度" in r]
+        em.reasons = prefix + [r for r in em.reasons if r not in prefix]
+
+    em.warnings = [
+        w
+        for w in prior_warnings
+        if "涨跌停/炸板率需 Eastmoney clist" not in w
+    ]
+    source = str(pool.get("source") or "akshare_limit_pools")
+    em.warnings.append(f"涨跌停来自 {source} 回退（非 clist 全市场扫描）")
+    return em
 
 
 def analyze_emotion_from_counts(
@@ -91,6 +145,7 @@ def analyze_emotion_from_counts(
         near_limit=0,
         north=north,
         include_limit_scoring=False,
+        include_breadth_scoring=True,
     )
     em.warnings.append("涨跌停/炸板率需 Eastmoney clist，当前为雪球宽度回退")
     if by_market:
@@ -117,6 +172,7 @@ def _score_market_emotion(
     near_limit: int,
     north: dict[str, Any],
     include_limit_scoring: bool,
+    include_breadth_scoring: bool = True,
 ) -> MarketEmotion:
     broken_rate = near_limit / (limit_up + near_limit) if (limit_up + near_limit) > 0 else 0.0
 
@@ -125,15 +181,16 @@ def _score_market_emotion(
     warnings: list[str] = []
     ratio_num = up_count / down_count if down_count > 0 else float(up_count)
 
-    if ratio_num > 2:
-        score += 3
-        reasons.append(f"涨跌比 {up_count}:{down_count}，赚钱效应强")
-    elif ratio_num > 1:
-        score += 1
-        reasons.append(f"涨跌比 {up_count}:{down_count}，偏中性")
-    else:
-        score -= 2
-        reasons.append(f"涨跌比 {up_count}:{down_count}，亏钱效应明显")
+    if include_breadth_scoring:
+        if ratio_num > 2:
+            score += 3
+            reasons.append(f"涨跌比 {up_count}:{down_count}，赚钱效应强")
+        elif ratio_num > 1:
+            score += 1
+            reasons.append(f"涨跌比 {up_count}:{down_count}，偏中性")
+        else:
+            score -= 2
+            reasons.append(f"涨跌比 {up_count}:{down_count}，亏钱效应明显")
 
     if include_limit_scoring:
         if limit_up >= 80:

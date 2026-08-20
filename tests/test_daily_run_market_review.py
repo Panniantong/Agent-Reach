@@ -264,3 +264,77 @@ class TestMarketReviewFallback:
         )
         assert "3000" in md
         assert "雪球宽度无此项" in md or "不可用" in md
+
+    @patch("agent_reach.daily_run.market_review._try_limit_pool_enrichment")
+    @patch("agent_reach.daily_run.market_review._try_xueqiu_breadth_emotion")
+    @patch("agent_reach.daily_run.eastmoney_market.fetch_all_stocks")
+    @patch("agent_reach.daily_run.akshare_adapter.fetch_all_a_spot_stocks")
+    @patch("agent_reach.daily_run.eastmoney_market.fetch_indices")
+    @patch("agent_reach.daily_run.eastmoney_market.fetch_north_flow_resilient")
+    @patch("agent_reach.daily_run.eastmoney_market.fetch_lhb")
+    def test_collect_enriches_xueqiu_with_limit_pools(
+        self,
+        mock_lhb,
+        mock_north,
+        mock_indices,
+        mock_ak,
+        mock_em_stocks,
+        mock_xq,
+        mock_limit,
+    ):
+        from agent_reach.daily_run.market_breadth_collector import analyze_emotion_from_counts
+        from agent_reach.daily_run.market_review import collect_market_review
+
+        mock_em_stocks.side_effect = RuntimeError("clist blocked")
+        mock_ak.side_effect = RuntimeError("akshare blocked")
+        mock_indices.return_value = {"sh000001": {"change_pct": 0.5, "name": "上证指数"}}
+        mock_north.return_value = ({"net_yi": 10.0, "direction": "inflow"}, [])
+        mock_lhb.return_value = []
+        partial_em = analyze_emotion_from_counts(3500, 1000, 90, {"net_yi": 10.0}).to_dict()
+        partial_em["breadth_partial"] = True
+        mock_xq.return_value = (partial_em, ["市场宽度改用雪球沪+深汇总"], {"up_count": 3500})
+        enriched = dict(partial_em)
+        enriched.update(
+            {
+                "limit_up": 79,
+                "limit_down": 12,
+                "broken_rate": 0.37,
+                "limit_source": "akshare_limit_pools",
+            }
+        )
+        mock_limit.return_value = (
+            enriched,
+            [{"code": "600000", "name": "X", "change_pct": 10, "industry": "半导体"}],
+            ["涨跌停改用 akshare_limit_pools"],
+            {"limit_up": 79, "source": "akshare_limit_pools"},
+        )
+
+        review = collect_market_review(settings={"market_review": {}}, review_date="2026-08-20")
+        assert review["emotion"]["limit_up"] == 79
+        assert review["limit_pool_meta"]["limit_up"] == 79
+        assert len(review["limit_up_stocks"]) == 1
+        mock_limit.assert_called_once()
+
+    def test_render_partial_with_limit_source(self):
+        from agent_reach.daily_run.market_breadth_collector import analyze_emotion_from_counts
+        from agent_reach.daily_run.market_review import render_market_review_markdown
+
+        em = analyze_emotion_from_counts(3000, 1200, 80, {"net_yi": 5}).to_dict()
+        em["breadth_partial"] = True
+        em["limit_up"] = 79
+        em["limit_down"] = 12
+        em["broken_rate"] = 0.37
+        em["limit_source"] = "akshare_limit_pools"
+        md = render_market_review_markdown(
+            {
+                "date": "2026-08-20",
+                "emotion": em,
+                "sector_analysis": {"mainline_type": "多题材轮动", "reasoning": "test"},
+                "lhb_analysis": {},
+                "comparison": {},
+            }
+        )
+        assert "79" in md
+        assert "12" in md
+        assert "akshare_limit_pools" in md
+        assert "雪球宽度无此项" not in md
