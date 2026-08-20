@@ -20,6 +20,8 @@ from agent_reach.daily_run.harness_policy import (
     resolve_harness_trade_signals,
     friction_min_return_default,
     forecast_int_default,
+    calibration_float_default,
+    _parse_text_overrides,
     threshold_default,
 )
 from agent_reach.daily_run.intraday import _decide_trade, _passes_friction
@@ -1367,3 +1369,98 @@ class TestHarnessP2Evolution:
         assert cfg["trading"]["friction_min_return_pct"] == 0.008
         assert cfg["thresholds"]["high_position_20d"] == 0.65
         assert "forecast_overlay" in cfg.get("harness_runtime", {})
+
+
+class TestHarnessForecastCalibration:
+    def test_parse_verify_bias_vol_scale_playbook(self):
+        parsed = _parse_text_overrides(
+            "bias +0.00% → +0.12%（均值误差 +0.81%）\n"
+            "vol_scale 1.00 → 1.03（扩大预测区间）"
+        )
+        assert parsed["bias_pct"] == 0.12
+        assert parsed["vol_scale"] == 1.03
+
+    def test_playbook_overrides_apply_calibration(self):
+        state = HarnessState()
+        state.entries["playbook"]["cal"] = HarnessEntry(
+            id="cal",
+            kind="playbook",
+            title="bias +0.00% → +0.12%（均值误差 +0.81%）",
+            content="vol_scale 1.00 → 1.03（扩大预测区间）",
+            source="deterministic",
+            job="verify",
+            evidence="forecast_review",
+            created_at="2026-08-20T10:01:43+00:00",
+            updated_at="2026-08-20T10:01:43+00:00",
+        )
+        flat = resolve_harness_flat_overrides(
+            state,
+            {"max_snapshot_age_hours": 24},
+            settings=_harness_settings(
+                harness={
+                    "enabled": True,
+                    "runtime_overlay": True,
+                    "threshold_evolution_mode": "harness",
+                    "runtime_overlay_sources": ["policy", "memory", "playbook"],
+                }
+            ),
+        )
+        assert flat["bias_pct"] == 0.12
+        assert flat["vol_scale"] == 1.03
+
+    def test_effective_settings_applies_calibration_overlay(self, monkeypatch, tmp_path):
+        cal_path = tmp_path / "calibration.json"
+        cal_path.write_text(
+            '{"bias_pct": 0.0, "vol_scale": 1.0, "reviews": 0}\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.week_forecast.calibration_path",
+            lambda: cal_path,
+        )
+        state = HarnessState()
+        state.entries["playbook"]["cal"] = HarnessEntry(
+            id="cal",
+            kind="playbook",
+            title="bias +0.00% → +0.12%（均值误差 +0.81%）",
+            content="vol_scale 1.00 → 1.03（扩大预测区间）",
+            source="deterministic",
+            job="verify",
+            evidence="forecast_review",
+            created_at="2026-08-20T10:01:43+00:00",
+            updated_at="2026-08-20T10:01:43+00:00",
+        )
+        monkeypatch.setattr("agent_reach.daily_run.harness.load_harness", lambda: state)
+        cfg = effective_settings(
+            _harness_settings(
+                harness={
+                    "enabled": True,
+                    "runtime_overlay": True,
+                    "threshold_evolution_mode": "harness",
+                    "runtime_overlay_sources": ["policy", "memory", "playbook"],
+                }
+            )
+        )
+        assert cfg["forecast_calibration"]["bias_pct"] == 0.12
+        assert cfg["forecast_calibration"]["vol_scale"] == 1.03
+        assert calibration_float_default(cfg, "bias_pct") == 0.12
+        assert calibration_float_default(cfg, "vol_scale") == 1.03
+        assert "calibration_overlay" in cfg.get("harness_runtime", {})
+
+    def test_load_calibration_merges_effective_settings(self, monkeypatch, tmp_path):
+        from agent_reach.daily_run.week_forecast import load_calibration
+
+        cal_path = tmp_path / "calibration.json"
+        cal_path.write_text(
+            '{"bias_pct": 0.0, "vol_scale": 1.0, "reviews": 0}\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.week_forecast.calibration_path",
+            lambda: cal_path,
+        )
+        merged = load_calibration(
+            settings={"forecast_calibration": {"bias_pct": 0.12, "vol_scale": 1.03}}
+        )
+        assert merged["bias_pct"] == 0.12
+        assert merged["vol_scale"] == 1.03

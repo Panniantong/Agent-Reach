@@ -57,7 +57,8 @@ def list_trading_days(start: date, end: date, *, settings: Optional[dict[str, An
     return days
 
 
-def load_calibration() -> dict[str, Any]:
+def load_calibration_file() -> dict[str, Any]:
+    """Read calibration.json only (no harness overlay)."""
     path = calibration_path()
     if not path.exists():
         return {"bias_pct": 0.0, "vol_scale": 1.0, "hit_rate": None, "reviews": 0}
@@ -65,6 +66,20 @@ def load_calibration() -> dict[str, Any]:
         return json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return {"bias_pct": 0.0, "vol_scale": 1.0, "hit_rate": None, "reviews": 0}
+
+
+def load_calibration(*, settings: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    base = load_calibration_file()
+    if settings is None:
+        return base
+    fc = settings.get("forecast_calibration")
+    if isinstance(fc, dict):
+        merged = dict(base)
+        for key in ("bias_pct", "vol_scale"):
+            if key in fc:
+                merged[key] = fc[key]
+        return merged
+    return base
 
 
 def save_calibration(data: dict[str, Any]) -> Path:
@@ -367,7 +382,7 @@ def generate_week_forecast(
     cfg = settings.get("week_forecast") or {}
     week_start, week_end = next_trading_week_range(as_of)
     trading_days = list_trading_days(week_start, week_end, settings=settings)
-    calibration = load_calibration()
+    calibration = load_calibration(settings=settings)
     vol_scale = _historical_vol_scale(calibration)
     calibration = {**calibration, "vol_scale": vol_scale}
     pf = portfolio or (snapshot.get("portfolio") or {})

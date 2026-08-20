@@ -1735,6 +1735,7 @@ _OVERLAY_SECTION_LABELS: dict[str, str] = {
     "threshold_overlay": "阈值",
     "runtime_overlay": "运行时",
     "forecast_overlay": "MSS 预测",
+    "calibration_overlay": "预测校准",
     "lookback_overlay": "Lookback 权重",
     "mss_weights_overlay": "MSS 权重",
 }

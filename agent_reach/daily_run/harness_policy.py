@@ -34,6 +34,8 @@ _EVOLVED_RUNTIME_KEYS: tuple[str, ...] = (
 _EVOLVED_FORECAST_KEYS: tuple[str, ...] = (
     "base_spread",
     "vol_multiplier",
+    "bias_pct",
+    "vol_scale",
 )
 
 _EVOLVED_FLAT_KEYS: tuple[str, ...] = (
@@ -77,6 +79,8 @@ _RUNTIME_FIXED: dict[str, float] = dict(_RUNTIME_NEUTRAL)
 _FORECAST_NEUTRAL: dict[str, float] = {
     "base_spread": 8.0,
     "vol_multiplier": 6.0,
+    "bias_pct": 0.0,
+    "vol_scale": 1.0,
 }
 
 _FORECAST_FIXED: dict[str, float] = dict(_FORECAST_NEUTRAL)
@@ -319,6 +323,8 @@ HARNESS_CONSUMER_HELPERS: dict[str, str] = {
     "friction_min_return_pct": "friction_min_return_default(settings)",
     "base_spread": "forecast_int_default(settings, 'base_spread')",
     "vol_multiplier": "forecast_int_default(settings, 'vol_multiplier')",
+    "bias_pct": "calibration_float_default(settings, 'bias_pct')",
+    "vol_scale": "calibration_float_default(settings, 'vol_scale')",
     "days_held": "effective_days_held(holding, settings=settings)",
     "lookback_weights": "lookback_weights_default(settings)",
     "deploy_ratio": "position_policy_default(settings, 'deploy_ratio')",
@@ -429,6 +435,18 @@ _FLAT_CONFIG_RE = re.compile(
     re.I,
 )
 _STOP_LOSS_RE = re.compile(r"MA20[-−](\d+(?:\.\d+)?)\s*%")
+_BIAS_ARROW_RE = re.compile(
+    r"bias\s*(?:[+\-]?[\d.]+\s*%?\s*)→\s*([+\-]?[\d.]+)\s*%",
+    re.I,
+)
+_VOL_SCALE_ARROW_RE = re.compile(
+    r"vol_scale\s*([\d.]+)\s*→\s*([\d.]+)",
+    re.I,
+)
+_FORECAST_CAL_KV_RE = re.compile(
+    r"vol_scale\s*=\s*([\d.]+).*?bias\s*=\s*([+\-]?[\d.]+)",
+    re.I,
+)
 _KRONOS_SYMBOL_RE = re.compile(
     r"([^\(（,、]+)?[\(（](\d{6})[\)）]\s*([+\-]?\d+(?:\.\d+)?)\s*%"
 )
@@ -562,10 +580,23 @@ def flat_base(settings: dict[str, Any], key: str, config: dict[str, Any]) -> flo
         return threshold_base(settings, key, config)
     if key in _EVOLVED_FORECAST_KEYS:
         if evolution_mode(settings, key) == "fixed":
-            block = settings.get("mss_forecast") or {}
-            if key in block:
-                return float(block[key])
-            return float(_FORECAST_FIXED[key])
+            if key in ("bias_pct", "vol_scale"):
+                from agent_reach.daily_run.week_forecast import load_calibration_file
+
+                cal = load_calibration_file()
+                if key in cal:
+                    return float(cal[key])
+            else:
+                block = settings.get("mss_forecast") or {}
+                if key in block:
+                    return float(block[key])
+            return float(_FORECAST_FIXED.get(key, _FORECAST_NEUTRAL[key]))
+        if key in ("bias_pct", "vol_scale"):
+            from agent_reach.daily_run.week_forecast import load_calibration_file
+
+            cal = load_calibration_file()
+            if key in cal:
+                return float(cal[key])
         return float(_FORECAST_NEUTRAL[key])
     if evolution_mode(settings, key) == "fixed":
         section = _RUNTIME_SECTIONS.get(key, "")
@@ -595,6 +626,14 @@ def forecast_int_default(settings: dict[str, Any], key: str) -> int:
     if key in block:
         return int(block[key])
     return int(flat_base(settings, key, settings.get("thresholds") or {}))
+
+
+def calibration_float_default(settings: dict[str, Any], key: str) -> float:
+    """Effective forecast calibration (bias_pct / vol_scale) after harness overlay."""
+    fc = settings.get("forecast_calibration") or {}
+    if key in fc:
+        return float(fc[key])
+    return float(flat_base(settings, key, settings.get("thresholds") or {}))
 
 
 def friction_min_return_default(settings: dict[str, Any]) -> float:
@@ -737,6 +776,10 @@ def _clamp_flat_values(values: dict[str, float]) -> dict[str, float]:
         out["base_spread"] = float(max(6.0, min(15.0, int(out["base_spread"]))))
     if "vol_multiplier" in out:
         out["vol_multiplier"] = float(max(4.0, min(10.0, int(out["vol_multiplier"]))))
+    if "bias_pct" in out:
+        out["bias_pct"] = float(max(-3.0, min(3.0, float(out["bias_pct"]))))
+    if "vol_scale" in out:
+        out["vol_scale"] = float(max(0.6, min(1.6, float(out["vol_scale"]))))
     if "max_holdings" in out and "max_total_symbols" in out:
         if out["max_total_symbols"] < out["max_holdings"]:
             out["max_total_symbols"] = out["max_holdings"]
@@ -794,6 +837,19 @@ def _parse_text_overrides(text: str) -> dict[str, float]:
     if stop_loss:
         overrides["stop_loss_ma20_pct"] = float(stop_loss.group(1)) / 100.0
 
+    bias_arrow = _BIAS_ARROW_RE.search(blob)
+    if bias_arrow:
+        overrides["bias_pct"] = float(bias_arrow.group(1))
+
+    vol_arrow = _VOL_SCALE_ARROW_RE.search(blob)
+    if vol_arrow:
+        overrides["vol_scale"] = float(vol_arrow.group(2))
+
+    cal_kv = _FORECAST_CAL_KV_RE.search(blob)
+    if cal_kv:
+        overrides["vol_scale"] = float(cal_kv.group(1))
+        overrides["bias_pct"] = float(cal_kv.group(2))
+
     return overrides
 
 
@@ -815,6 +871,20 @@ def _policy_overrides(state: Any, *, base: dict[str, float]) -> dict[str, float]
             overrides.update(structured)
         content = f"{getattr(entry, 'title', '')}\n{getattr(entry, 'content', '')}"
         overrides.update(_parse_text_overrides(content))
+    return overrides
+
+
+def _playbook_overrides(state: Any, *, base: dict[str, float]) -> dict[str, float]:
+    """Parse verify/forecast_review calibration lines from playbook entries."""
+    overrides = dict(base)
+    playbooks = list((getattr(state, "entries", {}) or {}).get("playbook", {}).values())
+    playbooks.sort(key=_entry_sort_key, reverse=True)
+    for entry in playbooks[:30]:
+        content = f"{getattr(entry, 'title', '')}\n{getattr(entry, 'content', '')}"
+        parsed = _parse_text_overrides(content)
+        for key in ("bias_pct", "vol_scale"):
+            if key in parsed:
+                overrides[key] = parsed[key]
     return overrides
 
 
@@ -1165,6 +1235,8 @@ def resolve_harness_flat_overrides(
         merged = _policy_overrides(state, base=merged)
     if "memory" in sources:
         merged = _memory_overrides(state, base=merged)
+    if "playbook" in sources:
+        merged = _playbook_overrides(state, base=merged)
     merged = _apply_mss_signal_evolution(merged, state, settings=cfg)
     merged = _apply_deviation_pct_evolution(merged, state, settings=cfg)
     merged = _apply_runtime_signal_evolution(merged, state, settings=cfg)
@@ -1319,7 +1391,10 @@ def harness_forecast_overlay_meta(
     for key in _EVOLVED_FORECAST_KEYS:
         base_val = float(base_forecast.get(key, _FORECAST_NEUTRAL[key]))
         eff_val = float(effective_forecast.get(key, base_val))
-        if abs(eff_val - base_val) >= 0.01:
+        if key in ("bias_pct", "vol_scale"):
+            if abs(eff_val - base_val) >= 0.001:
+                changed[key] = {"base": base_val, "effective": eff_val}
+        elif abs(eff_val - base_val) >= 0.01:
             changed[key] = {"base": base_val, "effective": eff_val}
     return changed
 
@@ -1442,6 +1517,26 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
     )
     if forecast_meta:
         harness_meta["forecast_overlay"] = forecast_meta
+
+    from agent_reach.daily_run.week_forecast import load_calibration_file
+
+    file_cal = load_calibration_file()
+    eff_bias = float(effective_flat.get("bias_pct", file_cal.get("bias_pct") or 0))
+    eff_vol = float(effective_flat.get("vol_scale", file_cal.get("vol_scale") or 1))
+    cfg["forecast_calibration"] = {
+        **file_cal,
+        "bias_pct": round(eff_bias, 3),
+        "vol_scale": round(eff_vol, 3),
+    }
+    cal_meta: dict[str, dict[str, float]] = {}
+    base_bias = float(file_cal.get("bias_pct") or 0)
+    base_vol = float(file_cal.get("vol_scale") or 1)
+    if abs(eff_bias - base_bias) >= 0.001:
+        cal_meta["bias_pct"] = {"base": base_bias, "effective": eff_bias}
+    if abs(eff_vol - base_vol) >= 0.001:
+        cal_meta["vol_scale"] = {"base": base_vol, "effective": eff_vol}
+    if cal_meta:
+        harness_meta["calibration_overlay"] = cal_meta
 
     base_lookback = resolve_harness_base_lookback_weights(cfg)
     effective_lookback = resolve_harness_lookback_weights(state, settings=cfg, flat=effective_flat)
