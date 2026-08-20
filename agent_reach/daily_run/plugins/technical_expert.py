@@ -61,8 +61,16 @@ class TechnicalExpert(ExpertPlugin):
             score -= 15
             notes.append("收盘<MA20")
 
+        dist_pct = (price - ma20) / ma20 * 100
+        ma_dist_delta = max(-8.0, min(8.0, dist_pct * 0.8))
+        score += ma_dist_delta
+        if abs(dist_pct) >= 0.3:
+            notes.append(f"相对MA20 {dist_pct:+.1f}%")
+
         high_pos = float(threshold_default(context.settings, "high_position_20d"))
         if pos is not None:
+            pos_fine = max(-4.0, min(4.0, (0.55 - pos) * 15))
+            score += pos_fine
             if 0.4 <= pos <= 0.6:
                 score += 10
                 notes.append(f"20日位置 {pos:.0%} 合理")
@@ -78,6 +86,13 @@ class TechnicalExpert(ExpertPlugin):
             else:
                 score -= 5
                 notes.append(f"量比 {vol:.2f} 偏弱")
+
+        change = _f(snap.get("change_pct"))
+        if change is not None:
+            ch_delta = max(-10.0, min(10.0, change * 2.0))
+            score += ch_delta
+            if abs(change) >= 0.3:
+                notes.append(f"日内 {change:+.2f}%")
 
         score, kronos_notes = _apply_kronos_adjustment(
             snap, score, price, ma20, context.settings

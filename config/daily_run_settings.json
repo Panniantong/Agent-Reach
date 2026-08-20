@@ -507,7 +507,8 @@
   },
 
   "snapshot": {
-    "intraday_enrich_level": "quotes"
+    "intraday_enrich_level": "quotes",
+    "intraday_refresh_technicals": true
   },
 
   "market_review": {

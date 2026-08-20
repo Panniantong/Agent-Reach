@@ -9,9 +9,12 @@ import pytest
 from agent_reach.daily_run.quote_fetch import QuoteFetchResult
 from agent_reach.daily_run.schedule import default_entries, render_crontab_block
 from agent_reach.daily_run.snapshot_builder import (
+    _apply_cached_technicals,
     _attach_technicals,
     _backfill_missing_technicals,
+    _estimate_position_20d,
     _fallback_technicals_patch,
+    _refresh_intraday_technicals,
     build_snapshot,
     code_to_xueqiu_symbol,
     load_portfolio,
@@ -148,6 +151,81 @@ class TestSnapshotBuilder:
         )
         assert patch["ma20"] == 255.0
         assert patch["position_20d"] is not None
+
+    def test_estimate_position_20d_moves_with_price(self):
+        ma20 = 255.0
+        low = _estimate_position_20d(250.0, ma20)
+        high = _estimate_position_20d(265.0, ma20)
+        assert low is not None and high is not None
+        assert high > low
+
+    def test_refresh_intraday_technicals_recomputes_position(self):
+        quote_map = {
+            "688008": {
+                "code": "688008",
+                "price": 265.0,
+                "ma20": 255.0,
+                "position_20d": 0.55,
+                "volume_ratio": 1.3,
+            }
+        }
+        _refresh_intraday_technicals(quote_map)
+        assert quote_map["688008"]["position_20d"] != 0.55
+        assert quote_map["688008"]["volume_ratio"] == 1.3
+
+    def test_apply_cached_technicals_preserves_live_volume_and_position(self):
+        quote_map = {
+            "688008": {
+                "code": "688008",
+                "price": 265.0,
+                "ma20": 255.0,
+                "volume_ratio": 1.3,
+            }
+        }
+        cached = {"688008": {"ma20": 255.0, "position_20d": 0.55, "volume_ratio": 0.9}}
+        _apply_cached_technicals(quote_map, cached, settings={"snapshot": {"intraday_refresh_technicals": True}})
+        assert quote_map["688008"]["volume_ratio"] == 1.3
+        assert quote_map["688008"]["position_20d"] != 0.55
+
+    @patch("agent_reach.daily_run.snapshot_builder.load_daily_cache")
+    @patch("agent_reach.daily_run.snapshot_builder.collect_macro_context")
+    @patch("agent_reach.daily_run.snapshot_builder.fetch_quotes_result")
+    def test_build_snapshot_intraday_refreshes_position_from_price(
+        self, mock_fetch_result, mock_macro, mock_cache, portfolio
+    ):
+        mock_cache.return_value = {
+            "technicals": {
+                "002273": {"ma20": 32.32, "position_20d": 0.55},
+            }
+        }
+        mock_macro.return_value = {
+            "mss_breakdown": {"fx": 40, "flow": 50, "global": 45, "sentiment": 48},
+            "sources": {},
+            "macro_summary": "live macro",
+        }
+        mock_fetch_result.return_value = QuoteFetchResult(
+            quotes={
+                "688008": {"code": "688008", "name": "澜起科技", "price": 260.0, "change_pct": 1.5, "source": "xueqiu"},
+                "002273": {"code": "002273", "name": "水晶光电", "price": 27.0, "change_pct": 0.2, "source": "xueqiu"},
+                "603986": {"code": "603986", "name": "兆易创新", "price": 450.0, "change_pct": -3.0, "source": "xueqiu"},
+            },
+            sources_used=["xueqiu"],
+        )
+        with patch("agent_reach.daily_run.snapshot_builder._backfill_missing_technicals") as mock_backfill:
+            mock_backfill.side_effect = lambda codes, quote_map, cached, **kwargs: cached
+            snap = build_snapshot(
+                portfolio,
+                report_type="intraday",
+                primary_code="002273",
+                settings={
+                    "snapshot": {
+                        "intraday_enrich_level": "quotes",
+                        "intraday_refresh_technicals": True,
+                    }
+                },
+            )
+        assert snap["ma20"] == 32.32
+        assert snap["position_20d"] == _estimate_position_20d(27.0, 32.32)
 
     def test_fallback_technicals_patch_uses_cost_when_ma20_missing(self):
         patch = _fallback_technicals_patch(

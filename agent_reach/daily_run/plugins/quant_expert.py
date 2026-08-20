@@ -26,20 +26,19 @@ class QuantExpert(ExpertPlugin):
         notes: list[str] = [f"资金流因子 {flow:.0f}"]
 
         if vol is not None:
+            vol_delta = max(-6.0, min(6.0, (vol - 1.0) * 8))
+            score += vol_delta
             if vol >= 1.2:
-                score += 8
                 notes.append(f"量比 {vol:.2f} 放量")
             elif vol < 0.8:
-                score -= 8
                 notes.append(f"量比 {vol:.2f} 缩量")
+            else:
+                notes.append(f"量比 {vol:.2f}")
 
         if change is not None:
-            if change > 2:
-                score += 5
-                notes.append(f"涨幅 {change:+.2f}%")
-            elif change < -2:
-                score -= 5
-                notes.append(f"跌幅 {change:+.2f}%")
+            ch_delta = max(-8.0, min(8.0, change * 2.5))
+            score += ch_delta
+            notes.append(f"日内 {change:+.2f}%")
 
         score = max(0.0, min(100.0, score))
         return PluginResult(

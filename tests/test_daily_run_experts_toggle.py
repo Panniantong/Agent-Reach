@@ -93,3 +93,23 @@ class TestMssExpertsDifferentiation:
         assert snap_a["mss_final"] != snap_b["mss_final"]
         assert "technical" in (snap_a.get("mss_breakdown") or {})
         assert "risk" in (snap_b.get("mss_breakdown") or {})
+
+    def test_intraday_price_moves_change_mss_with_same_macro(self):
+        cfg = load_settings()
+        base = {
+            "ma20": 255.0,
+            "position_20d": 0.52,
+            "volume_ratio": 1.1,
+        }
+        snap_low = run_experts(
+            _base_snapshot(price=252.0, change_pct=0.5, **base),
+            cfg,
+            names=MSS_EXPERT_NAMES,
+        )
+        snap_high = run_experts(
+            _base_snapshot(price=262.0, change_pct=2.5, **base),
+            cfg,
+            names=MSS_EXPERT_NAMES,
+        )
+        assert snap_low["mss_final"] != snap_high["mss_final"]
+        assert snap_high["mss_final"] > snap_low["mss_final"]

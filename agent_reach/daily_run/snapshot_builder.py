@@ -163,6 +163,11 @@ def _technicals_cost_fallback_enabled(settings: Optional[dict[str, Any]]) -> boo
     return snap.get("technicals_cost_fallback", True) is not False
 
 
+def _intraday_refresh_technicals_enabled(settings: Optional[dict[str, Any]]) -> bool:
+    snap = (settings or {}).get("snapshot") or {}
+    return snap.get("intraday_refresh_technicals", True) is not False
+
+
 def _estimate_position_20d(price: Any, ma20: Any) -> Optional[float]:
     if price is None or ma20 is None:
         return None
@@ -267,13 +272,38 @@ def _ensure_cached_technicals(
     return updated
 
 
+def _refresh_intraday_technicals(
+    quote_map: dict[str, dict[str, Any]],
+) -> None:
+    """Recompute position_20d from live price + cached ma20 so MSS moves intraday."""
+    for code, quote in quote_map.items():
+        if not isinstance(quote, dict):
+            continue
+        ma20 = quote.get("ma20")
+        price = quote.get("price")
+        pos = _estimate_position_20d(price, ma20)
+        if pos is not None:
+            quote_map[code] = {**quote, "position_20d": pos}
+
+
 def _apply_cached_technicals(
     quote_map: dict[str, dict[str, Any]],
     cached_technicals: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
 ) -> None:
+    refresh = _intraday_refresh_technicals_enabled(settings)
     for code, fields in cached_technicals.items():
-        if code in quote_map and isinstance(fields, dict) and fields:
-            quote_map[code] = {**quote_map[code], **fields}
+        if code not in quote_map or not isinstance(fields, dict) or not fields:
+            continue
+        merged = dict(fields)
+        if refresh:
+            merged.pop("position_20d", None)
+            if quote_map[code].get("volume_ratio") is not None:
+                merged.pop("volume_ratio", None)
+        quote_map[code] = {**quote_map[code], **merged}
+    if refresh:
+        _refresh_intraday_technicals(quote_map)
 
 
 def _backfill_missing_technicals(
@@ -458,12 +488,12 @@ def build_snapshot(
             source_rows=source_rows_by_code,
             settings=cfg,
         )
-        _apply_cached_technicals(quote_map, cached_technicals)
+        _apply_cached_technicals(quote_map, cached_technicals, settings=cfg)
 
     def _enrich_row(row: dict[str, Any], *, with_technicals: bool) -> dict[str, Any]:
         c = _normalize_code(str(row.get("code", "")))
         merged_map = dict(quote_map)
-        if c in cached_technicals:
+        if not _intraday_refresh_technicals_enabled(cfg) and c in cached_technicals:
             merged_map[c] = {**merged_map.get(c, {}), **cached_technicals[c]}
         return enrich_holding(row, merged_map, with_technicals=with_technicals)
 
@@ -535,7 +565,7 @@ def build_snapshot(
 
     row_fields = _primary_row_fields(holdings, watchlist, code_norm)
     if code_norm in quote_map:
-        primary_quote = {**quote_map[code_norm], **row_fields}
+        primary_quote = {**row_fields, **quote_map[code_norm]}
         primary_name = primary_quote.get("name", code_norm)
         primary_price = primary_quote.get("price")
         primary_ma20 = primary_quote.get("ma20")
