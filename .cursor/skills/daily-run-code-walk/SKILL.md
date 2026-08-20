@@ -17,6 +17,8 @@ description: >-
 
 详细键表：[references/harness-evolution.md](references/harness-evolution.md)
 
+**通用 diff 多 Agent 走读**（借鉴 [claude-review-loop](https://github.com/zjk1984/claude-review-loop)）：用 `.cursor/skills/code-review-loop/SKILL.md` — 并行 Diff + Holistic review，输出 `reviews/review-*.md`。
+
 ---
 
 ## Agent 必须执行（不可只读文档）
