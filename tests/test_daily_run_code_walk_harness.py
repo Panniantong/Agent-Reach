@@ -249,3 +249,18 @@ def test_run_agent_code_walk_includes_macro_audit(monkeypatch):
     )
     assert report.macro_findings
     assert any(f.area == "source" for f in report.all_findings())
+
+
+def test_render_markdown_includes_phase_g_hint_for_open_high():
+    from agent_reach.daily_run.close_code_review import CodeReviewResult
+    from agent_reach.daily_run.code_walk_harness import CodeFinding, CodeWalkReport, render_code_walk_markdown
+
+    review = CodeReviewResult(
+        findings=[
+            CodeFinding("harness", "high", "模块裸读 macro_veto", "须 threshold_default"),
+        ]
+    )
+    md = render_code_walk_markdown(CodeWalkReport(review=review))
+    assert "Phase G" in md
+    assert "grill-me-bug-fix" in md
+    assert "模块裸读 macro_veto" in md

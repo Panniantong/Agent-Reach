@@ -708,4 +708,19 @@ def render_code_walk_markdown(report: CodeWalkReport) -> str:
         lines.append("```json")
         lines.append(json.dumps(report.effective_overlay, ensure_ascii=False, indent=2))
         lines.append("```")
+    open_high = [
+        f
+        for f in report.review.findings
+        if not f.fixed and f.severity in ("critical", "high")
+    ]
+    if open_high:
+        lines.append("")
+        lines.append("**Phase G — Grill 追问（open high）**")
+        lines.append(
+            f"- {len(open_high)} 条待关闭；按 daily-run-code-walk skill "
+            "Phase G 逐条 AskUserQuestion → Bug Fix Plan 后再改代码"
+        )
+        lines.append("- 参考：`.cursor/skills/daily-run-code-walk/references/grill-me-bug-fix.md`")
+        for finding in open_high[:8]:
+            lines.append(f"- [{finding.severity}] {finding.area} · {finding.title}")
     return "\n".join(lines).strip() + "\n"

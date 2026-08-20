@@ -1,9 +1,9 @@
 ---
 name: daily-run-code-walk
 description: >-
-  Daily-run 专业代码走读 + harness 自进化。Agent 必须执行 scripts/run_walk.py，
-  将 findings 写入 harness memory/policy/playbook。改 portfolio/harness/走读、
-  PR review、或反馈字段卡住/阈值不生效时使用。
+  Daily-run 专业代码走读 + harness 自进化 + Phase G Grill 追问。Agent 必须执行
+  scripts/run_walk.py；open high 时对每条 finding 借鉴 grill-me-skill 逐枝问清
+  Bug Fix Plan 再改代码。改 portfolio/harness/走读、PR review、字段卡住时使用。
 ---
 
 # Daily-run 代码走读 + Harness 自进化
@@ -18,6 +18,8 @@ description: >-
 详细键表：[references/harness-evolution.md](references/harness-evolution.md)
 
 **通用 diff 多 Agent 走读**（借鉴 [claude-review-loop](https://github.com/zjk1984/claude-review-loop)）：用 `.cursor/skills/code-review-loop/SKILL.md` — 并行 Diff + Holistic review，输出 `reviews/review-*.md`。
+
+**Bug 全面解法追问**（借鉴 [grill-me-skill](https://github.com/zjk1984/grill-me-skill)）：对每条 **open high** 走 **Phase G** — 一次一问、多选选项、决策树闭合后再改代码。详见 [references/grill-me-bug-fix.md](references/grill-me-bug-fix.md)。
 
 ---
 
@@ -48,9 +50,10 @@ print(render_code_walk_markdown(report))
 ### 执行后必做
 
 1. 阅读输出中的 **待处理** findings（high 优先）
-2. 确认 **Harness 自进化** 块有 `refinement_id`（findings 已写入 harness）
-3. 修复代码；rerun `run_walk.py` 直到 open_high=0 或已记录 plan
-4. 跑测试金字塔（见 P3）
+2. 若 **open_high > 0** → 进入 **Phase G Grill**（见下），逐条产出 Bug Fix Plan
+3. 确认 **Harness 自进化** 块有 `refinement_id`（findings 已写入 harness）
+4. 按 Bug Fix Plan 修复代码；rerun `run_walk.py` 直到 open_high=0 或已记录 plan
+5. 跑测试金字塔（见 P3）
 
 ---
 
@@ -155,7 +158,36 @@ from agent_reach.daily_run.code_walk_harness import external_review_to_findings,
 evidence = findings_to_harness_evidence(external_review_to_findings(agent_items))
 ```
 
-推荐顺序：P0–P3 + macro audit → `--review-diff` → 若有 open_high 再跑 `code-review-loop` Phase 2–3。
+推荐顺序：P0–P3 + macro audit → `--review-diff` → 若有 open_high 再跑 `code-review-loop` Phase 2–3 → **Phase G Grill** → 实现修复。
+
+### Phase G — Grill 追问（借鉴 grill-me-skill）
+
+**目的：** 把「发现 bug」变成「全面解决方法」— 根因、修复、测试、harness、回归、Done 条件全部闭合后再写代码。
+
+**何时：** `run_walk.py` / `--review-diff` 存在 **critical/high** 且未关闭；或用户说「grill me / 追问怎么修彻底」。
+
+**怎么做：**
+
+| 规则 | 说明 |
+|------|------|
+| 一次一问 | 用 **AskUserQuestion**（或多选弹窗），禁止一次抛 5 个开放题 |
+| 2–4 个具体选项 | 每项应是可执行的下一步，不是泛泛 Yes/No |
+| 先自查后提问 | 真源/ grep / pytest / harness state 能确定的不要问用户 |
+| 决策树 | 现象 → 真源 → 根因 → 修复 → 验证 → 回归 → harness/plan 闭环 |
+| 输出 | 每条 finding 一份 **Bug Fix Plan**（模板见 reference） |
+
+**按 finding area 选题库：** [references/grill-me-bug-fix.md](references/grill-me-bug-fix.md)
+
+**Grill 结束标志：** 用户确认所有 high 的 Bug Fix Plan；然后才允许改代码。修完必须 rerun walk + P3。
+
+```text
+open_high finding
+    → Phase G（逐枝 AskUserQuestion）
+    → Bug Fix Plan（7 项 checklist 填满）
+    → 实现 + pytest
+    → rerun run_walk.py
+    → finding 消失或 plan 条目关闭
+```
 
 ---
 
@@ -175,6 +207,7 @@ load 不同步 + 裸读 → `load_portfolio` sync + 走读写入 harness playboo
 ## Definition of Done
 
 - [ ] 已运行 `run_walk.py` 且 harness refinement 成功
+- [ ] 所有 open **high** 已 Phase G 追问并产出 Bug Fix Plan（或已记入 harness plan）
 - [ ] macro audit 无 open **high**（或已记入 plan）
 - [ ] `list_static_config_pollution()` 为空（harness 模式）
 - [ ] 无裸读 evolved 键 / days_held
@@ -192,3 +225,5 @@ load 不同步 + 裸读 → `load_portfolio` sync + 走读写入 harness playboo
 | `close_code_review.py` | 收盘走读 + auto_fix |
 | `harness_policy.py` | 进化引擎 |
 | `harness.py` | `refine_after_job("code_walk")` |
+| [grill-me-bug-fix.md](references/grill-me-bug-fix.md) | Phase G 决策树 + Bug Fix Plan 模板 |
+| [grill-me-skill](https://github.com/zjk1984/grill-me-skill) | 一次一问、多选追问方法论 |
