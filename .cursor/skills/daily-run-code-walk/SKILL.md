@@ -75,6 +75,8 @@ macro_veto / holding_lock_days / base_spread / … 运行时进化
 | 静态 JSON 污染 | playbook + policy | list_static_config_pollution 清零 |
 | defensive 不一致 | memory | macro_veto↓ / min_cash↑ |
 | 模块裸读阈值 | policy + plan | 接入 threshold_default |
+| macro sources 缺 flow/sentiment | memory + policy + plan | enrich_macro / collect_macro |
+| diff review high | memory + plan | 修 diff 后再 `--review-diff` |
 | auto_fix 成功 | playbook | 记录已修复模式 |
 
 关闭进化：`close_code_review.harness_evolve_on_walk: false` 或 `--no-evolve`。
@@ -120,6 +122,41 @@ python3 -m pytest \
   tests/test_daily_run_portfolio_manager.py -q
 ```
 
+### P4 — Macro source audit（自动）
+
+`run_agent_code_walk()` 始终执行 `scan_macro_source_audit()`：
+
+- 读 `~/.agent-reach/daily_run/cache/<today>.json` 的 `macro_ctx.sources`
+- 对照 `data_audit.required_source_categories`（默认 quote/flow/sentiment）
+- **high**：enrich 后仍缺 flow/sentiment → 盘中 `intraday_block_on_audit_fail`（T10 类）
+
+Finding → harness：`source` area 写入 memory/policy/plan（见 `finding_to_harness_lines`）。
+
+### Phase R — 可选 diff review（`--review-diff`）
+
+与 `code-review-loop` **编排**（不合并 skill）：
+
+```bash
+python3 .cursor/skills/daily-run-code-walk/scripts/run_walk.py --review-diff
+python3 .cursor/skills/daily-run-code-walk/scripts/run_walk.py --review-diff --diff-scope uncommitted
+```
+
+| 层 | 职责 |
+|----|------|
+| **Deterministic** | `scan_diff_review()` — git diff `agent_reach/daily_run/`：裸读 evolved 键、load_settings 无 overlay、缺测试 diff |
+| **Agent** | 输出 `agent_instructions` → 并行启动 `code-review-loop` Phase 2（Diff + Holistic + Domain/Test） |
+| **Harness bridge** | 仅 **critical/high** diff findings → `findings_to_harness_evidence()`；medium/low 不污染 memory |
+
+外部 agent findings 合并：
+
+```python
+from agent_reach.daily_run.code_walk_harness import external_review_to_findings, findings_to_harness_evidence
+
+evidence = findings_to_harness_evidence(external_review_to_findings(agent_items))
+```
+
+推荐顺序：P0–P3 + macro audit → `--review-diff` → 若有 open_high 再跑 `code-review-loop` Phase 2–3。
+
 ---
 
 ## 案例库
@@ -138,9 +175,11 @@ load 不同步 + 裸读 → `load_portfolio` sync + 走读写入 harness playboo
 ## Definition of Done
 
 - [ ] 已运行 `run_walk.py` 且 harness refinement 成功
+- [ ] macro audit 无 open **high**（或已记入 plan）
 - [ ] `list_static_config_pollution()` 为空（harness 模式）
 - [ ] 无裸读 evolved 键 / days_held
 - [ ] 测试通过（含 `test_daily_run_code_walk_harness.py`）
+- [ ] daily-run PR：`--review-diff` 无 open high，或 code-review-loop 已 consolidate
 - [ ] skill writeback 新项带 `evolution_mode` guard
 
 ---
