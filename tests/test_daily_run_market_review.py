@@ -153,3 +153,63 @@ class TestMarketReviewPersistence:
         )
         assert out["emotion"]["score"] == 1
         mock_collect.assert_not_called()
+
+
+class TestMarketReviewFallback:
+    def test_macro_breadth_fallback_from_indices(self):
+        from agent_reach.daily_run.market_review import _macro_breadth_fallback
+
+        em = _macro_breadth_fallback(
+            {"sh000001": {"change_pct": 1.5, "name": "上证指数"}},
+            {"net_yi": 30.0},
+        )
+        assert em["breadth_degraded"] is True
+        assert em["rating"] in ("强", "中", "弱")
+        assert any("上证" in r for r in em["reasons"])
+
+    @patch("agent_reach.daily_run.eastmoney_market.fetch_all_stocks")
+    @patch("agent_reach.daily_run.akshare_adapter.fetch_all_a_spot_stocks")
+    @patch("agent_reach.daily_run.eastmoney_market.fetch_indices")
+    @patch("agent_reach.daily_run.eastmoney_market.fetch_north_flow_resilient")
+    @patch("agent_reach.daily_run.eastmoney_market.fetch_lhb")
+    def test_collect_uses_akshare_when_em_clist_fails(
+        self,
+        mock_lhb,
+        mock_north,
+        mock_indices,
+        mock_ak,
+        mock_em_stocks,
+    ):
+        from agent_reach.daily_run.market_review import collect_market_review
+
+        mock_em_stocks.side_effect = RuntimeError("Remote end closed connection")
+        mock_ak.return_value = _sample_stocks()
+        mock_indices.return_value = {"sh000001": {"change_pct": 0.5, "name": "上证指数"}}
+        mock_north.return_value = ({"net_yi": 10.0, "direction": "inflow"}, [])
+        mock_lhb.return_value = []
+
+        review = collect_market_review(settings={"market_review": {}}, review_date="2026-08-20")
+        assert "error" not in review
+        assert review["emotion"]["up_count"] == 60
+        assert any("akshare" in w for w in review["warnings"])
+
+    def test_render_degraded_not_full_error(self):
+        from agent_reach.daily_run.market_review import _macro_breadth_fallback, render_market_review_markdown
+
+        md = render_market_review_markdown(
+            {
+                "date": "2026-08-20",
+                "indices": {"sh000001": {"name": "上证指数", "change_pct": 0.5, "price": 3000}},
+                "emotion": _macro_breadth_fallback(
+                    {"sh000001": {"change_pct": 0.5}},
+                    {"net_yi": 5},
+                ),
+                "sector_analysis": {"mainline_type": "多题材轮动", "reasoning": "无涨停样本"},
+                "lhb_analysis": {},
+                "comparison": {},
+                "warnings": ["eastmoney clist: disconnected"],
+            }
+        )
+        assert "市场宽度数据拉取失败" not in md
+        assert "降级" in md or "不可用" in md
+        assert "全市场复盘" in md

@@ -110,33 +110,118 @@ def _prev_trading_review(
     return None
 
 
+def _macro_breadth_fallback(
+    indices: dict[str, Any],
+    north: dict[str, Any],
+) -> dict[str, Any]:
+    """Minimal emotion when full A-share list is unavailable."""
+    from agent_reach.daily_run.market_breadth_collector import MarketEmotion
+
+    reasons: list[str] = ["全 A 宽度不可用，仅指数+北向估算"]
+    warnings = ["市场宽度降级：缺少涨跌家数/涨跌停统计"]
+    score = 0
+    sh = indices.get("sh000001") or {}
+    pct = sh.get("change_pct")
+    if pct is not None:
+        pct_f = float(pct)
+        reasons.append(f"上证 {pct_f:+.2f}%")
+        if pct_f > 1:
+            score += 1
+        elif pct_f < -1:
+            score -= 1
+
+    net = float(north.get("net_yi") or 0)
+    if net > 50:
+        score += 1
+        reasons.append(f"北向大幅流入 {net:.0f} 亿")
+    elif net > 0:
+        reasons.append(f"北向小幅流入 {net:.0f} 亿")
+    elif net < -50:
+        score -= 1
+        warnings.append(f"北向大幅流出 {abs(net):.0f} 亿")
+        reasons.append(f"北向大幅流出 {abs(net):.0f} 亿")
+    elif net < 0:
+        reasons.append(f"北向小幅流出 {abs(net):.0f} 亿")
+
+    if score >= 4:
+        rating, position = "强", "7-8成"
+    elif score >= 1:
+        rating, position = "中", "5成"
+    else:
+        rating, position = "弱", "2-3成"
+
+    em = MarketEmotion(
+        score=score,
+        rating=rating,
+        position=position,
+        reasons=reasons,
+        warnings=warnings,
+        northbound_net_yi=net,
+    )
+    out = em.to_dict()
+    out["breadth_degraded"] = True
+    return out
+
+
 def collect_market_review(
     *,
     review_date: Optional[str] = None,
     settings: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    """Fetch Eastmoney data and build full market review payload."""
+    """Fetch market data with Eastmoney → akshare → macro fallbacks."""
     from agent_reach.daily_run.settings import load_settings
 
     cfg = settings or load_settings()
     mr_cfg = cfg.get("market_review") or {}
     timeout = float(mr_cfg.get("fetch_timeout_seconds", 15))
+    akshare_ttl = int((cfg.get("akshare") or {}).get("spot_ttl", 60))
     ds = review_date or today_shanghai().isoformat()
     day = date.fromisoformat(ds)
 
     from agent_reach.daily_run import eastmoney_market as em
 
-    indices = em.fetch_indices(timeout=timeout)
-    stocks = em.fetch_all_stocks(timeout=timeout)
-    north = em.fetch_north_flow(timeout=timeout)
-    industries = em.fetch_industry_boards(timeout=timeout)
-    concepts = em.fetch_concept_boards(timeout=timeout)
-    sector_flow = em.fetch_sector_fund_flow(timeout=timeout)
-    fund_rank = em.fetch_fund_flow_rank(timeout=timeout)
+    warnings: list[str] = []
+    source_parts: list[str] = []
+
+    indices, w = em._safe_list(em.fetch_indices, timeout=timeout, label="指数")
+    warnings.extend(w)
+    if indices:
+        source_parts.append("eastmoney_indices")
+
+    stocks, stock_source, stock_warnings = em.fetch_all_stocks_resilient(
+        timeout=timeout,
+        akshare_ttl=akshare_ttl,
+    )
+    warnings.extend(stock_warnings)
+    if stock_source != "none":
+        source_parts.append(stock_source)
+
+    north, north_warnings = em.fetch_north_flow_resilient(timeout=timeout)
+    warnings.extend(north_warnings)
+    if north.get("source"):
+        source_parts.append(str(north["source"]))
+    elif north.get("net_yi") is not None:
+        source_parts.append("eastmoney_north")
+
+    industries, w = em._safe_list(em.fetch_industry_boards, timeout=timeout, label="行业板块")
+    warnings.extend(w)
+    concepts, w = em._safe_list(em.fetch_concept_boards, timeout=timeout, label="概念板块")
+    warnings.extend(w)
+    sector_flow, w = em._safe_list(em.fetch_sector_fund_flow, timeout=timeout, label="板块资金流")
+    warnings.extend(w)
+    fund_rank, w = em._safe_list(em.fetch_fund_flow_rank, timeout=timeout, label="个股资金流")
+    warnings.extend(w)
     lhb_raw = em.fetch_lhb(ds, timeout=timeout)
 
-    limit_up_stocks = [s for s in stocks if float(s.get("change_pct") or 0) >= 9.8]
-    emotion = analyze_emotion(stocks, north, indices=indices)
+    if stocks:
+        limit_up_stocks = [s for s in stocks if float(s.get("change_pct") or 0) >= 9.8]
+        emotion = analyze_emotion(stocks, north, indices=indices).to_dict()
+        if stock_source == "akshare":
+            emotion.setdefault("warnings", []).append("宽度数据来自 akshare 回退")
+    else:
+        limit_up_stocks = []
+        emotion = _macro_breadth_fallback(indices, north)
+
     sector = analyze_sectors(limit_up_stocks, industries=industries, concepts=concepts)
     lhb = analyze_lhb(lhb_raw)
 
@@ -145,9 +230,10 @@ def collect_market_review(
 
     payload: dict[str, Any] = {
         "date": ds,
-        "source": "eastmoney",
+        "source": "+".join(source_parts) if source_parts else "degraded",
+        "warnings": warnings,
         "indices": indices,
-        "emotion": emotion.to_dict(),
+        "emotion": emotion,
         "north": north,
         "industries": industries[:15],
         "concepts": concepts[:15],
@@ -158,6 +244,8 @@ def collect_market_review(
         "lhb_raw": lhb_raw[:30],
         "lhb_analysis": lhb.to_dict(),
     }
+    if not stocks and not indices:
+        payload["error"] = "市场宽度与指数均不可用"
     payload["comparison"] = compare_market_review(
         payload, yesterday=yesterday, last_week=last_week
     )
@@ -189,28 +277,36 @@ def get_or_collect_market_review(
         review = {
             "date": ds,
             "error": str(exc),
-            "emotion": analyze_emotion([], {"net_yi": 0}).to_dict(),
+            "emotion": _macro_breadth_fallback({}, {"net_yi": 0}),
             "sector_analysis": analyze_sectors([]).to_dict(),
             "lhb_analysis": analyze_lhb([]).to_dict(),
+            "warnings": [str(exc)],
         }
 
-    if mr_cfg := cfg.get("market_review") or {}:
-        if mr_cfg.get("persist", True) is not False and "error" not in review:
-            save_market_review(review, ds)
+    mr_cfg = cfg.get("market_review") or {}
+    if mr_cfg.get("persist", True) is not False and "error" not in review:
+        save_market_review(review, ds)
     return review
 
 
 def render_market_review_markdown(review: dict[str, Any]) -> str:
     """Four-card markdown for Feishu close push."""
-    if not review or review.get("error"):
-        err = review.get("error", "未知错误") if review else "无数据"
-        return f"## 🌡️ 全市场复盘\n\n> 市场宽度数据拉取失败：{err}"
+    if not review:
+        return "## 🌡️ 全市场复盘\n\n> 市场宽度数据拉取失败：无数据"
 
     em = review.get("emotion") or {}
+    degraded = em.get("breadth_degraded") is True
+    has_breadth = not degraded and int(em.get("up_count") or 0) + int(em.get("down_count") or 0) > 0
+
+    if review.get("error") and not has_breadth and not review.get("indices"):
+        err = review.get("error", "未知错误")
+        return f"## 🌡️ 全市场复盘\n\n> 市场宽度数据拉取失败：{err}"
+
     sa = review.get("sector_analysis") or {}
     la = review.get("lhb_analysis") or {}
     cmp_ = review.get("comparison") or {}
     indices = review.get("indices") or {}
+    warnings = list(review.get("warnings") or []) + list(em.get("warnings") or [])
 
     rating = em.get("rating", "中")
     badge = {"强": "强势 🔥", "中": "中性 ⚖️", "弱": "弱势 ❄️"}.get(rating, rating)
@@ -221,10 +317,11 @@ def render_market_review_markdown(review: dict[str, Any]) -> str:
         "",
     ]
 
+    for w in warnings[:4]:
+        lines.append(f"- ⚠️ {w}")
+
     for r in em.get("reasons") or []:
         lines.append(f"- {r}")
-    for w in em.get("warnings") or []:
-        lines.append(f"- ⚠️ {w}")
 
     if indices:
         lines.extend(["", "### 📐 核心指数"])
@@ -234,13 +331,20 @@ def render_market_review_markdown(review: dict[str, Any]) -> str:
             pct_s = f"{float(pct):+.2f}%" if pct is not None else "—"
             lines.append(f"- **{name}** {info.get('price', '—')} ({pct_s})")
 
+    lines.extend(["", "### 📊 市场宽度"])
+    if has_breadth:
+        lines.extend(
+            [
+                f"- 上涨 **{em.get('up_count', '—')}** / 下跌 **{em.get('down_count', '—')}** · 涨跌比 **{em.get('ratio', '—')}**",
+                f"- 涨停 **{em.get('limit_up', '—')}** / 跌停 **{em.get('limit_down', '—')}** · 炸板率 **{float(em.get('broken_rate') or 0) * 100:.1f}%**",
+            ]
+        )
+    else:
+        lines.append("- 涨跌家数/涨跌停 **不可用**（已降级为指数+北向估算）")
+    lines.append(f"- 北向 **{em.get('northbound_net_yi', '—')} 亿**")
+
     lines.extend(
         [
-            "",
-            "### 📊 市场宽度",
-            f"- 上涨 **{em.get('up_count', '—')}** / 下跌 **{em.get('down_count', '—')}** · 涨跌比 **{em.get('ratio', '—')}**",
-            f"- 涨停 **{em.get('limit_up', '—')}** / 跌停 **{em.get('limit_down', '—')}** · 炸板率 **{float(em.get('broken_rate') or 0) * 100:.1f}%**",
-            f"- 北向 **{em.get('northbound_net_yi', '—')} 亿**",
             "",
             "## 🔥 板块主线",
             f"**{sa.get('mainline_type', '—')}** — {sa.get('reasoning', '')}",

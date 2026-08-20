@@ -58,6 +58,46 @@ def _load_spot_rows(*, ttl: int = 60) -> dict[str, dict[str, Any]]:
     return rows
 
 
+def _spot_row_industry(item: Any) -> str:
+    for col in item.index:
+        label = str(col)
+        if "行业" in label or label in ("板块", "所属板块"):
+            val = item.get(col)
+            if val is not None and str(val).strip():
+                return str(val).strip()
+    return ""
+
+
+def fetch_all_a_spot_stocks(*, ttl: int = 60) -> list[dict[str, Any]]:
+    """Full A-share spot table for market breadth (fallback when Eastmoney clist fails)."""
+    rows = _load_spot_rows(ttl=ttl)
+    stocks: list[dict[str, Any]] = []
+    for symbol, item in rows.items():
+        try:
+            price = float(item.get("最新价", 0) or 0)
+            change_pct = float(item.get("涨跌幅", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        industry = _spot_row_industry(item)
+        stocks.append(
+            {
+                "code": symbol,
+                "name": str(item.get("名称", symbol)),
+                "price": price,
+                "change_pct": change_pct,
+                "volume": _optional_float(item.get("成交量")),
+                "amount": _optional_float(item.get("成交额")),
+                "turnover": _optional_float(item.get("换手率")),
+                "industry": industry,
+                "concept": "",
+                "source": "akshare_spot_em",
+            }
+        )
+    if not stocks:
+        raise AKShareError("akshare spot 表为空")
+    return stocks
+
+
 def fetch_quotes_batch(codes: list[str], *, ttl: int = 60) -> dict[str, dict[str, Any]]:
     """Fetch multiple A-share quotes in one spot-table pass."""
     rows = _load_spot_rows(ttl=ttl)
@@ -68,14 +108,7 @@ def fetch_quotes_batch(codes: list[str], *, ttl: int = 60) -> dict[str, dict[str
         if item is None:
             continue
         price = float(item["最新价"])
-        industry = None
-        for col in item.index:
-            label = str(col)
-            if "行业" in label or label in ("板块", "所属板块"):
-                val = item.get(col)
-                if val is not None and str(val).strip():
-                    industry = str(val).strip()
-                    break
+        industry = _spot_row_industry(item) or None
         row_out: dict[str, Any] = {
             "code": symbol,
             "name": str(item.get("名称", symbol)),

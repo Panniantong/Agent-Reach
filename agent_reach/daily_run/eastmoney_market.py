@@ -9,23 +9,35 @@ import urllib.parse
 import urllib.request
 from typing import Any, Optional
 
-_EASTMONEY_UA = "Mozilla/5.0 (compatible; AgentReach/1.0)"
-_EASTMONEY_REFERER = "https://quote.eastmoney.com/"
+from agent_reach.daily_run.retry_utils import retry_with_backoff
+
+_EASTMONEY_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+_EASTMONEY_REFERER = "https://quote.eastmoney.com/center/gridlist.html"
 _DC_REFERER = "https://data.eastmoney.com/"
+_ALL_STOCK_FS = ",".join(["m:0+t:6", "m:0+t:80", "m:1+t:2", "m:1+t:23"])
+_ALL_STOCK_FIELDS = "f2,f3,f4,f5,f6,f8,f12,f14,f20,f21,f100,f102"
 
 
 def fetch_json(url: str, *, timeout: float = 15.0, referer: str = _EASTMONEY_REFERER) -> Any:
     ctx = ssl.create_default_context()
-    req = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": _EASTMONEY_UA,
-            "Accept": "application/json, text/plain, */*",
-            "Referer": referer,
-        },
-    )
-    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+
+    def _once() -> Any:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": _EASTMONEY_UA,
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "zh-CN,zh;q=0.9",
+                "Referer": referer,
+            },
+        )
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    return retry_with_backoff(_once, max_retries=2, label="eastmoney_json")
 
 
 def fetch_indices(*, timeout: float = 15.0) -> dict[str, dict[str, Any]]:
@@ -69,14 +81,7 @@ def fetch_indices(*, timeout: float = 15.0) -> dict[str, dict[str, Any]]:
     return out
 
 
-def fetch_all_stocks(*, timeout: float = 20.0) -> list[dict[str, Any]]:
-    fs = ",".join(["m:0+t:6", "m:0+t:80", "m:1+t:2", "m:1+t:23"])
-    url = (
-        "https://push2.eastmoney.com/api/qt/clist/get"
-        f"?pn=1&pz=6000&po=1&np=1&fltt=2&invt=2&fid=f3&fs={fs}"
-        "&fields=f2,f3,f4,f5,f6,f8,f12,f14,f20,f21,f100,f102"
-    )
-    data = fetch_json(url, timeout=timeout)
+def _parse_stock_rows(data: Any) -> list[dict[str, Any]]:
     stocks: list[dict[str, Any]] = []
     for item in (data.get("data") or {}).get("diff") or []:
         stocks.append(
@@ -92,9 +97,69 @@ def fetch_all_stocks(*, timeout: float = 20.0) -> list[dict[str, Any]]:
                 "circ_cap": item.get("f21"),
                 "industry": item.get("f100") or "",
                 "concept": item.get("f102") or "",
+                "source": "eastmoney",
             }
         )
     return stocks
+
+
+def fetch_all_stocks(
+    *,
+    timeout: float = 20.0,
+    page_size: int = 500,
+    max_pages: int = 20,
+) -> list[dict[str, Any]]:
+    """Paginated Eastmoney clist — lighter pages than single pz=6000 burst."""
+    stocks: list[dict[str, Any]] = []
+    total_expected: Optional[int] = None
+    for page in range(1, max_pages + 1):
+        url = (
+            "https://push2.eastmoney.com/api/qt/clist/get"
+            f"?pn={page}&pz={page_size}&po=1&np=1&fltt=2&invt=2&fid=f3&fs={_ALL_STOCK_FS}"
+            f"&fields={_ALL_STOCK_FIELDS}"
+        )
+        data = fetch_json(url, timeout=timeout)
+        batch = _parse_stock_rows(data)
+        if not batch:
+            break
+        stocks.extend(batch)
+        if total_expected is None:
+            try:
+                total_expected = int((data.get("data") or {}).get("total") or 0)
+            except (TypeError, ValueError):
+                total_expected = 0
+        if total_expected and len(stocks) >= total_expected:
+            break
+        if len(batch) < page_size:
+            break
+    if not stocks:
+        raise RuntimeError("eastmoney clist 返回空列表")
+    return stocks
+
+
+def fetch_all_stocks_resilient(
+    *,
+    timeout: float = 20.0,
+    akshare_ttl: int = 60,
+) -> tuple[list[dict[str, Any]], str, list[str]]:
+    """Eastmoney paginated clist → akshare spot fallback."""
+    warnings: list[str] = []
+    try:
+        stocks = fetch_all_stocks(timeout=timeout)
+        return stocks, "eastmoney", warnings
+    except Exception as exc:
+        warnings.append(f"eastmoney clist: {exc}")
+
+    try:
+        from agent_reach.daily_run.akshare_adapter import fetch_all_a_spot_stocks
+
+        stocks = fetch_all_a_spot_stocks(ttl=akshare_ttl)
+        warnings.append("市场宽度改用 akshare spot 回退")
+        return stocks, "akshare", warnings
+    except Exception as exc:
+        warnings.append(f"akshare spot: {exc}")
+
+    return [], "none", warnings
 
 
 def fetch_north_flow(*, timeout: float = 15.0) -> dict[str, Any]:
@@ -120,6 +185,41 @@ def fetch_north_flow(*, timeout: float = 15.0) -> dict[str, Any]:
         val = result["net_yi"]
         result["direction"] = "inflow" if val > 0 else "outflow" if val < 0 else "flat"
     return result
+
+
+def fetch_north_flow_resilient(*, timeout: float = 15.0) -> tuple[dict[str, Any], list[str]]:
+    warnings: list[str] = []
+    try:
+        return fetch_north_flow(timeout=timeout), warnings
+    except Exception as exc:
+        warnings.append(f"eastmoney 北向: {exc}")
+
+    try:
+        from agent_reach.daily_run.macro_collector import _fetch_northbound_flow
+
+        net = _fetch_northbound_flow()
+        if net is not None:
+            val = float(net)
+            return (
+                {
+                    "net_yi": val,
+                    "direction": "inflow" if val > 0 else "outflow" if val < 0 else "flat",
+                    "recent": [],
+                    "source": "akshare_macro",
+                },
+                [*warnings, "北向改用 akshare/macro 回退"],
+            )
+    except Exception as exc:
+        warnings.append(f"akshare 北向: {exc}")
+
+    return {"net_yi": 0.0, "direction": "flat", "recent": []}, warnings
+
+
+def _safe_list(fetch_fn, *, timeout: float, label: str) -> tuple[list[Any], list[str]]:
+    try:
+        return fetch_fn(timeout=timeout), []
+    except Exception as exc:
+        return [], [f"{label}: {exc}"]
 
 
 def fetch_industry_boards(*, timeout: float = 15.0) -> list[dict[str, Any]]:
@@ -166,10 +266,9 @@ def fetch_sector_fund_flow(*, timeout: float = 15.0) -> list[dict[str, Any]]:
 
 
 def fetch_fund_flow_rank(*, timeout: float = 15.0) -> list[dict[str, Any]]:
-    fs = ",".join(["m:0+t:6", "m:0+t:80", "m:1+t:2", "m:1+t:23"])
     url = (
         "https://push2.eastmoney.com/api/qt/clist/get"
-        f"?pn=1&pz=30&po=1&np=1&fltt=2&invt=2&fid=f62&fs={fs}"
+        f"?pn=1&pz=30&po=1&np=1&fltt=2&invt=2&fid=f62&fs={_ALL_STOCK_FS}"
         "&fields=f2,f3,f12,f14,f62,f184"
     )
     data = fetch_json(url, timeout=timeout)
