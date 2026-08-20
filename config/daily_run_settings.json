@@ -508,7 +508,8 @@
 
   "snapshot": {
     "intraday_enrich_level": "quotes",
-    "intraday_refresh_technicals": true
+    "intraday_refresh_technicals": true,
+    "intraday_refresh_macro": "flow_index"
   },
 
   "market_review": {

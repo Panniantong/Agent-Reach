@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from agent_reach.daily_run.macro_collector import collect_macro_context
+from agent_reach.daily_run.macro_collector import collect_macro_context, resolve_intraday_macro_context
 from agent_reach.daily_run.mss_forecast import forecast_mss_range
 from agent_reach.daily_run.snapshot_cache import load_daily_cache, load_last_snapshot, save_daily_cache
 
@@ -453,7 +453,15 @@ def build_snapshot(
 
     daily_cache = load_daily_cache() if enrich_level in ("full", "quotes") else {}
     macro_ctx: dict[str, Any] = {}
-    if daily_cache.get("macro_ctx"):
+    if enrich_level == "quotes" and report_type == "intraday" and daily_cache.get("macro_ctx"):
+        macro_ctx = resolve_intraday_macro_context(
+            pf,
+            daily_cache["macro_ctx"],
+            config=config,
+            settings=cfg,
+            workflow=report_type,
+        )
+    elif daily_cache.get("macro_ctx"):
         macro_ctx = dict(daily_cache["macro_ctx"])
     else:
         macro_ctx = collect_macro_context(pf, config=config, settings=cfg, workflow=report_type)
