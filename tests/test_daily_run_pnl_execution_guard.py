@@ -13,7 +13,7 @@ def _settings(**overrides):
     base = {
         "pnl_overview": {
             "win_rate_min": 0.0,
-            "loss_streak_max": 3,
+            "loss_streak_max": 0,
             "ledger_cost_tolerance_cny": 0.01,
         },
         "harness_runtime": {

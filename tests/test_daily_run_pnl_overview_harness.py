@@ -135,7 +135,7 @@ def test_pnl_overview_win_rate_and_loss_streak_policy():
                 {"realized_pnl": -50, "shares": 100, "cost_basis": 1000},
             ],
         },
-        settings={"pnl_overview": {"win_rate_min": 0.33, "loss_streak_max": 3}},
+        settings={"pnl_overview": {"win_rate_min": 0.0, "loss_streak_max": 0}},
     )
     assert any("卖出胜率偏低" in p for p in ev["policy"])
     assert any("连亏警戒" in p for p in ev["policy"])

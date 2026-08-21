@@ -17,6 +17,10 @@ from agent_reach.daily_run.realized_pnl import (
     format_sell_trade_line,
 )
 
+# Bootstrap detection floors when harness-effective guard thresholds are still 0.
+_PNL_DETECT_WIN_RATE_MIN = 0.33
+_PNL_DETECT_LOSS_STREAK_MAX = 3
+
 
 def _pnl_cfg(settings: Optional[dict[str, Any]]) -> dict[str, Any]:
     return dict((settings or {}).get("pnl_overview") or {})
@@ -89,7 +93,9 @@ def pnl_overview_to_harness_evidence(
     if wins or losses:
         memory.append(f"卖出胜率：{wins} 盈 / {losses} 亏")
         total_sells = wins + losses
-        win_rate_min = thr["win_rate_min"]
+        win_rate_min = float(thr["win_rate_min"])
+        if win_rate_min <= 0:
+            win_rate_min = _PNL_DETECT_WIN_RATE_MIN
         if win_rate_min > 0 and total_sells >= 3:
             win_rate = wins / total_sells
             if win_rate < win_rate_min:
@@ -98,6 +104,8 @@ def pnl_overview_to_harness_evidence(
                 )
                 plan.append("pnl：下日提高入场门槛，减少新开仓")
         loss_streak_max = int(thr["loss_streak_max"])
+        if loss_streak_max <= 0:
+            loss_streak_max = _PNL_DETECT_LOSS_STREAK_MAX
         streak = sell_loss_streak(data.get("realized_sells") or [])
         if loss_streak_max > 0 and streak >= loss_streak_max:
             policy.append(f"连亏警戒：连续{streak}笔卖出亏损")

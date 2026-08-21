@@ -92,7 +92,7 @@
     "portfolio_loss_cny_threshold": 5000,
     "coverable_realized_weight": 1.0,
     "win_rate_min": 0.0,
-    "loss_streak_max": 3,
+    "loss_streak_max": 0,
     "ledger_cost_tolerance_cny": 0.01
   },
 
@@ -748,6 +748,7 @@
     "sell_ratio_mode": "harness",
     "non_deep_loss_sell_ratio_mode": "harness",
     "win_rate_min_mode": "harness",
+    "loss_streak_max_mode": "harness",
     "max_memory": 80,
     "max_policy": 30,
     "max_playbook": 20,

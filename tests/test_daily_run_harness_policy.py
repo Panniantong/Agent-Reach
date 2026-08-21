@@ -927,10 +927,21 @@ class TestHarnessRuntimeExtensions:
         )
         policy = resolve_harness_deep_loss_policy(
             state,
-            settings={"harness": {"runtime_overlay_sources": ["policy"]}},
+            settings={"harness": {"runtime_overlay_sources": ["policy"], "loss_streak_max_mode": "harness"}},
         )
         assert policy["cover_ratio"] >= 1.15
         assert policy["sell_ratio"] <= 0.4
+        assert policy["loss_streak_max"] >= 3.0
+
+    def test_loss_streak_max_stays_zero_without_harness_phrase(self):
+        from agent_reach.daily_run.harness import HarnessState
+        from agent_reach.daily_run.harness_policy import resolve_harness_deep_loss_policy
+
+        policy = resolve_harness_deep_loss_policy(
+            HarnessState(),
+            settings={"harness": {"runtime_overlay_sources": ["policy"], "loss_streak_max_mode": "harness"}},
+        )
+        assert policy["loss_streak_max"] == 0.0
 
     def test_rejected_blocks_buy(self, tmp_path, monkeypatch):
         rej = tmp_path / "rejected_strategies.jsonl"

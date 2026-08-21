@@ -1916,6 +1916,10 @@ def _apply_deep_loss_signal_evolution(
             merged["win_rate_min"] = max(
                 0.0, float(merged.get("win_rate_min", 0.0)) - 0.05
             )
+        if evolution_mode(settings, "loss_streak_max") == "harness":
+            merged["loss_streak_max"] = max(
+                0.0, float(merged.get("loss_streak_max", 0.0)) - 1.0
+            )
     if _overlay_has_phrase(state, "深浮亏", settings=settings) or _overlay_has_phrase(
         state, "深度套牢", settings=settings
     ):
@@ -1966,7 +1970,8 @@ def _apply_deep_loss_signal_evolution(
         _tighten_sell_ratio(0.4)
         _tighten_non_deep_sell_ratio(0.55)
         if evolution_mode(settings, "loss_streak_max") == "harness":
-            merged["loss_streak_max"] = max(2.0, float(merged["loss_streak_max"]) - 1.0)
+            cur = float(merged.get("loss_streak_max", 0.0))
+            merged["loss_streak_max"] = max(cur, 3.0 if cur <= 0 else 2.0)
     if _overlay_has_phrase(state, "ledger 缺买入成本", settings=settings):
         merged["coverable_realized_weight"] = min(
             float(merged.get("coverable_realized_weight", 1.0)), 0.65
