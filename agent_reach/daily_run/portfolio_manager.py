@@ -259,6 +259,35 @@ def append_trade_ledger(
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
+def holding_today_buy_shares(holding: dict[str, Any]) -> int:
+    """Shares bought on the current trade session (A-share T+1 lock)."""
+    return max(0, int(holding.get("today_buy_shares") or 0))
+
+
+def holding_sellable_shares(holding: dict[str, Any]) -> int:
+    """Shares eligible to sell today (total minus same-session buys)."""
+    total = int(holding.get("shares") or 0)
+    locked = holding_today_buy_shares(holding)
+    return max(0, total - locked)
+
+
+def _reset_today_buys_for_new_session(pf: dict[str, Any]) -> dict[str, Any]:
+    """Clear today_buy_shares when portfolio trade session rolls to a new day."""
+    today = _today_str()
+    if str(pf.get("trade_session_date") or "") == today:
+        return pf
+    out = dict(pf)
+    out["trade_session_date"] = today
+    holdings: list[dict[str, Any]] = []
+    for h in pf.get("holdings") or []:
+        row = dict(h)
+        if holding_today_buy_shares(row) > 0:
+            row["today_buy_shares"] = 0
+        holdings.append(row)
+    out["holdings"] = holdings
+    return out
+
+
 def effective_days_held(
     holding: dict[str, Any],
     *,
@@ -283,6 +312,11 @@ def holding_is_sellable(
     *,
     as_of: Optional[date] = None,
 ) -> bool:
+    total = int(holding.get("shares") or 0)
+    if total <= 0:
+        return False
+    if holding_sellable_shares(holding) <= 0:
+        return False
     lock_days = runtime_int_default(settings, "trading", "holding_lock_days")
     return effective_days_held(holding, as_of=as_of, settings=settings) >= lock_days
 
@@ -372,8 +406,9 @@ def deep_loss_sell_analysis(
     required_cover = round(loss_abs * cover_ratio, 2) if deep and cover_ratio > 0 else 0.0
     code = _normalize_code(str(holding.get("code") or ""))
     total_shares = int(holding.get("shares") or 0)
+    sellable = holding_sellable_shares(holding)
     sell_shares = resolve_deep_loss_sell_shares(
-        total_shares,
+        min(total_shares, sellable),
         code,
         settings,
         is_deep_loss=deep,
@@ -503,8 +538,8 @@ def sync_portfolio_holding_days(
     *,
     settings: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    """Refresh days_held from acquired_date for all holdings."""
-    pf = dict(portfolio)
+    """Refresh days_held and roll same-day buy locks on a new trade session."""
+    pf = _reset_today_buys_for_new_session(dict(portfolio))
     holdings = []
     for h in pf.get("holdings") or []:
         row = dict(h)
@@ -612,6 +647,19 @@ def _apply_sell(
     if target is None:
         return ApplyResult(applied=False, portfolio=pf, message=f"{code} 不在持仓中，跳过卖出")
 
+    target.update(enriched.get(code, {}))
+    total_shares = int(target.get("shares") or 0)
+    sellable = holding_sellable_shares(target)
+    if sellable <= 0:
+        locked = holding_today_buy_shares(target)
+        if locked > 0:
+            return ApplyResult(
+                applied=False,
+                portfolio=pf,
+                message=f"{code} 当日买入 {locked} 股 T+1 锁仓，可卖 0 股",
+            )
+        return ApplyResult(applied=False, portfolio=pf, message=f"{code} 在 {lock_days} 天锁定期内，无法卖出")
+
     if not holding_is_sellable(target, settings):
         return ApplyResult(applied=False, portfolio=pf, message=f"{code} 在 {lock_days} 天锁定期内，无法卖出")
 
@@ -619,14 +667,20 @@ def _apply_sell(
     if ledger_block:
         return ApplyResult(applied=False, portfolio=pf, message=ledger_block)
 
-    target.update(enriched.get(code, {}))
     sell_analysis = deep_loss_sell_analysis(pf, target, enriched, settings)
     if not sell_analysis["allowed"]:
         return ApplyResult(applied=False, portfolio=pf, message=str(sell_analysis["block_reason"]))
 
-    shares = int(sell_analysis["sell_shares"] or 0)
+    shares = min(int(sell_analysis["sell_shares"] or 0), sellable)
+    shares = _round_lot(code, shares, total_shares=total_shares)
     price = _price_for(target, enriched)
     if shares <= 0 or price is None or price <= 0:
+        if holding_today_buy_shares(target) > 0:
+            return ApplyResult(
+                applied=False,
+                portfolio=pf,
+                message=f"{code} 当日买入 T+1 锁仓，可卖 {sellable} 股不足一手",
+            )
         return ApplyResult(applied=False, portfolio=pf, message=f"{code} 无法卖出（股数或价格无效）")
 
     commission_rate = friction_commission_rate_default(settings)
@@ -634,7 +688,6 @@ def _apply_sell(
     commission = round(gross * commission_rate, 2)
     proceeds = gross - commission
 
-    total_shares = int(target.get("shares") or 0)
     if shares >= total_shares:
         pf["holdings"] = [h for h in holdings if _normalize_code(str(h.get("code", ""))) != code]
     else:
@@ -801,12 +854,14 @@ def _apply_buy(
         total_cost = gross + commission
 
     pf["cash"] = round(cash - total_cost, 2)
+    pf["trade_session_date"] = _today_str()
     _add_bought_shares(
         holdings,
         code=code,
         name=str(target.get("name", code)),
         shares=shares,
         price=price,
+        commission=commission,
     )
     pf["holdings"] = holdings
 
@@ -1078,23 +1133,30 @@ def _add_bought_shares(
     name: str,
     shares: int,
     price: float,
+    commission: float = 0.0,
 ) -> None:
+    """Add shares; merge weighted average cost (incl. commission) and mark T+1 lock."""
     code = _normalize_code(code)
+    buy_cost = shares * price + float(commission or 0)
     for row in holdings:
         if _normalize_code(str(row.get("code", ""))) == code:
             old_shares = int(row.get("shares") or 0)
             old_cost = float(row.get("cost") or price)
             new_shares = old_shares + shares
+            old_basis = old_shares * old_cost
             row["shares"] = new_shares
-            row["cost"] = round((old_shares * old_cost + shares * price) / new_shares, 4)
+            row["cost"] = round((old_basis + buy_cost) / new_shares, 4)
+            row["today_buy_shares"] = holding_today_buy_shares(row) + shares
             return
 
+    per_share = buy_cost / shares if shares > 0 else price
     holdings.append(
         {
             "code": code,
             "name": name,
             "shares": shares,
-            "cost": round(price, 4),
+            "cost": round(per_share, 4),
+            "today_buy_shares": shares,
             "days_held": 0,
             "acquired_date": trade_calendar.today_shanghai().isoformat(),
         }
@@ -1136,15 +1198,23 @@ def _symbol_score(row: dict[str, Any], decision: Any, settings: dict[str, Any]) 
     return harness_symbol_score(row, settings, decision=decision)
 
 
-def _round_lot(code: str, shares: int) -> int:
+def _round_lot(code: str, shares: int, *, total_shares: Optional[int] = None) -> int:
     if shares <= 0:
         return 0
     text = str(code).zfill(6)
     if text.startswith("688"):
         lot = 200
-        return (shares // lot) * lot if shares >= lot else 0
+        if shares >= lot:
+            return (shares // lot) * lot
+        if total_shares is not None and shares >= total_shares:
+            return total_shares
+        return 0
     lot = 100
-    return (shares // lot) * lot
+    if shares >= lot:
+        return (shares // lot) * lot
+    if total_shares is not None and shares >= total_shares:
+        return total_shares
+    return 0
 
 
 def _decision_reason(decision: Any, fallback: str) -> str:

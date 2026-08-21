@@ -149,6 +149,41 @@ def test_enrich_sell_actions(tmp_path: Path):
     assert enriched[0]["cost_basis"] == 25625.38
 
 
+def test_fifo_skips_same_day_buy_on_sell():
+    trades = [
+        {
+            "at": "2026-08-21T06:38:15+00:00",
+            "actions": [
+                {
+                    "side": "buy",
+                    "code": "002273",
+                    "shares": 500,
+                    "amount": 13805.0,
+                    "commission": 20.71,
+                }
+            ],
+        },
+        {
+            "at": "2026-08-21T07:00:21+00:00",
+            "actions": [
+                {
+                    "side": "sell",
+                    "code": "002273",
+                    "shares": 400,
+                    "price": 27.48,
+                    "amount": 10992.0,
+                    "commission": 16.49,
+                    "holding_cost": 33.81,
+                }
+            ],
+        },
+    ]
+    rows = replay_realized_sells(trades, opening_costs={"002273": 33.81})
+    assert len(rows) == 1
+    assert rows[0].cost_basis == round(400 * 33.81, 2)
+    assert rows[0].avg_buy_price == 33.81
+
+
 def test_build_pnl_overview(tmp_path: Path):
     ledger = tmp_path / "ledger.jsonl"
     ledger.write_text(
@@ -176,6 +211,7 @@ def test_build_pnl_overview(tmp_path: Path):
     assert overview.unrealized_pnl == 160.0
     assert overview.total_pnl == 83.24
     assert len(overview.buys) == 2
+    assert overview.holdings[0]["cost"] == 80.8
     assert overview.holdings[0]["buy_at"] == "2026-08-17T09:54:00+08:00"
     assert overview.holdings[0]["buy_price"] == 80.8
     assert overview.holdings[0]["buy_shares"] == 800

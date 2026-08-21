@@ -295,8 +295,18 @@ def compute_trade_cash_flow(trades: list[dict[str, Any]]) -> float:
     return round(pnl, 2)
 
 
-def _lot_shares(queue: deque[tuple[int, float]]) -> int:
-    return sum(shares for shares, _ in queue)
+def _lot_shares(queue: deque[tuple[int, float, str]]) -> int:
+    return sum(shares for shares, _, _ in queue)
+
+
+def _lot_tuple(shares: int, cost_per: float, buy_date: str = "") -> tuple[int, float, str]:
+    return (shares, cost_per, buy_date)
+
+
+def _lot_buy_date(lot: tuple[int, float, str] | tuple[int, float]) -> str:
+    if len(lot) >= 3:
+        return str(lot[2] or "")
+    return ""
 
 
 def opening_costs_from_portfolio(portfolio: Optional[dict[str, Any]]) -> dict[str, float]:
@@ -326,7 +336,7 @@ def _resolve_holding_cost_per_share(
 
 
 def _seed_lot_if_needed(
-    lots: dict[str, deque[tuple[int, float]]],
+    lots: dict[str, deque[tuple[int, float, str]]],
     code: str,
     *,
     shares_needed: int,
@@ -339,10 +349,15 @@ def _seed_lot_if_needed(
     if have >= shares_needed:
         return
     missing = shares_needed - have
-    queue.appendleft((missing, float(cost_per_share)))
+    queue.appendleft(_lot_tuple(missing, float(cost_per_share), ""))
 
 
-def _apply_buy(lots: dict[str, deque[tuple[int, float]]], action: dict[str, Any]) -> None:
+def _apply_buy(
+    lots: dict[str, deque[tuple[int, float, str]]],
+    action: dict[str, Any],
+    *,
+    buy_date: str,
+) -> None:
     shares = int(action.get("shares") or 0)
     amount = float(action.get("amount") or 0)
     commission = float(action.get("commission") or 0)
@@ -350,13 +365,14 @@ def _apply_buy(lots: dict[str, deque[tuple[int, float]]], action: dict[str, Any]
         return
     code = _normalize_code(str(action.get("code") or "__unknown__"))
     cost_per = (amount + commission) / shares
-    lots.setdefault(code, deque()).append((shares, cost_per))
+    lots.setdefault(code, deque()).append(_lot_tuple(shares, cost_per, buy_date))
 
 
 def _apply_sell(
-    lots: dict[str, deque[tuple[int, float]]],
+    lots: dict[str, deque[tuple[int, float, str]]],
     action: dict[str, Any],
     *,
+    sell_date: str,
     opening_costs: Optional[dict[str, float]] = None,
 ) -> tuple[float, float]:
     """Return (realized_pnl, cost_basis) for one sell action."""
@@ -375,18 +391,24 @@ def _apply_sell(
     proceeds_per = (amount - commission) / shares
     remaining = shares
     queue = lots.setdefault(code, deque())
+    rest: deque[tuple[int, float, str]] = deque()
     pnl = 0.0
     cost_basis = 0.0
-    while remaining > 0 and queue:
-        lot_shares, lot_cost = queue[0]
+    while remaining > 0:
+        if not queue:
+            break
+        lot_shares, lot_cost, lot_date = queue.popleft()
+        if lot_date and lot_date == sell_date:
+            rest.append(_lot_tuple(lot_shares, lot_cost, lot_date))
+            continue
         take = min(remaining, lot_shares)
         pnl += take * (proceeds_per - lot_cost)
         cost_basis += take * lot_cost
         remaining -= take
-        if take >= lot_shares:
-            queue.popleft()
-        else:
-            queue[0] = (lot_shares - take, lot_cost)
+        if lot_shares > take:
+            rest.appendleft(_lot_tuple(lot_shares - take, lot_cost, lot_date))
+    rest.extend(queue)
+    lots[code] = rest
     if remaining > 0:
         fallback_cost = cost_per if cost_per > 0 else float(action.get("price") or 0)
         if fallback_cost > 0:
@@ -401,7 +423,7 @@ def replay_realized_sells(
     opening_costs: Optional[dict[str, float]] = None,
 ) -> list[RealizedSellRow]:
     """FIFO replay: one row per sell with realized P&L."""
-    lots: dict[str, deque[tuple[int, float]]] = {}
+    lots: dict[str, deque[tuple[int, float, str]]] = {}
     rows: list[RealizedSellRow] = []
 
     for entry in trades:
@@ -443,7 +465,7 @@ def replay_realized_sells(
         for action in actions:
             side = action.get("side")
             if side == "buy":
-                _apply_buy(lots, action)
+                _apply_buy(lots, action, buy_date=at)
             elif side == "sell":
                 if int(action.get("shares") or 0) > 0:
                     orphan_sells.append(action)
@@ -469,7 +491,12 @@ def replay_realized_sells(
                     )
 
         for action in orphan_sells:
-            realized, cost_basis = _apply_sell(lots, action, opening_costs=opening_costs)
+            realized, cost_basis = _apply_sell(
+                lots,
+                action,
+                sell_date=at,
+                opening_costs=opening_costs,
+            )
             shares = int(action.get("shares") or 0)
             pct = round(realized / cost_basis * 100, 2) if cost_basis > 0 else None
             avg_buy = round(cost_basis / shares, 4) if shares > 0 and cost_basis > 0 else None
@@ -607,7 +634,9 @@ def _holding_unrealized_rows(
         code = _normalize_code(str(h.get("code") or ""))
         shares = int(h.get("shares") or 0)
         buy = latest_buys.get(code)
-        cost = float(buy.price if buy else h.get("cost") or 0)
+        cost = float(h.get("cost") or 0)
+        if cost <= 0 and buy:
+            cost = float(buy.price)
         price = float(h.get("price") or cost)
         cost_basis = round(shares * cost, 2)
         mv = round(shares * price, 2)

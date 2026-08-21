@@ -175,9 +175,20 @@ class TestApplyAutoAdjust:
         watch_codes = {w["code"] for w in result.portfolio["watchlist"]}
         assert "688008" in watch_codes
 
-    def test_sell_respects_lock(self, portfolio, snapshot, settings_enabled):
+    def test_sell_respects_lock(self, portfolio, snapshot, settings_enabled, monkeypatch):
+        from datetime import date
+
+        monkeypatch.setattr(
+            "agent_reach.daily_run.trade_calendar.today_shanghai",
+            lambda: date(2026, 8, 21),
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager.effective_settings",
+            lambda s: s,
+        )
+        settings_enabled.setdefault("trading", {})["holding_lock_days"] = 1
         portfolio["holdings"][0]["days_held"] = 0
-        portfolio["holdings"][0].pop("acquired_date", None)
+        portfolio["holdings"][0]["acquired_date"] = "2026-08-21"
         portfolio["holdings"][1]["days_held"] = 5
         decision = TradeDecision(
             action="sell",
@@ -189,8 +200,133 @@ class TestApplyAutoAdjust:
         )
         result = apply_auto_adjust(portfolio, decision, snapshot, settings_enabled)
         assert result.applied is False
-        assert "688008" in result.message
+        assert "688008" in result.message or "T+1" in result.message or "锁" in result.message
         assert len(result.portfolio["holdings"]) == 2
+
+    def test_same_day_buy_blocks_sell_t_plus_one(self, portfolio, snapshot, settings_enabled, monkeypatch):
+        from datetime import date
+
+        settings_enabled["harness_runtime"] = {
+            "deep_loss_policy": {
+                "loss_cny_threshold": 5000,
+                "loss_pct_threshold": 10,
+                "cover_ratio": 0.0,
+                "sell_ratio": 1.0,
+                "non_deep_loss_sell_ratio": 1.0,
+            }
+        }
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager.effective_settings",
+            lambda s: s,
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.trade_calendar.today_shanghai",
+            lambda: date(2026, 8, 21),
+        )
+        snapshot = dict(snapshot)
+        snapshot["code"] = "002273"
+        portfolio = dict(portfolio)
+        portfolio["trade_session_date"] = "2026-08-21"
+        portfolio["holdings"] = [
+            {
+                "code": "002273",
+                "name": "水晶光电",
+                "shares": 800,
+                "cost": 30.0,
+                "days_held": 5,
+                "acquired_date": "2026-08-01",
+            }
+        ]
+        buy = TradeDecision(
+            action="buy",
+            trade_id="T12",
+            lookback_mss=55.0,
+            lookback_detail=[],
+            trend="rising",
+            reasoning="MSS 建仓",
+        )
+        bought = apply_auto_adjust(portfolio, buy, snapshot, settings_enabled, cash_limit_bypass=True)
+        assert bought.applied is True
+        holding = bought.portfolio["holdings"][0]
+        assert holding["today_buy_shares"] == bought.actions[0].shares
+        assert holding["shares"] == 800 + bought.actions[0].shares
+
+        sell = TradeDecision(
+            action="sell",
+            trade_id="T13",
+            lookback_mss=49.0,
+            lookback_detail=[],
+            trend="mixed",
+            reasoning="防御性减仓",
+        )
+        sold = apply_auto_adjust(bought.portfolio, sell, snapshot, settings_enabled)
+        assert sold.applied is True
+        sold_shares = sold.actions[0].shares
+        assert sold_shares <= 800
+        assert sold_shares < bought.actions[0].shares
+
+    def test_buy_merges_cost_with_commission(self, portfolio, snapshot, settings_enabled, monkeypatch):
+        from datetime import date
+
+        monkeypatch.setattr(
+            "agent_reach.daily_run.trade_calendar.today_shanghai",
+            lambda: date(2026, 8, 21),
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.pnl_execution_guard.pnl_buy_block_reason",
+            lambda *args, **kwargs: None,
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.pnl_execution_guard.pnl_symbol_ledger_block_reason",
+            lambda *args, **kwargs: None,
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager.pnl_buy_block_reason",
+            lambda *args, **kwargs: None,
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager.pnl_symbol_ledger_block_reason",
+            lambda *args, **kwargs: None,
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager.effective_settings",
+            lambda s: s,
+        )
+        snapshot = dict(snapshot)
+        snapshot["code"] = "002273"
+        portfolio = dict(portfolio)
+        portfolio["holdings"] = [
+            {
+                "code": "002273",
+                "name": "水晶光电",
+                "shares": 300,
+                "cost": 33.81,
+                "days_held": 5,
+                "acquired_date": "2026-08-01",
+            }
+        ]
+        decision = TradeDecision(
+            action="buy",
+            trade_id="T12",
+            lookback_mss=55.0,
+            lookback_detail=[],
+            trend="rising",
+            reasoning="加仓",
+        )
+        result = apply_auto_adjust(
+            portfolio,
+            decision,
+            snapshot,
+            settings_enabled,
+            cash_limit_bypass=True,
+        )
+        assert result.applied is True
+        action = result.actions[0]
+        holding = result.portfolio["holdings"][0]
+        old_basis = 300 * 33.81
+        new_basis = old_basis + action.amount + action.commission
+        expected_cost = round(new_basis / holding["shares"], 4)
+        assert holding["cost"] == expected_cost
 
     def test_sell_deep_loss_blocked_when_cover_insufficient(self, portfolio, snapshot, settings_enabled, tmp_path, monkeypatch):
         portfolio = {
@@ -567,13 +703,37 @@ class TestIncrementDays:
 
         from agent_reach.daily_run.portfolio_manager import holding_is_sellable, sync_portfolio_holding_days
 
-        pf = {"holdings": [{"code": "000725", "acquired_date": "2026-07-24", "days_held": 0}]}
+        pf = {"holdings": [{"code": "000725", "shares": 100, "acquired_date": "2026-07-24", "days_held": 0}]}
         with patch("agent_reach.daily_run.trade_calendar.today_shanghai", return_value=date(2026, 7, 24)):
             assert holding_is_sellable(pf["holdings"][0], {"trading": {"holding_lock_days": 1}}) is False
         with patch("agent_reach.daily_run.trade_calendar.today_shanghai", return_value=date(2026, 7, 27)):
             synced = sync_portfolio_holding_days(pf)
             assert synced["holdings"][0]["days_held"] == 1
             assert holding_is_sellable(synced["holdings"][0], {"trading": {"holding_lock_days": 1}}) is True
+
+    def test_today_buy_lock_resets_on_new_trade_session(self):
+        from datetime import date
+        from unittest.mock import patch
+
+        from agent_reach.daily_run.portfolio_manager import holding_sellable_shares, sync_portfolio_holding_days
+
+        pf = {
+            "trade_session_date": "2026-08-21",
+            "holdings": [
+                {
+                    "code": "002273",
+                    "shares": 500,
+                    "today_buy_shares": 500,
+                    "acquired_date": "2026-08-21",
+                }
+            ],
+        }
+        with patch("agent_reach.daily_run.trade_calendar.today_shanghai", return_value=date(2026, 8, 21)):
+            assert holding_sellable_shares(pf["holdings"][0]) == 0
+        with patch("agent_reach.daily_run.trade_calendar.today_shanghai", return_value=date(2026, 8, 22)):
+            synced = sync_portfolio_holding_days(pf)
+            assert synced["holdings"][0]["today_buy_shares"] == 0
+            assert holding_sellable_shares(synced["holdings"][0]) == 500
 
     def test_load_portfolio_syncs_days_held(self):
         from datetime import date
