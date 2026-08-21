@@ -88,6 +88,46 @@ def consecutive_buy_cash_bypass_threshold(settings: Optional[dict[str, Any]] = N
     return max(1, int(intraday.get("consecutive_buy_cash_bypass") or 3))
 
 
+def deep_loss_consecutive_buy_threshold(settings: Optional[dict[str, Any]] = None) -> int:
+    cfg = effective_settings(settings)
+    intraday = cfg.get("intraday") or {}
+    if intraday.get("deep_loss_consecutive_buy_enabled") is False:
+        return 0
+    return max(1, int(intraday.get("deep_loss_consecutive_buy") or 3))
+
+
+def deep_loss_buy_block_reason(
+    trades: list[dict[str, Any]] | None,
+    code: str,
+    snapshot: dict[str, Any],
+    *,
+    current_action: str,
+    settings: Optional[dict[str, Any]] = None,
+) -> Optional[str]:
+    """Block add-position buys on deep-loss holdings until N consecutive buy signals."""
+    threshold = deep_loss_consecutive_buy_threshold(settings)
+    if threshold <= 0 or str(current_action or "").strip().lower() != "buy":
+        return None
+    from agent_reach.daily_run.portfolio_manager import symbol_is_deep_loss_holding
+    from agent_reach.daily_run.snapshot_builder import _normalize_code
+
+    symbol_code = _normalize_code(str(code or ""))
+    if not symbol_code or not symbol_is_deep_loss_holding(snapshot, effective_settings(settings), symbol_code):
+        return None
+    streak = consecutive_buy_recommendations(trades, symbol_code) + 1
+    if streak >= threshold:
+        return None
+    name = str(snapshot.get("name") or symbol_code).strip()
+    for holding in (snapshot.get("portfolio") or {}).get("holdings") or []:
+        if _normalize_code(str(holding.get("code") or "")) == symbol_code:
+            name = str(holding.get("name") or name)
+            break
+    return (
+        f"{name} 深度套牢，需连续 {threshold} 次买入建议才允许加仓"
+        f"（当前 {streak}/{threshold}）"
+    )
+
+
 def should_apply_consecutive_buy_cash_bypass(
     trades: list[dict[str, Any]] | None,
     code: str,
@@ -152,6 +192,7 @@ TRADE_BLOCK_MESSAGES: dict[str, str] = {
     "buy_ledger": "⚠️ **风控阻断：** 标的账本不允许买入",
     "buy_kronos": "⚠️ **风控阻断：** Kronos 看空信号，不允许买入",
     "buy_cash": "⚠️ **风控阻断：** 现金比例不足，不允许加仓",
+    "buy_deep_loss": "⚠️ **风控阻断：** 深度套牢标的需连续 3 次买入建议才允许加仓",
     "sell_deep_loss": "⚠️ **风控阻断：** 深度套牢且组合覆盖不足，暂不允许卖出",
 }
 
@@ -555,6 +596,7 @@ def evaluate_trade(
         settings=cfg,
         trade_index=len(st.trades) + 1,
         expected_return_pct=expected_return_pct,
+        prior_trades=st.trades,
     )
 
     symbol_code = str(report.get("code") or "")
@@ -814,6 +856,8 @@ def infer_trade_block_kind(decision: TradeDecision | dict[str, Any]) -> Optional
         return "buy_ledger"
     if "连亏" in reasoning or "胜率" in reasoning:
         return "buy_pnl"
+    if "深度套牢" in reasoning and "加仓" in reasoning:
+        return "buy_deep_loss"
     return "buy_verdict"
 
 
@@ -892,6 +936,7 @@ def _decide_trade(
     settings: dict[str, Any],
     trade_index: int,
     expected_return_pct: Optional[float],
+    prior_trades: Optional[list[dict[str, Any]]] = None,
 ) -> TradeDecision:
     trading = settings.get("trading", {})
     macro_veto = macro_veto_default(settings)
@@ -1052,6 +1097,26 @@ def _decide_trade(
                 reasoning=f"MSS 达 {lookback_mss:.0f} 但预期收益 {exp_ret:.2%} 不足以覆盖摩擦成本",
                 blocked=False,
                 friction_blocked=True,
+                expected_return_pct=exp_ret,
+            )
+        deep_loss_block = deep_loss_buy_block_reason(
+            prior_trades,
+            symbol_code,
+            snapshot,
+            current_action="buy",
+            settings=settings,
+        )
+        if deep_loss_block:
+            return TradeDecision(
+                action="buy",
+                trade_id=trade_id,
+                lookback_mss=lookback_mss,
+                lookback_detail=[],
+                trend=trend,
+                reasoning=f"{deep_loss_block}{overlay_note}",
+                blocked=True,
+                block_kind="buy_deep_loss",
+                friction_blocked=False,
                 expected_return_pct=exp_ret,
             )
         return TradeDecision(

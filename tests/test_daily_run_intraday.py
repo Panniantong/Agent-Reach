@@ -379,6 +379,101 @@ class TestConsecutiveBuyCashBypass:
             settings=settings,
         )
 
+
+class TestDeepLossConsecutiveBuy:
+    def _deep_loss_snapshot(self) -> dict:
+        return {
+            "code": "002273",
+            "name": "水晶光电",
+            "price": 20.0,
+            "portfolio": {
+                "cash_ratio": 0.6,
+                "holdings": [
+                    {
+                        "code": "002273",
+                        "name": "水晶光电",
+                        "shares": 1000,
+                        "cost": 30.0,
+                        "days_held": 20,
+                    }
+                ],
+            },
+        }
+
+    def _deep_loss_settings(self) -> dict:
+        return {
+            "intraday": {"deep_loss_consecutive_buy": 3},
+            "harness_runtime": {
+                "deep_loss_policy": {
+                    "loss_cny_threshold": 1000,
+                    "loss_pct_threshold": 10,
+                    "cover_ratio": 0,
+                },
+                "threshold_overlay": {
+                    "macro_veto": {"base": 40, "effective": 30},
+                    "aggressive_entry": {"base": 50, "effective": 45},
+                },
+            },
+        }
+
+    def test_blocks_first_two_buy_recommendations(self):
+        from agent_reach.daily_run.intraday import _decide_trade
+
+        class Verdict:
+            blocked = False
+            verdict = "观察"
+            mss_final = 48.0
+
+        settings = self._deep_loss_settings()
+        snapshot = self._deep_loss_snapshot()
+        prior = [
+            {"code": "002273", "action": "buy", "blocked": True, "block_kind": "buy_deep_loss"},
+        ]
+        decision = _decide_trade(
+            lookback_mss=48.0,
+            trend="rising",
+            verdict=Verdict(),
+            report={"code": "002273", "name": "水晶光电", "blocked": False, "audit_passed": True},
+            snapshot=snapshot,
+            settings=settings,
+            trade_index=3,
+            expected_return_pct=0.02,
+            prior_trades=prior,
+        )
+        assert decision.action == "buy"
+        assert decision.blocked is True
+        assert decision.block_kind == "buy_deep_loss"
+        assert "2/3" in decision.reasoning
+
+    def test_allows_third_consecutive_buy(self):
+        from agent_reach.daily_run.intraday import _decide_trade
+
+        class Verdict:
+            blocked = False
+            verdict = "观察"
+            mss_final = 48.0
+
+        settings = self._deep_loss_settings()
+        snapshot = self._deep_loss_snapshot()
+        prior = [
+            {"code": "002273", "action": "buy", "blocked": True, "block_kind": "buy_deep_loss"},
+            {"code": "002273", "action": "buy", "blocked": True, "block_kind": "buy_deep_loss"},
+        ]
+        decision = _decide_trade(
+            lookback_mss=48.0,
+            trend="rising",
+            verdict=Verdict(),
+            report={"code": "002273", "name": "水晶光电", "blocked": False, "audit_passed": True},
+            snapshot=snapshot,
+            settings=settings,
+            trade_index=4,
+            expected_return_pct=0.02,
+            prior_trades=prior,
+        )
+        assert decision.action == "buy"
+        assert decision.blocked is False
+        assert "条件性建仓" in decision.reasoning or "Lookback MSS" in decision.reasoning
+
     def test_apply_buy_with_cash_limit_bypass(self, tmp_path, monkeypatch):
         from agent_reach.daily_run.intraday import TradeDecision, apply_paper_trade
 

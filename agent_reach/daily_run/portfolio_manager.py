@@ -467,6 +467,26 @@ def decision_symbol_sellable(
     return False
 
 
+def symbol_is_deep_loss_holding(
+    snapshot: dict[str, Any],
+    settings: dict[str, Any],
+    code: str,
+) -> bool:
+    """True when the snapshot symbol is held and meets deep-loss thresholds."""
+    target = _normalize_code(str(code or ""))
+    if not target:
+        return False
+    pf = snapshot.get("portfolio") or {}
+    enriched = build_enriched_symbols(snapshot, settings)
+    for holding in pf.get("holdings") or []:
+        if _normalize_code(str(holding.get("code") or "")) != target:
+            continue
+        if int(holding.get("shares") or 0) <= 0:
+            return False
+        return is_deep_loss_holding(holding, enriched, settings)
+    return False
+
+
 def sync_portfolio_holding_days(
     portfolio: dict[str, Any],
     *,
@@ -519,7 +539,13 @@ def apply_auto_adjust(
         return ApplyResult(applied=False, portfolio=portfolio, message=f"决策 {action}，不调仓")
 
     if action == "buy" and (blocked or friction_blocked):
-        return ApplyResult(applied=False, portfolio=portfolio, message="买入信号被风控或摩擦成本阻断")
+        reasoning = (
+            getattr(decision, "reasoning", None)
+            if not isinstance(decision, dict)
+            else decision.get("reasoning")
+        )
+        message = str(reasoning or "买入信号被风控或摩擦成本阻断")
+        return ApplyResult(applied=False, portfolio=portfolio, message=message)
 
     pf = sync_portfolio_holding_days(copy_portfolio(portfolio), settings=settings)
     enriched = build_enriched_symbols(snapshot)
