@@ -102,6 +102,18 @@ def explain_trade_skip_reason(
     )
 
 
+TRADE_BLOCK_MESSAGES: dict[str, str] = {
+    "audit": "⚠️ **风控阻断：** 数据审计未通过，暂停交易",
+    "buy_verdict": "⚠️ **风控阻断：** 当前标签不允许买入",
+    "buy_rejected": "⚠️ **风控阻断：** 已证伪策略不允许买入",
+    "buy_pnl": "⚠️ **风控阻断：** 盈亏纪律不允许新开仓",
+    "buy_ledger": "⚠️ **风控阻断：** 标的账本不允许买入",
+    "buy_kronos": "⚠️ **风控阻断：** Kronos 看空信号，不允许买入",
+    "buy_cash": "⚠️ **风控阻断：** 现金比例不足，不允许加仓",
+    "sell_deep_loss": "⚠️ **风控阻断：** 深度套牢且组合覆盖不足，暂不允许卖出",
+}
+
+
 @dataclass
 class TradeDecision:
     action: str  # buy | sell | hold | skip
@@ -111,12 +123,13 @@ class TradeDecision:
     trend: str
     reasoning: str
     blocked: bool = False
+    block_kind: Optional[str] = None
     friction_blocked: bool = False
     expected_return_pct: Optional[float] = None
     evaluation: Optional[dict[str, Any]] = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "action": self.action,
             "trade_id": self.trade_id,
             "lookback_mss": self.lookback_mss,
@@ -127,6 +140,9 @@ class TradeDecision:
             "friction_blocked": self.friction_blocked,
             "expected_return_pct": self.expected_return_pct,
         }
+        if self.block_kind:
+            payload["block_kind"] = self.block_kind
+        return payload
 
 
 @dataclass
@@ -682,6 +698,46 @@ def render_intraday_scan_markdown(
     return "\n".join(lines)
 
 
+def infer_trade_block_kind(decision: TradeDecision | dict[str, Any]) -> Optional[str]:
+    if isinstance(decision, dict):
+        blocked = decision.get("blocked", False)
+        block_kind = decision.get("block_kind")
+        reasoning = str(decision.get("reasoning") or "")
+    else:
+        blocked = decision.blocked
+        block_kind = decision.block_kind
+        reasoning = decision.reasoning or ""
+
+    if not blocked:
+        return None
+    if block_kind:
+        return str(block_kind)
+    if "深度套牢" in reasoning or "暂不卖" in reasoning:
+        return "sell_deep_loss"
+    if "已证伪策略" in reasoning:
+        return "buy_rejected"
+    if "Kronos" in reasoning:
+        return "buy_kronos"
+    if "现金比例" in reasoning:
+        return "buy_cash"
+    if "审计" in reasoning:
+        return "audit"
+    if "阻断买入" in reasoning or ("标签" in reasoning and "阻断" in reasoning):
+        return "buy_verdict"
+    if "账本" in reasoning or "ledger" in reasoning.lower():
+        return "buy_ledger"
+    if "连亏" in reasoning or "胜率" in reasoning:
+        return "buy_pnl"
+    return "buy_verdict"
+
+
+def format_trade_block_message(decision: TradeDecision | dict[str, Any]) -> Optional[str]:
+    block_kind = infer_trade_block_kind(decision)
+    if not block_kind:
+        return None
+    return TRADE_BLOCK_MESSAGES.get(block_kind, TRADE_BLOCK_MESSAGES["buy_verdict"])
+
+
 def render_intraday_trade_markdown(
     decision: TradeDecision,
     lookback_detail: list[dict[str, Any]],
@@ -699,8 +755,9 @@ def render_intraday_trade_markdown(
     ]
     if decision.friction_blocked:
         lines.append("⚠️ **摩擦惩罚阻断：** 预期收益不足以覆盖佣金与滑点")
-    if decision.blocked:
-        lines.append("⚠️ **风控阻断：** 当前不允许执行买入")
+    block_message = format_trade_block_message(decision)
+    if block_message:
+        lines.append(block_message)
 
     lines.extend(["", "**前序扫描回顾：**"])
     for s in scans[-3:]:
@@ -782,6 +839,7 @@ def _decide_trade(
             trend=trend,
             reasoning=f"{audit_block}{overlay_note}",
             blocked=True,
+            block_kind="audit",
             friction_blocked=friction_blocked,
             expected_return_pct=exp_ret,
         )
@@ -810,6 +868,7 @@ def _decide_trade(
             trend=trend,
             reasoning=f"标签 {verdict.verdict} 阻断买入（即时 MSS {verdict.mss_final:.0f}）",
             blocked=True,
+            block_kind="buy_verdict",
             friction_blocked=friction_blocked,
             expected_return_pct=exp_ret,
         )
@@ -833,6 +892,7 @@ def _decide_trade(
                 trend=trend,
                 reasoning=f"已证伪策略阻断买入：{buy_block}{overlay_note}",
                 blocked=True,
+                block_kind="buy_rejected",
                 friction_blocked=friction_blocked,
                 expected_return_pct=exp_ret,
             )
@@ -846,6 +906,7 @@ def _decide_trade(
                 trend=trend,
                 reasoning=f"{pnl_buy_block}{overlay_note}",
                 blocked=True,
+                block_kind="buy_pnl",
                 friction_blocked=friction_blocked,
                 expected_return_pct=exp_ret,
             )
@@ -860,6 +921,7 @@ def _decide_trade(
                 trend=trend,
                 reasoning=f"{ledger_block}{overlay_note}",
                 blocked=True,
+                block_kind="buy_ledger",
                 friction_blocked=friction_blocked,
                 expected_return_pct=exp_ret,
             )
@@ -873,6 +935,7 @@ def _decide_trade(
                 trend=trend,
                 reasoning=f"{kronos_block}{overlay_note}",
                 blocked=True,
+                block_kind="buy_kronos",
                 friction_blocked=friction_blocked,
                 expected_return_pct=exp_ret,
             )
@@ -885,6 +948,7 @@ def _decide_trade(
                 trend=trend,
                 reasoning=f"现金比例 {cash_ratio:.0%} 低于最低 {min_cash:.0%}，暂不加仓{overlay_note}",
                 blocked=True,
+                block_kind="buy_cash",
                 friction_blocked=friction_blocked,
                 expected_return_pct=exp_ret,
             )
@@ -948,6 +1012,7 @@ def _decide_trade(
                 trend=trend,
                 reasoning=f"防御性减仓信号触发，但{deep_loss_reason}{overlay_note}",
                 blocked=True,
+                block_kind="sell_deep_loss",
                 friction_blocked=False,
                 expected_return_pct=exp_ret,
             )

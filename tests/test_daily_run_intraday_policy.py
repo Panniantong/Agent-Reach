@@ -246,6 +246,109 @@ class TestMinDeployAndFriction:
         assert hurdle >= 0.006
 
 
+class TestTradeBlockMessages:
+    def test_deep_loss_block_shows_sell_not_buy(self, tmp_path, monkeypatch):
+        from agent_reach.daily_run.intraday import (
+            TradeDecision,
+            format_trade_block_message,
+            render_intraday_trade_markdown,
+        )
+        from agent_reach.daily_run.verdict import VerdictResult
+
+        ledger = tmp_path / "trade_ledger.jsonl"
+        ledger.write_text("", encoding="utf-8")
+        monkeypatch.setattr("agent_reach.daily_run.realized_pnl.default_ledger_path", lambda: ledger)
+
+        settings = {
+            "thresholds": {"macro_veto": 30, "aggressive_entry": 45, "min_cash_ratio": 0.5},
+            "trading": {"commission_rate": 0.0015, "slippage_rate": 0.001, "holding_lock_days": 1},
+            "pnl_overview": {"deep_loss_sell_require_cover": True, "large_unrealized_loss_cny": 5000},
+            "harness_runtime": {"trade_signals": {"defensive_trim": True}},
+        }
+        verdict = VerdictResult(
+            verdict="观察",
+            confidence="中",
+            mss_final=54,
+            entry_price=None,
+            stop_loss_price=None,
+            invalidation="",
+            reasoning="",
+            blocked=False,
+        )
+        decision = _decide_trade(
+            lookback_mss=54.0,
+            trend="falling",
+            verdict=verdict,
+            report={"code": "002583", "name": "海能达", "blocked": False},
+            snapshot={
+                "code": "002583",
+                "price": 8.32,
+                "portfolio": {
+                    "cash_ratio": 0.75,
+                    "holdings": [
+                        {
+                            "code": "002583",
+                            "name": "海能达",
+                            "shares": 1000,
+                            "cost": 19.38,
+                            "price": 8.32,
+                            "days_held": 30,
+                        },
+                        {
+                            "code": "600584",
+                            "name": "长电科技",
+                            "shares": 800,
+                            "cost": 80.8,
+                            "price": 85.0,
+                            "days_held": 5,
+                        },
+                    ],
+                },
+            },
+            settings=settings,
+            trade_index=3,
+            expected_return_pct=0.01,
+        )
+        assert decision.action == "hold"
+        assert decision.block_kind == "sell_deep_loss"
+
+        message = format_trade_block_message(decision)
+        assert message is not None
+        assert "不允许卖出" in message
+        assert "不允许执行买入" not in message
+        assert "不允许买入" not in message
+
+        markdown = render_intraday_trade_markdown(decision, [], {}, [])
+        assert "T3 · 观望" in markdown
+        assert "不允许卖出" in markdown
+        assert "不允许执行买入" not in markdown
+
+    def test_infer_block_kind_from_legacy_reasoning(self):
+        from agent_reach.daily_run.intraday import format_trade_block_message, infer_trade_block_kind
+
+        legacy = {
+            "blocked": True,
+            "reasoning": "防御性减仓信号触发，但海能达 深度套牢（浮亏 ¥11,300 / 58.3%），暂不卖",
+        }
+        assert infer_trade_block_kind(legacy) == "sell_deep_loss"
+        message = format_trade_block_message(legacy)
+        assert message is not None
+        assert "不允许卖出" in message
+
+    def test_verdict_block_shows_buy_message(self):
+        from agent_reach.daily_run.intraday import format_trade_block_message
+
+        decision = {
+            "blocked": True,
+            "block_kind": "buy_verdict",
+            "reasoning": "标签 观察 阻断买入（即时 MSS 47）",
+        }
+        message = format_trade_block_message(decision)
+        assert message is not None
+        assert "不允许买入" in message
+        assert "不允许卖出" not in message
+
+
 class TestDefensiveTrimPolicy:
     def test_defensive_trim_requires_mss_buffer(self):
         from agent_reach.daily_run.intraday_policy import defensive_trim_allows_sell
