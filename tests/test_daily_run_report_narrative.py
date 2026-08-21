@@ -319,7 +319,8 @@ def test_intraday_narrative_includes_trade_operations():
     assert "卖出" in md
     assert "长电科技" in md
     assert "未落账" in md
-    assert "T7 卖出" in narrative["summary"] or "T7" in narrative["summary"]
+    assert "MSS 52.1" in md
+    assert "未落账：深度套牢" in md or "未落账：深度套牢且组合覆盖不足" in md
 
 
 def test_merge_duplicate_risk_alerts():

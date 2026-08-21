@@ -816,26 +816,46 @@ def _attach_intraday_trade_operations(
 ) -> dict[str, Any]:
     from agent_reach.daily_run.close_portfolio_summary import format_intraday_trade_narrative_lines
 
+    def _entry(row: dict[str, Any]) -> Optional[dict[str, Any]]:
+        record = row.get("trade_record")
+        if not record and row.get("trade_action"):
+            record = {
+                "action": row.get("trade_action"),
+                "trade_id": row.get("trade_id"),
+                "reasoning": row.get("trade_reasoning"),
+                "portfolio_applied": row.get("portfolio_applied"),
+                "portfolio_message": row.get("portfolio_message"),
+                "blocked": row.get("blocked"),
+                "block_kind": row.get("block_kind"),
+                "friction_blocked": row.get("friction_blocked"),
+                "cash_limit_bypass": row.get("cash_limit_bypass"),
+                "consecutive_buy_streak": row.get("consecutive_buy_streak"),
+                "name": row.get("name"),
+                "code": row.get("code"),
+            }
+        if not record:
+            return None
+        return {
+            "name": row.get("name"),
+            "code": row.get("code"),
+            "scan_id": row.get("scan_id"),
+            "mss_final": row.get("mss_final"),
+            "lookback_mss": row.get("lookback_mss"),
+            "trend": row.get("trend"),
+            "verdict": row.get("verdict"),
+            "friction_blocked": row.get("friction_blocked"),
+            "trade_record": record,
+        }
+
     if context.get("portfolio_scope") == "merged":
         entries = [
-            {
-                "name": sym.get("name"),
-                "code": sym.get("code"),
-                "trade_record": sym.get("trade_record"),
-            }
+            item
             for sym in (context.get("symbols") or [])
-            if sym.get("trade_record")
-        ]
-    elif context.get("trade_record"):
-        entries = [
-            {
-                "name": context.get("name"),
-                "code": context.get("code"),
-                "trade_record": context.get("trade_record"),
-            }
+            if (item := _entry(sym)) is not None
         ]
     else:
-        entries = []
+        single = _entry(context)
+        entries = [single] if single else []
     ops = format_intraday_trade_narrative_lines(entries)
     if ops:
         narrative["trade_operations"] = ops

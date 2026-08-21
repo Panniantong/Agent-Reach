@@ -350,6 +350,7 @@ def format_trade_operations_narrative_lines(
 
 
 _INTRADAY_ACTION_LABELS = {"buy": "买入", "sell": "卖出", "hold": "观望", "skip": "跳过"}
+_TREND_ARROWS = {"rising": "↑", "falling": "↓", "flat": "→", "stable": "→"}
 
 
 def extract_intraday_trade_record(trade_wrapper: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -365,19 +366,42 @@ def extract_intraday_trade_record(trade_wrapper: dict[str, Any] | None) -> dict[
     return None
 
 
+def _intraday_trend_arrow(trend: Any) -> str:
+    return _TREND_ARROWS.get(str(trend or "").strip().lower(), "")
+
+
 def format_intraday_trade_narrative_line(
     trade_record: dict[str, Any],
     *,
     name: Optional[str] = None,
     code: Optional[str] = None,
+    mss_final: Optional[float] = None,
+    lookback_mss: Optional[float] = None,
+    trend: Optional[str] = None,
+    verdict: Optional[str] = None,
+    scan_id: Optional[str] = None,
+    friction_blocked: Optional[bool] = None,
 ) -> str:
-    """One T-numbered intraday trade line for the 规则解读 card."""
+    """One T-numbered intraday trade line with per-symbol scan + execution details."""
     action = str(trade_record.get("action") or "hold")
     trade_id = str(trade_record.get("trade_id") or "调仓")
     sym_name = name or trade_record.get("name") or trade_record.get("code") or "?"
     sym_code = code or trade_record.get("code") or "?"
     side = _INTRADAY_ACTION_LABELS.get(action, action)
-    line = f"{trade_id} · {side} **{sym_name}** ({sym_code})"
+    parts = [f"{trade_id} · {side} **{sym_name}** ({sym_code})"]
+
+    scan_bits: list[str] = []
+    if scan_id:
+        scan_bits.append(str(scan_id))
+    if mss_final is not None:
+        scan_bits.append(f"MSS {float(mss_final):.1f}")
+    if lookback_mss is not None:
+        arrow = _intraday_trend_arrow(trend)
+        scan_bits.append(f"Lookback {float(lookback_mss):.2f}{arrow}")
+    if verdict:
+        scan_bits.append(str(verdict))
+    if scan_bits:
+        parts.append(" · ".join(scan_bits))
 
     fill_actions = [
         act
@@ -389,34 +413,49 @@ def format_intraday_trade_narrative_line(
         shares = act.get("shares")
         price = act.get("price")
         if shares is not None and price is not None:
-            line += f" {int(shares)}股 @ ¥{float(price):.2f}"
+            parts.append(f"{int(shares)}股 @ ¥{float(price):.2f}")
         if act.get("amount") is not None:
-            line += f" · 成交额 ¥{float(act['amount']):,.0f}"
+            parts.append(f"成交额 ¥{float(act['amount']):,.0f}")
         commission = act.get("commission")
         if commission is not None and float(commission) > 0:
-            line += f" · 手续费 ¥{float(commission):.2f}"
+            parts.append(f"手续费 ¥{float(commission):.2f}")
         if act.get("side") == "sell" and act.get("realized_pnl") is not None:
             pnl = float(act["realized_pnl"])
             pct = act.get("realized_pnl_pct")
             pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
-            line += f" · 已实现盈亏 **{pnl:+,.0f}**{pct_s}"
+            parts.append(f"已实现盈亏 **{pnl:+,.0f}**{pct_s}")
     elif trade_record.get("shares") is not None and trade_record.get("price") is not None:
-        line += (
-            f" {int(trade_record['shares'])}股 @ ¥{float(trade_record['price']):.2f}"
+        parts.append(
+            f"{int(trade_record['shares'])}股 @ ¥{float(trade_record['price']):.2f}"
         )
 
-    reason = str(
-        trade_record.get("reasoning")
-        or trade_record.get("portfolio_message")
-        or ""
-    ).strip()
-    if reason:
-        line += f" — {reason}"
+    reasoning = str(trade_record.get("reasoning") or "").strip()
+    portfolio_message = str(trade_record.get("portfolio_message") or "").strip()
+    if reasoning:
+        parts.append(f"决策：{reasoning}")
 
-    if trade_record.get("portfolio_applied") is False:
-        line += "（未落账）"
+    applied = trade_record.get("portfolio_applied")
+    if applied is False:
+        if portfolio_message and portfolio_message != reasoning:
+            parts.append(f"未落账：{portfolio_message}")
+        else:
+            parts.append("未落账")
+    elif applied is True and fill_actions:
+        parts.append("已落账")
 
-    return line
+    if trade_record.get("cash_limit_bypass"):
+        streak = trade_record.get("consecutive_buy_streak")
+        suffix = f"（连续 {streak} 次买入）" if streak else ""
+        parts.append(f"突破现金/deploy 限制{suffix}")
+
+    if friction_blocked or trade_record.get("friction_blocked"):
+        parts.append("摩擦惩罚阻断")
+
+    block_kind = str(trade_record.get("block_kind") or "").strip()
+    if trade_record.get("blocked") and block_kind:
+        parts.append(f"阻断 {block_kind}")
+
+    return " · ".join(parts)
 
 
 def format_intraday_trade_narrative_lines(
@@ -428,9 +467,21 @@ def format_intraday_trade_narrative_lines(
         record = entry.get("trade_record") if isinstance(entry, dict) and "trade_record" in entry else entry
         if not isinstance(record, dict) or not record.get("action"):
             continue
-        name = entry.get("name") if isinstance(entry, dict) else None
-        code = entry.get("code") if isinstance(entry, dict) else None
-        lines.append(format_intraday_trade_narrative_line(record, name=name, code=code))
+        kwargs: dict[str, Any] = {}
+        if isinstance(entry, dict):
+            for key in (
+                "name",
+                "code",
+                "mss_final",
+                "lookback_mss",
+                "trend",
+                "verdict",
+                "scan_id",
+                "friction_blocked",
+            ):
+                if entry.get(key) is not None:
+                    kwargs[key] = entry[key]
+        lines.append(format_intraday_trade_narrative_line(record, **kwargs))
     return lines
 
 

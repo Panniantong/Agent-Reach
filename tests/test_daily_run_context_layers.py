@@ -96,11 +96,13 @@ def test_build_context_trace_with_overlay_and_trade():
         "consecutive_buy_streak": 3,
         "code": "300308",
     }
-    trace = build_context_trace(settings, job="intraday", ctx=ctx)
-    assert any("min_cash_ratio" in line or "50%" in line for line in trace)
-    assert any("deploy_ratio" in line or "25%" in line for line in trace)
-    assert any("突破" in line for line in trace)
-    assert any("未落账" in line or "现金不足" in line for line in trace)
+    intraday_trace = build_context_trace(settings, job="intraday", ctx=ctx)
+    assert not any("min_cash_ratio" in line or "deploy_ratio" in line for line in intraday_trace)
+
+    close_trace = build_context_trace(settings, job="close", ctx=ctx)
+    assert any("min_cash_ratio" in line or "50%" in line for line in close_trace)
+    assert any("deploy_ratio" in line or "25%" in line for line in close_trace)
+    assert any("未落账" in line or "现金不足" in line for line in close_trace)
 
 
 def test_build_context_trace_includes_recent_diffs(tmp_path, monkeypatch):
@@ -129,7 +131,11 @@ def test_build_context_trace_includes_recent_diffs(tmp_path, monkeypatch):
     assert any("harness 更新 policy/cash_guard" in line for line in trace)
 
 
-def test_build_context_trace_merged_symbols_and_cases(monkeypatch):
+def test_build_context_trace_merged_symbols_and_cases(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "agent_reach.daily_run.context_layers._harness_root",
+        lambda: tmp_path,
+    )
     monkeypatch.setattr(
         "agent_reach.daily_run.context_store.find_cases_for_symbol",
         lambda code, limit=1: [f"{code} 历史未落账"] if code == "300308" else [],
@@ -154,8 +160,8 @@ def test_build_context_trace_merged_symbols_and_cases(monkeypatch):
         ],
     }
     trace = build_context_trace({}, job="intraday", ctx=ctx, max_items=8)
-    assert any("中际旭创" in line and "未落账" in line for line in trace)
     assert any("Case [300308]" in line for line in trace)
+    assert not any("中际旭创" in line and "未落账" in line for line in trace)
 
 
 def test_write_text_sidecars(tmp_path):
@@ -168,7 +174,7 @@ def test_write_text_sidecars(tmp_path):
 
 def test_narrative_renders_context_trace():
     narrative = _attach_context_trace(
-        {"summary": "测试", "focus_points": ["A"], "job": "intraday", "planner": "deterministic"},
+        {"summary": "测试", "focus_points": ["A"], "job": "close", "planner": "deterministic"},
         settings={
             "harness_runtime": {
                 "threshold_overlay": {
@@ -176,9 +182,9 @@ def test_narrative_renders_context_trace():
                 }
             }
         },
-        job="intraday",
+        job="close",
     )
-    md = render_narrative_markdown(narrative, job="intraday")
+    md = render_narrative_markdown(narrative, job="close")
     assert "上下文轨迹" in md
     assert "aggressive_entry" in md or "45" in md
 
@@ -211,6 +217,9 @@ def test_intraday_narrative_includes_context_trace():
                 },
             },
         )
-    assert narrative.get("context_trace")
+    assert narrative.get("context_trace") is not None
     md = render_narrative_markdown(narrative, job="intraday")
-    assert "上下文轨迹" in md
+    assert "上下文轨迹" not in md or "阈值" not in md
+    assert "调仓操作" in md
+    assert "MSS 47.0" in md
+    assert "突破现金/deploy 限制" in md

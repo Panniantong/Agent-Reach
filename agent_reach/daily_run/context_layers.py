@@ -393,36 +393,39 @@ def build_context_trace(
 ) -> list[str]:
     """L0 retrieval trace lines for 规则解读 cards."""
     lines: list[str] = []
+    ctx = ctx or {}
+    is_intraday = str(job or ctx.get("job") or "").strip().lower() == "intraday"
     runtime = dict(settings.get("harness_runtime") or {})
 
-    threshold = runtime.get("threshold_overlay") or {}
-    for key, change in threshold.items():
-        if not isinstance(change, dict):
-            continue
-        bit = _format_overlay_item(str(key), change)
-        if bit:
-            lines.append(layer0(f"阈值 {bit}"))
-        if len(lines) >= max_items:
-            return lines[:max_items]
+    if not is_intraday:
+        threshold = runtime.get("threshold_overlay") or {}
+        for key, change in threshold.items():
+            if not isinstance(change, dict):
+                continue
+            bit = _format_overlay_item(str(key), change)
+            if bit:
+                lines.append(layer0(f"阈值 {bit}"))
+            if len(lines) >= max_items:
+                return lines[:max_items]
 
-    position = runtime.get("position_overlay") or {}
-    for key, change in position.items():
-        if not isinstance(change, dict):
-            continue
-        bit = _format_overlay_item(str(key), change)
-        if bit:
-            lines.append(layer0(f"仓位 {bit}"))
-        if len(lines) >= max_items:
-            return lines[:max_items]
+        position = runtime.get("position_overlay") or {}
+        for key, change in position.items():
+            if not isinstance(change, dict):
+                continue
+            bit = _format_overlay_item(str(key), change)
+            if bit:
+                lines.append(layer0(f"仓位 {bit}"))
+            if len(lines) >= max_items:
+                return lines[:max_items]
 
-    injection = runtime.get("injection_gate") or {}
-    for text in injection.get("adopted_preview") or []:
-        lines.append(layer0(f"采纳 {text}"))
-        if len(lines) >= max_items:
-            return lines[:max_items]
+        injection = runtime.get("injection_gate") or {}
+        for text in injection.get("adopted_preview") or []:
+            lines.append(layer0(f"采纳 {text}"))
+            if len(lines) >= max_items:
+                return lines[:max_items]
 
-    ctx = ctx or {}
-    _append_trade_context_lines(lines, ctx, max_items=max_items)
+        _append_trade_context_lines(lines, ctx, max_items=max_items)
+
     _append_recent_diff_lines(lines, max_items=max_items)
     _append_case_lines(lines, ctx, max_items=max_items)
 
