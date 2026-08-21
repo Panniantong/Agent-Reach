@@ -214,22 +214,29 @@ def record_harness_entry_diff(
     return diff
 
 
-def load_recent_overlay_diff(*, limit: int = 1) -> list[dict[str, Any]]:
-    path = _harness_root() / "overlay_diff.jsonl"
+def _load_recent_jsonl(name: str, *, limit: int = 1) -> list[dict[str, Any]]:
+    path = _harness_root() / name
     if not path.exists():
         return []
-    lines = path.read_text(encoding="utf-8").splitlines()
-    out: list[dict[str, Any]] = []
-    for line in reversed(lines):
+    rows: list[dict[str, Any]] = []
+    for line in reversed(path.read_text(encoding="utf-8").splitlines()):
         if not line.strip():
             continue
         try:
-            out.append(json.loads(line))
+            rows.append(json.loads(line))
         except json.JSONDecodeError:
             continue
-        if len(out) >= limit:
+        if len(rows) >= limit:
             break
-    return out
+    return rows
+
+
+def load_recent_overlay_diff(*, limit: int = 1) -> list[dict[str, Any]]:
+    return _load_recent_jsonl("overlay_diff.jsonl", limit=limit)
+
+
+def load_recent_memory_diff(*, limit: int = 1) -> list[dict[str, Any]]:
+    return _load_recent_jsonl("memory_diff.jsonl", limit=limit)
 
 
 def write_text_sidecars(target: Path, content: str) -> dict[str, str]:
@@ -258,6 +265,123 @@ def _format_overlay_item(key: str, change: dict[str, Any]) -> str:
             return f"{key} {float(base):.0%}→{float(eff):.0%}"
         return f"{key} {base}→{eff}"
     return f"{key} {base}→{eff}"
+
+
+def _format_overlay_diff_entry(entry: dict[str, Any]) -> str:
+    overlay = str(entry.get("overlay") or "").strip()
+    key = str(entry.get("key") or "").strip()
+    before = entry.get("before")
+    after = entry.get("after")
+    if not key and isinstance(after, dict) and not isinstance(before, dict):
+        bits: list[str] = []
+        for sub_key, sub_after in after.items():
+            if not isinstance(sub_after, dict):
+                continue
+            sub_bit = _format_overlay_item(str(sub_key), sub_after)
+            if sub_bit:
+                prefix = f"{overlay}/" if overlay else ""
+                bits.append(f"{prefix}{sub_bit}")
+        return " · ".join(bits)
+    if isinstance(before, dict) and isinstance(after, dict):
+        bit = _format_overlay_item(key, after)
+        if not bit and before != after:
+            bit = _format_overlay_item(key, {"base": before.get("base"), "effective": after.get("effective")})
+    elif isinstance(after, dict):
+        bit = _format_overlay_item(key, after)
+    else:
+        bit = f"{key}→{after}" if after is not None else ""
+    if not bit:
+        return ""
+    prefix = f"{overlay}/" if overlay and overlay != key else ""
+    return f"{prefix}{bit}"
+
+
+def _format_memory_diff_entry(entry: dict[str, Any], *, action: str) -> str:
+    kind = str(entry.get("kind") or "").strip()
+    entry_id = str(entry.get("entry_id") or "").strip()
+    label = f"{kind}/{entry_id}" if kind and entry_id else kind or entry_id or "entry"
+    action_map = {"adds": "新增", "updates": "更新", "deletes": "删除"}
+    verb = action_map.get(action, action)
+    return f"harness {verb} {label}"
+
+
+def _append_trade_context_lines(lines: list[str], ctx: dict[str, Any], *, max_items: int) -> None:
+    symbols = ctx.get("symbols") if ctx.get("portfolio_scope") == "merged" else None
+    targets = symbols if symbols else [ctx]
+    for item in targets:
+        if len(lines) >= max_items:
+            return
+        prefix = ""
+        if symbols:
+            prefix = str(item.get("name") or item.get("code") or "").strip()
+        if item.get("cash_limit_bypass"):
+            streak = item.get("consecutive_buy_streak")
+            suffix = f"（连续 {streak} 次买入）" if streak else ""
+            who = f"{prefix} " if prefix else ""
+            lines.append(layer0(f"{who}临时突破现金/deploy 限制{suffix}"))
+        msg = str(item.get("portfolio_message") or item.get("trade_reasoning") or "").strip()
+        action = item.get("trade_action")
+        if msg and action in ("buy", "sell"):
+            applied = item.get("portfolio_applied")
+            status = "已落账" if applied else "未落账"
+            who = f"{prefix} " if prefix else ""
+            lines.append(layer0(f"{who}调仓{status}：{msg}"))
+
+
+def _collect_ctx_codes(ctx: dict[str, Any]) -> list[str]:
+    priority: list[str] = []
+    rest: list[str] = []
+    seen: set[str] = set()
+
+    def _add(code: str, *, prefer: bool = False) -> None:
+        norm = str(code or "").strip()
+        if not norm or norm in seen:
+            return
+        seen.add(norm)
+        (priority if prefer else rest).append(norm)
+
+    _add(str(ctx.get("code") or ""))
+    for sym in ctx.get("symbols") or []:
+        prefer = not sym.get("portfolio_applied") and bool(
+            sym.get("portfolio_message") or sym.get("blocked") or sym.get("case_uri")
+        )
+        _add(str(sym.get("code") or ""), prefer=prefer)
+    return priority + rest
+
+
+def _append_recent_diff_lines(lines: list[str], *, max_items: int) -> None:
+    overlay = load_recent_overlay_diff(limit=1)
+    if overlay and len(lines) < max_items:
+        ops = overlay[0].get("operations") or {}
+        for bucket in ("updates", "adds", "deletes"):
+            for entry in ops.get(bucket) or []:
+                bit = _format_overlay_diff_entry(entry)
+                if not bit:
+                    continue
+                lines.append(layer0(f"overlay Δ {bit}"))
+                if len(lines) >= max_items:
+                    return
+    memory = load_recent_memory_diff(limit=1)
+    if memory and len(lines) < max_items:
+        ops = memory[0].get("operations") or {}
+        for bucket in ("updates", "adds", "deletes"):
+            for entry in ops.get(bucket) or []:
+                lines.append(layer0(_format_memory_diff_entry(entry, action=bucket)))
+                if len(lines) >= max_items:
+                    return
+
+
+def _append_case_lines(lines: list[str], ctx: dict[str, Any], *, max_items: int) -> None:
+    try:
+        from agent_reach.daily_run.context_store import find_cases_for_symbol
+    except Exception:
+        return
+    for code in _collect_ctx_codes(ctx):
+        if len(lines) >= max_items:
+            return
+        for case_line in find_cases_for_symbol(code, limit=1):
+            lines.append(layer0(f"Case [{code}] {case_line}"))
+            break
 
 
 def build_context_trace(
@@ -298,32 +422,8 @@ def build_context_trace(
             return lines[:max_items]
 
     ctx = ctx or {}
-    if ctx.get("cash_limit_bypass"):
-        streak = ctx.get("consecutive_buy_streak")
-        suffix = f"（连续 {streak} 次买入）" if streak else ""
-        lines.append(layer0(f"临时突破现金/deploy 限制{suffix}"))
-    msg = str(ctx.get("portfolio_message") or ctx.get("trade_reasoning") or "").strip()
-    if msg and ctx.get("trade_action") in ("buy", "sell"):
-        applied = ctx.get("portfolio_applied")
-        status = "已落账" if applied else "未落账"
-        lines.append(layer0(f"调仓{status}：{msg}"))
-
-    recent = load_recent_overlay_diff(limit=1)
-    if recent and len(lines) < max_items:
-        summary = recent[0].get("summary") or {}
-        total = int(summary.get("total_updates") or 0)
-        if total:
-            lines.append(layer0(f"近期 harness overlay 更新 {total} 项"))
-
-    code = str(ctx.get("code") or "").strip()
-    if code and len(lines) < max_items:
-        try:
-            from agent_reach.daily_run.context_store import find_cases_for_symbol
-
-            for case_line in find_cases_for_symbol(code, limit=1):
-                lines.append(layer0(f"Case {case_line}"))
-                break
-        except Exception:
-            pass
+    _append_trade_context_lines(lines, ctx, max_items=max_items)
+    _append_recent_diff_lines(lines, max_items=max_items)
+    _append_case_lines(lines, ctx, max_items=max_items)
 
     return lines[:max_items]

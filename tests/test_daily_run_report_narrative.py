@@ -280,6 +280,7 @@ def test_merged_intraday_narrative_deterministic():
     assert "调仓操作" in md
     assert "T7" in md
     assert "澜起科技" in md
+    assert narrative.get("context_trace")
 
 
 def test_intraday_narrative_includes_trade_operations():

@@ -94,12 +94,68 @@ def test_build_context_trace_with_overlay_and_trade():
         "portfolio_message": "现金不足以买入 300308 最小单位",
         "cash_limit_bypass": True,
         "consecutive_buy_streak": 3,
+        "code": "300308",
     }
     trace = build_context_trace(settings, job="intraday", ctx=ctx)
     assert any("min_cash_ratio" in line or "50%" in line for line in trace)
     assert any("deploy_ratio" in line or "25%" in line for line in trace)
     assert any("突破" in line for line in trace)
     assert any("未落账" in line or "现金不足" in line for line in trace)
+
+
+def test_build_context_trace_includes_recent_diffs(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "agent_reach.daily_run.context_layers._harness_root",
+        lambda: tmp_path,
+    )
+    record_runtime_overlay_diff(
+        {},
+        {"position_overlay": {"deploy_ratio": {"base": 1.0, "effective": 0.25}}},
+    )
+    record_harness_entry_diff(
+        "close",
+        [
+            {
+                "action": "update",
+                "kind": "policy",
+                "entry_id": "cash_guard",
+                "before": {"content": "old"},
+                "after": {"content": "new"},
+            }
+        ],
+    )
+    trace = build_context_trace({}, ctx={})
+    assert any("overlay Δ" in line and "deploy_ratio" in line for line in trace)
+    assert any("harness 更新 policy/cash_guard" in line for line in trace)
+
+
+def test_build_context_trace_merged_symbols_and_cases(monkeypatch):
+    monkeypatch.setattr(
+        "agent_reach.daily_run.context_store.find_cases_for_symbol",
+        lambda code, limit=1: [f"{code} 历史未落账"] if code == "300308" else [],
+    )
+    ctx = {
+        "portfolio_scope": "merged",
+        "symbols": [
+            {
+                "code": "688008",
+                "name": "澜起科技",
+                "trade_action": "hold",
+                "portfolio_applied": False,
+                "portfolio_message": "摩擦阻断",
+            },
+            {
+                "code": "300308",
+                "name": "中际旭创",
+                "trade_action": "buy",
+                "portfolio_applied": False,
+                "portfolio_message": "现金不足以买入 300308 最小单位",
+            },
+        ],
+    }
+    trace = build_context_trace({}, job="intraday", ctx=ctx, max_items=8)
+    assert any("中际旭创" in line and "未落账" in line for line in trace)
+    assert any("Case [300308]" in line for line in trace)
 
 
 def test_write_text_sidecars(tmp_path):
