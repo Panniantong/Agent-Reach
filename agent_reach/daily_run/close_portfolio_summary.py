@@ -349,6 +349,91 @@ def format_trade_operations_narrative_lines(
     return lines
 
 
+_INTRADAY_ACTION_LABELS = {"buy": "买入", "sell": "卖出", "hold": "观望", "skip": "跳过"}
+
+
+def extract_intraday_trade_record(trade_wrapper: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Return the persisted intraday trade row from ``evaluate_trade`` output."""
+    if not trade_wrapper:
+        return None
+    record = trade_wrapper.get("trade")
+    if isinstance(record, dict) and record.get("action"):
+        return record
+    decision = trade_wrapper.get("decision")
+    if isinstance(decision, dict) and decision.get("action"):
+        return decision
+    return None
+
+
+def format_intraday_trade_narrative_line(
+    trade_record: dict[str, Any],
+    *,
+    name: Optional[str] = None,
+    code: Optional[str] = None,
+) -> str:
+    """One T-numbered intraday trade line for the 规则解读 card."""
+    action = str(trade_record.get("action") or "hold")
+    trade_id = str(trade_record.get("trade_id") or "调仓")
+    sym_name = name or trade_record.get("name") or trade_record.get("code") or "?"
+    sym_code = code or trade_record.get("code") or "?"
+    side = _INTRADAY_ACTION_LABELS.get(action, action)
+    line = f"{trade_id} · {side} **{sym_name}** ({sym_code})"
+
+    fill_actions = [
+        act
+        for act in (trade_record.get("portfolio_actions") or [])
+        if act.get("side") in ("buy", "sell")
+    ]
+    if fill_actions:
+        act = fill_actions[0]
+        shares = act.get("shares")
+        price = act.get("price")
+        if shares is not None and price is not None:
+            line += f" {int(shares)}股 @ ¥{float(price):.2f}"
+        if act.get("amount") is not None:
+            line += f" · 成交额 ¥{float(act['amount']):,.0f}"
+        commission = act.get("commission")
+        if commission is not None and float(commission) > 0:
+            line += f" · 手续费 ¥{float(commission):.2f}"
+        if act.get("side") == "sell" and act.get("realized_pnl") is not None:
+            pnl = float(act["realized_pnl"])
+            pct = act.get("realized_pnl_pct")
+            pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
+            line += f" · 已实现盈亏 **{pnl:+,.0f}**{pct_s}"
+    elif trade_record.get("shares") is not None and trade_record.get("price") is not None:
+        line += (
+            f" {int(trade_record['shares'])}股 @ ¥{float(trade_record['price']):.2f}"
+        )
+
+    reason = str(
+        trade_record.get("reasoning")
+        or trade_record.get("portfolio_message")
+        or ""
+    ).strip()
+    if reason:
+        line += f" — {reason}"
+
+    if trade_record.get("portfolio_applied") is False:
+        line += "（未落账）"
+
+    return line
+
+
+def format_intraday_trade_narrative_lines(
+    trade_records: list[dict[str, Any]],
+) -> list[str]:
+    """Markdown bullet lines for intraday 规则解读 trade section."""
+    lines: list[str] = []
+    for entry in trade_records:
+        record = entry.get("trade_record") if isinstance(entry, dict) and "trade_record" in entry else entry
+        if not isinstance(record, dict) or not record.get("action"):
+            continue
+        name = entry.get("name") if isinstance(entry, dict) else None
+        code = entry.get("code") if isinstance(entry, dict) else None
+        lines.append(format_intraday_trade_narrative_line(record, name=name, code=code))
+    return lines
+
+
 def _format_intraday_trade_lines(trades: list[dict[str, Any]]) -> list[str]:
     lines: list[str] = []
     for entry in trades:

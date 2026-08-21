@@ -218,7 +218,7 @@ def test_intraday_narrative_deterministic_from_scan():
 
 
 def test_merged_intraday_narrative_deterministic():
-    from agent_reach.daily_run.report_narrative import generate_merged_intraday_narrative
+    from agent_reach.daily_run.report_narrative import generate_merged_intraday_narrative, render_narrative_markdown
 
     symbol_results = [
         {
@@ -230,7 +230,16 @@ def test_merged_intraday_narrative_deterministic():
                     "lookback_mss": 47.0,
                     "trend": "falling",
                 },
-                "trade": {"decision": {"action": "hold", "reasoning": "维持观望", "friction_blocked": True}},
+                "trade": {
+                    "decision": {"action": "hold", "reasoning": "维持观望", "friction_blocked": True},
+                    "trade": {
+                        "trade_id": "T7",
+                        "action": "hold",
+                        "reasoning": "维持观望",
+                        "friction_blocked": True,
+                        "portfolio_applied": False,
+                    },
+                },
             },
         },
         {
@@ -242,7 +251,16 @@ def test_merged_intraday_narrative_deterministic():
                     "lookback_mss": 49.0,
                     "trend": "rising",
                 },
-                "trade": {"decision": {"action": "hold", "friction_blocked": True}},
+                "trade": {
+                    "decision": {"action": "hold", "friction_blocked": True},
+                    "trade": {
+                        "trade_id": "T7",
+                        "action": "hold",
+                        "reasoning": "摩擦阻断",
+                        "friction_blocked": True,
+                        "portfolio_applied": False,
+                    },
+                },
             },
         },
     ]
@@ -258,6 +276,49 @@ def test_merged_intraday_narrative_deterministic():
     assert len(narrative.get("risk_alerts") or []) == 1
     assert "等2只" in narrative["risk_alerts"][0] or "澜起科技" in narrative["risk_alerts"][0]
     assert "摩擦惩罚阻断" in narrative["risk_alerts"][0]
+    md = render_narrative_markdown(narrative, job="intraday")
+    assert "调仓操作" in md
+    assert "T7" in md
+    assert "澜起科技" in md
+
+
+def test_intraday_narrative_includes_trade_operations():
+    from agent_reach.daily_run.report_narrative import generate_intraday_narrative, render_narrative_markdown
+
+    scan_result = {
+        "scan": {"scan_id": "S7", "name": "长电科技", "code": "600584", "mss_final": 52.1, "verdict": "观察"},
+        "lookback_mss": 51.8,
+        "trend": "rising",
+        "evaluation": {"report": {"reasoning": "MSS 回升但仍处观察区"}},
+        "lookback_detail": [{"scan_id": "S7", "mss_final": 52.1, "weight": 0.5}],
+    }
+    trade_result = {
+        "decision": {"action": "sell", "reasoning": "趋势转弱，部分止盈", "blocked": True},
+        "trade": {
+            "trade_id": "T7",
+            "action": "sell",
+            "reasoning": "趋势转弱，部分止盈",
+            "blocked": True,
+            "block_kind": "sell_deep_loss",
+            "portfolio_applied": False,
+            "portfolio_message": "深度套牢且组合覆盖不足，暂不允许卖出",
+            "name": "长电科技",
+            "code": "600584",
+        },
+    }
+    with patch("agent_reach.daily_run.llm_chat.resolve_chat_provider", return_value=None):
+        narrative = generate_intraday_narrative(
+            scan_result=scan_result,
+            trade_result=trade_result,
+            settings={"llm_narrative": {"enabled": True}},
+        )
+    md = render_narrative_markdown(narrative, job="intraday")
+    assert "调仓操作" in md
+    assert "T7" in md
+    assert "卖出" in md
+    assert "长电科技" in md
+    assert "未落账" in md
+    assert "T7 卖出" in narrative["summary"] or "T7" in narrative["summary"]
 
 
 def test_merge_duplicate_risk_alerts():

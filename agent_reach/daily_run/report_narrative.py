@@ -196,7 +196,12 @@ def _compact_narrative_payload(payload: dict[str, Any], limits: dict[str, int]) 
 def _narrative_system_prompt(job: str, *, limits: dict[str, int]) -> str:
     label = _JOB_LABELS.get(job, job)
     trade_hint = ""
-    if job == "close":
+    if job == "intraday":
+        trade_hint = (
+            "若有 trade_operations 输入，summary 须概括 T 编号调仓动作（买入/卖出/观望）；"
+            "禁止编造未提供的成交价/股数。"
+        )
+    elif job == "close":
         trade_hint = (
             '若有 trade_operations 输入，summary 须概括当日买卖与已实现盈亏；'
             'focus_points 可含明日建议；禁止编造未提供的成交价/股数。'
@@ -364,7 +369,8 @@ def render_narrative_markdown(narrative: dict[str, Any], *, job: str = "") -> st
             lines.append(f"- {item}")
     if narrative.get("trade_operations"):
         lines.append("")
-        lines.append("**当日买卖**")
+        trade_title = "**调仓操作**" if use_job == "intraday" else "**当日买卖**"
+        lines.append(trade_title)
         for item in narrative["trade_operations"]:
             lines.append(f"- {item}")
     return "\n".join(lines).strip()
@@ -648,6 +654,8 @@ def render_morning_narrative_footer(
 
 
 def _intraday_row_context(row: dict[str, Any]) -> dict[str, Any]:
+    from agent_reach.daily_run.close_portfolio_summary import extract_intraday_trade_record
+
     inner = row.get("result") or {}
     scan_wrap = inner.get("scan") or {}
     scan = scan_wrap.get("scan") or {}
@@ -655,6 +663,7 @@ def _intraday_row_context(row: dict[str, Any]) -> dict[str, Any]:
     report = evaluation.get("report") or {}
     trade = inner.get("trade") or {}
     decision = trade.get("decision") or {}
+    trade_record = extract_intraday_trade_record(trade) or {}
     return {
         "name": row.get("name") or scan.get("name"),
         "code": row.get("code") or scan.get("code"),
@@ -664,9 +673,13 @@ def _intraday_row_context(row: dict[str, Any]) -> dict[str, Any]:
         "lookback_mss": scan_wrap.get("lookback_mss"),
         "trend": scan_wrap.get("trend"),
         "reasoning": (report.get("reasoning") or "")[:96],
-        "trade_action": decision.get("action"),
-        "trade_reasoning": (decision.get("reasoning") or "")[:96],
-        "friction_blocked": decision.get("friction_blocked"),
+        "trade_action": decision.get("action") or trade_record.get("action"),
+        "trade_reasoning": (decision.get("reasoning") or trade_record.get("reasoning") or "")[:96],
+        "trade_id": trade_record.get("trade_id"),
+        "trade_record": trade_record or None,
+        "friction_blocked": decision.get("friction_blocked") or trade_record.get("friction_blocked"),
+        "portfolio_applied": trade_record.get("portfolio_applied"),
+        "blocked": trade_record.get("blocked") or decision.get("blocked"),
     }
 
 
@@ -675,10 +688,13 @@ def build_intraday_context(
     scan_result: dict[str, Any],
     trade_result: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
+    from agent_reach.daily_run.close_portfolio_summary import extract_intraday_trade_record
+
     scan = scan_result.get("scan") or {}
     evaluation = scan_result.get("evaluation") or {}
     report = evaluation.get("report") or {}
     decision = (trade_result or {}).get("decision") or {}
+    trade_record = extract_intraday_trade_record(trade_result) or {}
     lookback_detail = [
         {
             "scan_id": item.get("scan_id"),
@@ -698,9 +714,13 @@ def build_intraday_context(
         "trend": scan_result.get("trend"),
         "reasoning": (report.get("reasoning") or "")[:120],
         "lookback_detail": lookback_detail,
-        "trade_action": decision.get("action"),
-        "trade_reasoning": (decision.get("reasoning") or "")[:120],
-        "friction_blocked": decision.get("friction_blocked"),
+        "trade_action": decision.get("action") or trade_record.get("action"),
+        "trade_reasoning": (decision.get("reasoning") or trade_record.get("reasoning") or "")[:120],
+        "trade_id": trade_record.get("trade_id"),
+        "trade_record": trade_record or None,
+        "friction_blocked": decision.get("friction_blocked") or trade_record.get("friction_blocked"),
+        "portfolio_applied": trade_record.get("portfolio_applied"),
+        "blocked": trade_record.get("blocked") or decision.get("blocked"),
         "trade_skip_reason": scan_result.get("trade_skip_reason"),
     }
 
@@ -731,6 +751,10 @@ def _intraday_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
     summary = f"{scan_id} {ctx.get('name') or ctx.get('code')}：{verdict}"
     if mss is not None:
         summary += f"，MSS {mss}"
+    trade_id = ctx.get("trade_id")
+    if trade_id and ctx.get("trade_action"):
+        action_map = {"buy": "买入", "sell": "卖出", "hold": "观望", "skip": "跳过"}
+        summary += f"，{trade_id} {action_map.get(str(ctx['trade_action']), ctx['trade_action'])}"
     return {
         "summary": summary,
         "focus_points": focus[:3] or [f"{scan_id} 扫描完成，按 MSS 规则执行"],
@@ -740,6 +764,38 @@ def _intraday_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _attach_intraday_trade_operations(
+    narrative: dict[str, Any],
+    context: dict[str, Any],
+) -> dict[str, Any]:
+    from agent_reach.daily_run.close_portfolio_summary import format_intraday_trade_narrative_lines
+
+    if context.get("portfolio_scope") == "merged":
+        entries = [
+            {
+                "name": sym.get("name"),
+                "code": sym.get("code"),
+                "trade_record": sym.get("trade_record"),
+            }
+            for sym in (context.get("symbols") or [])
+            if sym.get("trade_record")
+        ]
+    elif context.get("trade_record"):
+        entries = [
+            {
+                "name": context.get("name"),
+                "code": context.get("code"),
+                "trade_record": context.get("trade_record"),
+            }
+        ]
+    else:
+        entries = []
+    ops = format_intraday_trade_narrative_lines(entries)
+    if ops:
+        narrative["trade_operations"] = ops
+    return narrative
+
+
 def generate_intraday_narrative(
     *,
     scan_result: dict[str, Any],
@@ -747,12 +803,15 @@ def generate_intraday_narrative(
     settings: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     context = build_intraday_context(scan_result=scan_result, trade_result=trade_result)
-    return _generate_narrative(
-        "intraday",
+    return _attach_intraday_trade_operations(
+        _generate_narrative(
+            "intraday",
+            context,
+            settings=settings,
+            system="解读本次盘中扫描与调仓评估结果；优先 MSS、Lookback、调仓动作。",
+            deterministic_fn=_intraday_deterministic,
+        ),
         context,
-        settings=settings,
-        system="解读本次盘中扫描与调仓评估结果；优先 MSS、Lookback、调仓动作。",
-        deterministic_fn=_intraday_deterministic,
     )
 
 
@@ -783,14 +842,21 @@ def _merged_intraday_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
     if mss_vals:
         focus.append(f"MSS 区间 {min(mss_vals):.1f}~{max(mss_vals):.1f}")
     focus.append(f"{n} 只标的，主导结论 {dominant}")
-    trade_actions = [str(s.get("trade_action") or "") for s in symbols if s.get("trade_action")]
-    if trade_actions:
-        holds = sum(1 for a in trade_actions if a == "hold")
-        focus.append(f"调仓评估 {len(trade_actions)} 只：观望 {holds} 只")
     risks = _collect_merged_intraday_risks(symbols)
+    trade_records = [sym.get("trade_record") for sym in symbols if sym.get("trade_record")]
+    if trade_records:
+        action_map = {"buy": "买入", "sell": "卖出", "hold": "观望", "skip": "跳过"}
+        trade_ids = [
+            f"{rec.get('trade_id') or '调仓'} {action_map.get(str(rec.get('action') or ''), rec.get('action') or '')}"
+            for rec in trade_records[:3]
+        ]
+        if trade_ids:
+            focus.append(f"调仓 {len(trade_records)} 只：{' · '.join(trade_ids)}")
     summary = f"{scan_id} 全持仓 {n} 只扫描"
     if mss_vals:
         summary += f"，MSS {min(mss_vals):.1f}~{max(mss_vals):.1f}"
+    if trade_records:
+        summary += f"，调仓 {len(trade_records)} 只"
     return {
         "summary": summary,
         "focus_points": focus[:3] or [f"{scan_id} 扫描完成"],
@@ -807,12 +873,15 @@ def generate_merged_intraday_narrative(
     settings: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     context = build_merged_intraday_context(symbol_results, scan_id=scan_id)
-    return _generate_narrative(
-        "intraday",
+    return _attach_intraday_trade_operations(
+        _generate_narrative(
+            "intraday",
+            context,
+            settings=settings,
+            system="解读本次定时盘中任务的整体扫描与调仓结论；禁止复述早报。",
+            deterministic_fn=_merged_intraday_deterministic,
+        ),
         context,
-        settings=settings,
-        system="解读本次定时盘中任务的整体扫描与调仓结论；禁止复述早报。",
-        deterministic_fn=_merged_intraday_deterministic,
     )
 
 
