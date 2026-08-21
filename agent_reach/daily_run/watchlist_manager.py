@@ -120,11 +120,24 @@ def adjust_watchlist(
     held_codes = {_normalize_code(str(h.get("code", ""))) for h in pf.get("holdings") or []}
     base_mss = _snapshot_base_mss(snapshot, settings)
     wl_cfg = watchlist_settings(settings)
+    from agent_reach.daily_run.harness_policy import deep_loss_policy_default
+    from agent_reach.daily_run.pnl_execution_guard import (
+        _pnl_overview_for_portfolio,
+        watchlist_remove_low_win_rate_reason,
+    )
+
+    pnl_overview: Optional[dict[str, Any]] = None
+    if deep_loss_policy_default(settings, "win_rate_min") > 0:
+        pnl_overview = _pnl_overview_for_portfolio(pf)
 
     if phase == "close" and sold_codes:
         for item in sold_codes:
             code = _normalize_code(str(item.get("code", "")))
             if not code or code in held_codes:
+                continue
+            if watchlist_remove_low_win_rate_reason(
+                settings, code, pf, overview=pnl_overview
+            ):
                 continue
             if _has_code(pf.get("watchlist") or [], code):
                 continue
@@ -155,6 +168,14 @@ def adjust_watchlist(
                 WatchlistChange("remove", code, str(w.get("name", code)), "已持仓，移出观察池")
             )
             continue
+        win_rate_reason = watchlist_remove_low_win_rate_reason(
+            settings, code, pf, overview=pnl_overview
+        )
+        if win_rate_reason:
+            changes.append(
+                WatchlistChange("remove", code, str(w.get("name", code)), win_rate_reason)
+            )
+            continue
         chg = row.get("change_pct")
         score = _symbol_score(row, base_mss=base_mss, settings=settings)
         if chg is not None and float(chg) <= -8:
@@ -180,6 +201,7 @@ def adjust_watchlist(
             changes,
             held_codes=held_codes,
             base_mss=base_mss,
+            pnl_overview=pnl_overview,
         )
 
     # Morning: optionally add candidates from config
@@ -194,6 +216,7 @@ def adjust_watchlist(
             snapshot=snapshot,
             enriched=enriched,
             base_mss=base_mss,
+            pnl_overview=pnl_overview,
         )
 
     if phase == "close":
@@ -205,6 +228,7 @@ def adjust_watchlist(
             changes,
             held_codes=held_codes,
             base_mss=base_mss,
+            pnl_overview=pnl_overview,
         )
 
     # Trim to watchlist max (non-held count)
@@ -472,6 +496,7 @@ def _refresh_close_watchlist_from_hot_topics(
     *,
     held_codes: set[str],
     base_mss: float,
+    pnl_overview: Optional[dict[str, Any]] = None,
 ) -> None:
     """Rebuild watchlist each close from latest hot topics + sector_pools."""
     hot_titles = _hot_titles_for_adjust(snapshot, pf, settings)
@@ -507,6 +532,7 @@ def _refresh_close_watchlist_from_hot_topics(
         base_mss=base_mss,
         hot_titles=hot_titles,
         candidate_order=ranked,
+        pnl_overview=pnl_overview,
     )
 
 
@@ -523,7 +549,10 @@ def _add_candidates(
     base_mss: float,
     hot_titles: Optional[list[str]] = None,
     candidate_order: Optional[list[dict[str, Any]]] = None,
+    pnl_overview: Optional[dict[str, Any]] = None,
 ) -> None:
+    from agent_reach.daily_run.pnl_execution_guard import watchlist_remove_low_win_rate_reason
+
     titles = hot_titles if hot_titles is not None else _hot_titles_for_adjust(snapshot, pf, settings)
     if candidate_order is not None:
         candidates = list(candidate_order)
@@ -551,6 +580,8 @@ def _add_candidates(
     for cand in candidates:
         code = _normalize_code(str(cand.get("code", "")))
         if not code or code in held_codes or _has_code(pf.get("watchlist") or [], code):
+            continue
+        if watchlist_remove_low_win_rate_reason(settings, code, pf, overview=pnl_overview):
             continue
         if _watchlist_only_count(pf, held_codes) >= max_watchlist_size(settings, pf):
             break
@@ -585,6 +616,7 @@ def _fill_watchlist_to_min(
     *,
     held_codes: set[str],
     base_mss: float,
+    pnl_overview: Optional[dict[str, Any]] = None,
 ) -> None:
     target_min = effective_watchlist_min(settings, pf)
     hot_titles = _hot_titles_for_adjust(snapshot, pf, settings)
@@ -602,6 +634,7 @@ def _fill_watchlist_to_min(
                 enriched=enriched,
                 base_mss=base_mss,
                 hot_titles=hot_titles,
+                pnl_overview=pnl_overview,
             )
         if _watchlist_only_count(pf, held_codes) == before:
             _add_candidates(
@@ -614,6 +647,7 @@ def _fill_watchlist_to_min(
                 snapshot=snapshot,
                 enriched=enriched,
                 base_mss=base_mss,
+                pnl_overview=pnl_overview,
             )
         if _watchlist_only_count(pf, held_codes) == before:
             break

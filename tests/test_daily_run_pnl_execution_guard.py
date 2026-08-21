@@ -24,6 +24,24 @@ def _settings(**overrides):
     return base
 
 
+def test_watchlist_remove_low_win_rate_reason():
+    from agent_reach.daily_run.pnl_execution_guard import watchlist_remove_low_win_rate_reason
+
+    reason = watchlist_remove_low_win_rate_reason(
+        _settings(),
+        "002273",
+        overview={
+            "realized_sells": [
+                {"code": "002273", "name": "水晶光电", "realized_pnl": -4.35},
+                {"code": "002273", "name": "水晶光电", "realized_pnl": -4.07},
+                {"code": "002273", "name": "水晶光电", "realized_pnl": -10.0},
+            ]
+        },
+    )
+    assert reason is not None
+    assert "移出观察池" in reason
+
+
 def test_pnl_buy_block_on_loss_streak():
     reason = pnl_buy_block_reason(
         _settings(pnl_overview={"win_rate_min": 0, "loss_streak_max": 3}),

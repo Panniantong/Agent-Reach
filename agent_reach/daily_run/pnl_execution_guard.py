@@ -102,6 +102,50 @@ def _pnl_overview_for_portfolio(portfolio: dict[str, Any]) -> dict[str, Any]:
     return overview.to_dict()
 
 
+def symbol_sell_win_rate_violation(
+    settings: dict[str, Any],
+    code: str,
+    portfolio: Optional[dict[str, Any]] = None,
+    *,
+    overview: Optional[dict[str, Any]] = None,
+) -> Optional[tuple[str, int, int, float]]:
+    """Return (display_name, wins, losses, win_rate_min) when symbol sell win rate is too low."""
+    win_rate_min = deep_loss_policy_default(settings, "win_rate_min")
+    symbol_code = _normalize_code(str(code or ""))
+    if win_rate_min <= 0 or not symbol_code:
+        return None
+
+    data = overview or _pnl_overview_for_portfolio(portfolio or {})
+    symbol_sells = _symbol_realized_sells(data.get("realized_sells") or [], symbol_code)
+    wins, losses = _count_sell_wins_losses(symbol_sells)
+    total_sells = wins + losses
+    if total_sells < _WIN_RATE_MIN_SAMPLES:
+        return None
+    if wins / total_sells >= win_rate_min:
+        return None
+    name = _symbol_display_name(symbol_code, portfolio, symbol_sells=symbol_sells)
+    return name, wins, losses, float(win_rate_min)
+
+
+def watchlist_remove_low_win_rate_reason(
+    settings: dict[str, Any],
+    code: str,
+    portfolio: Optional[dict[str, Any]] = None,
+    *,
+    overview: Optional[dict[str, Any]] = None,
+) -> Optional[str]:
+    violation = symbol_sell_win_rate_violation(
+        settings,
+        code,
+        portfolio,
+        overview=overview,
+    )
+    if not violation:
+        return None
+    _name, wins, losses, win_rate_min = violation
+    return f"卖出胜率偏低（{wins}盈/{losses}亏 < {win_rate_min:.0%}），移出观察池"
+
+
 def pnl_buy_block_reason(
     settings: dict[str, Any],
     portfolio: Optional[dict[str, Any]] = None,
@@ -120,17 +164,18 @@ def pnl_buy_block_reason(
     realized_sells = data.get("realized_sells") or []
 
     if win_rate_min > 0 and symbol_code:
-        symbol_sells = _symbol_realized_sells(realized_sells, symbol_code)
-        wins, losses = _count_sell_wins_losses(symbol_sells)
-        total_sells = wins + losses
-        if total_sells >= _WIN_RATE_MIN_SAMPLES:
-            win_rate = wins / total_sells
-            if win_rate < win_rate_min:
-                name = _symbol_display_name(symbol_code, portfolio, symbol_sells=symbol_sells)
-                return (
-                    f"{name}({symbol_code}) 卖出胜率偏低（{wins}盈/{losses}亏 "
-                    f"< {win_rate_min:.0%}），暂缓新开仓"
-                )
+        violation = symbol_sell_win_rate_violation(
+            settings,
+            symbol_code,
+            portfolio,
+            overview=data,
+        )
+        if violation:
+            name, wins, losses, win_rate_min = violation
+            return (
+                f"{name}({symbol_code}) 卖出胜率偏低（{wins}盈/{losses}亏 "
+                f"< {win_rate_min:.0%}），暂缓新开仓"
+            )
 
     if loss_streak_max > 0:
         streak = sell_loss_streak(realized_sells)

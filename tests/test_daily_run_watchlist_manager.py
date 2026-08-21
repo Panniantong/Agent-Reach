@@ -220,6 +220,35 @@ class TestWatchlistPolicy:
         result = adjust_watchlist(portfolio, snapshot, settings, "close")
         assert len(result.portfolio["watchlist"]) >= 5
 
+    def test_watchlist_removes_low_symbol_win_rate(self, portfolio, snapshot, settings, monkeypatch):
+        from agent_reach.daily_run import pnl_execution_guard
+
+        settings.setdefault("pnl_overview", {})
+        settings["pnl_overview"]["win_rate_min"] = 0.33
+        portfolio["watchlist"] = [
+            {"code": "002273", "name": "水晶光电"},
+            {"code": "603986", "name": "兆易创新"},
+        ]
+        monkeypatch.setattr(
+            pnl_execution_guard,
+            "_pnl_overview_for_portfolio",
+            lambda _pf: {
+                "realized_sells": [
+                    {"code": "002273", "name": "水晶光电", "realized_pnl": -4.35},
+                    {"code": "002273", "name": "水晶光电", "realized_pnl": -4.07},
+                    {"code": "002273", "name": "水晶光电", "realized_pnl": -10.0},
+                ]
+            },
+        )
+        result = adjust_watchlist(portfolio, snapshot, settings, "morning")
+        codes = {w["code"] for w in result.portfolio["watchlist"]}
+        assert "002273" not in codes
+        assert "603986" in codes
+        assert any(
+            c.action == "remove" and c.code == "002273" and "卖出胜率偏低" in c.reason
+            for c in result.changes
+        )
+
     def test_close_hot_topic_refresh_adds_sector_pool_match(self, portfolio, snapshot, settings):
         settings["watchlist"]["min_size"] = 0
         settings["watchlist"]["hot_topic_adjust_enabled"] = True
