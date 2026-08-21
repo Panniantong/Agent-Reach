@@ -14,6 +14,7 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 
 from agent_reach import __version__
 
@@ -28,6 +29,11 @@ _SENSITIVE_CONFIG_KEYS = {
     "twitter-cookies",
     "xhs-cookies",
 }
+_SKILL_SCOPE_USER = "user"
+_SKILL_SCOPE_PROJECT = "project"
+_SKILL_SCOPES = (_SKILL_SCOPE_USER, _SKILL_SCOPE_PROJECT)
+_PROJECT_SKILL_COMPONENTS = (".claude", "skills")
+_SKILL_DIRECTORY_NAME = "agent-reach"
 
 
 def _ensure_utf8_console():
@@ -94,6 +100,12 @@ def main():
                            help="Comma-separated optional channels to install "
                                 "(twitter,xiaoyuzhou,xueqiu,xiaohongshu,"
                                 "reddit,facebook,instagram,bilibili,linkedin,all)")
+    p_install.add_argument(
+        "--scope",
+        choices=_SKILL_SCOPES,
+        default=_SKILL_SCOPE_USER,
+        help="Skill scope: user (default) or current project",
+    )
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
@@ -133,7 +145,9 @@ def main():
                           help="Output machine-readable JSON instead of the text report")
 
     # ── uninstall ──
-    p_uninstall = sub.add_parser("uninstall", help="Remove all Agent Reach config, tokens, and skill files")
+    p_uninstall = sub.add_parser(
+        "uninstall", help="Remove user config, tokens, and user-scoped skill files"
+    )
     p_uninstall.add_argument("--dry-run", action="store_true",
                              help="Show what would be removed without making any changes")
     p_uninstall.add_argument("--keep-config", action="store_true",
@@ -146,6 +160,12 @@ def main():
                                help="Install SKILL.md to agent skill directories")
     p_skill_group.add_argument("--uninstall", action="store_true",
                                help="Remove SKILL.md from agent skill directories")
+    p_skill.add_argument(
+        "--scope",
+        choices=_SKILL_SCOPES,
+        default=_SKILL_SCOPE_USER,
+        help="Skill scope: user (default) or current project",
+    )
 
     # ── format ──
     p_format = sub.add_parser("format", help="Clean and format platform API output")
@@ -434,7 +454,9 @@ def _cmd_install(args):
             )
         else:
             # ── Install agent skill ──
-            skill_install_ok = _install_skill() is not False
+            skill_install_ok = _install_skill(
+                scope=getattr(args, "scope", _SKILL_SCOPE_USER)
+            ) is not False
             install_ok = (
                 core_install_ok and optional_install_ok and skill_install_ok
             )
@@ -466,7 +488,29 @@ def _cmd_install(args):
         print("Dry run complete. No changes were made.")
 
 
-def _install_skill(force: bool = True):
+def _project_skill_paths() -> "tuple[Path, Path] | None":
+    """Resolve the project skill directory and target under the current directory.
+
+    Returns ``None`` when ``.claude`` or ``.claude/skills`` is a symlink, so a
+    linked directory is never written to or removed on the user's behalf.
+    """
+    project_skill_dir = Path.cwd()
+    for component in _PROJECT_SKILL_COMPONENTS:
+        project_skill_dir /= component
+        if project_skill_dir.is_symlink():
+            print(
+                "  Warning: Refusing project skill operation through "
+                f"symlinked directory: {project_skill_dir}"
+            )
+            return None
+    return project_skill_dir, project_skill_dir / _SKILL_DIRECTORY_NAME
+
+
+def _install_skill(
+    force: bool = True,
+    *,
+    scope: str = _SKILL_SCOPE_USER,
+):
     """Install Agent Reach as an agent skill for supported agent clients."""
     import importlib.resources
     import os
@@ -538,7 +582,36 @@ def _install_skill(force: bool = True):
             print(f"  Warning: Could not install skill: {e}")
             return None
 
-    # Install into every known skill root that already exists.
+    if scope not in _SKILL_SCOPES:
+        raise ValueError(f"unsupported skill scope: {scope}")
+
+    if scope == _SKILL_SCOPE_PROJECT:
+        resolved = _project_skill_paths()
+        if resolved is None:
+            return False
+        project_skill_dir, project_target = resolved
+        # Announce the absolute destination before the first write, so a
+        # project-scoped install is never silent about where it lands.
+        print(f"Installing skill for current project: {project_target}")
+        try:
+            project_skill_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            print(f"  Warning: Could not prepare project skill directory: {exc}")
+            return False
+        status = _copy_skill_dir(os.fspath(project_target))
+        if status == "preserved":
+            print(
+                "Skill already installed, preserving existing files: "
+                f"{project_target}"
+            )
+            return True
+        if status == "installed":
+            print(f"Skill installed for current project: {project_target}")
+            return True
+        print("  -- Could not install agent skill for current project")
+        return False
+
+    # Install into every known user skill root that already exists.
     skill_dirs = [
         (os.path.expanduser("~/.agents/skills"), "Agent"),
         (os.path.expanduser("~/.config/opencode/skills"), "OpenCode"),
@@ -585,9 +658,30 @@ def _install_skill(force: bool = True):
     return installed
 
 
-def _uninstall_skill():
-    """Remove SKILL.md from all known agent skill directories."""
+def _uninstall_skill(scope: str = _SKILL_SCOPE_USER):
+    """Remove SKILL.md from the agent skill directories of the given scope."""
     import shutil
+
+    if scope not in _SKILL_SCOPES:
+        raise ValueError(f"unsupported skill scope: {scope}")
+
+    if scope == _SKILL_SCOPE_PROJECT:
+        resolved = _project_skill_paths()
+        if resolved is None:
+            return
+        _, project_target = resolved
+        if not project_target.is_symlink() and not project_target.is_dir():
+            print("  No project skill installation found.")
+            return
+        try:
+            if project_target.is_symlink():
+                project_target.unlink()
+            else:
+                shutil.rmtree(project_target)
+            print(f"  Removed project skill: {project_target}")
+        except OSError as exc:
+            print(f"  Could not remove {project_target}: {exc}")
+        return
 
     skill_dirs = [
         ("~/.config/opencode/skills/agent-reach", "OpenCode"),
@@ -625,10 +719,10 @@ def _uninstall_skill():
 def _cmd_skill(args):
     """Manage agent skill registration."""
     if args.install:
-        if not _install_skill():
+        if not _install_skill(scope=getattr(args, "scope", _SKILL_SCOPE_USER)):
             raise SystemExit(1)
     elif args.uninstall:
-        _uninstall_skill()
+        _uninstall_skill(scope=getattr(args, "scope", _SKILL_SCOPE_USER))
 
 
 def _cmd_format(args):

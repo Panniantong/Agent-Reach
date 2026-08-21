@@ -130,6 +130,9 @@ only when the user's task requires that platform, and require non-empty content.
 **Never create files in the agent workspace.** Use `/tmp/` for temporary
 output and `~/.agent-reach/` for persistent data.
 
+The one exception is skill registration under `<project>/.claude/skills/agent-reach/`,
+and only when the user explicitly passes `--scope=project`.
+
 ## Detailed references
 
 Read the matching file when you need specifics (commands above cover the

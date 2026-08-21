@@ -4,12 +4,14 @@
 import importlib.resources
 import os
 import re
+import sys
 import tempfile
 import unittest
 from argparse import Namespace
 from pathlib import Path
 from unittest.mock import patch
 
+import agent_reach.cli as cli
 from agent_reach.cli import _cmd_skill, _install_skill, _uninstall_skill
 
 
@@ -122,6 +124,316 @@ class TestSkillCommand(unittest.TestCase):
                 _cmd_skill(Namespace(install=True, uninstall=False))
 
         self.assertEqual(raised.exception.code, 1)
+
+    def test_project_scope_installs_only_in_current_project(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            project.mkdir()
+
+            with patch("pathlib.Path.cwd", return_value=project), patch(
+                "agent_reach.cli.os.path.expanduser",
+                side_effect=lambda path: path.replace("~", tmpdir),
+            ), patch.dict(os.environ, {}, clear=True):
+                installed = _install_skill(scope="project")
+
+            self.assertTrue(installed)
+            self.assertTrue(
+                (project / ".claude" / "skills" / "agent-reach" / "SKILL.md").is_file()
+            )
+            self.assertFalse((Path(tmpdir) / ".agents" / "skills" / "agent-reach").exists())
+
+    def test_project_scope_preserves_existing_skill_when_not_forced(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            skill = project / ".claude" / "skills" / "agent-reach" / "SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text("custom", encoding="utf-8")
+
+            with patch("pathlib.Path.cwd", return_value=project):
+                installed = _install_skill(force=False, scope="project")
+
+            self.assertTrue(installed)
+            self.assertEqual(skill.read_text(encoding="utf-8"), "custom")
+
+    def test_project_scope_rejects_symlinked_skill_parent(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            external = Path(tmpdir) / "external"
+            project.mkdir()
+            external.mkdir()
+            (project / ".claude").symlink_to(external, target_is_directory=True)
+
+            with patch("pathlib.Path.cwd", return_value=project):
+                installed = _install_skill(scope="project")
+
+            self.assertFalse(installed)
+            self.assertFalse((external / "skills").exists())
+
+    def test_project_scope_announces_target_before_writing(self):
+        """The resolved absolute target is printed before anything is created."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            project.mkdir()
+            target = project / ".claude" / "skills" / "agent-reach"
+            printed_before_mkdir = []
+            original_mkdir = Path.mkdir
+
+            def record_then_mkdir(path, *args, **kwargs):
+                printed_before_mkdir.append(list(printed))
+                return original_mkdir(path, *args, **kwargs)
+
+            printed = []
+            with patch("pathlib.Path.cwd", return_value=project), patch.object(
+                Path, "mkdir", autospec=True, side_effect=record_then_mkdir
+            ), patch("builtins.print", side_effect=lambda *a, **k: printed.append(" ".join(str(x) for x in a))):
+                installed = _install_skill(scope="project")
+
+            self.assertTrue(installed)
+            self.assertTrue(printed_before_mkdir, "mkdir was never called")
+            self.assertTrue(
+                any(str(target) in line for line in printed_before_mkdir[0]),
+                f"target not announced before first write: {printed_before_mkdir[0]}",
+            )
+
+    def test_project_scope_uninstall_removes_only_project_skill(self):
+        """Project uninstall removes what project install created, nothing else."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            project.mkdir()
+            target = project / ".claude" / "skills" / "agent-reach"
+            user_skill = Path(tmpdir) / ".claude" / "skills" / "agent-reach"
+            user_skill.mkdir(parents=True)
+            (user_skill / "SKILL.md").write_text("user", encoding="utf-8")
+
+            with patch("pathlib.Path.cwd", return_value=project):
+                self.assertTrue(_install_skill(scope="project"))
+                self.assertTrue((target / "SKILL.md").is_file())
+
+                with patch(
+                    "agent_reach.cli.os.path.expanduser",
+                    side_effect=lambda path: path.replace("~", tmpdir),
+                ), patch.dict(os.environ, {}, clear=True):
+                    _uninstall_skill(scope="project")
+
+            self.assertFalse(target.exists())
+            self.assertTrue((user_skill / "SKILL.md").is_file())
+
+    def test_project_scope_uninstall_reports_when_nothing_installed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            project.mkdir()
+
+            printed = []
+            with patch("pathlib.Path.cwd", return_value=project), patch(
+                "builtins.print",
+                side_effect=lambda *a, **k: printed.append(" ".join(str(x) for x in a)),
+            ):
+                _uninstall_skill(scope="project")
+
+            self.assertFalse((project / ".claude").exists())
+            self.assertTrue(
+                any("No project skill installation found." in x for x in printed), printed
+            )
+
+    def test_uninstall_skill_rejects_unknown_scope(self):
+        with self.assertRaises(ValueError):
+            _uninstall_skill(scope="workspace")
+
+    def test_project_scope_uninstall_unlinks_symlinked_target(self):
+        """A symlinked skill dir is unlinked, never followed into its victim."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            victim = Path(tmpdir) / "victim"
+            victim.mkdir()
+            (victim / "SKILL.md").write_text("outside", encoding="utf-8")
+            target = project / ".claude" / "skills" / "agent-reach"
+            target.parent.mkdir(parents=True)
+            target.symlink_to(victim, target_is_directory=True)
+
+            with patch("pathlib.Path.cwd", return_value=project):
+                _uninstall_skill(scope="project")
+
+            self.assertFalse(target.is_symlink())
+            self.assertTrue((victim / "SKILL.md").is_file())
+
+    def test_project_scope_uninstall_reports_removal_failure(self):
+        """A failing removal is reported, not raised at the caller."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            target = project / ".claude" / "skills" / "agent-reach"
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text("project", encoding="utf-8")
+            printed = []
+
+            with patch("pathlib.Path.cwd", return_value=project), patch(
+                "shutil.rmtree", side_effect=OSError("read only")
+            ), patch(
+                "builtins.print",
+                side_effect=lambda *a, **k: printed.append(" ".join(str(x) for x in a)),
+            ):
+                _uninstall_skill(scope="project")
+
+            self.assertTrue((target / "SKILL.md").is_file())
+            self.assertTrue(
+                any("read only" in line for line in printed), printed
+            )
+
+    def test_project_scope_uninstall_rejects_symlinked_skill_parent(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            external = Path(tmpdir) / "external"
+            project.mkdir()
+            (external / "skills" / "agent-reach").mkdir(parents=True)
+            (external / "skills" / "agent-reach" / "SKILL.md").write_text(
+                "outside", encoding="utf-8"
+            )
+            (project / ".claude").symlink_to(external, target_is_directory=True)
+
+            with patch("pathlib.Path.cwd", return_value=project):
+                _uninstall_skill(scope="project")
+
+            self.assertTrue((external / "skills" / "agent-reach" / "SKILL.md").is_file())
+
+    def test_skill_cli_accepts_project_scope_uninstall(self):
+        """`skill --uninstall --scope=project` is a supported combination."""
+        with patch.object(
+            sys, "argv", ["agent-reach", "skill", "--uninstall", "--scope=project"]
+        ), patch("agent_reach.cli._uninstall_skill") as uninstall:
+            cli.main()
+
+        uninstall.assert_called_once_with(scope="project")
+
+    def test_skill_command_forwards_uninstall_scope(self):
+        with patch("agent_reach.cli._uninstall_skill") as uninstall:
+            _cmd_skill(Namespace(install=False, uninstall=True, scope="project"))
+
+        uninstall.assert_called_once_with(scope="project")
+
+    def test_top_level_uninstall_stays_user_scoped(self):
+        """`agent-reach uninstall` must never touch the working directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            target = project / ".claude" / "skills" / "agent-reach"
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text("project", encoding="utf-8")
+
+            with patch("pathlib.Path.cwd", return_value=project), patch(
+                "agent_reach.cli.os.path.expanduser",
+                side_effect=lambda path: path.replace("~", tmpdir),
+            ), patch.dict(os.environ, {}, clear=True):
+                _uninstall_skill()
+
+            self.assertTrue((target / "SKILL.md").is_file())
+
+    def test_project_scope_reports_expected_directory_creation_failure(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            project.mkdir()
+            skill_root = project / ".claude" / "skills"
+            original_mkdir = Path.mkdir
+            attempted_paths = []
+
+            def fail_for_skill_root(path, *args, **kwargs):
+                attempted_paths.append(path)
+                if path == skill_root:
+                    raise OSError("read only")
+                return original_mkdir(path, *args, **kwargs)
+
+            with patch("pathlib.Path.cwd", return_value=project), patch.object(
+                Path, "mkdir", autospec=True, side_effect=fail_for_skill_root
+            ):
+                installed = _install_skill(scope="project")
+
+            self.assertFalse(installed)
+            self.assertIn(skill_root, attempted_paths)
+            self.assertFalse(skill_root.exists())
+
+    def test_project_scope_reports_expected_destination_copy_failure(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            project.mkdir()
+            target = project / ".claude" / "skills" / "agent-reach"
+            original_makedirs = os.makedirs
+            attempted_paths = []
+
+            def fail_for_target(path, *args, **kwargs):
+                attempted_paths.append(Path(path))
+                if Path(path) == target:
+                    raise OSError("read only")
+                return original_makedirs(path, *args, **kwargs)
+
+            with patch("pathlib.Path.cwd", return_value=project), patch(
+                "agent_reach.cli.os.makedirs", side_effect=fail_for_target
+            ):
+                installed = _install_skill(scope="project")
+
+            self.assertFalse(installed)
+            self.assertIn(target, attempted_paths)
+            self.assertFalse(target.exists())
+
+    def test_install_skill_rejects_unknown_scope(self):
+        with self.assertRaisesRegex(ValueError, "unsupported skill scope"):
+            _install_skill(scope="automatic")
+
+    def test_skill_command_forwards_explicit_scope(self):
+        with patch("agent_reach.cli._install_skill", return_value=True) as install:
+            _cmd_skill(Namespace(install=True, uninstall=False, scope="project"))
+
+        install.assert_called_once_with(scope="project")
+
+    def test_skill_cli_accepts_project_scope(self):
+        with patch.object(
+            sys,
+            "argv",
+            ["agent-reach", "skill", "--install", "--scope", "project"],
+        ), patch("agent_reach.cli._configure_logging"), patch(
+            "agent_reach.cli._cmd_skill"
+        ) as command:
+            cli.main()
+
+        self.assertEqual(command.call_args.args[0].scope, "project")
+
+    def test_system_install_forwards_project_scope(self):
+        args = Namespace(
+            env="local",
+            proxy="",
+            system=True,
+            safe=False,
+            dry_run=False,
+            channels="",
+            scope="project",
+        )
+        with patch("agent_reach.config.Config"), patch(
+            "agent_reach.doctor.check_all", return_value={}
+        ), patch("agent_reach.doctor.format_report", return_value="report"), patch(
+            "agent_reach.cli._install_system_deps", return_value=True
+        ), patch("agent_reach.cli._install_mcporter", return_value=True), patch(
+            "agent_reach.cli._install_skill", return_value=True
+        ) as install:
+            cli._cmd_install(args)
+
+        install.assert_called_once_with(scope="project")
+
+    def test_system_install_keeps_default_user_scope_call_compatible(self):
+        args = Namespace(
+            env="local",
+            proxy="",
+            system=True,
+            safe=False,
+            dry_run=False,
+            channels="",
+            scope="user",
+        )
+        with patch("agent_reach.config.Config"), patch(
+            "agent_reach.doctor.check_all", return_value={}
+        ), patch("agent_reach.doctor.format_report", return_value="report"), patch(
+            "agent_reach.cli._install_system_deps", return_value=True
+        ), patch("agent_reach.cli._install_mcporter", return_value=True), patch(
+            "agent_reach.cli._install_skill", return_value=True
+        ) as install:
+            cli._cmd_install(args)
+
+        install.assert_called_once_with(scope="user")
 
     def test_install_skill_creates_skill_md(self):
         """_install_skill should create SKILL.md in the first available skill dir."""

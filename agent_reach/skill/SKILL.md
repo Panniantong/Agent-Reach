@@ -122,6 +122,8 @@ agent-reach doctor --json
 
 **不要在 agent workspace 创建文件。** 使用 `/tmp/` 存放临时输出，`~/.agent-reach/` 存放持久数据。
 
+唯一例外：用户显式传入 `--scope=project` 时，skill 注册可写入 `<项目>/.claude/skills/agent-reach/`。
+
 ## 详细文档
 
 根据用户需求，阅读对应的详细文档：
