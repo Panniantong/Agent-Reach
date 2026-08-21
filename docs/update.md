@@ -22,6 +22,8 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 
 **Never create files, clone repos, or run commands in the agent workspace.** Use `/tmp/` for temporary work and `~/.agent-reach/` for persistent data.
 
+The one exception is skill registration under `<project>/.claude/skills/agent-reach/`, and only when the user explicitly passes `--scope=project`.
+
 ### Goal
 
 Update Agent Reach to the latest version, refresh upstream tools, migrate from retired backends, and verify everything works. The user should not need to do anything manually (except things only a human can do, like clicking a browser-extension install button).

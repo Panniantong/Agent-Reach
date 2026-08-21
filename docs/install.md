@@ -30,28 +30,25 @@ When fixing issues, stay within these limits:
 - **DO NOT** modify system files outside `~/.agent-reach/`
 - **DO NOT** install packages not listed in this guide
 - **DO NOT** disable firewalls, security settings, or system protections
-- **DO NOT** clone repos or create unrelated files inside the agent workspace /
-  working directory. The only supported workspace write is project-local skill
-  registration when the user explicitly selects `--scope=project`.
+- **DO NOT** clone repos, create files, or run commands inside the agent workspace / working directory
+  - Sole exception: project-local skill registration, and only when the user explicitly passes `--scope=project`
 - If something requires elevated permissions, **tell the user** what's needed and let them decide
 
 ### 📁 Directory Rules
 
-Agent Reach files go in dedicated directories. Project-local skill registration
-is the only workspace exception and must be selected explicitly:
+All Agent Reach files go in dedicated directories — **never in the agent workspace**:
 
 | Purpose | Directory | Example |
 |---------|-----------|---------|
 | Config & tokens | `~/.agent-reach/` | `~/.agent-reach/config.json` |
 | Upstream tool repos | `~/.agent-reach/tools/` | `~/.agent-reach/tools/xiaoyuzhou/` |
 | Temporary files | `/tmp/` | `/tmp/yt-dlp-output/` |
-| User-scoped skills | `~/.openclaw/skills/agent-reach/` | SKILL.md |
-| Project-scoped Claude Code skill | `<project>/.claude/skills/agent-reach/` | SKILL.md |
+| Skills | `~/.openclaw/skills/agent-reach/` | SKILL.md |
+| Skills, project scope (opt-in) | `<project>/.claude/skills/agent-reach/` | SKILL.md |
 
-**Why?** Unrelated workspace files pollute the user's project and can break the
-agent over time. The explicit project scope is limited to Claude Code's
-standard `.claude/skills/` directory and is rejected when `.claude` or its
-`skills` directory is a symlink.
+**Why?** If you clone repos or create files in the workspace, it pollutes the user's project directory and can break their agent over time. Keep the workspace clean.
+
+`--scope=project` is the one opt-in exception. It writes only Claude Code's standard `.claude/skills/agent-reach/` directory in the current working directory, and refuses to run when `.claude` or `.claude/skills` is a symlink.
 
 ### Step 1: Install the basics
 
@@ -108,7 +105,13 @@ skill to the current project, choose the scope explicitly:
 agent-reach install --env=auto --system --scope=project
 # Or register only the project-local skill:
 agent-reach skill --install --scope=project
+# And to remove it again:
+agent-reach skill --uninstall --scope=project
 ```
+
+`agent-reach uninstall` stays user-scoped: it never touches the working
+directory. Removing a project-scoped skill is always an explicit,
+project-scoped command.
 
 ### Step 2: Ask the user which optional channels they want
 
