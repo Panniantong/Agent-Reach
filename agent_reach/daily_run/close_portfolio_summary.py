@@ -34,7 +34,11 @@ class ClosePortfolioSummary:
     cash_ratio: Optional[float]
     cash_delta: Optional[float] = None
     capital_net_flow: Optional[float] = None
+    start_stock_mv: Optional[float] = None
     stock_mv: Optional[float] = None
+    stock_mv_delta: Optional[float] = None
+    stock_pnl: Optional[float] = None
+    cash_pnl: Optional[float] = None
     stock_ratio: Optional[float] = None
     holdings_count: int = 0
     watchlist_count: int = 0
@@ -75,7 +79,11 @@ class ClosePortfolioSummary:
             "cash_ratio": self.cash_ratio,
             "cash_delta": self.cash_delta,
             "capital_net_flow": self.capital_net_flow,
+            "start_stock_mv": self.start_stock_mv,
             "stock_mv": self.stock_mv,
+            "stock_mv_delta": self.stock_mv_delta,
+            "stock_pnl": self.stock_pnl,
+            "cash_pnl": self.cash_pnl,
             "stock_ratio": self.stock_ratio,
             "holdings_count": self.holdings_count,
             "watchlist_count": self.watchlist_count,
@@ -781,18 +789,30 @@ def _build_reason_lines(data: dict[str, Any]) -> list[str]:
     else:
         lines.append("缺少早盘净值基线，仅报告收盘持仓与现金。")
 
-    if day_mv is not None and pnl is not None:
-        gap = round(
-            float(pnl) - float(day_mv) - float(cash_delta or 0) + capital_net_flow,
+    stock_mv_delta = data.get("stock_mv_delta")
+    if pnl is not None and stock_mv_delta is not None and cash_delta is not None:
+        bridge_gap = round(
+            float(pnl) - float(stock_mv_delta) - float(cash_delta) + capital_net_flow,
             2,
         )
-        if abs(gap) >= 50:
+        lines.append(
+            f"净值分解：持股市值 **{float(stock_mv_delta):+,.0f}** · "
+            f"现金 **{float(cash_delta):+,.0f}**"
+            + (f" · 入出金 **{capital_net_flow:+,.0f}**" if abs(capital_net_flow) >= 1 else "")
+            + "。"
+        )
+        if abs(bridge_gap) >= 1:
+            lines.append(f"净值分解与当日盈亏差额 **¥{bridge_gap:+,.0f}**（需核对基线）。")
+
+    if day_mv is not None:
+        if stock_mv_delta is not None and abs(float(day_mv) - float(stock_mv_delta)) >= 50:
             lines.append(
-                f"持股当日盈亏合计 **¥{float(day_mv):+,.0f}**，"
-                f"与净值变动差额 **¥{gap:+,.0f}**（口径不一致或缺少早盘价）。"
+                f"收盘持仓价格波动合计 **¥{float(day_mv):+,.0f}**"
+                f"（与持股市值变动 **{float(stock_mv_delta):+,.0f}** 不同，"
+                f"因盘中买卖/换仓）。"
             )
         elif winners or losers:
-            lines.append(f"持股当日盈亏合计 **¥{float(day_mv):+,.0f}**（与组合盈亏一致）。")
+            lines.append(f"收盘持仓价格波动合计 **¥{float(day_mv):+,.0f}**。")
 
     perf_parts: list[str] = []
     if winners:
@@ -949,27 +969,34 @@ def build_close_portfolio_summary(
 
     daily_pnl: Optional[float] = None
     daily_pnl_pct: Optional[float] = None
+    stock_mv_delta: Optional[float] = None
     stock_pnl: Optional[float] = None
     cash_pnl: Optional[float] = None
 
-    day_mv_change = 0.0
+    day_mv_change: Optional[float] = None
+    day_mv_sum = 0.0
     has_day_mv = False
     for h in holdings:
         if h.get("day_pnl") is not None:
-            day_mv_change += float(h["day_pnl"])
+            day_mv_sum += float(h["day_pnl"])
             has_day_mv = True
     if has_day_mv:
-        stock_pnl = round(day_mv_change, 2)
+        day_mv_change = round(day_mv_sum, 2)
+
+    if start_stock_mv is not None and end_stock_mv is not None:
+        stock_mv_delta = round(end_stock_mv - start_stock_mv, 2)
+        stock_pnl = stock_mv_delta
 
     cash_delta: Optional[float] = None
     if end_cash is not None and morning_cash is not None:
         cash_delta = round(end_cash - morning_cash, 2)
         cash_pnl = cash_delta
 
+    # Authoritative: close NAV − morning NAV (exclude deposit/withdraw from P&L).
     if start_total is not None and end_total is not None:
         daily_pnl = round(end_total - start_total - capital_flow, 2)
-    elif stock_pnl is not None:
-        daily_pnl = round(stock_pnl + (cash_pnl or 0.0) - capital_flow, 2)
+    elif stock_mv_delta is not None and cash_delta is not None:
+        daily_pnl = round(stock_mv_delta + cash_delta - capital_flow, 2)
 
     if abs(capital_flow) >= 0.01:
         from agent_reach.daily_run.capital_events import format_capital_flow_note
@@ -1032,7 +1059,11 @@ def build_close_portfolio_summary(
         cash_ratio=cash_ratio,
         cash_delta=cash_delta,
         capital_net_flow=capital_flow if abs(capital_flow) >= 0.01 else None,
+        start_stock_mv=start_stock_mv if morning_pf.get("holdings") else None,
         stock_mv=stock_mv,
+        stock_mv_delta=stock_mv_delta,
+        stock_pnl=stock_pnl,
+        cash_pnl=cash_pnl,
         stock_ratio=stock_ratio,
         holdings_count=len(holdings),
         watchlist_count=len(watchlist),
@@ -1040,7 +1071,7 @@ def build_close_portfolio_summary(
         winners=winners,
         losers=losers,
         flat=flat,
-        day_mv_change=stock_pnl,
+        day_mv_change=day_mv_change,
         total_unrealized=round(total_unrealized, 2) if holdings else None,
         cumulative_realized_pnl=round(cumulative_realized, 2),
         total_return_pnl=total_return,
@@ -1082,23 +1113,24 @@ def render_close_portfolio_markdown(
             pct = float(data["daily_pnl_pct"])
             pct_s = f"（{sign}{pct}%）"
         headline = f"**{sign}¥{pnl:,.0f}{pct_s}**"
-        stock_part = ""
-        day_mv = data.get("day_mv_change")
+        bridge_part = ""
+        stock_mv_delta = data.get("stock_mv_delta")
         cash_delta = data.get("cash_delta")
-        if day_mv is not None:
-            stock_part = f" · 持股合计 {float(day_mv):+,.0f}"
+        if stock_mv_delta is not None:
+            bridge_part += f" · 持股市值 {float(stock_mv_delta):+,.0f}"
         if cash_delta is not None and abs(float(cash_delta)) >= 0.01:
-            stock_part += f" · 现金 {float(cash_delta):+,.0f}"
+            bridge_part += f" · 现金 {float(cash_delta):+,.0f}"
         capital_net_flow = data.get("capital_net_flow")
         if capital_net_flow is not None and abs(float(capital_net_flow)) >= 0.01:
-            stock_part += f" · 剔除入出金 {float(capital_net_flow):+,.0f}"
+            bridge_part += f" · 剔除入出金 {float(capital_net_flow):+,.0f}"
         if data.get("start_total") is not None and data.get("end_total") is not None:
             lines.append(
-                f"- {headline}{stock_part} · 早盘 ¥{float(data['start_total']):,.0f} → "
+                f"- 当日盈亏 {headline}（收盘净值 − 早盘净值）{bridge_part} · "
+                f"早盘 ¥{float(data['start_total']):,.0f} → "
                 f"收盘 ¥{float(data['end_total']):,.0f}"
             )
         else:
-            lines.append(f"- {headline}{stock_part}")
+            lines.append(f"- 当日盈亏 {headline}{bridge_part}")
     elif data.get("end_total") is not None:
         lines.append(f"- 收盘净值 **¥{float(data['end_total']):,.0f}**")
     else:

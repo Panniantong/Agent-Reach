@@ -90,12 +90,51 @@ class TestClosePortfolioSummary:
         assert summary.start_total == 102873.0
         assert summary.end_total == 103673.0
         assert summary.day_mv_change == 800.0
+        assert summary.stock_mv_delta == 800.0
         assert summary.daily_pnl == 800.0
+        assert summary.daily_pnl == round(summary.end_total - summary.start_total, 2)
         assert sum(float(h.get("day_pnl") or 0) for h in summary.holdings) == 800.0
         assert summary.holdings_count == 3
         assert summary.reason_lines
 
-    def test_daily_pnl_equals_sum_of_stock_day_pnl_with_cash_change(self, monkeypatch):
+    def test_daily_pnl_uses_nav_not_holding_day_sum_with_trades(self, monkeypatch):
+        """After partial sell, day_mv_change + cash_delta ≠ daily_pnl; NAV bridge does."""
+        morning = {
+            "portfolio": {
+                "cash": 500.0,
+                "holdings": [
+                    {"code": "688008", "name": "澜起", "shares": 100, "cost": 8.0, "price": 10.0},
+                ],
+            }
+        }
+        close = {
+            "portfolio": {
+                "cash": 1050.0,
+                "holdings": [
+                    {"code": "688008", "name": "澜起", "shares": 50, "cost": 8.0, "price": 12.0, "change_pct": 20.0},
+                ],
+            }
+        }
+        ledger = [
+            {
+                "at": "2026-08-21T07:00:00+00:00",
+                "actions": [{"side": "sell", "code": "688008", "shares": 50, "amount": 550.0, "commission": 0.0}],
+            }
+        ]
+        monkeypatch.setattr(
+            "agent_reach.daily_run.close_portfolio_summary._load_trade_ledger_range",
+            lambda start, end: ledger if start == end else [],
+        )
+        summary = _build_summary(close, morning)
+        assert summary.daily_pnl == 150.0
+        assert summary.daily_pnl == round(summary.end_total - summary.start_total, 2)
+        assert summary.stock_mv_delta == -400.0
+        assert summary.cash_delta == 550.0
+        assert summary.day_mv_change == 100.0
+        assert summary.daily_pnl == round(summary.stock_mv_delta + summary.cash_delta, 2)
+        assert round(summary.day_mv_change + summary.cash_delta, 2) != summary.daily_pnl
+
+    def test_daily_pnl_equals_nav_bridge_with_ledger_cash(self, monkeypatch):
         morning = _morning_baseline()
         close = _close_snapshot()
         close["portfolio"] = dict(close["portfolio"])
@@ -117,7 +156,14 @@ class TestClosePortfolioSummary:
         assert summary.day_mv_change == 800.0
         assert summary.cash_delta == -1000.0
         assert summary.daily_pnl == -200.0
-        assert summary.daily_pnl == round(stock_sum + float(summary.cash_delta or 0), 2)
+        assert summary.daily_pnl == round(
+            float(summary.end_total) - float(summary.start_total),
+            2,
+        )
+        assert summary.daily_pnl == round(
+            float(summary.stock_mv_delta) + float(summary.cash_delta),
+            2,
+        )
 
     def test_daily_pnl_reconciles_inflated_cash_with_ledger(self, monkeypatch):
         """When portfolio cash drifts from ledger, PnL uses ledger-implied cash."""

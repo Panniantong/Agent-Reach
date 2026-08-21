@@ -45,7 +45,7 @@ class TestCapitalEvents:
         with pytest.raises(ValueError, match="amount"):
             append_capital_event("deposit", -1, path=path)
 
-    def test_daily_pnl_excludes_deposit(self):
+    def test_daily_pnl_excludes_deposit(self, monkeypatch):
         day = date(2026, 8, 17)
         morning = _morning_baseline()
         close = _close_snapshot()
@@ -53,6 +53,10 @@ class TestCapitalEvents:
         close["portfolio"]["cash"] = float(close["portfolio"]["cash"]) + 100000
         close["portfolio"]["total"] = float(close["portfolio"]["total"]) + 100000
 
+        monkeypatch.setattr(
+            "agent_reach.daily_run.close_portfolio_summary._load_trade_ledger_range",
+            lambda start, end: [],
+        )
         with patch(
             "agent_reach.daily_run.capital_events.net_capital_flow",
             return_value=100000.0,
@@ -66,8 +70,8 @@ class TestCapitalEvents:
         assert summary.daily_pnl == 800.0
         assert summary.end_total == pytest.approx(summary.start_total + 100800.0, abs=0.02)
 
-    def test_daily_pnl_with_deposit_and_cash_spend(self):
-        """Simulates deposit + buy: cash_delta mixes flows; PnL excludes deposit only."""
+    def test_daily_pnl_with_deposit_and_cash_spend(self, monkeypatch):
+        """Simulates deposit + buy: PnL uses close NAV − start NAV − capital flow."""
         day = date(2026, 8, 17)
         morning = {
             "portfolio": {
@@ -87,17 +91,35 @@ class TestCapitalEvents:
             }
         }
 
+        monkeypatch.setattr(
+            "agent_reach.daily_run.close_portfolio_summary._load_trade_ledger_range",
+            lambda start, end: (
+                [
+                    {
+                        "at": "2026-08-17T06:00:00+00:00",
+                        "actions": [{"side": "buy", "amount": 73107.0, "commission": 127.0}],
+                    }
+                ]
+                if start == end
+                else []
+            ),
+        )
         with patch(
             "agent_reach.daily_run.capital_events.net_capital_flow",
             return_value=100000.0,
         ):
             summary = _build_summary_no_quotes(close, morning, as_of=day)
 
-        assert summary.cash_delta == pytest.approx(75439.31 - 48673.0, abs=0.01)
         assert summary.daily_pnl is not None
         assert summary.start_total is not None and summary.end_total is not None
+        assert summary.cash == pytest.approx(75439.31, abs=0.01)
+        assert summary.cash_delta == pytest.approx(75439.31 - 48673.0, abs=0.01)
         assert summary.daily_pnl == pytest.approx(
             float(summary.end_total) - float(summary.start_total) - 100000.0,
             abs=0.02,
         )
-        assert summary.daily_pnl < 5000
+        assert summary.stock_mv_delta is not None
+        assert summary.daily_pnl == pytest.approx(
+            float(summary.stock_mv_delta) + float(summary.cash_delta) - 100000.0,
+            abs=0.02,
+        )
