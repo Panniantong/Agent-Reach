@@ -181,9 +181,11 @@ def _watchlist_shortfall_line(
 
 
 def _format_ledger_trade_lines(trades: list[dict[str, Any]]) -> list[str]:
+    from agent_reach.daily_run.realized_pnl import format_trade_at
+
     lines: list[str] = []
     for entry in trades:
-        at = str(entry.get("at") or "")[:10]
+        at = format_trade_at(str(entry.get("at") or ""))
         decision = entry.get("decision_action")
         for action in entry.get("actions") or []:
             side = "买入" if action.get("side") == "buy" else "卖出"
@@ -219,10 +221,10 @@ def _format_ledger_trade_lines(trades: list[dict[str, Any]]) -> list[str]:
 
 def _ledger_action_to_operation(action: dict[str, Any], *, at: str = "") -> dict[str, Any]:
     """Normalize one ledger action for close AI narrative."""
+    from agent_reach.daily_run.realized_pnl import format_trade_at
+
     side = str(action.get("side") or "")
-    time_s = ""
-    if at:
-        time_s = str(at).replace("T", " ")[:16]
+    time_s = format_trade_at(str(at or ""))
     return {
         "side": side,
         "name": action.get("name") or action.get("code") or "?",
@@ -239,6 +241,8 @@ def _ledger_action_to_operation(action: dict[str, Any], *, at: str = "") -> dict
 
 def extract_close_trade_operations(portfolio_summary: dict[str, Any] | None) -> list[dict[str, Any]]:
     """Structured buy/sell rows for the close-day AI narrative."""
+    from agent_reach.daily_run.realized_pnl import format_trade_at
+
     if not portfolio_summary:
         return []
     ops: list[dict[str, Any]] = []
@@ -283,7 +287,7 @@ def extract_close_trade_operations(portfolio_summary: dict[str, Any] | None) -> 
             "commission": None,
             "realized_pnl": entry.get("realized_pnl"),
             "realized_pnl_pct": entry.get("realized_pnl_pct"),
-            "time": str(entry.get("as_of") or "").replace("T", " ")[:16],
+            "time": format_trade_at(str(entry.get("as_of") or "")),
             "portfolio_applied": entry.get("portfolio_applied", True),
         }
         if op.get("shares") and op.get("price"):

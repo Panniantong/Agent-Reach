@@ -514,6 +514,34 @@ def test_format_trade_operation_line_buy_and_sell():
     assert "1471" in sell.replace(",", "")
 
 
+def test_extract_close_trade_operations_uses_beijing_time():
+    from agent_reach.daily_run.close_portfolio_summary import extract_close_trade_operations
+
+    ops = extract_close_trade_operations(
+        {
+            "trades": [
+                {
+                    "at": "2026-08-21T01:01:41+00:00",
+                    "actions": [
+                        {
+                            "side": "sell",
+                            "code": "002273",
+                            "name": "水晶光电",
+                            "shares": 100,
+                            "price": 27.13,
+                            "amount": 2713.0,
+                            "commission": 4.07,
+                            "realized_pnl": -4.0,
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+    assert len(ops) == 1
+    assert ops[0]["time"] == "2026-08-21 09:01"
+
+
 def test_append_merged_narrative_section():
     from agent_reach.daily_run.report_push import ReportSection, append_merged_narrative_section
 
