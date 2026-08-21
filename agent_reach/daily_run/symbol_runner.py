@@ -404,11 +404,16 @@ def run_close_for_symbols(
         )
         sections_retitle_done = False
         from agent_reach.daily_run.close_portfolio_summary import (
+            apply_portfolio_cash_reconcile,
             build_close_portfolio_summary,
+            collect_merged_intraday_trades,
             render_close_portfolio_markdown,
         )
-        from agent_reach.daily_run.snapshot_builder import save_portfolio
+        from agent_reach.daily_run.snapshot_builder import build_enriched_symbols, save_portfolio
         from agent_reach.daily_run.symbols import sync_snapshot_portfolio
+        from agent_reach.daily_run.trade_calendar import today_shanghai
+        from agent_reach.daily_run.capital_events import net_capital_flow
+        from agent_reach.daily_run.weekly_report import _load_trade_ledger_range
         from agent_reach.daily_run.watchlist_manager import (
             adjust_watchlist,
             collect_intraday_sold_codes,
@@ -423,6 +428,22 @@ def run_close_for_symbols(
         verify_dict = symbol_results[0]["result"].get("verify") or {}
 
         pf_work = load_portfolio()
+        merged_intraday_trades = collect_merged_intraday_trades(targets)
+        day = today_shanghai()
+        ledger_trades = _load_trade_ledger_range(day, day)
+        morning_cash = float((morning_bl.get("portfolio") or {}).get("cash") or 0)
+        enriched = build_enriched_symbols(primary_snap)
+        pf_work, cash_fixed, _cash_note = apply_portfolio_cash_reconcile(
+            pf_work,
+            morning_cash=morning_cash,
+            ledger_trades=ledger_trades,
+            capital_flow=net_capital_flow(day),
+            enriched=enriched,
+        )
+        if cash_fixed:
+            save_portfolio(pf_work)
+            sync_snapshot_portfolio(primary_snap, pf_work)
+
         wl_result = None
         if is_watchlist_adjust_enabled(cfg):
             wl_result = adjust_watchlist(
@@ -441,8 +462,8 @@ def run_close_for_symbols(
         portfolio_summary_obj = build_close_portfolio_summary(
             primary_snap,
             morning_bl,
-            trades=shared_state.trades,
-            intraday_trades=shared_state.trades,
+            trades=ledger_trades,
+            intraday_trades=merged_intraday_trades,
             watchlist_adjust=wl_result.to_dict() if wl_result else None,
             settings=cfg,
         )
@@ -463,21 +484,21 @@ def run_close_for_symbols(
             summary=portfolio_summary_obj.to_dict(),
             baseline=morning_bl,
             current=primary_snap,
-            intraday_trades=shared_state.trades,
+            intraday_trades=merged_intraday_trades,
             settings=cfg,
         ).to_dict()
         intraday_friction_whatif = build_intraday_friction_whatif(
             summary=portfolio_summary_obj.to_dict(),
             baseline=morning_bl,
             current=primary_snap,
-            intraday_trades=shared_state.trades,
+            intraday_trades=merged_intraday_trades,
             settings=cfg,
         ).to_dict()
         intraday_sell_whatif = build_intraday_sell_whatif(
             summary=portfolio_summary_obj.to_dict(),
             baseline=morning_bl,
             current=primary_snap,
-            intraday_trades=shared_state.trades,
+            intraday_trades=merged_intraday_trades,
             settings=cfg,
         ).to_dict()
         portfolio_summary_obj.sell_rules_whatif = sell_rules_whatif
@@ -538,8 +559,8 @@ def run_close_for_symbols(
                 portfolio_summary_dict = build_close_portfolio_summary(
                     primary_snap,
                     morning_bl,
-                    trades=shared_state.trades,
-                    intraday_trades=shared_state.trades,
+                    trades=ledger_trades,
+                    intraday_trades=merged_intraday_trades,
                     watchlist_adjust=wl_result.to_dict() if wl_result else None,
                     settings=cfg,
                 ).to_dict()

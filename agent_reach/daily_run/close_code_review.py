@@ -444,6 +444,59 @@ def _review_portfolio(
                     )
                 )
 
+    try:
+        from agent_reach.daily_run.capital_events import net_capital_flow
+        from agent_reach.daily_run.close_portfolio_summary import expected_end_cash_from_ledger
+        from agent_reach.daily_run.trade_calendar import today_shanghai
+        from agent_reach.daily_run.weekly_report import _load_trade_ledger_range
+        from agent_reach.daily_run.workflows import load_morning_baseline
+
+        morning_bl = load_morning_baseline()
+        morning_cash = float((morning_bl.get("portfolio") or {}).get("cash") or 0)
+        day = today_shanghai()
+        ledger = _load_trade_ledger_range(day, day)
+        capital_flow = net_capital_flow(day)
+        expected = expected_end_cash_from_ledger(
+            morning_cash,
+            ledger,
+            capital_flow=capital_flow,
+        )
+        if cash is not None:
+            drift = round(float(cash) - expected, 2)
+            if abs(drift) > 1.0:
+                detail = (
+                    f"记录 ¥{float(cash):,.0f} vs ledger 推算 ¥{expected:,.0f}（偏差 ¥{drift:+,.0f}）"
+                )
+                if auto_fix:
+                    pf["cash"] = expected
+                    if total is not None and float(total) > 0:
+                        pf["cash_ratio"] = round(expected / float(total), 4)
+                    out.portfolio = pf
+                    out.portfolio_changed = True
+                    msg = f"已按 ledger 修正现金：{detail}"
+                    out.fixes_applied.append(msg)
+                    out.findings.append(
+                        CodeFinding(
+                            "portfolio",
+                            "high",
+                            "portfolio 现金与 ledger 不一致",
+                            detail,
+                            fixed=True,
+                            fix_note=msg,
+                        )
+                    )
+                else:
+                    out.findings.append(
+                        CodeFinding(
+                            "portfolio",
+                            "high",
+                            "portfolio 现金与 ledger 不一致",
+                            detail,
+                        )
+                    )
+    except FileNotFoundError:
+        pass
+
 
 def _review_harness_evolution(
     out: CodeReviewResult,

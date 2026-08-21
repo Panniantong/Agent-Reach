@@ -113,6 +113,68 @@ def _recalc_portfolio_totals(portfolio: dict[str, Any], enriched: dict[str, dict
     _recalc_totals(portfolio, enriched)
 
 
+def expected_end_cash_from_ledger(
+    morning_cash: float,
+    ledger_trades: list[dict[str, Any]],
+    *,
+    capital_flow: float = 0.0,
+) -> float:
+    """Morning cash + same-day ledger net flow + capital events (deposit/withdraw)."""
+    flow = compute_trade_cash_flow(ledger_trades)
+    return round(float(morning_cash) + flow + float(capital_flow or 0), 2)
+
+
+def apply_portfolio_cash_reconcile(
+    portfolio: dict[str, Any],
+    *,
+    morning_cash: float,
+    ledger_trades: list[dict[str, Any]],
+    capital_flow: float = 0.0,
+    enriched: Optional[dict[str, dict[str, Any]]] = None,
+    tolerance: float = 1.0,
+) -> tuple[dict[str, Any], bool, Optional[str]]:
+    """Align portfolio cash with morning baseline + ledger when drift exceeds tolerance."""
+    recorded = float(portfolio.get("cash") or 0)
+    expected = expected_end_cash_from_ledger(
+        morning_cash,
+        ledger_trades,
+        capital_flow=capital_flow,
+    )
+    drift = round(recorded - expected, 2)
+    if abs(drift) <= tolerance:
+        return portfolio, False, None
+    pf = dict(portfolio)
+    pf["cash"] = expected
+    if enriched is not None:
+        _recalc_portfolio_totals(pf, enriched)
+    note = (
+        f"已修正 portfolio 现金 ¥{recorded:,.0f} → ¥{expected:,.0f} "
+        f"（与 ledger 偏差 ¥{drift:+,.0f}）"
+    )
+    return pf, True, note
+
+
+def collect_merged_intraday_trades(codes: Optional[list[str]] = None) -> list[dict[str, Any]]:
+    """Merge per-symbol intraday trade rows for close summary / what-if."""
+    from agent_reach.daily_run.intraday import load_state
+
+    if not codes:
+        return list(load_state().trades)
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw in codes:
+        code = _normalize_code(str(raw or ""))
+        if not code:
+            continue
+        for row in load_state(code=code).trades:
+            key = str(row.get("trade_id") or "") + "|" + str(row.get("action") or "")
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(dict(row))
+    return merged
+
+
 def _morning_portfolio(baseline: dict[str, Any]) -> dict[str, Any]:
     pf = dict(baseline.get("portfolio") or {})
     watchlist = baseline.get("watchlist") or pf.get("watchlist") or []
@@ -852,6 +914,28 @@ def build_close_portfolio_summary(
     end_cash_raw = close_pf.get("cash")
     end_cash = float(end_cash_raw) if end_cash_raw is not None else None
 
+    ledger_trades = _load_trade_ledger_range(day, day)
+    trade_cash_flow = compute_trade_cash_flow(ledger_trades)
+    notes: list[str] = []
+    cash_reconcile_drift: Optional[float] = None
+    if morning_cash is not None and end_cash is not None:
+        expected_end_cash = expected_end_cash_from_ledger(
+            morning_cash,
+            ledger_trades,
+            capital_flow=capital_flow,
+        )
+        drift = round(end_cash - expected_end_cash, 2)
+        if abs(drift) > 1.0:
+            cash_reconcile_drift = drift
+            notes.append(
+                (
+                    f"portfolio 现金 ¥{end_cash:,.0f} 与 ledger 推算 ¥{expected_end_cash:,.0f} "
+                    f"偏差 ¥{drift:+,.0f}，当日盈亏已按 ledger 重算"
+                )
+            )
+            close_pf["cash"] = expected_end_cash
+            end_cash = expected_end_cash
+
     holdings = _holding_pnl_rows(close_pf, enriched, morning_prices, close_prices)
     baseline_has_holdings = bool(morning_pf.get("holdings"))
     holdings = _attach_day_pnl(holdings, allow_change_pct_fallback=baseline_has_holdings)
@@ -860,8 +944,9 @@ def build_close_portfolio_summary(
     end_total: Optional[float] = None
     if end_cash is not None:
         end_total = round(end_stock_mv + end_cash, 2)
+        if cash_reconcile_drift is not None:
+            _recalc_portfolio_totals(close_pf, enriched)
 
-    notes: list[str] = []
     daily_pnl: Optional[float] = None
     daily_pnl_pct: Optional[float] = None
     stock_pnl: Optional[float] = None
@@ -920,13 +1005,11 @@ def build_close_portfolio_summary(
         if weight is not None:
             max_weight = max(max_weight or 0.0, float(weight))
 
-    ledger_trades = _load_trade_ledger_range(day, day)
     all_through_day = _load_trade_ledger_range(date(2000, 1, 1), day)
     prior_trades = all_through_day[: max(0, len(all_through_day) - len(ledger_trades))]
     realized = compute_day_realized_pnl(ledger_trades, prior_trades=prior_trades)
     cumulative_realized = compute_realized_pnl(all_through_day)
     total_return = round(cumulative_realized + total_unrealized, 2)
-    trade_cash_flow = compute_trade_cash_flow(ledger_trades)
     realized_sells = [r.to_dict() for r in replay_realized_sells(ledger_trades)]
     intraday_list = list(intraday_trades or [])
     wl_changes = _watchlist_changes_from_adjust(watchlist_adjust)

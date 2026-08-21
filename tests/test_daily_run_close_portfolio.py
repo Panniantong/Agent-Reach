@@ -22,6 +22,15 @@ def _no_capital_flow(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def _empty_trade_ledger(monkeypatch):
+    """Isolate unit tests from ~/.agent-reach trade_ledger.jsonl on disk."""
+    monkeypatch.setattr(
+        "agent_reach.daily_run.close_portfolio_summary._load_trade_ledger_range",
+        lambda start, end: [],
+    )
+
+
 def _morning_baseline():
     return {
         "code": "688008",
@@ -86,12 +95,22 @@ class TestClosePortfolioSummary:
         assert summary.holdings_count == 3
         assert summary.reason_lines
 
-    def test_daily_pnl_equals_sum_of_stock_day_pnl_with_cash_change(self):
+    def test_daily_pnl_equals_sum_of_stock_day_pnl_with_cash_change(self, monkeypatch):
         morning = _morning_baseline()
         close = _close_snapshot()
         close["portfolio"] = dict(close["portfolio"])
         close["portfolio"]["cash"] = 47673.0
         close["portfolio"]["total"] = 100500.0
+        ledger = [
+            {
+                "at": "2026-08-21T06:00:00+00:00",
+                "actions": [{"side": "buy", "amount": 990.0, "commission": 10.0}],
+            }
+        ]
+        monkeypatch.setattr(
+            "agent_reach.daily_run.close_portfolio_summary._load_trade_ledger_range",
+            lambda start, end: ledger if start == end else [],
+        )
         summary = _build_summary(close, morning)
         stock_sum = sum(float(h.get("day_pnl") or 0) for h in summary.holdings)
         assert stock_sum == 800.0
@@ -99,6 +118,60 @@ class TestClosePortfolioSummary:
         assert summary.cash_delta == -1000.0
         assert summary.daily_pnl == -200.0
         assert summary.daily_pnl == round(stock_sum + float(summary.cash_delta or 0), 2)
+
+    def test_daily_pnl_reconciles_inflated_cash_with_ledger(self, monkeypatch):
+        """When portfolio cash drifts from ledger, PnL uses ledger-implied cash."""
+        morning = _morning_baseline()
+        close = _close_snapshot()
+        close = dict(close)
+        close["portfolio"] = dict(close["portfolio"])
+        close["portfolio"]["cash"] = 135412.55
+        close["portfolio"]["total"] = float(close["portfolio"]["total"]) + 86839.55
+
+        ledger = [
+            {
+                "at": "2026-08-21T01:01:41+00:00",
+                "actions": [
+                    {"side": "sell", "amount": 2713.0, "commission": 4.07},
+                ],
+            },
+            {
+                "at": "2026-08-21T06:38:15+00:00",
+                "actions": [
+                    {"side": "buy", "amount": 13805.0, "commission": 20.71},
+                ],
+            },
+            {
+                "at": "2026-08-21T06:39:14+00:00",
+                "actions": [
+                    {"side": "buy", "amount": 12165.0, "commission": 18.25},
+                ],
+            },
+            {
+                "at": "2026-08-21T06:40:11+00:00",
+                "actions": [
+                    {"side": "buy", "amount": 7864.0, "commission": 11.8},
+                ],
+            },
+            {
+                "at": "2026-08-21T07:00:21+00:00",
+                "actions": [
+                    {"side": "sell", "amount": 10992.0, "commission": 16.49},
+                ],
+            },
+        ]
+
+        monkeypatch.setattr(
+            "agent_reach.daily_run.close_portfolio_summary._load_trade_ledger_range",
+            lambda start, end: ledger if start == end else [],
+        )
+
+        summary = _build_summary(close, morning)
+        expected_cash = 48673.0 - 20200.32
+        assert summary.cash == pytest.approx(expected_cash, abs=0.05)
+        assert summary.daily_pnl is not None
+        assert summary.daily_pnl < 10000
+        assert any("ledger" in note.lower() for note in summary.notes)
 
     def test_secondary_holding_gets_change_pct_via_quote_refresh(self):
         morning = _morning_baseline()
@@ -219,7 +292,11 @@ class TestClosePortfolioSummary:
                 ],
             }
         }
-        summary = _build_summary(close, morning)
+        with patch(
+            "agent_reach.daily_run.close_portfolio_summary._morning_prices_for_pnl",
+            return_value={},
+        ):
+            summary = _build_summary(close, morning)
         row = next(h for h in summary.holdings if h["code"] == "002273")
         assert row.get("week_start_price") is None
         assert row["day_pnl"] == pytest.approx(444.12, abs=0.05)
