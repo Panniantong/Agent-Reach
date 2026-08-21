@@ -409,8 +409,8 @@ def run_close_for_symbols(
             collect_merged_intraday_trades,
             render_close_portfolio_markdown,
         )
-        from agent_reach.daily_run.snapshot_builder import build_enriched_symbols, save_portfolio
-        from agent_reach.daily_run.symbols import sync_snapshot_portfolio
+        from agent_reach.daily_run.snapshot_builder import save_portfolio
+        from agent_reach.daily_run.symbols import build_enriched_symbols, sync_snapshot_portfolio
         from agent_reach.daily_run.trade_calendar import today_shanghai
         from agent_reach.daily_run.capital_events import net_capital_flow
         from agent_reach.daily_run.weekly_report import _load_trade_ledger_range
