@@ -199,7 +199,7 @@ class Config:
     def is_configured(self, feature: str) -> bool:
         """Check if a feature has all required config."""
         required = self.FEATURE_REQUIREMENTS.get(feature, [])
-        return all(self.get(k) for k in required)
+        return all(self.get(k) is not None for k in required)
 
     def get_configured_features(self) -> dict:
         """Return status of all optional features."""

@@ -66,6 +66,18 @@ class TestConfig:
         tmp_config.set("exa_api_key", "test-key")
         assert tmp_config.is_configured("exa_search")
 
+    def test_is_configured_accepts_empty_string(self, tmp_config):
+        tmp_config.set("exa_api_key", "")
+        assert tmp_config.is_configured("exa_search")
+
+    def test_is_configured_accepts_zero(self, tmp_config):
+        tmp_config.set("exa_api_key", 0)
+        assert tmp_config.is_configured("exa_search")
+
+    def test_is_configured_accepts_empty_list(self, tmp_config):
+        tmp_config.set("exa_api_key", [])
+        assert tmp_config.is_configured("exa_search")
+
     def test_get_configured_features(self, tmp_config):
         features = tmp_config.get_configured_features()
         assert isinstance(features, dict)
