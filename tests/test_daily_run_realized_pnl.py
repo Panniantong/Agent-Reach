@@ -5,6 +5,7 @@ from datetime import date
 from pathlib import Path
 
 from agent_reach.daily_run.realized_pnl import (
+    annotate_ledger_sell_pnl,
     backfill_ledger_realized_pnl,
     build_pnl_overview,
     compute_day_realized_pnl,
@@ -289,3 +290,71 @@ def test_compute_day_realized_pnl_prefers_stored_sell_fields():
     assert compute_day_realized_pnl(day_trades, prior_trades=prior) == 2025.2
     # Day-only FIFO replay without stored fields would miss buy history.
     assert compute_realized_pnl(day_trades) != 2025.2
+
+
+def test_annotate_ledger_sell_pnl_overwrites_wrong_stored_fields():
+    prior = [
+        {
+            "at": "2026-08-19T01:02:56+00:00",
+            "actions": [
+                {
+                    "side": "sell",
+                    "code": "002273",
+                    "shares": 100,
+                    "price": 29.0,
+                    "amount": 2900.0,
+                    "commission": 4.35,
+                    "realized_pnl": -4.35,
+                    "cost_basis": 2900.0,
+                }
+            ],
+        }
+    ]
+    day_trades = [
+        {
+            "at": "2026-08-21T01:01:41+00:00",
+            "trade_id": "T1",
+            "actions": [
+                {
+                    "side": "sell",
+                    "code": "002273",
+                    "shares": 100,
+                    "price": 27.13,
+                    "amount": 2713.0,
+                    "commission": 4.07,
+                    "realized_pnl": -4.07,
+                    "cost_basis": 2713.0,
+                }
+            ],
+        },
+        {
+            "at": "2026-08-21T07:00:21+00:00",
+            "trade_id": "T13",
+            "actions": [
+                {
+                    "side": "sell",
+                    "code": "002273",
+                    "shares": 400,
+                    "price": 27.48,
+                    "amount": 10992.0,
+                    "commission": 16.49,
+                    "realized_pnl": -85.06,
+                    "cost_basis": 11060.57,
+                }
+            ],
+        },
+    ]
+    annotated = annotate_ledger_sell_pnl(
+        day_trades,
+        prior_trades=prior,
+        opening_costs={"002273": 33.81},
+    )
+    sells = [a for e in annotated for a in e["actions"] if a["side"] == "sell"]
+    assert sells[0]["realized_pnl"] == -672.07
+    assert sells[1]["realized_pnl"] == -2548.49
+    assert compute_day_realized_pnl(
+        annotated,
+        prior_trades=prior,
+        opening_costs={"002273": 33.81},
+        use_stored=False,
+    ) == -3220.56

@@ -552,11 +552,13 @@ def compute_day_realized_pnl(
     *,
     prior_trades: Optional[list[dict[str, Any]]] = None,
     opening_costs: Optional[dict[str, float]] = None,
+    use_stored: bool = True,
 ) -> float:
     """Day realized P&L: prefer stored sell fields, else FIFO replay with buy history."""
-    stored = sum_stored_realized_pnl(day_trades)
-    if stored is not None:
-        return stored
+    if use_stored:
+        stored = sum_stored_realized_pnl(day_trades)
+        if stored is not None:
+            return stored
     merged = list(prior_trades or []) + list(day_trades or [])
     if not merged:
         return 0.0
@@ -567,6 +569,43 @@ def compute_day_realized_pnl(
     if day_s:
         rows = [r for r in rows if r.date == day_s]
     return round(sum(r.realized_pnl for r in rows), 2)
+
+
+def annotate_ledger_sell_pnl(
+    entries: list[dict[str, Any]],
+    *,
+    prior_trades: Optional[list[dict[str, Any]]] = None,
+    opening_costs: Optional[dict[str, float]] = None,
+) -> list[dict[str, Any]]:
+    """Overwrite sell action realized_pnl fields using FIFO replay (for display / close cards)."""
+    merged = list(prior_trades or []) + list(entries or [])
+    rows = replay_realized_sells(merged, opening_costs=opening_costs)
+    row_idx = 0
+    out: list[dict[str, Any]] = []
+    for entry in entries:
+        at = str(entry.get("at") or "")[:10]
+        new_actions: list[dict[str, Any]] = []
+        for action in entry.get("actions") or []:
+            act = dict(action)
+            if action.get("side") == "sell" and int(action.get("shares") or 0) > 0:
+                code = _normalize_code(str(action.get("code") or ""))
+                shares = int(action.get("shares") or 0)
+                while row_idx < len(rows) and not (
+                    rows[row_idx].date == at
+                    and _normalize_code(rows[row_idx].code) == code
+                    and int(rows[row_idx].shares or 0) == shares
+                ):
+                    row_idx += 1
+                if row_idx < len(rows):
+                    sell_row = rows[row_idx]
+                    row_idx += 1
+                    act["cost_basis"] = sell_row.cost_basis
+                    act["realized_pnl"] = sell_row.realized_pnl
+                    if sell_row.realized_pnl_pct is not None:
+                        act["realized_pnl_pct"] = sell_row.realized_pnl_pct
+            new_actions.append(act)
+        out.append({**dict(entry), "actions": new_actions})
+    return out
 
 
 def enrich_sell_actions(
@@ -771,10 +810,12 @@ def backfill_ledger_realized_pnl(*, path: Optional[Path] = None, dry_run: bool =
             continue
 
     deduped = dedupe_trade_ledger_entries(entries)
+    seed_costs: dict[str, float] = {}
     try:
-        from agent_reach.daily_run.snapshot_builder import load_portfolio
+        from agent_reach.daily_run.workflows import load_morning_baseline
 
-        seed_costs = opening_costs_from_portfolio(load_portfolio())
+        baseline = load_morning_baseline()
+        seed_costs = opening_costs_from_portfolio(baseline.get("portfolio") or baseline)
     except Exception:
         seed_costs = {}
     rows = replay_realized_sells(deduped, opening_costs=seed_costs or None)

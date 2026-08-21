@@ -242,6 +242,15 @@ def append_trade_ledger(
 
     prior = load_ledger_entries(path=p, end=trade_calendar.today_shanghai())
     opening_costs = opening_costs_from_portfolio(load_portfolio())
+    try:
+        from agent_reach.daily_run.workflows import load_morning_baseline
+
+        morning_costs = opening_costs_from_portfolio(
+            (load_morning_baseline().get("portfolio") or {})
+        )
+        opening_costs = {**morning_costs, **opening_costs}
+    except FileNotFoundError:
+        pass
     enriched = enrich_sell_actions(
         prior,
         raw_actions,

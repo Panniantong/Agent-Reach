@@ -16,9 +16,11 @@ from agent_reach.daily_run.weekly_report import (
     _watchlist_rows,
 )
 from agent_reach.daily_run.realized_pnl import (
+    annotate_ledger_sell_pnl,
     compute_day_realized_pnl,
     compute_realized_pnl,
     compute_trade_cash_flow,
+    opening_costs_from_portfolio,
     replay_realized_sells,
 )
 
@@ -934,7 +936,16 @@ def build_close_portfolio_summary(
     end_cash_raw = close_pf.get("cash")
     end_cash = float(end_cash_raw) if end_cash_raw is not None else None
 
+    all_through_day = _load_trade_ledger_range(date(2000, 1, 1), day)
     ledger_trades = _load_trade_ledger_range(day, day)
+    prior_trades = all_through_day[: max(0, len(all_through_day) - len(ledger_trades))]
+    morning_opening = opening_costs_from_portfolio(morning_pf)
+    if ledger_trades:
+        ledger_trades = annotate_ledger_sell_pnl(
+            ledger_trades,
+            prior_trades=prior_trades,
+            opening_costs=morning_opening or None,
+        )
     trade_cash_flow = compute_trade_cash_flow(ledger_trades)
     notes: list[str] = []
     cash_reconcile_drift: Optional[float] = None
@@ -1032,12 +1043,23 @@ def build_close_portfolio_summary(
         if weight is not None:
             max_weight = max(max_weight or 0.0, float(weight))
 
-    all_through_day = _load_trade_ledger_range(date(2000, 1, 1), day)
-    prior_trades = all_through_day[: max(0, len(all_through_day) - len(ledger_trades))]
-    realized = compute_day_realized_pnl(ledger_trades, prior_trades=prior_trades)
-    cumulative_realized = compute_realized_pnl(all_through_day)
+    realized = compute_day_realized_pnl(
+        ledger_trades,
+        prior_trades=prior_trades,
+        opening_costs=morning_opening or None,
+        use_stored=False,
+    )
+    cumulative_realized = compute_realized_pnl(
+        all_through_day,
+        opening_costs=morning_opening or None,
+    )
     total_return = round(cumulative_realized + total_unrealized, 2)
-    realized_sells = [r.to_dict() for r in replay_realized_sells(ledger_trades)]
+    day_s = day.isoformat()
+    realized_sells = [
+        r.to_dict()
+        for r in replay_realized_sells(all_through_day, opening_costs=morning_opening or None)
+        if r.date == day_s
+    ]
     intraday_list = list(intraday_trades or [])
     wl_changes = _watchlist_changes_from_adjust(watchlist_adjust)
 
