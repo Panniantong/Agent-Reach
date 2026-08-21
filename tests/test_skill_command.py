@@ -169,6 +169,112 @@ class TestSkillCommand(unittest.TestCase):
             self.assertFalse(installed)
             self.assertFalse((external / "skills").exists())
 
+    def test_project_scope_announces_target_before_writing(self):
+        """The resolved absolute target is printed before anything is created."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            project.mkdir()
+            target = project / ".claude" / "skills" / "agent-reach"
+            printed_before_mkdir = []
+            original_mkdir = Path.mkdir
+
+            def record_then_mkdir(path, *args, **kwargs):
+                printed_before_mkdir.append(list(printed))
+                return original_mkdir(path, *args, **kwargs)
+
+            printed = []
+            with patch("pathlib.Path.cwd", return_value=project), patch.object(
+                Path, "mkdir", autospec=True, side_effect=record_then_mkdir
+            ), patch("builtins.print", side_effect=lambda *a, **k: printed.append(" ".join(str(x) for x in a))):
+                installed = _install_skill(scope="project")
+
+            self.assertTrue(installed)
+            self.assertTrue(printed_before_mkdir, "mkdir was never called")
+            self.assertTrue(
+                any(str(target) in line for line in printed_before_mkdir[0]),
+                f"target not announced before first write: {printed_before_mkdir[0]}",
+            )
+
+    def test_project_scope_uninstall_removes_only_project_skill(self):
+        """Project uninstall removes what project install created, nothing else."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            project.mkdir()
+            target = project / ".claude" / "skills" / "agent-reach"
+            user_skill = Path(tmpdir) / ".claude" / "skills" / "agent-reach"
+            user_skill.mkdir(parents=True)
+            (user_skill / "SKILL.md").write_text("user", encoding="utf-8")
+
+            with patch("pathlib.Path.cwd", return_value=project):
+                self.assertTrue(_install_skill(scope="project"))
+                self.assertTrue((target / "SKILL.md").is_file())
+
+                with patch(
+                    "agent_reach.cli.os.path.expanduser",
+                    side_effect=lambda path: path.replace("~", tmpdir),
+                ), patch.dict(os.environ, {}, clear=True):
+                    _uninstall_skill(scope="project")
+
+            self.assertFalse(target.exists())
+            self.assertTrue((user_skill / "SKILL.md").is_file())
+
+    def test_project_scope_uninstall_reports_when_nothing_installed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            project.mkdir()
+
+            with patch("pathlib.Path.cwd", return_value=project):
+                _uninstall_skill(scope="project")
+
+            self.assertFalse((project / ".claude").exists())
+
+    def test_project_scope_uninstall_rejects_symlinked_skill_parent(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            external = Path(tmpdir) / "external"
+            project.mkdir()
+            (external / "skills" / "agent-reach").mkdir(parents=True)
+            (external / "skills" / "agent-reach" / "SKILL.md").write_text(
+                "outside", encoding="utf-8"
+            )
+            (project / ".claude").symlink_to(external, target_is_directory=True)
+
+            with patch("pathlib.Path.cwd", return_value=project):
+                _uninstall_skill(scope="project")
+
+            self.assertTrue((external / "skills" / "agent-reach" / "SKILL.md").is_file())
+
+    def test_skill_cli_accepts_project_scope_uninstall(self):
+        """`skill --uninstall --scope=project` is a supported combination."""
+        with patch.object(
+            sys, "argv", ["agent-reach", "skill", "--uninstall", "--scope=project"]
+        ), patch("agent_reach.cli._uninstall_skill") as uninstall:
+            cli.main()
+
+        uninstall.assert_called_once_with(scope="project")
+
+    def test_skill_command_forwards_uninstall_scope(self):
+        with patch("agent_reach.cli._uninstall_skill") as uninstall:
+            _cmd_skill(Namespace(install=False, uninstall=True, scope="project"))
+
+        uninstall.assert_called_once_with(scope="project")
+
+    def test_top_level_uninstall_stays_user_scoped(self):
+        """`agent-reach uninstall` must never touch the working directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            target = project / ".claude" / "skills" / "agent-reach"
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text("project", encoding="utf-8")
+
+            with patch("pathlib.Path.cwd", return_value=project), patch(
+                "agent_reach.cli.os.path.expanduser",
+                side_effect=lambda path: path.replace("~", tmpdir),
+            ), patch.dict(os.environ, {}, clear=True):
+                _uninstall_skill()
+
+            self.assertTrue((target / "SKILL.md").is_file())
+
     def test_project_scope_reports_expected_directory_creation_failure(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             project = Path(tmpdir) / "project"
@@ -236,19 +342,6 @@ class TestSkillCommand(unittest.TestCase):
             cli.main()
 
         self.assertEqual(command.call_args.args[0].scope, "project")
-
-    def test_skill_cli_rejects_project_scope_for_uninstall(self):
-        with patch.object(
-            sys,
-            "argv",
-            ["agent-reach", "skill", "--uninstall", "--scope", "project"],
-        ), patch("agent_reach.cli._cmd_skill") as command, self.assertRaises(
-            SystemExit
-        ) as raised:
-            cli.main()
-
-        self.assertEqual(raised.exception.code, 2)
-        command.assert_not_called()
 
     def test_system_install_forwards_project_scope(self):
         args = Namespace(

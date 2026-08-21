@@ -104,7 +104,7 @@ def main():
         "--scope",
         choices=_SKILL_SCOPES,
         default=_SKILL_SCOPE_USER,
-        help="Skill installation scope: user (default) or current project",
+        help="Skill scope: user (default) or current project",
     )
 
     # ── configure ──
@@ -164,7 +164,7 @@ def main():
         "--scope",
         choices=_SKILL_SCOPES,
         default=_SKILL_SCOPE_USER,
-        help="Skill installation scope: user (default) or current project",
+        help="Skill scope: user (default) or current project",
     )
 
     # ── format ──
@@ -234,13 +234,6 @@ def main():
         and args.provider != "auto"
     ):
         p_tr.error("--allow-provider-fallback requires --provider auto")
-    if (
-        args.command == "skill"
-        and args.uninstall
-        and args.scope != _SKILL_SCOPE_USER
-    ):
-        p_skill.error("--scope is only supported with --install")
-
     # Suppress loguru noise unless --verbose
     _configure_logging(getattr(args, "verbose", False))
 
@@ -494,6 +487,24 @@ def _cmd_install(args):
         print("Dry run complete. No changes were made.")
 
 
+def _project_skill_paths() -> "tuple[Path, Path] | None":
+    """Resolve the project skill directory and target under the current directory.
+
+    Returns ``None`` when a component of the path is a symlink, so neither
+    install nor uninstall can reach outside the project through one.
+    """
+    project_skill_dir = Path.cwd()
+    for component in _PROJECT_SKILL_COMPONENTS:
+        project_skill_dir /= component
+        if project_skill_dir.is_symlink():
+            print(
+                "  Warning: Refusing project skill operation through "
+                f"symlinked directory: {project_skill_dir}"
+            )
+            return None
+    return project_skill_dir, project_skill_dir / _SKILL_DIRECTORY_NAME
+
+
 def _install_skill(
     force: bool = True,
     *,
@@ -574,22 +585,18 @@ def _install_skill(
         raise ValueError(f"unsupported skill scope: {scope}")
 
     if scope == _SKILL_SCOPE_PROJECT:
-        project_root = Path.cwd()
-        project_skill_dir = project_root
-        for component in _PROJECT_SKILL_COMPONENTS:
-            project_skill_dir /= component
-            if project_skill_dir.is_symlink():
-                print(
-                    "  Warning: Refusing project skill installation through "
-                    f"symlinked directory: {project_skill_dir}"
-                )
-                return False
+        resolved = _project_skill_paths()
+        if resolved is None:
+            return False
+        project_skill_dir, project_target = resolved
+        # Announce the absolute destination before the first write, so a
+        # project-scoped install is never silent about where it lands.
+        print(f"Installing skill for current project: {project_target}")
         try:
             project_skill_dir.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
             print(f"  Warning: Could not prepare project skill directory: {exc}")
             return False
-        project_target = project_skill_dir / _SKILL_DIRECTORY_NAME
         status = _copy_skill_dir(os.fspath(project_target))
         if status == "preserved":
             print(
@@ -650,9 +657,30 @@ def _install_skill(
     return installed
 
 
-def _uninstall_skill():
-    """Remove SKILL.md from all known agent skill directories."""
+def _uninstall_skill(scope: str = _SKILL_SCOPE_USER):
+    """Remove SKILL.md from the agent skill directories of the given scope."""
     import shutil
+
+    if scope not in _SKILL_SCOPES:
+        raise ValueError(f"unsupported skill scope: {scope}")
+
+    if scope == _SKILL_SCOPE_PROJECT:
+        resolved = _project_skill_paths()
+        if resolved is None:
+            return
+        _, project_target = resolved
+        if not project_target.is_symlink() and not project_target.is_dir():
+            print("  No project skill installation found.")
+            return
+        try:
+            if project_target.is_symlink():
+                project_target.unlink()
+            else:
+                shutil.rmtree(project_target)
+            print(f"  Removed project skill: {project_target}")
+        except OSError as exc:
+            print(f"  Could not remove {project_target}: {exc}")
+        return
 
     skill_dirs = [
         ("~/.config/opencode/skills/agent-reach", "OpenCode"),
@@ -693,7 +721,7 @@ def _cmd_skill(args):
         if not _install_skill(scope=getattr(args, "scope", _SKILL_SCOPE_USER)):
             raise SystemExit(1)
     elif args.uninstall:
-        _uninstall_skill()
+        _uninstall_skill(scope=getattr(args, "scope", _SKILL_SCOPE_USER))
 
 
 def _cmd_format(args):

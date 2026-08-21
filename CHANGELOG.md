@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements / 改进
 
-- Add an explicit `--scope=project` option for project-local Claude Code skill registration while preserving user scope as the default.
+- Add an explicit `--scope=project` option for project-local Claude Code skill registration and removal, while preserving user scope as the default.
 
 ## [1.3.1] - 2026-03-27
 
