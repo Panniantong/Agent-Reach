@@ -609,7 +609,7 @@ def annotate_ledger_sell_pnl(
 
 
 def opening_costs_for_display() -> dict[str, float]:
-    """Morning baseline costs merged with current portfolio (for intraday FIFO display)."""
+    """Morning baseline costs, with current portfolio filling gaps only."""
     costs: dict[str, float] = {}
     try:
         from agent_reach.daily_run.workflows import load_morning_baseline
@@ -622,7 +622,8 @@ def opening_costs_for_display() -> dict[str, float]:
     try:
         from agent_reach.daily_run.snapshot_builder import load_portfolio
 
-        costs.update(opening_costs_from_portfolio(load_portfolio()))
+        for code, cost in opening_costs_from_portfolio(load_portfolio()).items():
+            costs.setdefault(code, cost)
     except Exception:
         pass
     return costs

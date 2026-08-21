@@ -251,7 +251,10 @@ def append_trade_ledger(
         morning_costs = opening_costs_from_portfolio(
             (load_morning_baseline().get("portfolio") or {})
         )
-        opening_costs = {**morning_costs, **opening_costs}
+        merged = dict(morning_costs)
+        for code, cost in opening_costs.items():
+            merged.setdefault(code, cost)
+        opening_costs = merged
     except FileNotFoundError:
         pass
     enriched = enrich_sell_actions(
