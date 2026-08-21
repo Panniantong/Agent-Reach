@@ -400,6 +400,10 @@ def main():
     # ── version ──
     sub.add_parser("version", help="Show version")
 
+    from agent_reach.daily_run.context_cli import add_context_subparser
+
+    add_context_subparser(sub)
+
     args = parser.parse_args()
 
     # Suppress loguru noise unless --verbose
@@ -437,6 +441,10 @@ def main():
         _cmd_format(args)
     elif args.command == "transcribe":
         _cmd_transcribe(args)
+    elif args.command == "context":
+        from agent_reach.daily_run.context_cli import cmd_context
+
+        cmd_context(args)
 
 
 # ── Command handlers ────────────────────────────────

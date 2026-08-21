@@ -315,4 +315,15 @@ def build_context_trace(
         if total:
             lines.append(layer0(f"近期 harness overlay 更新 {total} 项"))
 
+    code = str(ctx.get("code") or "").strip()
+    if code and len(lines) < max_items:
+        try:
+            from agent_reach.daily_run.context_store import find_cases_for_symbol
+
+            for case_line in find_cases_for_symbol(code, limit=1):
+                lines.append(layer0(f"Case {case_line}"))
+                break
+        except Exception:
+            pass
+
     return lines[:max_items]

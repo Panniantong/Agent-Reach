@@ -588,6 +588,24 @@ def evaluate_trade(
     trade_record["portfolio_message"] = apply_result.message
     if apply_result.applied:
         trade_record["portfolio_actions"] = [a.to_dict() for a in apply_result.actions]
+    try:
+        from agent_reach.daily_run.context_store import record_trade_case
+
+        pf = enriched.get("portfolio") or {}
+        case_uri = record_trade_case(
+            trade_record,
+            portfolio_snapshot={
+                "cash": pf.get("cash"),
+                "total": pf.get("total"),
+                "cash_ratio": pf.get("cash_ratio"),
+            },
+            price=enriched.get("price"),
+            settings=cfg,
+        )
+        if case_uri:
+            trade_record["case_uri"] = case_uri
+    except Exception:
+        pass
     st.trades.append(trade_record)
     save_state(st, state_path)
 

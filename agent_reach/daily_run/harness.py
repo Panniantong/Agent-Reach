@@ -175,6 +175,12 @@ class HarnessState:
             "refinements": [event.to_dict() for event in self.refinements[-200:]],
         }
         p.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        try:
+            from agent_reach.daily_run.context_store import sync_harness_sidecars
+
+            sync_harness_sidecars(self)
+        except Exception:
+            pass
         return p
 
     def clone(self) -> HarnessState:

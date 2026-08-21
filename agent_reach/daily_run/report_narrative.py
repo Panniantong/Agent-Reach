@@ -721,6 +721,7 @@ def _intraday_row_context(row: dict[str, Any]) -> dict[str, Any]:
         "portfolio_message": trade_record.get("portfolio_message"),
         "cash_limit_bypass": trade_record.get("cash_limit_bypass"),
         "consecutive_buy_streak": trade_record.get("consecutive_buy_streak"),
+        "case_uri": trade_record.get("case_uri"),
     }
 
 
@@ -766,6 +767,7 @@ def build_intraday_context(
         "portfolio_message": trade_record.get("portfolio_message"),
         "cash_limit_bypass": trade_record.get("cash_limit_bypass"),
         "consecutive_buy_streak": trade_record.get("consecutive_buy_streak"),
+        "case_uri": trade_record.get("case_uri"),
     }
 
 
