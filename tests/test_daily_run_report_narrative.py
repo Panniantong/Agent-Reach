@@ -42,6 +42,48 @@ def test_planner_deterministic_skips_llm_even_with_provider():
             assert narrative["planner"] == "deterministic"
 
 
+def test_per_job_planner_override_keeps_weekly_deterministic():
+    with patch("agent_reach.daily_run.llm_chat.resolve_chat_provider", return_value="deepseek"):
+        with patch("agent_reach.daily_run.llm_chat.chat_json") as mock_chat:
+            mock_chat.return_value = {
+                "summary": "LLM 周报",
+                "focus_points": ["A"],
+                "divergence_notes": [],
+                "risk_alerts": [],
+            }
+            narrative = generate_weekly_narrative(
+                {"week_start": "2026-08-10", "week_end": "2026-08-14", "weekly_pnl": -100},
+                settings={
+                    "llm_narrative": {
+                        "enabled": True,
+                        "planner": "llm",
+                        "jobs": {"weekly": {"planner": "deterministic"}},
+                    }
+                },
+            )
+            mock_chat.assert_not_called()
+            assert narrative["planner"] == "deterministic"
+
+
+@patch("agent_reach.daily_run.llm_chat.chat_json")
+@patch("agent_reach.daily_run.llm_chat.resolve_chat_provider", return_value="deepseek")
+def test_morning_uses_llm_when_planner_llm(mock_provider, mock_chat):
+    mock_chat.return_value = {
+        "summary": "早盘 LLM 摘要",
+        "focus_points": ["MSS 回升"],
+        "divergence_notes": [],
+        "risk_alerts": [],
+    }
+    narrative = generate_morning_narrative(
+        {"name": "澜起科技", "code": "688008", "portfolio": {"cash_ratio": 0.46}},
+        {"name": "澜起科技", "verdict": "可做", "mss_final": 53.2},
+        settings={"llm_narrative": {"enabled": True, "planner": "llm", "jobs": {"morning": True}}},
+    )
+    mock_chat.assert_called_once()
+    assert narrative["planner"] == "llm"
+    assert narrative["summary"] == "早盘 LLM 摘要"
+
+
 def test_morning_sections_include_ai_last():
     sections = render_morning_sections(
         team_markdown="",

@@ -222,8 +222,22 @@ def _narrative_cfg(settings: Optional[dict[str, Any]], job: str) -> dict[str, An
             if key != "jobs" and val is not None:
                 root[key] = val
     jobs = root.get("jobs") or {}
-    if isinstance(jobs, dict) and job in jobs and not jobs[job]:
-        return {"enabled": False}
+    if isinstance(jobs, dict) and job in jobs:
+        entry = jobs[job]
+        if entry is False:
+            return {"enabled": False}
+        if isinstance(entry, dict):
+            if entry.get("enabled") is False:
+                return {"enabled": False}
+            for key in (
+                "planner",
+                "provider",
+                "model",
+                "timeout_seconds",
+                "max_output_tokens",
+            ):
+                if entry.get(key) is not None:
+                    root[key] = entry[key]
     if root.get("enabled") is False:
         return {"enabled": False}
     harness_llm = ((settings or {}).get("harness") or {}).get("llm_refine") or {}

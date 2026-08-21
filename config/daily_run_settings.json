@@ -712,7 +712,7 @@
 
   "llm_narrative": {
     "enabled": true,
-    "planner": "deterministic",
+    "planner": "llm",
     "provider": "deepseek",
     "model": "deepseek-v4-flash",
     "timeout_seconds": 45,
@@ -727,8 +727,8 @@
     "jobs": {
       "morning": true,
       "close": true,
-      "weekly": true,
-      "forecast": true
+      "weekly": {"planner": "deterministic"},
+      "forecast": {"planner": "deterministic"}
     }
   },
 
