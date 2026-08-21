@@ -222,9 +222,11 @@ class TestWatchlistPolicy:
 
     def test_watchlist_removes_low_symbol_win_rate(self, portfolio, snapshot, settings, monkeypatch):
         from agent_reach.daily_run import pnl_execution_guard
+        from agent_reach.daily_run.harness_policy import deep_loss_policy_default
 
         settings.setdefault("pnl_overview", {})
-        settings["pnl_overview"]["win_rate_min"] = 0.33
+        settings["pnl_overview"]["win_rate_min"] = 0.0
+        settings["watchlist"]["candidates"] = []
         portfolio["watchlist"] = [
             {"code": "002273", "name": "水晶光电"},
             {"code": "603986", "name": "兆易创新"},
@@ -239,6 +241,25 @@ class TestWatchlistPolicy:
                     {"code": "002273", "name": "水晶光电", "realized_pnl": -10.0},
                 ]
             },
+        )
+        original_default = deep_loss_policy_default
+
+        def _patched_default(cfg, key):
+            if key == "win_rate_min":
+                return 0.33
+            return original_default(cfg, key)
+
+        monkeypatch.setattr(
+            "agent_reach.daily_run.harness_policy.deep_loss_policy_default",
+            _patched_default,
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.pnl_execution_guard.deep_loss_policy_default",
+            _patched_default,
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.watchlist_candidates.effective_watchlist_candidates",
+            lambda _settings: [],
         )
         result = adjust_watchlist(portfolio, snapshot, settings, "morning")
         codes = {w["code"] for w in result.portfolio["watchlist"]}

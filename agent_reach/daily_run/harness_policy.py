@@ -1912,6 +1912,10 @@ def _apply_deep_loss_signal_evolution(
     if signals.get("pnl_target_hit"):
         _relax_sell_ratio(0.6)
         _relax_non_deep_sell_ratio(0.85)
+        if evolution_mode(settings, "win_rate_min") == "harness":
+            merged["win_rate_min"] = max(
+                0.0, float(merged.get("win_rate_min", 0.0)) - 0.05
+            )
     if _overlay_has_phrase(state, "深浮亏", settings=settings) or _overlay_has_phrase(
         state, "深度套牢", settings=settings
     ):
@@ -1954,13 +1958,14 @@ def _apply_deep_loss_signal_evolution(
         merged["coverable_realized_weight"] = min(
             float(merged.get("coverable_realized_weight", 1.0)), 0.75
         )
-        if float(merged.get("win_rate_min") or 0) > 0:
-            merged["win_rate_min"] = min(float(merged["win_rate_min"]), 0.4)
+        if evolution_mode(settings, "win_rate_min") == "harness":
+            cur = float(merged.get("win_rate_min", 0.0))
+            merged["win_rate_min"] = max(cur, 0.33 if cur <= 0 else 0.4)
     if _overlay_has_phrase(state, "连亏警戒", settings=settings):
         merged["cover_ratio"] = max(float(merged.get("cover_ratio", 1.0)), 1.15)
         _tighten_sell_ratio(0.4)
         _tighten_non_deep_sell_ratio(0.55)
-        if float(merged.get("loss_streak_max") or 0) > 0:
+        if evolution_mode(settings, "loss_streak_max") == "harness":
             merged["loss_streak_max"] = max(2.0, float(merged["loss_streak_max"]) - 1.0)
     if _overlay_has_phrase(state, "ledger 缺买入成本", settings=settings):
         merged["coverable_realized_weight"] = min(
@@ -2036,8 +2041,14 @@ def resolve_harness_deep_loss_policy(
     merged["coverable_realized_weight"] = max(
         0.0, min(1.0, float(merged.get("coverable_realized_weight", 1.0)))
     )
-    merged["win_rate_min"] = max(0.0, min(0.9, float(merged.get("win_rate_min", 0.0))))
-    merged["loss_streak_max"] = max(0.0, min(10.0, float(merged.get("loss_streak_max", 0.0))))
+    if evolution_mode(settings, "win_rate_min") == "harness":
+        merged["win_rate_min"] = max(0.0, min(0.9, float(merged.get("win_rate_min", 0.0))))
+    else:
+        merged["win_rate_min"] = deep_loss_policy_base(settings, "win_rate_min")
+    if evolution_mode(settings, "loss_streak_max") == "harness":
+        merged["loss_streak_max"] = max(0.0, min(10.0, float(merged.get("loss_streak_max", 0.0))))
+    else:
+        merged["loss_streak_max"] = deep_loss_policy_base(settings, "loss_streak_max")
     merged["ledger_cost_tolerance_cny"] = max(
         0.01, float(merged.get("ledger_cost_tolerance_cny", 0.01))
     )

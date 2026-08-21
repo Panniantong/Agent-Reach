@@ -896,7 +896,18 @@ class TestHarnessRuntimeExtensions:
         pos = resolve_harness_position_policy(state, settings=settings)
         assert deep["cover_ratio"] >= 1.1
         assert deep["coverable_realized_weight"] <= 0.75
+        assert deep["win_rate_min"] >= 0.33
         assert pos["deploy_ratio"] <= 0.35
+
+    def test_win_rate_min_stays_zero_without_harness_phrase(self):
+        from agent_reach.daily_run.harness import HarnessState
+        from agent_reach.daily_run.harness_policy import resolve_harness_deep_loss_policy
+
+        policy = resolve_harness_deep_loss_policy(
+            HarnessState(),
+            settings={"harness": {"runtime_overlay_sources": ["policy"], "win_rate_min_mode": "harness"}},
+        )
+        assert policy["win_rate_min"] == 0.0
 
     def test_loss_streak_phrase_evolves_policy(self):
         from agent_reach.daily_run.harness import HarnessEntry, HarnessState

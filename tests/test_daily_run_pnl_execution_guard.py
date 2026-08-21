@@ -12,9 +12,16 @@ from agent_reach.daily_run.portfolio_manager import apply_auto_adjust
 def _settings(**overrides):
     base = {
         "pnl_overview": {
-            "win_rate_min": 0.33,
+            "win_rate_min": 0.0,
             "loss_streak_max": 3,
             "ledger_cost_tolerance_cny": 0.01,
+        },
+        "harness_runtime": {
+            "deep_loss_policy": {
+                "win_rate_min": 0.33,
+                "loss_streak_max": 3,
+                "ledger_cost_tolerance_cny": 0.01,
+            }
         },
         "portfolio": {"auto_adjust_enabled": True, "max_holdings": 10},
         "trading": {"holding_lock_days": 0, "commission_rate": 0.0015},
