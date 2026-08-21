@@ -220,6 +220,16 @@ def _fallback_technicals_patch(
     return patch
 
 
+def _xueqiu_technicals_enabled(settings: Optional[dict[str, Any]]) -> bool:
+    snap = (settings or {}).get("snapshot") or {}
+    qcfg = (settings or {}).get("quote_fetch") or {}
+    if snap.get("xueqiu_technicals_fallback") is False:
+        return False
+    if qcfg.get("xueqiu_technicals_fallback") is False:
+        return False
+    return True
+
+
 def _attach_technicals(
     quote: dict[str, Any],
     code: str,
@@ -235,6 +245,21 @@ def _attach_technicals(
         out.update(fetch_technicals(norm))
     except Exception as exc:
         logger.warning("akshare technicals failed for {}: {}", norm, exc)
+
+    if _technicals_patch(out).get("ma20") is None and _xueqiu_technicals_enabled(settings):
+        try:
+            from agent_reach.daily_run.xueqiu_technicals import fetch_technicals as fetch_xueqiu_technicals
+
+            xq = fetch_xueqiu_technicals(norm)
+            out.update(xq)
+            logger.info(
+                "technicals fallback for {}: ma20={} vol_ratio={} source=xueqiu",
+                norm,
+                xq.get("ma20"),
+                xq.get("volume_ratio"),
+            )
+        except Exception as exc:
+            logger.warning("xueqiu technicals failed for {}: {}", norm, exc)
 
     if _technicals_patch(out).get("ma20") is None:
         fb = _fallback_technicals_patch(norm, out, row=fallback_row, settings=settings)

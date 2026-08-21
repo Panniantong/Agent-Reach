@@ -244,8 +244,9 @@ class TestSnapshotBuilder:
         )
         assert patch == {}
 
+    @patch("agent_reach.daily_run.xueqiu_technicals.fetch_technicals", side_effect=RuntimeError("xq down"))
     @patch("agent_reach.daily_run.akshare_adapter.fetch_technicals", side_effect=RuntimeError("network"))
-    def test_attach_technicals_falls_back_to_portfolio_ma20(self, _mock_fetch):
+    def test_attach_technicals_falls_back_to_portfolio_ma20(self, _mock_fetch, _mock_xq):
         out = _attach_technicals(
             {"code": "688008", "price": 260.0},
             "688008",
@@ -254,9 +255,46 @@ class TestSnapshotBuilder:
         assert out["ma20"] == 255.0
         assert out["position_20d"] is not None
 
-    @patch("agent_reach.daily_run.snapshot_cache.save_daily_cache")
+    @patch(
+        "agent_reach.daily_run.xueqiu_technicals.fetch_technicals",
+        return_value={
+            "ma5": 6.05,
+            "ma20": 5.84,
+            "position_20d": 0.42,
+            "volume_ratio": 0.82,
+            "history_days": 25,
+            "technicals_source": "xueqiu",
+        },
+    )
     @patch("agent_reach.daily_run.akshare_adapter.fetch_technicals", side_effect=RuntimeError("network"))
-    def test_backfill_missing_technicals_uses_cost_fallback(self, _mock_fetch, _mock_save, portfolio):
+    def test_attach_technicals_falls_back_to_xueqiu_without_portfolio_row(
+        self,
+        _mock_ak,
+        _mock_xq,
+    ):
+        out = _attach_technicals({"code": "000725", "price": 5.9}, "000725")
+        assert out["ma20"] == 5.84
+        assert out["volume_ratio"] == 0.82
+        assert out["technicals_source"] == "xueqiu"
+
+    @patch(
+        "agent_reach.daily_run.xueqiu_technicals.fetch_technicals",
+        return_value={"ma20": 5.84, "ma5": 6.05, "position_20d": 0.4, "volume_ratio": 0.8},
+    )
+    @patch("agent_reach.daily_run.akshare_adapter.fetch_technicals", side_effect=RuntimeError("network"))
+    def test_attach_technicals_uses_xueqiu_before_portfolio_row(self, _mock_ak, mock_xq):
+        out = _attach_technicals(
+            {"code": "688008", "price": 260.0},
+            "688008",
+            fallback_row={"ma20": 255.0},
+        )
+        assert out["ma20"] == 5.84
+        mock_xq.assert_called_once()
+
+    @patch("agent_reach.daily_run.snapshot_cache.save_daily_cache")
+    @patch("agent_reach.daily_run.xueqiu_technicals.fetch_technicals", side_effect=RuntimeError("xq down"))
+    @patch("agent_reach.daily_run.akshare_adapter.fetch_technicals", side_effect=RuntimeError("network"))
+    def test_backfill_missing_technicals_uses_cost_fallback(self, _mock_fetch, _mock_xq, _mock_save, portfolio):
         quote_map = {
             "688008": {"code": "688008", "price": 260.0},
             "002273": {"code": "002273", "price": 27.0},
