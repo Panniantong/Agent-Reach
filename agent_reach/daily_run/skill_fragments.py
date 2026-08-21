@@ -77,6 +77,14 @@ def write_fragments(
     archived = _archive_experience_fragment(week_start, week_end)
     PLAYBOOK_FRAGMENT.write_text(playbook_block.rstrip() + "\n", encoding="utf-8")
     EXPERIENCE_FRAGMENT.write_text(experience_block.rstrip() + "\n", encoding="utf-8")
+    sidecars: dict[str, Any] = {}
+    try:
+        from agent_reach.daily_run.context_layers import write_text_sidecars
+
+        sidecars["playbook"] = write_text_sidecars(PLAYBOOK_FRAGMENT, playbook_block)
+        sidecars["experience"] = write_text_sidecars(EXPERIENCE_FRAGMENT, experience_block)
+    except Exception:
+        pass
     manifest = {
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "week_start": week_start,
@@ -89,6 +97,7 @@ def write_fragments(
             "playbook": block_fingerprint(playbook_block),
             "experience": block_fingerprint(experience_block),
         },
+        "sidecars": sidecars,
     }
     FRAGMENTS_MANIFEST.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return manifest

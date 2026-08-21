@@ -190,6 +190,12 @@ def _compact_narrative_payload(payload: dict[str, Any], limits: dict[str, int]) 
             max_items=12,
             max_chars=160,
         )
+    if out.get("context_trace"):
+        out["context_trace"] = _trim_string_list(
+            out.get("context_trace"),
+            max_items=6,
+            max_chars=160,
+        )
     return out
 
 
@@ -373,7 +379,29 @@ def render_narrative_markdown(narrative: dict[str, Any], *, job: str = "") -> st
         lines.append(trade_title)
         for item in narrative["trade_operations"]:
             lines.append(f"- {item}")
+    if narrative.get("context_trace"):
+        lines.append("")
+        lines.append("**上下文轨迹**")
+        for item in narrative["context_trace"]:
+            lines.append(f"- {item}")
     return "\n".join(lines).strip()
+
+
+def _attach_context_trace(
+    narrative: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+    job: str = "",
+    ctx: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    from agent_reach.daily_run.context_layers import build_context_trace
+    from agent_reach.daily_run.settings import effective_settings
+
+    cfg = effective_settings(settings)
+    trace = build_context_trace(cfg, job=job or str(narrative.get("job") or ""), ctx=ctx)
+    if trace:
+        narrative["context_trace"] = trace
+    return narrative
 
 
 # --- Morning ---
@@ -439,12 +467,17 @@ def generate_morning_narrative(
     settings: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     context = build_morning_context(snapshot, report)
-    return _generate_narrative(
-        "morning",
-        context,
+    return _attach_context_trace(
+        _generate_narrative(
+            "morning",
+            context,
+            settings=settings,
+            system=_morning_focus_hint(),
+            deterministic_fn=_morning_deterministic,
+        ),
         settings=settings,
-        system=_morning_focus_hint(),
-        deterministic_fn=_morning_deterministic,
+        job="morning",
+        ctx=context,
     )
 
 
@@ -521,12 +554,17 @@ def generate_merged_morning_narrative(
     settings: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     context = build_merged_morning_context(entries, primary_snapshot=primary_snapshot)
-    return _generate_narrative(
-        "morning",
-        context,
+    return _attach_context_trace(
+        _generate_narrative(
+            "morning",
+            context,
+            settings=settings,
+            system=f"{_morning_focus_hint()} 全组合视角，跨标的归纳，勿逐只复述。",
+            deterministic_fn=_merged_morning_deterministic,
+        ),
         settings=settings,
-        system=f"{_morning_focus_hint()} 全组合视角，跨标的归纳，勿逐只复述。",
-        deterministic_fn=_merged_morning_deterministic,
+        job="morning",
+        ctx=context,
     )
 
 
@@ -680,6 +718,9 @@ def _intraday_row_context(row: dict[str, Any]) -> dict[str, Any]:
         "friction_blocked": decision.get("friction_blocked") or trade_record.get("friction_blocked"),
         "portfolio_applied": trade_record.get("portfolio_applied"),
         "blocked": trade_record.get("blocked") or decision.get("blocked"),
+        "portfolio_message": trade_record.get("portfolio_message"),
+        "cash_limit_bypass": trade_record.get("cash_limit_bypass"),
+        "consecutive_buy_streak": trade_record.get("consecutive_buy_streak"),
     }
 
 
@@ -722,6 +763,9 @@ def build_intraday_context(
         "portfolio_applied": trade_record.get("portfolio_applied"),
         "blocked": trade_record.get("blocked") or decision.get("blocked"),
         "trade_skip_reason": scan_result.get("trade_skip_reason"),
+        "portfolio_message": trade_record.get("portfolio_message"),
+        "cash_limit_bypass": trade_record.get("cash_limit_bypass"),
+        "consecutive_buy_streak": trade_record.get("consecutive_buy_streak"),
     }
 
 
@@ -803,15 +847,20 @@ def generate_intraday_narrative(
     settings: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     context = build_intraday_context(scan_result=scan_result, trade_result=trade_result)
-    return _attach_intraday_trade_operations(
-        _generate_narrative(
-            "intraday",
+    return _attach_context_trace(
+        _attach_intraday_trade_operations(
+            _generate_narrative(
+                "intraday",
+                context,
+                settings=settings,
+                system="解读本次盘中扫描与调仓评估结果；优先 MSS、Lookback、调仓动作。",
+                deterministic_fn=_intraday_deterministic,
+            ),
             context,
-            settings=settings,
-            system="解读本次盘中扫描与调仓评估结果；优先 MSS、Lookback、调仓动作。",
-            deterministic_fn=_intraday_deterministic,
         ),
-        context,
+        settings=settings,
+        job="intraday",
+        ctx=context,
     )
 
 
@@ -873,15 +922,20 @@ def generate_merged_intraday_narrative(
     settings: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     context = build_merged_intraday_context(symbol_results, scan_id=scan_id)
-    return _attach_intraday_trade_operations(
-        _generate_narrative(
-            "intraday",
+    return _attach_context_trace(
+        _attach_intraday_trade_operations(
+            _generate_narrative(
+                "intraday",
+                context,
+                settings=settings,
+                system="解读本次定时盘中任务的整体扫描与调仓结论；禁止复述早报。",
+                deterministic_fn=_merged_intraday_deterministic,
+            ),
             context,
-            settings=settings,
-            system="解读本次定时盘中任务的整体扫描与调仓结论；禁止复述早报。",
-            deterministic_fn=_merged_intraday_deterministic,
         ),
-        context,
+        settings=settings,
+        job="intraday",
+        ctx=context,
     )
 
 
@@ -1176,15 +1230,20 @@ def generate_close_narrative(
         curve=curve,
         forecast_review=forecast_review,
     )
-    return _attach_close_trade_operations(
-        _generate_narrative(
-            "close",
+    return _attach_context_trace(
+        _attach_close_trade_operations(
+            _generate_narrative(
+                "close",
+                context,
+                settings=settings,
+                system="优先当日盈亏、成交买卖、偏差项、明日一条建议。",
+                deterministic_fn=_close_deterministic,
+            ),
             context,
-            settings=settings,
-            system="优先当日盈亏、成交买卖、偏差项、明日一条建议。",
-            deterministic_fn=_close_deterministic,
         ),
-        context,
+        settings=settings,
+        job="close",
+        ctx=context,
     )
 
 
@@ -1301,15 +1360,20 @@ def generate_merged_close_narrative(
         curve=curve,
         forecast_review=forecast_review,
     )
-    return _attach_close_trade_operations(
-        _generate_narrative(
-            "close",
+    return _attach_context_trace(
+        _attach_close_trade_operations(
+            _generate_narrative(
+                "close",
+                context,
+                settings=settings,
+                system="全组合视角；优先当日盈亏、成交买卖、跨标的偏差、明日一条建议。",
+                deterministic_fn=_merged_close_deterministic,
+            ),
             context,
-            settings=settings,
-            system="全组合视角；优先当日盈亏、成交买卖、跨标的偏差、明日一条建议。",
-            deterministic_fn=_merged_close_deterministic,
         ),
-        context,
+        settings=settings,
+        job="close",
+        ctx=context,
     )
 
 

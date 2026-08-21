@@ -1679,6 +1679,18 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
         except Exception:
             pass
         cfg["harness_runtime"] = harness_meta
+        try:
+            from agent_reach.daily_run.context_layers import (
+                load_last_runtime_overlay,
+                record_runtime_overlay_diff,
+                save_last_runtime_overlay,
+            )
+
+            prev = load_last_runtime_overlay()
+            record_runtime_overlay_diff(prev, harness_meta, job="runtime", trigger="apply_overlay")
+            save_last_runtime_overlay(harness_meta)
+        except Exception:
+            pass
     return cfg
 
 

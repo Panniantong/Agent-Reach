@@ -875,6 +875,17 @@ def refine_after_job(
         changes=len(all_changes),
         snapshot_path=str(snapshot_path) if snapshot_path else None,
     )
+    try:
+        from agent_reach.daily_run.context_layers import record_harness_entry_diff
+
+        record_harness_entry_diff(
+            job,
+            all_edits,
+            refinement_id=event.id,
+            trigger=f"job:{job}",
+        )
+    except Exception:
+        pass
     gate_dict = gate.to_dict()
     if snapshot_path:
         gate_dict["snapshot_path"] = str(snapshot_path)
