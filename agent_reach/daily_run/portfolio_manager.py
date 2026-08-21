@@ -62,12 +62,14 @@ class ApplyResult:
     portfolio: dict[str, Any]
     actions: list[TradeAction] = field(default_factory=list)
     message: str = ""
+    action_payloads: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
+        payloads = self.action_payloads or [a.to_dict() for a in self.actions]
         return {
             "applied": self.applied,
             "message": self.message,
-            "actions": [a.to_dict() for a in self.actions],
+            "actions": payloads,
         }
 
 
@@ -226,9 +228,10 @@ def append_trade_ledger(
     trade_id: Optional[str] = None,
     decision_action: Optional[str] = None,
     path: Optional[Path] = None,
-) -> None:
+) -> list[dict[str, Any]]:
+    """Append ledger row; return enriched action dicts (incl. FIFO realized_pnl on sells)."""
     if not actions:
-        return
+        return []
     p = path or default_ledger_path()
     p.parent.mkdir(parents=True, exist_ok=True)
     at = datetime.now(timezone.utc).isoformat()
@@ -266,6 +269,7 @@ def append_trade_ledger(
     }
     with open(p, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    return enriched
 
 
 def holding_today_buy_shares(holding: dict[str, Any]) -> int:
@@ -723,6 +727,18 @@ def _apply_sell(
     if sell_ratio < 0.999:
         label = "深度套牢分批" if sell_analysis.get("is_deep_loss") else "非深亏分批"
         sell_note = f"（{label} sell_ratio={sell_ratio:.0%}）"
+    holding_cost = float(target.get("cost") or 0)
+    if holding_cost <= 0:
+        try:
+            from agent_reach.daily_run.workflows import load_morning_baseline
+
+            morning = load_morning_baseline()
+            for h in (morning.get("portfolio") or {}).get("holdings") or []:
+                if _normalize_code(str(h.get("code", ""))) == code:
+                    holding_cost = float(h.get("cost") or 0)
+                    break
+        except FileNotFoundError:
+            pass
     trade = TradeAction(
         side="sell",
         code=code,
@@ -732,7 +748,7 @@ def _apply_sell(
         amount=round(gross, 2),
         commission=commission,
         reasoning=_decision_reason(decision, f"卖出 {target.get('name', code)} {shares} 股{sell_note}"),
-        holding_cost=float(target.get("cost") or 0) or None,
+        holding_cost=holding_cost if holding_cost > 0 else None,
     )
     _recalc_totals(pf, enriched)
     return ApplyResult(applied=True, portfolio=pf, actions=[trade], message=trade.reasoning)
@@ -1235,11 +1251,17 @@ def render_apply_markdown(result: ApplyResult) -> str:
     if not result.applied:
         return f"**调仓执行：** 未执行 — {result.message}"
     lines = ["**调仓执行（paper）：**"]
-    for a in result.actions:
-        side = "买入" if a.side == "buy" else "卖出"
+    payloads = result.action_payloads or [a.to_dict() for a in result.actions]
+    for a in payloads:
+        side = "买入" if a.get("side") == "buy" else "卖出"
         lines.append(
-            f"- {side} **{a.name}** ({a.code}) {a.shares} 股 @ {a.price:.2f} "
-            f"≈ ¥{a.amount:,.0f}（佣金 ¥{a.commission:.2f}）"
+            f"- {side} **{a.get('name')}** ({a.get('code')}) {a.get('shares')} 股 @ {float(a['price']):.2f} "
+            f"≈ ¥{float(a['amount']):,.0f}（佣金 ¥{float(a['commission']):.2f}）"
         )
+        if a.get("side") == "sell" and a.get("realized_pnl") is not None:
+            pnl = float(a["realized_pnl"])
+            pct = a.get("realized_pnl_pct")
+            pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
+            lines.append(f"  · 已实现盈亏 **{pnl:+,.0f}**{pct_s}")
     lines.append(f"\n{result.message}")
     return "\n".join(lines)

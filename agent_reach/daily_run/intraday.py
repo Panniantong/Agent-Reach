@@ -533,11 +533,12 @@ def apply_paper_trade(
             )
         save_portfolio(result.portfolio)
         sync_snapshot_portfolio(snap, result.portfolio)
-        append_trade_ledger(
+        enriched = append_trade_ledger(
             result.actions,
             trade_id=decision.trade_id,
             decision_action=decision.action,
         )
+        result.action_payloads = enriched
     return result
 
 
@@ -629,7 +630,10 @@ def evaluate_trade(
     trade_record["portfolio_applied"] = apply_result.applied
     trade_record["portfolio_message"] = apply_result.message
     if apply_result.applied:
-        trade_record["portfolio_actions"] = [a.to_dict() for a in apply_result.actions]
+        payloads = apply_result.action_payloads or [
+            a.to_dict() for a in (apply_result.actions or [])
+        ]
+        trade_record["portfolio_actions"] = payloads
     try:
         from agent_reach.daily_run.context_store import record_trade_case
 

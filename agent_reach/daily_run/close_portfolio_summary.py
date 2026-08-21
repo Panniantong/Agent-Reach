@@ -346,7 +346,13 @@ def extract_close_trade_operations(portfolio_summary: dict[str, Any] | None) -> 
         if action not in ("buy", "sell"):
             for act in entry.get("portfolio_actions") or []:
                 if act.get("side") in ("buy", "sell"):
-                    _append(_ledger_action_to_operation(act, at=str(entry.get("as_of") or "")))
+                    from agent_reach.daily_run.realized_pnl import enrich_sell_actions_for_display
+
+                    enriched_act = enrich_sell_actions_for_display(
+                        [act],
+                        entry_at=str(entry.get("as_of") or ""),
+                    )[0]
+                    _append(_ledger_action_to_operation(enriched_act, at=str(entry.get("as_of") or "")))
             continue
         side = "buy" if action == "buy" else "sell"
         op = {
@@ -367,7 +373,13 @@ def extract_close_trade_operations(portfolio_summary: dict[str, Any] | None) -> 
         _append(op)
         for act in entry.get("portfolio_actions") or []:
             if act.get("side") in ("buy", "sell"):
-                _append(_ledger_action_to_operation(act, at=str(entry.get("as_of") or "")))
+                from agent_reach.daily_run.realized_pnl import enrich_sell_actions_for_display
+
+                enriched_act = enrich_sell_actions_for_display(
+                    [act],
+                    entry_at=str(entry.get("as_of") or ""),
+                )[0]
+                _append(_ledger_action_to_operation(enriched_act, at=str(entry.get("as_of") or "")))
 
     return ops
 
@@ -485,6 +497,10 @@ def format_intraday_trade_narrative_line(
         if act.get("side") in ("buy", "sell")
     ]
     if fill_actions:
+        entry_at = str(trade_record.get("as_of") or "")
+        from agent_reach.daily_run.realized_pnl import enrich_sell_actions_for_display
+
+        fill_actions = enrich_sell_actions_for_display(fill_actions, entry_at=entry_at)
         act = fill_actions[0]
         shares = act.get("shares")
         price = act.get("price")
@@ -583,8 +599,14 @@ def _format_intraday_trade_lines(trades: list[dict[str, Any]]) -> list[str]:
         if not entry.get("portfolio_applied", True):
             line += "（未落账）"
         lines.append(line)
+        entry_at = str(entry.get("as_of") or "")
         for act in entry.get("portfolio_actions") or []:
-            sub = _format_ledger_trade_lines([{"at": entry.get("as_of"), "actions": [act]}])
+            if act.get("side") not in ("buy", "sell"):
+                continue
+            from agent_reach.daily_run.realized_pnl import enrich_sell_actions_for_display
+
+            enriched = enrich_sell_actions_for_display([act], entry_at=entry_at)
+            sub = _format_ledger_trade_lines([{"at": entry_at, "actions": enriched}])
             lines.extend(sub)
     return lines
 

@@ -12,6 +12,7 @@ from agent_reach.daily_run.realized_pnl import (
     compute_realized_pnl,
     compute_trade_cash_flow,
     enrich_sell_actions,
+    enrich_sell_actions_for_display,
     format_buy_trade_line,
     format_sell_trade_line,
     replay_realized_sells,
@@ -358,3 +359,23 @@ def test_annotate_ledger_sell_pnl_overwrites_wrong_stored_fields():
         opening_costs={"002273": 33.81},
         use_stored=False,
     ) == -3220.56
+
+
+def test_enrich_sell_actions_for_display_fills_missing_realized():
+    actions = [
+        {
+            "side": "sell",
+            "code": "002273",
+            "shares": 100,
+            "price": 27.13,
+            "amount": 2713.0,
+            "commission": 4.07,
+        }
+    ]
+    enriched = enrich_sell_actions_for_display(
+        actions,
+        entry_at="2026-08-21T01:01:41+00:00",
+        prior_trades=[],
+        opening_costs={"002273": 33.81},
+    )
+    assert enriched[0]["realized_pnl"] == -672.07

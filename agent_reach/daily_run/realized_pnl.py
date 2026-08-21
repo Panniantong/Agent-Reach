@@ -608,6 +608,52 @@ def annotate_ledger_sell_pnl(
     return out
 
 
+def opening_costs_for_display() -> dict[str, float]:
+    """Morning baseline costs merged with current portfolio (for intraday FIFO display)."""
+    costs: dict[str, float] = {}
+    try:
+        from agent_reach.daily_run.workflows import load_morning_baseline
+
+        costs.update(
+            opening_costs_from_portfolio((load_morning_baseline().get("portfolio") or {}))
+        )
+    except FileNotFoundError:
+        pass
+    try:
+        from agent_reach.daily_run.snapshot_builder import load_portfolio
+
+        costs.update(opening_costs_from_portfolio(load_portfolio()))
+    except Exception:
+        pass
+    return costs
+
+
+def enrich_sell_actions_for_display(
+    actions: list[dict[str, Any]],
+    *,
+    entry_at: str,
+    prior_trades: Optional[list[dict[str, Any]]] = None,
+    opening_costs: Optional[dict[str, float]] = None,
+) -> list[dict[str, Any]]:
+    """Fill missing realized_pnl on sell rows for intraday / close display."""
+    sells = [a for a in actions if a.get("side") == "sell" and a.get("realized_pnl") is None]
+    if not sells:
+        return [dict(a) for a in actions]
+    if prior_trades is None:
+        prior_trades = [
+            e
+            for e in load_ledger_entries(end=today_shanghai())
+            if str(e.get("at") or "") < entry_at
+        ]
+    costs = opening_costs if opening_costs is not None else opening_costs_for_display()
+    return enrich_sell_actions(
+        prior_trades,
+        [dict(a) for a in actions],
+        entry_at=entry_at,
+        opening_costs=costs or None,
+    )
+
+
 def enrich_sell_actions(
     prior_entries: list[dict[str, Any]],
     actions: list[dict[str, Any]],
