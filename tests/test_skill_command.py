@@ -223,10 +223,60 @@ class TestSkillCommand(unittest.TestCase):
             project = Path(tmpdir) / "project"
             project.mkdir()
 
-            with patch("pathlib.Path.cwd", return_value=project):
+            printed = []
+            with patch("pathlib.Path.cwd", return_value=project), patch(
+                "builtins.print",
+                side_effect=lambda *a, **k: printed.append(" ".join(str(x) for x in a)),
+            ):
                 _uninstall_skill(scope="project")
 
             self.assertFalse((project / ".claude").exists())
+            self.assertTrue(
+                any("No project skill installation found." in x for x in printed), printed
+            )
+
+    def test_uninstall_skill_rejects_unknown_scope(self):
+        with self.assertRaises(ValueError):
+            _uninstall_skill(scope="workspace")
+
+    def test_project_scope_uninstall_unlinks_symlinked_target(self):
+        """A symlinked skill dir is unlinked, never followed into its victim."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            victim = Path(tmpdir) / "victim"
+            victim.mkdir()
+            (victim / "SKILL.md").write_text("outside", encoding="utf-8")
+            target = project / ".claude" / "skills" / "agent-reach"
+            target.parent.mkdir(parents=True)
+            target.symlink_to(victim, target_is_directory=True)
+
+            with patch("pathlib.Path.cwd", return_value=project):
+                _uninstall_skill(scope="project")
+
+            self.assertFalse(target.is_symlink())
+            self.assertTrue((victim / "SKILL.md").is_file())
+
+    def test_project_scope_uninstall_reports_removal_failure(self):
+        """A failing removal is reported, not raised at the caller."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir) / "project"
+            target = project / ".claude" / "skills" / "agent-reach"
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text("project", encoding="utf-8")
+            printed = []
+
+            with patch("pathlib.Path.cwd", return_value=project), patch(
+                "shutil.rmtree", side_effect=OSError("read only")
+            ), patch(
+                "builtins.print",
+                side_effect=lambda *a, **k: printed.append(" ".join(str(x) for x in a)),
+            ):
+                _uninstall_skill(scope="project")
+
+            self.assertTrue((target / "SKILL.md").is_file())
+            self.assertTrue(
+                any("read only" in line for line in printed), printed
+            )
 
     def test_project_scope_uninstall_rejects_symlinked_skill_parent(self):
         with tempfile.TemporaryDirectory() as tmpdir:

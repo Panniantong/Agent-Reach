@@ -234,6 +234,7 @@ def main():
         and args.provider != "auto"
     ):
         p_tr.error("--allow-provider-fallback requires --provider auto")
+
     # Suppress loguru noise unless --verbose
     _configure_logging(getattr(args, "verbose", False))
 
@@ -490,8 +491,8 @@ def _cmd_install(args):
 def _project_skill_paths() -> "tuple[Path, Path] | None":
     """Resolve the project skill directory and target under the current directory.
 
-    Returns ``None`` when a component of the path is a symlink, so neither
-    install nor uninstall can reach outside the project through one.
+    Returns ``None`` when ``.claude`` or ``.claude/skills`` is a symlink, so a
+    linked directory is never written to or removed on the user's behalf.
     """
     project_skill_dir = Path.cwd()
     for component in _PROJECT_SKILL_COMPONENTS:
