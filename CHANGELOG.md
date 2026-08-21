@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Improvements / 改进
+
+- Add an explicit `--scope=project` option for project-local Claude Code skill registration while preserving user scope as the default.
+
 ## [1.3.1] - 2026-03-27
 
 ### 🐛 Bug Fixes / 修复
