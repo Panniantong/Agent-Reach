@@ -35,6 +35,8 @@
 
   "intraday": {
     "harness_evolve": true,
+    "consecutive_buy_cash_bypass": 3,
+    "consecutive_buy_cash_bypass_enabled": true,
     "trend_min_points": 2,
     "trend_delta_threshold": 1.0,
     "buy_trends": ["rising", "turning_up"],

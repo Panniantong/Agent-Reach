@@ -495,6 +495,7 @@ def apply_auto_adjust(
     settings: dict[str, Any],
     *,
     allow_watchlist_changes: bool = False,
+    cash_limit_bypass: bool = False,
 ) -> ApplyResult:
     """Apply paper buy/sell to portfolio.json based on intraday TradeDecision.
 
@@ -541,6 +542,7 @@ def apply_auto_adjust(
             settings,
             allow_watchlist_changes=allow_watchlist_changes,
             prefer_code=prefer_code or None,
+            cash_limit_bypass=cash_limit_bypass,
         )
 
     return ApplyResult(applied=False, portfolio=portfolio, message=f"未知决策 {action}")
@@ -643,12 +645,19 @@ def _apply_buy(
     *,
     allow_watchlist_changes: bool = False,
     prefer_code: Optional[str] = None,
+    cash_limit_bypass: bool = False,
 ) -> ApplyResult:
     holdings = list(pf.get("holdings") or [])
     held_codes = {_normalize_code(str(h.get("code", ""))) for h in holdings}
     prefer = _normalize_code(str(prefer_code or ""))
 
-    budget_ctx = _buy_budget_context(pf, enriched, settings, holdings)
+    budget_ctx = _buy_budget_context(
+        pf,
+        enriched,
+        settings,
+        holdings,
+        cash_limit_bypass=cash_limit_bypass,
+    )
     if isinstance(budget_ctx, ApplyResult):
         return budget_ctx
     total, cash, deployable, min_deploy, min_cash_ratio, commission_rate = budget_ctx
@@ -658,7 +667,11 @@ def _apply_buy(
         prefer_row = _resolve_buy_row(prefer, pf, enriched)
         if prefer_row is not None:
             prefer_price = float(_price_for(prefer_row, enriched))
-            if _can_afford_min_lot(
+            min_lot = _min_lot(prefer)
+            min_cost = min_lot * prefer_price * (1 + commission_rate)
+            if cash_limit_bypass and cash >= min_cost:
+                target = prefer_row
+            elif _can_afford_min_lot(
                 prefer,
                 prefer_price,
                 deployable=deployable,
@@ -716,9 +729,25 @@ def _apply_buy(
         )
 
     price = float(_price_for(target, enriched))
-    budget_gross = harness_buy_budget(total=total, deployable=deployable, settings=settings)
+    budget_kwargs: dict[str, Any] = {}
+    if cash_limit_bypass:
+        budget_kwargs = {
+            "deploy_ratio_override": 1.0,
+            "max_position_pct_override": 100.0,
+        }
+    budget_gross = harness_buy_budget(
+        total=total,
+        deployable=deployable,
+        settings=settings,
+        **budget_kwargs,
+    )
     budget = budget_gross / (1 + commission_rate)
     shares = _round_lot(code, int(budget // price))
+    if shares <= 0 and cash_limit_bypass:
+        min_lot = _min_lot(code)
+        min_cost = min_lot * price * (1 + commission_rate)
+        if cash >= min_cost:
+            shares = min_lot
     if shares <= 0:
         return ApplyResult(applied=False, portfolio=pf, message=f"现金不足以买入 {code} 最小单位")
 
@@ -756,7 +785,11 @@ def _apply_buy(
         price=price,
         amount=round(gross, 2),
         commission=commission,
-        reasoning=f"买入 {target.get('name', code)} {shares} 股 @ {price:.2f}（MSS 信号建仓）",
+        reasoning=(
+            f"买入 {target.get('name', code)} {shares} 股 @ {price:.2f}（MSS 信号建仓"
+            + ("；连续买入建议，临时突破现金限制" if cash_limit_bypass else "")
+            + "）"
+        ),
     )
     _recalc_totals(pf, enriched)
     return ApplyResult(applied=True, portfolio=pf, actions=[trade], message=trade.reasoning)
@@ -901,6 +934,8 @@ def _buy_budget_context(
     enriched: dict[str, dict[str, Any]],
     settings: dict[str, Any],
     holdings: list[dict[str, Any]],
+    *,
+    cash_limit_bypass: bool = False,
 ) -> tuple[float, float, float, float, float, float] | ApplyResult:
     thresholds = settings.get("thresholds", {})
     min_cash_ratio = float(thresholds.get("min_cash_ratio", min_cash_ratio_default(settings)))
@@ -913,7 +948,10 @@ def _buy_budget_context(
             for h in holdings
         )
 
-    min_cash = total * min_cash_ratio
+    if cash_limit_bypass:
+        min_cash = 0.0
+    else:
+        min_cash = total * min_cash_ratio
     deployable = cash - min_cash
     min_deploy = min_deploy_cash_default(settings)
     if deployable < min_deploy:

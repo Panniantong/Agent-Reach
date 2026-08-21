@@ -60,6 +60,48 @@ def count_trade_evaluations(trades: list[dict[str, Any]] | None) -> int:
     )
 
 
+def consecutive_buy_recommendations(
+    trades: list[dict[str, Any]] | None,
+    code: str,
+) -> int:
+    """Trailing count of consecutive buy recommendations for one symbol."""
+    from agent_reach.daily_run.snapshot_builder import _normalize_code
+
+    norm = _normalize_code(code)
+    streak = 0
+    for rec in reversed(list(trades or [])):
+        rec_code = _normalize_code(str(rec.get("code") or ""))
+        if rec_code and rec_code != norm:
+            break
+        if str(rec.get("action") or "").strip().lower() == "buy":
+            streak += 1
+        else:
+            break
+    return streak
+
+
+def consecutive_buy_cash_bypass_threshold(settings: Optional[dict[str, Any]] = None) -> int:
+    cfg = effective_settings(settings)
+    intraday = cfg.get("intraday") or {}
+    if intraday.get("consecutive_buy_cash_bypass_enabled") is False:
+        return 0
+    return max(1, int(intraday.get("consecutive_buy_cash_bypass") or 3))
+
+
+def should_apply_consecutive_buy_cash_bypass(
+    trades: list[dict[str, Any]] | None,
+    code: str,
+    *,
+    current_action: str,
+    settings: Optional[dict[str, Any]] = None,
+) -> bool:
+    threshold = consecutive_buy_cash_bypass_threshold(settings)
+    if threshold <= 0 or str(current_action or "").strip().lower() != "buy":
+        return False
+    streak = consecutive_buy_recommendations(trades, code) + 1
+    return streak >= threshold
+
+
 def append_trade_skip_note(markdown: str, reason: str) -> str:
     text = str(reason or "").strip()
     if not text:
@@ -382,6 +424,7 @@ def apply_paper_trade(
     snapshot: dict[str, Any],
     *,
     settings: Optional[dict[str, Any]] = None,
+    cash_limit_bypass: bool = False,
 ) -> "ApplyResult":
     """Apply paper buy/sell to portfolio.json when auto_adjust is enabled."""
     from agent_reach.daily_run.portfolio_manager import (
@@ -431,7 +474,14 @@ def apply_paper_trade(
             ),
         )
 
-    result = apply_auto_adjust(pf, decision, snap, cfg, allow_watchlist_changes=False)
+    result = apply_auto_adjust(
+        pf,
+        decision,
+        snap,
+        cfg,
+        allow_watchlist_changes=False,
+        cash_limit_bypass=cash_limit_bypass,
+    )
     if result.applied:
         if not register_applied_trade(result.actions):
             pf_now = load_portfolio()
@@ -507,6 +557,17 @@ def evaluate_trade(
         expected_return_pct=expected_return_pct,
     )
 
+    symbol_code = str(report.get("code") or "")
+    cash_limit_bypass = should_apply_consecutive_buy_cash_bypass(
+        st.trades,
+        symbol_code,
+        current_action=decision.action,
+        settings=cfg,
+    )
+    consecutive_buy_streak = consecutive_buy_recommendations(st.trades, symbol_code) + (
+        1 if decision.action == "buy" else 0
+    )
+
     trade_record = {
         **decision.to_dict(),
         "as_of": datetime.now(timezone.utc).isoformat(),
@@ -514,8 +575,15 @@ def evaluate_trade(
         "mss_final": report.get("mss_final"),
         "code": report.get("code"),
         "name": report.get("name"),
+        "consecutive_buy_streak": consecutive_buy_streak if decision.action == "buy" else None,
+        "cash_limit_bypass": cash_limit_bypass or None,
     }
-    apply_result = apply_paper_trade(decision, enriched, settings=cfg)
+    apply_result = apply_paper_trade(
+        decision,
+        enriched,
+        settings=cfg,
+        cash_limit_bypass=cash_limit_bypass,
+    )
     trade_record["portfolio_applied"] = apply_result.applied
     trade_record["portfolio_message"] = apply_result.message
     if apply_result.applied:

@@ -1815,11 +1815,17 @@ def harness_buy_budget(
     total: float,
     deployable: float,
     settings: dict[str, Any],
+    deploy_ratio_override: Optional[float] = None,
+    max_position_pct_override: Optional[float] = None,
 ) -> float:
     """Gross buy budget (before commission) from harness-evolved position policy."""
     policy = _position_policy(settings)
     deploy_ratio = max(0.0, min(1.0, float(policy.get("deploy_ratio", 1.0))))
     max_pct = max(0.0, float(policy.get("max_position_pct", 35.0)))
+    if deploy_ratio_override is not None:
+        deploy_ratio = max(0.0, min(1.0, float(deploy_ratio_override)))
+    if max_position_pct_override is not None:
+        max_pct = max(0.0, float(max_position_pct_override))
     budget = max(0.0, float(deployable)) * deploy_ratio
     if total > 0 and max_pct > 0:
         budget = min(budget, total * max_pct / 100.0)

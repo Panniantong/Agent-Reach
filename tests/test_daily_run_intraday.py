@@ -4,6 +4,7 @@
 from datetime import date, datetime, timezone
 from unittest.mock import patch
 
+import json
 import pytest
 
 from agent_reach.daily_run.intraday import (
@@ -350,3 +351,104 @@ class TestIntradayWorkflow:
         assert any("盘中小结" in body for _, body in sends)
         assert not any("早盘全持仓" in body for _, body in sends)
         assert result.get("narrative_feishu") is not None
+
+
+class TestConsecutiveBuyCashBypass:
+    def test_consecutive_buy_recommendations(self):
+        from agent_reach.daily_run.intraday import consecutive_buy_recommendations
+
+        trades = [
+            {"code": "300308", "action": "hold"},
+            {"code": "300308", "action": "buy"},
+            {"code": "300308", "action": "buy"},
+        ]
+        assert consecutive_buy_recommendations(trades, "300308") == 2
+
+    def test_should_apply_on_third_consecutive_buy(self):
+        from agent_reach.daily_run.intraday import should_apply_consecutive_buy_cash_bypass
+
+        trades = [
+            {"code": "300308", "action": "buy", "portfolio_applied": False},
+            {"code": "300308", "action": "buy", "portfolio_applied": False},
+        ]
+        settings = {"intraday": {"consecutive_buy_cash_bypass": 3}}
+        assert should_apply_consecutive_buy_cash_bypass(
+            trades,
+            "300308",
+            current_action="buy",
+            settings=settings,
+        )
+
+    def test_apply_buy_with_cash_limit_bypass(self, tmp_path, monkeypatch):
+        from agent_reach.daily_run.intraday import TradeDecision, apply_paper_trade
+
+        portfolio_path = tmp_path / "portfolio.json"
+        portfolio_path.write_text(
+            json.dumps(
+                {
+                    "total": 188965.8,
+                    "cash": 158321.8,
+                    "cash_ratio": 0.8378,
+                    "holdings": [
+                        {"code": "688008", "name": "澜起科技", "shares": 100, "cost": 255.87, "days_held": 5},
+                    ],
+                    "watchlist": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.snapshot_builder.default_portfolio_path",
+            lambda: portfolio_path,
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager.daily_trade_state_path",
+            lambda: tmp_path / "daily_trade_state.json",
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager.default_ledger_path",
+            lambda: tmp_path / "trade_ledger.jsonl",
+        )
+        monkeypatch.setattr(
+            "agent_reach.daily_run.portfolio_manager._today_str",
+            lambda: "2026-08-21",
+        )
+
+        snapshot = {
+            "code": "300308",
+            "name": "中际旭创",
+            "price": 928.89,
+            "change_pct": 1.2,
+            "portfolio": {
+                "total": 188965.8,
+                "cash": 158321.8,
+                "cash_ratio": 0.8378,
+                "holdings": [
+                    {"code": "688008", "name": "澜起科技", "shares": 100, "cost": 255.87, "price": 260.0},
+                ],
+            },
+            "watchlist": [],
+        }
+        settings = load_settings()
+        settings.setdefault("portfolio", {})["auto_adjust_enabled"] = True
+        settings.setdefault("thresholds", {})["min_cash_ratio"] = 0.5
+        settings["harness_runtime"] = {
+            "position_policy": {"deploy_ratio": 0.25, "max_position_pct": 25.0},
+        }
+        decision = TradeDecision(
+            action="buy",
+            trade_id="T7",
+            lookback_mss=47.0,
+            lookback_detail=[],
+            trend="rising",
+            reasoning="连续第三次买入建议",
+        )
+
+        blocked = apply_paper_trade(decision, snapshot, settings=settings, cash_limit_bypass=False)
+        assert blocked.applied is False
+        assert "最小单位" in blocked.message or "资金不足一手" in blocked.message
+
+        bypassed = apply_paper_trade(decision, snapshot, settings=settings, cash_limit_bypass=True)
+        assert bypassed.applied is True
+        assert bypassed.actions[0].shares == 100
+        assert "突破现金限制" in bypassed.actions[0].reasoning
