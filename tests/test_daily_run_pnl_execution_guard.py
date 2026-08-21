@@ -48,11 +48,49 @@ def test_pnl_buy_block_on_low_win_rate():
         overview={
             "win_count": 1,
             "loss_count": 4,
-            "realized_sells": [{"realized_pnl": -10}],
+            "realized_sells": [
+                {"code": "603986", "name": "兆易创新", "realized_pnl": 100},
+                {"code": "603986", "name": "兆易创新", "realized_pnl": -10},
+                {"code": "603986", "name": "兆易创新", "realized_pnl": -20},
+                {"code": "603986", "name": "兆易创新", "realized_pnl": -30},
+            ],
         },
+        code="603986",
     )
     assert reason is not None
+    assert "603986" in reason
     assert "卖出胜率偏低" in reason
+
+
+def test_pnl_buy_block_ignores_other_symbols_win_rate():
+    reason = pnl_buy_block_reason(
+        _settings(),
+        overview={
+            "win_count": 1,
+            "loss_count": 4,
+            "realized_sells": [
+                {"code": "688008", "name": "澜起科技", "realized_pnl": -10},
+                {"code": "688008", "name": "澜起科技", "realized_pnl": -20},
+                {"code": "688008", "name": "澜起科技", "realized_pnl": -30},
+                {"code": "688008", "name": "澜起科技", "realized_pnl": -40},
+                {"code": "600584", "name": "长电科技", "realized_pnl": 3496.54},
+            ],
+        },
+        code="600584",
+    )
+    assert reason is None
+
+
+def test_pnl_buy_block_requires_symbol_code_for_win_rate():
+    reason = pnl_buy_block_reason(
+        _settings(),
+        overview={
+            "win_count": 1,
+            "loss_count": 4,
+            "realized_sells": [{"code": "603986", "realized_pnl": -10}],
+        },
+    )
+    assert reason is None
 
 
 def test_pnl_ledger_block_on_holding():
@@ -147,7 +185,12 @@ def test_decide_trade_blocks_buy_on_pnl_guard():
     pnl_execution_guard._pnl_overview_for_portfolio = lambda _pf: {
         "win_count": 1,
         "loss_count": 4,
-        "realized_sells": [],
+        "realized_sells": [
+            {"code": "603986", "name": "兆易创新", "realized_pnl": 100},
+            {"code": "603986", "name": "兆易创新", "realized_pnl": -10},
+            {"code": "603986", "name": "兆易创新", "realized_pnl": -20},
+            {"code": "603986", "name": "兆易创新", "realized_pnl": -30},
+        ],
     }
     try:
         decision = _decide_trade(

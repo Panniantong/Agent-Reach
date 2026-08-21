@@ -896,7 +896,11 @@ def _decide_trade(
                 friction_blocked=friction_blocked,
                 expected_return_pct=exp_ret,
             )
-        pnl_buy_block = pnl_buy_block_reason(settings, portfolio)
+        pnl_buy_block = pnl_buy_block_reason(
+            settings,
+            portfolio,
+            code=str(report.get("code") or ""),
+        )
         if pnl_buy_block:
             return TradeDecision(
                 action="hold",

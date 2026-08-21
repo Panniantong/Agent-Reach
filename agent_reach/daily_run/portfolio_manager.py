@@ -653,10 +653,6 @@ def _apply_buy(
         return budget_ctx
     total, cash, deployable, min_deploy, min_cash_ratio, commission_rate = budget_ctx
 
-    buy_block = pnl_buy_block_reason(settings, pf)
-    if buy_block:
-        return ApplyResult(applied=False, portfolio=pf, message=buy_block)
-
     target: Optional[dict[str, Any]] = None
     if prefer:
         prefer_row = _resolve_buy_row(prefer, pf, enriched)
@@ -695,6 +691,10 @@ def _apply_buy(
         target = candidates[0]
 
     code = _normalize_code(str(target["code"]))
+
+    buy_block = pnl_buy_block_reason(settings, pf, code=code)
+    if buy_block:
+        return ApplyResult(applied=False, portfolio=pf, message=buy_block)
 
     ledger_block = pnl_symbol_ledger_block_reason(settings, code, pf)
     if ledger_block:
@@ -789,16 +789,6 @@ def simulate_buy_analysis(
 
     total, cash, deployable, _min_deploy, _min_cash_ratio, commission_rate = budget_ctx
 
-    buy_block = pnl_buy_block_reason(settings, pf)
-    if buy_block:
-        return {
-            "allowed": False,
-            "buy_shares": 0,
-            "block_reason": buy_block,
-            "deploy_ratio": float(position.get("deploy_ratio", 1.0)),
-            "max_position_pct": float(position.get("max_position_pct", 35.0)),
-        }
-
     target: Optional[dict[str, Any]] = None
     if prefer:
         prefer_row = _resolve_buy_row(prefer, pf, enriched)
@@ -829,6 +819,16 @@ def simulate_buy_analysis(
         target = candidates[0]
 
     code = _normalize_code(str(target["code"]))
+
+    buy_block = pnl_buy_block_reason(settings, pf, code=code)
+    if buy_block:
+        return {
+            "allowed": False,
+            "buy_shares": 0,
+            "block_reason": buy_block,
+            "deploy_ratio": float(position.get("deploy_ratio", 1.0)),
+            "max_position_pct": float(position.get("max_position_pct", 35.0)),
+        }
 
     ledger_block = pnl_symbol_ledger_block_reason(settings, code, pf)
     if ledger_block:
