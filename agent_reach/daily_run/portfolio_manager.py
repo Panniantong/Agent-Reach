@@ -38,9 +38,10 @@ class TradeAction:
     amount: float
     commission: float
     reasoning: str
+    holding_cost: Optional[float] = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "side": self.side,
             "code": self.code,
             "name": self.name,
@@ -50,6 +51,9 @@ class TradeAction:
             "commission": self.commission,
             "reasoning": self.reasoning,
         }
+        if self.holding_cost is not None and float(self.holding_cost) > 0:
+            payload["holding_cost"] = round(float(self.holding_cost), 4)
+        return payload
 
 
 @dataclass
@@ -229,14 +233,21 @@ def append_trade_ledger(
     p.parent.mkdir(parents=True, exist_ok=True)
     at = datetime.now(timezone.utc).isoformat()
     raw_actions = [a.to_dict() for a in actions]
-    from agent_reach.daily_run.realized_pnl import enrich_sell_actions, load_ledger_entries
+    from agent_reach.daily_run.realized_pnl import (
+        enrich_sell_actions,
+        load_ledger_entries,
+        opening_costs_from_portfolio,
+    )
+    from agent_reach.daily_run.snapshot_builder import load_portfolio
 
     prior = load_ledger_entries(path=p, end=trade_calendar.today_shanghai())
+    opening_costs = opening_costs_from_portfolio(load_portfolio())
     enriched = enrich_sell_actions(
         prior,
         raw_actions,
         entry_at=at,
         trade_id=trade_id,
+        opening_costs=opening_costs or None,
     )
     entry = {
         "at": at,
@@ -659,6 +670,7 @@ def _apply_sell(
         amount=round(gross, 2),
         commission=commission,
         reasoning=_decision_reason(decision, f"卖出 {target.get('name', code)} {shares} 股{sell_note}"),
+        holding_cost=float(target.get("cost") or 0) or None,
     )
     _recalc_totals(pf, enriched)
     return ApplyResult(applied=True, portfolio=pf, actions=[trade], message=trade.reasoning)

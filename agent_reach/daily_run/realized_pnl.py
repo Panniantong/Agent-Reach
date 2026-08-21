@@ -295,6 +295,53 @@ def compute_trade_cash_flow(trades: list[dict[str, Any]]) -> float:
     return round(pnl, 2)
 
 
+def _lot_shares(queue: deque[tuple[int, float]]) -> int:
+    return sum(shares for shares, _ in queue)
+
+
+def opening_costs_from_portfolio(portfolio: Optional[dict[str, Any]]) -> dict[str, float]:
+    """Map normalized code -> per-share cost for legacy FIFO seeding."""
+    out: dict[str, float] = {}
+    for row in (portfolio or {}).get("holdings") or []:
+        code = _normalize_code(str(row.get("code") or ""))
+        cost = float(row.get("cost") or 0)
+        if code and cost > 0:
+            out[code] = cost
+    return out
+
+
+def _resolve_holding_cost_per_share(
+    action: dict[str, Any],
+    *,
+    opening_costs: Optional[dict[str, float]] = None,
+) -> float:
+    for key in ("holding_cost", "cost_per_share", "cost"):
+        raw = action.get(key)
+        if raw is not None and float(raw) > 0:
+            return float(raw)
+    code = _normalize_code(str(action.get("code") or ""))
+    if opening_costs and code in opening_costs:
+        return float(opening_costs[code])
+    return 0.0
+
+
+def _seed_lot_if_needed(
+    lots: dict[str, deque[tuple[int, float]]],
+    code: str,
+    *,
+    shares_needed: int,
+    cost_per_share: float,
+) -> None:
+    if shares_needed <= 0 or cost_per_share <= 0:
+        return
+    queue = lots.setdefault(code, deque())
+    have = _lot_shares(queue)
+    if have >= shares_needed:
+        return
+    missing = shares_needed - have
+    queue.appendleft((missing, float(cost_per_share)))
+
+
 def _apply_buy(lots: dict[str, deque[tuple[int, float]]], action: dict[str, Any]) -> None:
     shares = int(action.get("shares") or 0)
     amount = float(action.get("amount") or 0)
@@ -309,6 +356,8 @@ def _apply_buy(lots: dict[str, deque[tuple[int, float]]], action: dict[str, Any]
 def _apply_sell(
     lots: dict[str, deque[tuple[int, float]]],
     action: dict[str, Any],
+    *,
+    opening_costs: Optional[dict[str, float]] = None,
 ) -> tuple[float, float]:
     """Return (realized_pnl, cost_basis) for one sell action."""
     shares = int(action.get("shares") or 0)
@@ -319,6 +368,10 @@ def _apply_sell(
         return round(amount_only, 2), 0.0
 
     code = _normalize_code(str(action.get("code") or "__unknown__"))
+    cost_per = _resolve_holding_cost_per_share(action, opening_costs=opening_costs)
+    if cost_per > 0:
+        _seed_lot_if_needed(lots, code, shares_needed=shares, cost_per_share=cost_per)
+
     proceeds_per = (amount - commission) / shares
     remaining = shares
     queue = lots.setdefault(code, deque())
@@ -335,14 +388,18 @@ def _apply_sell(
         else:
             queue[0] = (lot_shares - take, lot_cost)
     if remaining > 0:
-        fallback_cost = float(action.get("price") or 0)
+        fallback_cost = cost_per if cost_per > 0 else float(action.get("price") or 0)
         if fallback_cost > 0:
             pnl += remaining * (proceeds_per - fallback_cost)
             cost_basis += remaining * fallback_cost
     return round(pnl, 2), round(cost_basis, 2)
 
 
-def replay_realized_sells(trades: list[dict[str, Any]]) -> list[RealizedSellRow]:
+def replay_realized_sells(
+    trades: list[dict[str, Any]],
+    *,
+    opening_costs: Optional[dict[str, float]] = None,
+) -> list[RealizedSellRow]:
     """FIFO replay: one row per sell with realized P&L."""
     lots: dict[str, deque[tuple[int, float]]] = {}
     rows: list[RealizedSellRow] = []
@@ -412,7 +469,7 @@ def replay_realized_sells(trades: list[dict[str, Any]]) -> list[RealizedSellRow]
                     )
 
         for action in orphan_sells:
-            realized, cost_basis = _apply_sell(lots, action)
+            realized, cost_basis = _apply_sell(lots, action, opening_costs=opening_costs)
             shares = int(action.get("shares") or 0)
             pct = round(realized / cost_basis * 100, 2) if cost_basis > 0 else None
             avg_buy = round(cost_basis / shares, 4) if shares > 0 and cost_basis > 0 else None
@@ -437,8 +494,15 @@ def replay_realized_sells(trades: list[dict[str, Any]]) -> list[RealizedSellRow]
     return rows
 
 
-def compute_realized_pnl(trades: list[dict[str, Any]]) -> float:
-    return round(sum(r.realized_pnl for r in replay_realized_sells(trades)), 2)
+def compute_realized_pnl(
+    trades: list[dict[str, Any]],
+    *,
+    opening_costs: Optional[dict[str, float]] = None,
+) -> float:
+    return round(
+        sum(r.realized_pnl for r in replay_realized_sells(trades, opening_costs=opening_costs)),
+        2,
+    )
 
 
 def sum_stored_realized_pnl(trades: list[dict[str, Any]]) -> Optional[float]:
@@ -460,6 +524,7 @@ def compute_day_realized_pnl(
     day_trades: list[dict[str, Any]],
     *,
     prior_trades: Optional[list[dict[str, Any]]] = None,
+    opening_costs: Optional[dict[str, float]] = None,
 ) -> float:
     """Day realized P&L: prefer stored sell fields, else FIFO replay with buy history."""
     stored = sum_stored_realized_pnl(day_trades)
@@ -471,7 +536,7 @@ def compute_day_realized_pnl(
     day_s = str(day_trades[0].get("at") or "")[:10] if day_trades else ""
     if not day_s and day_trades:
         day_s = ""
-    rows = replay_realized_sells(merged)
+    rows = replay_realized_sells(merged, opening_costs=opening_costs)
     if day_s:
         rows = [r for r in rows if r.date == day_s]
     return round(sum(r.realized_pnl for r in rows), 2)
@@ -483,6 +548,7 @@ def enrich_sell_actions(
     *,
     entry_at: str,
     trade_id: Optional[str] = None,
+    opening_costs: Optional[dict[str, float]] = None,
 ) -> list[dict[str, Any]]:
     """Annotate sell actions with realized_pnl fields before persisting."""
     synthetic = prior_entries + [
@@ -492,7 +558,7 @@ def enrich_sell_actions(
             "actions": actions,
         }
     ]
-    rows = replay_realized_sells(synthetic)
+    rows = replay_realized_sells(synthetic, opening_costs=opening_costs)
     new_sells = [r for r in rows if r.date == entry_at[:10]]
     sell_map: dict[str, RealizedSellRow] = {}
     for row in new_sells:
@@ -581,11 +647,12 @@ def build_pnl_overview(
     entries = load_ledger_entries(path=ledger_path, start=period_start, end=day)
     buy_rows = _ledger_buy_rows(entries)
     latest_buys = _latest_buys_by_code(buy_rows)
-    realized_rows = replay_realized_sells(entries)
+    pf = portfolio or {}
+    seed_costs = opening_costs_from_portfolio(pf)
+    realized_rows = replay_realized_sells(entries, opening_costs=seed_costs or None)
     realized = round(sum(r.realized_pnl for r in realized_rows), 2)
     cash_flow = compute_trade_cash_flow(entries)
 
-    pf = portfolio or {}
     holdings = _holding_unrealized_rows(pf, latest_buys=latest_buys)
     unrealized = round(sum(float(h.get("unrealized_pnl") or 0) for h in holdings), 2)
 
@@ -675,7 +742,13 @@ def backfill_ledger_realized_pnl(*, path: Optional[Path] = None, dry_run: bool =
             continue
 
     deduped = dedupe_trade_ledger_entries(entries)
-    rows = replay_realized_sells(deduped)
+    try:
+        from agent_reach.daily_run.snapshot_builder import load_portfolio
+
+        seed_costs = opening_costs_from_portfolio(load_portfolio())
+    except Exception:
+        seed_costs = {}
+    rows = replay_realized_sells(deduped, opening_costs=seed_costs or None)
     row_idx = 0
     updated = 0
     new_lines: list[str] = []

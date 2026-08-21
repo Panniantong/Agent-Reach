@@ -31,6 +31,52 @@ def test_compute_trade_cash_flow():
     assert compute_trade_cash_flow(trades) == 469.0
 
 
+def test_orphan_sell_uses_holding_cost():
+    trades = [
+        {
+            "at": "2026-08-21T01:01:41+00:00",
+            "actions": [
+                {
+                    "side": "sell",
+                    "code": "002273",
+                    "name": "水晶光电",
+                    "shares": 100,
+                    "price": 27.13,
+                    "amount": 2713.0,
+                    "commission": 4.07,
+                    "holding_cost": 33.81,
+                }
+            ],
+        }
+    ]
+    rows = replay_realized_sells(trades)
+    assert len(rows) == 1
+    assert rows[0].cost_basis == 3381.0
+    assert rows[0].realized_pnl == -672.07
+    assert rows[0].avg_buy_price == 33.81
+
+
+def test_orphan_sell_uses_portfolio_opening_costs():
+    trades = [
+        {
+            "at": "2026-08-21T01:01:41+00:00",
+            "actions": [
+                {
+                    "side": "sell",
+                    "code": "002273",
+                    "name": "水晶光电",
+                    "shares": 100,
+                    "price": 27.13,
+                    "amount": 2713.0,
+                    "commission": 4.07,
+                }
+            ],
+        }
+    ]
+    rows = replay_realized_sells(trades, opening_costs={"002273": 33.81})
+    assert rows[0].realized_pnl == -672.07
+
+
 def test_compute_realized_pnl_fifo():
     trades = [
         {
