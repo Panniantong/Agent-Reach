@@ -29,6 +29,14 @@ TEAM_EXPERT_NAMES: list[str] = [
     "identifier",
 ]
 
+LITE_EXPERT_NAMES: list[str] = [
+    "fundamental",
+    "technical",
+    "quant",
+    "risk",
+    "identifier",
+]
+
 MSS_EXPERT_NAMES: list[str] = [
     "technical",
     "quant",
@@ -51,7 +59,12 @@ _BY_NAME: dict[str, ExpertPlugin] = {p.name: p for p in _BUILTIN}
 
 
 def list_plugins() -> list[dict[str, str]]:
-    return [{"name": p.name, "description": p.description} for p in _BUILTIN]
+    from agent_reach.daily_run.plugins.pipeline import list_filter_plugins, list_transform_plugins
+
+    rows = [{"name": p.name, "description": p.description, "kind": "expert"} for p in _BUILTIN]
+    rows.extend({**row, "kind": "filter"} for row in list_filter_plugins())
+    rows.extend({**row, "kind": "transform"} for row in list_transform_plugins())
+    return rows
 
 
 def get_plugin(name: str) -> ExpertPlugin | None:
@@ -94,12 +107,20 @@ def run_experts(
     plugin_cfg = cfg.get("plugins", {})
     use_parallel = parallel if parallel is not None else plugin_cfg.get("parallel", True)
 
+    from agent_reach.daily_run.plugins.pipeline import apply_pre_expert_pipeline
+
+    prepared, pipeline_notes = apply_pre_expert_pipeline(snapshot, cfg)
+    if prepared.get("expert_pipeline_blocked"):
+        blocked = dict(prepared)
+        blocked["expert_pipeline_notes"] = pipeline_notes
+        return blocked
+
     enabled = names or plugin_cfg.get("enabled") or TEAM_EXPERT_NAMES
     selected = [_BY_NAME[n] for n in enabled if n in _BY_NAME]
     if names and not selected:
         raise ValueError(f"未知插件：{names}")
 
-    ctx = PluginContext(snapshot=snapshot, settings=cfg)
+    ctx = PluginContext(snapshot=prepared, settings=cfg)
 
     if use_parallel and len(selected) > 1:
         results = _run_parallel(selected, ctx)
@@ -108,7 +129,9 @@ def run_experts(
 
     expert_scores: dict[str, float] = {r.name: r.score for r in results}
 
-    merged = dict(snapshot)
+    merged = dict(prepared)
+    if pipeline_notes:
+        merged["expert_pipeline_notes"] = pipeline_notes
     merged["expert_scores"] = expert_scores
     merged["expert_results"] = [r.to_dict() for r in results]
 

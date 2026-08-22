@@ -74,22 +74,23 @@ class TestVerdictFusion:
 class TestScheduleEntries:
     def test_fifteen_intraday_scans(self):
         assert len(INTRADAY_SCAN_TIMES) == 13
-        assert INTRADAY_MAX_SCANS == 15
+        assert INTRADAY_MAX_SCANS == 16
 
     def test_default_entries_count(self):
-        assert len(default_entries()) == 18  # premarket + morning + 13 scans + close + weekly + forecast
+        assert len(default_entries()) == 19  # premarket + morning + midday + 13 scans + close + weekly + forecast
 
 
 class TestMacroCollector:
     @patch("agent_reach.daily_run.hot_news_collector.collect_hot_news")
+    @patch("agent_reach.daily_run.macro_collector._fetch_xueqiu_hot_stocks", return_value=[])
     @patch("agent_reach.daily_run.macro_collector._fetch_index_change", return_value=0.5)
     @patch("agent_reach.daily_run.macro_collector._fetch_northbound_flow", return_value=12.0)
-    @patch("agent_reach.daily_run.macro_collector._fetch_xueqiu_sentiment", return_value=("雪球热点：存储", []))
-    def test_collect_macro_context(self, mock_xq, mock_nb, mock_idx, mock_hot):
+    @patch("agent_reach.daily_run.macro_collector._fetch_xueqiu_sentiment", return_value=("雪球热点：存储", [], []))
+    def test_collect_macro_context(self, mock_xq, mock_nb, mock_idx, mock_hot_stocks, mock_hot_news):
         from agent_reach.daily_run.hot_news_collector import HotNewsResult
         from agent_reach.daily_run.macro_collector import collect_macro_context
 
-        mock_hot.return_value = HotNewsResult()
+        mock_hot_news.return_value = HotNewsResult()
         pf = {"mss_breakdown": {"fx": 50, "flow": 50, "global": 50, "sentiment": 50}}
         ctx = collect_macro_context(pf, settings=load_settings())
         assert "flow" in ctx["sources"]
@@ -97,10 +98,13 @@ class TestMacroCollector:
         assert "_macro_baseline_ref" in ctx["mss_breakdown"]
 
     @patch("agent_reach.daily_run.hot_news_collector.collect_hot_news")
+    @patch("agent_reach.daily_run.macro_collector._fetch_xueqiu_hot_stocks", return_value=[])
     @patch("agent_reach.daily_run.macro_collector._fetch_index_change", return_value=0.0)
     @patch("agent_reach.daily_run.macro_collector._fetch_northbound_flow", return_value=None)
-    @patch("agent_reach.daily_run.macro_collector._fetch_xueqiu_sentiment", return_value=("", []))
-    def test_macro_baseline_uses_harness_evolution(self, mock_xq, mock_nb, mock_idx, mock_hot, monkeypatch):
+    @patch("agent_reach.daily_run.macro_collector._fetch_xueqiu_sentiment", return_value=("", [], []))
+    def test_macro_baseline_uses_harness_evolution(
+        self, mock_xq, mock_nb, mock_idx, mock_hot_stocks, mock_hot_news, monkeypatch
+    ):
         from agent_reach.daily_run.harness import HarnessState, HarnessEntry
         from agent_reach.daily_run.hot_news_collector import HotNewsResult
         from agent_reach.daily_run.macro_collector import collect_macro_context
@@ -118,7 +122,7 @@ class TestMacroCollector:
             updated_at="2026-08-17T00:00:00+00:00",
         )
         monkeypatch.setattr("agent_reach.daily_run.harness.load_harness", lambda: state)
-        mock_hot.return_value = HotNewsResult()
+        mock_hot_news.return_value = HotNewsResult()
         settings = load_settings()
         settings.setdefault("harness", {})["runtime_overlay_sources"] = ["memory"]
         ctx = collect_macro_context({}, settings=settings)
@@ -135,31 +139,35 @@ class TestIntradayMacroRefresh:
         assert intraday_refresh_macro_mode({"snapshot": {"intraday_refresh_macro": "FULL"}}) == "full"
         assert intraday_refresh_macro_mode({"snapshot": {"intraday_refresh_macro": "bogus"}}) == "flow_index"
 
-    @patch("agent_reach.daily_run.macro_collector._fetch_xueqiu_sentiment", return_value=("雪球热点：存储", []))
+    @patch("agent_reach.daily_run.macro_collector._fetch_xueqiu_hot_stocks", return_value=[])
+    @patch("agent_reach.daily_run.macro_collector._fetch_xueqiu_sentiment", return_value=("雪球热点：存储", [], []))
     @patch("agent_reach.daily_run.hot_news_collector.collect_hot_news")
     @patch("agent_reach.daily_run.macro_collector._fetch_index_change", return_value=1.0)
     @patch("agent_reach.daily_run.macro_collector._fetch_northbound_flow", return_value=10.0)
-    def test_flow_index_scope_skips_sentiment_apis(self, mock_nb, mock_idx, mock_hot, _mock_xq):
+    def test_flow_index_scope_skips_sentiment_apis(
+        self, mock_nb, mock_idx, mock_hot_news, mock_hot_stocks, _mock_xq
+    ):
         from agent_reach.daily_run.hot_news_collector import HotNewsResult
         from agent_reach.daily_run.macro_collector import collect_macro_context
 
-        mock_hot.return_value = HotNewsResult()
+        mock_hot_news.return_value = HotNewsResult()
         ctx = collect_macro_context(
             {"mss_breakdown": {"fx": 50, "flow": 50, "global": 50, "sentiment": 62}},
             settings=load_settings(),
             scope="flow_index",
         )
-        mock_hot.assert_not_called()
+        mock_hot_news.assert_not_called()
         assert "sentiment" not in ctx["sources"]
         assert ctx["mss_breakdown"]["global"] > 50
         assert ctx["mss_breakdown"]["sentiment"] == 62
 
-    @patch("agent_reach.daily_run.macro_collector._fetch_xueqiu_sentiment", return_value=("", []))
+    @patch("agent_reach.daily_run.macro_collector._fetch_xueqiu_hot_stocks", return_value=[])
+    @patch("agent_reach.daily_run.macro_collector._fetch_xueqiu_sentiment", return_value=("", [], []))
     @patch("agent_reach.daily_run.hot_news_collector.collect_hot_news")
     @patch("agent_reach.daily_run.macro_collector._fetch_index_change", return_value=1.5)
     @patch("agent_reach.daily_run.macro_collector._fetch_northbound_flow", return_value=8.0)
     def test_merge_intraday_macro_context_keeps_cached_sentiment(
-        self, mock_nb, mock_idx, mock_hot, _mock_xq
+        self, mock_nb, mock_idx, mock_hot_news, mock_hot_stocks, _mock_xq
     ):
         from agent_reach.daily_run.hot_news_collector import HotNewsResult
         from agent_reach.daily_run.macro_collector import (
@@ -167,7 +175,7 @@ class TestIntradayMacroRefresh:
             merge_intraday_macro_context,
         )
 
-        mock_hot.return_value = HotNewsResult()
+        mock_hot_news.return_value = HotNewsResult()
         cached = {
             "mss_breakdown": {
                 "fx": 47.0,

@@ -9,6 +9,7 @@ from typing import Any, Optional
 
 _JOB_LABELS = {
     "morning": "早报",
+    "midday": "午盘分析",
     "intraday": "盘中扫描",
     "close": "收盘复盘",
     "weekly": "周六周报",
@@ -196,6 +197,45 @@ def _compact_narrative_payload(payload: dict[str, Any], limits: dict[str, int]) 
             max_items=6,
             max_chars=160,
         )
+    verdict = out.get("whatif_verdict")
+    if isinstance(verdict, dict):
+        trimmed = dict(verdict)
+        trimmed["summary"] = _trim_text(trimmed.get("summary"), limits["max_summary_chars"] * 2)
+        trimmed["detail_lines"] = _trim_string_list(
+            trimmed.get("detail_lines"),
+            max_items=5,
+            max_chars=120,
+        )
+        if trimmed.get("harness_note"):
+            trimmed["harness_note"] = _trim_text(trimmed.get("harness_note"), 120)
+        out["whatif_verdict"] = trimmed
+    tuning = out.get("harness_tuning")
+    if isinstance(tuning, dict):
+        trimmed_tuning = dict(tuning)
+        trimmed_tuning["summary"] = _trim_text(trimmed_tuning.get("summary"), limits["max_summary_chars"] * 2)
+        for key in ("policy_lines", "plan_lines", "playbook_lines", "execution_lines", "overlay_lines", "notes"):
+            if trimmed_tuning.get(key):
+                trimmed_tuning[key] = _trim_string_list(
+                    trimmed_tuning.get(key),
+                    max_items=4 if key == "policy_lines" else 3,
+                    max_chars=120,
+                )
+        out["harness_tuning"] = trimmed_tuning
+    evolution = out.get("harness_evolution")
+    if isinstance(evolution, dict):
+        trimmed_evolution = dict(evolution)
+        trimmed_evolution["summary"] = _trim_text(
+            trimmed_evolution.get("summary"),
+            limits["max_summary_chars"] * 2,
+        )
+        for key in ("overlay_lines", "execution_lines", "signal_lines", "notes"):
+            if trimmed_evolution.get(key):
+                trimmed_evolution[key] = _trim_string_list(
+                    trimmed_evolution.get(key),
+                    max_items=8 if key == "overlay_lines" else 4,
+                    max_chars=120,
+                )
+        out["harness_evolution"] = trimmed_evolution
     return out
 
 
@@ -231,6 +271,11 @@ def _narrative_cfg(settings: Optional[dict[str, Any]], job: str) -> dict[str, An
         wf = dict(((settings or {}).get("week_forecast") or {}).get("llm_narrative") or {})
         for key, val in wf.items():
             if key != "jobs" and val is not None:
+                root[key] = val
+    if job == "midday":
+        md = dict(((settings or {}).get("midday") or {}).get("llm_narrative") or {})
+        for key, val in md.items():
+            if val is not None:
                 root[key] = val
     jobs = root.get("jobs") or {}
     if isinstance(jobs, dict) and job in jobs:
@@ -268,6 +313,59 @@ def narrative_use_llm(cfg: dict[str, Any]) -> bool:
 
 def _morning_focus_hint() -> str:
     return "优先 verdict、MSS 变化、现金比例。"
+
+
+def _narrative_supplement_fields(
+    *,
+    snapshot: Optional[dict[str, Any]] = None,
+    portfolio_summary: Optional[dict[str, Any]] = None,
+    macro_signals: Optional[dict[str, Any]] = None,
+    include_hit_summary: bool = False,
+) -> dict[str, str]:
+    from agent_reach.daily_run.watchlist_intel import watchlist_intel_narrative_summary
+    from agent_reach.daily_run.xueqiu_stock_search import xueqiu_stock_search_summary
+
+    out = {
+        "watchlist_intel_summary": watchlist_intel_narrative_summary(
+            snapshot,
+            portfolio_summary=portfolio_summary,
+        ),
+        "xueqiu_stock_search_summary": xueqiu_stock_search_summary(macro_signals),
+    }
+    if include_hit_summary:
+        out["xueqiu_hit_summary"] = _xueqiu_hit_narrative_summary()
+    return out
+
+
+def _xueqiu_hit_narrative_summary(*, min_samples: int = 3) -> str:
+    from agent_reach.daily_run.xueqiu_hit_outcomes import summarize_xueqiu_hit_outcomes
+
+    stats = summarize_xueqiu_hit_outcomes()
+    total = int(stats.get("total") or 0)
+    if total < min_samples:
+        return ""
+    hr = stats.get("hit_rate")
+    hr_s = f"{float(hr):.0%}" if isinstance(hr, (int, float)) else "—"
+    return f"雪球热榜命中率 {hr_s}（近 {stats.get('window_days', 30)} 日 {total} 条）"
+
+
+def _narrative_intel_focus(ctx: dict[str, Any]) -> list[str]:
+    """Extra deterministic focus lines: watchlist intel + search (when not in hot summary)."""
+    extras: list[str] = []
+    intel = str(ctx.get("watchlist_intel_summary") or "").strip()
+    if intel:
+        extras.append(intel[:100])
+    search = str(ctx.get("xueqiu_stock_search_summary") or "").strip()
+    hot = str(ctx.get("xueqiu_hot_summary") or "").strip()
+    if search and search != hot and search not in hot:
+        extras.append(search[:100])
+    exa = str(ctx.get("xueqiu_exa_summary") or "").strip()
+    if exa:
+        extras.append(exa[:100])
+    hit = str(ctx.get("xueqiu_hit_summary") or "").strip()
+    if hit:
+        extras.append(hit[:100])
+    return extras
 
 
 def _generate_narrative(
@@ -316,6 +414,8 @@ def _generate_narrative(
         out = deterministic_fn(context)
     else:
         out = _default_deterministic(context, job)
+    if job in ("close", "weekly") and isinstance(out, dict) and not out.get("skipped"):
+        out = _attach_rule_interpretation_extras(out, context, settings=settings)
     out = _compact_narrative_payload(out, limits)
     out["skipped"] = False
     out["job"] = job
@@ -342,6 +442,7 @@ def render_narrative_markdown(narrative: dict[str, Any], *, job: str = "") -> st
     subtitles = {
         "forecast": "数值路径不变",
         "morning": "决策摘要",
+        "midday": "午后策略",
         "intraday": "盘中小结",
         "close": "复盘摘要",
         "weekly": "周报摘要",
@@ -350,6 +451,56 @@ def render_narrative_markdown(narrative: dict[str, Any], *, job: str = "") -> st
     lines = [f"## 📋 规则解读（{sub}）", ""]
     if narrative.get("summary"):
         lines.append(str(narrative["summary"]))
+    verdict = narrative.get("whatif_verdict")
+    if isinstance(verdict, dict) and (verdict.get("summary") or verdict.get("detail_lines")):
+        lines.append("")
+        lines.append("**基准值 vs 自进化**")
+        if verdict.get("summary"):
+            lines.append(str(verdict["summary"]))
+        for item in verdict.get("detail_lines") or []:
+            lines.append(f"- {item}")
+        if verdict.get("harness_note"):
+            lines.append(f"- _{verdict['harness_note']}_")
+    harness_tuning = narrative.get("harness_tuning")
+    if isinstance(harness_tuning, dict) and (
+        harness_tuning.get("summary")
+        or harness_tuning.get("policy_lines")
+        or harness_tuning.get("execution_lines")
+    ):
+        lines.append("")
+        lines.append("**Harness 调参总结**")
+        if harness_tuning.get("summary"):
+            lines.append(str(harness_tuning["summary"]))
+        for item in harness_tuning.get("policy_lines") or []:
+            lines.append(f"- 策略：{item}")
+        for item in harness_tuning.get("plan_lines") or []:
+            lines.append(f"- 计划：{item}")
+        for item in harness_tuning.get("playbook_lines") or []:
+            lines.append(f"- 演练：{item}")
+        for item in harness_tuning.get("execution_lines") or []:
+            lines.append(f"- 执行：{item}")
+        for item in harness_tuning.get("overlay_lines") or []:
+            lines.append(f"- 参数：{item}")
+        for item in harness_tuning.get("notes") or []:
+            lines.append(f"- _{item}_")
+    harness_evolution = narrative.get("harness_evolution")
+    if isinstance(harness_evolution, dict) and (
+        harness_evolution.get("summary")
+        or harness_evolution.get("overlay_lines")
+        or harness_evolution.get("execution_lines")
+    ):
+        lines.append("")
+        lines.append("**Harness 进化总结**")
+        if harness_evolution.get("summary"):
+            lines.append(str(harness_evolution["summary"]))
+        for item in harness_evolution.get("overlay_lines") or []:
+            lines.append(f"- 参数：{item}")
+        for item in harness_evolution.get("signal_lines") or []:
+            lines.append(f"- 信号：{item}")
+        for item in harness_evolution.get("execution_lines") or []:
+            lines.append(f"- 执行：{item}")
+        for item in harness_evolution.get("notes") or []:
+            lines.append(f"- _{item}_")
     label_focus = {
         "morning": "关注点",
         "close": "关注点",
@@ -413,6 +564,15 @@ def build_morning_context(
 ) -> dict[str, Any]:
     pf = snapshot.get("portfolio") or {}
     holdings = pf.get("holdings") or []
+    macro_signals = snapshot.get("macro_signals") or {}
+    from agent_reach.daily_run.xueqiu_hot_display import (
+        portfolio_hot_post_summary,
+        portfolio_hot_stock_summary,
+        portfolio_hot_stocks_new_summary,
+        xueqiu_hot_context_summary,
+    )
+
+    supplements = _narrative_supplement_fields(snapshot=snapshot, macro_signals=macro_signals)
     return {
         "job": "morning",
         "name": report.get("name") or snapshot.get("name"),
@@ -424,6 +584,10 @@ def build_morning_context(
         "confidence": report.get("confidence"),
         "reasoning": (report.get("reasoning") or "")[:160],
         "macro_summary": (snapshot.get("macro_summary") or "")[:120],
+        "xueqiu_hot_summary": xueqiu_hot_context_summary(macro_signals),
+        "portfolio_hot_stock_summary": portfolio_hot_stock_summary(macro_signals),
+        "portfolio_hot_post_summary": portfolio_hot_post_summary(macro_signals),
+        **supplements,
         "change_pct": snapshot.get("change_pct"),
         "cash_ratio": pf.get("cash_ratio"),
         "holdings_count": len(holdings),
@@ -444,6 +608,15 @@ def _morning_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
     cash = ctx.get("cash_ratio")
     if cash is not None and float(cash) >= 0.4:
         focus.append(f"现金仓位 {float(cash):.0%}，符合防守配置")
+    overlap = (
+        ctx.get("portfolio_hot_stock_summary")
+        or ctx.get("portfolio_hot_post_summary")
+        or ctx.get("xueqiu_hot_summary")
+    )
+    if overlap:
+        focus.insert(1, overlap[:100])
+    for idx, extra in enumerate(_narrative_intel_focus(ctx)):
+        focus.insert(2 + idx, extra)
     if mss is not None and float(mss) < 40:
         risks.append("MSS 低于 macro_veto 区间，禁止接飞刀、取消买入计划")
     if ctx.get("invalidation"):
@@ -458,6 +631,52 @@ def _morning_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
         "risk_alerts": risks[:2],
         "planner": "deterministic",
     }
+
+
+def generate_midday_narrative(
+    scan_result: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    scan = scan_result.get("scan") or {}
+    report = (scan_result.get("evaluation") or {}).get("report") or {}
+    context = {
+        "job": "midday",
+        "scan_id": scan.get("scan_id"),
+        "mss_final": scan.get("mss_final") or report.get("mss_final"),
+        "verdict": scan.get("verdict") or report.get("verdict"),
+        "lookback_mss": scan_result.get("lookback_mss"),
+        "trend": scan_result.get("trend"),
+        "macro_summary": (scan_result.get("enriched") or {}).get("macro_summary"),
+        "summary": f"午盘 refresh · {scan.get('verdict') or report.get('verdict') or '观察'}",
+        "focus_points": [],
+        "risk_alerts": [],
+    }
+
+    def _deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "summary": str(ctx.get("summary") or "午盘分析"),
+            "focus_points": [
+                f"Lookback MSS {float(ctx.get('lookback_mss') or 0):.1f}",
+                "13:00 开盘后以新扫描确认",
+            ],
+            "divergence_notes": [],
+            "risk_alerts": [],
+            "planner": "deterministic",
+        }
+
+    return _attach_context_trace(
+        _generate_narrative(
+            "midday",
+            context,
+            settings=settings,
+            system="解读午盘 refresh：上午回顾、午休宏观、午后 Lookback 与策略。",
+            deterministic_fn=_deterministic,
+        ),
+        settings=settings,
+        job="midday",
+        ctx=context,
+    )
 
 
 def generate_morning_narrative(
@@ -507,6 +726,18 @@ def build_merged_morning_context(
             }
         )
     pf = (primary_snapshot or {}).get("portfolio") or {}
+    macro_signals = (primary_snapshot or {}).get("macro_signals") or {}
+    from agent_reach.daily_run.xueqiu_hot_display import (
+        portfolio_hot_post_summary,
+        portfolio_hot_stock_summary,
+        portfolio_hot_stocks_new_summary,
+        xueqiu_hot_context_summary,
+    )
+
+    supplements = _narrative_supplement_fields(
+        snapshot=primary_snapshot,
+        macro_signals=macro_signals,
+    )
     return {
         "job": "morning",
         "portfolio_scope": "merged",
@@ -515,6 +746,10 @@ def build_merged_morning_context(
         "cash_ratio": pf.get("cash_ratio"),
         "holdings_count": len(pf.get("holdings") or []),
         "macro_summary": ((primary_snapshot or {}).get("macro_summary") or "")[:120],
+        "xueqiu_hot_summary": xueqiu_hot_context_summary(macro_signals),
+        "portfolio_hot_stock_summary": portfolio_hot_stock_summary(macro_signals),
+        "portfolio_hot_post_summary": portfolio_hot_post_summary(macro_signals),
+        **supplements,
     }
 
 
@@ -533,6 +768,15 @@ def _merged_morning_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
     cash = ctx.get("cash_ratio")
     if cash is not None:
         focus.append(f"组合现金 {float(cash):.0%}")
+    overlap = (
+        ctx.get("portfolio_hot_stock_summary")
+        or ctx.get("portfolio_hot_post_summary")
+        or ctx.get("xueqiu_hot_summary")
+    )
+    if overlap:
+        focus.insert(1, overlap[:100])
+    for idx, extra in enumerate(_narrative_intel_focus(ctx)):
+        focus.insert(2 + idx, extra)
     if mss_vals and min(mss_vals) < 40:
         risks.append("部分标的 MSS 低于宏观否决线")
     summary = f"早盘全持仓 {n} 只"
@@ -729,8 +973,16 @@ def build_intraday_context(
     *,
     scan_result: dict[str, Any],
     trade_result: Optional[dict[str, Any]] = None,
+    macro_signals: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     from agent_reach.daily_run.close_portfolio_summary import extract_intraday_trade_record
+    from agent_reach.daily_run.xueqiu_hot_display import (
+        portfolio_hot_post_summary,
+        portfolio_hot_stock_summary,
+        portfolio_hot_stocks_new_summary,
+        xueqiu_exa_research_summary,
+        xueqiu_hot_context_summary,
+    )
 
     scan = scan_result.get("scan") or {}
     evaluation = scan_result.get("evaluation") or {}
@@ -745,6 +997,7 @@ def build_intraday_context(
         }
         for item in (scan_result.get("lookback_detail") or [])[:3]
     ]
+    xq_signals = macro_signals or scan_result.get("xueqiu_cross") or {}
     return {
         "job": "intraday",
         "scan_id": scan.get("scan_id"),
@@ -768,6 +1021,11 @@ def build_intraday_context(
         "cash_limit_bypass": trade_record.get("cash_limit_bypass"),
         "consecutive_buy_streak": trade_record.get("consecutive_buy_streak"),
         "case_uri": trade_record.get("case_uri"),
+        "xueqiu_hot_summary": xueqiu_hot_context_summary(xq_signals),
+        "portfolio_hot_stock_summary": portfolio_hot_stock_summary(xq_signals),
+        "portfolio_hot_post_summary": portfolio_hot_post_summary(xq_signals),
+        "portfolio_hot_stocks_new_summary": portfolio_hot_stocks_new_summary(xq_signals),
+        "xueqiu_exa_summary": xueqiu_exa_research_summary(xq_signals),
     }
 
 
@@ -780,6 +1038,17 @@ def _intraday_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
     lookback = ctx.get("lookback_mss")
     if lookback is not None:
         focus.append(f"Lookback MSS {lookback}" + (f"，趋势 {ctx.get('trend')}" if ctx.get("trend") else ""))
+    overlap = (
+        ctx.get("portfolio_hot_stocks_new_summary")
+        or ctx.get("portfolio_hot_stock_summary")
+        or ctx.get("portfolio_hot_post_summary")
+        or ctx.get("xueqiu_hot_summary")
+    )
+    if overlap:
+        focus.insert(0, overlap[:100])
+    for extra in _narrative_intel_focus(ctx):
+        if extra not in focus:
+            focus.insert(min(1, len(focus)), extra)
     if ctx.get("trade_action"):
         action = str(ctx["trade_action"])
         action_map = {"buy": "买入", "sell": "卖出", "hold": "观望", "skip": "跳过"}
@@ -867,8 +1136,13 @@ def generate_intraday_narrative(
     scan_result: dict[str, Any],
     trade_result: Optional[dict[str, Any]] = None,
     settings: Optional[dict[str, Any]] = None,
+    macro_signals: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    context = build_intraday_context(scan_result=scan_result, trade_result=trade_result)
+    context = build_intraday_context(
+        scan_result=scan_result,
+        trade_result=trade_result,
+        macro_signals=macro_signals,
+    )
     return _attach_context_trace(
         _attach_intraday_trade_operations(
             _generate_narrative(
@@ -890,7 +1164,16 @@ def build_merged_intraday_context(
     symbol_results: list[dict[str, Any]],
     *,
     scan_id: Optional[str] = None,
+    macro_signals: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
+    from agent_reach.daily_run.xueqiu_hot_display import (
+        portfolio_hot_post_summary,
+        portfolio_hot_stock_summary,
+        portfolio_hot_stocks_new_summary,
+        xueqiu_exa_research_summary,
+        xueqiu_hot_context_summary,
+    )
+
     symbols = [_intraday_row_context(row) for row in symbol_results if not row.get("skipped")]
     return {
         "job": "intraday",
@@ -898,6 +1181,11 @@ def build_merged_intraday_context(
         "scan_id": scan_id or (symbols[0].get("scan_id") if symbols else None),
         "symbol_count": len(symbols),
         "symbols": symbols,
+        "xueqiu_hot_summary": xueqiu_hot_context_summary(macro_signals),
+        "portfolio_hot_stock_summary": portfolio_hot_stock_summary(macro_signals),
+        "portfolio_hot_post_summary": portfolio_hot_post_summary(macro_signals),
+        "portfolio_hot_stocks_new_summary": portfolio_hot_stocks_new_summary(macro_signals),
+        "xueqiu_exa_summary": xueqiu_exa_research_summary(macro_signals),
     }
 
 
@@ -912,6 +1200,17 @@ def _merged_intraday_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
     dominant = max(set(verdicts), key=verdicts.count) if verdicts else "—"
     if mss_vals:
         focus.append(f"MSS 区间 {min(mss_vals):.1f}~{max(mss_vals):.1f}")
+    overlap = (
+        ctx.get("portfolio_hot_stocks_new_summary")
+        or ctx.get("portfolio_hot_stock_summary")
+        or ctx.get("portfolio_hot_post_summary")
+        or ctx.get("xueqiu_hot_summary")
+    )
+    if overlap:
+        focus.insert(0, overlap[:100])
+    for extra in _narrative_intel_focus(ctx):
+        if extra not in focus:
+            focus.insert(min(1, len(focus)), extra)
     focus.append(f"{n} 只标的，主导结论 {dominant}")
     risks = _collect_merged_intraday_risks(symbols)
     trade_records = [sym.get("trade_record") for sym in symbols if sym.get("trade_record")]
@@ -942,8 +1241,13 @@ def generate_merged_intraday_narrative(
     *,
     scan_id: Optional[str] = None,
     settings: Optional[dict[str, Any]] = None,
+    macro_signals: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    context = build_merged_intraday_context(symbol_results, scan_id=scan_id)
+    context = build_merged_intraday_context(
+        symbol_results,
+        scan_id=scan_id,
+        macro_signals=macro_signals,
+    )
     return _attach_context_trace(
         _attach_intraday_trade_operations(
             _generate_narrative(
@@ -980,31 +1284,41 @@ def push_intraday_narrative_card(
     scan_result: Optional[dict[str, Any]] = None,
     trade_result: Optional[dict[str, Any]] = None,
     symbol_results: Optional[list[dict[str, Any]]] = None,
+    macro_signals: Optional[dict[str, Any]] = None,
 ) -> Optional[dict[str, Any]]:
     """Push AI interpretation of this intraday scheduled run (always last)."""
     if not intraday_append_narrative(settings):
         return None
+    xq_signals = macro_signals
+    if xq_signals is None and scan_result:
+        xq_signals = scan_result.get("xueqiu_cross")
     if symbol_results and len(symbol_results) > 1:
         narrative = generate_merged_intraday_narrative(
             symbol_results,
             scan_id=scan_id,
             settings=settings,
+            macro_signals=xq_signals,
         )
     elif scan_result:
         narrative = generate_intraday_narrative(
             scan_result=scan_result,
             trade_result=trade_result,
             settings=settings,
+            macro_signals=xq_signals,
         )
     elif symbol_results:
         row = next((r for r in symbol_results if not r.get("skipped")), None)
         if not row:
             return None
         inner = row.get("result") or {}
+        if xq_signals is None:
+            scan_payload = inner.get("scan") or {}
+            xq_signals = scan_payload.get("xueqiu_cross")
         narrative = generate_intraday_narrative(
             scan_result=inner.get("scan") or {},
             trade_result=inner.get("trade"),
             settings=settings,
+            macro_signals=xq_signals,
         )
     else:
         return None
@@ -1032,9 +1346,16 @@ def build_close_context(
     forecast_review: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     from agent_reach.daily_run.close_portfolio_summary import extract_close_trade_operations
+    from agent_reach.daily_run.xueqiu_hot_display import (
+        portfolio_hot_post_summary,
+        portfolio_hot_stock_summary,
+        portfolio_hot_stocks_new_summary,
+        xueqiu_hot_context_summary,
+    )
 
     trade_ops = extract_close_trade_operations(portfolio_summary)
     sell_rules_whatif = (portfolio_summary or {}).get("sell_rules_whatif")
+    macro_signals = snapshot.get("macro_signals") or {}
     ctx = {
         "job": "close",
         "name": snapshot.get("name"),
@@ -1055,9 +1376,18 @@ def build_close_context(
         "buy_rules_whatif": (portfolio_summary or {}).get("buy_rules_whatif"),
         "intraday_friction_whatif": (portfolio_summary or {}).get("intraday_friction_whatif"),
         "intraday_sell_whatif": (portfolio_summary or {}).get("intraday_sell_whatif"),
+        "harness_result": (portfolio_summary or {}).get("harness_result"),
         "curve_trend": (curve or {}).get("trend"),
         "forecast_review_accuracy": (forecast_review or {}).get("accuracy"),
         "macro_summary": (snapshot.get("macro_summary") or "")[:120],
+        "xueqiu_hot_summary": xueqiu_hot_context_summary(macro_signals),
+        "portfolio_hot_stock_summary": portfolio_hot_stock_summary(macro_signals),
+        "portfolio_hot_post_summary": portfolio_hot_post_summary(macro_signals),
+        **_narrative_supplement_fields(
+            snapshot=snapshot,
+            portfolio_summary=portfolio_summary,
+            macro_signals=macro_signals,
+        ),
     }
     return ctx
 
@@ -1075,6 +1405,529 @@ def _attach_close_trade_operations(
     if ops:
         narrative["trade_operations"] = ops
     return narrative
+
+
+def build_baseline_evolved_verdict(ctx: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """Synthesize what-if blocks into an overall baseline vs evolved verdict for 规则解读."""
+    sell = ctx.get("sell_rules_whatif") or {}
+    buy = ctx.get("buy_rules_whatif") or {}
+    friction = ctx.get("intraday_friction_whatif") or {}
+    intraday_sell = ctx.get("intraday_sell_whatif") or {}
+
+    has_any = any(block and not block.get("skipped") for block in (sell, buy, friction, intraday_sell))
+    if not has_any:
+        return None
+
+    detail_lines: list[str] = []
+    highlights: list[str] = []
+    evolved_score = 0
+    baseline_score = 0
+    harness_note = ""
+
+    daily_pnl = ctx.get("portfolio_daily_pnl")
+    if daily_pnl is None:
+        daily_pnl = ctx.get("weekly_pnl")
+    pnl_negative = daily_pnl is not None and float(daily_pnl) < 0
+
+    if sell and not sell.get("skipped"):
+        actual_pnl = float(sell.get("actual_realized_pnl") or 0)
+        hypo_pnl = float(sell.get("hypothetical_realized_pnl") or 0)
+        pnl_delta = float(sell.get("realized_pnl_delta") or 0)
+        if pnl_delta >= 200:
+            evolved_score += 1
+            sell_winner = "自进化"
+            highlights.append(f"卖出少亏 ¥{pnl_delta:,.0f}")
+        elif pnl_delta <= -200:
+            baseline_score += 1
+            sell_winner = "基准值"
+            highlights.append(f"卖出多赚 ¥{abs(pnl_delta):,.0f}")
+        else:
+            sell_winner = "持平"
+        sign_a = "+" if actual_pnl >= 0 else ""
+        sign_h = "+" if hypo_pnl >= 0 else ""
+        sign_d = "+" if pnl_delta >= 0 else ""
+        detail_lines.append(
+            f"卖出：基准已实现 {sign_a}¥{actual_pnl:,.0f} → 自进化 {sign_h}¥{hypo_pnl:,.0f}"
+            f"（差 {sign_d}¥{pnl_delta:,.0f}，{sell_winner}更优）"
+        )
+
+    if buy and not buy.get("skipped"):
+        actual_n = float(buy.get("actual_buy_notional") or 0)
+        hypo_n = float(buy.get("hypothetical_buy_notional") or 0)
+        notional_delta = float(buy.get("buy_notional_delta") or 0)
+        if abs(notional_delta) >= 5000:
+            if pnl_negative and notional_delta <= -5000:
+                evolved_score += 1
+                buy_winner = "自进化"
+                highlights.append(f"买入少部署 ¥{abs(notional_delta):,.0f}")
+                harness_note = (
+                    "harness 买入侧会标「基准更优」（机制性少买判定），"
+                    "但按当日盈亏应是自进化更优"
+                )
+            elif (not pnl_negative) and notional_delta >= 5000:
+                evolved_score += 1
+                buy_winner = "自进化"
+                highlights.append(f"买入多部署 ¥{notional_delta:,.0f}")
+            elif pnl_negative and notional_delta >= 5000:
+                baseline_score += 1
+                buy_winner = "基准值"
+            elif (not pnl_negative) and notional_delta <= -5000:
+                baseline_score += 1
+                buy_winner = "基准值"
+                harness_note = "harness 买入侧标「基准更优」，上涨日可能错失加仓机会"
+            else:
+                buy_winner = "持平"
+        else:
+            buy_winner = "持平"
+        sign_d = "+" if notional_delta >= 0 else ""
+        detail_lines.append(
+            f"买入：基准 ¥{actual_n:,.0f} → 自进化 ¥{hypo_n:,.0f}"
+            f"（差 {sign_d}¥{notional_delta:,.0f}，{buy_winner}更优）"
+        )
+
+    if intraday_sell and not intraday_sell.get("skipped"):
+        rows = list(intraday_sell.get("rows") or [])
+        actual_total = sum(int(r.get("actual_sold") or 0) for r in rows)
+        hypo_total = sum(int(r.get("hypothetical_sold") or 0) for r in rows)
+        sell_share_delta = int(
+            intraday_sell.get("sell_share_delta") or (hypo_total - actual_total)
+        )
+        missed = int(intraday_sell.get("missed_sell_signals") or 0)
+        realized = float(ctx.get("realized_pnl") or sell.get("actual_realized_pnl") or 0)
+        if abs(sell_share_delta) >= 100:
+            if sell_share_delta < 0 and realized < 0:
+                evolved_score += 1
+                scan_winner = "自进化"
+                highlights.append(f"盘中少卖 {abs(sell_share_delta)} 股")
+            elif sell_share_delta > 0 and realized >= 0:
+                evolved_score += 1
+                scan_winner = "自进化"
+                highlights.append(f"盘中多卖 {sell_share_delta} 股")
+            elif sell_share_delta < 0 and realized >= 0:
+                baseline_score += 1
+                scan_winner = "基准值"
+            else:
+                if sell_share_delta < 0:
+                    evolved_score += 1
+                    scan_winner = "自进化"
+                    highlights.append(f"盘中少卖 {abs(sell_share_delta)} 股")
+                else:
+                    baseline_score += 1
+                    scan_winner = "基准值"
+        elif missed >= 1:
+            baseline_score += 1
+            scan_winner = "基准值"
+        else:
+            scan_winner = "持平"
+        detail_lines.append(
+            f"盘中卖出 scan：基准 {actual_total} 股 → 自进化 {hypo_total} 股"
+            f"（差 {sell_share_delta:+d} 股，{scan_winner}更优）"
+        )
+
+    if friction and not friction.get("skipped"):
+        friction_pass = int(friction.get("friction_would_pass") or 0)
+        trend_miss = int(friction.get("trend_mismatch") or 0)
+        rows = list(friction.get("rows") or [])
+        diffs = [r for r in rows if (r.get("actual_action") or "") != (r.get("evolved_action") or "")]
+        if friction_pass == 0 and trend_miss == 0 and not diffs:
+            detail_lines.append("盘中摩擦/趋势：无差异（持平）")
+        else:
+            if friction_pass >= 1:
+                evolved_score += 1
+                fr_winner = "自进化"
+            elif trend_miss >= 1:
+                baseline_score += 1
+                fr_winner = "基准值"
+            else:
+                fr_winner = "持平"
+            detail_lines.append(
+                f"盘中摩擦/趋势：可放行 {friction_pass} 次 · 趋势误判 {trend_miss} 次（{fr_winner}更优）"
+            )
+
+    if not detail_lines:
+        return None
+
+    if evolved_score > baseline_score:
+        overall = "evolved"
+        overall_label = "整体自进化更优"
+    elif baseline_score > evolved_score:
+        overall = "baseline"
+        overall_label = "整体基准值更优"
+    else:
+        overall = "mixed"
+        overall_label = "整体基本持平"
+
+    if highlights:
+        summary = f"{overall_label}：" + "，".join(highlights[:3])
+    else:
+        summary = overall_label
+
+    out: dict[str, Any] = {
+        "overall": overall,
+        "summary": summary,
+        "detail_lines": detail_lines[:5],
+    }
+    if harness_note:
+        out["harness_note"] = harness_note
+    return out
+
+
+def _dedupe_text_lines(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in items:
+        text = str(item).strip()
+        if text and text not in seen:
+            seen.add(text)
+            out.append(text)
+    return out
+
+
+def _compact_harness_execution_summary(harness_result: dict[str, Any]) -> list[str]:
+    if not harness_result:
+        return []
+    if harness_result.get("skipped") and harness_result.get("error"):
+        return [f"Harness 跳过：{harness_result['error']}"]
+
+    from agent_reach.daily_run.harness import _collect_harness_refinement_layers
+
+    layers = _collect_harness_refinement_layers(harness_result)
+    total = sum(int(layer.get("changes") or 0) for _, layer in layers)
+    lines: list[str] = []
+    if layers:
+        lines.append(f"本次 harness 精炼 {len(layers)} 个 job，合计 {total} 项参数变更")
+        for _label, layer in layers[:4]:
+            changes = int(layer.get("changes") or 0)
+            if changes <= 0:
+                continue
+            rid = layer.get("refinement_id") or ""
+            planner = layer.get("planner") or layer.get("layer") or _label
+            summary = str(layer.get("proposal_summary") or layer.get("reason") or "").strip()
+            bit = f"{planner} · `{rid}` · {changes} 项变更"
+            if summary:
+                bit += f" · {summary[:48]}"
+            lines.append(bit)
+    rollback = harness_result.get("auto_rollback") or {}
+    if rollback.get("triggered"):
+        lines.append(
+            f"坏交易回滚：{rollback.get('pnl_label') or 'PnL'} "
+            f"{rollback.get('pnl_pct')}% ≤ {rollback.get('threshold')}% · "
+            f"已撤销 {rollback.get('count', 0)} 次 refine"
+        )
+    return lines
+
+
+_RUNTIME_EVOLUTION_LABELS: dict[str, str] = {
+    "trade_min_scans": "最少扫描次数",
+    "trade_every_n_scans": "交易间隔扫描",
+    "max_applied_trades_per_day": "日最大成交笔数",
+    "max_trade_evaluations_per_symbol": "单票最大评估次数",
+    "max_holdings": "最大持仓数",
+    "max_total_symbols": "最大标的数",
+    "holding_lock_days": "锁仓天数",
+    "stop_loss_ma20_pct": "MA20止损比例",
+    "friction_min_return_pct": "摩擦最小收益",
+}
+
+_POSITION_EVOLUTION_LABELS: dict[str, str] = {
+    "deploy_ratio": "deploy_ratio",
+    "max_position_pct": "max_position_pct",
+}
+
+_FORECAST_EVOLUTION_LABELS: dict[str, str] = {
+    "base_spread": "base_spread",
+    "vol_multiplier": "vol_multiplier",
+    "bias_pct": "bias_pct",
+    "vol_scale": "vol_scale",
+}
+
+
+def _overlay_evolution_label(section: str, key: str) -> str:
+    from agent_reach.daily_run.harness_display import THRESHOLD_REF_SPECS
+
+    if section == "threshold_overlay":
+        return {spec[0]: spec[2] for spec in THRESHOLD_REF_SPECS}.get(key, key)
+    if section == "position_overlay":
+        return _POSITION_EVOLUTION_LABELS.get(key, key)
+    if section == "runtime_overlay":
+        return _RUNTIME_EVOLUTION_LABELS.get(key, key)
+    if section in ("forecast_overlay", "calibration_overlay"):
+        return _FORECAST_EVOLUTION_LABELS.get(key, key)
+    return key
+
+
+def _collect_harness_overlay_evolution_lines(
+    settings: Optional[dict[str, Any]],
+    *,
+    effective_overlay: Optional[dict[str, Any]] = None,
+    max_lines: int = 10,
+) -> list[str]:
+    """Collect base→effective overlay diffs for harness evolution summary."""
+    from agent_reach.daily_run.context_layers import _format_overlay_item
+    from agent_reach.daily_run.harness_display import format_lookback_weights_pct
+    from agent_reach.daily_run.settings import effective_settings
+
+    eff = effective_settings(settings or {})
+    runtime = dict(eff.get("harness_runtime") or {})
+    if effective_overlay:
+        for section, block in effective_overlay.items():
+            if block and not runtime.get(section):
+                runtime[section] = block
+
+    lines: list[str] = []
+    sections = (
+        "threshold_overlay",
+        "position_overlay",
+        "runtime_overlay",
+        "forecast_overlay",
+        "lookback_overlay",
+        "calibration_overlay",
+    )
+    for section in sections:
+        block = runtime.get(section) or {}
+        if section == "lookback_overlay":
+            lb = block.get("lookback_weights") if isinstance(block, dict) else block
+            if isinstance(lb, dict):
+                base = lb.get("base")
+                eff_w = lb.get("effective")
+                if base and eff_w and list(base) != list(eff_w):
+                    lines.append(
+                        f"Lookback {format_lookback_weights_pct(eff_w)}"
+                        f"（基准 {format_lookback_weights_pct(base)}）"
+                    )
+            continue
+        if not isinstance(block, dict):
+            continue
+        for key, change in block.items():
+            if not isinstance(change, dict):
+                continue
+            label = _overlay_evolution_label(section, str(key))
+            bit = _format_overlay_item(label, change)
+            if bit:
+                lines.append(bit)
+            if len(lines) >= max_lines:
+                return lines
+
+    trade_signals = runtime.get("trade_signals") or {}
+    if isinstance(trade_signals, dict):
+        active = [str(k) for k, v in trade_signals.items() if v]
+        if active:
+            lines.append("交易信号 " + "、".join(active[:6]))
+    return lines[:max_lines]
+
+
+def build_harness_evolution_summary(
+    ctx: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> Optional[dict[str, Any]]:
+    """Build harness parameter evolution summary for weekly 规则解读."""
+    if ctx.get("job") != "weekly":
+        return None
+
+    harness_result = dict(ctx.get("harness_result") or {})
+    weekly_skills = harness_result.get("weekly_skills") or {}
+    effective_overlay = ctx.get("effective_overlay") or weekly_skills.get("effective_overlay")
+
+    overlay_lines = _collect_harness_overlay_evolution_lines(
+        settings,
+        effective_overlay=effective_overlay,
+    )
+    execution = _compact_harness_execution_summary(harness_result)
+
+    total_changes = weekly_skills.get("total_changes")
+    if total_changes is None:
+        from agent_reach.daily_run.harness import _collect_harness_refinement_layers
+
+        layers = _collect_harness_refinement_layers(harness_result)
+        total_changes = sum(int(layer.get("changes") or 0) for _, layer in layers)
+
+    signal_lines: list[str] = []
+    buy_opt = weekly_skills.get("buy_rules_whatif") or {}
+    if buy_opt and not buy_opt.get("skipped"):
+        optimal = buy_opt.get("llm_optimal") or {}
+        deploy = optimal.get("deploy_ratio")
+        max_pct = optimal.get("max_position_pct")
+        if deploy is not None or max_pct is not None:
+            bits: list[str] = []
+            if deploy is not None:
+                bits.append(f"deploy_ratio={float(deploy):.0%}")
+            if max_pct is not None:
+                bits.append(f"max_position_pct={float(max_pct):.0f}%")
+            if bits:
+                signal_lines.append("买入 what-if DeepSeek 最优：" + " · ".join(bits))
+
+    if not overlay_lines and not execution and not signal_lines and not total_changes:
+        return None
+
+    summary_parts: list[str] = []
+    if total_changes:
+        summary_parts.append(f"本周 harness 共 {int(total_changes)} 项参数变更")
+    if overlay_lines:
+        summary_parts.append(overlay_lines[0])
+    elif execution:
+        summary_parts.append(execution[0])
+    elif signal_lines:
+        summary_parts.append(signal_lines[0])
+
+    notes: list[str] = []
+    rollback = harness_result.get("auto_rollback") or {}
+    if rollback.get("triggered"):
+        notes.append(
+            f"坏交易回滚已触发（{rollback.get('pnl_label') or 'PnL'} "
+            f"{rollback.get('pnl_pct')}%），部分 refine 已撤销"
+        )
+
+    out: dict[str, Any] = {
+        "summary": "；".join(summary_parts[:2]) if summary_parts else "维持当前 harness 有效参数",
+        "total_changes": int(total_changes or 0),
+    }
+    if overlay_lines:
+        out["overlay_lines"] = overlay_lines[:8]
+    if signal_lines:
+        out["signal_lines"] = signal_lines[:2]
+    if execution:
+        out["execution_lines"] = execution[:4]
+    if notes:
+        out["notes"] = notes
+    return out
+
+
+def build_harness_tuning_summary(
+    ctx: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> Optional[dict[str, Any]]:
+    """Build harness policy/plan tuning summary for 规则解读 from what-if + session refine."""
+    from agent_reach.daily_run.sell_rules_whatif import (
+        summarize_buy_whatif_for_harness,
+        summarize_intraday_friction_for_harness,
+        summarize_intraday_sell_for_harness,
+        summarize_whatif_for_harness,
+    )
+
+    pnl = ctx.get("portfolio_daily_pnl")
+    if pnl is None:
+        pnl = ctx.get("weekly_pnl")
+    pnl_pct = ctx.get("portfolio_daily_pnl_pct")
+    if pnl_pct is None:
+        pnl_pct = ctx.get("weekly_pnl_pct")
+
+    policy: list[str] = []
+    plan: list[str] = []
+    playbook: list[str] = []
+
+    sell = ctx.get("sell_rules_whatif") or {}
+    if sell and not sell.get("skipped") and (
+        sell.get("rows")
+        or abs(float(sell.get("actual_realized_pnl") or 0)) >= 0.01
+        or abs(float(sell.get("hypothetical_realized_pnl") or 0)) >= 0.01
+    ):
+        block = summarize_whatif_for_harness(sell, weekly_pnl=pnl, weekly_pnl_pct=pnl_pct)
+        policy.extend(block.get("policy") or [])
+        plan.extend(block.get("plan") or [])
+        playbook.extend(block.get("playbook") or [])
+
+    buy = ctx.get("buy_rules_whatif") or {}
+    if buy and not buy.get("skipped") and buy.get("rows"):
+        block = summarize_buy_whatif_for_harness(buy, weekly_pnl=pnl, weekly_pnl_pct=pnl_pct)
+        policy.extend(block.get("policy") or [])
+        plan.extend(block.get("plan") or [])
+        playbook.extend(block.get("playbook") or [])
+
+    friction = ctx.get("intraday_friction_whatif") or {}
+    if friction and not friction.get("skipped"):
+        block = summarize_intraday_friction_for_harness(friction)
+        policy.extend(block.get("policy") or [])
+        plan.extend(block.get("plan") or [])
+        playbook.extend(block.get("playbook") or [])
+
+    intraday_sell = ctx.get("intraday_sell_whatif") or {}
+    if intraday_sell and not intraday_sell.get("skipped"):
+        block = summarize_intraday_sell_for_harness(intraday_sell)
+        policy.extend(block.get("policy") or [])
+        plan.extend(block.get("plan") or [])
+        playbook.extend(block.get("playbook") or [])
+
+    policy = _dedupe_text_lines(policy)
+    plan = _dedupe_text_lines(plan)
+    playbook = _dedupe_text_lines(playbook)
+
+    execution = _compact_harness_execution_summary(dict(ctx.get("harness_result") or {}))
+
+    overlay_lines: list[str] = []
+    if settings:
+        from agent_reach.daily_run.harness_display import format_effective_thresholds_markdown
+
+        overlay_md = format_effective_thresholds_markdown(settings)
+        if overlay_md:
+            overlay_lines = [
+                line[2:].strip()
+                for line in overlay_md.splitlines()
+                if line.startswith("- ")
+            ]
+
+    if not policy and not plan and not playbook and not execution and not overlay_lines:
+        return None
+
+    summary_parts: list[str] = []
+    if policy:
+        summary_parts.append(policy[0])
+    elif plan:
+        summary_parts.append(plan[0][:72])
+    elif playbook:
+        summary_parts.append(playbook[0][:72])
+    if execution:
+        summary_parts.append(execution[0])
+    summary = "；".join(summary_parts[:2]) if summary_parts else "维持当前 harness 参数"
+
+    notes: list[str] = []
+    buy_delta = float((buy or {}).get("buy_notional_delta") or 0)
+    if (
+        buy
+        and not buy.get("skipped")
+        and buy_delta <= -5000
+        and pnl is not None
+        and float(pnl) < 0
+        and any("deploy_ratio" in item for item in policy)
+    ):
+        notes.append(
+            "买入 harness 建议上调 deploy_ratio，与当日下跌盈亏方向相反，"
+            "执行时需对照上方「基准值 vs 自进化」综合结论"
+        )
+
+    out: dict[str, Any] = {
+        "summary": summary,
+        "policy_lines": policy[:4],
+        "plan_lines": plan[:3],
+    }
+    if playbook:
+        out["playbook_lines"] = playbook[:2]
+    if execution:
+        out["execution_lines"] = execution[:3]
+    if overlay_lines:
+        out["overlay_lines"] = overlay_lines[:4]
+    if notes:
+        out["notes"] = notes
+    return out
+
+
+def _attach_rule_interpretation_extras(
+    payload: dict[str, Any],
+    ctx: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    verdict = build_baseline_evolved_verdict(ctx)
+    if verdict:
+        payload["whatif_verdict"] = verdict
+    tuning = build_harness_tuning_summary(ctx, settings=settings)
+    if tuning:
+        payload["harness_tuning"] = tuning
+    evolution = build_harness_evolution_summary(ctx, settings=settings)
+    if evolution:
+        payload["harness_evolution"] = evolution
+    return payload
 
 
 def _append_trade_whatif_focus(focus: list[str], ctx: dict[str, Any], *, max_rows: int = 3) -> None:
@@ -1218,6 +2071,15 @@ def _close_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
         if trade_summary:
             focus.append(f"当日成交：{trade_summary}")
     _append_trade_whatif_focus(focus, ctx)
+    overlap = (
+        ctx.get("portfolio_hot_stock_summary")
+        or ctx.get("portfolio_hot_post_summary")
+        or ctx.get("xueqiu_hot_summary")
+    )
+    if overlap:
+        focus.insert(1, overlap[:100])
+    for idx, extra in enumerate(_narrative_intel_focus(ctx)):
+        focus.insert(2 + idx, extra)
     for rec in ctx.get("recommendations") or []:
         focus.append(f"明日：{rec}")
     for dev in ctx.get("deviations") or []:
@@ -1275,8 +2137,16 @@ def build_merged_close_context(
     portfolio_summary: Optional[dict[str, Any]] = None,
     curve: Optional[dict[str, Any]] = None,
     forecast_review: Optional[dict[str, Any]] = None,
+    harness_result: Optional[dict[str, Any]] = None,
+    macro_signals: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     from agent_reach.daily_run.close_portfolio_summary import extract_close_trade_operations
+    from agent_reach.daily_run.xueqiu_hot_display import (
+        portfolio_hot_post_summary,
+        portfolio_hot_stock_summary,
+        portfolio_hot_stocks_new_summary,
+        xueqiu_hot_context_summary,
+    )
 
     symbols: list[dict[str, Any]] = []
     for row in symbol_results:
@@ -1308,8 +2178,16 @@ def build_merged_close_context(
         "buy_rules_whatif": (portfolio_summary or {}).get("buy_rules_whatif"),
         "intraday_friction_whatif": (portfolio_summary or {}).get("intraday_friction_whatif"),
         "intraday_sell_whatif": (portfolio_summary or {}).get("intraday_sell_whatif"),
+        "harness_result": harness_result or (portfolio_summary or {}).get("harness_result"),
         "curve_trend": (curve or {}).get("trend"),
         "forecast_review_accuracy": (forecast_review or {}).get("accuracy"),
+        "xueqiu_hot_summary": xueqiu_hot_context_summary(macro_signals),
+        "portfolio_hot_stock_summary": portfolio_hot_stock_summary(macro_signals),
+        "portfolio_hot_post_summary": portfolio_hot_post_summary(macro_signals),
+        **_narrative_supplement_fields(
+            portfolio_summary=portfolio_summary,
+            macro_signals=macro_signals,
+        ),
     }
 
 
@@ -1345,6 +2223,15 @@ def _merged_close_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
         if trade_summary:
             focus.append(f"当日成交：{trade_summary}")
     _append_trade_whatif_focus(focus, ctx)
+    overlap = (
+        ctx.get("portfolio_hot_stock_summary")
+        or ctx.get("portfolio_hot_post_summary")
+        or ctx.get("xueqiu_hot_summary")
+    )
+    if overlap:
+        focus.insert(1, overlap[:100])
+    for idx, extra in enumerate(_narrative_intel_focus(ctx)):
+        focus.insert(2 + idx, extra)
     for sym in ctx.get("symbols") or []:
         if sym.get("verify_summary"):
             focus.append(f"{sym.get('name') or sym.get('code')}：{sym['verify_summary'][:72]}")
@@ -1374,6 +2261,8 @@ def generate_merged_close_narrative(
     portfolio_summary: Optional[dict[str, Any]] = None,
     curve: Optional[dict[str, Any]] = None,
     forecast_review: Optional[dict[str, Any]] = None,
+    harness_result: Optional[dict[str, Any]] = None,
+    macro_signals: Optional[dict[str, Any]] = None,
     settings: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     context = build_merged_close_context(
@@ -1381,6 +2270,8 @@ def generate_merged_close_narrative(
         portfolio_summary=portfolio_summary,
         curve=curve,
         forecast_review=forecast_review,
+        harness_result=harness_result,
+        macro_signals=macro_signals,
     )
     return _attach_context_trace(
         _attach_close_trade_operations(
@@ -1402,7 +2293,21 @@ def generate_merged_close_narrative(
 # --- Weekly ---
 
 
-def build_weekly_context(report: dict[str, Any]) -> dict[str, Any]:
+def _weekly_xueqiu_hot_summary(report: dict[str, Any]) -> str:
+    from agent_reach.daily_run.xueqiu_hot_display import (
+        portfolio_hot_stock_summary,
+        xueqiu_hot_context_summary,
+    )
+
+    macro_signals = report.get("macro_signals") or {}
+    return portfolio_hot_stock_summary(macro_signals) or xueqiu_hot_context_summary(macro_signals)
+
+
+def build_weekly_context(
+    report: dict[str, Any],
+    *,
+    harness_result: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
     holdings = []
     for h in (report.get("holdings") or [])[:8]:
         holdings.append(
@@ -1421,6 +2326,13 @@ def build_weekly_context(report: dict[str, Any]) -> dict[str, Any]:
         }
         for i in (report.get("process_improvements") or [])[:3]
     ]
+    from agent_reach.daily_run.xueqiu_hot_display import portfolio_hot_stock_summary
+
+    supplements = _narrative_supplement_fields(
+        snapshot={"watchlist_intel": report.get("watchlist_intel") or {}},
+        macro_signals=report.get("macro_signals") or {},
+        include_hit_summary=True,
+    )
     return {
         "job": "weekly",
         "week_start": report.get("week_start"),
@@ -1432,6 +2344,10 @@ def build_weekly_context(report: dict[str, Any]) -> dict[str, Any]:
         "cash_ratio": report.get("cash_ratio"),
         "holdings": holdings,
         "hot_sectors": (report.get("hot_sectors") or [])[:5],
+        "macro_signals": report.get("macro_signals") or {},
+        "xueqiu_hot_summary": _weekly_xueqiu_hot_summary(report),
+        "portfolio_hot_stock_summary": portfolio_hot_stock_summary(report.get("macro_signals")),
+        **supplements,
         "process_improvements": improvements,
         "experience_snippets": (report.get("experience_snippets") or [])[:3],
         "notes": report.get("notes") or [],
@@ -1439,6 +2355,12 @@ def build_weekly_context(report: dict[str, Any]) -> dict[str, Any]:
         "buy_rules_whatif": report.get("buy_rules_whatif"),
         "intraday_friction_whatif": report.get("intraday_friction_whatif"),
         "intraday_sell_whatif": report.get("intraday_sell_whatif"),
+        "pnl_attribution": report.get("pnl_attribution"),
+        "harness_result": harness_result or report.get("harness") or report.get("harness_result"),
+        "effective_overlay": (
+            (harness_result or {}).get("weekly_skills") or {}
+        ).get("effective_overlay")
+        or report.get("effective_overlay"),
     }
 
 
@@ -1457,6 +2379,29 @@ def _weekly_deterministic(ctx: dict[str, Any]) -> dict[str, Any]:
         focus.append(
             f"盈亏分解：股票 {float(stock_pnl or 0):+,.0f} · 现金 {float(cash_pnl or 0):+,.0f}"
         )
+    overlap = (
+        ctx.get("portfolio_hot_stock_summary")
+        or ctx.get("portfolio_hot_post_summary")
+        or ctx.get("xueqiu_hot_summary")
+    )
+    if overlap:
+        focus.insert(1, overlap[:100])
+    for idx, extra in enumerate(_narrative_intel_focus(ctx)):
+        focus.insert(2 + idx, extra)
+    attr = ctx.get("pnl_attribution") or {}
+    held = attr.get("held_week_chg")
+    realized = attr.get("realized_pnl")
+    rebalance = attr.get("rebalance_pnl")
+    if held is not None or rebalance is not None:
+        bits: list[str] = []
+        if held is not None:
+            bits.append(f"现持仓 {float(held):+,.0f}")
+        if realized is not None and abs(float(realized)) >= 0.01:
+            bits.append(f"已清仓 {float(realized):+,.0f}")
+        if rebalance is not None:
+            bits.append(f"换仓及其它 {float(rebalance):+,.0f}")
+        if bits:
+            focus.append("归因：" + " · ".join(bits))
     for sec in ctx.get("hot_sectors") or []:
         name = sec.get("sector") or sec.get("name") or "板块"
         chg = sec.get("avg_change_pct") or sec.get("change_pct")
@@ -1485,8 +2430,9 @@ def generate_weekly_narrative(
     report: dict[str, Any],
     *,
     settings: Optional[dict[str, Any]] = None,
+    harness_result: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    context = build_weekly_context(report)
+    context = build_weekly_context(report, harness_result=harness_result)
     return _generate_narrative(
         "weekly",
         context,
@@ -1511,6 +2457,13 @@ def _week_direction(days: dict[str, Any]) -> str:
 
 
 def build_forecast_context(forecast: dict[str, Any]) -> dict[str, Any]:
+    from agent_reach.daily_run.xueqiu_hot_display import (
+        portfolio_hot_post_summary,
+        portfolio_hot_stock_summary,
+        portfolio_hot_stocks_new_summary,
+        xueqiu_hot_context_summary,
+    )
+
     symbols_out: list[dict[str, Any]] = []
     for code, sym in (forecast.get("symbols") or {}).items():
         kronos = sym.get("kronos") or {}
@@ -1533,6 +2486,12 @@ def build_forecast_context(forecast: dict[str, Any]) -> dict[str, Any]:
         {"title": ev.get("title"), "summary": (ev.get("summary") or "")[:120]}
         for ev in (forecast.get("news_events") or [])[:3]
     ]
+    macro_signals = forecast.get("macro_signals") or {}
+    supplements = _narrative_supplement_fields(
+        snapshot={"watchlist_intel": forecast.get("watchlist_intel") or {}},
+        macro_signals=macro_signals,
+        include_hit_summary=True,
+    )
     return {
         "job": "forecast",
         "week_start": forecast.get("week_start"),
@@ -1542,6 +2501,10 @@ def build_forecast_context(forecast: dict[str, Any]) -> dict[str, Any]:
         "symbols": symbols_out,
         "mss_daily": mss_rows,
         "news_events": news,
+        "xueqiu_hot_summary": xueqiu_hot_context_summary(macro_signals),
+        "portfolio_hot_stock_summary": portfolio_hot_stock_summary(macro_signals),
+        "portfolio_hot_post_summary": portfolio_hot_post_summary(macro_signals),
+        **supplements,
     }
 
 
@@ -1566,6 +2529,16 @@ def _forecast_deterministic(context: dict[str, Any]) -> dict[str, Any]:
     if bearish:
         focus.append("Kronos 偏弱：" + "、".join(bearish[:4]))
         risks.append("偏弱标的勿追高")
+    overlap = (
+        context.get("portfolio_hot_stock_summary")
+        or context.get("portfolio_hot_post_summary")
+        or context.get("xueqiu_hot_summary")
+    )
+    if overlap:
+        focus.insert(0, overlap[:100])
+    for extra in _narrative_intel_focus(context):
+        if extra not in focus:
+            focus.insert(min(1, len(focus)), extra)
     summary = f"下周 {context.get('week_start')}~{context.get('week_end')} 预测解读"
     return {
         "summary": summary,

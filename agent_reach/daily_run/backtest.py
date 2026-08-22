@@ -16,6 +16,7 @@ class BacktestMetrics:
     trade_count: int
     win_rate: float
     days_in_market: int
+    sharpe_ratio: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -26,6 +27,7 @@ class BacktestMetrics:
             "trade_count": self.trade_count,
             "win_rate": round(self.win_rate, 4),
             "days_in_market": self.days_in_market,
+            "sharpe_ratio": round(self.sharpe_ratio, 4),
         }
 
 
@@ -42,6 +44,33 @@ class BacktestResult:
             f"超额 {m.excess_return:.2%} | 最大回撤 {m.max_drawdown:.2%} | "
             f"交易 {m.trade_count} 次 | 胜率 {m.win_rate:.1%}"
         )
+
+
+def compute_sharpe_ratio(
+    equity_curve: list[float],
+    *,
+    periods_per_year: int = 252,
+    risk_free_rate: float = 0.0,
+) -> float:
+    """Annualized Sharpe from equity curve (StrategyOptimizer-style)."""
+    if len(equity_curve) < 3:
+        return 0.0
+    daily_returns: list[float] = []
+    for i in range(1, len(equity_curve)):
+        prev = float(equity_curve[i - 1])
+        if prev <= 0:
+            continue
+        daily_returns.append(float(equity_curve[i]) / prev - 1.0)
+    if len(daily_returns) < 2:
+        return 0.0
+    rf_daily = risk_free_rate / periods_per_year
+    excess = [r - rf_daily for r in daily_returns]
+    mean = sum(excess) / len(excess)
+    variance = sum((r - mean) ** 2 for r in excess) / len(excess)
+    std = variance**0.5
+    if std <= 0:
+        return 0.0
+    return (mean / std) * (periods_per_year**0.5)
 
 
 def run_mss_backtest(
@@ -138,6 +167,7 @@ def run_mss_backtest(
     total_return = (final_equity / initial_capital) - 1
     benchmark_return = bench_mult - 1
     win_rate = wins / trade_count if trade_count else 0.0
+    sharpe = compute_sharpe_ratio(equity_curve)
 
     metrics = BacktestMetrics(
         total_return=total_return,
@@ -147,6 +177,7 @@ def run_mss_backtest(
         trade_count=trade_count,
         win_rate=win_rate,
         days_in_market=days_in_market,
+        sharpe_ratio=sharpe,
     )
     return BacktestResult(metrics=metrics, trades=trades, equity_curve=equity_curve)
 
@@ -165,6 +196,7 @@ def render_backtest_markdown(result: BacktestResult) -> str:
         f"| 交易次数 | {m.trade_count} |",
         f"| 胜率 | {m.win_rate:.1%} |",
         f"| 持仓天数 | {m.days_in_market} |",
+        f"| Sharpe | {m.sharpe_ratio:.2f} |",
     ]
     if result.trades:
         lines.extend(["", "**最近交易：**"])

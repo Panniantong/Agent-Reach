@@ -98,6 +98,30 @@ def fetch_all_a_spot_stocks(*, ttl: int = 60) -> list[dict[str, Any]]:
     return stocks
 
 
+def _spot_row_pe(item: Any) -> Optional[float]:
+    for col in ("市盈率-动态", "市盈率", "PE"):
+        val = item.get(col)
+        if val is None or str(val).strip() in ("", "-", "nan", "None"):
+            continue
+        try:
+            parsed = float(val)
+        except (TypeError, ValueError):
+            continue
+        if parsed > 0:
+            return parsed
+    return None
+
+
+def _spot_row_market_cap(item: Any) -> Optional[float]:
+    from agent_reach.daily_run.valuation_metrics import normalize_market_cap_yuan
+
+    for col in ("总市值", "流通市值"):
+        cap = normalize_market_cap_yuan(item.get(col))
+        if cap is not None:
+            return cap
+    return None
+
+
 def fetch_quotes_batch(codes: list[str], *, ttl: int = 60) -> dict[str, dict[str, Any]]:
     """Fetch multiple A-share quotes in one spot-table pass."""
     rows = _load_spot_rows(ttl=ttl)
@@ -121,6 +145,15 @@ def fetch_quotes_batch(codes: list[str], *, ttl: int = 60) -> dict[str, dict[str
         if industry:
             row_out["industry"] = industry
             row_out["sector"] = industry
+        pe = _spot_row_pe(item)
+        if pe is not None:
+            row_out["pe_ttm"] = pe
+        turnover_rate = _optional_float(item.get("换手率"))
+        if turnover_rate is not None and turnover_rate > 0:
+            row_out["turnover_rate"] = turnover_rate
+        market_cap = _spot_row_market_cap(item)
+        if market_cap is not None:
+            row_out["market_capital"] = market_cap
         out[symbol] = row_out
     return out
 

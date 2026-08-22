@@ -526,6 +526,39 @@ class TestXueqiuChannel:
         assert results[0]["name"] == "贵州茅台"
         assert results[1]["exchange"] == "SZA"
 
+    def test_get_stock_timeline_announcements(self, monkeypatch):
+        import agent_reach.channels.xueqiu as xueqiu_mod
+
+        monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
+
+        fake_data = {
+            "list": [
+                {
+                    "id": 1,
+                    "title": "2025年年度报告",
+                    "description": "公司发布年度报告",
+                    "target": "/S/SH600519/1",
+                    "created_at": 1700000000000,
+                }
+            ]
+        }
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def read(self):
+                return json.dumps(fake_data).encode()
+
+        monkeypatch.setattr(xueqiu_mod._opener, "open", lambda req, timeout=None: FakeResponse())
+        rows = XueqiuChannel().get_stock_announcements("SH600519", limit=3)
+        assert len(rows) == 1
+        assert rows[0]["title"] == "2025年年度报告"
+        assert rows[0]["source"] == "公告"
+
     # ------------------------------------------------------------------ #
     # get_hot_posts
     # ------------------------------------------------------------------ #

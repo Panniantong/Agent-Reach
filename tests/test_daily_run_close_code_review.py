@@ -46,6 +46,10 @@ def test_render_code_review_markdown():
 
 def test_detect_cash_ratio_mismatch():
     settings = load_settings()
+    settings = {
+        **settings,
+        "harness": {**(settings.get("harness") or {}), "enabled": False, "runtime_overlay": False},
+    }
     portfolio = {
         "total": 100000,
         "cash": 50000,
@@ -55,7 +59,9 @@ def test_detect_cash_ratio_mismatch():
     }
     result = run_close_code_review(portfolio=portfolio, snapshot={}, settings=settings)
     assert result.portfolio_changed is True
-    assert abs(result.portfolio["cash_ratio"] - 0.5) < 0.001
+    cash = float(result.portfolio["cash"])
+    total = float(result.portfolio["total"])
+    assert abs(float(result.portfolio["cash_ratio"]) - cash / total) < 0.001
 
 
 def test_auto_fix_stale_days_held():

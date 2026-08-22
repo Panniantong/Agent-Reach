@@ -57,7 +57,9 @@ def enrich_macro_sources(
             continue
         existing = out.get(cat)
         if cat not in out or (
-            isinstance(existing, dict) and _is_placeholder(existing.get("summary", ""))
+            isinstance(existing, dict)
+            and existing.get("backend") != "xueqiu"
+            and _is_placeholder(existing.get("summary", ""))
         ):
             merged = dict(detail)
             merged.setdefault("backend", "portfolio_override")
@@ -96,6 +98,116 @@ def macro_ctx_needs_full_refresh(
     return not macro_sources_complete(enriched, portfolio, settings)
 
 
+def fetch_xueqiu_hot_signals(
+    portfolio: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+    enrich_extras: bool = True,
+) -> dict[str, Any]:
+    """Fetch live Xueqiu hot posts + hot stocks for morning/weekly cards and narratives."""
+    from agent_reach.daily_run.settings import effective_settings, load_settings
+
+    cfg = effective_settings(settings or load_settings())
+    collector_cfg = cfg.get("macro_collector", {})
+    if collector_cfg.get("enabled", True) is False:
+        return {}
+    post_limit = int(collector_cfg.get("sentiment_post_limit", 5))
+    stock_limit = int(collector_cfg.get("hot_stock_limit", 10))
+    watch_limit = int(collector_cfg.get("hot_watch_stock_limit", stock_limit))
+    _, posts, hits = _fetch_xueqiu_sentiment(portfolio, limit=post_limit)
+    stocks = _fetch_xueqiu_hot_stocks(limit=stock_limit, stock_type=10)
+    watch_stocks: list[dict[str, Any]] = []
+    if collector_cfg.get("fetch_hot_watch_stocks", True):
+        watch_stocks = _fetch_xueqiu_hot_stocks(limit=watch_limit, stock_type=12)
+    out: dict[str, Any] = {}
+    if posts:
+        out["sentiment_posts"] = posts
+        out["sentiment_hits"] = hits
+    if stocks:
+        out["hot_stocks"] = stocks
+    if watch_stocks:
+        out["hot_watch_stocks"] = watch_stocks
+    from agent_reach.daily_run.xueqiu_hot_display import enrich_portfolio_xueqiu_matches
+
+    enrich_portfolio_xueqiu_matches(out, portfolio, settings=cfg)
+    if enrich_extras:
+        from agent_reach.daily_run.xueqiu_exa_research import attach_xueqiu_exa_research
+        from agent_reach.daily_run.xueqiu_symbol_sentiment import attach_portfolio_symbol_sentiment
+
+        attach_portfolio_symbol_sentiment(out, portfolio, settings=cfg)
+        attach_xueqiu_exa_research(out, settings=cfg)
+    from agent_reach.daily_run.hot_topic_dedup import dedupe_macro_hot_topics
+
+    dedupe_macro_hot_topics(out, settings=cfg)
+    return out
+
+
+def _intraday_xueqiu_cross_cache_path() -> "Path":
+    from pathlib import Path
+
+    return Path.home() / ".agent-reach" / "daily_run" / "cache" / "xueqiu_intraday_cross.json"
+
+
+def fetch_intraday_xueqiu_cross_alerts(
+    portfolio: dict[str, Any],
+    *,
+    settings: Optional[dict[str, Any]] = None,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Fetch live Xueqiu hot cross alerts for intraday scans (TTL-cached)."""
+    import json
+    import time
+
+    from agent_reach.daily_run.settings import effective_settings, load_settings
+
+    cfg = effective_settings(settings or load_settings())
+    collector_cfg = cfg.get("macro_collector") or {}
+    if collector_cfg.get("intraday_hot_cross_enabled", True) is False:
+        return {}
+
+    ttl = int(collector_cfg.get("intraday_hot_cross_ttl_seconds", 600))
+    cache_path = _intraday_xueqiu_cross_cache_path()
+    if not force and cache_path.exists():
+        try:
+            cached = json.loads(cache_path.read_text(encoding="utf-8"))
+            age = time.time() - float(cached.get("fetched_at") or 0)
+            if age < ttl:
+                out = dict(cached.get("signals") or {})
+                from agent_reach.daily_run.xueqiu_hot_display import apply_intraday_hot_stock_delta
+
+                out = apply_intraday_hot_stock_delta(out, settings=cfg)
+                if out.get("portfolio_hot_stocks_new"):
+                    from agent_reach.daily_run.xueqiu_exa_research import attach_xueqiu_exa_research
+
+                    attach_xueqiu_exa_research(out, settings=cfg)
+                return out
+        except (json.JSONDecodeError, OSError, TypeError, ValueError):
+            pass
+
+    signals = fetch_xueqiu_hot_signals(portfolio, settings=cfg, enrich_extras=False)
+    keep_keys = (
+        "portfolio_hot_stocks",
+        "portfolio_hot_posts",
+        "hot_stocks",
+        "hot_watch_stocks",
+        "sentiment_posts",
+    )
+    out = {key: signals[key] for key in keep_keys if key in signals}
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(
+        json.dumps({"fetched_at": time.time(), "signals": out}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    from agent_reach.daily_run.xueqiu_hot_display import apply_intraday_hot_stock_delta
+
+    out = apply_intraday_hot_stock_delta(out, settings=cfg)
+    if out.get("portfolio_hot_stocks_new"):
+        from agent_reach.daily_run.xueqiu_exa_research import attach_xueqiu_exa_research
+
+        attach_xueqiu_exa_research(out, settings=cfg)
+    return out
+
+
 def collect_macro_context(
     portfolio: dict[str, Any],
     *,
@@ -120,6 +232,10 @@ def collect_macro_context(
         "index_change_pct": None,
         "northbound_flow_yi": None,
         "sentiment_posts": [],
+        "sentiment_hits": [],
+        "hot_stocks": [],
+        "hot_watch_stocks": [],
+        "portfolio_hot_stocks": [],
         "hot_topics": [],
         "hot_topics_matched": [],
         "hot_topic_hits": 0,
@@ -151,15 +267,40 @@ def collect_macro_context(
     sentiment_summary = ""
     if scope == "full":
         # --- Xueqiu sentiment ---
-        sentiment_summary, posts = _fetch_xueqiu_sentiment(
-            portfolio, limit=int(collector_cfg.get("sentiment_post_limit", 5))
+        post_limit = int(collector_cfg.get("sentiment_post_limit", 5))
+        sentiment_summary, posts, hits = _fetch_xueqiu_sentiment(
+            portfolio, limit=post_limit
         )
-        if sentiment_summary:
+        if posts:
             signals["sentiment_posts"] = posts
-            sources["sentiment"] = {
-                "summary": sentiment_summary,
-                "backend": "xueqiu",
-            }
+            signals["sentiment_hits"] = hits
+        if sentiment_summary or posts:
+            from agent_reach.daily_run.xueqiu_hot_display import xueqiu_sentiment_source_summary
+
+            summary = sentiment_summary or xueqiu_sentiment_source_summary(posts)
+            if summary:
+                sources["sentiment"] = {
+                    "summary": summary,
+                    "backend": "xueqiu",
+                    "post_count": len(posts),
+                }
+
+        stock_limit = int(collector_cfg.get("hot_stock_limit", 10))
+        watch_limit = int(collector_cfg.get("hot_watch_stock_limit", stock_limit))
+        hot_stocks = _fetch_xueqiu_hot_stocks(limit=stock_limit, stock_type=10)
+        if hot_stocks:
+            signals["hot_stocks"] = hot_stocks
+        if collector_cfg.get("fetch_hot_watch_stocks", True):
+            hot_watch_stocks = _fetch_xueqiu_hot_stocks(limit=watch_limit, stock_type=12)
+            if hot_watch_stocks:
+                signals["hot_watch_stocks"] = hot_watch_stocks
+        from agent_reach.daily_run.xueqiu_hot_display import enrich_portfolio_xueqiu_matches
+
+        enrich_portfolio_xueqiu_matches(signals, portfolio, settings=cfg)
+        from agent_reach.daily_run.xueqiu_exa_research import attach_xueqiu_exa_research
+        from agent_reach.daily_run.xueqiu_symbol_sentiment import attach_portfolio_symbol_sentiment
+
+        attach_portfolio_symbol_sentiment(signals, portfolio, settings=cfg)
 
         # --- Multi-platform hot news (60s API) ---
         hot_summary = ""
@@ -217,17 +358,62 @@ def collect_macro_context(
                     "backend": "redfox_api",
                     "error": str(exc),
                 }
+
+        from agent_reach.daily_run.xueqiu_stock_search import attach_xueqiu_stock_search
+
+        attach_xueqiu_stock_search(signals, portfolio, settings=cfg)
+
+        from agent_reach.daily_run.hot_topic_dedup import dedupe_macro_hot_topics
+
+        dedupe_summary = dedupe_macro_hot_topics(signals, settings=cfg)
+        if dedupe_summary.get("enabled") and dedupe_summary.get("dropped_total"):
+            sources.setdefault("hot_topic_dedup", {})
+            sources["hot_topic_dedup"] = {
+                "summary": f"多源去重 {dedupe_summary['dropped_total']} 条",
+                "backend": "hot_topic_dedup",
+                "dropped_total": dedupe_summary["dropped_total"],
+                "dropped_preview": dedupe_summary.get("dropped_preview") or [],
+            }
+
+        from agent_reach.daily_run.eastmoney_intent import attach_eastmoney_macro_context
+
+        attach_eastmoney_macro_context(signals, sources, portfolio, settings=cfg)
+
+        attach_xueqiu_exa_research(signals, settings=cfg)
     else:
         hot_summary = ""
         hot_headline = ""
 
-    # Merge portfolio overrides (non-placeholder only)
+    # Merge portfolio overrides (non-placeholder only; keep live Xueqiu)
     if scope == "full":
         for cat, detail in overrides.items():
-            if isinstance(detail, dict) and not _is_placeholder(detail.get("summary", "")):
-                sources[cat] = dict(detail)
+            if not isinstance(detail, dict) or _is_placeholder(detail.get("summary", "")):
+                continue
+            existing = sources.get(cat)
+            if isinstance(existing, dict) and existing.get("backend") == "xueqiu":
+                continue
+            if cat in sources and not _is_placeholder(
+                (existing or {}).get("summary", "") if isinstance(existing, dict) else str(existing or "")
+            ):
+                continue
+            sources[cat] = dict(detail)
 
     breakdown = _derive_mss_breakdown(base_breakdown, signals, cfg, scope=scope)
+
+    if scope == "full":
+        from agent_reach.daily_run.emotion_mss_fusion import (
+            apply_emotion_to_mss_breakdown,
+            emotion_mss_fusion_enabled,
+        )
+        from agent_reach.daily_run.market_review import load_market_review, market_review_enabled
+        from agent_reach.daily_run.trade_calendar import today_shanghai
+
+        if emotion_mss_fusion_enabled(cfg) and market_review_enabled(cfg):
+            review = load_market_review(today_shanghai().isoformat())
+            emotion = (review or {}).get("emotion")
+            if isinstance(emotion, dict) and emotion:
+                breakdown = apply_emotion_to_mss_breakdown(breakdown, emotion, settings=cfg)
+                signals["market_emotion"] = emotion
 
     macro_parts = []
     if scope == "full":
@@ -400,14 +586,23 @@ def _derive_mss_breakdown(
         flow = _clamp(baseline + float(nb) * 2.5)
 
     if scope == "full":
-        posts = signals.get("sentiment_posts") or []
-        if posts:
-            sentiment = _clamp(baseline + len(posts) * 3)
+        hits = signals.get("sentiment_hits") or signals.get("sentiment_posts") or []
+        if hits:
+            sentiment = _clamp(baseline + len(hits) * 3)
 
-        hot_cfg = settings.get("hot_news") or {}
+        hot_cfg = settings.get("macro_collector") or {}
+        match_boost = float(hot_cfg.get("portfolio_hot_stock_boost", 2))
+        hot_matches = signals.get("portfolio_hot_stocks") or []
+        if hot_matches and match_boost:
+            sentiment = _clamp(sentiment + len(hot_matches) * match_boost)
+        post_boost = float(hot_cfg.get("portfolio_hot_post_boost", 1))
+        post_matches = signals.get("portfolio_hot_posts") or []
+        if post_matches and post_boost:
+            sentiment = _clamp(sentiment + len(post_matches) * post_boost)
+        hot_news_cfg = settings.get("hot_news") or {}
         hot_hits = int(signals.get("hot_topic_hits") or 0)
         if hot_hits:
-            boost = float(hot_cfg.get("sentiment_boost_per_hit", 2))
+            boost = float(hot_news_cfg.get("sentiment_boost_per_hit", 2))
             sentiment = _clamp(sentiment + hot_hits * boost)
 
         redfox_hits = int(signals.get("redfox_hits") or 0)
@@ -466,7 +661,7 @@ def _fetch_xueqiu_sentiment(
     portfolio: dict[str, Any],
     *,
     limit: int = 5,
-) -> tuple[str, list[dict[str, Any]]]:
+) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
     try:
         from agent_reach.channels import xueqiu as xq_mod
 
@@ -483,9 +678,22 @@ def _fetch_xueqiu_sentiment(
             hits = posts[:2]
         parts = [f"{p.get('title') or p.get('text', '')[:30]}" for p in hits[:2]]
         summary = "雪球热点：" + " | ".join(parts) if parts else ""
-        return summary[:200], hits
+        return summary[:200], posts, hits
     except Exception:
-        return "", []
+        return "", [], []
+
+
+def _fetch_xueqiu_hot_stocks(*, limit: int = 10, stock_type: int = 10) -> list[dict[str, Any]]:
+    try:
+        from agent_reach.channels import xueqiu as xq_mod
+
+        xq_mod._ensure_cookies()
+        ch = xq_mod.XueqiuChannel()
+        stocks = ch.get_hot_stocks(limit=limit, stock_type=stock_type)
+        board = "人气榜" if stock_type == 10 else "关注榜" if stock_type == 12 else f"type{stock_type}"
+        return [{**row, "board": board, "board_type": stock_type} for row in stocks]
+    except Exception:
+        return []
 
 
 def _portfolio_keywords(portfolio: dict[str, Any], settings: Optional[dict[str, Any]] = None) -> list[str]:

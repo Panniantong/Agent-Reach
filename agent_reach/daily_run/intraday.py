@@ -21,7 +21,6 @@ from agent_reach.daily_run.intraday_policy import (
     trend_triggers_eval,
 )
 from agent_reach.daily_run.pipeline import evaluate_snapshot, render_markdown
-from agent_reach.daily_run.plugins.loader import run_experts
 from agent_reach.daily_run.harness_policy import (
     aggressive_entry_default,
     macro_veto_default,
@@ -310,18 +309,16 @@ def record_scan(
     enriched.setdefault("report_type", "intraday")
     enriched.setdefault("as_of", datetime.now(timezone.utc).isoformat())
 
-    from agent_reach.daily_run.team import experts_enabled, mss_experts_enabled
+    from agent_reach.daily_run.team import enrich_with_team_or_experts
 
-    if experts_enabled(cfg, workflow="intraday"):
-        enriched = run_experts(dict(snapshot), cfg, names=plugin_names)
-        enriched.setdefault("report_type", "intraday")
-        enriched.setdefault("as_of", datetime.now(timezone.utc).isoformat())
-    elif mss_experts_enabled(cfg, workflow="intraday"):
-        from agent_reach.daily_run.plugins.loader import MSS_EXPERT_NAMES, run_experts
-
-        enriched = run_experts(dict(snapshot), cfg, names=MSS_EXPERT_NAMES)
-        enriched.setdefault("report_type", "intraday")
-        enriched.setdefault("as_of", datetime.now(timezone.utc).isoformat())
+    enriched, _expert_steps = enrich_with_team_or_experts(
+        dict(snapshot),
+        cfg,
+        workflow="intraday",
+        plugin_names=plugin_names,
+    )
+    enriched.setdefault("report_type", "intraday")
+    enriched.setdefault("as_of", datetime.now(timezone.utc).isoformat())
 
     evaluation = evaluate_snapshot(enriched, cfg, doctor_channels=doctor_channels)
     report = evaluation["report"]
@@ -345,6 +342,23 @@ def record_scan(
     lookback_mss, lookback_detail = compute_lookback_mss(st.scans, cfg)
     trend = detect_mss_trend(st.scans, cfg)
 
+    from agent_reach.daily_run.macro_collector import fetch_intraday_xueqiu_cross_alerts
+
+    pf = enriched.get("portfolio") or {}
+    xueqiu_cross = fetch_intraday_xueqiu_cross_alerts(pf, settings=cfg)
+
+    markdown = render_intraday_scan_markdown(
+        entry,
+        lookback_mss,
+        lookback_detail,
+        trend,
+        report,
+        scan_count=len(st.scans),
+        settings=cfg,
+        macro_signals=xueqiu_cross,
+        enriched=enriched,
+    )
+
     return {
         "scan": entry,
         "enriched": enriched,
@@ -353,9 +367,8 @@ def record_scan(
         "lookback_mss": lookback_mss,
         "lookback_detail": lookback_detail,
         "trend": trend,
-        "markdown": render_intraday_scan_markdown(
-            entry, lookback_mss, lookback_detail, trend, report, scan_count=len(st.scans), settings=cfg
-        ),
+        "xueqiu_cross": xueqiu_cross,
+        "markdown": markdown,
     }
 
 
@@ -423,15 +436,31 @@ def record_scan_from_evaluation(
     lookback_mss, lookback_detail = compute_lookback_mss(st.scans, cfg)
     trend = detect_mss_trend(st.scans, cfg)
 
+    from agent_reach.daily_run.macro_collector import fetch_intraday_xueqiu_cross_alerts
+
+    pf = enriched.get("portfolio") or {}
+    xueqiu_cross = fetch_intraday_xueqiu_cross_alerts(pf, settings=cfg)
+
+    markdown = render_intraday_scan_markdown(
+        entry,
+        lookback_mss,
+        lookback_detail,
+        trend,
+        report,
+        scan_count=len(st.scans),
+        settings=cfg,
+        macro_signals=xueqiu_cross,
+        enriched=enriched,
+    )
+
     return {
         "scan": entry,
         "state": st.to_dict(),
         "lookback_mss": lookback_mss,
         "lookback_detail": lookback_detail,
         "trend": trend,
-        "markdown": render_intraday_scan_markdown(
-            entry, lookback_mss, lookback_detail, trend, report, scan_count=len(st.scans), settings=cfg
-        ),
+        "xueqiu_cross": xueqiu_cross,
+        "markdown": markdown,
     }
 
 
@@ -476,70 +505,72 @@ def apply_paper_trade(
         is_auto_adjust_enabled,
         register_applied_trade,
     )
-    from agent_reach.daily_run.snapshot_builder import load_portfolio, save_portfolio
+    from agent_reach.daily_run.snapshot_builder import _PORTFOLIO_IO_LOCK, load_portfolio, save_portfolio
     from agent_reach.daily_run.symbols import sync_snapshot_portfolio
 
     cfg = effective_settings(settings)
-    pf = load_portfolio()
-    if not is_auto_adjust_enabled(cfg):
-        return ApplyResult(applied=False, portfolio=pf, message="auto_adjust 未启用")
 
-    from agent_reach.daily_run.snapshot_builder import _normalize_code
-    from agent_reach.daily_run.symbols import build_enriched_symbols
+    with _PORTFOLIO_IO_LOCK:
+        pf = load_portfolio()
+        if not is_auto_adjust_enabled(cfg):
+            return ApplyResult(applied=False, portfolio=pf, message="auto_adjust 未启用")
 
-    quote_map = build_enriched_symbols(snapshot)
-    snap = dict(snapshot)
-    sync_snapshot_portfolio(snap, pf)
-    for row in (snap.get("portfolio") or {}).get("holdings") or []:
-        code = _normalize_code(str(row.get("code", "")))
-        if code in quote_map:
-            row.update({k: quote_map[code][k] for k in ("price", "change_pct", "name", "ma20") if quote_map[code].get(k) is not None})
-    merged_watchlist = []
-    for row in snap.get("watchlist") or []:
-        item = dict(row)
-        code = _normalize_code(str(item.get("code", "")))
-        if code in quote_map:
-            item.update({k: quote_map[code][k] for k in ("price", "change_pct", "name", "ma20") if quote_map[code].get(k) is not None})
-        merged_watchlist.append(item)
-    snap["watchlist"] = merged_watchlist
+        from agent_reach.daily_run.snapshot_builder import _normalize_code
+        from agent_reach.daily_run.symbols import build_enriched_symbols
 
-    action = decision.action
-    applied_cap = max_applied_trades_per_day(cfg)
-    if action in ("buy", "sell") and global_trades_today() >= applied_cap:
-        return ApplyResult(
-            applied=False,
-            portfolio=pf,
-            message=(
-                f"今日全组合落账已达上限 {applied_cap} 次，"
-                f"{'买入' if action == 'buy' else '卖出'}信号仅记录不落账"
-            ),
-        )
+        quote_map = build_enriched_symbols(snapshot)
+        snap = dict(snapshot)
+        sync_snapshot_portfolio(snap, pf)
+        for row in (snap.get("portfolio") or {}).get("holdings") or []:
+            code = _normalize_code(str(row.get("code", "")))
+            if code in quote_map:
+                row.update({k: quote_map[code][k] for k in ("price", "change_pct", "name", "ma20") if quote_map[code].get(k) is not None})
+        merged_watchlist = []
+        for row in snap.get("watchlist") or []:
+            item = dict(row)
+            code = _normalize_code(str(item.get("code", "")))
+            if code in quote_map:
+                item.update({k: quote_map[code][k] for k in ("price", "change_pct", "name", "ma20") if quote_map[code].get(k) is not None})
+            merged_watchlist.append(item)
+        snap["watchlist"] = merged_watchlist
 
-    result = apply_auto_adjust(
-        pf,
-        decision,
-        snap,
-        cfg,
-        allow_watchlist_changes=False,
-        cash_limit_bypass=cash_limit_bypass,
-    )
-    if result.applied:
-        if not register_applied_trade(result.actions):
-            pf_now = load_portfolio()
+        action = decision.action
+        applied_cap = max_applied_trades_per_day(cfg)
+        if action in ("buy", "sell") and global_trades_today() >= applied_cap:
             return ApplyResult(
                 applied=False,
-                portfolio=pf_now,
-                message="重复成交已忽略（同日相同指令）",
+                portfolio=pf,
+                message=(
+                    f"今日全组合落账已达上限 {applied_cap} 次，"
+                    f"{'买入' if action == 'buy' else '卖出'}信号仅记录不落账"
+                ),
             )
-        save_portfolio(result.portfolio)
-        sync_snapshot_portfolio(snap, result.portfolio)
-        enriched = append_trade_ledger(
-            result.actions,
-            trade_id=decision.trade_id,
-            decision_action=decision.action,
+
+        result = apply_auto_adjust(
+            pf,
+            decision,
+            snap,
+            cfg,
+            allow_watchlist_changes=False,
+            cash_limit_bypass=cash_limit_bypass,
         )
-        result.action_payloads = enriched
-    return result
+        if result.applied:
+            if not register_applied_trade(result.actions):
+                pf_now = load_portfolio()
+                return ApplyResult(
+                    applied=False,
+                    portfolio=pf_now,
+                    message="重复成交已忽略（同日相同指令）",
+                )
+            save_portfolio(result.portfolio)
+            sync_snapshot_portfolio(snap, result.portfolio)
+            enriched = append_trade_ledger(
+                result.actions,
+                trade_id=decision.trade_id,
+                decision_action=decision.action,
+            )
+            result.action_payloads = enriched
+        return result
 
 
 def evaluate_trade(
@@ -570,16 +601,14 @@ def evaluate_trade(
         enriched = pre_enriched
         evaluation = pre_evaluation
     else:
-        from agent_reach.daily_run.team import experts_enabled, mss_experts_enabled
+        from agent_reach.daily_run.team import enrich_with_team_or_experts
 
-        if experts_enabled(cfg, workflow="intraday"):
-            enriched = run_experts(dict(snapshot), cfg, names=plugin_names)
-        elif mss_experts_enabled(cfg, workflow="intraday"):
-            from agent_reach.daily_run.plugins.loader import MSS_EXPERT_NAMES, run_experts
-
-            enriched = run_experts(dict(snapshot), cfg, names=MSS_EXPERT_NAMES)
-        else:
-            enriched = dict(snapshot)
+        enriched, _expert_steps = enrich_with_team_or_experts(
+            dict(snapshot),
+            cfg,
+            workflow="intraday",
+            plugin_names=plugin_names,
+        )
         enriched.setdefault("report_type", "intraday")
         evaluation = evaluate_snapshot(enriched, cfg, doctor_channels=doctor_channels)
 
@@ -657,7 +686,14 @@ def evaluate_trade(
 
     from agent_reach.daily_run.portfolio_manager import render_apply_markdown
 
-    markdown = render_intraday_trade_markdown(decision, lookback_detail, report, st.scans, settings=cfg)
+    markdown = render_intraday_trade_markdown(
+        decision,
+        lookback_detail,
+        report,
+        st.scans,
+        settings=cfg,
+        enriched=enriched,
+    )
     markdown = markdown + "\n\n---\n\n" + render_apply_markdown(apply_result)
 
     return {
@@ -787,6 +823,8 @@ def render_intraday_scan_markdown(
     *,
     scan_count: Optional[int] = None,
     settings: Optional[dict[str, Any]] = None,
+    macro_signals: Optional[dict[str, Any]] = None,
+    enriched: Optional[dict[str, Any]] = None,
 ) -> str:
     trend_map = {
         "rising": "上升",
@@ -803,6 +841,18 @@ def render_intraday_scan_markdown(
         f"**即时 MSS：** {scan.get('mss_final')} 分 · **标签：** {scan.get('verdict')}",
         f"**Lookback MSS：** {lookback_mss} 分 · **趋势：** {trend_map.get(trend, trend)}",
     ]
+    from agent_reach.daily_run.xueqiu_hot_display import render_intraday_xueqiu_alert_markdown
+
+    alert_md = render_intraday_xueqiu_alert_markdown(macro_signals)
+    if alert_md:
+        lines.extend(["", alert_md])
+    if enriched and (enriched.get("team_review") or enriched.get("expert_results")):
+        from agent_reach.daily_run.team import expert_card_enabled, render_team_markdown
+
+        if settings is None or expert_card_enabled(settings, workflow="intraday"):
+            team_md = render_team_markdown(enriched)
+            if team_md:
+                lines.extend(["", team_md])
     total = scan_count if scan_count is not None else len(lookback_detail)
     if total > 1:
         lines.append(f"**今日累计扫描：** {total} 次")
@@ -879,6 +929,7 @@ def render_intraday_trade_markdown(
     scans: list[dict[str, Any]],
     *,
     settings: Optional[dict[str, Any]] = None,
+    enriched: Optional[dict[str, Any]] = None,
 ) -> str:
     action_map = {"buy": "买入", "sell": "卖出", "hold": "观望", "skip": "跳过"}
     lines = [
@@ -892,6 +943,14 @@ def render_intraday_trade_markdown(
     block_message = format_trade_block_message(decision)
     if block_message:
         lines.append(block_message)
+
+    if enriched and (enriched.get("team_review") or enriched.get("expert_results")):
+        from agent_reach.daily_run.team import expert_card_enabled, render_team_markdown
+
+        if settings is None or expert_card_enabled(settings, workflow="intraday"):
+            team_md = render_team_markdown(enriched)
+            if team_md:
+                lines.extend(["", team_md])
 
     lines.extend(["", "**前序扫描回顾：**"])
     for s in scans[-3:]:

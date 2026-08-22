@@ -14,6 +14,7 @@ from agent_reach.daily_run.portfolio_manager import (
 from agent_reach.daily_run.symbols import build_enriched_symbols, copy_portfolio
 from agent_reach.daily_run.snapshot_builder import _normalize_code
 from agent_reach.daily_run.watchlist_candidates import effective_watchlist_candidates
+from agent_reach.daily_run.watchlist_intel import watchlist_intel_enabled
 
 WatchlistPhase = Literal["morning", "close"]
 
@@ -114,6 +115,10 @@ def adjust_watchlist(
     pf = copy_portfolio(portfolio)
     enriched = build_enriched_symbols(snapshot)
     changes: list[WatchlistChange] = []
+    if watchlist_intel_enabled(settings):
+        from agent_reach.daily_run.watchlist_intel import collect_watchlist_intel
+
+        snapshot["watchlist_intel"] = collect_watchlist_intel(pf, settings=settings)
     from agent_reach.daily_run.harness_policy import macro_veto_default
 
     macro_veto = macro_veto_default(settings)
@@ -176,8 +181,17 @@ def adjust_watchlist(
                 WatchlistChange("remove", code, str(w.get("name", code)), win_rate_reason)
             )
             continue
+        if watchlist_intel_enabled(settings):
+            from agent_reach.daily_run.watchlist_intel import watchlist_remove_negative_intel_reason
+
+            neg_reason = watchlist_remove_negative_intel_reason(code, snapshot, settings=settings)
+            if neg_reason:
+                changes.append(
+                    WatchlistChange("remove", code, str(w.get("name", code)), neg_reason)
+                )
+                continue
         chg = row.get("change_pct")
-        score = _symbol_score(row, base_mss=base_mss, settings=settings)
+        score = _symbol_score(row, base_mss=base_mss, settings=settings, snapshot=snapshot)
         if chg is not None and float(chg) <= -8:
             changes.append(
                 WatchlistChange("remove", code, str(w.get("name", code)), f"跌幅 {float(chg):.1f}% 过大")
@@ -239,6 +253,7 @@ def adjust_watchlist(
         max_watchlist_size(settings, pf),
         changes,
         base_mss=base_mss,
+        snapshot=snapshot,
     )
 
     if verify and verify.get("verdict_current") == "回避":
@@ -251,6 +266,7 @@ def adjust_watchlist(
             changes,
             reason_prefix="宏观回避，收缩观察池",
             base_mss=base_mss,
+            snapshot=snapshot,
         )
 
     if phase == "close" and wl_cfg.get("close_reorder_by_performance", True):
@@ -435,6 +451,7 @@ def _watchlist_entry_from_candidate(
     settings: dict[str, Any],
     hot_titles: list[str],
     default_reason: str,
+    snapshot: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     code = _normalize_code(str(cand.get("code", "")))
     name = str(cand.get("name") or code)
@@ -445,6 +462,11 @@ def _watchlist_entry_from_candidate(
         hot_titles=hot_titles,
         default_reason=default_reason,
     )
+    if snapshot and watchlist_intel_enabled(settings):
+        from agent_reach.daily_run.watchlist_intel import intel_reason_suffix
+
+        intel = (snapshot.get("watchlist_intel") or {}).get(code)
+        reason = f"{reason}{intel_reason_suffix(intel)}"
     return {
         "code": code,
         "name": name,
@@ -573,6 +595,7 @@ def _add_candidates(
                     enriched.get(_normalize_code(str(c.get("code", ""))), {}),
                     base_mss=base_mss,
                     settings=settings,
+                    snapshot=snapshot,
                 ),
                 reverse=True,
             )
@@ -594,6 +617,7 @@ def _add_candidates(
             settings=settings,
             hot_titles=titles,
             default_reason=reason,
+            snapshot=snapshot,
         )
         pf.setdefault("watchlist", []).append(entry)
         changes.append(
@@ -662,6 +686,7 @@ def _trim_by_score(
     *,
     reason_prefix: str = "超出上限，按评分保留",
     base_mss: Optional[float] = None,
+    snapshot: Optional[dict[str, Any]] = None,
 ) -> list[dict[str, Any]]:
     if len(watchlist) <= limit:
         return watchlist
@@ -671,6 +696,7 @@ def _trim_by_score(
                 {**w, **enriched.get(_normalize_code(str(w.get("code", ""))), {})},
                 base_mss=base_mss,
                 settings=settings,
+                snapshot=snapshot,
             ),
             w,
         )
@@ -705,18 +731,28 @@ def _symbol_score(
     base_mss: Optional[float] = None,
     settings: Optional[dict[str, Any]] = None,
     decision: Any = None,
+    snapshot: Optional[dict[str, Any]] = None,
 ) -> float:
     if settings is not None:
         from agent_reach.daily_run.harness_policy import harness_symbol_score
 
-        return harness_symbol_score(row, settings, decision=decision, base_mss=base_mss)
-    from agent_reach.daily_run.harness_policy import macro_factor_baseline_default
+        score = harness_symbol_score(row, settings, decision=decision, base_mss=base_mss)
+    else:
+        from agent_reach.daily_run.harness_policy import macro_factor_baseline_default
 
-    base = float(base_mss if base_mss is not None else macro_factor_baseline_default(settings or {}))
-    chg = row.get("change_pct")
-    if chg is not None:
-        base += float(chg) * 0.5
-    return base
+        base = float(base_mss if base_mss is not None else macro_factor_baseline_default(settings or {}))
+        chg = row.get("change_pct")
+        score = base
+        if chg is not None:
+            score += float(chg) * 0.5
+    if snapshot and settings and watchlist_intel_enabled(settings):
+        from agent_reach.daily_run.snapshot_builder import _normalize_code
+        from agent_reach.daily_run.watchlist_intel import intel_score_adjustment
+
+        code = _normalize_code(str(row.get("code") or ""))
+        intel = (snapshot.get("watchlist_intel") or {}).get(code)
+        score += intel_score_adjustment(intel, settings=settings)
+    return score
 
 
 def _has_code(watchlist: list[dict[str, Any]], code: str) -> bool:

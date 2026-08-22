@@ -2,7 +2,7 @@
 """Tests for expert enable/disable toggles."""
 
 from agent_reach.daily_run.plugins.loader import MSS_EXPERT_NAMES, run_experts
-from agent_reach.daily_run.settings import load_settings
+from agent_reach.daily_run.settings import _DEFAULT_PATH, load_settings
 from agent_reach.daily_run.team import (
     expert_card_enabled,
     experts_enabled,
@@ -30,13 +30,15 @@ def _base_snapshot(**overrides):
 
 
 class TestExpertsToggle:
-    def test_disabled_by_default_in_config(self):
-        cfg = load_settings()
-        assert cfg.get("team", {}).get("enabled") is False
-        assert experts_enabled(cfg, workflow="morning") is False
-        assert expert_card_enabled(cfg, workflow="morning") is False
-        assert experts_enabled(cfg, workflow="close") is False
-        assert experts_enabled(cfg, workflow="intraday") is False
+    def test_enabled_by_default_in_config(self):
+        cfg = load_settings(path=_DEFAULT_PATH)
+        assert cfg.get("team", {}).get("enabled") is True
+        assert cfg.get("team", {}).get("morning_team_first") is True
+        assert experts_enabled(cfg, workflow="morning") is True
+        assert expert_card_enabled(cfg, workflow="morning") is True
+        assert team_first_enabled(cfg, workflow="morning") is True
+        assert experts_enabled(cfg, workflow="close") is True
+        assert experts_enabled(cfg, workflow="intraday") is True
 
     def test_mss_experts_without_full_team(self):
         cfg = load_settings()

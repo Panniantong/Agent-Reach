@@ -346,3 +346,82 @@ class TestSymbolRunner:
         assert mock_merged_harness.call_count == 1
         for call in mock_run_close.call_args_list:
             assert call.kwargs.get("skip_harness_layer_b") is True
+
+
+class TestIntradayParallel:
+    def test_intraday_parallel_workers_caps_at_symbol_count(self):
+        from agent_reach.daily_run.symbol_runner import intraday_parallel_workers
+
+        cfg = {"schedule": {"intraday_parallel": True, "intraday_parallel_workers": 10}}
+        assert intraday_parallel_workers(cfg, 4) == 4
+        assert intraday_parallel_workers(cfg, 10) == 10
+
+    def test_intraday_parallel_disabled(self):
+        from agent_reach.daily_run.symbol_runner import intraday_parallel_workers
+
+        cfg = {"schedule": {"intraday_parallel": False, "intraday_parallel_workers": 10}}
+        assert intraday_parallel_workers(cfg, 10) == 1
+
+    @patch("agent_reach.daily_run.symbol_runner.ThreadPoolExecutor")
+    @patch("agent_reach.daily_run.symbol_runner.build_and_save")
+    @patch("agent_reach.daily_run.symbol_runner.load_portfolio")
+    @patch("agent_reach.daily_run.intraday.run_intraday")
+    @patch("agent_reach.daily_run.intraday.load_state")
+    @patch("agent_reach.daily_run.intraday.should_evaluate_trade")
+    def test_run_intraday_for_symbols_uses_parallel_executor(
+        self,
+        mock_should_trade,
+        mock_load_state,
+        mock_run_intraday,
+        mock_load_portfolio,
+        mock_build,
+        mock_executor,
+    ):
+        from agent_reach.daily_run.intraday import IntradayState
+        from agent_reach.daily_run.symbol_runner import run_intraday_for_symbols
+
+        mock_load_portfolio.return_value = PORTFOLIO
+        mock_load_state.return_value = IntradayState(date="2026-08-22", scans=[], trades=[])
+        mock_should_trade.return_value = False
+        mock_build.return_value = ({"code": "688008", "portfolio": PORTFOLIO}, "/tmp/snap.json")
+        mock_run_intraday.return_value = {
+            "scan": {"scan": {"scan_id": "S2"}, "markdown": "scan md"},
+            "feishu": None,
+        }
+
+        class _ImmediateExecutor:
+            def __init__(self, max_workers=None):
+                self.max_workers = max_workers
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def submit(self, fn, idx, code):
+                from concurrent.futures import Future
+
+                fut = Future()
+                fut.set_result(fn(idx, code))
+                return fut
+
+        mock_executor.side_effect = _ImmediateExecutor
+
+        cfg = load_settings()
+        cfg = {
+            **cfg,
+            "schedule": {
+                **(cfg.get("schedule") or {}),
+                "symbols_mode": "all",
+                "intraday_parallel": True,
+                "intraday_parallel_workers": 10,
+                "symbol_push_mode": "merge_by_category",
+            },
+        }
+        result = run_intraday_for_symbols(settings=cfg, push=False, symbols=["688008", "002273"])
+        mock_executor.assert_called_once()
+        assert mock_executor.call_args.kwargs["max_workers"] == 2
+        assert result["intraday_parallel"] is True
+        assert len(result["symbol_results"]) == 2
+        assert mock_run_intraday.call_count == 2

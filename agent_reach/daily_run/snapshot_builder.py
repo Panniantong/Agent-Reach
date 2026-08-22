@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import json
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
+
+_PORTFOLIO_IO_LOCK = threading.RLock()
 
 from agent_reach.daily_run.macro_collector import (
     collect_macro_context,
@@ -74,11 +77,12 @@ def save_portfolio(portfolio: dict[str, Any], path: Optional[Path] = None) -> Pa
     from agent_reach.daily_run.portfolio_manager import sync_portfolio_holding_days
     from agent_reach.daily_run.settings import load_settings
 
-    portfolio = sync_portfolio_holding_days(portfolio, settings=load_settings())
-    p = path or default_portfolio_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(portfolio, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return p
+    with _PORTFOLIO_IO_LOCK:
+        portfolio = sync_portfolio_holding_days(portfolio, settings=load_settings())
+        p = path or default_portfolio_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(portfolio, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return p
 
 
 def code_to_xueqiu_symbol(code: str) -> str:
@@ -650,6 +654,9 @@ def build_snapshot(
     }
 
     sources = enrich_macro_sources(pf, macro_ctx.get("sources"), cfg)
+    from agent_reach.daily_run.xueqiu_hot_display import sync_xueqiu_sentiment_source
+
+    sources = sync_xueqiu_sentiment_source(sources, macro_ctx.get("macro_signals"))
     if quote_summary_parts:
         sources["quote"] = {
             "summary": " · ".join(quote_summary_parts[:4]),
@@ -709,6 +716,13 @@ def build_snapshot(
         snapshot["volume_ratio"] = primary_vol
     if primary_change is not None:
         snapshot["change_pct"] = primary_change
+    primary_quote = quote_map.get(code_norm) or {}
+    if primary_quote.get("pe_ttm") is not None:
+        snapshot["pe_ttm"] = primary_quote["pe_ttm"]
+    if primary_quote.get("turnover_rate") is not None:
+        snapshot["turnover_rate"] = primary_quote["turnover_rate"]
+    if primary_quote.get("market_capital") is not None:
+        snapshot["market_capital"] = primary_quote["market_capital"]
     if row_fields.get("unrealized_pnl") is not None:
         snapshot["unrealized_pnl"] = row_fields["unrealized_pnl"]
 

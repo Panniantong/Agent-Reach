@@ -108,8 +108,8 @@ upstream `analyzeEmotion()` 综合打分 → 定级 → 仓位：
 
 **待增强：**
 
-- [ ] 情绪定级与 MSS 宏观分自动融合（当前并列展示）
-- [ ] 全市场宽度失败时降级为 macro_collector 摘要（不阻断收盘）
+- [x] 情绪定级与 MSS 宏观分自动融合（`emotion_mss_fusion.py` + 收盘 market_review）
+- [x] 全市场宽度失败时降级为 macro_collector 摘要（不阻断收盘）— `market_review._attach_macro_collector_fallback` + `macro_fallback_enabled`
 
 **参考文件（upstream）：** `SKILL.md` · `index.html`（`analyzeEmotion` / `analyzeSectors` / `analyzeLHB`）· `server.js`
 

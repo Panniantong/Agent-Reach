@@ -17,6 +17,7 @@ def digest_path() -> Path:
 def save_weekly_digest(report: dict[str, Any], *, week_end: Optional[str] = None) -> Path:
     path = digest_path()
     path.parent.mkdir(parents=True, exist_ok=True)
+    macro_signals = dict(report.get("macro_signals") or {})
     record = {
         "saved_at": today_shanghai().isoformat(),
         "week_end": week_end or report.get("week_end"),
@@ -25,6 +26,9 @@ def save_weekly_digest(report: dict[str, Any], *, week_end: Optional[str] = None
         "sector_groups": report.get("sector_groups") or {},
         "news_events": report.get("news_events") or [],
         "skill_learning": report.get("skill_learning") or [],
+        "macro_signals": macro_signals,
+        "watchlist_intel": report.get("watchlist_intel") or {},
+        "xueqiu_exa_research": macro_signals.get("xueqiu_exa_research") or [],
     }
     path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path

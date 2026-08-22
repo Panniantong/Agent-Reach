@@ -207,6 +207,15 @@ def fuse_verdict_with_team(
             label_key = "watch"
         downgrade.append(f"Team 共识：{consensus_label}（{team_review.get('consensus_score', '—')} 分）")
 
+    team_cfg = settings.get("team") or {}
+    if team_review.get("counter_downgrade") and team_cfg.get("counter_thesis_downgrade", True) is not False:
+        if label_key == "buy":
+            label_key = "watch"
+            counter = str(team_review.get("counter_thesis") or "反面检验触发")
+            downgrade.append(f"Supervisor 反面检验降级：{counter[:96]}")
+            if confidence == "高":
+                confidence = "中"
+
     # Buffett hard veto when fundamentals present and fail
     buffett_blocked, buffett_notes = _check_buffett_filter(snapshot, settings)
     if buffett_blocked:

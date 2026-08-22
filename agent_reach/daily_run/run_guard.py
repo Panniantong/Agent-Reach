@@ -19,7 +19,7 @@ class HarnessCooldownError(RuntimeError):
 
 
 _LOCK_DIR = Path.home() / ".agent-reach" / "daily_run" / "locks"
-_DEDUP_JOBS = frozenset({"morning", "close", "weekly", "forecast"})
+_DEDUP_JOBS = frozenset({"morning", "midday", "close", "weekly", "forecast"})
 
 
 def lock_dir() -> Path:
@@ -94,6 +94,7 @@ def check_duplicate_job(
 
     labels = {
         "morning": "早盘",
+        "midday": "午盘",
         "close": "收盘复盘",
         "weekly": "周报",
         "forecast": "下周预测",

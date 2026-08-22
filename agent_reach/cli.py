@@ -134,9 +134,9 @@ def main():
     p_dr_opt.add_argument("--input", "-i", required=True, help="History JSON (with optional factor fields)")
     p_dr_opt.add_argument(
         "--objective",
-        default="excess_return",
-        choices=["excess_return", "total_return", "win_rate", "sharpe_proxy"],
-        help="Optimization objective",
+        default=None,
+        choices=["excess_return", "total_return", "win_rate", "sharpe", "sharpe_proxy"],
+        help="Optimization objective (default: settings.optimizer.default_objective)",
     )
     p_dr_opt.add_argument("--save", action="store_true",
                           help="Write best params to ~/.agent-reach/daily_run_settings.json")
@@ -223,7 +223,7 @@ def main():
     p_dr_sched.add_argument(
         "--job",
         default="",
-        choices=["morning", "intraday", "close", "weekly", "forecast"],
+        choices=["morning", "midday", "intraday", "close", "weekly", "forecast"],
         help="Job for schedule run (alternative to positional job_name)",
     )
     p_dr_sched.add_argument("--dry-run", action="store_true",
@@ -257,6 +257,39 @@ def main():
     p_dr_hot_stop.add_argument("--mode", default="",
                                choices=["", "native", "docker", "auto"],
                                help="Stop only selected deploy mode")
+    p_dr_conf = p_daily_sub.add_parser("configure", help="Merge workflow settings into user daily_run_settings.json")
+    p_dr_conf_sub = p_dr_conf.add_subparsers(dest="configure_action", required=True)
+    p_dr_conf_team = p_dr_conf_sub.add_parser("team", help="Enable Team-First (8 experts + Supervisor)")
+    p_dr_conf_team.add_argument("--dry-run", action="store_true", help="Report only, do not write")
+    p_dr_conf_team.add_argument("--path", default="", help="Settings file path")
+    p_dr_conf_team.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_conf_team.add_argument("--no-morning", action="store_true", help="Do not set morning_team_first")
+    p_dr_conf_team.add_argument("--no-close", action="store_true", help="Do not set close_team_first")
+    p_dr_conf_team.add_argument("--no-intraday", action="store_true", help="Do not set intraday_team_first")
+    p_dr_redfox = p_daily_sub.add_parser("redfox", help="RedFox integrations")
+    p_dr_redfox_sub = p_dr_redfox.add_subparsers(dest="redfox_action", required=True)
+    p_dr_redfox_gzh = p_dr_redfox_sub.add_parser("gzh", help="Manage gzh subscription list")
+    p_dr_redfox_gzh_sub = p_dr_redfox_gzh.add_subparsers(dest="gzh_action", required=True)
+    p_dr_gzh_list = p_dr_redfox_gzh_sub.add_parser("list", help="List subscribed gzh accounts")
+    p_dr_gzh_list.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_gzh_add = p_dr_redfox_gzh_sub.add_parser("add", help="Add a gzh account")
+    p_dr_gzh_add.add_argument("--category", required=True, help="official or personal")
+    p_dr_gzh_add.add_argument("name", help="Account display name")
+    p_dr_gzh_add.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_gzh_rm = p_dr_redfox_gzh_sub.add_parser("remove", help="Remove a gzh account")
+    p_dr_gzh_rm.add_argument("--category", required=True, help="official or personal")
+    p_dr_gzh_rm.add_argument("name", help="Account display name")
+    p_dr_gzh_rm.add_argument("--json", action="store_true", help="JSON output")
+    p_dr_kronos = p_daily_sub.add_parser("kronos", help="Kronos prediction utilities")
+    p_dr_kronos_sub = p_dr_kronos.add_subparsers(dest="kronos_action", required=True)
+    p_dr_kronos_bt = p_dr_kronos_sub.add_parser(
+        "backtest",
+        help="AKShare historical hold-out backtest (FaceCat-style)",
+    )
+    p_dr_kronos_bt.add_argument("--code", required=True, help="A-share code e.g. 688008")
+    p_dr_kronos_bt.add_argument("--holdout", type=int, default=0, help="Hold-out days (default from settings)")
+    p_dr_kronos_bt.add_argument("--folds", type=int, default=0, help="Walk-back folds (default from settings)")
+    p_dr_kronos_bt.add_argument("--json", action="store_true", help="JSON output only")
     p_daily_sub.add_parser("sample", help="Print example snapshot JSON to stdout")
     p_dr_harness = p_daily_sub.add_parser("harness", help="Continual harness: show memory / rollback refine")
     p_dr_harness_sub = p_dr_harness.add_subparsers(dest="harness_action", required=True)
@@ -1582,11 +1615,7 @@ def _cmd_daily_run(args):
 
     if args.daily_action == "optimize":
         from agent_reach.config import Config
-        from agent_reach.daily_run.optimizer import (
-            grid_search_optimize,
-            render_optimize_markdown,
-            save_optimized_settings,
-        )
+        from agent_reach.daily_run.strategy_optimizer import StrategyOptimizer
         from agent_reach.daily_run.settings import load_settings
         from agent_reach.integrations.feishu import FeishuError, send_card
 
@@ -1595,7 +1624,8 @@ def _cmd_daily_run(args):
             print("❌ optimize input must be a JSON array")
             sys.exit(1)
         settings = load_settings()
-        result = grid_search_optimize(history, settings, objective=args.objective)
+        optimizer = StrategyOptimizer(settings)
+        result = optimizer.optimize(history, objective=args.objective)
         payload = {
             "objective": result.objective,
             "best_score": result.best_score,
@@ -1604,11 +1634,11 @@ def _cmd_daily_run(args):
             "trials": result.trials,
         }
         print(json.dumps(payload, ensure_ascii=False, indent=2))
-        md = render_optimize_markdown(result)
+        md = optimizer.render_markdown(result)
         print("\n--- Markdown ---\n")
         print(md)
         if args.save:
-            out = save_optimized_settings(result, settings)
+            out = optimizer.save(result)
             harness_mode = (settings.get("harness") or {}).get("threshold_evolution_mode") == "harness"
             if harness_mode:
                 print(f"\n✅ Optimizer metadata saved to {out}")
@@ -1948,8 +1978,8 @@ def _cmd_daily_run(args):
 
         if args.schedule_action == "run":
             job = args.job or args.job_name or "intraday"
-            if job not in ("morning", "intraday", "close", "weekly", "forecast"):
-                print("❌ job must be morning, intraday, close, weekly, or forecast")
+            if job not in ("morning", "midday", "intraday", "close", "weekly", "forecast"):
+                print("❌ job must be morning, midday, intraday, close, weekly, or forecast")
                 sys.exit(1)
             try:
                 result = run_scheduled(job, push=not args.dry_run, config=Config(), force=args.force)
@@ -1967,6 +1997,9 @@ def _cmd_daily_run(args):
             if job == "morning":
                 report = (job_result.get("evaluation") or {}).get("report") or {}
                 print(f"   verdict={report.get('verdict')} MSS={report.get('mss_final')}")
+            elif job == "midday":
+                scan = result.get("scan") or (job_result.get("scan") or {})
+                print(f"   {scan.get('scan_id')} MSS={scan.get('mss_final')} · {scan.get('verdict')} · source=midday")
             elif job == "intraday":
                 scan = (job_result.get("scan") or {}).get("scan") or {}
                 print(f"   {scan.get('scan_id')} MSS={scan.get('mss_final')} · {scan.get('verdict')}")
@@ -1985,7 +2018,7 @@ def _cmd_daily_run(args):
                 print("   Feishu push sent")
             return
 
-        print("Usage: agent-reach daily-run schedule {print|install|run} [--job morning|intraday|close|weekly|forecast]")
+        print("Usage: agent-reach daily-run schedule {print|install|run} [--job morning|midday|intraday|close|weekly|forecast]")
         sys.exit(1)
 
     if args.daily_action == "hot-news":
@@ -2055,6 +2088,105 @@ def _cmd_daily_run(args):
 
         print("Usage: agent-reach daily-run hot-news {install|status|stop}")
         sys.exit(1)
+
+    if args.daily_action == "configure":
+        import json as _json
+        from pathlib import Path as _Path
+
+        if args.configure_action == "team":
+            from agent_reach.daily_run.team_setup import enable_team_first, render_team_setup_markdown
+
+            path = _Path(args.path).expanduser() if args.path else None
+            result = enable_team_first(
+                path=path,
+                morning_team_first=not args.no_morning,
+                close_team_first=not args.no_close,
+                intraday_team_first=not args.no_intraday,
+                dry_run=args.dry_run,
+            )
+            if args.json:
+                print(_json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print(render_team_setup_markdown(result))
+                if result.get("saved"):
+                    print(f"\n✅ Team-First enabled: {result.get('path')}")
+                elif result.get("dry_run") and result.get("changed"):
+                    print("\n(dry-run — re-run without --dry-run to apply)")
+            return
+
+        print("Usage: agent-reach daily-run configure {team}")
+        sys.exit(1)
+
+    if args.daily_action == "kronos":
+        import json as _json
+
+        from agent_reach.daily_run.kronos_holdout_backtest import (
+            render_kronos_holdout_markdown,
+            run_kronos_holdout_backtest,
+        )
+        from agent_reach.daily_run.settings import effective_settings, load_settings
+
+        if args.kronos_action != "backtest":
+            print("Usage: agent-reach daily-run kronos backtest --code 688008 [--holdout 5] [--folds 3]")
+            sys.exit(1)
+
+        settings = effective_settings(load_settings())
+        kronos_cfg = dict(settings.get("kronos") or {})
+        if not kronos_cfg.get("enabled", False):
+            print("⚠️  kronos.enabled=false — 回测仍将尝试加载模型（设置 kronos.enabled=true 以启用线上预测）")
+        holdout = int(args.holdout) if args.holdout else None
+        folds = int(args.folds) if args.folds else 1
+        result = run_kronos_holdout_backtest(
+            args.code,
+            holdout_days=holdout,
+            folds=folds,
+            settings=settings,
+        )
+        if args.json:
+            print(_json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(_json.dumps(result, ensure_ascii=False, indent=2))
+            print("\n--- Markdown ---\n")
+            print(render_kronos_holdout_markdown(result))
+        if not result.get("available"):
+            sys.exit(1)
+        return
+
+    if args.daily_action == "redfox":
+        import json as _json
+
+        from agent_reach.daily_run.redfox_gzh import (
+            add_gzh_subscription,
+            list_gzh_subscriptions,
+            remove_gzh_subscription,
+            render_gzh_subscriptions_markdown,
+        )
+        from agent_reach.daily_run.settings import load_settings
+
+        settings = load_settings()
+        if args.redfox_action != "gzh":
+            print("Usage: agent-reach daily-run redfox gzh {list|add|remove}")
+            sys.exit(1)
+
+        try:
+            if args.gzh_action == "list":
+                result = list_gzh_subscriptions(settings=settings)
+            elif args.gzh_action == "add":
+                result = add_gzh_subscription(args.category, args.name, settings=settings)
+            elif args.gzh_action == "remove":
+                result = remove_gzh_subscription(args.category, args.name, settings=settings)
+            else:
+                print("Usage: agent-reach daily-run redfox gzh {list|add|remove}")
+                sys.exit(1)
+        except ValueError as exc:
+            print(f"❌ {exc}")
+            sys.exit(1)
+
+        if args.json:
+            print(_json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(render_gzh_subscriptions_markdown(result))
+        return
 
     if args.daily_action == "harness":
         import json as _json
@@ -2433,7 +2565,7 @@ def _cmd_daily_run(args):
     if args.daily_action not in ("evaluate", "push"):
         print(
             "Usage: agent-reach daily-run "
-            "{morning|close|intraday|build-snapshot|schedule|hot-news|harness|capital|pnl|evaluate|push|fetch|verify|backtest|optimize|plugins|sample} ..."
+            "{morning|close|intraday|build-snapshot|schedule|hot-news|configure|redfox|kronos|harness|capital|pnl|evaluate|push|fetch|verify|backtest|optimize|plugins|sample} ..."
         )
         sys.exit(1)
 
@@ -2856,11 +2988,28 @@ def _cmd_doctor(args=None):
     integrations = check_integrations(config)
 
     if args is not None and getattr(args, "json", False):
-        payload = {"channels": results, "integrations": integrations}
+        daily_run = {}
+        try:
+            from agent_reach.daily_run.daily_run_diagnostics import collect_daily_run_diagnostics
+
+            daily_run = collect_daily_run_diagnostics()
+        except Exception as exc:
+            daily_run = {"status": "error", "message": str(exc)}
+        payload = {"channels": results, "integrations": integrations, "daily_run": daily_run}
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return
 
     rprint(format_report(results))
+    try:
+        from agent_reach.daily_run.daily_run_diagnostics import (
+            collect_daily_run_diagnostics,
+            format_daily_run_diagnostics_markdown,
+        )
+
+        diag = collect_daily_run_diagnostics()
+        rprint(format_daily_run_diagnostics_markdown(diag))
+    except Exception:
+        pass
 
     # Auto-install skill if not already present (fixes #154)
     _install_skill(force=False)

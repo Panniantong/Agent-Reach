@@ -18,6 +18,7 @@ class CloseHarnessSkillsReport:
     close_improve: dict[str, Any] = field(default_factory=dict)
     data_audit: dict[str, Any] = field(default_factory=dict)
     watchlist_adjust: dict[str, Any] = field(default_factory=dict)
+    watchlist_intel: dict[str, Any] = field(default_factory=dict)
     pnl_overview: dict[str, Any] = field(default_factory=dict)
     pnl_target: dict[str, Any] = field(default_factory=dict)
     intraday_friction: dict[str, Any] = field(default_factory=dict)
@@ -35,6 +36,7 @@ class CloseHarnessSkillsReport:
             "close_improve": self.close_improve,
             "data_audit": self.data_audit,
             "watchlist_adjust": self.watchlist_adjust,
+            "watchlist_intel": self.watchlist_intel,
             "pnl_overview": self.pnl_overview,
             "pnl_target": self.pnl_target,
             "intraday_friction": self.intraday_friction,
@@ -52,6 +54,7 @@ class CloseHarnessSkillsReport:
                     self.close_improve,
                     self.data_audit,
                     self.watchlist_adjust,
+                    self.watchlist_intel,
                     self.pnl_overview,
                     self.pnl_target,
                     self.intraday_friction,
@@ -110,6 +113,18 @@ def run_close_harness_refinements(
 
         report.watchlist_adjust = apply_watchlist_adjust_harness_refinement(
             watchlist_adjust,
+            settings=cfg,
+        )
+
+    intel_by_code = dict((snapshot or {}).get("watchlist_intel") or {})
+    if not intel_by_code and portfolio_summary is not None:
+        intel_by_code = dict(portfolio_summary.get("watchlist_intel") or {})
+    if intel_by_code:
+        from agent_reach.daily_run.watchlist_intel_harness import apply_watchlist_intel_harness_refinement
+
+        report.watchlist_intel = apply_watchlist_intel_harness_refinement(
+            intel_by_code,
+            adjust=watchlist_adjust,
             settings=cfg,
         )
 

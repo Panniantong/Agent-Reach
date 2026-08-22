@@ -118,7 +118,7 @@ ${PY} -m agent_reach.cli doctor --json
 
 索引：[references/README.md](daily_run/references/README.md)
 
-## 📋 下周执行清单（周六自动更新 · 外链 2026-08-10~2026-08-14）
+## 📋 下周执行清单（周六自动更新 · 外链 2026-08-17~2026-08-21）
 
 > **动态片段** `~/.agent-reach/daily_run/skill/playbook.md` · 索引 `next_week_playbook.json`
 

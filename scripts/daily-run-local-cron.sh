@@ -11,11 +11,11 @@ set -euo pipefail
 
 JOB="${1:-}"
 if [ -z "$JOB" ]; then
-  echo "usage: daily-run-local-cron.sh morning|intraday|close|weekly|forecast" >&2
+  echo "usage: daily-run-local-cron.sh morning|midday|intraday|close|weekly|forecast" >&2
   exit 2
 fi
 case "$JOB" in
-  morning|intraday|close|weekly|forecast) ;;
+  morning|midday|intraday|close|weekly|forecast) ;;
   *)
     echo "unknown job: $JOB" >&2
     exit 2

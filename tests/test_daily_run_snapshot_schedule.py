@@ -324,11 +324,12 @@ class TestSchedule:
         assert "daily-run-local-cron.sh morning" in block
         assert "daily-run-local-cron.sh close" in block
         assert "0 18 * * 1-5" in block
-        assert "S15/15" in block
+        assert "daily-run-local-cron.sh midday" in block
+        assert "S15/16" in block
         assert block.count("daily-run-local-cron.sh intraday") == 14
 
     def test_default_entries_count(self):
-        assert len(default_entries()) == 18  # premarket + morning + 13 scans + close + weekly + forecast
+        assert len(default_entries()) == 19  # premarket + morning + midday + 13 scans + close + weekly + forecast
 
     @patch("agent_reach.daily_run.intraday.record_morning_scan", return_value={"scan": {"scan_id": "S1"}})
     @patch("agent_reach.daily_run.trade_calendar.is_trading_day", return_value=(True, ""))

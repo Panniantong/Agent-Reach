@@ -224,6 +224,23 @@ class TestHarnessPolicyOverlay:
         )
         assert cfg["thresholds"]["macro_veto"] == 40
 
+    def test_explicit_portfolio_caps_not_overwritten_by_harness(self, monkeypatch):
+        from agent_reach.daily_run.harness import HarnessState
+
+        monkeypatch.setattr(
+            "agent_reach.daily_run.harness.load_harness",
+            lambda: HarnessState(),
+        )
+        cfg = apply_harness_policy_overlay(
+            {
+                "portfolio": {"max_total_symbols": 3, "max_holdings": 2},
+                "thresholds": {"max_snapshot_age_hours": 24},
+                "harness": {"enabled": True},
+            }
+        )
+        assert cfg["portfolio"]["max_total_symbols"] == 3
+        assert cfg["portfolio"]["max_holdings"] == 2
+
     def test_threshold_default_before_overlay(self, monkeypatch):
         from agent_reach.daily_run.harness import HarnessState
 

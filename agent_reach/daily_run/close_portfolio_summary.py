@@ -63,12 +63,14 @@ class ClosePortfolioSummary:
     intraday_trades: list[dict[str, Any]] = field(default_factory=list)
     watchlist_changes: list[dict[str, Any]] = field(default_factory=list)
     watchlist_min_size: int = 5
+    watchlist_intel: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     reason_lines: list[str] = field(default_factory=list)
     sell_rules_whatif: Optional[dict[str, Any]] = None
     buy_rules_whatif: Optional[dict[str, Any]] = None
     intraday_friction_whatif: Optional[dict[str, Any]] = None
     intraday_sell_whatif: Optional[dict[str, Any]] = None
+    pnl_attribution: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -108,12 +110,14 @@ class ClosePortfolioSummary:
             "intraday_trades": self.intraday_trades,
             "watchlist_changes": self.watchlist_changes,
             "watchlist_min_size": self.watchlist_min_size,
+            "watchlist_intel": self.watchlist_intel,
             "notes": self.notes,
             "reason_lines": self.reason_lines,
             "sell_rules_whatif": self.sell_rules_whatif,
             "buy_rules_whatif": self.buy_rules_whatif,
             "intraday_friction_whatif": self.intraday_friction_whatif,
             "intraday_sell_whatif": self.intraday_sell_whatif,
+            "pnl_attribution": self.pnl_attribution,
         }
 
 
@@ -1130,8 +1134,18 @@ def build_close_portfolio_summary(
         intraday_trades=intraday_list,
         watchlist_changes=wl_changes,
         watchlist_min_size=wl_min,
+        watchlist_intel=dict(current.get("watchlist_intel") or {}),
         notes=notes,
     )
+    from agent_reach.daily_run.backtest_attributor import build_close_pnl_attribution
+
+    close_cfg = (settings or {}).get("close_portfolio") or {}
+    if close_cfg.get("pnl_attribution_enabled", True) is not False:
+        summary.pnl_attribution = build_close_pnl_attribution(
+            summary.to_dict(),
+            snapshot=current,
+            baseline=baseline,
+        )
     summary.reason_lines = _build_reason_lines(summary.to_dict())
     return summary
 
@@ -1189,6 +1203,15 @@ def render_close_portfolio_markdown(
     total_return_line = format_total_return_line(data)
     if total_return_line:
         lines.append(total_return_line)
+
+    attr_md = ""
+    if data.get("pnl_attribution"):
+        from agent_reach.daily_run.backtest_attributor import render_close_pnl_attribution_markdown
+
+        attr_md = render_close_pnl_attribution_markdown(data["pnl_attribution"])
+    if attr_md:
+        lines.append("")
+        lines.append(attr_md)
 
     if data.get("realized_pnl") is not None and abs(float(data["realized_pnl"])) > 0.01:
         realized = float(data["realized_pnl"])
@@ -1280,6 +1303,7 @@ def render_close_portfolio_markdown(
         lines.append(f"- 本次按最新热点刷新，新增 **{len(fill_adds)}** 只观察标的")
 
     if watchlist:
+        intel_by_code = data.get("watchlist_intel") or {}
         for w in watchlist:
             code = _normalize_code(str(w.get("code", "")))
             name = w.get("name") or code
@@ -1289,12 +1313,31 @@ def render_close_portfolio_markdown(
             sector = w.get("sector")
             sector_s = f" · **{sector}**" if sector else ""
             reason = str(w.get("reason") or add_reasons.get(code, "")).strip()
+            if not reason:
+                from agent_reach.daily_run.watchlist_intel import intel_line_for_code
+
+                intel_hint = intel_line_for_code(intel_by_code, code)
+                if intel_hint and intel_hint not in reason:
+                    reason = intel_hint
             if reason:
                 lines.append(f"- **{name}** ({code}){sector_s}{chg_s} — {reason}")
             else:
                 lines.append(f"- **{name}** ({code}){sector_s}{chg_s}")
     else:
         lines.append("- 观察池为空")
+
+    intel_md = ""
+    if data.get("watchlist_intel"):
+        from agent_reach.daily_run.watchlist_intel import render_watchlist_intel_markdown
+
+        intel_md = render_watchlist_intel_markdown(
+            data.get("watchlist_intel") or {},
+            watchlist=watchlist,
+            limit=5,
+        )
+    if intel_md:
+        lines.append("")
+        lines.append(intel_md)
 
     lines.append("")
     lines.append("## 📝 原因摘要")

@@ -207,7 +207,16 @@ class TestWeeklyReport:
     @patch("agent_reach.daily_run.weekly_report.run_sector_research", return_value=[])
     @patch("agent_reach.daily_run.weekly_report._load_week_manifests", return_value=[])
     @patch("agent_reach.daily_run.weekly_report._load_trade_ledger_range", return_value=[])
-    def test_generate_weekly_report(self, mock_ledger, mock_manifests, mock_exa, snapshot, portfolio):
+    @patch(
+        "agent_reach.daily_run.watchlist_intel.collect_watchlist_intel",
+        return_value={
+            "603986": {
+                "name": "兆易创新",
+                "announcements": [{"title": "业绩预告"}],
+            }
+        },
+    )
+    def test_generate_weekly_report(self, mock_intel, mock_ledger, mock_manifests, mock_exa, snapshot, portfolio):
         report = generate_weekly_report(
             snapshot,
             {"weekly_report": {"enabled": True, "exa_sector_research": False}},
@@ -218,6 +227,8 @@ class TestWeeklyReport:
         assert report.end_total == 75000
         assert len(report.holdings) == 2
         assert len(report.watchlist) == 1
+        assert report.watchlist_intel["603986"]["name"] == "兆易创新"
+        assert report.to_dict()["watchlist_intel"]["603986"]["name"] == "兆易创新"
         assert "澜起科技" in render_weekly_markdown(report)
         assert "股市技能学习" in render_weekly_markdown(report)
         assert "流程改进意见" in render_weekly_markdown(report)
@@ -289,6 +300,111 @@ class TestWeeklyReport:
         assert "股票市值" in text
         assert "持有现金" in text
         assert "44,402.27" in text or "44,021" in text
+
+    def test_compute_weekly_stock_cash_pnl_uses_balance_not_trade_flow(self):
+        from agent_reach.daily_run.weekly_report import _compute_weekly_stock_cash_pnl
+
+        cash_pnl, stock_pnl, notes = _compute_weekly_stock_cash_pnl(
+            weekly_pnl=-103896.59,
+            start_cash=140176.27,
+            end_cash=28472.68,
+            start_stock_mv=45901.0,
+            end_stock_mv=53708.0,
+            holdings_changed=True,
+            trades=[{"actions": [{"side": "sell"}]}],
+            manifest_cash_pnl=-111703.59,
+        )
+        assert cash_pnl == -111703.59
+        assert stock_pnl == 7807.0
+        assert round(cash_pnl + stock_pnl, 2) == -103896.59
+        assert not any("ledger 成交重算" in n for n in notes)
+
+    def test_build_weekly_pnl_attribution_rebalance(self):
+        from agent_reach.daily_run.weekly_report import (
+            build_weekly_pnl_attribution,
+            build_weekly_pnl_source_attribution_lines,
+        )
+
+        attr = build_weekly_pnl_attribution(
+            weekly_pnl=-103896.59,
+            cash_pnl=-111703.59,
+            stock_pnl=7807.0,
+            realized_pnl=3419.66,
+            trade_cash_flow=20784.9,
+            holdings=[
+                {"week_chg": -1136.0},
+                {"week_chg": -425.0},
+                {"week_chg": -28.0},
+                {"week_chg": -14.0},
+            ],
+        )
+        assert attr["held_week_chg"] == -1603.0
+        assert attr["realized_pnl"] == 3419.66
+        assert attr["rebalance_pnl"] == -105713.25
+
+        lines = build_weekly_pnl_source_attribution_lines(
+            {"weekly_pnl": -103896.59, "pnl_attribution": attr, "cash_pnl": -111703.59}
+        )
+        text = "\n".join(lines)
+        assert "归因明细" in text
+        assert "现持仓价格" in text
+        assert "已清仓已实现" in text
+        assert "换仓及其它" in text
+        assert "成交净现金流" in text
+
+    def test_render_pnl_lines_includes_trade_pnl_detail(self):
+        from agent_reach.daily_run.weekly_report import WeeklyReport, _render_pnl_lines
+
+        report = WeeklyReport(
+            week_start=date(2026, 8, 17),
+            week_end=date(2026, 8, 21),
+            start_total=186077.27,
+            end_total=82180.68,
+            weekly_pnl=-103896.59,
+            weekly_pnl_pct=-55.84,
+            realized_pnl=3419.66,
+            trade_cash_flow=20784.9,
+            trade_pnl_detail={
+                "realized_pnl": 3419.66,
+                "sells": [
+                    {
+                        "name": "京东方A",
+                        "code": "000725",
+                        "shares": 1400,
+                        "price": 6.47,
+                        "avg_buy_price": 6.58,
+                        "realized_pnl": -1471.34,
+                        "realized_pnl_pct": -13.99,
+                        "at": "2026-08-19T02:00:00+00:00",
+                        "date": "2026-08-19",
+                    }
+                ],
+                "buys": [
+                    {
+                        "side": "buy",
+                        "name": "海能达",
+                        "code": "002583",
+                        "shares": 1500,
+                        "price": 8.11,
+                        "amount": 12165.0,
+                        "commission": 18.25,
+                        "at": "2026-08-21T03:00:00+00:00",
+                        "date": "2026-08-21",
+                        "status": "held",
+                        "week_end_price": 8.12,
+                        "floating_pnl": 15.0,
+                        "floating_pnl_pct": 0.12,
+                    }
+                ],
+            },
+        )
+        text = "\n".join(_render_pnl_lines(report))
+        assert "股票盈亏明细" in text
+        assert "本周交易" in text
+        assert "京东方A" in text
+        assert "海能达" in text
+        assert "已实现" in text
+        assert "浮盈浮亏" in text
 
     def test_load_trade_ledger_range_dedupes(self, tmp_path, monkeypatch):
         from agent_reach.daily_run.weekly_report import _load_trade_ledger_range
@@ -780,3 +896,85 @@ class TestScheduleWeekly:
         block = render_crontab_block()
         assert "daily-run-local-cron.sh weekly" in block
         assert "30 8 * * 6" in block
+
+
+class TestWeeklyXueqiuHitSection:
+    @patch("agent_reach.daily_run.xueqiu_hit_outcomes.summarize_xueqiu_hit_outcomes")
+    def test_render_weekly_sections_includes_hit_rate(self, mock_stats):
+        from agent_reach.daily_run.weekly_report import WeeklyReport, render_weekly_sections
+
+        mock_stats.return_value = {
+            "total": 8,
+            "hits": 5,
+            "misses": 3,
+            "hit_rate": 0.625,
+            "window_days": 30,
+            "by_type": {"hot_stock": {"hit": 3, "total": 5}},
+        }
+        report = WeeklyReport(
+            week_start=date(2026, 8, 10),
+            week_end=date(2026, 8, 14),
+            start_total=100000,
+            end_total=99212,
+            weekly_pnl=-788,
+            weekly_pnl_pct=-0.9,
+            realized_pnl=0,
+        )
+        sections = render_weekly_sections(report)
+        labels = [s.label for s in sections]
+        assert "雪球命中率" in labels
+        hit_section = next(s for s in sections if s.label == "雪球命中率")
+        assert "命中率" in hit_section.markdown
+
+    def test_render_weekly_sections_includes_watchlist_intel(self):
+        from agent_reach.daily_run.weekly_report import WeeklyReport, render_weekly_sections
+
+        report = WeeklyReport(
+            week_start=date(2026, 8, 10),
+            week_end=date(2026, 8, 14),
+            start_total=100000,
+            end_total=99212,
+            weekly_pnl=-788,
+            weekly_pnl_pct=-0.9,
+            realized_pnl=0,
+            watchlist=[{"code": "603986", "name": "兆易创新"}],
+            watchlist_intel={
+                "603986": {
+                    "name": "兆易创新",
+                    "announcements": [{"title": "业绩预告"}],
+                }
+            },
+        )
+        sections = render_weekly_sections(report)
+        labels = [s.label for s in sections]
+        assert "观察池情报" in labels
+        intel_section = next(s for s in sections if s.label == "观察池情报")
+        assert "兆易创新" in intel_section.markdown
+
+
+class TestWeeklyExperienceSnippets:
+    def test_dedupes_by_symbol_and_covers_week(self, tmp_path, monkeypatch):
+        from agent_reach.daily_run import experience as exp_mod
+        from agent_reach.daily_run.experience import load_weekly_experience_snippets
+
+        exp_dir = tmp_path / "experience"
+        exp_dir.mkdir()
+        monkeypatch.setattr(exp_mod, "experience_dir", lambda: exp_dir)
+        path = exp_dir / "experience.jsonl"
+        entries = [
+            {"date": "2026-08-19", "at": "t1", "code": "688008", "name": "澜起科技", "mss_final": 45, "prediction_hit": True, "rules": ["old"]},
+            {"date": "2026-08-19", "at": "t2", "code": "688008", "name": "澜起科技", "mss_final": 46, "prediction_hit": True, "rules": ["dup"]},
+            {"date": "2026-08-19", "at": "t3", "code": "002273", "name": "水晶光电", "mss_final": 50, "prediction_hit": False, "rules": ["flow"]},
+            {"date": "2026-08-21", "at": "t4", "code": "688008", "name": "澜起科技", "mss_final": 48, "prediction_hit": True, "rules": ["latest"]},
+            {"date": "2026-08-21", "at": "t5", "code": "002583", "name": "海能达", "mss_final": 42, "prediction_hit": False, "rules": ["risk"]},
+            {"date": "2026-08-22", "at": "t6", "code": "600584", "name": "长电科技", "mss_final": 44, "prediction_hit": True, "rules": ["skip"]},
+        ]
+        path.write_text("\n".join(json.dumps(e, ensure_ascii=False) for e in entries) + "\n", encoding="utf-8")
+
+        snippets = load_weekly_experience_snippets(date(2026, 8, 17), date(2026, 8, 21), limit=5)
+        names = [s.split()[1] for s in snippets]
+        assert names.count("澜起科技") == 1
+        assert "水晶光电" in names
+        assert "海能达" in names
+        assert "长电科技" not in names
+        assert any("MSS=48" in s and "澜起科技" in s for s in snippets)

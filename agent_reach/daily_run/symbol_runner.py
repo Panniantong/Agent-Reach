@@ -5,11 +5,41 @@ from __future__ import annotations
 
 import gc
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Optional
 
 from agent_reach.daily_run.settings import load_settings
 from agent_reach.daily_run.snapshot_builder import build_and_save, load_portfolio
 from agent_reach.daily_run.symbols import resolve_target_symbols, symbol_display_name
+
+
+def intraday_parallel_enabled(settings: dict[str, Any]) -> bool:
+    sched = settings.get("schedule") or {}
+    return sched.get("intraday_parallel", True) is not False
+
+
+def intraday_parallel_workers(settings: dict[str, Any], symbol_count: int) -> int:
+    if not intraday_parallel_enabled(settings) or symbol_count <= 1:
+        return 1
+    sched = settings.get("schedule") or {}
+    configured = int(sched.get("intraday_parallel_workers") or 2)
+    return max(1, min(configured, symbol_count))
+
+
+def _worker_settings_for_intraday_parallel(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Avoid nested ThreadPool explosion: serial experts inside parallel symbol workers."""
+    if not intraday_parallel_enabled(cfg):
+        return cfg
+    out = dict(cfg)
+    plugins = dict(out.get("plugins") or {})
+    if plugins.get("parallel", True):
+        plugins = {**plugins, "parallel": False}
+        out["plugins"] = plugins
+    team = dict(out.get("team") or {})
+    if team.get("parallel", True):
+        team = {**team, "parallel": False}
+        out["team"] = team
+    return out
 
 
 def symbol_push_interval(settings: dict[str, Any]) -> float:
@@ -101,7 +131,9 @@ def run_morning_for_symbols(
 
             record_morning_scan(run_result, settings=cfg, code=code)
             if merge_push:
-                section_groups.append((name, morning_sections_from_run(run_result)))
+                section_groups.append(
+                    (name, morning_sections_from_run(run_result, include_xueqiu_hot=False))
+                )
                 report = (run_result.get("evaluation") or {}).get("report") or {}
                 decision_entries.append((name, code, report))
                 if expert_card_enabled(cfg, workflow="morning"):
@@ -132,6 +164,16 @@ def run_morning_for_symbols(
             expert_snapshots=expert_snapshots or None,
             decision_entries=decision_entries or None,
         )
+        if symbol_results:
+            from agent_reach.daily_run.report_push import append_merged_xueqiu_hot_section
+
+            primary_snap = symbol_results[0]["result"]["snapshot"]
+            merged = append_merged_xueqiu_hot_section(
+                merged,
+                primary_snap.get("macro_signals"),
+                report_kind="morning",
+                symbol_count=len(decision_entries),
+            )
         if defer_narrative and decision_entries:
             from agent_reach.daily_run.report_narrative import generate_merged_morning_narrative
             from agent_reach.daily_run.report_push import append_merged_narrative_section
@@ -203,71 +245,114 @@ def run_intraday_for_symbols(
     merge_push = _should_merge_push(cfg)
     sched = cfg.get("schedule") or {}
     gc_between = sched.get("intraday_gc_between_symbols", True) is not False
-    symbol_results: list[dict[str, Any]] = []
-    scan_bodies: list[tuple[str, str]] = []
+    worker_cfg = _worker_settings_for_intraday_parallel(cfg)
+    use_parallel = intraday_parallel_workers(cfg, len(targets)) > 1
+    symbol_results: list[Optional[dict[str, Any]]] = [None] * len(targets)
+    scan_body_rows: list[tuple[int, str, str]] = []
     scan_id: Optional[str] = None
     errors: list[str] = []
 
-    total = len(targets)
-    for idx, code in enumerate(targets, start=1):
-        pf = load_portfolio()
+    def _run_one(idx: int, code: str) -> dict[str, Any]:
         name = symbol_display_name(pf, code)
-        print(f"[daily-run] intraday {idx}/{total} {code} {name}", flush=True)
+        print(f"[daily-run] intraday {idx + 1}/{len(targets)} {code} {name}", flush=True)
         state_path = default_state_path(code)
         state = load_state(state_path)
 
         if len(state.scans) >= INTRADAY_MAX_SCANS:
-            symbol_results.append(
-                {
+            return {
+                "idx": idx,
+                "code": code,
+                "name": name,
+                "payload": {
                     "code": code,
                     "skipped": True,
                     "reason": f"今日扫描已达 {INTRADAY_MAX_SCANS} 次上限",
-                }
-            )
-            continue
-        try:
-            snap, path = build_and_save(
-                report_type="intraday",
-                config=config,
-                primary_code=code,
-                portfolio=pf,
-            )
-            do_trade = should_evaluate_trade(state, cfg, state_path=state_path)
-            run_result = run_intraday(
-                snap,
-                settings=cfg,
-                doctor_channels=doctor_channels,
-                push=push and not merge_push,
-                trade=do_trade,
-                config=config,
-                state_path=state_path,
-            )
-            inner = run_result.get("scan") or {}
-            scan = inner.get("scan") or {}
-            scan_id = scan.get("scan_id") or scan_id
-            md = inner.get("markdown") or ""
-            if merge_push and md.strip():
-                scan_bodies.append((name, md.strip()))
-                trade_md = (run_result.get("trade") or {}).get("markdown")
-                if trade_md:
-                    scan_bodies[-1] = (name, md.strip() + "\n\n---\n\n" + trade_md.strip())
-            symbol_results.append(
-                {
-                    "code": code,
-                    "name": name,
-                    "snapshot_path": str(path),
-                    "trade_evaluated": do_trade,
-                    "result": run_result,
-                    "feishu": run_result.get("feishu"),
-                }
-            )
-        except Exception as exc:
-            errors.append(f"{code}: {exc}")
-        finally:
+                },
+            }
+
+        snap, path = build_and_save(
+            report_type="intraday",
+            config=config,
+            primary_code=code,
+            portfolio=pf,
+            settings=worker_cfg,
+        )
+        do_trade = should_evaluate_trade(state, worker_cfg, state_path=state_path)
+        run_result = run_intraday(
+            snap,
+            settings=worker_cfg,
+            doctor_channels=doctor_channels,
+            push=push and not merge_push,
+            trade=do_trade,
+            config=config,
+            state_path=state_path,
+        )
+        inner = run_result.get("scan") or {}
+        scan = inner.get("scan") or {}
+        md = inner.get("markdown") or ""
+        body = md.strip()
+        trade_md = (run_result.get("trade") or {}).get("markdown")
+        if trade_md:
+            body = body + "\n\n---\n\n" + trade_md.strip() if body else trade_md.strip()
+        return {
+            "idx": idx,
+            "code": code,
+            "name": name,
+            "scan_id": scan.get("scan_id"),
+            "body": body,
+            "payload": {
+                "code": code,
+                "name": name,
+                "snapshot_path": str(path),
+                "trade_evaluated": do_trade,
+                "result": run_result,
+                "feishu": run_result.get("feishu"),
+            },
+        }
+
+    total = len(targets)
+    if use_parallel:
+        workers = intraday_parallel_workers(cfg, total)
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(_run_one, idx, code): (idx, code)
+                for idx, code in enumerate(targets)
+            }
+            for future in as_completed(futures):
+                idx, code = futures[future]
+                try:
+                    row = future.result()
+                except Exception as exc:
+                    errors.append(f"{code}: {exc}")
+                    continue
+                symbol_results[row["idx"]] = row["payload"]
+                if merge_push and row.get("body"):
+                    scan_body_rows.append((row["idx"], row["name"], row["body"]))
+                if row.get("scan_id"):
+                    scan_id = row["scan_id"]
+                if gc_between:
+                    gc.collect()
+    else:
+        for idx, code in enumerate(targets):
+            try:
+                row = _run_one(idx, code)
+            except Exception as exc:
+                errors.append(f"{code}: {exc}")
+                if gc_between:
+                    gc.collect()
+                continue
+            symbol_results[row["idx"]] = row["payload"]
+            if merge_push and row.get("body"):
+                scan_body_rows.append((row["idx"], row["name"], row["body"]))
+            if row.get("scan_id"):
+                scan_id = row["scan_id"]
             if gc_between:
                 gc.collect()
 
-    if errors and not symbol_results:
+    ordered_results = [row for row in symbol_results if row is not None]
+    scan_bodies = [(name, body) for _, name, body in sorted(scan_body_rows, key=lambda x: x[0])]
+
+    if errors and not ordered_results:
         raise RuntimeError(errors[0])
 
     feishu_result = None
@@ -289,23 +374,28 @@ def run_intraday_for_symbols(
         from agent_reach.integrations.feishu import send_card
 
         feishu_result = send_card(config or Config(), title, body, template=tpl)
+        from agent_reach.daily_run.macro_collector import fetch_intraday_xueqiu_cross_alerts
         from agent_reach.daily_run.report_narrative import push_intraday_narrative_card
 
+        xueqiu_cross = fetch_intraday_xueqiu_cross_alerts(pf, settings=cfg)
         narrative_feishu = push_intraday_narrative_card(
             config or Config(),
             cfg,
             scan_id=scan_id,
             symbol_count=len(scan_bodies),
-            symbol_results=symbol_results,
+            symbol_results=ordered_results,
+            macro_signals=xueqiu_cross,
         )
 
     return {
         "job": "intraday",
         "symbol_push_mode": symbol_push_mode(cfg),
+        "intraday_parallel": use_parallel,
+        "intraday_parallel_workers": intraday_parallel_workers(cfg, len(targets)) if use_parallel else 1,
         "symbols": targets,
-        "symbol_results": symbol_results,
+        "symbol_results": ordered_results,
         "errors": errors,
-        "feishu": feishu_result or next((r.get("feishu") for r in reversed(symbol_results) if r.get("feishu")), None),
+        "feishu": feishu_result or next((r.get("feishu") for r in reversed(ordered_results) if r.get("feishu")), None),
         "narrative_feishu": narrative_feishu if push and merge_push and scan_bodies else None,
     }
 
@@ -373,7 +463,14 @@ def run_close_for_symbols(
             )
             if merge_push:
                 section_groups.append(
-                    (name, close_sections_from_run(run_result, verify_name=name))
+                    (
+                        name,
+                        close_sections_from_run(
+                            run_result,
+                            verify_name=name,
+                            include_xueqiu_hot=False,
+                        ),
+                    )
                 )
                 if expert_card_enabled(cfg, workflow="close"):
                     expert_snapshots.append((name, code, run_result["snapshot"]))
@@ -403,6 +500,17 @@ def run_close_for_symbols(
             decision_entries=None,
         )
         sections_retitle_done = False
+        if symbol_results:
+            from agent_reach.daily_run.report_push import append_merged_xueqiu_hot_section
+
+            primary_snap = symbol_results[0]["result"]["snapshot"]
+            merged = append_merged_xueqiu_hot_section(
+                merged,
+                primary_snap.get("macro_signals"),
+                report_kind="close",
+                symbol_count=len(symbol_results),
+            )
+            sections_retitle_done = True
         from agent_reach.daily_run.close_portfolio_summary import (
             apply_portfolio_cash_reconcile,
             build_close_portfolio_summary,
@@ -567,11 +675,15 @@ def run_close_for_symbols(
             curve_payload = primary_inner.get("curve")
             if curve_payload is not None and hasattr(curve_payload, "to_dict"):
                 curve_payload = curve_payload.to_dict()
+            harness_result = (primary_inner.get("harness") or {}) if defer_harness_layer_b else {}
+            primary_snap = symbol_results[0]["result"]["snapshot"]
             narrative = generate_merged_close_narrative(
                 symbol_results,
                 portfolio_summary=portfolio_summary_dict,
                 curve=curve_payload,
                 forecast_review=primary_inner.get("forecast_review"),
+                harness_result=harness_result,
+                macro_signals=primary_snap.get("macro_signals"),
                 settings=cfg,
             )
             merged = append_merged_narrative_section(

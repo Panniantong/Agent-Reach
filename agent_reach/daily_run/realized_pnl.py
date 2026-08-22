@@ -257,6 +257,204 @@ def format_sell_trade_line(row: dict[str, Any] | RealizedSellRow) -> str:
     return " · ".join(parts)
 
 
+def format_weekly_buy_pnl_line(row: dict[str, Any]) -> str:
+    """Weekly buy row with floating P&L (held) or linked realized (closed)."""
+    base = format_buy_trade_line(row)
+    status = str(row.get("status") or "")
+    if status == "held":
+        fp = row.get("floating_pnl")
+        pct = row.get("floating_pnl_pct")
+        end_px = row.get("week_end_price")
+        pct_s = f"（{float(pct):+.2f}%）" if pct is not None else ""
+        end_s = f"¥{float(end_px):.2f}" if end_px is not None else "周末价"
+        return f"{base} · 持至周末 {end_s} · 浮盈浮亏 **{float(fp or 0):+,.0f}**{pct_s}"
+    if status == "closed":
+        realized = row.get("realized_pnl")
+        if realized is not None and abs(float(realized)) >= 0.01:
+            return f"{base} · 本周已清仓 · 相关卖出已实现 **{float(realized):+,.0f}**"
+        return f"{base} · 本周已清仓"
+    return base
+
+
+def build_weekly_trade_pnl_detail(
+    trades: list[dict[str, Any]],
+    *,
+    week_start: date,
+    week_end: date,
+    prior_trades: Optional[list[dict[str, Any]]] = None,
+    opening_costs: Optional[dict[str, float]] = None,
+    holdings: Optional[list[dict[str, Any]]] = None,
+) -> dict[str, Any]:
+    """Per-trade buy/sell P&L for a weekly report window."""
+    holdings = holdings or []
+    holdings_by_code: dict[str, dict[str, Any]] = {}
+    for h in holdings:
+        code = _normalize_code(str(h.get("code") or ""))
+        if code:
+            holdings_by_code[code] = h
+
+    merged = list(prior_trades or []) + list(trades or [])
+    sell_rows = replay_realized_sells(merged, opening_costs=opening_costs or None)
+    ws, we = week_start.isoformat(), week_end.isoformat()
+    week_sells = [r for r in sell_rows if ws <= r.date <= we]
+
+    buy_rows: list[dict[str, Any]] = []
+    for buy in _ledger_buy_rows(trades):
+        row = buy.to_dict()
+        code = buy.code
+        holding = holdings_by_code.get(code)
+        if holding and int(holding.get("shares") or 0) > 0:
+            end_px = float(holding.get("week_end_price") or holding.get("price") or buy.price)
+            cost_basis = round(buy.price * buy.shares, 2)
+            float_pnl = round((end_px - buy.price) * buy.shares, 2)
+            pct = round(float_pnl / cost_basis * 100, 2) if cost_basis > 0 else None
+            row.update(
+                {
+                    "status": "held",
+                    "week_end_price": end_px,
+                    "floating_pnl": float_pnl,
+                    "floating_pnl_pct": pct,
+                }
+            )
+        else:
+            code_sells = [s for s in week_sells if s.code == code]
+            realized = round(sum(s.realized_pnl for s in code_sells), 2) if code_sells else None
+            row.update({"status": "closed", "realized_pnl": realized})
+        buy_rows.append(row)
+
+    prior_sells = [r for r in sell_rows if r.date < ws]
+    all_realized = round(sum(r.realized_pnl for r in sell_rows), 2)
+    prior_realized = round(sum(r.realized_pnl for r in prior_sells), 2)
+
+    holding_rows: list[dict[str, Any]] = []
+    for h in holdings:
+        shares = int(h.get("shares") or 0)
+        if shares <= 0:
+            continue
+        cost = float(h.get("cost") or 0)
+        price = float(h.get("week_end_price") or h.get("price") or cost)
+        cost_basis = round(shares * cost, 2)
+        unrealized = h.get("unrealized_pnl")
+        if unrealized is None and cost_basis > 0:
+            unrealized = round(shares * price - cost_basis, 2)
+        pct = h.get("unrealized_pct")
+        if pct is None and cost_basis > 0 and unrealized is not None:
+            pct = round(float(unrealized) / cost_basis * 100, 2)
+        holding_rows.append(
+            {
+                "code": h.get("code"),
+                "name": h.get("name"),
+                "shares": shares,
+                "cost": cost,
+                "price": price,
+                "cost_basis": cost_basis,
+                "unrealized_pnl": unrealized,
+                "unrealized_pnl_pct": pct,
+            }
+        )
+    unrealized_total = round(sum(float(h.get("unrealized_pnl") or 0) for h in holding_rows), 2)
+
+    wins = losses = flats = 0
+    for row in sell_rows:
+        if row.realized_pnl > 0.01:
+            wins += 1
+        elif row.realized_pnl < -0.01:
+            losses += 1
+        else:
+            flats += 1
+
+    return {
+        "week_start": ws,
+        "week_end": we,
+        "buys": buy_rows,
+        "sells": [r.to_dict() for r in week_sells],
+        "realized_pnl": round(sum(r.realized_pnl for r in week_sells), 2),
+        "buy_count": len(buy_rows),
+        "sell_count": len(week_sells),
+        "prior_sells": [r.to_dict() for r in sorted(prior_sells, key=lambda r: (r.date, r.at))],
+        "prior_realized_pnl": prior_realized,
+        "prior_sell_count": len(prior_sells),
+        "cumulative_realized_pnl": all_realized,
+        "cumulative_sell_count": len(sell_rows),
+        "holdings": holding_rows,
+        "unrealized_pnl": unrealized_total,
+        "total_pnl": round(all_realized + unrealized_total, 2),
+        "win_count": wins,
+        "loss_count": losses,
+        "flat_count": flats,
+    }
+
+
+def render_weekly_trade_pnl_markdown(detail: dict[str, Any]) -> str:
+    """Markdown: weekly trades + historical realized sells + current holdings float."""
+    buys = detail.get("buys") or []
+    sells = detail.get("sells") or []
+    prior_sells = detail.get("prior_sells") or []
+    holdings = detail.get("holdings") or []
+    if not buys and not sells and not prior_sells and not holdings:
+        return ""
+
+    lines: list[str] = ["## 📈 股票盈亏明细", ""]
+
+    if sells or buys:
+        lines.append("### 本周交易")
+        if sells:
+            lines.append("")
+            lines.append("**卖出（已实现）**")
+            for row in sells:
+                lines.append(f"- {format_sell_trade_line(row)}")
+            total = float(detail.get("realized_pnl") or 0)
+            sign = "+" if total >= 0 else ""
+            lines.append(f"- **本周卖出合计：** {sign}¥{total:,.2f}（{len(sells)} 笔）")
+        if buys:
+            lines.append("")
+            lines.append("**买入**")
+            for row in buys:
+                lines.append(f"- {format_weekly_buy_pnl_line(row)}")
+            held = [b for b in buys if b.get("status") == "held"]
+            if held:
+                float_total = round(sum(float(b.get("floating_pnl") or 0) for b in held), 2)
+                lines.append(f"- **本周买入持至周末浮盈浮亏：** {float_total:+,.2f}（{len(held)} 笔）")
+        lines.append("")
+
+    if prior_sells:
+        lines.append("### 历史卖出（本周之前 · 已实现）")
+        for row in prior_sells:
+            lines.append(f"- {format_sell_trade_line(row)}")
+        prior_total = float(detail.get("prior_realized_pnl") or 0)
+        sign = "+" if prior_total >= 0 else ""
+        lines.append(
+            f"- **历史已实现合计：** {sign}¥{prior_total:,.2f}（{len(prior_sells)} 笔）"
+        )
+        lines.append("")
+
+    if holdings:
+        lines.append("### 当前持股（浮盈浮亏 · 相对成本）")
+        for row in holdings:
+            lines.append(f"- {format_holding_trade_line(row)}")
+        unrealized = float(detail.get("unrealized_pnl") or 0)
+        lines.append(f"- **持仓浮盈浮亏合计：** {unrealized:+,.2f}（{len(holdings)} 只）")
+        lines.append("")
+
+    cumulative = detail.get("cumulative_realized_pnl")
+    total_pnl = detail.get("total_pnl")
+    if cumulative is not None or total_pnl is not None:
+        cum = float(cumulative or 0)
+        unreal = float(detail.get("unrealized_pnl") or 0)
+        wins = int(detail.get("win_count") or 0)
+        losses = int(detail.get("loss_count") or 0)
+        lines.append("### 累计总览")
+        lines.append(
+            f"- **历史已实现（含本周）** {cum:+,.2f}（卖出 {int(detail.get('cumulative_sell_count') or 0)} 笔"
+            f"{f' · {wins} 盈 / {losses} 亏' if wins or losses else ''}）"
+        )
+        lines.append(f"- **当前持股浮盈浮亏** {unreal:+,.2f}")
+        if total_pnl is not None:
+            lines.append(f"- **总收益（已实现 + 浮盈浮亏）** {float(total_pnl):+,.2f}")
+
+    return "\n".join(lines).strip()
+
+
 def format_holding_trade_line(row: dict[str, Any]) -> str:
     name = row.get("name") or row.get("code") or "?"
     code = row.get("code") or "?"

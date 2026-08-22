@@ -237,6 +237,32 @@ def generate_skill_learning(
             )
         )
 
+    try:
+        from agent_reach.daily_run.xueqiu_hit_outcomes import summarize_xueqiu_hit_outcomes
+
+        xq_stats = summarize_xueqiu_hit_outcomes()
+        if xq_stats.get("total", 0) >= 5:
+            hr = xq_stats.get("hit_rate", 0)
+            hr_pct = f"{hr:.0%}" if isinstance(hr, (int, float)) else "—"
+            action = (
+                "审视 macro_collector.portfolio_hot_stock_boost 是否过高"
+                if isinstance(hr, (int, float)) and hr < 0.4
+                else "将有效热榜模式写入 daily_run_skill「雪球热榜」章节"
+            )
+            items.append(
+                SkillLearningItem(
+                    title="雪球热榜命中经验",
+                    source="experience",
+                    summary=(
+                        f"近 {xq_stats.get('window_days', 30)} 日 "
+                        f"{xq_stats['total']} 条热榜结算，命中率 {hr_pct}"
+                    ),
+                    action=action,
+                )
+            )
+    except Exception:
+        pass
+
     close_jobs = sum(1 for m in manifests if m.get("job") == "close")
     if close_jobs < 3:
         items.append(

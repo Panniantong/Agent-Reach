@@ -48,11 +48,24 @@ class TestWeeklyDigest:
             "week_end": "2026-07-10",
             "hot_sectors": [{"sector": "半导体", "avg_change_pct": 2.1}],
             "sector_research": [{"label": "AI", "summary": "test"}],
+            "macro_signals": {
+                "hot_stocks": [{"name": "澜起科技", "symbol": "688008"}],
+                "xueqiu_exa_research": [{"label": "存储", "summary": "景气延续"}],
+            },
+            "watchlist_intel": {
+                "603986": {
+                    "name": "兆易创新",
+                    "announcements": [{"title": "业绩预告"}],
+                }
+            },
         }
         save_weekly_digest(report)
         loaded = load_weekly_digest()
         assert loaded is not None
         assert loaded["hot_sectors"][0]["sector"] == "半导体"
+        assert loaded["macro_signals"]["hot_stocks"][0]["name"] == "澜起科技"
+        assert loaded["watchlist_intel"]["603986"]["name"] == "兆易创新"
+        assert loaded["xueqiu_exa_research"][0]["label"] == "存储"
 
     def test_events_from_digest(self):
         events = _events_from_weekly_digest(

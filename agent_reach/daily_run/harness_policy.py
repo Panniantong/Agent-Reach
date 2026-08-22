@@ -1497,8 +1497,13 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
     cfg["schedule"] = schedule
 
     portfolio = dict(cfg.get("portfolio") or {})
+    original_portfolio = dict((settings.get("portfolio") or {}))
     portfolio["max_holdings"] = int(effective_flat["max_holdings"])
     portfolio["max_total_symbols"] = int(effective_flat["max_total_symbols"])
+    if "max_holdings" in original_portfolio:
+        portfolio["max_holdings"] = int(original_portfolio["max_holdings"])
+    if "max_total_symbols" in original_portfolio:
+        portfolio["max_total_symbols"] = int(original_portfolio["max_total_symbols"])
     cfg["portfolio"] = portfolio
 
     trading = dict(cfg.get("trading") or {})
@@ -1670,6 +1675,12 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
             harness_meta["injection_gate"] = injection_audit
     except Exception:
         pass
+
+    from agent_reach.daily_run.xueqiu_hit_candidate_policy import apply_xueqiu_hit_candidate_overlay
+
+    cfg, hit_candidate_meta = apply_xueqiu_hit_candidate_overlay(cfg)
+    if hit_candidate_meta:
+        harness_meta["xueqiu_hit_candidate_overlay"] = hit_candidate_meta
 
     if harness_meta:
         try:

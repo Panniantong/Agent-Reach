@@ -63,8 +63,25 @@ fi
 chmod +x "${REPO_ROOT}/scripts/daily-run-local-cron.sh"
 chmod +x "${REPO_ROOT}/scripts/60s-local-setup.sh"
 chmod +x "${REPO_ROOT}/scripts/60s-reboot-start.sh"
+chmod +x "${REPO_ROOT}/scripts/enable-team-first.sh"
 
 export PATH="${HOME}/.local/node/bin:${PATH}"
+
+for _arg in "$@"; do
+  if [ "$_arg" = "--team-first" ]; then
+    TEAM_FIRST=true
+    break
+  fi
+done
+
+if [ "${TEAM_FIRST:-false}" = "true" ]; then
+  echo "⏳ 启用 Team-First（8 专家 + Supervisor）..."
+  if "$PYTHON" -m agent_reach.cli daily-run configure team; then
+    echo "✅ Team-First 已写入 ~/.agent-reach/daily_run_settings.json"
+  else
+    echo "⚠️ Team-First 配置跳过（可稍后运行: bash scripts/enable-team-first.sh）"
+  fi
+fi
 
 echo "⏳ 部署本地 60s 热点 API（Node.js 本机，无需 Docker）..."
 if "$PYTHON" -m agent_reach.cli daily-run hot-news install --mode native; then
@@ -75,3 +92,5 @@ fi
 
 echo "✅ 本地 daily-run 环境就绪"
 echo "   下一步: ${PYTHON} -m agent_reach.cli daily-run schedule install"
+echo "   可选 Team-First: TEAM_FIRST=true bash scripts/daily-run-local-setup.sh"
+echo "   或: bash scripts/enable-team-first.sh"

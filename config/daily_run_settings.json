@@ -65,7 +65,16 @@
       "evidence_chain"
     ],
     "block_push_on_fail": true,
-    "allow_downgrade_on_missing_technical": true
+    "allow_downgrade_on_missing_technical": true,
+    "coherence_enabled": true
+  },
+
+  "report_quality_gate": {
+    "enabled": true,
+    "block_on_coherence_fail": false,
+    "strict_coherence_enabled": true,
+    "strict_workflows": ["morning", "close"],
+    "coherence_enabled": true
   },
 
   "data_audit": {
@@ -190,6 +199,10 @@
     "variance_materiality_cny": 500
   },
 
+  "close_portfolio": {
+    "pnl_attribution_enabled": true
+  },
+
   "finance_variance": {
     "enabled": true,
     "harness_evolve": true,
@@ -290,6 +303,7 @@
     "feishu_split_tables": true,
     "feishu_template_premarket": "orange",
     "feishu_template_intraday": "blue",
+    "feishu_template_midday": "blue",
     "feishu_template_close": "purple",
     "feishu_template_verify": "purple",
     "feishu_template_weekly": "blue",
@@ -340,6 +354,16 @@
     }
   },
 
+  "midday": {
+    "enabled": true,
+    "macro_refresh": true,
+    "mss_experts": false,
+    "llm_narrative": {
+      "enabled": true,
+      "planner": "deterministic"
+    }
+  },
+
   "week_forecast": {
     "enabled": true,
     "harness_evolve": true,
@@ -348,6 +372,7 @@
     "max_news_queries": 2,
     "close_review": true,
     "reuse_weekly_digest_exa": true,
+    "xueqiu_cookie_alert_enabled": true,
     "calibration_learning_rate": 0.15,
     "max_bias_pct": 3.0,
     "min_vol_scale": 0.6,
@@ -379,6 +404,10 @@
     "technical_max_score_delta": 12,
     "attach_to_snapshot": true,
     "attach_predict_days": 5,
+    "use_trade_calendar": true,
+    "dispersion_from_ohlc": true,
+    "holdout_days": 5,
+    "holdout_folds": 1,
     "local_files_only": false,
     "verbose": false,
     "log_errors": true
@@ -407,7 +436,7 @@
     "harness_evolve": true,
     "macro_veto_grid": [38, 40, 42, 45],
     "aggressive_entry_grid": [48, 50, 52, 55],
-    "default_objective": "excess_return",
+    "default_objective": "sharpe",
     "mss_weight_grid": [
       {"fx": 0.3, "flow": 0.3, "global": 0.2, "sentiment": 0.2},
       {"fx": 0.25, "flow": 0.35, "global": 0.2, "sentiment": 0.2},
@@ -429,19 +458,28 @@
     ],
     "parallel": true,
     "channel_enrich": true,
+    "eastmoney_intent_enabled": true,
+    "eastmoney_news_limit": 5,
+    "eastmoney_screen_min_change_pct": 3.0,
+    "eastmoney_screen_limit": 5,
+    "eastmoney_macro_enabled": true,
     "exa_research_on_close": true,
     "max_exa_queries": 3,
     "exa_timeout": 45,
-    "max_exa_queries_per_expert": 1
+    "max_exa_queries_per_expert": 1,
+    "pipeline_enabled": true,
+    "transforms": ["ensure_mss_breakdown"],
+    "filters": ["require_price"]
   },
 
   "team": {
-    "enabled": false,
+    "enabled": true,
     "mss_experts": true,
     "morning_mss_experts": true,
     "intraday_mss_experts": true,
     "close_mss_experts": true,
     "mode": "full_parallel",
+    "lite_on_single_symbol": true,
     "experts": [
       "fundamental",
       "technical",
@@ -454,14 +492,56 @@
     ],
     "parallel": true,
     "supervisor": true,
-    "morning_team_first": false,
-    "close_team_first": false,
-    "intraday_experts": false
+    "morning_team_first": true,
+    "close_team_first": true,
+    "intraday_team_first": true,
+    "intraday_experts": true,
+    "counter_thesis_downgrade": true,
+    "counter_thesis_llm": {
+      "enabled": false,
+      "provider": "auto",
+      "model": null,
+      "timeout_seconds": 45,
+      "max_output_tokens": 280,
+      "max_factors": 4
+    }
   },
 
   "macro_collector": {
     "enabled": true,
-    "sentiment_post_limit": 5
+    "sentiment_post_limit": 5,
+    "hot_stock_limit": 10,
+    "hot_watch_stock_limit": 10,
+    "fetch_hot_watch_stocks": true,
+    "match_portfolio_hot_stocks": true,
+    "match_portfolio_hot_posts": true,
+    "intraday_hot_cross_enabled": true,
+    "intraday_hot_cross_ttl_seconds": 600,
+    "fetch_symbol_sentiment": true,
+    "symbol_sentiment_symbol_limit": 5,
+    "symbol_sentiment_post_limit": 3,
+    "xueqiu_exa_research_enabled": true,
+    "xueqiu_exa_search_research_enabled": true,
+    "xueqiu_exa_max_queries": 2,
+    "portfolio_hot_stock_boost": 2,
+    "portfolio_hot_post_boost": 1,
+    "intraday_hot_stock_delta_enabled": true,
+    "intraday_exa_new_hot_enabled": true,
+    "hot_topic_dedup_enabled": true,
+    "hot_topic_dedup_threshold": 0.86,
+    "hot_topic_dedup_cross_source": true,
+    "xueqiu_hit_outcomes_enabled": true,
+    "xueqiu_hit_harness_evolve": true,
+    "xueqiu_hit_candidate_overlay_enabled": true,
+    "xueqiu_hit_low_rate": 0.4,
+    "xueqiu_hit_high_rate": 0.6,
+    "xueqiu_hit_overlay_min_samples": 3,
+    "xueqiu_hit_overlay_min_misses": 3,
+    "xueqiu_hit_overlay_min_hits": 3,
+    "xueqiu_stock_search_enabled": true,
+    "xueqiu_stock_search_limit": 3,
+    "xueqiu_stock_search_query_limit": 2,
+    "xueqiu_stock_search_per_query": 2
   },
 
   "hot_news": {
@@ -491,6 +571,8 @@
     "symbols_mode": "all",
     "close_symbols_mode": "holdings",
     "intraday_symbols_mode": "all",
+    "intraday_parallel": true,
+    "intraday_parallel_workers": 2,
     "intraday_gc_between_symbols": true,
     "symbol_push_mode": "merge_by_category",
     "symbol_push_interval_seconds": 0.5,
@@ -517,7 +599,11 @@
   "market_review": {
     "enabled": true,
     "persist": true,
-    "fetch_timeout_seconds": 15
+    "fetch_timeout_seconds": 15,
+    "emotion_mss_fusion_enabled": true,
+    "macro_fallback_enabled": true,
+    "xueqiu_breadth_fallback": true,
+    "akshare_limit_pool_fallback": true
   },
 
   "redfox": {
@@ -566,6 +652,21 @@
     "ttl_seconds": 86400
   },
 
+  "intent": {
+    "enabled": true,
+    "ttl_seconds": 600,
+    "query_ttl_seconds": 45,
+    "ttl_by_intent": {
+      "news-search": 600,
+      "stock-screen": 300,
+      "query": 45,
+      "exa-search": 3600
+    },
+    "rate_limit_enabled": true,
+    "rate_limit_max": 30,
+    "rate_limit_window_seconds": 300
+  },
+
   "portfolio": {
     "auto_adjust_enabled": true,
     "mode": "paper",
@@ -583,6 +684,19 @@
     "hot_topic_adjust_enabled": true,
     "hot_topic_remove_change_pct": -2.0,
     "hot_topic_fetch_if_missing": true,
+    "announcement_intel_enabled": true,
+    "announcement_lookback_days": 7,
+    "announcement_fetch_limit": 3,
+    "news_fetch_limit": 3,
+    "announcement_score_boost": 3,
+    "news_score_boost": 1,
+    "negative_announcement_penalty": -4,
+    "negative_news_penalty": -2,
+    "negative_intel_remove_enabled": true,
+    "intel_harness_evolve": true,
+    "intel_symbol_limit": 8,
+    "intel_include_candidates": true,
+    "intel_candidate_limit": 5,
     "candidates": [
       {"code": "603986", "name": "兆易创新", "keywords": ["兆易", "存储", "芯片", "DDR", "半导体"]},
       {"code": "000725", "name": "京东方A", "keywords": ["京东方", "面板", "OLED", "显示"]},
@@ -594,6 +708,10 @@
       {"code": "688981", "name": "中芯国际", "keywords": ["中芯", "晶圆", "半导体"]}
     ],
     "weekly_candidates_enabled": true,
+    "xueqiu_hot_candidates_enabled": true,
+    "xueqiu_search_candidates_enabled": true,
+    "eastmoney_screen_candidates_enabled": true,
+    "eastmoney_screen_per_sector": 2,
     "weekly_candidates_min": 5,
     "weekly_candidates_max": 10,
     "weekly_hot_sector_limit": 10,
@@ -729,6 +847,7 @@
     "jobs": {
       "morning": true,
       "close": true,
+      "intraday": {"planner": "deterministic"},
       "weekly": {"planner": "deterministic"},
       "forecast": {"planner": "deterministic"}
     }

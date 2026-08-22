@@ -9,6 +9,8 @@ from typing import Any, Optional
 
 from agent_reach.daily_run.trade_calendar import today_shanghai
 
+_CACHE_IO_LOCK = __import__("threading").Lock()
+
 
 def cache_dir() -> Path:
     return Path.home() / ".agent-reach" / "daily_run" / "cache"
@@ -53,19 +55,20 @@ def merge_technicals(
 
 
 def save_daily_cache(data: dict[str, Any], d: Optional[Any] = None) -> Path:
-    cache_dir().mkdir(parents=True, exist_ok=True)
-    path = daily_cache_path(d)
-    existing = load_daily_cache(d)
-    payload = dict(data)
-    incoming_technicals = payload.pop("technicals", None)
-    if isinstance(incoming_technicals, dict):
-        existing["technicals"] = merge_technicals(
-            existing.get("technicals") or {},
-            incoming_technicals,
-        )
-    existing.update(payload)
-    path.write_text(json.dumps(existing, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return path
+    with _CACHE_IO_LOCK:
+        cache_dir().mkdir(parents=True, exist_ok=True)
+        path = daily_cache_path(d)
+        existing = load_daily_cache(d)
+        payload = dict(data)
+        incoming_technicals = payload.pop("technicals", None)
+        if isinstance(incoming_technicals, dict):
+            existing["technicals"] = merge_technicals(
+                existing.get("technicals") or {},
+                incoming_technicals,
+            )
+        existing.update(payload)
+        path.write_text(json.dumps(existing, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return path
 
 
 def last_snapshot_path() -> Path:

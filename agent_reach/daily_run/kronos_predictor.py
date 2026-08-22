@@ -209,6 +209,92 @@ def _direction_from_change(chg: float) -> str:
     return "flat"
 
 
+def _direction_arrow(direction: str) -> str:
+    return {"up": "↑", "down": "↓", "flat": "→"}.get(str(direction or ""), "→")
+
+
+def resolve_kronos_trading_days(
+    count: int,
+    *,
+    settings: Optional[dict[str, Any]] = None,
+    as_of: Optional[date] = None,
+) -> list[date]:
+    """Next ``count`` A-share trading days after ``as_of`` (skips weekends/holidays)."""
+    from agent_reach.daily_run.trade_calendar import next_trading_day, today_shanghai
+
+    cfg = kronos_cfg(settings)
+    if cfg.get("use_trade_calendar", True) is False:
+        base = as_of or today_shanghai()
+        return [base + timedelta(days=i) for i in range(1, max(count, 1) + 1)]
+
+    cursor = as_of or today_shanghai()
+    days: list[date] = []
+    while len(days) < max(count, 1):
+        cursor = next_trading_day(cursor, settings=settings)
+        days.append(cursor)
+    return days
+
+
+def _confidence_band_from_prediction(
+    pred_df: Any,
+    *,
+    anchor: float,
+    daily_changes: list[float],
+    settings: Optional[dict[str, Any]] = None,
+) -> tuple[list[float], str]:
+    cfg = kronos_cfg(settings)
+    if cfg.get("dispersion_from_ohlc", True) is not False and anchor:
+        try:
+            last_low = float(pred_df["low"].astype(float).iloc[-1])
+            last_high = float(pred_df["high"].astype(float).iloc[-1])
+            cum_lo = (last_low - anchor) / anchor * 100
+            cum_hi = (last_high - anchor) / anchor * 100
+            lo, hi = sorted((cum_lo, cum_hi))
+            return [round(lo, 2), round(hi, 2)], "ohlc_cumulative"
+        except (KeyError, TypeError, ValueError, IndexError):
+            pass
+    lo = min(daily_changes) if daily_changes else 0.0
+    hi = max(daily_changes) if daily_changes else 0.0
+    return [round(lo, 2), round(hi, 2)], "daily_change"
+
+
+def render_kronos_path_markdown(
+    kronos: dict[str, Any],
+    *,
+    max_days: int = 5,
+) -> str:
+    """Compact virtual-K summary for Feishu cards (direction arrows + OHLC)."""
+    if not kronos or not kronos.get("available"):
+        return ""
+    dir_cn = {"up": "↑看涨", "down": "↓看跌", "flat": "→震荡"}
+    lines: list[str] = []
+    days = kronos.get("days") or {}
+    spark: list[str] = []
+    for ds in sorted(days.keys())[:max_days]:
+        day = days[ds]
+        arrow = _direction_arrow(day.get("direction"))
+        if all(day.get(k) is not None for k in ("open", "high", "low", "close")):
+            spark.append(
+                f"{ds[5:]} {arrow} "
+                f"O{float(day['open']):.1f}/H{float(day['high']):.1f}/"
+                f"L{float(day['low']):.1f}/C{float(day['close']):.1f}"
+            )
+        else:
+            spark.append(f"{ds[5:]} {arrow} {float(day.get('change_pct') or 0):+.1f}%")
+    if spark:
+        lines.append("**Kronos 虚 K 路径：** " + " · ".join(spark))
+    cum = kronos.get("cum_change_pct")
+    band = kronos.get("confidence_band") or []
+    dir_nd = kronos.get("direction_nd", "flat")
+    band_kind = kronos.get("band_kind") or "daily_change"
+    band_s = f"[{band[0]:+.1f}%, {band[1]:+.1f}%]" if len(band) == 2 else ""
+    lines.append(
+        f"_{dir_cn.get(dir_nd, '→震荡')} 累计 {float(cum or 0):+.1f}% {band_s} "
+        f"(sample={kronos.get('sample_count', 1)}, band={band_kind})_"
+    )
+    return "\n".join(lines)
+
+
 def _future_timestamps(trading_days: list[date]) -> Any:
     import pandas as pd
 
@@ -268,6 +354,95 @@ def save_kronos_daily_cache(
     return path
 
 
+def predict_from_ohlcv_frames(
+    x_df: Any,
+    x_timestamp: Any,
+    trading_days: list[date],
+    *,
+    base_price: Optional[float] = None,
+    settings: Optional[dict[str, Any]] = None,
+    code: str = "",
+) -> Optional[dict[str, Any]]:
+    """Run Kronos on pre-sliced OHLCV frames (used by live forecast and hold-out backtest)."""
+    cfg = kronos_cfg(settings)
+    if not trading_days:
+        return None
+
+    pred_window = int(cfg.get("predict_window", 10))
+    pred_len = min(len(trading_days), pred_window)
+    trading_days = trading_days[:pred_len]
+    if len(x_df) < min(int(cfg.get("lookback_window", 90)) // 2, 30):
+        return None
+
+    try:
+        y_timestamp = _future_timestamps(trading_days)
+        predictor = get_kronos_predictor(settings)
+        pred_df = predictor.predict(
+            df=x_df,
+            x_timestamp=x_timestamp,
+            y_timestamp=y_timestamp,
+            pred_len=pred_len,
+            T=float(cfg.get("inference_T", 0.6)),
+            top_p=float(cfg.get("inference_top_p", 0.9)),
+            top_k=int(cfg.get("inference_top_k", 0)),
+            sample_count=int(cfg.get("inference_sample_count", 5)),
+            verbose=bool(cfg.get("verbose", False)),
+        )
+
+        anchor = float(base_price if base_price is not None else x_df["close"].iloc[-1])
+        days: dict[str, Any] = {}
+        closes = pred_df["close"].astype(float).tolist()
+        prev = anchor
+        changes: list[float] = []
+        for i, day in enumerate(trading_days):
+            close_px = float(closes[i])
+            chg_pct = (close_px - prev) / prev * 100 if prev else 0.0
+            changes.append(chg_pct)
+            day_payload: dict[str, Any] = {
+                "close": round(close_px, 3),
+                "change_pct": round(chg_pct, 2),
+                "direction": _direction_from_change(chg_pct),
+            }
+            for col in ("open", "high", "low", "volume", "amount"):
+                if col in pred_df.columns:
+                    val = float(pred_df[col].iloc[i])
+                    day_payload[col] = round(val, 3 if col not in {"volume", "amount"} else 0)
+            days[day.isoformat()] = day_payload
+            prev = close_px
+
+        cum = (closes[-1] - anchor) / anchor * 100 if anchor else 0.0
+        band, band_kind = _confidence_band_from_prediction(
+            pred_df,
+            anchor=anchor,
+            daily_changes=changes,
+            settings=settings,
+        )
+        sym = normalize_symbol(code)[0] if code else ""
+        return {
+            "available": True,
+            "backend": str(cfg.get("predictor_model", "NeoQuasar/Kronos-small")),
+            "code": sym,
+            "lookback_used": len(x_df),
+            "predict_window": pred_len,
+            "direction_nd": _direction_from_change(cum),
+            "cum_change_pct": round(cum, 2),
+            "confidence_band": band,
+            "band_kind": band_kind,
+            "sample_count": int(cfg.get("inference_sample_count", 5)),
+            "days": days,
+        }
+    except (KronosError, OSError, ValueError, RuntimeError) as exc:
+        if cfg.get("log_errors", True):
+            from loguru import logger
+
+            logger.warning("Kronos predict_from_ohlcv_frames failed: {}", exc)
+        return {
+            "available": False,
+            "code": normalize_symbol(code)[0] if code else "",
+            "error": str(exc),
+        }
+
+
 def predict_symbol_paths(
     code: str,
     trading_days: list[date],
@@ -304,52 +479,16 @@ def predict_symbol_paths(
         use_len = min(len(df), lookback)
         x_df = df.iloc[-use_len:][["open", "high", "low", "close", "volume", "amount"]]
         x_timestamp = df.iloc[-use_len:]["timestamps"]
-        y_timestamp = _future_timestamps(trading_days)
-
-        predictor = get_kronos_predictor(settings)
-        pred_df = predictor.predict(
-            df=x_df,
-            x_timestamp=x_timestamp,
-            y_timestamp=y_timestamp,
-            pred_len=pred_len,
-            T=float(cfg.get("inference_T", 0.6)),
-            top_p=float(cfg.get("inference_top_p", 0.9)),
-            top_k=int(cfg.get("inference_top_k", 0)),
-            sample_count=int(cfg.get("inference_sample_count", 5)),
-            verbose=bool(cfg.get("verbose", False)),
+        result = predict_from_ohlcv_frames(
+            x_df,
+            x_timestamp,
+            trading_days,
+            base_price=base_price or float(df["close"].iloc[-1]),
+            settings=settings,
+            code=code,
         )
-
-        anchor = float(base_price or df["close"].iloc[-1])
-        days: dict[str, Any] = {}
-        closes = pred_df["close"].astype(float).tolist()
-        prev = anchor
-        changes: list[float] = []
-        for i, day in enumerate(trading_days):
-            close_px = float(closes[i])
-            chg_pct = (close_px - prev) / prev * 100 if prev else 0.0
-            changes.append(chg_pct)
-            days[day.isoformat()] = {
-                "close": round(close_px, 3),
-                "change_pct": round(chg_pct, 2),
-                "direction": _direction_from_change(chg_pct),
-            }
-            prev = close_px
-
-        cum = (closes[-1] - anchor) / anchor * 100 if anchor else 0.0
-        lo = min(changes) if changes else 0.0
-        hi = max(changes) if changes else 0.0
-        result = {
-            "available": True,
-            "backend": str(cfg.get("predictor_model", "NeoQuasar/Kronos-small")),
-            "code": normalize_symbol(code)[0],
-            "lookback_used": use_len,
-            "predict_window": pred_len,
-            "direction_nd": _direction_from_change(cum),
-            "cum_change_pct": round(cum, 2),
-            "confidence_band": [round(lo, 2), round(hi, 2)],
-            "sample_count": int(cfg.get("inference_sample_count", 5)),
-            "days": days,
-        }
+        if not result or not result.get("available"):
+            return result
         if cfg.get("daily_cache", True) is not False:
             save_kronos_daily_cache(code, trading_days, result, settings=settings)
         return result
@@ -382,8 +521,7 @@ def attach_kronos_to_snapshot(
 
     if trading_days is None:
         n = int(cfg.get("attach_predict_days", 5))
-        start = date.today()
-        trading_days = [start + timedelta(days=i) for i in range(1, n + 1)]
+        trading_days = resolve_kronos_trading_days(n, settings=settings)
 
     result = predict_symbol_paths(
         code,

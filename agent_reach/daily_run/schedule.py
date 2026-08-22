@@ -39,8 +39,8 @@ INTRADAY_SCAN_TIMES: list[tuple[str, str]] = [
     ("36", "14"),  # 14:36 S14
     ("0", "15"),   # 15:00 S15
 ]
-# S1 = 07:00 premarket intraday; S2 = 08:00 morning job; S3–S15 = intraday cron slots above
-INTRADAY_MAX_SCANS = 1 + 1 + len(INTRADAY_SCAN_TIMES)
+# 16 scans/day: S1 premarket 07:00 + S2 morning 08:00 + midday 12:30 + S3–S15 session
+INTRADAY_MAX_SCANS = 1 + 1 + 1 + len(INTRADAY_SCAN_TIMES)
 
 
 @dataclass
@@ -85,6 +85,7 @@ def default_entries() -> list[CronEntry]:
     entries = [
         CronEntry("0", "7", "1-5", _cron_run_cmd("intraday"), "daily-run 盘前 S1 7:00"),
         CronEntry("0", "8", "1-5", _cron_run_cmd("morning"), "daily-run 早盘 8:00"),
+        CronEntry("30", "12", "1-5", _cron_run_cmd("midday"), "daily-run 午盘分析 12:30"),
     ]
     for i, (minute, hour) in enumerate(INTRADAY_SCAN_TIMES, start=3):
         entries.append(
@@ -201,10 +202,12 @@ def run_scheduled(
 
     if job not in ("weekly", "forecast"):
         trading_ok, trading_reason = is_trading_day(settings=settings)
-        if not trading_ok:
+        if not trading_ok and not force:
             result = {"job": job, "skipped": True, "reason": trading_reason}
             save_run_manifest(job, result, duration_ms=0)
             return result
+        if not trading_ok and force:
+            logger.warning("schedule {}: --force 绕过交易日检查（{}）", job, trading_reason)
 
     from agent_reach.daily_run.run_guard import (
         JobBusyError,
@@ -493,6 +496,48 @@ def _run_job_body(
             }
             feishu = run_result.get("feishu")
 
+    elif job == "midday":
+        from agent_reach.daily_run.midday import midday_cfg, run_midday
+
+        with StepTimer("schedule.midday"):
+            if not midday_cfg(settings)["enabled"]:
+                result = {"job": job, "skipped": True, "reason": "midday disabled"}
+                feishu = None
+            else:
+                from agent_reach.daily_run.intraday import load_state
+
+                state = load_state()
+                if len(state.scans) >= INTRADAY_MAX_SCANS:
+                    result = {
+                        "job": job,
+                        "skipped": True,
+                        "reason": f"今日扫描已达 {INTRADAY_MAX_SCANS} 次上限",
+                    }
+                    feishu = None
+                else:
+                    snap, path = build_and_save(
+                        report_type="midday",
+                        config=config,
+                        settings=settings,
+                        enrich_level="quotes",
+                    )
+                    run_result = run_midday(
+                        snap,
+                        settings=settings,
+                        doctor_channels=doctor,
+                        push=push,
+                        config=config,
+                    )
+                    result = {
+                        "job": job,
+                        "snapshot_path": str(path),
+                        "result": run_result,
+                        "scan": run_result.get("scan"),
+                    }
+                    feishu = run_result.get("feishu")
+                    if run_result.get("push_error"):
+                        result["push_error"] = run_result["push_error"]
+
     elif job == "intraday":
         from agent_reach.daily_run.intraday import load_state, run_intraday, should_evaluate_trade
 
@@ -662,6 +707,6 @@ def _run_job_body(
             feishu = run_result.get("feishu")
 
     else:
-        raise ValueError(f"未知定时任务：{job}，可选 morning | intraday | close | weekly | forecast")
+        raise ValueError(f"未知定时任务：{job}，可选 morning | midday | intraday | close | weekly | forecast")
 
     return result, feishu

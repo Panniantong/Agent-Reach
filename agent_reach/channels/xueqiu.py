@@ -244,6 +244,126 @@ class XueqiuChannel(Channel):
             )
         return results
 
+    def get_stock_timeline(
+        self,
+        symbol: str,
+        *,
+        source: str = "公告",
+        limit: int = 10,
+    ) -> list:
+        """Fetch stock timeline items (announcements or news) from Xueqiu.
+
+        Args:
+            symbol: e.g. SH688008
+            source: ``公告`` for announcements, ``自选股新闻`` for news feed
+            limit: max items (up to 20)
+
+        Returns list of dicts: id, title, text, url, created_at, source
+        """
+        params = urllib.parse.urlencode(
+            {
+                "symbol": symbol,
+                "symbol_id": symbol,
+                "source": source,
+                "count": min(max(int(limit), 1), 20),
+                "page": 1,
+                "sort": "alpha",
+                "comment": "0",
+                "hl": "0",
+            }
+        )
+        urls = (
+            f"https://api.xueqiu.com/statuses/stock_timeline.json?{params}",
+            f"https://xueqiu.com/statuses/stock_timeline.json?{params}",
+        )
+        data: dict[str, Any] = {}
+        last_exc: Exception | None = None
+        for url in urls:
+            try:
+                data = _get_json(url)
+                break
+            except Exception as exc:
+                last_exc = exc
+                continue
+        if not data and last_exc is not None:
+            raise last_exc
+
+        items = data.get("list") or []
+        results: list[dict[str, Any]] = []
+        for item in items[:limit]:
+            if not isinstance(item, dict):
+                continue
+            text = _strip_html(str(item.get("description") or item.get("text") or ""))
+            title = str(item.get("title") or "").strip() or text[:60]
+            target = str(item.get("target") or "").strip()
+            results.append(
+                {
+                    "id": item.get("id"),
+                    "title": title,
+                    "text": text[:240],
+                    "url": f"https://xueqiu.com{target}" if target else "",
+                    "created_at": item.get("created_at"),
+                    "source": source,
+                }
+            )
+        return results
+
+    def get_stock_announcements(self, symbol: str, *, limit: int = 5) -> list:
+        """Recent company announcements for one symbol."""
+        return self.get_stock_timeline(symbol, source="公告", limit=limit)
+
+    def get_stock_news(self, symbol: str, *, limit: int = 5) -> list:
+        """Recent stock news feed items for one symbol."""
+        return self.get_stock_timeline(symbol, source="自选股新闻", limit=limit)
+
+    def search_symbol_posts(
+        self,
+        symbol: str,
+        *,
+        limit: int = 5,
+        sort: str = "time",
+        source: str = "all",
+    ) -> list:
+        """Fetch recent discussion posts for one stock symbol (e.g. SH688008).
+
+        Returns list of dicts: id, title, text, author, likes, url, created_at
+        """
+        params = urllib.parse.urlencode(
+            {
+                "symbol": symbol,
+                "count": min(max(int(limit), 1), 20),
+                "page": 1,
+                "comment": "0",
+                "hl": "0",
+                "source": source,
+                "sort": sort,
+                "q_type": "",
+                "type": "11,12",
+            }
+        )
+        data = _get_json(f"https://xueqiu.com/query/v1/symbol/search/status.json?{params}")
+        items = data.get("list") or []
+        results: list[dict[str, Any]] = []
+        for item in items[:limit]:
+            if not isinstance(item, dict):
+                continue
+            user = item.get("user") or {}
+            text = _strip_html(str(item.get("text") or item.get("description") or ""))
+            title = str(item.get("title") or "").strip()
+            target = str(item.get("target") or "").strip()
+            results.append(
+                {
+                    "id": item.get("id", 0),
+                    "title": title,
+                    "text": text[:200],
+                    "author": user.get("screen_name", ""),
+                    "likes": item.get("like_count", 0),
+                    "url": f"https://xueqiu.com{target}" if target else "",
+                    "created_at": item.get("created_at"),
+                }
+            )
+        return results
+
     def get_hot_posts(self, limit: int = 20) -> list:
         """获取雪球热门帖子。
 

@@ -39,6 +39,7 @@ def _objective_fn(name: str) -> Callable[[BacktestResult], float]:
         "excess_return": lambda r: r.metrics.excess_return,
         "total_return": lambda r: r.metrics.total_return,
         "win_rate": lambda r: r.metrics.win_rate,
+        "sharpe": lambda r: r.metrics.sharpe_ratio,
         "sharpe_proxy": lambda r: (
             r.metrics.total_return / r.metrics.max_drawdown
             if r.metrics.max_drawdown > 0
@@ -48,6 +49,17 @@ def _objective_fn(name: str) -> Callable[[BacktestResult], float]:
     if name not in objectives:
         raise ValueError(f"未知 objective: {name}，可选 {list(objectives)}")
     return objectives[name]
+
+
+def resolve_optimize_objective(
+    objective: Optional[str] = None,
+    settings: Optional[dict[str, Any]] = None,
+) -> str:
+    """Resolve objective name (CLI override → settings.optimizer.default_objective)."""
+    if objective:
+        return str(objective)
+    cfg = settings or load_settings()
+    return str((cfg.get("optimizer") or {}).get("default_objective") or "sharpe")
 
 
 def _history_has_factors(history: list[dict[str, Any]]) -> bool:
@@ -72,7 +84,7 @@ def grid_search_optimize(
     history: list[dict[str, Any]],
     settings: Optional[dict[str, Any]] = None,
     *,
-    objective: str = "excess_return",
+    objective: Optional[str] = None,
 ) -> OptimizeResult:
     """Grid search macro_veto / aggressive_entry and optionally mss_weights."""
     cfg = settings or load_settings()
@@ -87,6 +99,7 @@ def grid_search_optimize(
         {"fx": 0.35, "flow": 0.25, "global": 0.2, "sentiment": 0.2},
     ]
 
+    objective = resolve_optimize_objective(objective, cfg)
     score_fn = _objective_fn(objective)
     initial_capital = float(backtest_cfg.get("default_initial_capital", 100_000))
     commission = float(backtest_cfg.get("commission_rate", 0.0015))
@@ -196,6 +209,7 @@ def render_optimize_markdown(result: OptimizeResult) -> str:
         f"| 超额收益 | {m.get('excess_return', 0):.2%} |",
         f"| 最大回撤 | {m.get('max_drawdown', 0):.2%} |",
         f"| 胜率 | {m.get('win_rate', 0):.1%} |",
+        f"| Sharpe | {m.get('sharpe_ratio', 0):.2f} |",
     ]
     weights = p.get("mss_weights")
     if isinstance(weights, dict) and weights:

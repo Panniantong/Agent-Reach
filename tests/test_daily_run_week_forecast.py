@@ -14,6 +14,7 @@ from agent_reach.daily_run.week_forecast import (
     next_trading_week_range,
     persist_week_forecast,
     render_forecast_markdown,
+    render_forecast_sections,
     save_calibration,
 )
 from agent_reach.daily_run.week_forecast_tracker import (
@@ -60,7 +61,16 @@ class TestWeekForecast:
 
     @patch("agent_reach.daily_run.week_forecast.run_news_research", return_value=[])
     @patch("agent_reach.daily_run.week_forecast.list_trading_days")
-    def test_generate_week_forecast(self, mock_days, mock_news, snapshot, portfolio):
+    @patch(
+        "agent_reach.daily_run.watchlist_intel.collect_watchlist_intel",
+        return_value={
+            "603986": {
+                "name": "兆易创新",
+                "news": [{"title": "存储景气"}],
+            }
+        },
+    )
+    def test_generate_week_forecast(self, mock_intel, mock_days, mock_news, snapshot, portfolio):
         mock_days.return_value = [
             date(2026, 7, 13),
             date(2026, 7, 14),
@@ -75,9 +85,79 @@ class TestWeekForecast:
         assert len(forecast.symbols) == 2
         assert "688008" in forecast.symbols
         assert "603986" in forecast.symbols
+        assert forecast.watchlist_intel["603986"]["name"] == "兆易创新"
+        assert forecast.to_dict()["watchlist_intel"]["603986"]["name"] == "兆易创新"
         md = render_forecast_markdown(forecast)
         assert "下周预测" in md or "预测周期" in md
         assert "澜起科技" in md
+
+    @patch("agent_reach.daily_run.week_forecast.run_news_research", return_value=[])
+    @patch("agent_reach.daily_run.week_forecast.list_trading_days")
+    @patch("agent_reach.daily_run.weekly_digest.load_weekly_digest")
+    def test_forecast_reuses_digest_exa(
+        self,
+        mock_digest,
+        mock_days,
+        mock_news,
+        snapshot,
+        portfolio,
+    ):
+        mock_days.return_value = [date(2026, 7, 13), date(2026, 7, 14)]
+        mock_digest.return_value = {
+            "week_end": "2026-07-10",
+            "sector_research": [{"label": "半导体", "summary": "景气"}],
+            "xueqiu_exa_research": [
+                {"label": "存储链", "summary": "Exa 摘要", "success": True},
+            ],
+        }
+        with patch(
+            "agent_reach.daily_run.macro_collector.fetch_xueqiu_hot_signals",
+            return_value={"hot_stocks": []},
+        ) as mock_fetch:
+            forecast = generate_week_forecast(
+                snapshot,
+                {"week_forecast": {"exa_news_research": False, "reuse_weekly_digest_exa": True}},
+                as_of=date(2026, 7, 12),
+                portfolio=portfolio,
+            )
+        mock_fetch.assert_called_once()
+        assert mock_fetch.call_args.kwargs.get("enrich_extras") is False
+        assert forecast.macro_signals.get("xueqiu_exa_research")
+        assert any(r.get("from_digest") for r in forecast.news_research)
+
+    @patch("agent_reach.daily_run.week_forecast.run_news_research", return_value=[])
+    @patch("agent_reach.daily_run.week_forecast.list_trading_days")
+    @patch("agent_reach.daily_run.weekly_digest.load_weekly_digest")
+    def test_forecast_reuses_digest_watchlist_intel(
+        self,
+        mock_digest,
+        mock_days,
+        mock_news,
+        snapshot,
+        portfolio,
+    ):
+        mock_days.return_value = [date(2026, 7, 13), date(2026, 7, 14)]
+        mock_digest.return_value = {
+            "week_end": "2026-07-10",
+            "watchlist_intel": {
+                "603986": {
+                    "name": "兆易创新",
+                    "news": [{"title": "存储景气"}],
+                }
+            },
+        }
+        snap = dict(snapshot)
+        snap.pop("watchlist_intel", None)
+        forecast = generate_week_forecast(
+            snap,
+            {"week_forecast": {"exa_news_research": False}},
+            as_of=date(2026, 7, 12),
+            portfolio=portfolio,
+        )
+        assert forecast.watchlist_intel["603986"]["name"] == "兆易创新"
+        sections = render_forecast_sections(forecast)
+        labels = [s.label for s in sections]
+        assert "观察池情报" in labels
 
     @patch("agent_reach.daily_run.week_forecast.run_news_research", return_value=[])
     @patch("agent_reach.daily_run.week_forecast.list_trading_days")

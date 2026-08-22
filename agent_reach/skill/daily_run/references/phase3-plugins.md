@@ -27,6 +27,7 @@ run_data_audit → collect/enrich snapshot
 |------|----------|----------|
 | `lite_parallel` | 单标的轻量分析 | 基本面 + 技术 + 量化 + 风控 + identifier |
 | `full_parallel` | 多标的对比 / 验证复盘 / 股票池 / 高意图串联 | **全部 8 位** |
+| `auto` | `lite_on_single_symbol=true` 且 snapshot 仅单 code | 自动 lite / full |
 
 upstream 触发词（对比、验证、复盘、冲突、股票池、筛选、审计…）→ daily-run 对应：`morning` / `close` / `verify` / `weekly` 工作流。配置项 `team.mode` 默认 `full_parallel`。
 
@@ -74,16 +75,17 @@ python3 -m agent_reach.cli daily-run plugins run -i snapshot.json --names macro,
     "experts": ["fundamental", "technical", "quant", "risk", "macro", "industry", "sentiment", "identifier"],
     "morning_team_first": true,
     "close_team_first": true,
-    "morning_experts": true,
-    "close_experts": true,
-    "mss_experts": true
+    "intraday_team_first": true,
+    "intraday_experts": true,
+    "counter_thesis_downgrade": true,
   }
 }
 ```
 
-- `team.enabled=false` 时仍可用 `mss_experts` 跑 technical/quant/risk 打分（不渲染 8 专家卡片）
+- `team.enabled=false` 时仍可用 `mss_experts` 跑 technical/quant/risk 打分（不渲染 8 专家卡片）；repo 默认 **已启用** Team-First
 - `morning_experts` / `close_experts` 控制各工作流是否跑全专家 + 飞书专家面板
 - 用户覆盖：`~/.agent-reach/daily_run_settings.json`
+- 一键启用 Team-First：`bash scripts/enable-team-first.sh` 或 `python3 -m agent_reach.cli daily-run configure team`
 
 ### 插件系统对比
 
@@ -100,9 +102,11 @@ python3 -m agent_reach.cli daily-run plugins run -i snapshot.json --names macro,
 
 ```bash
 agent-reach daily-run optimize -i config/daily_run_history.example.json
-agent-reach daily-run optimize -i config/daily_run_history_factors.example.json --objective sharpe_proxy
+agent-reach daily-run optimize -i config/daily_run_history_factors.example.json --objective sharpe
 agent-reach daily-run optimize -i history.json --save --push
 ```
+
+默认 objective 来自 `optimizer.default_objective`（repo 默认 **`sharpe`**）。也可显式 `--objective sharpe_proxy|excess_return|total_return|win_rate`。
 
 优化维度：
 - `macro_veto` × `aggressive_entry` 阈值网格
@@ -110,7 +114,7 @@ agent-reach daily-run optimize -i history.json --save --push
 
 `--save` 写入 `~/.agent-reach/daily_run_settings.json`
 
-upstream 还包含 `StrategyOptimizer` / `BacktestAttributor`（夏普寻优 + 盈亏因子归因）；daily-run 当前以 `optimize` + `backtest` CLI 覆盖 MSS 阈值与规则回测，**归因报告**尚未 1:1 移植。
+upstream 还包含 `StrategyOptimizer`（夏普寻优）；daily-run 以 `strategy_optimizer.StrategyOptimizer` + `optimize` CLI 覆盖 MSS 阈值与规则回测（默认 objective=`sharpe`），收盘 **PnL 因子归因** 已写入 `backtest_attributor.py` → 组合卡。
 
 ### 集成状态（weekly skill 审视时更新）
 
@@ -125,12 +129,24 @@ upstream 还包含 `StrategyOptimizer` / `BacktestAttributor`（夏普寻优 + �
 
 **待增强（可继续借鉴 upstream）：**
 
-- [ ] `FilterPlugin` / `TransformPlugin` 独立扩展点
-- [ ] 东财意图路由 `news-search` / `query` / `stock-screen`（upstream `team_router.route_eastmoney_intent`）
-- [ ] Markdown 报告后置门禁 `report_quality_gate.py`（候选股表格 vs 推荐段交叉校验）
-- [ ] `BacktestAttributor` 盈亏因子分解写入收盘复盘
-- [ ] 高意图串联缓存 / 重复请求限流（upstream `intent` 块）
-- [ ] 默认 `team.enabled=true` + `morning_team_first`（当前 repo 默认 false，需用户显式开启）
+- [x] `FilterPlugin` / `TransformPlugin` 预专家管线（`plugins/pipeline.py` + `ensure_mss_breakdown`）
+- [x] 东财意图路由 `news-search` / `query` / `stock-screen`（`eastmoney_intent.py` + sentiment expert 优先东财）
+- [x] Markdown 报告后置门禁 `report_quality_gate.py`（推荐段 vs 观察池/候选池交叉校验）
+- [x] 情绪定级与 MSS 宏观分融合（`emotion_mss_fusion.py` + 收盘 market_review）
+- [x] `BacktestAttributor` 盈亏因子分解写入收盘复盘（`backtest_attributor.py` → 组合卡）
+- [x] 高意图串联缓存 / 重复请求限流（`intent_cache.py` + `config.intent` 块；东财 + Exa channel enrich + **week_forecast Exa**）
+- [x] `lite_parallel` 5 专家子集 + `team.mode=auto` 单标的自动切换（`team.resolve_team_experts`）
+- [x] RedFox gzh 订阅 CLI（`daily-run redfox gzh list|add|remove`）
+- [x] 默认 `team.enabled=true` + `morning_team_first`（repo 默认已启用；用户覆盖见 `~/.agent-reach/daily_run_settings.json` 或 `daily-run configure team`）
+- [x] `StrategyOptimizer` 夏普寻优 parity（`strategy_optimizer.py` + `backtest.compute_sharpe_ratio` + objective `sharpe`）
+- [x] 盘中 Team-First（`intraday_team_first` + `enrich_with_team_or_experts` + 扫描卡专家面板）
+- [x] 报告一致性硬阻断（`strict_coherence_enabled` + `strict_workflows: morning/close`）
+- [x] Supervisor 反面检验降级（`counter_factors` + `counter_thesis_downgrade` → `fuse_verdict_with_team`）
+- [x] Supervisor 反面检验 LLM 深化（`supervisor_counter_llm.py` + `team.counter_thesis_llm`）
+- [x] 工作流统一 `enrich_with_team_or_experts`（morning/close/intraday）
+- [x] 默认 `require_price` 预专家 filter（缺价 snapshot 跳过专家）
+- [x] 盘中调仓卡 Team 专家面板
+- [x] Doctor daily-run 诊断（Team / intent 缓存 / gzh 订阅）
 
 **参考文件（upstream）：** `SKILL.md` · `scripts/team_router.py` · `docs/agent-teams-blueprint.md` · `config/settings.json`
 

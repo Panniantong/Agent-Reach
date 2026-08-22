@@ -41,3 +41,25 @@ class ExpertPlugin(ABC):
     @abstractmethod
     def run(self, context: PluginContext) -> PluginResult:
         ...
+
+
+class FilterPlugin(ABC):
+    """Pre-expert gate — return False to skip expert execution."""
+
+    name: str = "filter"
+    description: str = ""
+
+    @abstractmethod
+    def apply(self, context: PluginContext) -> bool:
+        ...
+
+
+class TransformPlugin(ABC):
+    """Pre-expert snapshot transform."""
+
+    name: str = "transform"
+    description: str = ""
+
+    @abstractmethod
+    def transform(self, snapshot: dict[str, Any], settings: dict[str, Any]) -> dict[str, Any]:
+        ...

@@ -137,6 +137,12 @@ cd ~/.agent-reach/vendor/FaceCat-Kronos/examples && python3 cpu_prediction_examp
 python3 -m agent_reach.cli daily-run schedule run forecast
 ```
 
+```bash
+# hold-out 回测（需 FaceCat-Kronos + torch；AKShare 拉历史 K 线）
+python3 -m agent_reach.cli daily-run kronos backtest --code 688008
+python3 -m agent_reach.cli daily-run kronos backtest --code 688008 --holdout 5 --folds 3 --json
+```
+
 ### 集成状态（weekly skill 审视时更新）
 
 **已完成：**
@@ -149,10 +155,10 @@ python3 -m agent_reach.cli daily-run schedule run forecast
 
 **待增强（FaceCat 可继续借鉴）：**
 
-- [ ] `kronos_paths.days` 持久化完整 OHLCV（供止损模拟 / 虚 K 线渲染）
-- [ ] `attach_kronos_to_snapshot` 改用交易所交易日历（与 forecast 一致）
-- [ ] 基于 `sample_count` 多路径的真实离散度 band（非 min/max 日涨跌）
-- [ ] 可选：AKShare 历史 hold-out 回测 helper（对标 FaceCat 回测模式）
-- [ ] 飞书个股路径卡片附 Kronos 方向箭头 / 简易虚 K 线摘要
+- [x] `kronos_paths.days` 持久化完整 OHLCV（供止损模拟 / 虚 K 线渲染）
+- [x] `attach_kronos_to_snapshot` 改用交易所交易日历（`resolve_kronos_trading_days` + `use_trade_calendar`）
+- [x] 基于预测 OHLC 的累计离散度 band（`dispersion_from_ohlc` / `band_kind=ohlc_cumulative`）
+- [x] 飞书个股路径卡片附 Kronos 方向箭头 / 简易虚 K 线摘要（`render_kronos_path_markdown`）
+- [x] 可选：AKShare 历史 hold-out 回测 helper（`kronos_holdout_backtest.py` + `daily-run kronos backtest`）
 
 ---

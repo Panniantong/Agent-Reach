@@ -2,6 +2,7 @@
 """Tests for weekly hot-sector watchlist candidates."""
 
 import json
+from unittest.mock import patch
 
 import pytest
 
@@ -133,3 +134,66 @@ class TestWatchlistCandidates:
         settings["watchlist"]["weekly_hot_sector_limit"] = 99
         sector_limit, _, _ = _weekly_candidate_limits(settings["watchlist"])
         assert sector_limit == 10
+
+    def test_xueqiu_hot_stock_candidates_when_below_min(self, settings):
+        settings["watchlist"]["sector_pools"] = {}
+        report = {
+            "week_end": "2026-07-25",
+            "holdings": [{"code": "688008", "name": "澜起科技"}],
+            "hot_sectors": [],
+            "sector_groups": {},
+            "sector_research": [],
+            "macro_signals": {
+                "hot_stocks": [
+                    {"rank": 2, "name": "中芯国际", "symbol": "SH688981", "percent": 2.5},
+                    {"rank": 5, "name": "新易盛", "symbol": "300502", "percent": 1.1},
+                ],
+            },
+        }
+        update = build_weekly_watchlist_candidates(report, settings)
+        codes = {c["code"] for c in update.candidates}
+        assert "688981" in codes or "300502" in codes
+        assert any(c.get("source") == "xueqiu_hot" for c in update.candidates)
+
+    def test_xueqiu_hot_candidates_always_on(self, settings):
+        report = {
+            **_weekly_report(),
+            "macro_signals": {
+                "hot_stocks": [
+                    {"rank": 2, "name": "中芯国际", "symbol": "SH688981", "percent": 2.5},
+                ],
+                "xueqiu_stock_search": [
+                    {"code": "688047", "name": "龙芯中科", "query": "国产CPU"},
+                ],
+            },
+        }
+        update = build_weekly_watchlist_candidates(report, settings)
+        codes = {c["code"] for c in update.candidates}
+        sources = {c.get("source") for c in update.candidates}
+        assert len(update.candidates) >= 5
+        assert "688981" in codes or "688012" in codes
+        assert "xueqiu_hot" in sources or "xueqiu_search" in sources
+
+    @patch(
+        "agent_reach.daily_run.eastmoney_intent.screen_eastmoney_stocks",
+        return_value=[
+            {"code": "688047", "name": "龙芯中科", "change_pct": 4.5},
+        ],
+    )
+    def test_eastmoney_screen_candidates(self, mock_screen, settings):
+        settings["watchlist"]["sector_pools"] = {}
+        report = {
+            "week_end": "2026-07-25",
+            "holdings": [{"code": "688008", "name": "澜起科技"}],
+            "hot_sectors": [],
+            "sector_groups": {
+                "半导体": [{"code": "603986", "name": "兆易创新", "change_pct": 3.5}],
+            },
+            "sector_research": [],
+            "macro_signals": {},
+        }
+        update = build_weekly_watchlist_candidates(report, settings)
+        codes = {c["code"] for c in update.candidates}
+        assert "688047" in codes
+        assert any(c.get("source") == "eastmoney_screen" for c in update.candidates)
+        mock_screen.assert_called()

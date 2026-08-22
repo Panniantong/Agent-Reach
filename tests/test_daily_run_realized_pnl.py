@@ -379,3 +379,177 @@ def test_enrich_sell_actions_for_display_fills_missing_realized():
         opening_costs={"002273": 33.81},
     )
     assert enriched[0]["realized_pnl"] == -672.07
+
+
+def test_build_weekly_trade_pnl_detail_lists_all_buys_and_sells():
+    from datetime import date
+
+    from agent_reach.daily_run.realized_pnl import (
+        build_weekly_trade_pnl_detail,
+        render_weekly_trade_pnl_markdown,
+    )
+
+    prior = [
+        {
+            "at": "2026-08-15T01:00:00+00:00",
+            "actions": [
+                {
+                    "side": "buy",
+                    "code": "688008",
+                    "name": "澜起科技",
+                    "shares": 100,
+                    "amount": 25587.0,
+                    "commission": 38.38,
+                    "price": 255.87,
+                }
+            ],
+        }
+    ]
+    week_trades = [
+        {
+            "at": "2026-08-19T02:00:00+00:00",
+            "actions": [
+                {
+                    "side": "sell",
+                    "code": "688008",
+                    "name": "澜起科技",
+                    "shares": 100,
+                    "price": 200.55,
+                    "amount": 20055.0,
+                    "commission": 30.08,
+                }
+            ],
+        },
+        {
+            "at": "2026-08-21T03:00:00+00:00",
+            "actions": [
+                {
+                    "side": "buy",
+                    "code": "600584",
+                    "name": "长电科技",
+                    "shares": 100,
+                    "amount": 7864.0,
+                    "commission": 11.8,
+                    "price": 78.64,
+                }
+            ],
+        },
+    ]
+    holdings = [
+        {
+            "code": "600584",
+            "name": "长电科技",
+            "shares": 100,
+            "week_end_price": 78.57,
+            "price": 78.57,
+        }
+    ]
+    detail = build_weekly_trade_pnl_detail(
+        week_trades,
+        week_start=date(2026, 8, 17),
+        week_end=date(2026, 8, 21),
+        prior_trades=prior,
+        opening_costs={"688008": 255.87},
+        holdings=holdings,
+    )
+    assert detail["sell_count"] == 1
+    assert detail["buy_count"] == 1
+    assert detail["realized_pnl"] < 0
+    assert detail["buys"][0]["status"] == "held"
+    assert detail["buys"][0]["floating_pnl"] == -7.0
+
+    md = render_weekly_trade_pnl_markdown(detail)
+    assert "股票盈亏明细" in md
+    assert "本周交易" in md
+    assert "卖出（已实现）" in md
+    assert "买入" in md
+    assert "澜起科技" in md
+    assert "长电科技" in md
+    assert "本周卖出合计" in md
+
+
+def test_build_weekly_trade_pnl_detail_includes_historical_sells_and_holdings():
+    from datetime import date
+
+    from agent_reach.daily_run.realized_pnl import (
+        build_weekly_trade_pnl_detail,
+        render_weekly_trade_pnl_markdown,
+    )
+
+    prior = [
+        {
+            "at": "2026-08-10T01:00:00+00:00",
+            "actions": [
+                {
+                    "side": "sell",
+                    "code": "000725",
+                    "name": "京东方A",
+                    "shares": 500,
+                    "price": 6.0,
+                    "amount": 3000.0,
+                    "commission": 4.5,
+                }
+            ],
+        },
+        {
+            "at": "2026-08-15T01:00:00+00:00",
+            "actions": [
+                {
+                    "side": "buy",
+                    "code": "688008",
+                    "name": "澜起科技",
+                    "shares": 100,
+                    "amount": 25587.0,
+                    "commission": 38.38,
+                    "price": 255.87,
+                }
+            ],
+        },
+    ]
+    week_trades = [
+        {
+            "at": "2026-08-19T02:00:00+00:00",
+            "actions": [
+                {
+                    "side": "sell",
+                    "code": "688008",
+                    "name": "澜起科技",
+                    "shares": 100,
+                    "price": 200.55,
+                    "amount": 20055.0,
+                    "commission": 30.08,
+                }
+            ],
+        },
+    ]
+    holdings = [
+        {
+            "code": "600584",
+            "name": "长电科技",
+            "shares": 100,
+            "cost": 78.64,
+            "week_end_price": 78.57,
+            "price": 78.57,
+            "unrealized_pnl": -7.0,
+            "unrealized_pct": -0.09,
+        }
+    ]
+    detail = build_weekly_trade_pnl_detail(
+        week_trades,
+        week_start=date(2026, 8, 17),
+        week_end=date(2026, 8, 21),
+        prior_trades=prior,
+        opening_costs={"000725": 6.5, "688008": 255.87},
+        holdings=holdings,
+    )
+    assert detail["prior_sell_count"] == 1
+    assert detail["sell_count"] == 1
+    assert detail["unrealized_pnl"] == -7.0
+    assert detail["total_pnl"] == round(detail["cumulative_realized_pnl"] + (-7.0), 2)
+
+    md = render_weekly_trade_pnl_markdown(detail)
+    assert "历史卖出（本周之前" in md
+    assert "京东方A" in md
+    assert "当前持股（浮盈浮亏" in md
+    assert "累计总览" in md
+    assert "总收益（已实现 + 浮盈浮亏）" in md

@@ -111,13 +111,14 @@ class TestCollectHotNews:
 
 class TestMacroIntegration:
     @patch("agent_reach.daily_run.hot_news_collector.collect_hot_news")
+    @patch("agent_reach.daily_run.macro_collector._fetch_xueqiu_hot_stocks", return_value=[])
     @patch("agent_reach.daily_run.macro_collector._fetch_index_change", return_value=0.5)
     @patch("agent_reach.daily_run.macro_collector._fetch_northbound_flow", return_value=12.0)
-    @patch("agent_reach.daily_run.macro_collector._fetch_xueqiu_sentiment", return_value=("", []))
-    def test_macro_includes_hot_news(self, mock_xq, mock_nb, mock_idx, mock_hot):
+    @patch("agent_reach.daily_run.macro_collector._fetch_xueqiu_sentiment", return_value=("", [], []))
+    def test_macro_includes_hot_news(self, mock_xq, mock_nb, mock_idx, mock_hot_stocks, mock_hot_news):
         from agent_reach.daily_run.macro_collector import collect_macro_context
 
-        mock_hot.return_value = HotNewsResult(
+        mock_hot_news.return_value = HotNewsResult(
             items=[{"title": "芯片", "platform": "weibo"}],
             matched=[{"title": "芯片", "platform": "weibo"}, {"title": "存储", "platform": "60s"}],
             daily_headlines=["宏观要闻"],

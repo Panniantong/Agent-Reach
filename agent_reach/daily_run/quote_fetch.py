@@ -41,7 +41,7 @@ def code_to_eastmoney_secid(code: str) -> str:
     return f"{market}.{text}"
 
 
-_EASTMONEY_FIELDS = "f43,f58,f60,f169,f170"
+_EASTMONEY_FIELDS = "f43,f58,f60,f169,f170,f162,f168,f116"
 _EASTMONEY_UA = "Mozilla/5.0 (compatible; AgentReach/1.0)"
 _EASTMONEY_REFERER = "https://quote.eastmoney.com/"
 
@@ -59,6 +59,60 @@ def _parse_eastmoney_change_pct(data: dict[str, Any]) -> Optional[float]:
         if prev > 0:
             return round((price - prev) / prev * 100, 2)
     return None
+
+
+def _optional_float(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed <= 0 or parsed != parsed:
+        return None
+    return parsed
+
+
+def _parse_eastmoney_pe_ttm(data: dict[str, Any]) -> Optional[float]:
+    raw = _optional_float(data.get("f162"))
+    if raw is None:
+        return None
+    if raw > 10000:
+        return None
+    if raw > 500:
+        return round(raw / 100.0, 2)
+    return round(raw, 2)
+
+
+def _parse_eastmoney_turnover(data: dict[str, Any]) -> Optional[float]:
+    from agent_reach.daily_run.valuation_metrics import normalize_turnover_pct
+
+    raw = _optional_float(data.get("f168"))
+    if raw is None:
+        return None
+    if raw > 100:
+        raw = raw / 100.0
+    return normalize_turnover_pct(raw)
+
+
+def _parse_eastmoney_market_cap(data: dict[str, Any]) -> Optional[float]:
+    from agent_reach.daily_run.valuation_metrics import normalize_market_cap_yuan
+
+    return normalize_market_cap_yuan(data.get("f116"))
+
+
+def _parse_eastmoney_valuation(data: dict[str, Any]) -> dict[str, float]:
+    out: dict[str, float] = {}
+    pe = _parse_eastmoney_pe_ttm(data)
+    if pe is not None:
+        out["pe_ttm"] = pe
+    turnover = _parse_eastmoney_turnover(data)
+    if turnover is not None:
+        out["turnover_rate"] = turnover
+    market_cap = _parse_eastmoney_market_cap(data)
+    if market_cap is not None:
+        out["market_capital"] = market_cap
+    return out
 
 
 def _fetch_eastmoney(codes: list[str], *, max_retries: int) -> dict[str, dict[str, Any]]:
@@ -89,7 +143,7 @@ def _fetch_eastmoney(codes: list[str], *, max_retries: int) -> dict[str, dict[st
         price = float(raw_price) / 100.0
         prev_raw = data.get("f60")
         prev_close = float(prev_raw) / 100.0 if prev_raw is not None else price
-        return {
+        row = {
             "code": normalize_code(code),
             "name": str(data.get("f58") or code),
             "price": price,
@@ -97,6 +151,8 @@ def _fetch_eastmoney(codes: list[str], *, max_retries: int) -> dict[str, dict[st
             "reference_price": prev_close,
             "source": "eastmoney",
         }
+        row.update(_parse_eastmoney_valuation(data))
+        return row
 
     for code in codes:
         norm = normalize_code(code)
@@ -111,6 +167,17 @@ def _fetch_eastmoney(codes: list[str], *, max_retries: int) -> dict[str, dict[st
         if row and row.get("price"):
             out[norm] = row
     return out
+
+_VALUATION_KEYS = ("pe_ttm", "turnover_rate", "market_capital")
+
+
+def _merge_valuation_fields(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
+    out = dict(base)
+    for key in _VALUATION_KEYS:
+        if out.get(key) is None and extra.get(key) is not None:
+            out[key] = extra[key]
+    return out
+
 
 @dataclass
 class QuoteFetchResult:
@@ -160,6 +227,24 @@ def _fetch_xueqiu(codes: list[str], *, max_retries: int) -> dict[str, dict[str, 
                 "reference_price": float(q.get("last_close") or price),
                 "source": "xueqiu",
             }
+            pe = q.get("pe_ttm")
+            if pe is not None:
+                try:
+                    out[code]["pe_ttm"] = float(pe)
+                except (TypeError, ValueError):
+                    pass
+            turnover = q.get("turnover_rate")
+            if turnover is not None:
+                try:
+                    out[code]["turnover_rate"] = float(turnover)
+                except (TypeError, ValueError):
+                    pass
+            market_cap = q.get("market_capital")
+            if market_cap is not None:
+                try:
+                    out[code]["market_capital"] = float(market_cap)
+                except (TypeError, ValueError):
+                    pass
         except Exception:
             continue
     return out
@@ -219,6 +304,9 @@ def fetch_quotes_map(
                 result.quotes[code] = batch[code]
                 missing.remove(code)
                 result.errors.pop(code, None)
+        for code, row in batch.items():
+            if code in result.quotes:
+                result.quotes[code] = _merge_valuation_fields(result.quotes[code], row)
 
     for code in missing:
         result.errors.setdefault(code, "no quote from configured sources")

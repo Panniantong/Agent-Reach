@@ -58,6 +58,35 @@ class FundamentalExpert(ExpertPlugin):
                 score -= 5
                 notes.append(f"ROE {roe:.0%} 偏弱")
 
+        pe_ttm = _f(snap.get("pe_ttm"))
+        if pe_ttm is not None:
+            total += 1
+            if pe_ttm <= 35:
+                score += 8
+                passed += 1
+                notes.append(f"PE(TTM) {pe_ttm:.1f}")
+            elif pe_ttm >= 60:
+                score -= 8
+                notes.append(f"PE(TTM) {pe_ttm:.1f} 偏高")
+            else:
+                notes.append(f"PE(TTM) {pe_ttm:.1f}")
+
+        turnover = snap.get("turnover_rate")
+        if turnover is not None:
+            from agent_reach.daily_run.valuation_metrics import format_turnover_rate
+
+            turnover_s = format_turnover_rate(turnover)
+            if turnover_s:
+                notes.append(f"换手率 {turnover_s}")
+
+        market_cap = snap.get("market_capital")
+        if market_cap is not None:
+            from agent_reach.daily_run.valuation_metrics import format_market_cap
+
+            cap_s = format_market_cap(market_cap)
+            if cap_s:
+                notes.append(f"市值 {cap_s}")
+
         if total == 0:
             # Infer from holdings quality tags or neutral
             holdings = (snap.get("portfolio") or {}).get("holdings") or []

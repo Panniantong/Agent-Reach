@@ -114,6 +114,62 @@ def _prev_trading_review(
     return None
 
 
+def _attach_macro_collector_fallback(
+    payload: dict[str, Any],
+    *,
+    settings: dict[str, Any],
+) -> dict[str, Any]:
+    """Attach macro_collector flow_index summary when market breadth is degraded."""
+    mr_cfg = settings.get("market_review") or {}
+    if mr_cfg.get("macro_fallback_enabled", True) is False:
+        return payload
+
+    emotion = dict(payload.get("emotion") or {})
+    degraded = emotion.get("breadth_degraded") is True
+    has_counts = int(emotion.get("up_count") or 0) + int(emotion.get("down_count") or 0) > 0
+    if not degraded and has_counts:
+        return payload
+
+    try:
+        from agent_reach.daily_run.macro_collector import collect_macro_context
+
+        macro = collect_macro_context({}, settings=settings, workflow="close", scope="flow_index")
+    except Exception as exc:
+        payload.setdefault("warnings", []).append(f"macro_collector fallback: {exc}")
+        return payload
+
+    sources = macro.get("sources") or {}
+    summary = str(macro.get("macro_summary") or "").strip()
+    signals = macro.get("macro_signals") or {}
+    payload["macro_fallback"] = {
+        "summary": summary,
+        "sources": sources,
+        "index_change_pct": signals.get("index_change_pct"),
+        "northbound_flow_yi": signals.get("northbound_flow_yi"),
+    }
+
+    reasons = list(emotion.get("reasons") or [])
+    for key in ("quote", "flow", "sentiment"):
+        detail = sources.get(key)
+        if isinstance(detail, dict) and detail.get("summary"):
+            line = f"macro · {detail['summary']}"
+            if line not in reasons:
+                reasons.append(line)
+    if summary:
+        line = f"macro_collector · {summary[:100]}"
+        if line not in reasons:
+            reasons.append(line)
+    emotion["reasons"] = reasons
+    emotion["macro_fallback"] = True
+    payload["emotion"] = emotion
+    payload.setdefault("warnings", []).append("市场宽度降级，已附加 macro_collector 摘要")
+
+    if payload.get("error") == "市场宽度与指数均不可用" and (payload.get("indices") or summary):
+        payload.pop("error", None)
+
+    return payload
+
+
 def _macro_breadth_fallback(
     indices: dict[str, Any],
     north: dict[str, Any],
@@ -355,6 +411,10 @@ def collect_market_review(
     payload["comparison"] = compare_market_review(
         payload, yesterday=yesterday, last_week=last_week
     )
+    payload = _attach_macro_collector_fallback(payload, settings=cfg)
+    from agent_reach.daily_run.eastmoney_intent import attach_eastmoney_market_review
+
+    attach_eastmoney_market_review(payload, settings=cfg)
     return payload
 
 
@@ -395,7 +455,11 @@ def get_or_collect_market_review(
     return review
 
 
-def render_market_review_markdown(review: dict[str, Any]) -> str:
+def render_market_review_markdown(
+    review: dict[str, Any],
+    *,
+    snapshot: Optional[dict[str, Any]] = None,
+) -> str:
     """Four-card markdown for Feishu close push."""
     if not review:
         return "## 🌡️ 全市场复盘\n\n> 市场宽度数据拉取失败：无数据"
@@ -520,5 +584,25 @@ def render_market_review_markdown(review: dict[str, Any]) -> str:
                 f"情绪分 {vs_w.get('emotion_score_delta', 0):+d} · "
                 f"北向 {vs_w.get('northbound_delta_yi', 0):+.1f}亿"
             )
+
+    em_summary = review.get("eastmoney_summary")
+    if em_summary:
+        lines.extend(["", "## 📰 东财资讯", str(em_summary)])
+
+    macro_fb = review.get("macro_fallback") or {}
+    if macro_fb.get("summary") or em.get("macro_fallback"):
+        lines.extend(["", "### 🧭 macro_collector 降级摘要"])
+        if macro_fb.get("summary"):
+            lines.append(f"- {macro_fb['summary']}")
+        for key in ("quote", "flow", "sentiment"):
+            detail = (macro_fb.get("sources") or {}).get(key)
+            if isinstance(detail, dict) and detail.get("summary"):
+                lines.append(f"- {detail['summary']}")
+
+    from agent_reach.daily_run.emotion_mss_display import render_emotion_mss_parallel_markdown
+
+    parallel_md = render_emotion_mss_parallel_markdown(review, snapshot=snapshot)
+    if parallel_md:
+        lines.extend(["", parallel_md])
 
     return "\n".join(lines)

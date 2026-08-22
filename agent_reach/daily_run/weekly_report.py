@@ -33,6 +33,8 @@ class WeeklyReport:
     end_stock_mv: Optional[float] = None
     stock_pnl: Optional[float] = None
     cash_pnl: Optional[float] = None
+    pnl_attribution: dict[str, Any] = field(default_factory=dict)
+    trade_pnl_detail: dict[str, Any] = field(default_factory=dict)
     holdings: list[dict[str, Any]] = field(default_factory=list)
     watchlist: list[dict[str, Any]] = field(default_factory=list)
     hot_sectors: list[dict[str, Any]] = field(default_factory=list)
@@ -56,6 +58,8 @@ class WeeklyReport:
     buy_rules_whatif: Optional[dict[str, Any]] = None
     intraday_friction_whatif: Optional[dict[str, Any]] = None
     intraday_sell_whatif: Optional[dict[str, Any]] = None
+    macro_signals: dict[str, Any] = field(default_factory=dict)
+    watchlist_intel: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -73,6 +77,8 @@ class WeeklyReport:
             "end_stock_mv": self.end_stock_mv,
             "stock_pnl": self.stock_pnl,
             "cash_pnl": self.cash_pnl,
+            "pnl_attribution": self.pnl_attribution,
+            "trade_pnl_detail": self.trade_pnl_detail,
             "holdings": self.holdings,
             "watchlist": self.watchlist,
             "hot_sectors": self.hot_sectors,
@@ -96,6 +102,8 @@ class WeeklyReport:
             "buy_rules_whatif": self.buy_rules_whatif,
             "intraday_friction_whatif": self.intraday_friction_whatif,
             "intraday_sell_whatif": self.intraday_sell_whatif,
+            "macro_signals": self.macro_signals,
+            "watchlist_intel": self.watchlist_intel,
         }
 
 
@@ -557,6 +565,123 @@ def _compute_realized_pnl(trades: list[dict[str, Any]]) -> float:
     return compute_realized_pnl(trades)
 
 
+def _resolve_weekly_balance_parts(
+    *,
+    start_record: Optional[dict[str, Any]],
+    end_record: Optional[dict[str, Any]],
+    portfolio: dict[str, Any],
+    enriched: dict[str, dict[str, Any]],
+    end_total: Optional[float],
+) -> tuple[
+    Optional[float],
+    Optional[float],
+    Optional[float],
+    Optional[float],
+]:
+    """Return (start_cash, start_stock_mv, end_cash, end_stock_mv) from manifests / portfolio."""
+    start_cash: Optional[float] = None
+    start_stock_mv: Optional[float] = None
+    end_cash: Optional[float] = None
+    end_stock_mv: Optional[float] = None
+
+    if start_record:
+        start_cash, start_stock_mv = _portfolio_parts_from_manifest(start_record)
+    if end_record:
+        end_cash, end_stock_mv = _portfolio_parts_from_manifest(end_record)
+    elif portfolio.get("cash") is not None:
+        end_cash = float(portfolio.get("cash") or 0)
+        end_stock_mv = _stock_mv_from_enriched(portfolio, enriched)
+        if end_total is not None and end_cash is not None:
+            implied_stock = round(float(end_total) - end_cash, 2)
+            if end_stock_mv is not None and abs(implied_stock - end_stock_mv) >= 1.0:
+                end_stock_mv = implied_stock
+
+    return start_cash, start_stock_mv, end_cash, end_stock_mv
+
+
+def _compute_weekly_stock_cash_pnl(
+    *,
+    weekly_pnl: Optional[float],
+    start_cash: Optional[float],
+    end_cash: Optional[float],
+    start_stock_mv: Optional[float],
+    end_stock_mv: Optional[float],
+    holdings_changed: bool,
+    trades: list[dict[str, Any]],
+    manifest_cash_pnl: Optional[float],
+) -> tuple[Optional[float], Optional[float], list[str]]:
+    """Balance-sheet stock/cash split: actual cash & stock MV deltas, not ledger trade flow."""
+    notes: list[str] = []
+    cash_pnl: Optional[float] = None
+    stock_pnl: Optional[float] = None
+
+    if (
+        not holdings_changed
+        and manifest_cash_pnl is not None
+        and abs(manifest_cash_pnl) < 0.01
+    ):
+        cash_pnl = 0.0
+        if trades:
+            notes.append("ledger 有成交记录但本周持仓/现金未变，盈亏分解不含成交流水")
+    elif start_cash is not None and end_cash is not None:
+        cash_pnl = round(end_cash - start_cash, 2)
+    elif manifest_cash_pnl is not None:
+        cash_pnl = manifest_cash_pnl
+
+    if start_stock_mv is not None and end_stock_mv is not None:
+        stock_pnl = round(end_stock_mv - start_stock_mv, 2)
+    elif weekly_pnl is not None and cash_pnl is not None:
+        stock_pnl = round(weekly_pnl - cash_pnl, 2)
+
+    if (
+        weekly_pnl is not None
+        and cash_pnl is not None
+        and stock_pnl is not None
+        and abs(round(cash_pnl + stock_pnl - weekly_pnl, 2)) >= 0.02
+    ):
+        notes.append(
+            "盈亏分解与净值差 "
+            f"¥{round(cash_pnl + stock_pnl - weekly_pnl, 2):+.2f}（周初/周末 manifest 口径差）"
+        )
+
+    return cash_pnl, stock_pnl, notes
+
+
+def build_weekly_pnl_attribution(
+    *,
+    weekly_pnl: Optional[float],
+    cash_pnl: Optional[float],
+    stock_pnl: Optional[float],
+    realized_pnl: float,
+    trade_cash_flow: float,
+    holdings: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Source attribution: held price move, realized exits, rebalance residual."""
+    week_rows = [h for h in holdings if h.get("week_chg") is not None]
+    held_week_chg = (
+        round(sum(float(h["week_chg"]) for h in week_rows), 2) if week_rows else None
+    )
+    rebalance_pnl: Optional[float] = None
+    if weekly_pnl is not None:
+        rebalance_pnl = round(
+            float(weekly_pnl) - float(held_week_chg or 0) - float(realized_pnl or 0),
+            2,
+        )
+    out: dict[str, Any] = {
+        "realized_pnl": round(float(realized_pnl or 0), 2),
+        "trade_cash_flow": round(float(trade_cash_flow or 0), 2),
+    }
+    if held_week_chg is not None:
+        out["held_week_chg"] = held_week_chg
+    if rebalance_pnl is not None:
+        out["rebalance_pnl"] = rebalance_pnl
+    if cash_pnl is not None:
+        out["cash_pnl"] = cash_pnl
+    if stock_pnl is not None:
+        out["stock_pnl"] = stock_pnl
+    return out
+
+
 def _holding_pnl_rows(
     portfolio: dict[str, Any],
     enriched: dict[str, dict[str, Any]],
@@ -816,22 +941,9 @@ def resolve_weekly_portfolio(
 
 
 def _load_experience_snippets(start: date, end: date, limit: int = 5) -> list[str]:
-    from agent_reach.daily_run.experience import load_recent_experience
+    from agent_reach.daily_run.experience import load_weekly_experience_snippets
 
-    recent = load_recent_experience(limit=50)
-    snippets: list[str] = []
-    for e in recent:
-        ds = str(e.get("date") or "")
-        if not _date_in_range(ds, start, end):
-            continue
-        hit = "✅" if e.get("prediction_hit") else "—"
-        rules = "；".join((e.get("rules") or [])[:2])
-        snippets.append(
-            f"{ds} {e.get('name')} MSS={e.get('mss_final')} {hit} {rules}".strip()
-        )
-        if len(snippets) >= limit:
-            break
-    return snippets
+    return load_weekly_experience_snippets(start, end, limit=limit)
 
 
 def generate_weekly_report(
@@ -927,13 +1039,13 @@ def generate_weekly_report(
 
     start_record = _start_manifest_record(manifests, morning_totals, close_totals, week_start)
     end_record = _end_manifest_record(manifests, close_totals)
-    if start_record:
-        start_cash, start_stock_mv = _portfolio_parts_from_manifest(start_record)
-    if end_record:
-        end_cash, end_stock_mv = _portfolio_parts_from_manifest(end_record)
-    elif cash is not None:
-        end_cash = cash
-        end_stock_mv = _stock_mv_from_enriched(pf, enriched)
+    start_cash, start_stock_mv, end_cash, end_stock_mv = _resolve_weekly_balance_parts(
+        start_record=start_record,
+        end_record=end_record,
+        portfolio=pf,
+        enriched=enriched,
+        end_total=end_total,
+    )
 
     start_shares = (
         _holdings_shares_from_manifest(start_record)
@@ -947,31 +1059,17 @@ def generate_weekly_report(
     if start_cash is not None and end_cash is not None:
         manifest_cash_pnl = round(end_cash - start_cash, 2)
 
-    if (
-        not holdings_changed
-        and manifest_cash_pnl is not None
-        and abs(manifest_cash_pnl) < 0.01
-    ):
-        cash_pnl = 0.0
-        if trades:
-            notes.append("ledger 有成交记录但本周持仓/现金未变，盈亏分解不含成交流水")
-    elif holdings_changed and trades and start_cash is not None:
-        cash_pnl = trade_cash_flow
-        end_cash = round(start_cash + cash_pnl, 2)
-        notes.append("现金变动按 ledger 成交重算（本周持仓已变化）")
-    elif manifest_cash_pnl is not None:
-        cash_pnl = manifest_cash_pnl
-    elif start_cash is not None and end_cash is not None:
-        cash_pnl = round(end_cash - start_cash, 2)
-
-    if weekly_pnl is not None and cash_pnl is not None:
-        stock_pnl = round(weekly_pnl - cash_pnl, 2)
-        if start_total is not None and start_cash is not None:
-            start_stock_mv = round(start_total - start_cash, 2)
-        if end_total is not None and end_cash is not None:
-            end_stock_mv = round(end_total - end_cash, 2)
-    elif start_stock_mv is not None and end_stock_mv is not None:
-        stock_pnl = round(end_stock_mv - start_stock_mv, 2)
+    cash_pnl, stock_pnl, pnl_notes = _compute_weekly_stock_cash_pnl(
+        weekly_pnl=weekly_pnl,
+        start_cash=start_cash,
+        end_cash=end_cash,
+        start_stock_mv=start_stock_mv,
+        end_stock_mv=end_stock_mv,
+        holdings_changed=holdings_changed,
+        trades=trades,
+        manifest_cash_pnl=manifest_cash_pnl,
+    )
+    notes.extend(pnl_notes)
 
     week_start_prices, week_price_note = _week_start_prices_from_manifests(manifests, week_start)
     if week_price_note:
@@ -986,6 +1084,38 @@ def generate_weekly_report(
         notes.append("本周无收盘 manifest，持股周末收盘价取当前报价")
 
     holdings = _holding_pnl_rows(pf, enriched, week_start_prices, week_end_prices)
+    pnl_attribution = build_weekly_pnl_attribution(
+        weekly_pnl=weekly_pnl,
+        cash_pnl=cash_pnl,
+        stock_pnl=stock_pnl,
+        realized_pnl=realized,
+        trade_cash_flow=trade_cash_flow,
+        holdings=holdings,
+    )
+
+    from agent_reach.daily_run.realized_pnl import (
+        build_weekly_trade_pnl_detail,
+        load_ledger_entries,
+        opening_costs_from_portfolio,
+    )
+
+    prior_trades = load_ledger_entries(end=week_start - timedelta(days=1))
+    start_pf: dict[str, Any] = {}
+    if start_record:
+        snap_start, _ = _merged_enriched_from_manifest(start_record)
+        start_pf = dict((snap_start or {}).get("portfolio") or {})
+    opening_costs = opening_costs_from_portfolio(start_pf or pf)
+    trade_pnl_detail = build_weekly_trade_pnl_detail(
+        trades,
+        week_start=week_start,
+        week_end=week_end,
+        prior_trades=prior_trades,
+        opening_costs=opening_costs or None,
+        holdings=holdings,
+    )
+    if trade_pnl_detail.get("sell_count"):
+        realized = float(trade_pnl_detail.get("realized_pnl") or realized)
+
     watchlist = _watchlist_rows(pf, enriched)
     hot_sectors = _identify_hot_sectors(enriched)
     sector_groups = _group_by_sector(enriched)
@@ -1065,6 +1195,22 @@ def generate_weekly_report(
         settings=settings,
     ).to_dict()
 
+    from agent_reach.daily_run.macro_collector import fetch_xueqiu_hot_signals
+
+    macro_signals = fetch_xueqiu_hot_signals(pf, settings=settings)
+    if not macro_signals:
+        cached = snapshot.get("macro_signals")
+        if isinstance(cached, dict) and (
+            cached.get("sentiment_posts") or cached.get("hot_stocks")
+        ):
+            macro_signals = cached
+
+    watchlist_intel = dict(snapshot.get("watchlist_intel") or {})
+    if not watchlist_intel:
+        from agent_reach.daily_run.watchlist_intel import collect_watchlist_intel
+
+        watchlist_intel = collect_watchlist_intel(pf, settings=settings)
+
     return WeeklyReport(
         week_start=week_start,
         week_end=week_end,
@@ -1080,6 +1226,8 @@ def generate_weekly_report(
         end_stock_mv=end_stock_mv,
         stock_pnl=stock_pnl,
         cash_pnl=cash_pnl,
+        pnl_attribution=pnl_attribution,
+        trade_pnl_detail=trade_pnl_detail,
         holdings=holdings,
         watchlist=watchlist,
         hot_sectors=hot_sectors,
@@ -1101,6 +1249,8 @@ def generate_weekly_report(
         buy_rules_whatif=buy_rules_whatif,
         intraday_friction_whatif=intraday_friction_whatif,
         intraday_sell_whatif=intraday_sell_whatif,
+        macro_signals=macro_signals,
+        watchlist_intel=watchlist_intel,
     )
 
 
@@ -1149,6 +1299,59 @@ def _weekly_report_data(report: WeeklyReport | dict[str, Any]) -> dict[str, Any]
     return report
 
 
+def build_weekly_pnl_source_attribution_lines(report: WeeklyReport | dict[str, Any]) -> list[str]:
+    """Held / realized / rebalance breakdown of weekly portfolio P&L."""
+    data = _weekly_report_data(report)
+    attr = dict(data.get("pnl_attribution") or {})
+    if not attr and data.get("weekly_pnl") is None:
+        return []
+
+    held = attr.get("held_week_chg")
+    realized = attr.get("realized_pnl")
+    rebalance = attr.get("rebalance_pnl")
+    trade_flow = attr.get("trade_cash_flow")
+
+    if held is None and rebalance is None and (realized is None or abs(float(realized)) < 0.01):
+        return []
+
+    parts: list[str] = []
+    if held is not None:
+        sign = "+" if float(held) >= 0 else ""
+        parts.append(f"现持仓价格 {sign}¥{float(held):,.2f}")
+    if realized is not None and abs(float(realized)) >= 0.01:
+        sign = "+" if float(realized) >= 0 else ""
+        parts.append(f"已清仓已实现 {sign}¥{float(realized):,.2f}")
+    if rebalance is not None and (
+        abs(float(rebalance)) >= 0.01
+        or held is not None
+        or (realized is not None and abs(float(realized)) >= 0.01)
+    ):
+        sign = "+" if float(rebalance) >= 0 else ""
+        parts.append(f"换仓及其它 {sign}¥{float(rebalance):,.2f}")
+
+    lines: list[str] = []
+    if parts:
+        lines.append("- **归因明细：** " + " · ".join(parts))
+        lines.append(
+            "  - _现持仓=周末仍持有标的的周初→周末价差；"
+            "已清仓=本周卖出 FIFO 已实现；"
+            "换仓及其它=组合净值变动扣除前两项（含买卖换仓、已卖标的浮亏兑现等）_"
+        )
+
+    cash_pnl = attr.get("cash_pnl", data.get("cash_pnl"))
+    if (
+        trade_flow is not None
+        and cash_pnl is not None
+        and abs(float(trade_flow) - float(cash_pnl)) >= 1000
+    ):
+        sign = "+" if float(trade_flow) >= 0 else ""
+        lines.append(
+            f"- **成交净现金流（ledger）：** {sign}¥{float(trade_flow):,.2f} "
+            f"（≠ 现金余额变动 ¥{float(cash_pnl):+,.2f}，前者为买卖流水，后者为余额差）"
+        )
+    return lines
+
+
 def build_weekly_pnl_attribution_lines(report: WeeklyReport | dict[str, Any]) -> list[str]:
     """Stock vs cash decomposition of weekly portfolio change."""
     data = _weekly_report_data(report)
@@ -1191,6 +1394,7 @@ def build_weekly_pnl_attribution_lines(report: WeeklyReport | dict[str, Any]) ->
             f"- **持有现金：** ¥{float(start_cash):,.2f} → ¥{float(end_cash):,.2f}{pct_s}"
         )
 
+    lines.extend(build_weekly_pnl_source_attribution_lines(data))
     return lines
 
 
@@ -1328,6 +1532,13 @@ def _render_pnl_lines(report: WeeklyReport) -> list[str]:
             )
         )
     lines.extend(build_weekly_pnl_explanation(report))
+    if report.trade_pnl_detail:
+        from agent_reach.daily_run.realized_pnl import render_weekly_trade_pnl_markdown
+
+        trade_md = render_weekly_trade_pnl_markdown(report.trade_pnl_detail)
+        if trade_md:
+            lines.append("")
+            lines.extend(trade_md.splitlines())
     for note in report.notes:
         if not any(note in line for line in lines):
             lines.append(f"- _{note}_")
@@ -1521,6 +1732,35 @@ def render_weekly_sections(report: WeeklyReport) -> list[WeeklySection]:
         market_lines.append("")
         market_lines.append(render_weekly_candidates_markdown(wl_update))
     sections.append(WeeklySection("板块·热点", _join_section_lines(market_lines)))
+
+    from agent_reach.daily_run.xueqiu_hot_display import render_xueqiu_hot_markdown
+
+    xq_md = render_xueqiu_hot_markdown(report.macro_signals)
+    if xq_md.strip():
+        xq_lines = _period_header_lines(report, continuation=True) + [xq_md]
+        sections.append(WeeklySection("雪球热门", _join_section_lines(xq_lines)))
+
+    from agent_reach.daily_run.watchlist_intel import render_watchlist_intel_markdown
+
+    intel_md = render_watchlist_intel_markdown(
+        report.watchlist_intel or {},
+        watchlist=report.watchlist,
+        limit=5,
+    )
+    if intel_md.strip():
+        intel_lines = _period_header_lines(report, continuation=True) + [intel_md]
+        sections.append(WeeklySection("观察池情报", _join_section_lines(intel_lines)))
+
+    from agent_reach.daily_run.xueqiu_hit_outcomes import (
+        render_xueqiu_hit_outcomes_markdown,
+        summarize_xueqiu_hit_outcomes,
+    )
+
+    hit_stats = summarize_xueqiu_hit_outcomes()
+    hit_md = render_xueqiu_hit_outcomes_markdown(hit_stats)
+    if hit_md.strip() and int(hit_stats.get("total") or 0) >= 3:
+        hit_lines = _period_header_lines(report, continuation=True) + [hit_md]
+        sections.append(WeeklySection("雪球命中率", _join_section_lines(hit_lines)))
 
     track_body = _render_mss_lines(report) + _render_experience_lines(report)
     if track_body:

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from agent_reach.daily_run.auditor import AuditResult, run_data_audit
-from agent_reach.daily_run.quality_gate import GateResult, validate_report
+from agent_reach.daily_run.quality_gate import GateResult, validate_report, _workflow_from_snapshot
 from agent_reach.daily_run.settings import effective_settings, load_settings
 from agent_reach.daily_run.harness_display import format_mss_breakdown_lines
 from agent_reach.daily_run.verdict import VerdictResult, compute_verdict, fuse_verdict_with_team
@@ -37,7 +37,7 @@ def evaluate_snapshot(
     if enriched.get("team_review") or enriched.get("team_consensus_label"):
         verdict = fuse_verdict_with_team(verdict, enriched, cfg)
     report = build_report(enriched, audit, verdict, cfg)
-    gate = validate_report(report, cfg)
+    gate = validate_report(report, cfg, snapshot=enriched, workflow=_workflow_from_snapshot(enriched))
 
     if gate.downgraded and gate.missing_fields:
         labels = cfg.get("verdict_labels", {})
@@ -74,6 +74,11 @@ def build_report(
 
     breakdown = snapshot.get("mss_breakdown") or {}
     breakdown_lines = _format_mss_breakdown_lines(breakdown)
+    from agent_reach.daily_run.emotion_mss_fusion import format_emotion_fusion_line
+
+    fusion_line = format_emotion_fusion_line(breakdown)
+    if fusion_line:
+        breakdown_lines.append(fusion_line)
     from agent_reach.daily_run.harness_display import (
         format_effective_thresholds_markdown,
         format_mss_weights_overlay_markdown,

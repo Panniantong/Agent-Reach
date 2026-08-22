@@ -159,11 +159,12 @@ python3 ~/redfox-community/skills/trending-hub/scripts/fetch_hotspot.py --source
 - [x] gzh 订阅文件 — `~/.agent-reach/daily_run/redfox/gzh_subscriptions.json`
 - [x] weibo-realtime-search — `fetch_weibo_search`（intraday/close）
 - [x] supervisor 反面检验 — `team._build_counter_thesis`（共识「可做」时）
+- [x] supervisor 反面检验 LLM — `supervisor_counter_llm.enrich_counter_thesis_llm`（`team.counter_thesis_llm.enabled`）
 
 **待增强：**
 
-- [ ] gzh 订阅 CLI 管理命令（对标 upstream `manage_subscriptions.py`）
-- [ ] stock-analysis 反面检验 enrich supervisor prompt（非仅 markdown 一行）
+- [x] gzh 订阅 CLI 管理命令 — `daily-run redfox gzh list|add|remove`
+- [x] stock-analysis 反面检验 enrich supervisor LLM prompt — `supervisor_counter_llm.py`（Batch 12）
 
 **参考文件（upstream）：** `skills/stock-feed/SKILL.md` · `skills/trending-hub/SKILL.md` · `skills/gzh-astock-top/SKILL.md` · `skills/stock-analysis/SKILL.md` · `skills/investor-distiller/SKILL.md`
 

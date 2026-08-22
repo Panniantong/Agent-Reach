@@ -14,10 +14,30 @@ def search_exa_snippet(query: str, settings: dict[str, Any]) -> Optional[str]:
     if max_q <= 0:
         return None
     try:
-        from agent_reach.daily_run.exa_client import summarize_hits, web_search_exa
+        from agent_reach.daily_run.exa_client import summarize_hits
+        from agent_reach.daily_run.intent_cache import run_intent_cached
 
-        hits = web_search_exa(query, num_results=2, timeout=int(cfg.get("exa_timeout", 30)))
-        return summarize_hits(hits) or None
+        def _fetch() -> dict[str, Any]:
+            from agent_reach.daily_run.exa_cache import cached_web_search_exa
+
+            hits, _from_exa_cache = cached_web_search_exa(
+                query,
+                num_results=2,
+                timeout=int(cfg.get("exa_timeout", 30)),
+                settings=settings,
+            )
+            snippet = summarize_hits(hits) or ""
+            return {
+                "intent": "exa-search",
+                "query": query,
+                "snippet": snippet,
+                "hits": hits,
+            }
+
+        result = run_intent_cached("exa-search", query, _fetch, settings=settings)
+        if result.get("skipped"):
+            return None
+        return str(result.get("snippet") or "").strip() or None
     except Exception:
         return None
 
@@ -45,6 +65,22 @@ def hot_news_summary_from_snapshot(snapshot: dict[str, Any]) -> Optional[str]:
         return None
     text = hot.get("text_feed") or hot.get("summary") or hot.get("detail")
     return str(text).strip() or None
+
+
+def fetch_eastmoney_intent_snippet(
+    snapshot: dict[str, Any],
+    settings: dict[str, Any],
+) -> Optional[str]:
+    from agent_reach.daily_run.eastmoney_intent import (
+        format_eastmoney_intent_summary,
+        route_eastmoney_intent,
+    )
+
+    query = str(snapshot.get("name") or snapshot.get("code") or "").strip()
+    if not query:
+        return None
+    result = route_eastmoney_intent(query, settings=settings)
+    return format_eastmoney_intent_summary(result) or None
 
 
 def score_from_text(text: str, base: float = 50.0) -> float:

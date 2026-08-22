@@ -12,7 +12,7 @@ from agent_reach.daily_run.settings import load_settings
 
 def test_expected_scan_slots_count():
     slots = expected_scan_slots()
-    assert len(slots) == 15
+    assert len(slots) == 16
     assert slots[0]["scan_id"] == "S1"
     assert slots[0]["time"] == "07:00"
     assert slots[1]["scan_id"] == "S2"

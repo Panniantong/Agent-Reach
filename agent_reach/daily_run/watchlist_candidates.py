@@ -131,6 +131,134 @@ def _rank_hot_sectors(report: dict[str, Any] | Any) -> list[tuple[str, float, st
     return [(name, score, reason) for name, (score, reason) in ranked]
 
 
+def _add_xueqiu_hot_candidates(
+    chosen: list[dict[str, Any]],
+    chosen_codes: set[str],
+    skip_codes: set[str],
+    *,
+    macro_signals: dict[str, Any],
+    max_candidates: int,
+    sector_names: list[str],
+) -> None:
+    from agent_reach.daily_run.xueqiu_hot_display import normalize_xueqiu_symbol
+
+    boards: list[dict[str, Any]] = []
+    for stock in macro_signals.get("hot_stocks") or []:
+        if isinstance(stock, dict):
+            boards.append({**stock, "board": stock.get("board") or "人气榜"})
+    for stock in macro_signals.get("hot_watch_stocks") or []:
+        if isinstance(stock, dict):
+            boards.append({**stock, "board": stock.get("board") or "关注榜"})
+    if not boards:
+        return
+
+    for stock in boards:
+        if len(chosen) >= max_candidates:
+            return
+        code = normalize_xueqiu_symbol(str(stock.get("symbol") or ""))
+        if not code or len(code) != 6 or code in skip_codes or code in chosen_codes:
+            continue
+        name = str(stock.get("name") or code)
+        board = str(stock.get("board") or "热股")
+        rank = stock.get("rank")
+        rank_s = f" #{rank}" if rank is not None else ""
+        pct = stock.get("percent")
+        pct_s = f" {float(pct):+.1f}%" if pct is not None else ""
+        chosen.append(
+            _candidate_dict(
+                {"code": code, "name": name, "keywords": [name[:4], code]},
+                reason=f"雪球{board}候选：{name}{rank_s}{pct_s}",
+                source="xueqiu_hot",
+            )
+        )
+        chosen_codes.add(code)
+        if "雪球热股" not in sector_names:
+            sector_names.append("雪球热股")
+
+
+def _add_eastmoney_screen_candidates(
+    chosen: list[dict[str, Any]],
+    chosen_codes: set[str],
+    skip_codes: set[str],
+    *,
+    sector_keywords: list[str],
+    settings: dict[str, Any],
+    max_candidates: int,
+    sector_names: list[str],
+) -> None:
+    wl_cfg = watchlist_settings(settings)
+    if wl_cfg.get("eastmoney_screen_candidates_enabled", True) is False:
+        return
+    plugins = (settings or {}).get("plugins") or {}
+    if plugins.get("eastmoney_intent_enabled") is False:
+        return
+
+    from agent_reach.daily_run.eastmoney_intent import screen_eastmoney_stocks
+
+    per_sector = int(wl_cfg.get("eastmoney_screen_per_sector", 2))
+    skip_labels = {"综合", "未分类", "雪球热股", "热点搜股", "东财选股"}
+    for keyword in sector_keywords:
+        if len(chosen) >= max_candidates:
+            return
+        kw = str(keyword or "").strip()
+        if not kw or kw in skip_labels:
+            continue
+        rows = screen_eastmoney_stocks(keyword=kw, settings=settings)
+        added = 0
+        for row in rows:
+            if len(chosen) >= max_candidates or added >= per_sector:
+                break
+            code = _normalize_code(str(row.get("code") or ""))
+            if not code or code in skip_codes or code in chosen_codes:
+                continue
+            name = str(row.get("name") or code)
+            chg = row.get("change_pct")
+            chg_s = f" {float(chg):+.1f}%" if chg is not None else ""
+            chosen.append(
+                _candidate_dict(
+                    {"code": code, "name": name, "keywords": [name[:4], kw, code]},
+                    reason=f"东财选股：{kw} → {name}{chg_s}",
+                    source="eastmoney_screen",
+                )
+            )
+            chosen_codes.add(code)
+            added += 1
+        if added and "东财选股" not in sector_names:
+            sector_names.append("东财选股")
+
+
+def _add_xueqiu_search_candidates(
+    chosen: list[dict[str, Any]],
+    chosen_codes: set[str],
+    skip_codes: set[str],
+    *,
+    macro_signals: dict[str, Any],
+    max_candidates: int,
+    sector_names: list[str],
+) -> None:
+    rows = macro_signals.get("xueqiu_stock_search") or []
+    for row in rows:
+        if len(chosen) >= max_candidates:
+            return
+        if not isinstance(row, dict):
+            continue
+        code = _normalize_code(str(row.get("code") or ""))
+        if not code or code in skip_codes or code in chosen_codes:
+            continue
+        name = str(row.get("name") or code)
+        query = str(row.get("query") or "热点")
+        chosen.append(
+            _candidate_dict(
+                {"code": code, "name": name, "keywords": [name[:4], query, code]},
+                reason=f"热点搜股：「{query}」→ {name}",
+                source="xueqiu_search",
+            )
+        )
+        chosen_codes.add(code)
+        if "热点搜股" not in sector_names:
+            sector_names.append("热点搜股")
+
+
 def build_weekly_watchlist_candidates(
     report: dict[str, Any] | Any,
     settings: dict[str, Any],
@@ -157,7 +285,8 @@ def build_weekly_watchlist_candidates(
     skip_codes = static_codes | held_codes
 
     ranked_sectors: list[tuple[str, float, str]] = []
-    for sector, score, sector_reason in _rank_hot_sectors(data):
+    all_ranked_sectors = _rank_hot_sectors(data)
+    for sector, score, sector_reason in all_ranked_sectors:
         if _match_pool_key(sector, pools):
             ranked_sectors.append((sector, score, sector_reason))
         if len(ranked_sectors) >= sector_limit:
@@ -185,6 +314,39 @@ def build_weekly_watchlist_candidates(
         _add_from_pool(sector, sector_reason, list(pools.get(pool_key or "", []) or []))
         if len(chosen) >= max_candidates:
             break
+
+    macro = dict(data.get("macro_signals") or {})
+    if wl_cfg.get("xueqiu_hot_candidates_enabled", True) is not False:
+        _add_xueqiu_hot_candidates(
+            chosen,
+            chosen_codes,
+            skip_codes,
+            macro_signals=macro,
+            max_candidates=max_candidates,
+            sector_names=sector_names,
+        )
+    if wl_cfg.get("xueqiu_search_candidates_enabled", True) is not False:
+        _add_xueqiu_search_candidates(
+            chosen,
+            chosen_codes,
+            skip_codes,
+            macro_signals=macro,
+            max_candidates=max_candidates,
+            sector_names=sector_names,
+        )
+
+    screen_keywords = list(sector_names)
+    if not screen_keywords:
+        screen_keywords = [name for name, _, _ in all_ranked_sectors[:5]]
+    _add_eastmoney_screen_candidates(
+        chosen,
+        chosen_codes,
+        skip_codes,
+        sector_keywords=screen_keywords,
+        settings=settings,
+        max_candidates=max_candidates,
+        sector_names=sector_names,
+    )
 
     if len(chosen) < min_candidates:
         for item in data.get("hot_sectors") or []:

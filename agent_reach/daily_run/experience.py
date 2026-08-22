@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -35,6 +35,7 @@ def append_experience_entry(
     research: Optional[list[dict[str, Any]]] = None,
     settings: Optional[dict[str, Any]] = None,
     forecast_review: Optional[dict[str, Any]] = None,
+    xueqiu_hit_settle: Optional[dict[str, Any]] = None,
 ) -> ExperienceAppendResult:
     """Append one close review atom to experience.jsonl and update rules summary."""
     cfg = (settings or {}).get("experience", {})
@@ -91,6 +92,13 @@ def append_experience_entry(
             "optimization_notes": forecast_review.get("optimization_notes") or [],
         }
 
+    if xueqiu_hit_settle and not xueqiu_hit_settle.get("skipped"):
+        entry["xueqiu_hit_settle"] = {
+            "settled_count": xueqiu_hit_settle.get("settled_count"),
+            "counts": xueqiu_hit_settle.get("counts"),
+            "harness_refinement_id": (xueqiu_hit_settle.get("harness") or {}).get("refinement_id"),
+        }
+
     if harness_result and not harness_result.get("skipped"):
         entry["harness_refinement_id"] = harness_result.get("refinement_id")
 
@@ -145,6 +153,60 @@ def load_recent_experience(limit: int = 10) -> list[dict[str, Any]]:
         except json.JSONDecodeError:
             continue
     return out
+
+
+def _experience_recency(entry: dict[str, Any]) -> tuple[str, str]:
+    return (str(entry.get("date") or ""), str(entry.get("at") or ""))
+
+
+def _date_in_experience_range(ds: str, start: date, end: date) -> bool:
+    try:
+        d = date.fromisoformat(ds[:10])
+    except ValueError:
+        return False
+    return start <= d <= end
+
+
+def load_experience_in_range(start: date, end: date) -> list[dict[str, Any]]:
+    """All experience entries whose ``date`` falls in ``[start, end]`` (inclusive)."""
+    path = experience_dir() / "experience.jsonl"
+    if not path.exists():
+        return []
+    out: list[dict[str, Any]] = []
+    with open(path, encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            ds = str(entry.get("date") or "")
+            if _date_in_experience_range(ds, start, end):
+                out.append(entry)
+    return out
+
+
+def format_experience_snippet(entry: dict[str, Any]) -> str:
+    ds = str(entry.get("date") or "")
+    hit = "✅" if entry.get("prediction_hit") else "—"
+    rules = "；".join((entry.get("rules") or [])[:2])
+    return f"{ds} {entry.get('name')} MSS={entry.get('mss_final')} {hit} {rules}".strip()
+
+
+def load_weekly_experience_snippets(start: date, end: date, limit: int = 5) -> list[str]:
+    """
+    Weekly report snippets: latest entry per symbol in range, most recent symbols first.
+    """
+    latest_by_code: dict[str, dict[str, Any]] = {}
+    for entry in load_experience_in_range(start, end):
+        code = str(entry.get("code") or "").strip() or str(entry.get("name") or "unknown")
+        prev = latest_by_code.get(code)
+        if prev is None or _experience_recency(entry) > _experience_recency(prev):
+            latest_by_code[code] = entry
+    ranked = sorted(latest_by_code.values(), key=_experience_recency, reverse=True)
+    return [format_experience_snippet(entry) for entry in ranked[: max(limit, 0)]]
 
 
 def load_experience_rules(limit: int = 5, *, settings: Optional[dict[str, Any]] = None) -> list[str]:

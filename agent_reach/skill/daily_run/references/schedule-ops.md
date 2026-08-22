@@ -49,6 +49,7 @@ agent-reach daily-run schedule install
 
 # 立即执行（等同 cron 触发）
 agent-reach daily-run schedule run morning
+agent-reach daily-run schedule run midday
 agent-reach daily-run schedule run intraday
 agent-reach daily-run schedule run close
 agent-reach daily-run schedule run weekly
@@ -60,10 +61,11 @@ agent-reach daily-run schedule run forecast
 |------|------|
 | 07:00 | 盘前 S1 扫描 + 飞书（smart 模式推送） |
 | 08:00 | 早盘全量分析 + S2 + 飞书 + 保存基线 |
-| 09:30–15:00 **11 次**扫描 | 盘中 S3–S12 + 条件调仓 T_n（smart 推送：S1/S2/S12 或调仓时） |
+| **12:30** | **午盘轻分析**：宏观/舆情 refresh + Lookback 锚点 → 飞书（写入 intraday，source=midday） |
+| 09:30–15:00 **11 次**扫描 | 盘中 S3–S15 + 条件调仓 T_n（smart 推送：S1/S2/S12 或调仓时） |
 | 18:00 | 收盘复盘（Team + 曲线 + Exa + 验证 + 预测校准） |
 | **周六 08:30** | **周报**：盈亏、持股、观察池、热门板块 → 飞书；**闭环** 写回 skill + settings + 本地同步 + skill 审视 |
-| **周日 08:30** | **下周预测**：MSS/标的日走势、新闻热点 → 飞书 + `forecasts/` |
+| **周日 08:30** | **下周预测**：MSS/标的日走势、新闻热点 → 飞书 + `forecasts/`；Cookie 失效时首卡 **🍪 雪球 Cookie 预警**（含 Cookie-Editor 导出步骤） |
 
 **周六 skill 机械门禁**（`weekly_report.skill_gates`）：写回后校验必备章节、行数上限、playbook/experience 标记与 snapshot 块尺寸；未通过则**阻断周报飞书推送**并单独发红色告警卡。配置见 `config/daily_run_settings.json`。
 

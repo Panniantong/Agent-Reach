@@ -20,11 +20,9 @@ from agent_reach.daily_run.close_research import render_research_markdown, run_e
 from agent_reach.daily_run.curve_analysis import analyze_intraday_curve, render_curve_markdown
 from agent_reach.daily_run.experience import append_experience_entry, render_experience_markdown
 from agent_reach.daily_run.team import (
+    enrich_with_team_or_experts,
     expert_card_enabled,
-    experts_enabled,
-    mss_experts_enabled,
     render_team_markdown,
-    run_team_first,
     team_first_enabled,
 )
 from agent_reach.daily_run.verify import render_verify_markdown, verify_snapshots
@@ -216,23 +214,19 @@ def run_morning(
     if team_first is None:
         use_team = team_first_enabled(cfg, workflow="morning")
     else:
+        from agent_reach.daily_run.team import experts_enabled
+
         use_team = bool(team_first) and experts_enabled(cfg, workflow="morning")
 
-    if use_team:
-        enriched = run_team_first(snapshot, cfg, names=plugin_names)
-        steps.append("team_first")
-    elif experts_enabled(cfg, workflow="morning"):
-        from agent_reach.daily_run.plugins.loader import run_experts
-
-        enriched = run_experts(snapshot, cfg, names=plugin_names)
-        steps.append("experts")
-    elif mss_experts_enabled(cfg, workflow="morning"):
-        from agent_reach.daily_run.plugins.loader import MSS_EXPERT_NAMES, run_experts
-
-        enriched = run_experts(snapshot, cfg, names=MSS_EXPERT_NAMES)
-        steps.append("mss_experts")
-    else:
-        enriched = dict(snapshot)
+    enriched, expert_steps = enrich_with_team_or_experts(
+        snapshot,
+        cfg,
+        workflow="morning",
+        plugin_names=plugin_names,
+        team_first=use_team if team_first is not None else None,
+    )
+    steps.extend(expert_steps)
+    if not expert_steps:
         steps.append("snapshot")
 
     evaluation = evaluate_snapshot(enriched, cfg, doctor_channels=doctor_channels)
@@ -271,6 +265,14 @@ def run_morning(
         _workflow_harness_error(morning_harness_errors, "morning_harness", exc)
         morning_harness_result = {"skipped": True, "error": str(exc)}
 
+    xueqiu_hit_record: dict[str, Any] = {}
+    try:
+        from agent_reach.daily_run.xueqiu_hit_outcomes import record_xueqiu_hit_fingerprints
+
+        xueqiu_hit_record = record_xueqiu_hit_fingerprints(enriched, settings=cfg)
+    except Exception as exc:
+        _workflow_harness_error(morning_harness_errors, "xueqiu_hit_record", exc)
+
     team_md = render_team_markdown(enriched) if expert_card_enabled(cfg, workflow="morning") else ""
     report_md = render_markdown(report)
     morning_narrative: dict[str, Any] = {"skipped": True, "reason": "deferred"}
@@ -300,6 +302,7 @@ def run_morning(
             report=report,
             harness_markdown=harness_md,
             narrative=morning_narrative,
+            macro_signals=enriched.get("macro_signals"),
         )
         feishu_result = push_report_sections(
             sections,
@@ -335,6 +338,7 @@ def run_morning(
         "feishu": feishu_result,
         "harness_plan_closeout": plan_close,
         "harness_morning": morning_harness_result,
+        "xueqiu_hit_record": xueqiu_hit_record,
         **({"harness_errors": morning_harness_errors} if morning_harness_errors else {}),
     }
 
@@ -677,6 +681,8 @@ def run_close(
     if team_first is None:
         use_team = team_first_enabled(cfg, workflow="close")
     else:
+        from agent_reach.daily_run.team import experts_enabled
+
         use_team = bool(team_first) and experts_enabled(cfg, workflow="close")
 
     from agent_reach.daily_run.kronos_predictor import attach_kronos_to_snapshot, is_kronos_enabled
@@ -684,14 +690,17 @@ def run_close(
     if is_kronos_enabled(cfg):
         enriched = attach_kronos_to_snapshot(dict(current), settings=cfg)
 
-    if use_team:
-        if not experts_already_ran:
-            enriched = run_team_first(enriched, cfg, names=plugin_names)
-        team_md = render_team_markdown(enriched)
-    elif mss_experts_enabled(cfg, workflow="close") and not experts_already_ran:
-        from agent_reach.daily_run.plugins.loader import MSS_EXPERT_NAMES, run_experts
+    if not experts_already_ran:
+        enriched, _expert_steps = enrich_with_team_or_experts(
+            enriched,
+            cfg,
+            workflow="close",
+            plugin_names=plugin_names,
+            team_first=use_team if team_first is not None else None,
+        )
 
-        enriched = run_experts(dict(enriched), cfg, names=plugin_names or MSS_EXPERT_NAMES)
+    if use_team and expert_card_enabled(cfg, workflow="close"):
+        team_md = render_team_markdown(enriched)
 
     if verify_dict is not None:
         from agent_reach.daily_run.verify import verify_from_dict
@@ -777,6 +786,19 @@ def run_close(
     except Exception as exc:
         _workflow_harness_error(harness_errors, "forecast_review", exc)
 
+    xueqiu_hit_settle: dict[str, Any] = {}
+    try:
+        from agent_reach.daily_run.xueqiu_hit_outcomes import settle_xueqiu_hits
+
+        xueqiu_hit_settle = settle_xueqiu_hits(
+            baseline,
+            enriched,
+            verify_dict,
+            settings=cfg,
+        )
+    except Exception as exc:
+        _workflow_harness_error(harness_errors, "xueqiu_hit_settle", exc)
+
     exp_append = append_experience_entry(
         enriched,
         verify_dict,
@@ -784,10 +806,21 @@ def run_close(
         research=research_results,
         settings=cfg,
         forecast_review=forecast_review.to_dict() if forecast_review else None,
+        xueqiu_hit_settle=xueqiu_hit_settle,
     )
     exp_path = exp_append.path
     experience_harness = exp_append.harness
     exp_md = render_experience_markdown(limit=3, settings=cfg) or ""
+    try:
+        from agent_reach.daily_run.xueqiu_hit_outcomes import render_xueqiu_hit_outcomes_markdown
+
+        xq_hit_md = render_xueqiu_hit_outcomes_markdown(
+            settled=xueqiu_hit_settle.get("entries") or [],
+        )
+        if xq_hit_md:
+            exp_md = (exp_md + "\n\n" + xq_hit_md).strip() if exp_md else xq_hit_md
+    except Exception as exc:
+        _workflow_harness_error(harness_errors, "xueqiu_hit_markdown", exc)
 
     if cfg.get("close_improvements", {}).get("enabled", True):
         from agent_reach.daily_run.close_improvements import (
@@ -823,8 +856,18 @@ def run_close(
     if market_review_enabled(cfg):
         market_review_obj = get_or_collect_market_review(settings=cfg)
         if market_review_obj:
-            market_review_md = render_market_review_markdown(market_review_obj)
+            market_review_md = render_market_review_markdown(market_review_obj, snapshot=enriched)
             enriched["market_review"] = market_review_obj
+            emotion = market_review_obj.get("emotion")
+            if isinstance(emotion, dict) and emotion:
+                from agent_reach.daily_run.emotion_mss_fusion import apply_emotion_to_mss_breakdown
+
+                enriched["mss_breakdown"] = apply_emotion_to_mss_breakdown(
+                    enriched.get("mss_breakdown") or {},
+                    emotion,
+                    settings=cfg,
+                )
+                enriched["market_emotion"] = emotion
 
     redfox_md = ""
     if redfox_enabled(cfg):
@@ -967,17 +1010,6 @@ def run_close(
 
     curve_payload = curve.to_dict() if curve is not None and hasattr(curve, "to_dict") else curve
     close_narrative: dict[str, Any] = {"skipped": True, "reason": "deferred"}
-    if not skip_narrative:
-        from agent_reach.daily_run.report_narrative import generate_close_narrative
-
-        close_narrative = generate_close_narrative(
-            snapshot=enriched,
-            verify=verify_dict,
-            portfolio_summary=portfolio_summary_obj.to_dict() if portfolio_summary_obj else None,
-            curve=curve_payload,
-            forecast_review=forecast_review.to_dict() if forecast_review else None,
-            settings=cfg,
-        )
 
     push_harness_summary = _harness_push_summary_enabled(cfg, report_kind="close")
     harness_result: dict[str, Any] = {}
@@ -1006,6 +1038,22 @@ def run_close(
             _workflow_harness_error(harness_errors, "close_harness_layer_ab", exc)
             harness_result = {"skipped": True, "error": str(exc)}
 
+    if not skip_narrative:
+        from agent_reach.daily_run.report_narrative import generate_close_narrative
+
+        portfolio_dict = portfolio_summary_obj.to_dict() if portfolio_summary_obj else None
+        if portfolio_dict is not None and harness_result:
+            portfolio_dict = dict(portfolio_dict)
+            portfolio_dict["harness_result"] = harness_result
+        close_narrative = generate_close_narrative(
+            snapshot=enriched,
+            verify=verify_dict,
+            portfolio_summary=portfolio_dict,
+            curve=curve_payload,
+            forecast_review=forecast_review.to_dict() if forecast_review else None,
+            settings=cfg,
+        )
+
     feishu_result = None
     if push:
         audit_cfg = cfg.get("data_audit", {})
@@ -1026,6 +1074,7 @@ def run_close(
             portfolio_markdown=portfolio_md,
             harness_markdown=harness_md,
             narrative=close_narrative,
+            macro_signals=enriched.get("macro_signals"),
         )
         feishu_result = push_report_sections(
             sections,
@@ -1150,15 +1199,8 @@ def prepare_close_run(
         is_watchlist_adjust_enabled,
     )
 
-    close_team = (cfg.get("team") or {}).get("close_team_first", True) is not False
-    if close_team and experts_enabled(cfg, workflow="close"):
-        snap = run_team_first(snap, cfg)
-        steps.append("team_first")
-    elif mss_experts_enabled(cfg, workflow="close"):
-        from agent_reach.daily_run.plugins.loader import MSS_EXPERT_NAMES, run_experts
-
-        snap = run_experts(snap, cfg, names=MSS_EXPERT_NAMES)
-        steps.append("mss_experts")
+    snap, expert_steps = enrich_with_team_or_experts(snap, cfg, workflow="close")
+    steps.extend(expert_steps)
 
     verify_result = verify_snapshots(baseline, snap, cfg)
     verify_out = verify_result.to_dict()
@@ -1329,11 +1371,11 @@ def scheduled_start_context(job: str, settings: dict[str, Any]) -> dict[str, Any
     scan_id: Optional[str] = None
     targets: list[str] = []
 
-    if job in ("morning", "intraday", "close"):
-        targets = resolve_target_symbols(pf, settings, workflow=job)
+    if job in ("morning", "midday", "intraday", "close"):
+        targets = resolve_target_symbols(pf, settings, workflow=job if job != "midday" else "intraday")
         symbol_count = len(targets) or 1
 
-    if job == "intraday":
+    if job in ("intraday", "midday"):
         from agent_reach.daily_run.intraday import load_state
         from agent_reach.daily_run.schedule import INTRADAY_MAX_SCANS
 
@@ -1364,6 +1406,7 @@ def send_scheduled_job_start_notification(
     templates = settings.get("report", {})
     template_keys = {
         "morning": "feishu_template_premarket",
+        "midday": "feishu_template_midday",
         "intraday": "feishu_template_intraday",
         "close": "feishu_template_close",
         "weekly": "feishu_template_weekly",
@@ -1371,6 +1414,7 @@ def send_scheduled_job_start_notification(
     }
     default_templates = {
         "morning": "orange",
+        "midday": "blue",
         "intraday": "blue",
         "close": "purple",
         "weekly": "blue",
@@ -1384,6 +1428,10 @@ def send_scheduled_job_start_notification(
     if job == "morning":
         title = "🌅 早盘分析已启动" + symbol_suffix
         pipeline = "**数据审计** → **MSS 决策** → 飞书推送"
+    elif job == "midday":
+        scan_label = scan_id or "S?"
+        title = f"☀️ 午盘 {scan_label} 已启动{symbol_suffix}"
+        pipeline = "**宏观刷新** → **Lookback 锚点** → 飞书推送"
     elif job == "intraday":
         scan_label = scan_id or "S?"
         title = f"📊 盘中 {scan_label} 已启动{symbol_suffix}"
@@ -1503,24 +1551,66 @@ def run_weekly(
         _workflow_harness_error(harness_errors, "weekly_harness_layer_a", exc)
         harness_result["layer_a"] = {"skipped": True, "error": str(exc)}
 
-    from agent_reach.daily_run.report_narrative import generate_weekly_narrative
-
-    report.llm_narrative = generate_weekly_narrative(report.to_dict(), settings=cfg)
-    steps.append("llm_narrative")
-
-    md = render_weekly_markdown(report)
-    steps.append("render")
-
-    feishu_result = None
-    gate_alert: str = ""
     gates = ((skill_writeback.get("skill_audit") or {}).get("gates") or {})
     block_push = bool(gates.get("block_weekly_push"))
+    gate_alert: str = ""
     if block_push:
         from agent_reach.daily_run.skill_gates import format_gate_alert_markdown
 
         gate_alert = format_gate_alert_markdown(gates)
         steps.append("push_blocked_skill_gates")
 
+    try:
+        from agent_reach.daily_run.harness import refine_after_job_llm
+
+        weekly_evidence = {
+            "report": report.to_dict(),
+            "applied_config": skill_writeback.get("applied_config") or [],
+        }
+        layer_b = refine_after_job_llm("weekly", evidence=weekly_evidence, settings=cfg)
+        harness_result["layer_b"] = layer_b
+        if layer_b.get("refinement_id"):
+            steps.append("harness_layer_b")
+    except Exception as exc:
+        _workflow_harness_error(harness_errors, "weekly_harness_layer_b", exc)
+        harness_result["layer_b"] = {"skipped": True, "error": str(exc)}
+
+    harness_result["weekly_skills"] = harness_result.get("weekly_skills") or (
+        weekly_skills_report.to_dict() if weekly_skills_report is not None else {}
+    )
+
+    rollback: dict[str, Any] = {"skipped": True}
+    if not block_push:
+        from agent_reach.daily_run.harness import auto_rollback_on_bad_trade
+
+        try:
+            rollback = auto_rollback_on_bad_trade(
+                portfolio_summary={"weekly_pnl_pct": report.weekly_pnl_pct},
+                harness_result=harness_result,
+                settings=cfg,
+                job="weekly",
+            )
+        except Exception as exc:
+            _workflow_harness_error(harness_errors, "weekly_harness_auto_rollback", exc)
+            rollback = {"skipped": True, "error": str(exc)}
+        if rollback.get("triggered"):
+            harness_result["auto_rollback"] = rollback
+
+    cfg = effective_settings(settings)
+
+    from agent_reach.daily_run.report_narrative import generate_weekly_narrative
+
+    report.llm_narrative = generate_weekly_narrative(
+        report.to_dict(),
+        settings=cfg,
+        harness_result=harness_result,
+    )
+    steps.append("llm_narrative")
+
+    md = render_weekly_markdown(report)
+    steps.append("render")
+
+    feishu_result = None
     if push and not block_push:
         from agent_reach.config import Config
 
@@ -1560,36 +1650,9 @@ def run_weekly(
         )
         steps.append("push_gate_alert")
 
-    try:
-        from agent_reach.daily_run.harness import refine_after_job_llm
-
-        weekly_evidence = {
-            "report": report.to_dict(),
-            "applied_config": skill_writeback.get("applied_config") or [],
-        }
-        layer_b = refine_after_job_llm("weekly", evidence=weekly_evidence, settings=cfg)
-        harness_result["layer_b"] = layer_b
-        if layer_b.get("refinement_id"):
-            steps.append("harness_layer_b")
-    except Exception as exc:
-        _workflow_harness_error(harness_errors, "weekly_harness_layer_b", exc)
-        harness_result["layer_b"] = {"skipped": True, "error": str(exc)}
-
-    harness_result["weekly_skills"] = harness_result.get("weekly_skills") or (
-        weekly_skills_report.to_dict() if weekly_skills_report is not None else {}
-    )
     if push and not block_push:
         from agent_reach.config import Config
-        from agent_reach.daily_run.harness import auto_rollback_on_bad_trade
 
-        rollback = auto_rollback_on_bad_trade(
-            portfolio_summary={"weekly_pnl_pct": report.weekly_pnl_pct},
-            harness_result=harness_result,
-            settings=cfg,
-            job="weekly",
-        )
-        if rollback.get("triggered"):
-            harness_result["auto_rollback"] = rollback
         cfg_obj = config or Config()
         summary_enabled = _harness_push_summary_enabled(cfg, report_kind="weekly")
         if summary_enabled and _push_harness_summary_card(

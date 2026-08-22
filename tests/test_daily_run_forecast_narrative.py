@@ -91,3 +91,23 @@ def test_render_forecast_sections_puts_ai_last():
     )
     assert sections[-1].label == "规则解读"
     assert isinstance(sections[-1], ForecastSection)
+
+
+def test_render_forecast_sections_includes_xueqiu_hot():
+    sections = render_forecast_sections(
+        {
+            "week_start": "2026-08-17",
+            "week_end": "2026-08-21",
+            "llm_narrative": {},
+            "mss_daily": {},
+            "symbols": {},
+            "news_events": [],
+            "macro_signals": {
+                "sentiment_posts": [{"title": "下周存储逻辑", "author": "作者"}],
+            },
+        }
+    )
+    labels = [s.label for s in sections]
+    assert "雪球热门" in labels
+    xq = next(s for s in sections if s.label == "雪球热门")
+    assert "下周存储逻辑" in xq.markdown

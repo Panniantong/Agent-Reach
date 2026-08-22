@@ -35,6 +35,7 @@ _CATEGORY_LABELS: dict[str, str] = {
     "forecast_symbols": "个股路径",
     "forecast_news": "新闻热点",
     "harness": "Harness 进化",
+    "xueqiu_hot": "雪球热门",
 }
 
 
@@ -89,6 +90,7 @@ def render_morning_sections(
     report: dict[str, Any],
     harness_markdown: str = "",
     narrative: Optional[dict[str, Any]] = None,
+    macro_signals: Optional[dict[str, Any]] = None,
 ) -> list[ReportSection]:
     name = report.get("name") or report.get("code") or "大盘"
     verdict = report.get("verdict") or "观察"
@@ -106,6 +108,16 @@ def render_morning_sections(
         sections.append(
             ReportSection(category="decision", title="", body=report_markdown.strip(), template=None)
         )
+    from agent_reach.daily_run.xueqiu_hot_display import render_xueqiu_hot_markdown
+
+    xueqiu_md = render_xueqiu_hot_markdown(macro_signals)
+    if xueqiu_md.strip():
+        sections.append(ReportSection(category="xueqiu_hot", title="", body=xueqiu_md))
+    from agent_reach.daily_run.eastmoney_intent import render_eastmoney_macro_markdown
+
+    em_md = render_eastmoney_macro_markdown(macro_signals=macro_signals)
+    if em_md.strip():
+        sections.append(ReportSection(category="eastmoney", title="", body=em_md))
     if harness_markdown.strip():
         sections.append(ReportSection(category="harness", title="", body=harness_markdown.strip()))
     if ai_section is not None:
@@ -136,6 +148,7 @@ def render_close_sections(
     market_markdown: str = "",
     harness_markdown: str = "",
     narrative: Optional[dict[str, Any]] = None,
+    macro_signals: Optional[dict[str, Any]] = None,
 ) -> list[ReportSection]:
     label = verify_name or "大盘"
     sections: list[ReportSection] = []
@@ -158,6 +171,16 @@ def render_close_sections(
         sections.append(ReportSection(category="experience", title="", body=experience_markdown.strip()))
     if verify_markdown.strip():
         sections.append(ReportSection(category="verify", title="", body=verify_markdown.strip()))
+    from agent_reach.daily_run.xueqiu_hot_display import render_xueqiu_hot_markdown
+
+    xueqiu_md = render_xueqiu_hot_markdown(macro_signals)
+    if xueqiu_md.strip():
+        sections.append(ReportSection(category="xueqiu_hot", title="", body=xueqiu_md))
+    from agent_reach.daily_run.eastmoney_intent import render_eastmoney_macro_markdown
+
+    em_md = render_eastmoney_macro_markdown(macro_signals=macro_signals)
+    if em_md.strip():
+        sections.append(ReportSection(category="eastmoney", title="", body=em_md))
     if harness_markdown.strip():
         sections.append(ReportSection(category="harness", title="", body=harness_markdown.strip()))
     if portfolio_markdown.strip():
@@ -182,6 +205,7 @@ _WEEKLY_CATEGORY_MAP = {
     "规则解读": "weekly_narrative",
     "盈亏·持仓": "weekly_portfolio",
     "板块·热点": "weekly_market",
+    "雪球热门": "xueqiu_hot",
     "MSS·经验": "weekly_track",
     "学习·改进": "weekly_insights",
 }
@@ -213,6 +237,7 @@ _FORECAST_CATEGORY_MAP = {
     "MSS预测": "forecast_mss",
     "个股路径": "forecast_symbols",
     "新闻热点": "forecast_news",
+    "雪球热门": "xueqiu_hot",
 }
 
 
@@ -360,6 +385,40 @@ def append_merged_narrative_section(
     return out
 
 
+def append_merged_xueqiu_hot_section(
+    sections: list[ReportSection],
+    macro_signals: Optional[dict[str, Any]],
+    *,
+    report_kind: str,
+    symbol_count: int,
+) -> list[ReportSection]:
+    """Append one portfolio-level Xueqiu hot-post/stock card after MSS decision."""
+    from agent_reach.daily_run.xueqiu_hot_display import render_xueqiu_hot_markdown
+
+    body = render_xueqiu_hot_markdown(macro_signals)
+    if not body.strip():
+        return sections
+    out = list(sections)
+    insert_at = 0
+    insert_after = {"morning": "decision", "close": "verify", "forecast": "forecast_mss"}
+    target_cat = insert_after.get(report_kind, "decision")
+    for i, sec in enumerate(out):
+        if sec.category == target_cat:
+            insert_at = i + 1
+            break
+    out.insert(insert_at, ReportSection(category="xueqiu_hot", title="", body=body.strip()))
+    total = len(out)
+    for i, sec in enumerate(out, start=1):
+        sec.title = merged_category_title(
+            report_kind=report_kind,
+            category=sec.category,
+            index=i,
+            total=total,
+            symbol_count=1 if sec.category == "daily_portfolio" else symbol_count,
+        )
+    return out
+
+
 def append_merged_harness_section(
     sections: list[ReportSection],
     harness_markdown: str,
@@ -444,18 +503,32 @@ def merge_sections_by_category(
     return merged
 
 
-def morning_sections_from_run(run_result: dict[str, Any]) -> list[ReportSection]:
+def morning_sections_from_run(
+    run_result: dict[str, Any],
+    *,
+    include_xueqiu_hot: bool = True,
+) -> list[ReportSection]:
     evaluation = run_result.get("evaluation") or {}
     report = evaluation.get("report") or {}
+    snapshot = run_result.get("snapshot") or {}
+    macro_signals = snapshot.get("macro_signals") if include_xueqiu_hot else None
     return render_morning_sections(
         team_markdown=run_result.get("team_markdown") or "",
         report_markdown=run_result.get("report_markdown") or "",
         report=report,
         narrative=run_result.get("llm_narrative"),
+        macro_signals=macro_signals,
     )
 
 
-def close_sections_from_run(run_result: dict[str, Any], *, verify_name: str) -> list[ReportSection]:
+def close_sections_from_run(
+    run_result: dict[str, Any],
+    *,
+    verify_name: str,
+    include_xueqiu_hot: bool = True,
+) -> list[ReportSection]:
+    snapshot = run_result.get("snapshot") or {}
+    macro_signals = snapshot.get("macro_signals") if include_xueqiu_hot else None
     return render_close_sections(
         verify_name=verify_name,
         market_markdown=run_result.get("market_review_markdown") or "",
@@ -466,6 +539,7 @@ def close_sections_from_run(run_result: dict[str, Any], *, verify_name: str) -> 
         verify_markdown=run_result.get("verify_markdown") or "",
         portfolio_markdown=run_result.get("portfolio_markdown") or "",
         narrative=run_result.get("llm_narrative"),
+        macro_signals=macro_signals,
     )
 
 

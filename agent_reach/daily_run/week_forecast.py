@@ -242,6 +242,32 @@ def _events_from_weekly_digest(digest: dict[str, Any]) -> list[dict[str, Any]]:
     return events
 
 
+def _digest_exa_research_rows(digest: Optional[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not digest:
+        return []
+    rows = list(digest.get("xueqiu_exa_research") or [])
+    if rows:
+        return rows
+    macro = digest.get("macro_signals") or {}
+    return list(macro.get("xueqiu_exa_research") or [])
+
+
+def _digest_exa_as_news_research(digest: Optional[dict[str, Any]], *, limit: int = 2) -> list[dict[str, Any]]:
+    cached: list[dict[str, Any]] = []
+    for row in _digest_exa_research_rows(digest)[:limit]:
+        cached.append(
+            {
+                "type": "xueqiu_exa",
+                "label": row.get("label") or row.get("query") or "雪球Exa",
+                "summary": row.get("summary") or "",
+                "hits": row.get("hits") or [],
+                "success": row.get("success", True),
+                "from_digest": True,
+            }
+        )
+    return cached
+
+
 def _historical_vol_scale(calibration: dict[str, Any]) -> float:
     """Blend calibration vol_scale with recent forecast review errors."""
     base = float(calibration.get("vol_scale") or 1.0)
@@ -323,9 +349,32 @@ def run_news_research(
         return []
 
     def _run_one(q: dict[str, str]) -> dict[str, Any]:
-        try:
+        from agent_reach.daily_run.intent_cache import run_intent_cached
+
+        def _fetch() -> dict[str, Any]:
             hits = web_search_exa(q["query"], num_results=3, timeout=timeout)
             return {**q, "hits": hits, "summary": summarize_hits(hits), "success": True}
+
+        try:
+            wrapped = run_intent_cached(
+                "exa-search",
+                q["query"],
+                _fetch,
+                settings=settings,
+                extra=f"week_forecast:{q.get('type', 'news')}",
+            )
+            if wrapped.get("skipped"):
+                return {
+                    **q,
+                    "hits": [],
+                    "summary": str(wrapped.get("reason") or "rate_limited"),
+                    "success": False,
+                    "rate_limited": wrapped.get("rate_limited"),
+                }
+            out = dict(wrapped)
+            if wrapped.get("from_cache"):
+                out["from_cache"] = True
+            return out
         except ExaError as exc:
             return {**q, "hits": [], "summary": str(exc), "success": False}
 
@@ -351,6 +400,9 @@ class WeekForecast:
     notes: list[str] = field(default_factory=list)
     kronos_paths: dict[str, Any] = field(default_factory=dict)
     llm_narrative: dict[str, Any] = field(default_factory=dict)
+    macro_signals: dict[str, Any] = field(default_factory=dict)
+    watchlist_intel: dict[str, Any] = field(default_factory=dict)
+    xueqiu_cookie_health: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -368,6 +420,9 @@ class WeekForecast:
             "reviews": [],
             "notes": self.notes,
             "llm_narrative": self.llm_narrative,
+            "macro_signals": self.macro_signals,
+            "watchlist_intel": self.watchlist_intel,
+            "xueqiu_cookie_health": self.xueqiu_cookie_health,
         }
 
 
@@ -471,7 +526,8 @@ def generate_week_forecast(
             )
 
     news_queries = build_news_queries(snapshot, week_start)
-    if digest and cfg.get("reuse_weekly_digest_exa", True) is not False:
+    reuse_digest = digest and cfg.get("reuse_weekly_digest_exa", True) is not False
+    if reuse_digest:
         cached_research = [
             {
                 "type": "digest",
@@ -483,9 +539,44 @@ def generate_week_forecast(
             }
             for r in (digest.get("sector_research") or [])[:2]
         ]
+        cached_research.extend(_digest_exa_as_news_research(digest))
         news_research = cached_research + run_news_research(news_queries[:1], settings)
     else:
         news_research = run_news_research(news_queries, settings)
+
+    from agent_reach.daily_run.macro_collector import fetch_xueqiu_hot_signals
+
+    macro_signals = fetch_xueqiu_hot_signals(
+        pf,
+        settings=settings,
+        enrich_extras=not reuse_digest,
+    )
+    if not macro_signals:
+        cached = snapshot.get("macro_signals")
+        if isinstance(cached, dict) and cached:
+            macro_signals = cached
+        elif digest:
+            macro_signals = dict(digest.get("macro_signals") or {})
+    elif reuse_digest:
+        digest_exa = _digest_exa_research_rows(digest)
+        if digest_exa:
+            macro_signals = dict(macro_signals)
+            macro_signals["xueqiu_exa_research"] = digest_exa
+            notes.append("复用周六 digest 雪球 Exa")
+
+    watchlist_intel = dict(snapshot.get("watchlist_intel") or {})
+    if not watchlist_intel and digest:
+        watchlist_intel = dict(digest.get("watchlist_intel") or {})
+    if not watchlist_intel:
+        from agent_reach.daily_run.watchlist_intel import collect_watchlist_intel
+
+        watchlist_intel = collect_watchlist_intel(pf, settings=settings)
+
+    from agent_reach.daily_run.xueqiu_cookie_health import check_xueqiu_cookie_health
+
+    xueqiu_health = check_xueqiu_cookie_health(macro_signals=macro_signals)
+    if xueqiu_health.get("status") != "ok":
+        notes.append(f"雪球 Cookie {xueqiu_health.get('status')}：{xueqiu_health.get('message', '')}")
 
     forecast = WeekForecast(
         week_start=week_start,
@@ -498,6 +589,9 @@ def generate_week_forecast(
         news_research=news_research,
         calibration_used=dict(calibration),
         notes=notes,
+        macro_signals=macro_signals,
+        watchlist_intel=watchlist_intel,
+        xueqiu_cookie_health=xueqiu_health,
     )
     from agent_reach.daily_run.report_narrative import generate_forecast_narrative
 
@@ -571,15 +665,21 @@ def _render_symbols_section(data: dict[str, Any]) -> str:
             lines.append(f"- **{ds} {wd}** {d_label} 预期 {lo:+.1f}% ~ {hi:+.1f}%{conf_s}{k_note}")
         kronos = sym.get("kronos") or {}
         if kronos.get("available"):
-            cum = kronos.get("cum_change_pct")
-            band = kronos.get("confidence_band") or []
-            dir_nd = kronos.get("direction_nd", "flat")
-            k_dir = dir_cn.get(dir_nd, "→震荡")
-            band_s = f"[{band[0]:+.1f}%, {band[1]:+.1f}%]" if len(band) == 2 else ""
-            lines.append(
-                f"_Kronos {k_dir} 累计 {cum:+.1f}% {band_s} "
-                f"(sample={kronos.get('sample_count', 1)})_"
-            )
+            from agent_reach.daily_run.kronos_predictor import render_kronos_path_markdown
+
+            k_md = render_kronos_path_markdown(kronos)
+            if k_md:
+                lines.append(k_md)
+            else:
+                cum = kronos.get("cum_change_pct")
+                band = kronos.get("confidence_band") or []
+                dir_nd = kronos.get("direction_nd", "flat")
+                k_dir = dir_cn.get(dir_nd, "→震荡")
+                band_s = f"[{band[0]:+.1f}%, {band[1]:+.1f}%]" if len(band) == 2 else ""
+                lines.append(
+                    f"_Kronos {k_dir} 累计 {cum:+.1f}% {band_s} "
+                    f"(sample={kronos.get('sample_count', 1)})_"
+                )
         lines.append("")
     return "\n".join(lines).strip()
 
@@ -607,6 +707,19 @@ def _render_news_section(data: dict[str, Any]) -> str:
 def render_forecast_sections(forecast: WeekForecast | dict[str, Any]) -> list[ForecastSection]:
     data = forecast.to_dict() if isinstance(forecast, WeekForecast) else forecast
     sections: list[ForecastSection] = []
+    wf_cfg = {}
+    try:
+        from agent_reach.daily_run.settings import load_settings
+
+        wf_cfg = load_settings().get("week_forecast") or {}
+    except Exception:
+        pass
+    if wf_cfg.get("xueqiu_cookie_alert_enabled", True) is not False:
+        from agent_reach.daily_run.xueqiu_cookie_health import render_xueqiu_cookie_alert_markdown
+
+        cookie_md = render_xueqiu_cookie_alert_markdown(data.get("xueqiu_cookie_health"))
+        if cookie_md.strip():
+            sections.append(ForecastSection(label="Cookie预警", markdown=cookie_md))
     mss_md = _render_mss_section(data)
     if mss_md.strip():
         sections.append(ForecastSection(label="MSS预测", markdown=mss_md))
@@ -616,6 +729,25 @@ def render_forecast_sections(forecast: WeekForecast | dict[str, Any]) -> list[Fo
     news_md = _render_news_section(data)
     if news_md.strip():
         sections.append(ForecastSection(label="新闻热点", markdown=news_md))
+    from agent_reach.daily_run.xueqiu_hot_display import render_xueqiu_hot_markdown
+
+    xq_md = render_xueqiu_hot_markdown(data.get("macro_signals"))
+    if xq_md.strip():
+        sections.append(ForecastSection(label="雪球热门", markdown=xq_md))
+    from agent_reach.daily_run.watchlist_intel import render_watchlist_intel_markdown
+
+    watchlist = [
+        {"code": code, "name": sym.get("name") or code}
+        for code, sym in (data.get("symbols") or {}).items()
+        if sym.get("role") == "watchlist"
+    ]
+    intel_md = render_watchlist_intel_markdown(
+        data.get("watchlist_intel") or {},
+        watchlist=watchlist,
+        limit=5,
+    )
+    if intel_md.strip():
+        sections.append(ForecastSection(label="观察池情报", markdown=intel_md))
     from agent_reach.daily_run.report_narrative import render_narrative_markdown
 
     narrative_md = render_narrative_markdown(data.get("llm_narrative") or {}, job="forecast")
