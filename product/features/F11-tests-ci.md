@@ -1,6 +1,6 @@
 # F11 Tests / CI
 
-**Parent:** none · **Phase:** 1–5 (tests land with the feature they lock) · **Status:** planned
+**Parent:** none · **Phase:** 1–5 (tests land with the feature they lock) · **Status:** F11.1–F11.3 done
 
 Do not delete or weaken existing tests. Especially: `tests/test_doctor_credential_boundaries.py`, `tests/test_url_security.py`, `tests/test_private_file_writes.py`, `tests/test_cookie_security.py`, `tests/test_mcp_server.py`, `tests/test_probe.py` (no `shell=True`).
 

@@ -1,6 +1,6 @@
 # F8 Channel productization
 
-**Parent:** none · **Phase:** 1 (docs: commercial first) and 4 (install gating) · **Status:** planned
+**Parent:** none · **Phase:** 1 (docs: commercial first) and 4 (install gating) · **Status:** phase-1 docs done
 
 Registry stays 15 names. No deletions in Phases 1–4 unless Pepe asks. Gating is skill + install + docs.
 

@@ -1,6 +1,6 @@
 # F9 MCP
 
-**Parent:** none · **Phase:** keep across all phases; docs fix in Phase 1 · **Status:** planned (lock) · **Audit:** MCP surface
+**Parent:** none · **Phase:** keep across all phases; docs fix in Phase 1 · **Status:** F9.2 docs done; F9.1 lock · **Audit:** MCP surface
 
 ADR-012: MCP stays status/doctor. `integrations/mcp_server.py` exposes `get_status` only. Config opened `read_only=True` (`mcp_server.py:40-55`). Tests: `tests/test_mcp_server.py`.
 

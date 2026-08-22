@@ -1,6 +1,6 @@
 # F1 Contract truth
 
-**Parent:** none · **Phase:** 1 · **Status:** planned · **Audit:** contract-drift (low)
+**Parent:** none · **Phase:** 1 · **Status:** done · **Audit:** contract-drift (low)
 
 Stop the docs from lying about what the code is. After F1, a new agent reading CLAUDE.md / README / skill / CONTRIBUTING can implement against reality: 15 channels, `can_handle` + `check`, doctor-only core, YAML config, curated backends not "the entire internet".
 

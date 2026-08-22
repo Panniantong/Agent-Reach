@@ -2,7 +2,7 @@
 
 This directory is the execution package for turning Agent Reach from a working personal installer into a production-grade **local-first** product. It is not the runtime. Runtime stays in `agent_reach/`.
 
-**Current phase: 1 (contract truth + pins + doctor prose).** Phase 1 is executed on `phase-1-contract-hygiene` (uncommitted). Do not start Phase 2 from memory.
+**Current phase: 2 (not started).** Phase 1 landed on `phase-1-contract-hygiene`. Do not start Phase 2 from memory.
 
 Canvas: [Agent Reach product plan](/Users/pepe/.cursor/projects/Users-pepe-Development-Agent-Reach/canvases/agent-reach-product-plan.canvas.tsx)
 
@@ -63,4 +63,4 @@ No edits to `agent_reach/` Python, CLI, tests, `pyproject.toml`, or skill runtim
 
 ## Next execution entry
 
-Paste `NEW-CHAT-PROMPT.md` into a new chat. Phase 1 encodings (ADR-017): README pointer YES; drop skill check-update nudge YES; pyproject description text YES (no version bump, no release); `doctor --json` `confidence` field NO (prose-only doctor honesty).
+Phase 1 is on `phase-1-contract-hygiene`. Next is Phase 2 (`CHECKLIST.md`). Pepe must pick F5.1 (DNS-pin vs stop fetch) before fetch code. Do not add `--i-understand-system` unless asked.

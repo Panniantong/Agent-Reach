@@ -1,6 +1,6 @@
 # F12 Telemetry / update
 
-**Parent:** none · **Phase:** 1 (nudge drop) · **Status:** planned · **Audit:** check-update-nudge (low)
+**Parent:** none · **Phase:** 1 (nudge drop) · **Status:** done (F12.4 skip) · **Audit:** check-update-nudge (low)
 
 `agent-reach check-update` is a real command (`cli.py:171`, `:2222-2281`) that GETs `https://api.github.com/repos/Panniantong/Agent-Reach`. Doctor github probes disable gh telemetry (`channels/github.py:20-27`). That is correct; do not "improve" doctor by running `gh auth status`.
 

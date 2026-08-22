@@ -37,7 +37,7 @@ AI 에이전트는 이미 인터넷에 접근할 수 있습니다 — 하지만 
 Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
 ```
 
-이 명령을 에이전트에 복사해서 붙여넣으세요. 몇 분 뒤에는 트윗을 읽고, Reddit을 검색하고, Bilibili를 볼 수 있게 됩니다.
+이 명령을 에이전트에 복사하세요. 몇 분 뒤에는 GitHub 읽기, 웹 검색, YouTube 자막, RSS를 쓸 수 있습니다. Cookie 플랫폼은 power-user 선택 사항입니다.
 
 **이미 설치하셨나요? 한 번에 업데이트하세요:**
 
@@ -62,19 +62,18 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 플랫폼 | 기능 | 설정 | 참고 |
 |----------|-------------|:-----:|-------|
 | 🌐 **Web** | 읽기 | 없음 | 모든 URL → 깨끗한 Markdown ([Jina Reader](https://github.com/jina-ai/reader) ⭐9.8K) |
-| 🐦 **Twitter/X** | 읽기 · 검색 | Cookie | Cookie로 검색, 타임라인, 트윗 읽기, 아티클 읽기 가능 ([twitter-cli](https://github.com/public-clis/twitter-cli)) |
-| 📕 **XiaoHongShu** | 읽기 · 검색 · 댓글 | OpenCLI / Cookie | OpenCLI는 사용자가 관리하는 기존 Chrome 세션만 사용하며, MCP/기존 도구는 Cookie-Editor 사용 |
-| 💼 **LinkedIn** | Jina Reader (공개 페이지) | Cookie | 전체 프로필, 회사, 채용 공고 검색 가능. 에이전트에 "LinkedIn 설정 도와줘"라고 말하세요 |
-| 💬 **WeChat Articles** | 검색 + 읽기 | 없음 | Exa를 통한 WeChat 공식 계정 게시글 검색 + 읽기 (설정 없음) + 선택적 [Camoufox](https://github.com/daijro/camoufox) |
-| 💻 **V2EX** | 인기 주제 · 노드 주제 · 주제 상세 + 답글 · 사용자 프로필 | 없음 | 공개 JSON API, 인증 없음. 기술 커뮤니티 콘텐츠에 적합 |
-| 📈 **Xueqiu (雪球)** | 주식 시세 · 검색 · 인기 글 · 인기 종목 | 브라우저 Cookie | 에이전트에 "Xueqiu 설정 도와줘"라고 말하세요 |
-| 🎙️ **Xiaoyuzhou Podcast** | 음성 변환 | 무료 API key | Groq Whisper를 통한 팟캐스트 오디오 → 전체 텍스트 변환 (무료) |
-| 🔍 **Web Search** | 검색 | 자동 설정 | 설치 시 자동 설정, 무료, API key 불필요 ([Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter)) |
-| 📦 **GitHub** | 읽기 · 검색 | 없음 | [gh CLI](https://cli.github.com) 기반. 공개 저장소는 즉시 사용 가능. `gh auth login`으로 비공개 저장소 읽기 |
 | 📺 **YouTube** | 읽기 · **검색** | 없음 | 자막 + 1800+ 비디오 사이트 검색 ([yt-dlp](https://github.com/yt-dlp/yt-dlp) ⭐148K) |
-| 📺 **Bilibili** | 읽기 · **검색** | 설정 없음 | [bili-cli](https://github.com/public-clis/bilibili-cli)로 검색·비디오 정보(로그인 불필요), 자막은 OpenCLI. yt-dlp는 Bilibili의 412 차단으로 사용하지 않음 |
 | 📡 **RSS** | 읽기 | 없음 | 모든 RSS/Atom 피드 ([feedparser](https://github.com/kurtmckee/feedparser) ⭐2.3K) |
-| 📖 **Reddit** | 검색 · 읽기 | Cookie | 2024년부터 인증 필요 — 설치 후 `rdt login` 실행 ([rdt-cli](https://github.com/public-clis/rdt-cli)) |
+| 🔍 **Web Search** | 검색 | 자동 설정 | 설치 시 자동 설정, 무료, API key 불필요 ([Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter)) |
+| 📦 **GitHub** | 읽기 · 검색 | 없음 | [gh CLI](https://cli.github.com) 기반. 공개 저장소는 즉시 사용 가능. `gh auth login`으로 비공개 저장소 **읽기** |
+| 💻 **V2EX** | 인기 주제 · 노드 주제 · 주제 상세 + 답글 · 사용자 프로필 | 없음 | 공개 JSON API, 인증 없음. 기술 커뮤니티 콘텐츠에 적합 |
+| 📺 **Bilibili** | 읽기 · **검색** | 설정 없음 | [bili-cli](https://github.com/public-clis/bilibili-cli)로 검색·비디오 정보(로그인 불필요), 자막은 OpenCLI. yt-dlp는 Bilibili의 412 차단으로 사용하지 않음 |
+| 🎙️ **Xiaoyuzhou Podcast** | 음성 변환 | 무료 API key | Groq Whisper를 통한 팟캐스트 오디오 → 전체 텍스트 변환 (무료) |
+| 🐦 **Twitter/X** | 읽기 · 검색 | Cookie (power-user / burner) | Cookie로 검색, 타임라인, 트윗 읽기, 아티클 읽기 가능 ([twitter-cli](https://github.com/public-clis/twitter-cli)) |
+| 📕 **XiaoHongShu** | 읽기 · 검색 · 댓글 | OpenCLI / Cookie (power-user / burner) | OpenCLI는 사용자가 관리하는 기존 Chrome 세션만 사용하며, MCP/기존 도구는 Cookie-Editor 사용 |
+| 📖 **Reddit** | 검색 · 읽기 | Cookie (power-user / burner) | 익명 API 없음. 데스크톱은 OpenCLI, 또는 [rdt-cli](https://github.com/public-clis/rdt-cli) + Cookie |
+| 💼 **LinkedIn** | Jina Reader (공개 페이지) | 공개 페이지는 Web. MCP 로그인은 power-user | 에이전트에 "LinkedIn 설정 도와줘"라고 말하세요 |
+| 📈 **Xueqiu (雪球)** | 주식 시세 · 검색 · 인기 글 · 인기 종목 | Cookie (power-user / burner) | 에이전트에 "Xueqiu 설정 도와줘"라고 말하세요 |
 
 > **상업 코어:** GitHub, Exa, YouTube, RSS, Web/Jina. Cookie / OpenCLI 플랫폼은 power-user / burner 선택 사항이며 기본 제품이 아닙니다.
 >
@@ -101,9 +100,12 @@ Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/m
 <summary>수동 설치</summary>
 
 ```bash
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+curl -fsSL -o /tmp/agent-reach-constraints.txt \
+  https://raw.githubusercontent.com/Panniantong/agent-reach/main/constraints.txt
+pip install -c /tmp/agent-reach-constraints.txt \
+  https://github.com/Panniantong/agent-reach/archive/main.zip
 agent-reach install --env=auto           # 읽기 전용 확인 (기본값)
-agent-reach install --env=auto --system  # 시스템 변경을 명시적으로 승인한 경우에만
+# agent-reach install --env=auto --system  # 사용자가 시스템 변경을 명시한 뒤에만
 ```
 </details>
 
@@ -225,7 +227,7 @@ channels/
 | YouTube 자막 + 검색 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | YouTube 및 지원 비디오 사이트용(Bilibili에는 사용하지 않음) |
 | Bilibili | [bili-cli](https://github.com/public-clis/bilibili-cli) ▸ OpenCLI ▸ 검색 API | yt-dlp는 412 차단으로 폐기. bili-cli는 로그인 없이 검색·읽기 가능 |
 | 웹 검색 | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | AI 시맨틱 검색, MCP 통합, API key 불필요 |
-| GitHub | [gh CLI](https://cli.github.com) | 공식 도구, 인증 후 전체 API |
+| GitHub | [gh CLI](https://cli.github.com) | 공식 도구. 인증 후 비공개 저장소 읽기 |
 | RSS 읽기 | [feedparser](https://github.com/kurtmckee/feedparser) | Python 생태계 표준, 2.3K stars |
 | XiaoHongShu | [OpenCLI](https://github.com/jackwener/opencli) (데스크톱) ▸ [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) (서버) ▸ xhs-cli | OpenCLI는 사용자가 관리하는 기존 세션만 사용하며, 그 외에는 Cookie-Editor로 수동 설정 |
 | LinkedIn | [mcp-server-linkedin](https://github.com/stickerdaniel/linkedin-mcp-server) | 1.2K stars, MCP 서버, 브라우저 자동화 |
@@ -271,7 +273,7 @@ Agent Reach는 Reddit을 위해 [rdt-cli](https://github.com/public-clis/rdt-cli
 <details>
 <summary><strong>Agent Reach는 Claude Code / Cursor / Windsurf / OpenClaw와 호환되나요?</strong></summary>
 
-네! Agent Reach는 설치 + 설정 도구입니다. Shell 명령을 실행할 수 있는 모든 AI 코딩 에이전트가 사용할 수 있습니다 — Claude Code, Cursor, Windsurf, OpenClaw, Codex 등. `pip install https://github.com/Panniantong/agent-reach/archive/main.zip` 실행 후 먼저 `agent-reach install`로 읽기 전용 검사를 하고, 시스템 변경을 명시적으로 승인한 경우에만 `agent-reach install --system`을 실행합니다. PyPI의 동명 패키지는 다른 프로젝트입니다.
+네! Agent Reach는 설치 + 설정 도구입니다. Shell 명령을 실행할 수 있는 모든 AI 코딩 에이전트가 사용할 수 있습니다 — Claude Code, Cursor, Windsurf, OpenClaw, Codex 등. `pip install -c constraints.txt`(같은 git ref의 `constraints.txt`) 실행 후 먼저 `agent-reach install`로 읽기 전용 검사를 하고, 시스템 변경을 명시적으로 승인한 경우에만 `agent-reach install --system`을 실행합니다. pipx는 `-c`를 받을 수 없습니다. PyPI의 동명 패키지는 다른 프로젝트입니다.
 </details>
 
 <details>

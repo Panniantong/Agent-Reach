@@ -1,6 +1,6 @@
 # F2 Install / update hygiene
 
-**Parent:** none · **Phase:** 1 (docs + constraints) and 2 (CLI blast print) · **Status:** planned · **Audit:** unpinned-deps, agent-system-writes
+**Parent:** none · **Phase:** 1 (docs + constraints) and 2 (CLI blast print) · **Status:** phase-1 done · **Audit:** unpinned-deps, agent-system-writes
 
 Default install stays check-only (`cli.py:261` `safe_mode = not --system`). User-facing recipes pin with `constraints.txt`. `--system` is never the copy-paste one-liner. Skill write targets are listed so operators know the blast radius.
 

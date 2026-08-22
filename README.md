@@ -79,7 +79,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 帮我安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
 ```
 
-复制给你的 Agent，几分钟后它就能读推特、搜 Reddit、看 YouTube、刷小红书了。
+复制给你的 Agent，几分钟后它就能读 GitHub、搜网页、看 YouTube、订阅 RSS。Cookie 平台是 power-user 可选。
 
 **已经装过了？更新也是一句话：**
 
@@ -241,7 +241,7 @@ channels/
 | YouTube 字幕 + 搜索 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | — | 154K Star，YouTube 仍是最佳（注意：不再用于 B站） |
 | B站 | [bili-cli](https://github.com/public-clis/bilibili-cli) | OpenCLI ▸ 搜索 API | yt-dlp 被 B站风控 412 封死（2026-06 实测），bili-cli 无登录可搜可读 |
 | 搜全网 | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | — | AI 语义搜索，MCP 接入免 Key |
-| GitHub | [gh CLI](https://cli.github.com) | — | 官方工具，认证后完整 API 能力 |
+| GitHub | [gh CLI](https://cli.github.com) | — | 官方工具，认证后可读私有仓库（只读） |
 | 读 RSS | [feedparser](https://github.com/kurtmckee/feedparser) | — | Python 生态标准选择 |
 | 小红书 | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)（服务器）▸ xhs-cli | OpenCLI 只用用户已有会话；其余后端用 Cookie-Editor 手工导出 |
 | LinkedIn | [mcp-server-linkedin](https://github.com/stickerdaniel/linkedin-mcp-server) | Jina Reader | MCP 服务，浏览器自动化 |

@@ -149,3 +149,31 @@ def test_update_md_constraints_or_pipx_exception():
     text = _read("docs/update.md")
     assert "-c constraints.txt" in text or "-c /tmp/agent-reach-constraints.txt" in text
     assert "pipx cannot take `-c`" in text
+
+
+def test_translation_readmes_use_constraints_not_bare_zip():
+    for relative in (
+        "docs/README_en.md",
+        "docs/README_ja.md",
+        "docs/README_ko.md",
+    ):
+        text = _read(relative)
+        assert (
+            "pip install https://github.com/Panniantong/agent-reach/archive/main.zip"
+            not in text
+        ), relative
+        assert "constraints.txt" in text, relative
+
+
+def test_commercial_github_row_before_twitter():
+    for relative in (
+        "README.md",
+        "docs/README_en.md",
+        "docs/README_ja.md",
+        "docs/README_ko.md",
+    ):
+        text = _read(relative)
+        github = text.find("**GitHub**")
+        twitter = text.find("**Twitter")
+        assert github != -1 and twitter != -1, relative
+        assert github < twitter, relative

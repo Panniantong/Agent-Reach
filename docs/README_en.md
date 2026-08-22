@@ -78,7 +78,7 @@ To connect your Agent to these platforms, you'd have to find tools, install depe
 Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
 ```
 
-Copy that to your Agent. A few minutes later, it can read tweets, search Reddit, and watch Bilibili.
+Copy that to your Agent. A few minutes later it can read GitHub, search the web, pull YouTube captions, and parse RSS. Cookie platforms are power-user optional.
 
 **Already installed? Update in one command:**
 
@@ -159,7 +159,10 @@ The Agent installs the Python package, checks your environment, and tells you wh
 <summary>Manual install</summary>
 
 ```bash
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+curl -fsSL -o /tmp/agent-reach-constraints.txt \
+  https://raw.githubusercontent.com/Panniantong/agent-reach/main/constraints.txt
+pip install -c /tmp/agent-reach-constraints.txt \
+  https://github.com/Panniantong/agent-reach/archive/main.zip
 agent-reach install --env=auto
 ```
 </details>
@@ -298,7 +301,7 @@ Each channel file **actually probes** its candidate backends in order (not just 
 | YouTube subtitles + search | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | — | 154K stars, still the best for YouTube (no longer used for Bilibili) |
 | Bilibili | [bili-cli](https://github.com/public-clis/bilibili-cli) | OpenCLI ▸ search API | yt-dlp is 412-blocked by Bilibili (verified June 2026); bili-cli searches and reads without login |
 | Search the web | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | — | AI semantic search, MCP integration, no API key |
-| GitHub | [gh CLI](https://cli.github.com) | — | Official tool, full API after auth |
+| GitHub | [gh CLI](https://cli.github.com) | — | Official tool; auth unlocks private-repo read |
 | Read RSS | [feedparser](https://github.com/kurtmckee/feedparser) | — | Python ecosystem standard |
 | XiaoHongShu | [OpenCLI](https://github.com/jackwener/opencli) (desktop) | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) (server) ▸ xhs-cli | OpenCLI uses only an existing user-controlled session; other backends use a manual Cookie-Editor export |
 | LinkedIn | [mcp-server-linkedin](https://github.com/stickerdaniel/linkedin-mcp-server) | Jina Reader | MCP server, browser automation |

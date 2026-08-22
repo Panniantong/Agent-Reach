@@ -74,7 +74,7 @@ Branch from latest main. Do not bump version (`1.5.0`). Do not add runtime deps.
 
 **Out of Phase 1:** F2.7, F3.5, F4.1–F4.6 (except F1.3), F5–F7, F8.2–F8.4, F10, F11.4–F11.6.
 
-**Exit:** CLAUDE.md / README / registry all say 15; contract matches `base.py`; version asserted; install docs use constraints; default still check-only; cookie-refresh tests pass; doctor JSON schema unchanged; skill has no cookie-paste one-liner and no post-task check-update. **Met on branch `phase-1-contract-hygiene` (uncommitted; pytest 603 passed).**
+**Exit:** CLAUDE.md / README / registry all say 15; contract matches `base.py`; version asserted; install docs use constraints; default still check-only; cookie-refresh tests pass; doctor JSON schema unchanged; skill has no cookie-paste one-liner and no post-task check-update. **Met on branch `phase-1-contract-hygiene` (pytest 605 passed; follow-up docs uncommitted until Pepe asks).**
 
 ---
 

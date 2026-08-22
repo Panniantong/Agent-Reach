@@ -1,6 +1,6 @@
 # F3 Doctor honesty
 
-**Parent:** none · **Phase:** 1 (prose + schema lock) · **Status:** planned · **Audit:** doctor-false-neg
+**Parent:** none · **Phase:** 1 (prose + schema lock) · **Status:** phase-1 done (F3.2 blocked) · **Audit:** doctor-false-neg
 
 Doctor must be a signal agents can trust **without** running cookie-refreshing CLIs and **without** adding a JSON field in Phase 1.
 
