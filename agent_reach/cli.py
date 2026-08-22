@@ -61,7 +61,7 @@ def main():
 
     parser = argparse.ArgumentParser(
         prog="agent-reach",
-        description="Give your AI Agent eyes to see the entire internet",
+        description="Local-first installer, doctor, and skill for curated read/search backends",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Show debug logs")
     parser.add_argument("--version", action="version", version=f"Agent Reach v{__version__}")

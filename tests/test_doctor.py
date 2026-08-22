@@ -109,9 +109,91 @@ class TestDoctor:
         plain = re.sub(r"\[[^\]]*\]", "", report)
         assert "Agent Reach" in plain
         assert "装好即用：" in plain
-        assert "1/3 个渠道可用" in plain
-        # Inactive optional channels should be summarized in one line
-        assert "可选渠道可以解锁" in plain
+        assert "1/3" in plain
+        assert "已现场确认可用" in plain
+        assert "不等于关闭" in plain
+        # Inactive optional channels should be summarized, not treated as off
+        assert "未现场确认" in plain
+        assert "可选渠道可以解锁" not in plain
+
+    def test_format_report_warn_is_not_counted_as_off(self):
+        report = doctor.format_report(
+            {
+                "web": {
+                    "status": "ok",
+                    "name": "网页",
+                    "message": "可抓取网页",
+                    "tier": 0,
+                    "backends": ["requests"],
+                },
+                "github": {
+                    "status": "warn",
+                    "name": "GitHub",
+                    "message": "gh 已安装，未做 live 验证",
+                    "tier": 0,
+                    "backends": ["gh"],
+                },
+            }
+        )
+        import re
+        plain = re.sub(r"\[[^\]]*\]", "", report)
+        assert "1/2" in plain
+        assert "已现场确认可用" in plain
+        assert "勿把 warn 当成关闭" in plain
+        # github warn is listed with [!] in the zero-config section, not as 未安装
+        assert "GitHub" in plain
+
+    def test_doctor_json_keys_stable(self, tmp_config, monkeypatch):
+        monkeypatch.setattr(
+            doctor,
+            "get_all_channels",
+            lambda: [
+                _StubChannel("web", "网页", 0, "ok", "可抓取网页", ["requests"],
+                             active_backend="requests"),
+                _StubChannel("github", "GitHub", 0, "warn", "gh 未验证", ["gh"]),
+            ],
+        )
+        expected = {
+            "status",
+            "name",
+            "message",
+            "tier",
+            "backends",
+            "active_backend",
+        }
+        results = doctor.check_all(tmp_config)
+        assert results
+        for result in results.values():
+            assert set(result.keys()) == expected
+            assert result["status"] in {"ok", "warn", "off", "error"}
+
+    def test_doctor_json_keys_stable_real_channels(self, tmp_config, monkeypatch):
+        monkeypatch.setattr("shutil.which", lambda _cmd: None)
+
+        import urllib.request
+        from urllib.error import URLError
+
+        def _no_net(*_a, **_k):
+            raise URLError("offline")
+
+        monkeypatch.setattr(urllib.request, "urlopen", _no_net)
+        import agent_reach.channels.xueqiu as xueqiu_mod
+        monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", True)
+        monkeypatch.setattr(xueqiu_mod._opener, "open", _no_net)
+
+        expected = {
+            "status",
+            "name",
+            "message",
+            "tier",
+            "backends",
+            "active_backend",
+        }
+        results = doctor.check_all(tmp_config)
+        assert len(results) == 15
+        for result in results.values():
+            assert set(result.keys()) == expected
+            assert result["status"] in {"ok", "warn", "off", "error"}
 
 
 def test_stale_active_backend_does_not_leak_into_errored_result(monkeypatch):

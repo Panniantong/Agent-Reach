@@ -21,7 +21,7 @@ from agent_reach.config import Config
 
 
 class AgentReach:
-    """Give your AI Agent eyes to see the entire internet.
+    """Installer, doctor, and config tool for curated read/search backends.
 
     This class provides health-check functionality.
     For reading/searching, use the upstream tools directly

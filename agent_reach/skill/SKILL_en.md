@@ -9,9 +9,8 @@ description: >
   Twitter/X, Reddit, Facebook, Instagram, YouTube, GitHub, Bilibili, XiaoHongShu,
   Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
 
-  15 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
-  Zero config for 6 channels. Run `agent-reach doctor --json` to see which
-  backend serves each platform right now.
+  15 registered channels; commercial core does not need session cookies.
+  Run `agent-reach doctor --json` to see which backend serves each platform.
 
   NOT for: writing reports/analysis/translation (this skill only FETCHES
   internet content); posting/commenting/liking (write operations); platforms
@@ -30,8 +29,10 @@ these platforms — do not invent your own approach.**
 1. **Health-check before acting**: for multi-backend/login-backed platforms (XiaoHongShu /
    Reddit / Bilibili / Twitter / Facebook / Instagram), run `agent-reach doctor --json` first.
    Use a populated `active_backend`; `active_backend: null` means Doctor deliberately skipped a
-   live probe to avoid browser-cookie reads or remote writes, not that no backend exists. Only when
-   the user's task requires that platform, run the reference's read-only command to verify it.
+   live probe to avoid browser-cookie reads or remote writes, not that no backend exists.
+   `status: warn` is not off: github / twitter / xiaohongshu / reddit / facebook / instagram /
+   exa_search / linkedin never return `ok` by design (no live probe). Only when the user's task
+   requires that platform, run the reference's read-only command to verify it.
 2. **Announce what you use**: say "using agent-reach, platform X via backend Y"
    before starting.
 3. **On failure, follow the retry chains in references/** — never guess
@@ -39,12 +40,6 @@ these platforms — do not invent your own approach.**
 4. **For broad research tasks**: combine platforms (Exa for web search +
    Twitter/Reddit for discussions + XiaoHongShu/Bilibili for Chinese
    perspectives), collect in parallel, then synthesize.
-5. **Watch versions for the user**: after finishing a substantial
-   multi-platform task, run `agent-reach check-update` (fast, one API call).
-   If a new version exists, append one line to your wrap-up: "Agent Reach
-   vX.Y.Z is available — paste this to me to update: 帮我更新 Agent Reach：
-   https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md".
-   Never interrupt the current task to update; never nag about the same version twice.
 
 ## Routing table
 
@@ -149,4 +144,10 @@ chains — note: reference docs are written in Chinese, commands are universal):
 If a channel needs setup, fetch the install guide:
 https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
 
-The user only provides cookies / one extension click; the agent does the rest.
+For cookie channels (Twitter / XiaoHongShu), have the user export with Cookie-Editor
+and pipe to the CLI (local TTY getpass also works). Never paste cookies into chat:
+
+```bash
+agent-reach configure twitter-cookies --stdin
+agent-reach configure xhs-cookies --stdin
+```
