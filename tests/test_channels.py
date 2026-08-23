@@ -1616,6 +1616,64 @@ class TestLinkedInChannel:
 
 
 class TestExaSearchChannel:
+    def test_direct_rest_is_preferred_when_key_is_configured(self, monkeypatch):
+        from agent_reach.channels import exa_search
+        from agent_reach.channels.exa_search import ExaSearchChannel
+        from agent_reach.probe import ProbeResult
+
+        observed = {}
+
+        def fake_probe(command, args, **kwargs):
+            observed.update(command=command, args=args, kwargs=kwargs)
+            return ProbeResult(
+                "ok",
+                output='{"configured": true, "backend": "Exa REST API"}',
+            )
+
+        monkeypatch.setattr(exa_search, "probe_command", fake_probe)
+        monkeypatch.setattr(
+            exa_search,
+            "inspect_mcporter_config",
+            lambda: pytest.fail("preferred REST path must not inspect mcporter"),
+        )
+
+        ch = ExaSearchChannel()
+        status, message = ch.check({"exa_api_key": "opaque-test-key"})
+        assert status == "warn"
+        assert "不发起计费搜索" in message
+        assert ch.active_backend is None
+        assert observed["command"] == "agent-reach-exa"
+        assert observed["args"] == ["status", "--json"]
+        assert observed["kwargs"]["env"] == {"EXA_API_KEY": "opaque-test-key"}
+
+    def test_mcp_remains_available_without_api_key(self, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)
+        config_path = tmp_path / "config" / "mcporter.json"
+        config_path.parent.mkdir()
+        config_path.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "exa": {"baseUrl": "https://mcp.example.test"}
+                    },
+                    "imports": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            shutil,
+            "which",
+            lambda command: "/usr/local/bin/mcporter" if command == "mcporter" else None,
+        )
+        from agent_reach.channels.exa_search import ExaSearchChannel
+
+        ch = ExaSearchChannel()
+        status, message = ch.check({})
+        assert status == "warn"
+        assert "mcporter" in message
+        assert ch.active_backend is None
+
     def test_mcporter_is_never_executed(self, monkeypatch, tmp_path):
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/mcporter")
