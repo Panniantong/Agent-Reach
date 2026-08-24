@@ -86,13 +86,18 @@ def _run_builtin(action: str, params: dict) -> dict:
     return {"ok": False, "error": f"unknown builtin: {action}"}
 
 
-def create_app():
+def create_app(narrative_service=None):
     from fastapi import Body, FastAPI, HTTPException
     from fastapi.responses import FileResponse, StreamingResponse
+    from fastapi.staticfiles import StaticFiles
 
     app = FastAPI(title="Agent Reach // Radar Console", docs_url=None, redoc_url=None)
     jobs = JobManager()
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     app.state.jobs = jobs
+    from agent_reach.radar_ui.narrative_api import register_narrative_routes
+
+    register_narrative_routes(app, jobs, narrative_service)
 
     @app.get("/")
     def index():

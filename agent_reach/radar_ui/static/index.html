@@ -86,6 +86,7 @@ button.run:disabled{color:var(--dim); border-color:var(--line); cursor:not-allow
 .blink{animation:bl 1.1s steps(2) infinite}
 @keyframes bl{50%{opacity:.25}}
 </style>
+<link rel="stylesheet" href="/static/narrative.css">
 </head>
 <body>
 <header id="head">
@@ -283,5 +284,6 @@ function followJob(job,label){
 loadProviders(); loadOverview(); loadFiles(); loadDeck();
 setInterval(loadProviders, 120000);
 </script>
+<script src="/static/narrative.js"></script>
 </body>
 </html>

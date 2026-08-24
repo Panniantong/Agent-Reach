@@ -237,6 +237,37 @@ def main():
     p_ui.add_argument("--port", type=int, default=8123)
     p_ui.add_argument("--no-open", action="store_true", help="不自動開瀏覽器")
 
+    # ── radar-narrative (evidence → contracts → calibrated probabilities) ──
+    p_narr = sub.add_parser(
+        "radar-narrative",
+        help="敘事推演：人工匯入、事件契約、校準、結算與稽核",
+    )
+    p_narr.add_argument(
+        "narrative_action",
+        choices=["ingest", "discover", "contract", "forecast", "resolve",
+                 "calibrate", "status", "seed-reports"],
+    )
+    p_narr.add_argument("--text", default="")
+    p_narr.add_argument("--url", default="")
+    p_narr.add_argument("--file", dest="file_path", default="")
+    p_narr.add_argument("--title", default="")
+    p_narr.add_argument("--source-id", default="")
+    p_narr.add_argument("--domain", default="")
+    p_narr.add_argument("--ticker", default="")
+    p_narr.add_argument("--published-at", default="")
+    p_narr.add_argument("--as-of", default="")
+    p_narr.add_argument("--query", default="")
+    p_narr.add_argument("--count", type=int, default=8)
+    p_narr.add_argument("--contract-id", default="")
+    p_narr.add_argument("--payload", default="", help="事件契約 JSON 檔")
+    p_narr.add_argument("--samples", default="", help="歷史 point-in-time samples JSON 檔")
+    p_narr.add_argument("--features", default="", help="當前 numeric features JSON 檔")
+    p_narr.add_argument("--horizon", choices=["quarter", "1y", "3y", "5y"], default="1y")
+    p_narr.add_argument("--outcome", type=int, choices=[0, 1], default=None)
+    p_narr.add_argument("--reason", default="")
+    p_narr.add_argument("--actor", default="local-user")
+    p_narr.add_argument("--json", action="store_true", help="輸出完整 JSON")
+
     # ── kol-post (single-stock KOL post scaffold, KG-driven) ──
     p_kol = sub.add_parser(
         "kol-post", help="Scaffold a single-stock KOL post (繁中) with supply-chain KG chokepoints injected"
@@ -304,6 +335,8 @@ def main():
         _cmd_radar_run(args)
     elif args.command == "radar-ui":
         _cmd_radar_ui(args)
+    elif args.command == "radar-narrative":
+        _cmd_radar_narrative(args)
     elif args.command == "kol-post":
         _cmd_kol_post(args)
 
@@ -687,6 +720,98 @@ def _cmd_radar_ui(args):
 
         webbrowser.open(url)
     uvicorn.run(create_app(), host="127.0.0.1", port=args.port, log_level="warning")
+
+def _load_narrative_json(path: str, label: str):
+    from pathlib import Path
+
+    if not path:
+        return None
+    file_path = Path(path).expanduser()
+    if not file_path.is_file():
+        raise ValueError(f"{label} JSON 不存在: {file_path}")
+    return json.loads(file_path.read_text(encoding="utf-8"))
+
+
+def _cmd_radar_narrative(args):
+    """Manual evidence ingestion and calibrated event-contract workflow."""
+    from pathlib import Path
+
+    from agent_reach.narrative.service import NarrativeService
+
+    service = NarrativeService()
+    action = args.narrative_action
+    if action == "status":
+        result = service.status()
+    elif action == "ingest":
+        result = service.ingest(
+            text=args.text,
+            url=args.url,
+            file_path=args.file_path,
+            title=args.title,
+            source_id=args.source_id,
+            domain=args.domain,
+            ticker=args.ticker,
+            published_at=args.published_at,
+            as_of=args.as_of,
+        )
+    elif action == "discover":
+        result = service.discover(args.query, domain=args.domain, num_results=args.count)
+    elif action == "contract":
+        payload = _load_narrative_json(args.payload, "contract")
+        if not isinstance(payload, dict):
+            raise ValueError("contract --payload 必須是 JSON object")
+        result = service.create_contract(payload)
+    elif action == "forecast":
+        samples_payload = _load_narrative_json(args.samples, "samples") or []
+        if isinstance(samples_payload, dict):
+            samples_payload = samples_payload.get("samples") or []
+        features = _load_narrative_json(args.features, "features") or {}
+        result = service.forecast(
+            args.contract_id,
+            samples=samples_payload,
+            current_features=features,
+            as_of=args.as_of,
+        )
+    elif action == "resolve":
+        if args.outcome is None:
+            result = service.auto_resolve(args.contract_id, actor=args.actor)
+        else:
+            if not args.reason:
+                raise ValueError("人工覆核必須提供 --reason")
+            result = service.human_override(
+                args.contract_id,
+                outcome=args.outcome,
+                reason=args.reason,
+                actor=args.actor,
+            )
+    elif action == "calibrate":
+        result = service.calibrate(domain=args.domain, horizon=args.horizon, as_of=args.as_of)
+    elif action == "seed-reports":
+        result = service.bootstrap_report_seeds(Path(__file__).resolve().parent.parent)
+    else:
+        raise ValueError(f"unknown narrative action: {action}")
+
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if action == "status":
+        counts = result["store"]["counts"]
+        print(f"敘事推演資料庫: {result['store']['database']}")
+        print(" · ".join(f"{key}={value}" for key, value in counts.items()))
+    elif action == "forecast":
+        forecast = result["forecast"]
+        if forecast["probability_status"] == "calibrated":
+            print(
+                f"校準機率 {forecast['probability']:.1%} "
+                f"[{forecast['lower_bound']:.1%}, {forecast['upper_bound']:.1%}]"
+            )
+        else:
+            print("資料不足：校準閘門未通過，不顯示點機率")
+        print(f"forecast_id={forecast['id']}")
+    else:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 
 
 def _cmd_kol_post(args):
@@ -2201,10 +2326,10 @@ def _is_newer_version(remote: str, local: str) -> bool:
         except ValueError:
             return None
 
-    r, l = parse(remote), parse(local)
-    if r is None or l is None:
+    remote_parts, local_parts = parse(remote), parse(local)
+    if remote_parts is None or local_parts is None:
         return remote != local  # unparseable — fall back to old behavior
-    return r > l
+    return remote_parts > local_parts
 
 
 def _cmd_check_update():

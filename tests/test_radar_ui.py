@@ -12,6 +12,9 @@ pytest.importorskip("httpx")
 from fastapi.testclient import TestClient  # noqa: E402
 
 import agent_reach.radar_ui.server as srv  # noqa: E402
+from agent_reach.narrative.quant import QuantAdapter  # noqa: E402
+from agent_reach.narrative.service import NarrativeService  # noqa: E402
+from agent_reach.narrative.store import NarrativeStore  # noqa: E402
 from agent_reach.radar_ui.jobs import JobManager  # noqa: E402
 
 
@@ -23,19 +26,31 @@ def client(monkeypatch, tmp_path):
     (tmp_path / "latest.md").write_text("# digest", encoding="utf-8")
     monkeypatch.setitem(srv.FILE_DIRS, "digests", tmp_path)
     monkeypatch.setitem(srv.FILE_DIRS, "wiki", wiki)
-    return TestClient(srv.create_app())
+    monkeypatch.setattr("agent_reach.radar_ui.jobs.JOBS_DIR", tmp_path / "jobs")
+    narrative = NarrativeService(
+        NarrativeStore(tmp_path / "narrative"),
+        QuantAdapter(tmp_path / "quant"),
+    )
+    return TestClient(srv.create_app(narrative_service=narrative))
 
 
 def test_platforms_and_scenarios_serializable(client, monkeypatch):
     import agent_reach.llm as llm_mod
 
-    monkeypatch.setattr(llm_mod, "providers_status",
-                        lambda config=None, probe=False: {"ollama": {"ok": True, "detail": ""}})
+    monkeypatch.setattr(
+        llm_mod,
+        "providers_status",
+        lambda config=None, probe=False: {"ollama": {"ok": True, "detail": ""}},
+    )
     plats = client.get("/api/platforms").json()
     assert {p["name"] for p in plats} >= {"twitter", "arxiv", "finviz"}
     data = client.get("/api/scenarios").json()
     assert {s["id"] for s in data["scenarios"]} == {
-        "arxiv_expert_report", "x_guru_summary", "github_trending_post", "market_signal_post"}
+        "arxiv_expert_report",
+        "x_guru_summary",
+        "github_trending_post",
+        "market_signal_post",
+    }
     assert {a["id"] for a in data["actions"]} == {"deepdive", "wiki_update", "notebooklm_sync"}
 
 
@@ -65,6 +80,7 @@ def test_job_lifecycle_and_log_capture(monkeypatch, tmp_path):
 
     def work():
         from loguru import logger
+
         logger.info("步驟一")
         return {"ok": True, "outputs": ["x.md"]}
 
@@ -89,8 +105,11 @@ def test_job_lifecycle_and_log_capture(monkeypatch, tmp_path):
 def test_collect_endpoint_spawns_job(client, monkeypatch):
     import agent_reach.radar as radar_mod
 
-    monkeypatch.setattr(radar_mod, "run_radar",
-                        lambda platforms=None, **k: (srv.FILE_DIRS["digests"] / "latest.md", {}))
+    monkeypatch.setattr(
+        radar_mod,
+        "run_radar",
+        lambda platforms=None, **k: (srv.FILE_DIRS["digests"] / "latest.md", {}),
+    )
     job = client.post("/api/collect", json={"platforms": ["arxiv"]}).json()
     assert job["kind"] == "collect" and job["params"]["platforms"] == ["arxiv"]
     for _ in range(50):

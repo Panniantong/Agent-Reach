@@ -15,6 +15,7 @@
 | `agent-reach radar-sync run\|setup\|status [--topic T] [--dry-run]` | 推送論文/深讀到每主題 NotebookLM notebook |
 | `agent-reach radar-run list\|providers\|<場景id> [--set k=v]` | 場景 pipeline 觸發 + provider 健康檢查 |
 | `agent-reach radar-ui [--port 8123]` | 暗黑極客 web 控制台（瀏覽 + 一鍵觸發） |
+| `agent-reach radar-narrative ingest\|discover\|contract\|forecast\|resolve\|calibrate\|status` | 證據覆核、事件契約、校準機率與追加式結算 |
 | `agent-reach radar-report [--student-model M]` | 學生們起草 → 助教評 → 主師評分出 gold |
 | `agent-reach radar-students list\|add\|retire\|leaderboard` | 學生隊伍管理（汰舊換強） |
 | `agent-reach radar-backfill [--handle H] [--repos R] [--distill]` | 大神歷史回溯 + 方法論知識庫蒸餾 |
@@ -30,6 +31,8 @@
 - `radar_assistant_mentors` — 助教清單覆寫（預設 Opus / Sonnet / Codex / Grok）
 - `ollama_base_url` — 學生端 + 本地場景模型（預設 `http://127.0.0.1:11434`）
 - `radar_output_dir` / `radar_sources_file` — 輸出與來源檔位置覆寫
+- `narrative_data_dir` — 敘事 SQLite 與不可變 blobs 位置覆寫
+- `quant_data_root` — 只讀 Quant artifact 根目錄（預設 `D:\DOT\Quant\data`）
 - `twitter_auth_token` + `twitter_ct0` — 大神推文收集（Cookie-Editor 匯出）
 - `finviz_auth_token` — Finviz Elite（或走 `finviz_env_paths` env 檔）
 - `notebooklm_profile` — NotebookLM 登入 profile（通常 `default`）
@@ -117,7 +120,7 @@ agent-reach radar-run market_signal_post
 ## 控制台（radar-ui）
 
 ```bash
-pip install "agent-reach[ui]"
+pip install "agent-reach[ui,narrative]"
 agent-reach radar-ui        # http://127.0.0.1:8123，僅本機
 ```
 
@@ -126,6 +129,10 @@ agent-reach radar-ui        # http://127.0.0.1:8123，僅本機
 複選平台一鍵收集，場景卡缺 provider 會置灰並標明缺什麼；底部 console 即時串流
 job log。
 
+
+1.7.0 起控制台加入總覽、產業、公司、來源、歷史、推演、結算、校準八個工作區；
+未通過校準閘門的局面不顯示數字機率。完整流程與事件 sample 格式見
+[`narrative.md`](narrative.md)。
 ## 學生隊伍（汰舊換強）
 
 種子是 2 位 `qwen3:4b` 不同 persona。新開源小模型上場：

@@ -7,7 +7,9 @@ from unittest.mock import patch
 
 import pytest
 import requests
+
 import agent_reach.cli as cli
+from agent_reach import __version__
 from agent_reach.cli import main
 
 
@@ -18,6 +20,7 @@ class TestCLI:
                 main()
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
+        assert __version__ == "1.7.0"
         assert "Agent Reach v" in captured.out
 
     def test_no_command_shows_help(self, capsys):
@@ -148,7 +151,7 @@ class TestCheckUpdateRetry:
 
         sequence = [
             R(429, headers={"Retry-After": "3"}),
-            R(200, payload={"tag_name": "v1.6.0"}),
+            R(200, payload={"tag_name": "v1.7.0"}),
         ]
 
         with patch("requests.get", side_effect=sequence):
@@ -204,6 +207,7 @@ class TestVersionCompare:
 class TestWatchVersionCompare:
     def test_watch_does_not_prompt_downgrade(self, monkeypatch, capsys):
         """watch 与 check-update 同语义:本地领先远端 release 时不提示更新。"""
+
         class R:
             status_code = 200
             headers = {}
@@ -215,8 +219,16 @@ class TestWatchVersionCompare:
         monkeypatch.setattr(cli, "_github_get_with_retry", lambda *a, **k: (R(), None, 1))
         monkeypatch.setattr(
             "agent_reach.doctor.check_all",
-            lambda config: {"web": {"status": "ok", "name": "任意网页", "message": "ok",
-                            "tier": 0, "backends": ["Jina Reader"], "active_backend": "Jina Reader"}},
+            lambda config: {
+                "web": {
+                    "status": "ok",
+                    "name": "任意网页",
+                    "message": "ok",
+                    "tier": 0,
+                    "backends": ["Jina Reader"],
+                    "active_backend": "Jina Reader",
+                }
+            },
         )
         cli._cmd_watch()
         out = capsys.readouterr().out
