@@ -8,7 +8,13 @@
     ["resolutions", "結算", "RE"], ["calibration", "校準", "CA"]
   ];
   const spine = ["來源原文", "主張", "Quant", "因果驅動", "事件契約", "校準機率", "結算"];
-  const state = { tab: "overview", ticker: "NVDA", eventSource: null };
+  const state = {
+    tab: "overview",
+    ticker: "NVDA",
+    boardHorizon: "1y",
+    activeScenario: "",
+    eventSource: null
+  };
   const esc = value => String(value == null ? "" : value)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -289,14 +295,134 @@
     } catch (error) { log(error.message, true); }
   }
 
+  function boardValue(row) {
+    if (row.value == null || Number.isNaN(Number(row.value))) return "—";
+    if (row.format === "percent") return pct(row.value);
+    if (row.format === "number") return num(row.value, 2);
+    return num(row.value, 1);
+  }
+
+  function boardList(items, fallback) {
+    return (items || []).length
+      ? '<ul class="nr-list">' + items.map(item => "<li>" + esc(item) + "</li>").join("") + "</ul>"
+      : '<p class="nr-muted-copy">' + esc(fallback) + "</p>";
+  }
+
+  function scenarioProbability(scenario) {
+    if (scenario.probability_status === "calibrated") {
+      return '<span class="nr-scenario-prob">' + pct(scenario.probability) + "</span>";
+    }
+    return '<span class="nr-scenario-prob insufficient">資料不足</span>';
+  }
+
+  function scenarioDetail(scenario) {
+    return '<article class="nr-scenario-detail" data-active-scenario-detail>' +
+      '<header><div><p class="nr-eyebrow">ACTIVE EVENT / ' + esc(scenario.horizon) + '</p><h3>' +
+      esc(scenario.name) + '</h3></div><div class="nr-scenario-status">' + tag(scenario.probability_status) +
+      scenarioProbability(scenario) + '</div></header><p class="nr-event-contract">' + esc(scenario.event) +
+      '</p><p class="nr-scenario-copy">' + esc(scenario.narrative) + '</p><div class="nr-logic-grid">' +
+      '<section><p class="nr-eyebrow">驅動</p>' + boardList(scenario.drivers, "尚無通過覆核的驅動。") + '</section>' +
+      '<section><p class="nr-eyebrow risk">反證</p>' + boardList(scenario.counterevidence, "尚無反方證據。") + '</section>' +
+      '<section><p class="nr-eyebrow">失效條件</p>' + boardList(scenario.invalidators, "尚未定義失效條件。") + '</section>' +
+      '<section><p class="nr-eyebrow">事件契約</p><dl class="nr-kv"><dt>結算日</dt><dd>' +
+      esc(scenario.resolution_date) + '</dd><dt>來源</dt><dd>' + esc(scenario.origin) +
+      '</dd><dt>機率</dt><dd>' + esc(scenario.gate_reason) + '</dd></dl></section></div>' +
+      '<div class="nr-outcomes"><div><span>受益</span>' + (scenario.beneficiaries || []).map(value =>
+        '<b class="nr-chip opportunity">' + esc(value) + '</b>').join("") + '</div><div><span>受害</span>' +
+      (scenario.victims || []).map(value => '<b class="nr-chip risk">' + esc(value) + '</b>').join("") +
+      '</div></div></article>';
+  }
+
+  function boardMarkup(data) {
+    const scenarios = data.scenarios || [];
+    const active = scenarios.find(row => row.id === state.activeScenario) || scenarios[0];
+    state.activeScenario = active ? active.id : "";
+    const metricCards = (data.evidence || []).map(row =>
+      '<article class="nr-tape-cell"><p>' + tag(row.tag) + esc(row.label) + '</p><strong>' + boardValue(row) +
+      '</strong><small>' + esc(row.as_of) + ' · ' + esc(row.freshness) + '</small></article>'
+    ).join("");
+    const scenarioTabs = scenarios.map((scenario, index) =>
+      '<button class="nr-scenario-tab' + (scenario.id === state.activeScenario ? " active" : "") +
+      '" type="button" data-scenario-id="' + esc(scenario.id) + '" aria-pressed="' +
+      (scenario.id === state.activeScenario ? "true" : "false") + '"><small>S' + String(index + 1).padStart(2, "0") +
+      ' · ' + esc(scenario.horizon) + '</small><span>' + esc(scenario.name) + '</span>' +
+      scenarioProbability(scenario) + '</button>'
+    ).join("");
+    const opportunityCards = (data.opportunities || []).map(row =>
+      '<article class="nr-brief-row"><div>' + tag(row.support) + '<strong>' + esc(row.title) +
+      '</strong></div><p>' + esc(row.why) + '</p></article>'
+    ).join("");
+    const riskCards = (data.risks || []).map(row =>
+      '<article class="nr-brief-row risk"><div>' + tag(row.support, "risk") + '<strong>' + esc(row.title) +
+      '</strong></div><p>' + esc(row.why) + '</p></article>'
+    ).join("");
+    return '<section class="nr-board-hero"><div><p class="nr-eyebrow">LIVE RESEARCH BOARD / ' +
+      esc(data.as_of) + '</p><h2>' + esc(data.title) + '</h2><p>' + esc(data.regime.summary) +
+      '</p><p>' + esc(data.regime.interpretation) + '</p></div><dl class="nr-board-meta"><dt>體制</dt><dd>' +
+      esc(data.regime.label) + '</dd><dt>期限</dt><dd>' + esc(data.horizon) + '</dd><dt>結算日</dt><dd>' +
+      esc(data.resolution_date) + '</dd><dt>證據等級</dt><dd>' + esc(data.calibration.status) +
+      '</dd></dl></section><section class="nr-analogue"><div><p class="nr-eyebrow">此刻最像</p><h3>' +
+      esc(data.analogue.name) + '</h3><p>' + esc(data.analogue.rhyme) + '</p></div><div><p class="nr-eyebrow">這次不一樣</p><p>' +
+      esc(data.analogue.difference) + '</p></div></section><section class="nr-evidence-tape" aria-label="Quant 證據帶">' +
+      metricCards + '</section><section class="nr-section"><div class="nr-section-head"><h2>可能局面</h2>' +
+      '<span>可重疊，不強制加總 100%</span></div><div class="nr-scenario-rail" role="list">' + scenarioTabs +
+      '</div><div id="nr-scenario-detail">' + (active ? scenarioDetail(active) : empty("沒有可顯示的局面。")) +
+      '</div></section><section class="nr-dual-brief"><div><h2>機會</h2>' + opportunityCards +
+      '</div><div><h2>風險</h2>' + riskCards + '</div></section><section class="nr-section nr-source-ledger">' +
+      '<div class="nr-section-head"><h2>來源如何被使用</h2><span>原文 → 主張 → Quant → 契約</span></div>' +
+      (data.source_synthesis || []).map(row => '<div><strong>' + esc(row.source) + '</strong><p>' +
+        esc(row.use) + '</p></div>').join("") + '</section>';
+  }
+
+  function bindScenarioBoard(data) {
+    all("[data-scenario-id]").forEach(button => button.addEventListener("click", () => {
+      state.activeScenario = button.dataset.scenarioId;
+      all("[data-scenario-id]").forEach(row => {
+        const active = row.dataset.scenarioId === state.activeScenario;
+        row.classList.toggle("active", active);
+        row.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      const selected = (data.scenarios || []).find(row => row.id === state.activeScenario);
+      if (selected) one("#nr-scenario-detail").innerHTML = scenarioDetail(selected);
+    }));
+  }
+
+  async function loadScenarioBoard(ticker, horizon) {
+    const box = one("#nr-board-result");
+    if (!box) return;
+    box.innerHTML = '<div class="nr-board-loading">正在對齊 Quant 截止日、歷史韻腳與事件契約…</div>';
+    try {
+      const data = await api("/api/narrative/board/" + encodeURIComponent(ticker) + "?horizon=" + encodeURIComponent(horizon));
+      state.ticker = data.ticker;
+      state.boardHorizon = data.horizon;
+      state.activeScenario = "";
+      box.innerHTML = boardMarkup(data);
+      bindScenarioBoard(data);
+      setInspector(data.ticker + " / 發布閘門", '<div class="nr-warning">' + esc(data.calibration.reason) +
+        '</div><hr class="nr-inspector-rule"><dl class="nr-kv"><dt>成熟樣本</dt><dd>' +
+        num(data.calibration.matured_forward_evaluations, 0) + ' / ' +
+        num(data.calibration.minimum_forward_evaluations, 0) + '</dd><dt>規則</dt><dd>' +
+        esc(data.calibration.rule) + '</dd><dt>下單</dt><dd>orders_generated = false</dd></dl>');
+    } catch (error) {
+      box.innerHTML = errorCard(error);
+      log(error.message || error, true);
+    }
+  }
+
   async function renderInference() {
     const stage = one("#nr-stage");
-    stage.innerHTML = heading("SIMULATION / WORKBENCH", "把觀點改寫成會輸的契約。",
-      "先匯入原文、覆核主張，再定義事件與結算條件。沒有歷史樣本就停在資料不足。") +
+    stage.innerHTML = heading("SIMULATION / RESULTS", "先看局面，再打開工作台。",
+      "當前 Quant、歷史韻腳、支持／反證與失效條件在同一張盤；沒有通過校準就不顯示數字機率。") +
+      '<form class="nr-board-controls" id="nr-board-form"><label><span class="nr-label">Ticker</span>' +
+      '<input class="nr-input" id="nr-board-ticker" value="' + esc(state.ticker) + '"></label>' +
+      '<label><span class="nr-label">視野</span><select class="nr-select" id="nr-board-horizon">' +
+      ["quarter", "1y", "3y", "5y"].map(value => '<option' + (value === state.boardHorizon ? " selected" : "") + '>' + value + '</option>').join("") +
+      '</select></label><button class="nr-button" type="submit">重新推演</button></form><div id="nr-board-result"></div>' +
+      '<details class="nr-workbench" id="nr-workbench"><summary>打開證據匯入、事件契約與校準工具</summary><div class="nr-workbench-body">' +
       '<div class="nr-grid"><form class="nr-card wide" id="nr-import-form"><p class="nr-eyebrow">01 / IMPORT</p><h3>人工匯入原文</h3>' +
       '<div class="nr-form-row"><label><span class="nr-label">URL</span><input class="nr-input" id="nr-import-url" placeholder="https://..."></label>' +
       '<label><span class="nr-label">Domain</span><input class="nr-input" id="nr-import-domain" placeholder="semiconductors"></label>' +
-      '<label><span class="nr-label">Ticker</span><input class="nr-input" id="nr-import-ticker" placeholder="NVDA"></label></div>' +
+      '<label><span class="nr-label">Ticker</span><input class="nr-input" id="nr-import-ticker" value="' + esc(state.ticker) + '"></label></div>' +
       '<label><span class="nr-label">或貼文字</span><textarea class="nr-textarea" id="nr-import-text"></textarea></label>' +
       '<label><span class="nr-label">或選檔案</span><input class="nr-input" id="nr-import-file" type="file"></label>' +
       '<button class="nr-button" type="submit">匯入並抽取待審主張</button></form>' +
@@ -319,8 +445,14 @@
       '<form class="nr-card full" id="nr-forecast-form"><div class="nr-form-row"><label><span class="nr-label">Contract ID</span><input class="nr-input" id="nr-forecast-contract"></label>' +
       '<label><span class="nr-label">As-of</span><input class="nr-input" id="nr-forecast-asof" type="date"></label></div>' +
       '<label><span class="nr-label">Historical samples JSON</span><textarea class="nr-textarea" id="nr-samples">[]</textarea></label>' +
-      '<button class="nr-button" type="submit">執行 walk-forward 校準</button></form></section>';
-    await loadPendingClaims();
+      '<button class="nr-button" type="submit">執行 walk-forward 校準</button></form></section></div></details>';
+    one("#nr-board-form").addEventListener("submit", event => {
+      event.preventDefault();
+      const ticker = one("#nr-board-ticker").value.trim() || "NVDA";
+      const horizon = one("#nr-board-horizon").value;
+      loadScenarioBoard(ticker, horizon);
+    });
+    await Promise.all([loadPendingClaims(), loadScenarioBoard(state.ticker, state.boardHorizon)]);
     one("#nr-import-form").addEventListener("submit", async event => {
       event.preventDefault();
       const file = one("#nr-import-file").files[0];
@@ -366,7 +498,6 @@
           samples:JSON.parse(one("#nr-samples").value)})}), "局面校準"); }
       catch (error) { log(error.message, true); }
     });
-    setInspector("發布規則", '<div class="nr-warning">未通過統計閘門時只顯示「資料不足」。</div><hr class="nr-inspector-rule"><p>聯合路徑須另建共現事件契約。</p>');
   }
 
   async function renderResolutions() {

@@ -211,6 +211,13 @@ def register_narrative_routes(app, jobs, service: Optional[NarrativeService] = N
         except Exception as exc:  # noqa: BLE001
             fail(exc)
 
+    @app.get("/api/narrative/board/{ticker}")
+    def narrative_board(ticker: str, horizon: str = "1y"):
+        try:
+            return narrative.scenario_board(ticker, horizon=horizon)
+        except Exception as exc:  # noqa: BLE001
+            fail(exc)
+
     @app.get("/api/narrative/history")
     def narrative_history():
         return narrative.history()

@@ -40,6 +40,15 @@ def main():
         expect(page.get_by_text("EVIDENCE GRADE", exact=True)).to_be_visible()
 
         page.locator('[data-tab="inference"]').click()
+        expect(page.get_by_text("LIVE RESEARCH BOARD /", exact=False)).to_be_visible(timeout=10_000)
+        expect(page.locator(".nr-scenario-tab")).to_have_count(4)
+        expect(page.locator(".nr-scenario-prob.insufficient").first).to_have_text("資料不足")
+        if SCREENSHOT:
+            target = Path(SCREENSHOT)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(target), full_page=True)
+
+        page.locator("#nr-workbench > summary").click()
         expect(page.locator("#nr-import-form")).to_be_visible()
         page.locator("#nr-import-domain").fill("information-technology")
         page.locator("#nr-import-ticker").fill("NVDA")
@@ -70,11 +79,6 @@ def main():
 
         page.keyboard.press("Alt+8")
         expect(page.get_by_text("機率要接受結算，不接受文采。", exact=True)).to_be_visible()
-
-        if SCREENSHOT:
-            target = Path(SCREENSHOT)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            page.screenshot(path=str(target), full_page=True)
 
         browser.close()
 

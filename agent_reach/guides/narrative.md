@@ -10,6 +10,14 @@ pip install "agent-reach[ui,narrative]"
 agent-reach radar-ui
 ```
 
+開啟 `http://127.0.0.1:8123`，切到「推演」。頁面預設直接載入 NVDA 的結果盤，
+先顯示體制、歷史韻腳、Quant 證據帶、可重疊局面、支持／反證、失效條件與
+受益／受害對象；原文匯入、事件契約與校準工具收在結果下方的工作台。
+
+系統內建的局面是研究 blueprint，不是已校準預測。若帳本沒有通過發布閘門的
+forecast，局面仍會完整顯示，但機率只顯示「資料不足」。已建立且通過閘門的
+事件契約會併入同一張結果盤，並顯示機率與區間。
+
 - 結構化資料：`~/.agent-reach/radar/narrative/narrative.sqlite3`
 - 不可變原文：`~/.agent-reach/radar/narrative/blobs/<sha256>.<ext>`
 - Quant 根目錄：預設 `D:\DOT\Quant\data`，只讀
@@ -133,6 +141,7 @@ PIT 會明確降級 evidence grade。
 - `/api/narrative/discovery`、`/contracts`、`/forecasts`
 - `/api/narrative/resolutions`、`/sources`
 - `/api/narrative/dashboard`、`/company/{ticker}`、`/history`
+- `/api/narrative/board/{ticker}?horizon=1y`（結果優先的局面工作區）
 - `/api/narrative/calibration`
 
 探索、forecast 與 recalibration 使用 Radar `JobManager`；狀態由

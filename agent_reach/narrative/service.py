@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
@@ -31,6 +31,8 @@ ARCHETYPES = (
     "valuation_crowding",
     "governance_accounting",
 )
+
+_HORIZON_DAYS = {"quarter": 92, "1y": 365, "3y": 1095, "5y": 1826}
 
 _EPISODE_SEEDS = (
     (
@@ -88,6 +90,17 @@ def _flatten_numeric(value: Any, prefix: str = "", limit: int = 80) -> dict[str,
     elif isinstance(value, (int, float)):
         out[prefix] = float(value)
     return out
+
+
+def _nested_number(value: Any, *path: str) -> Optional[float]:
+    current = value
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    if isinstance(current, bool) or not isinstance(current, (int, float)):
+        return None
+    return float(current)
 
 
 class NarrativeService:
@@ -642,6 +655,364 @@ class NarrativeService:
             "forecasts": forecasts_by_contract,
             "decision_cards": cards,
             "robust_opportunities": self.robust_opportunities(cards),
+        }
+
+    def scenario_board(self, ticker: str, *, horizon: str = "1y") -> dict:
+        """Build a result-first research board without inventing event probabilities."""
+        if horizon not in _HORIZON_DAYS:
+            raise ValueError("horizon must be one of quarter, 1y, 3y, 5y")
+        company = self.company(ticker)
+        symbol = company["ticker"]
+        dossier = company["quant"]
+        prices = dossier.get("prices") or {}
+        artifacts = dossier.get("artifacts") or {}
+        factor_artifact = artifacts.get("factors") or {}
+        factor_data = factor_artifact.get("data") or {}
+        factors = factor_data.get("factors") or {}
+        returns = prices.get("returns") or {}
+        price_as_of = str(prices.get("as_of") or date.today().isoformat())[:10]
+        try:
+            resolution_date = (
+                date.fromisoformat(price_as_of) + timedelta(days=_HORIZON_DAYS[horizon])
+            ).isoformat()
+        except ValueError:
+            resolution_date = (
+                date.today() + timedelta(days=_HORIZON_DAYS[horizon])
+            ).isoformat()
+
+        ret_21 = _nested_number(returns, "21d")
+        ret_63 = _nested_number(returns, "63d")
+        ret_252 = _nested_number(returns, "252d")
+        drawdown = _nested_number(prices, "drawdown_252d")
+        relative_63 = _nested_number(factors, "relative", "relative_return_63d")
+        volatility_63 = _nested_number(factors, "risk", "ann_vol_63d")
+        beta_126 = _nested_number(factors, "relative", "static_beta_126d")
+        tail_amplification = _nested_number(
+            factors, "lower_tail_dependence", "tail_amplification"
+        )
+        supply_overlay = _nested_number(
+            factors, "supply_chain", "supply_risk_overlay_score"
+        )
+        liquidity_score = _nested_number(
+            factors, "execution_liquidity", "liquidity_score"
+        )
+        regime = str(factor_data.get("regime_label") or "UNKNOWN")
+        regime_as_of = str(factor_data.get("as_of") or "UNKNOWN")[:10]
+        matured = _nested_number(
+            factors,
+            "regime_probability_forward_calibration",
+            "matured_evaluations",
+        )
+        required = _nested_number(
+            factors,
+            "regime_probability_forward_calibration",
+            "minimum_forward_evaluations",
+        )
+
+        evidence = [
+            {
+                "tag": "COMPUTED",
+                "label": "最新收盤",
+                "value": prices.get("last_close"),
+                "format": "number",
+                "as_of": price_as_of,
+                "source": prices.get("path") or "Quant prices",
+                "freshness": prices.get("freshness") or "unknown",
+            },
+            {
+                "tag": "COMPUTED",
+                "label": "21 日報酬",
+                "value": ret_21,
+                "format": "percent",
+                "as_of": price_as_of,
+                "source": prices.get("path") or "Quant prices",
+                "freshness": prices.get("freshness") or "unknown",
+            },
+            {
+                "tag": "COMPUTED",
+                "label": "63 日報酬",
+                "value": ret_63,
+                "format": "percent",
+                "as_of": price_as_of,
+                "source": prices.get("path") or "Quant prices",
+                "freshness": prices.get("freshness") or "unknown",
+            },
+            {
+                "tag": "COMPUTED",
+                "label": "252 日報酬",
+                "value": ret_252,
+                "format": "percent",
+                "as_of": price_as_of,
+                "source": prices.get("path") or "Quant prices",
+                "freshness": prices.get("freshness") or "unknown",
+            },
+            {
+                "tag": "COMPUTED",
+                "label": "63 日年化波動",
+                "value": volatility_63,
+                "format": "percent",
+                "as_of": regime_as_of,
+                "source": factor_artifact.get("path") or "Quant factors",
+                "freshness": factor_artifact.get("freshness") or "unknown",
+            },
+            {
+                "tag": "COMPUTED",
+                "label": "供應鏈風險覆蓋分數",
+                "value": supply_overlay,
+                "format": "score",
+                "as_of": regime_as_of,
+                "source": factor_artifact.get("path") or "Quant factors",
+                "freshness": factor_artifact.get("freshness") or "unknown",
+            },
+        ]
+
+        gate_reason = (
+            "[COMPUTED] 目前沒有成熟的 point-in-time 結算樣本，不能發布數字機率。"
+            if matured in (None, 0.0)
+            else (
+                f"[COMPUTED] 成熟 forward evaluations={int(matured)}；"
+                f"最低需求={int(required) if required is not None else 'UNKNOWN'}。"
+            )
+        )
+        base = {
+            "probability_status": "insufficient_data",
+            "probability": None,
+            "interval": None,
+            "gate_reason": gate_reason,
+            "horizon": horizon,
+            "resolution_date": resolution_date,
+            "origin": "system_blueprint",
+        }
+        scenarios = [
+            {
+                **base,
+                "id": f"{symbol.lower()}-continuation",
+                "name": "成長延續／驗收通過",
+                "event": f"{symbol} 自 {price_as_of} 至 {resolution_date} 的收盤報酬 ≥ 20%。",
+                "narrative": (
+                    "[INFERRED | MED] 長期動能延續，需求與獲利驗收足以抵消估值壓力；"
+                    "這是待結算事件，不是買進指令。"
+                ),
+                "drivers": [
+                    "[COMPUTED] 252 日報酬仍為正。",
+                    "[COMPUTED] 最近 21 日價格動能回升。",
+                    "[KNOWN] 價格資料具明確截止日與不可變來源路徑。",
+                ],
+                "counterevidence": [
+                    "[COMPUTED] 63 日相對報酬偏弱。",
+                    f"[COMPUTED] 因子體制截至 {regime_as_of} 為 {regime}。",
+                ],
+                "invalidators": [
+                    "兩個連續觀測窗的 63 日報酬轉負。",
+                    "基本面 artifact 無法補齊可驗證 as_of。",
+                    "期末報酬未達事件契約門檻。",
+                ],
+                "beneficiaries": [symbol, "TSM"] if symbol == "NVDA" else [symbol],
+                "victims": ["追高且無失效條件的敘事"],
+                "archetypes": ["technology_diffusion_capacity", "valuation_crowding"],
+            },
+            {
+                **base,
+                "id": f"{symbol.lower()}-digestion",
+                "name": "高位震盪／估值消化",
+                "event": f"{symbol} 在 {resolution_date} 前維持高波動，但趨勢沒有形成可發布優勢。",
+                "narrative": (
+                    "[INFERRED | MED] 長期報酬與短期相對弱勢互相抵銷，價格用區間而非方向"
+                    "消化前期漲幅。"
+                ),
+                "drivers": [
+                    "[COMPUTED] 21 日與 252 日報酬方向不完全一致。",
+                    "[COMPUTED] 年化波動仍高，單一方向敘事的誤差會被放大。",
+                ],
+                "counterevidence": [
+                    "[COMPUTED] 若 63 日相對強度持續改善，震盪假設會弱化。",
+                    "[COMPUTED] 若因子體制切回明確上升，區間假設失效。",
+                ],
+                "invalidators": [
+                    "價格突破後連續兩個 21 日窗保持正相對報酬。",
+                    "事件契約到期時出現 ≥20% 或 ≤−20% 的方向性報酬。",
+                ],
+                "beneficiaries": ["波動率與事件研究"],
+                "victims": ["只押單一路徑的研究流程"],
+                "archetypes": ["valuation_crowding", "liquidity_discount_rate"],
+            },
+            {
+                **base,
+                "id": f"{symbol.lower()}-rerating",
+                "name": "折現率／尾部風險重定價",
+                "event": f"{symbol} 自 {price_as_of} 至 {resolution_date} 的收盤報酬 ≤ −20%。",
+                "narrative": (
+                    "[INFERRED | MED] 即使產業需求沒有消失，高 beta、尾部共振與相對弱勢也可能先壓縮估值。"
+                ),
+                "drivers": [
+                    f"[COMPUTED] 126 日 beta={beta_126 if beta_126 is not None else 'UNKNOWN'}。",
+                    f"[COMPUTED] 下尾共振放大倍數={tail_amplification if tail_amplification is not None else 'UNKNOWN'}。",
+                    f"[COMPUTED] 252 日內回撤={drawdown if drawdown is not None else 'UNKNOWN'}。",
+                ],
+                "counterevidence": [
+                    "[COMPUTED] 252 日價格報酬仍為正。",
+                    "[COMPUTED] 執行流動性高，流動性風險不是目前的主要缺口。",
+                ],
+                "invalidators": [
+                    "相對報酬與 trend 因子同步轉正。",
+                    "期末報酬未達事件契約的負向門檻。",
+                ],
+                "beneficiaries": ["短久期現金流", "風險預算"],
+                "victims": [symbol, "高 beta AI 標的"],
+                "archetypes": ["liquidity_discount_rate", "valuation_crowding"],
+            },
+            {
+                **base,
+                "id": f"{symbol.lower()}-bottleneck",
+                "name": "供應鏈瓶頸外溢",
+                "event": f"{symbol} 的已驗證直接供應依賴在 {resolution_date} 前成為營運或估值主因。",
+                "narrative": (
+                    "[INFERRED | LOW] 價值捕獲可能從平台外溢到先進製造與供應瓶頸；"
+                    "此事件需要官方營運資料人工結算。"
+                ),
+                "drivers": [
+                    "[KNOWN] Quant 供應鏈圖保存兩條已驗證 primary-source 直接邊。",
+                    f"[COMPUTED] 供應鏈風險覆蓋分數={supply_overlay if supply_overlay is not None else 'UNKNOWN'}。",
+                ],
+                "counterevidence": [
+                    "[KNOWN] 該分數明示為 risk overlay，不是報酬預測。",
+                    "[INFERRED | LOW] 替代供應、設計變更或需求下降都可繞過瓶頸。",
+                ],
+                "invalidators": [
+                    "官方文件移除或降低直接依賴。",
+                    "供應瓶頸沒有轉成營收、毛利或交付限制。",
+                ],
+                "beneficiaries": ["TSM", "已驗證供應節點"] if symbol == "NVDA" else [],
+                "victims": [symbol, "單一路徑供應鏈假設"],
+                "archetypes": ["technology_diffusion_capacity", "regulation_geopolitics"],
+            },
+        ]
+
+        for index, card in enumerate(company.get("decision_cards") or []):
+            scenarios.insert(
+                index,
+                {
+                    "id": f"contract-{index}",
+                    "name": "已建立事件契約",
+                    "event": card["event"],
+                    "narrative": "[KNOWN] 使用者已建立、可重播的事件契約。",
+                    "probability_status": card["probability_status"],
+                    "probability": card["probability"],
+                    "interval": card["interval"],
+                    "gate_reason": (
+                        "[COMPUTED] 已通過校準發布閘門。"
+                        if card["probability_status"] == "calibrated"
+                        else "[COMPUTED] 此契約尚未通過校準發布閘門。"
+                    ),
+                    "horizon": card["horizon"],
+                    "resolution_date": card["invalidation"]["resolution_date"],
+                    "origin": "event_contract",
+                    "drivers": [row["text"] for row in card["opportunity"]["verified_support"]],
+                    "counterevidence": [
+                        row["text"] for row in card["risk"]["counterevidence"]
+                    ],
+                    "invalidators": card["invalidation"]["conditions"],
+                    "beneficiaries": card["opportunity"]["beneficiaries"],
+                    "victims": card["risk"]["victims"],
+                    "archetypes": [],
+                },
+            )
+
+        positive_tension = ret_252 is not None and ret_252 > 0
+        short_tension = relative_63 is not None and relative_63 < 0
+        return {
+            "ticker": symbol,
+            "horizon": horizon,
+            "as_of": price_as_of,
+            "resolution_date": resolution_date,
+            "title": f"{symbol}：AI 驗收、估值消化與供應瓶頸",
+            "regime": {
+                "label": regime,
+                "as_of": regime_as_of,
+                "summary": (
+                    "[COMPUTED] 長期價格動能為正，但中期相對強度與較早的因子體制偏弱。"
+                    if positive_tension and short_tension
+                    else "[COMPUTED] 價格與因子證據未形成一致方向。"
+                ),
+                "interpretation": (
+                    "[INFERRED | MED] 現在更像『趨勢仍在、但驗收與估值開始分岔』，"
+                    "不是單一路徑的主升或崩盤。"
+                ),
+            },
+            "analogue": {
+                "name": "AI 基礎設施擴散 × 2021–2022 折現率轉折",
+                "rhyme": (
+                    "[INFERRED, post-hoc | MED] 技術擴散與資本支出延續時，"
+                    "估值可以先因折現率與擁擠度重定價。"
+                ),
+                "difference": (
+                    "[INFERRED, post-hoc | LOW] 目前歷史事件圖仍是描述性 scaffold，"
+                    "尚無核准來源包，不得進模型訓練。"
+                ),
+            },
+            "scenarios": scenarios,
+            "evidence": evidence,
+            "opportunities": [
+                {
+                    "title": "長期動能尚未被價格否定",
+                    "support": "COMPUTED",
+                    "why": "252 日報酬為正；必須與較弱的 63 日相對強度一起看。",
+                },
+                {
+                    "title": "流動性足以支撐事件研究",
+                    "support": "COMPUTED",
+                    "why": f"執行流動性分數={liquidity_score if liquidity_score is not None else 'UNKNOWN'}；這不是方向訊號。",
+                },
+                {
+                    "title": "供應瓶頸可被拆成可驗證事件",
+                    "support": "KNOWN",
+                    "why": "直接供應邊有 primary-source 證據，但價值捕獲仍需營運資料結算。",
+                },
+            ],
+            "risks": [
+                {
+                    "title": "價格與因子時點衝突",
+                    "support": "COMPUTED",
+                    "why": f"價格截至 {price_as_of}，因子截至 {regime_as_of}；不能混成同一時點。",
+                },
+                {
+                    "title": "高 beta 與尾部共振",
+                    "support": "COMPUTED",
+                    "why": f"beta={beta_126 if beta_126 is not None else 'UNKNOWN'}；尾部放大={tail_amplification if tail_amplification is not None else 'UNKNOWN'}。",
+                },
+                {
+                    "title": "證據新鮮度降級",
+                    "support": "KNOWN",
+                    "why": "；".join(dossier.get("issues") or ["未偵測到資料警告"]),
+                },
+            ],
+            "source_synthesis": [
+                {
+                    "source": prices.get("path") or "Quant prices",
+                    "use": "[COMPUTED] 價格、報酬、回撤與資料截止日。",
+                },
+                {
+                    "source": factor_artifact.get("path") or "Quant factors",
+                    "use": "[COMPUTED] 體制、相對強弱、beta、尾部與供應鏈風險。",
+                },
+                {
+                    "source": "Narrative evidence ledger",
+                    "use": (
+                        f"[KNOWN] {len(company.get('claims') or [])} 項公司主張；"
+                        "pending 主張不進已驗證證據。"
+                    ),
+                },
+            ],
+            "calibration": {
+                "status": "insufficient_data"
+                if not any(row["probability_status"] == "calibrated" for row in scenarios)
+                else "partially_calibrated",
+                "matured_forward_evaluations": int(matured or 0),
+                "minimum_forward_evaluations": int(required or 0),
+                "rule": "90% Brier Skill CI 下界 > 0，且機率區間寬度 ≤ 40pp。",
+                "reason": gate_reason,
+            },
+            "orders_generated": False,
         }
 
     def history(self) -> dict:

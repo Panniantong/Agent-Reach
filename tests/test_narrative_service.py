@@ -185,3 +185,25 @@ def test_robust_opportunities_require_calibrated_high_probability_events():
     assert first["risk"]["victims"] == ["legacy-vendor"]
     assert first["watch"] == ["hyperscaler capex"]
     assert first["orders_generated"] is False
+
+
+def test_scenario_board_is_result_first_without_leaking_probability(service):
+    board = service.scenario_board("NVDA", horizon="1y")
+
+    assert board["ticker"] == "NVDA"
+    assert board["title"].startswith("NVDA")
+    assert len(board["scenarios"]) == 4
+    assert board["calibration"]["status"] == "insufficient_data"
+    assert board["orders_generated"] is False
+    for scenario in board["scenarios"]:
+        assert scenario["event"]
+        assert scenario["drivers"]
+        assert scenario["invalidators"]
+        assert scenario["probability_status"] == "insufficient_data"
+        assert scenario["probability"] is None
+        assert scenario["interval"] is None
+
+
+def test_scenario_board_rejects_mixed_or_unknown_horizon(service):
+    with pytest.raises(ValueError, match="horizon must be one of"):
+        service.scenario_board("NVDA", horizon="18m")

@@ -114,6 +114,7 @@ def test_status_industry_company_and_history_endpoints(narrative_client):
     status = narrative_client.get("/api/narrative/status").json()
     dashboard = narrative_client.get("/api/narrative/dashboard").json()
     company = narrative_client.get("/api/narrative/company/NVDA").json()
+    board = narrative_client.get("/api/narrative/board/NVDA?horizon=1y").json()
     history = narrative_client.get("/api/narrative/history").json()
 
     assert status["store"]["schema_version"] == 2
@@ -123,6 +124,9 @@ def test_status_industry_company_and_history_endpoints(narrative_client):
     assert dashboard["crypto"]["name"] == "Crypto"
     assert company["ticker"] == "NVDA"
     assert company["quant"]["evidence_grade"] == "insufficient"
+    assert board["ticker"] == "NVDA"
+    assert board["scenarios"]
+    assert all(row["probability"] is None for row in board["scenarios"])
     assert history["episodes"]
     assert all(episode["post_hoc"] for episode in history["episodes"])
 
@@ -160,5 +164,8 @@ def test_narrative_ui_has_eight_workspaces_and_responsive_accessibility(narrativ
         assert label in script
     assert 'role="tablist"' in script
     assert "aria-selected" in script
+    assert "LIVE RESEARCH BOARD" in script
+    assert "nr-scenario-rail" in styles
+    assert "nr-workbench" in styles
     assert "@media (max-width: 680px)" in styles
     assert "prefers-reduced-motion" in styles
