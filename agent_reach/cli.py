@@ -14,12 +14,18 @@ import json
 import os
 import sys
 import time
+from html.parser import HTMLParser
+from urllib.parse import unquote
+from xml.etree import ElementTree
 
 from agent_reach import __version__
 
 # Pinned to the 0.4.2 state — PyPI still only has 0.4.1 (upstream issue #10).
 _RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66"
 _MAX_CONFIGURE_VALUE_CHARS = 1024 * 1024
+_MAX_RELEASE_ATOM_BYTES = 2 * 1024 * 1024
+_RELEASE_API_URL = "https://api.github.com/repos/Panniantong/Agent-Reach/releases/latest"
+_RELEASE_ATOM_URL = "https://github.com/Panniantong/Agent-Reach/releases.atom"
 _SENSITIVE_CONFIG_KEYS = {
     "proxy",
     "github-token",
@@ -2158,36 +2164,166 @@ def _classify_github_response_error(resp):
     return None
 
 
-def _github_get_with_retry(url, timeout=10, retries=3, sleeper=time.sleep):
-    """GET GitHub API with retry/backoff and basic error classification."""
+def _github_get_with_retry(
+    url,
+    timeout=10,
+    retries=3,
+    sleeper=time.sleep,
+    headers=None,
+):
+    """GET a GitHub endpoint with retry/backoff and error classification."""
     import requests
 
     for attempt in range(1, retries + 1):
         try:
-            resp = requests.get(url, timeout=timeout)
+            request_options = {"timeout": timeout}
+            if headers:
+                request_options["headers"] = headers
+            resp = requests.get(url, **request_options)
         except requests.exceptions.RequestException as exc:
-            if attempt >= retries:
+            retryable = isinstance(
+                exc,
+                (requests.exceptions.Timeout, requests.exceptions.ConnectionError),
+            )
+            if not retryable or attempt >= retries:
                 return None, _classify_update_error(exc), attempt
             sleeper(2 ** (attempt - 1))
             continue
 
         err_kind = _classify_github_response_error(resp)
-        if err_kind in ("rate_limit", "server_error"):
+        if err_kind == "rate_limit":
+            return None, err_kind, attempt
+        if err_kind == "server_error":
             if attempt >= retries:
                 return None, err_kind, attempt
             delay = 2 ** (attempt - 1)
-            retry_after = resp.headers.get("Retry-After")
-            if err_kind == "rate_limit" and retry_after:
-                try:
-                    delay = max(delay, float(retry_after))
-                except Exception:
-                    pass
             sleeper(delay)
             continue
 
         return resp, None, attempt
 
     return None, "unknown", retries
+
+
+def _release_from_atom(payload):
+    """Return normalized release metadata from GitHub's public Atom feed."""
+    if not payload or len(payload) > _MAX_RELEASE_ATOM_BYTES:
+        return None
+    try:
+        root = ElementTree.fromstring(payload)
+    except ElementTree.ParseError:
+        return None
+
+    namespace = {"atom": "http://www.w3.org/2005/Atom"}
+    marker = "/releases/tag/"
+    for entry in root.findall("atom:entry", namespace):
+        content = entry.find("atom:content", namespace)
+        body = _release_notes_text(content.text if content is not None else "")
+        for link in entry.findall("atom:link", namespace):
+            href = link.get("href", "")
+            if link.get("rel") != "alternate" or marker not in href:
+                continue
+            tag = unquote(href.split(marker, 1)[1]).strip("/")
+            version = tag[1:] if tag.startswith("v") else tag
+            parts = version.split(".")
+            if (
+                0 < len(tag) <= 128
+                and len(parts) == 3
+                and all(part.isdigit() for part in parts)
+            ):
+                return {"tag_name": tag, "body": body}
+    return None
+
+
+class _ReleaseNotesParser(HTMLParser):
+    """Reduce release-note HTML to readable, non-executable text."""
+
+    _BLOCK_TAGS = {"br", "h1", "h2", "h3", "h4", "li", "p", "tr"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self._BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in self._BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_data(self, data):
+        self.parts.append(data)
+
+
+def _release_notes_text(payload):
+    if not payload:
+        return ""
+    parser = _ReleaseNotesParser()
+    parser.feed(payload)
+    return "\n".join(
+        " ".join(line.split())
+        for line in "".join(parser.parts).splitlines()
+        if line.strip()
+    )
+
+
+def _fetch_latest_release(config=None):
+    """Fetch release metadata without consuming anonymous GitHub API quota.
+
+    A configured token uses the higher-limit authenticated API. Missing,
+    invalid, or rate-limited credentials fall back to GitHub's Atom feed,
+    which is served outside the API quota pool.
+    """
+    if config is None:
+        from agent_reach.config import Config
+
+        config = Config(read_only=True)
+
+    token = config.get("github_token") or os.environ.get("GH_TOKEN")
+    attempts = 0
+    last_error = None
+
+    if token:
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        response, error, api_attempts = _github_get_with_retry(
+            _RELEASE_API_URL,
+            timeout=10,
+            retries=2,
+            headers=headers,
+        )
+        attempts += api_attempts
+        if not error and response and response.status_code == 200:
+            try:
+                release = response.json()
+            except ValueError:
+                release = None
+            if isinstance(release, dict) and release.get("tag_name"):
+                return release, None, attempts
+            last_error = "http"
+        else:
+            last_error = error or _classify_github_response_error(response) or "http"
+
+    response, error, atom_attempts = _github_get_with_retry(
+        _RELEASE_ATOM_URL,
+        timeout=10,
+        retries=2,
+        headers={"Accept": "application/atom+xml"},
+    )
+    attempts += atom_attempts
+    if not error and response and response.status_code == 200:
+        release = _release_from_atom(response.content)
+        if release:
+            return release, None, attempts
+        last_error = "http"
+    else:
+        last_error = error or _classify_github_response_error(response) or last_error or "http"
+
+    return None, last_error or "unknown", attempts
 
 
 #: Full update = package + upstream tools + skill. The one-liner walks an
@@ -2222,63 +2358,29 @@ def _is_newer_version(remote: str, local: str) -> bool:
 def _cmd_check_update():
     """Check for newer versions on GitHub."""
     from agent_reach import __version__
+    from agent_reach.config import Config
 
     print(f"当前版本: v{__version__}")
-    release_url = "https://api.github.com/repos/Panniantong/Agent-Reach/releases/latest"
-    commit_url = "https://api.github.com/repos/Panniantong/Agent-Reach/commits/main"
-
-    # Fetch latest release with retry/backoff.
-    resp, err, attempts = _github_get_with_retry(release_url, timeout=10, retries=3)
+    release, err, attempts = _fetch_latest_release(Config(read_only=True))
     if err:
-        print(f"[!] 无法检查更新（{_update_error_text(err)}，已重试 {attempts} 次）")
+        print(f"[!] 无法检查更新（{_update_error_text(err)}，共尝试 {attempts} 次）")
         return "error"
 
-    if resp.status_code == 200:
-        data = resp.json()
-        latest = data.get("tag_name", "").lstrip("v")
-        body = data.get("body", "")
-
-        if latest and _is_newer_version(latest, __version__):
-            print(f"最新版本: v{latest} ← 有更新！")
-            if body:
-                print()
-                print("更新内容：")
-                # Show first 20 lines of release notes
-                for line in body.strip().split("\n")[:20]:
-                    print(f"  {line}")
+    latest = release.get("tag_name", "").lstrip("v")
+    body = release.get("body", "")
+    if latest and _is_newer_version(latest, __version__):
+        print(f"最新版本: v{latest} ← 有更新！")
+        if body:
             print()
-            print(_UPDATE_INSTRUCTIONS)
-            return "update_available"
-        print("✅ 已是最新版本")
-        return "up_to_date"
-
-    release_err = _classify_github_response_error(resp)
-    if release_err == "rate_limit":
-        print("[!] 无法检查更新（GitHub API 速率限制，请稍后重试）")
-        return "error"
-
-    # No releases yet, fall back to latest main commit.
-    resp2, err2, attempts2 = _github_get_with_retry(commit_url, timeout=10, retries=2)
-    if err2:
-        print(f"[!] 无法检查更新（{_update_error_text(err2)}，已重试 {attempts + attempts2} 次）")
-        return "error"
-    if resp2.status_code == 200:
-        commit = resp2.json()
-        sha = commit.get("sha", "")[:7]
-        msg = commit.get("commit", {}).get("message", "").split("\n")[0]
-        date = commit.get("commit", {}).get("committer", {}).get("date", "")[:10]
-        print(f"最新提交: {sha} ({date}) {msg}")
+            print("更新内容：")
+            # Show first 20 lines of release notes
+            for line in body.strip().split("\n")[:20]:
+                print(f"  {line}")
         print()
         print(_UPDATE_INSTRUCTIONS)
-        return "unknown"
-
-    commit_err = _classify_github_response_error(resp2)
-    if commit_err == "rate_limit":
-        print("[!] 无法检查更新（GitHub API 速率限制，请稍后重试）")
-        return "error"
-
-    print(f"[!] 无法检查更新（GitHub 返回 {resp2.status_code}）")
-    return "error"
+        return "update_available"
+    print("✅ 已是最新版本")
+    return "up_to_date"
 
 
 def _cmd_watch():
@@ -2309,13 +2411,10 @@ def _cmd_watch():
     update_available = False
     new_version = ""
     release_body = ""
-    resp, err, _attempts = _github_get_with_retry(
-        "https://api.github.com/repos/Panniantong/Agent-Reach/releases/latest",
-        timeout=10,
-        retries=2,
-    )
-    if not err and resp and resp.status_code == 200:
-        data = resp.json()
+    data, err, _attempts = _fetch_latest_release(config)
+    if err:
+        issues.append(f"[!] 更新检查：{_update_error_text(err)}")
+    elif data:
         latest = data.get("tag_name", "").lstrip("v")
         if latest and _is_newer_version(latest, __version__):
             update_available = True
