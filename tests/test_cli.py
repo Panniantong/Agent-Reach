@@ -227,7 +227,7 @@ class TestCLI:
         cli._install_reddit_deps()
         assert calls == ["rdt"]
 
-    def test_install_opencli_uses_resolved_windows_npm_path(self, monkeypatch):
+    def test_install_opencli_uses_resolved_windows_npm_path(self, monkeypatch, capsys):
         import agent_reach.backends as backends
         from agent_reach.backends import OpenCLIStatus
 
@@ -255,6 +255,10 @@ class TestCLI:
         assert calls == [
             ["C:/Tools/npm.CMD", "install", "-g", backends.OPENCLI_PACKAGE]
         ]
+        out = capsys.readouterr().out
+        assert "github.com/jackwener/opencli/releases" in out
+        assert "加载已解压的扩展程序" in out
+        assert "chromewebstore.google.com" not in out
 
     def test_install_facebook_instagram_routes_to_opencli_once(self, monkeypatch, capsys):
         calls = []

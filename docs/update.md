@@ -71,12 +71,13 @@ backend for 小红书/Reddit (and adds B站 subtitles). Offer it once. For
 小红书, OpenCLI may use only an existing Chrome session explicitly controlled
 by the user. The update must never log the user in or read browser cookies:
 
-> "这次更新引入了 OpenCLI 后端。要装吗？装完只需你在 Chrome 商店点一次
-> 『添加扩展』。小红书 OpenCLI 只使用你已有的 Chrome 会话；如果没有现成
-> 会话，我不会自动登录，会改用 Cookie-Editor 配置 MCP / 存量工具。"
+> "这次更新引入了 OpenCLI 后端。要装吗？装完需要你从 OpenCLI 官方 Releases
+> 下载扩展，并在 Chrome 扩展页手动『加载已解压的扩展程序』。
+> 小红书 OpenCLI 只使用你已有的 Chrome 会话；如果没有现成会话，我不会自动登录，
+> 会改用 Cookie-Editor 配置 MCP / 存量工具。"
 
 If yes: `agent-reach install --system --channels opencli` and guide them through the
-extension click. If no, everything keeps working on existing backends.
+manual extension load. If no, everything keeps working on existing backends.
 
 ### Step 4: Coexistence (DO NOT uninstall old tools)
 
@@ -113,8 +114,9 @@ Tell the user:
 1. What version they're on now (`agent-reach version`)
 2. How many channels are available, and which backend each multi-backend
    platform is using (from doctor)
-3. Anything that needs their action (e.g. a Chrome extension click, or a
-   manual Cookie-Editor export when XiaoHongShu uses MCP / a legacy tool)
+3. Anything that needs their action (e.g. manually loading the Chrome
+   extension, or a manual Cookie-Editor export when XiaoHongShu uses MCP /
+   a legacy tool)
 4. What changed in this update (release notes shown by `check-update`)
 
 Done.

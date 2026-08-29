@@ -149,4 +149,4 @@ chains — note: reference docs are written in Chinese, commands are universal):
 If a channel needs setup, fetch the install guide:
 https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
 
-The user only provides cookies / one extension click; the agent does the rest.
+The user only provides cookies / one manual browser-extension load; the agent does the rest.

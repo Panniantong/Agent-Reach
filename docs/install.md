@@ -215,9 +215,11 @@ agent-reach install --system --channels opencli
 ```
 
 > 装完后引导用户做唯一一步手动操作（Chrome 安全限制，无法代劳）：
-> 1. 打开 https://chromewebstore.google.com/detail/opencli/ildkmabpimmkaediidaifkhjpohdnifk
-> 2. 点「添加至 Chrome」
-> 3. 运行 `opencli doctor` 验证（显示 Extension: connected 即成功）
+> 1. 从 OpenCLI 官方 [Releases](https://github.com/jackwener/opencli/releases)
+>    下载最新 `opencli-extension-v{version}.zip`
+> 2. 解压后打开 `chrome://extensions`，启用「开发者模式」
+> 3. 点「加载已解压的扩展程序」，选择解压目录
+> 4. 运行 `opencli doctor` 验证（显示 Extension: connected 即成功）
 >
 > AUTH_REQUIRED 且用户没有现成会话时，不要替用户自动登录；改走下面的
 > xiaohongshu-mcp / 存量工具 Cookie-Editor 路线。
@@ -241,7 +243,8 @@ agent-reach install --system --channels facebook,instagram
 ```
 
 > 装完后：
-> 1. 确认 Chrome 已安装 OpenCLI 扩展并通过 `opencli doctor`
+> 1. 确认 Chrome 已按上面的官方 Releases 流程加载 OpenCLI 扩展，
+>    并通过 `opencli doctor`
 > 2. 在 Chrome 里登录 facebook.com / instagram.com
 > 3. Agent 直接调用：
 >    ```bash

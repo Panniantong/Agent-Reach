@@ -1016,7 +1016,7 @@ def _install_opencli_deps():
 
     Desktop-only. The npm package installs automatically; the Chrome
     extension CANNOT be installed programmatically (Chrome security model),
-    so we print a one-click guide instead.
+    so we print the official release + load-unpacked guide instead.
     """
     import shutil
     import subprocess
@@ -1059,9 +1059,10 @@ def _install_opencli_deps():
     ):
         print("  ✅ OpenCLI installed")
         print("  最后一步（必须手动，Chrome 安全限制）：安装浏览器扩展")
-        print(f"    1. 打开 {OPENCLI_EXTENSION_URL}")
-        print("    2. 点「添加至 Chrome」")
-        print("    3. 运行 `opencli doctor` 验证连接")
+        print(f"    1. 从官方 Releases 下载最新 opencli-extension-v*.zip：{OPENCLI_EXTENSION_URL}")
+        print("    2. 解压后打开 chrome://extensions，并启用开发者模式")
+        print("    3. 点「加载已解压的扩展程序」，选择解压目录")
+        print("    4. 运行 `opencli doctor` 验证连接")
         return True
     else:
         print(f"  [!]  OpenCLI install failed. Run: npm install -g {OPENCLI_PACKAGE}")

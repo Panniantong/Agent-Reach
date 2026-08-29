@@ -71,6 +71,19 @@ def test_xiaohongshu_opencli_and_export_boundaries_are_truthful():
     assert "非 xiaohongshu.com 域 Cookie" in xhs_guide
 
 
+def test_public_guidance_uses_official_opencli_extension_releases():
+    """Never direct users to the outdated, unaffiliated Web Store build."""
+    all_text = "\n".join(
+        path.read_text(encoding="utf-8") for path in _policy_documents()
+    )
+    assert "chromewebstore.google.com/detail/opencli/" not in all_text
+
+    install_guide = (ROOT / "docs" / "install.md").read_text(encoding="utf-8")
+    assert "github.com/jackwener/opencli/releases" in install_guide
+    assert "chrome://extensions" in install_guide
+    assert "加载已解压的扩展程序" in install_guide
+
+
 def test_twitter_operational_docs_explain_the_environment_boundary():
     """Saved cookies help doctor only; direct twitter commands need env vars."""
     operational_docs = (
