@@ -33,6 +33,7 @@ from urllib.parse import urlparse
 import requests
 
 from agent_reach.config import Config
+from agent_reach.security.grimdall_guard import safe_execute
 
 # Whisper API limit is 25MB; leave headroom for multipart overhead.
 SIZE_LIMIT_BYTES = 24 * 1024 * 1024
@@ -104,7 +105,7 @@ def _probe_audio_duration(path: Path) -> float:
         str(path),
     ]
     try:
-        proc = subprocess.run(
+        proc = safe_execute(
             cmd,
             capture_output=True,
             encoding="utf-8",
@@ -159,7 +160,7 @@ def _run(cmd: List[str], timeout: int = 600) -> None:
     network read or a hung probe must not block the CLI forever.
     """
     try:
-        proc = subprocess.run(
+        proc = safe_execute(
             cmd,
             capture_output=True,
             encoding="utf-8",
