@@ -17,8 +17,8 @@ import time
 
 from agent_reach import __version__
 
-# Pinned to the 0.4.2 state — PyPI still only has 0.4.1 (upstream issue #10).
-_RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66"
+# Pinned to the upstream requests transport fix (public-clis/rdt-cli#20).
+_RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@3ff6db5c96c31dc0cf68a0431ede064903237818"
 _MAX_CONFIGURE_VALUE_CHARS = 1024 * 1024
 _SENSITIVE_CONFIG_KEYS = {
     "proxy",
