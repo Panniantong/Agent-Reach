@@ -21,6 +21,12 @@ def main():
         page = browser.new_page(viewport={"width": 390, "height": 844})
         page.on("pageerror", lambda error: browser_errors.append(str(error)))
         page.on(
+            "response",
+            lambda response: browser_errors.append(
+                f"HTTP {response.status} {response.url}"
+            ) if response.status >= 400 else None,
+        )
+        page.on(
             "console",
             lambda message: browser_errors.append(message.text)
             if message.type == "error"

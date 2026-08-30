@@ -49,6 +49,18 @@ class _ResearchStub:
         return {"as_of": as_of, "serenity_days": serenity_days}
 
 
+class _OfficialStub:
+    def sync_sec_filings(self, ticker, *, cik, as_of, limit, user_agent):
+        return {
+            "ticker": ticker,
+            "cik": cik,
+            "as_of": as_of,
+            "limit": limit,
+            "user_agent": user_agent,
+            "claims_created": 0,
+        }
+
+
 def test_narrative_status_json(capsys):
     with patch("agent_reach.narrative.service.NarrativeService", return_value=_NarrativeStub()):
         with patch("sys.argv", ["agent-reach", "radar-narrative", "status", "--json"]):
@@ -143,3 +155,26 @@ def test_daily_sync_has_separate_two_day_default(capsys):
 
     payload = json.loads(capsys.readouterr().out)
     assert payload["serenity_days"] == 2
+
+
+def test_sec_sync_routes_explicit_identity_and_as_of(capsys):
+    with patch("agent_reach.narrative.service.NarrativeService", return_value=_NarrativeStub()):
+        with patch(
+            "agent_reach.narrative.official.OfficialSourceAdapter",
+            return_value=_OfficialStub(),
+        ):
+            with patch(
+                "sys.argv",
+                [
+                    "agent-reach", "radar-narrative", "sec-sync", "--ticker", "LITE",
+                    "--cik", "1234567", "--as-of", "2026-08-30", "--count", "12",
+                    "--user-agent", "Agent Reach analyst@example.com", "--json",
+                ],
+            ):
+                main()
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ticker"] == "LITE"
+    assert payload["as_of"] == "2026-08-30"
+    assert payload["limit"] == 12
+    assert payload["claims_created"] == 0

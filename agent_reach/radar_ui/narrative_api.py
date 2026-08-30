@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from agent_reach.narrative.ingest import MAX_IMPORT_BYTES
+from agent_reach.narrative.official import OfficialSourceAdapter
 from agent_reach.narrative.research import ResearchService
 from agent_reach.narrative.service import NarrativeService
 
@@ -17,8 +18,10 @@ def register_narrative_routes(app, jobs, service: Optional[NarrativeService] = N
 
     narrative = service or NarrativeService()
     research = ResearchService(store=narrative.store, quant=narrative.quant)
+    official = OfficialSourceAdapter(store=narrative.store)
     app.state.narrative = narrative
     app.state.research = research
+    app.state.official_sources = official
 
     def fail(exc: Exception):
         if isinstance(exc, LookupError):
@@ -245,6 +248,10 @@ def register_narrative_routes(app, jobs, service: Optional[NarrativeService] = N
     def narrative_research_themes():
         return {"themes": research.themes()}
 
+    @app.get("/api/narrative/research/serenity")
+    def narrative_research_serenity(limit: int = 100):
+        return {"units": research.serenity_units(limit=limit)}
+
     @app.get("/api/narrative/research/packs")
     def narrative_research_packs(slice_id: str = "", limit: int = 100):
         return {"packs": research.packs(slice_id=slice_id, limit=limit)}
@@ -393,5 +400,35 @@ def register_narrative_routes(app, jobs, service: Optional[NarrativeService] = N
             "narrative_weekly_freeze",
             {"as_of": as_of},
             lambda: research.weekly_freeze(as_of=as_of),
+        )
+        return job.to_dict()
+
+    @app.post("/api/narrative/research/official/sec")
+    def narrative_research_official_sec(payload: dict = Body(...)):
+        ticker = str(payload.get("ticker") or "")
+        job = jobs.submit(
+            "narrative_official_sec",
+            {"ticker": ticker, "as_of": str(payload.get("as_of") or "")},
+            lambda: official.sync_sec_filings(
+                ticker,
+                cik=str(payload.get("cik") or ""),
+                as_of=str(payload.get("as_of") or ""),
+                limit=int(payload.get("limit") or 40),
+                user_agent=str(payload.get("user_agent") or ""),
+            ),
+        )
+        return job.to_dict()
+
+    @app.post("/api/narrative/research/official/federal-register")
+    def narrative_research_official_policy(payload: dict = Body(...)):
+        query = str(payload.get("query") or "")
+        job = jobs.submit(
+            "narrative_official_policy",
+            {"query": query, "as_of": str(payload.get("as_of") or "")},
+            lambda: official.sync_federal_register(
+                query,
+                as_of=str(payload.get("as_of") or ""),
+                limit=int(payload.get("limit") or 40),
+            ),
         )
         return job.to_dict()

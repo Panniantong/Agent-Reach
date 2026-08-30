@@ -196,9 +196,39 @@ def test_narrative_ui_has_nine_workspaces_and_responsive_accessibility(narrative
     assert "LIVE RESEARCH BOARD" in script
     assert "RESEARCH / EVIDENCE GRAPH" in script
     assert "BOTTLENECK CONTRACT" in script
+    assert "Serenity thesis units" in script
+    assert "PENDING TRANSLATION" in script
     assert "nr-scenario-rail" in styles
     assert "nr-workbench" in styles
     assert "nr-graph-flow" in styles
     assert "nr-edge.state-verified" in styles
     assert "@media (max-width: 680px)" in styles
     assert "prefers-reduced-motion" in styles
+
+
+def test_official_sec_api_is_an_explicit_background_job(narrative_client, monkeypatch):
+    official = narrative_client.app.state.official_sources
+    monkeypatch.setattr(
+        official,
+        "sync_sec_filings",
+        lambda ticker, **kwargs: {
+            "ticker": ticker,
+            "as_of": kwargs["as_of"],
+            "filings": [],
+            "claims_created": 0,
+        },
+    )
+
+    submitted = narrative_client.post(
+        "/api/narrative/research/official/sec",
+        json={
+            "ticker": "LITE",
+            "as_of": "2026-08-30",
+            "user_agent": "Agent Reach analyst@example.com",
+        },
+    ).json()
+    job = _wait_for_job(narrative_client, submitted["id"])
+
+    assert job["status"] == "done"
+    assert job["result"]["ticker"] == "LITE"
+    assert job["result"]["claims_created"] == 0

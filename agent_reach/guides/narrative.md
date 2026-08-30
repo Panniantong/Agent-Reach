@@ -101,12 +101,21 @@ agent-reach radar-narrative daily-sync --serenity-days 2
 agent-reach radar-narrative weekly-freeze --as-of 2026-08-30
 agent-reach radar-narrative pack-diff --pack-id pack_... --base-pack-id pack_...
 agent-reach radar-narrative relationship-calibrate --horizon 1y
+agent-reach radar-narrative sec-sync --ticker LITE --as-of 2026-08-30 \
+  --user-agent "Agent Reach analyst@example.com" --count 40
+agent-reach radar-narrative policy-sync --query "export controls" --as-of 2026-08-30
 ```
 
 `serenity-backfill` 排除純轉貼，以 tweet URL／內容雜湊去重；原文與可選的繁中、
 英文翻譯存在同一 document，翻譯不建立第二份證據。沒有 X archive/export 時，
 每日 coverage 的零表示 unknown，不表示當日沒有貼文。MethodProfile 固定先進 draft，
 沒有 analyst voting weight。
+
+`sec-sync` 只接受 SEC 的 submissions 與 Archives 公開端點，保存 10-K、10-Q、
+8-K、20-F、6-K 及其 `/A` 修正版的 accession、filing date、available date、原文
+與 hash。SEC 要求帶聯絡方式的 descriptive User-Agent；可用 `sec_user_agent` 設定，
+或每次傳 `--user-agent`。`policy-sync` 保存 Federal Register 的 proposed、final、
+effective 狀態。兩者只證明官方文件及其狀態存在，不會自動建立公司影響 claim。
 
 歷史 sample 格式：
 
@@ -173,6 +182,7 @@ PIT 會明確降級 evidence grade。
 - `/api/narrative/research/relationships`、`/bottlenecks`、`/coverage`
 - `/api/narrative/research/bottlenecks/{id}/review`（observed 需兩個 A/B 維度）
 - `/api/narrative/research/live`、`/monitor`、`/stress-tests`
+- `/api/narrative/research/official/sec`、`/official/federal-register`（只在 POST 後取得）
 
 探索、forecast 與 recalibration 使用 Radar `JobManager`；狀態由
 `/api/jobs/{id}` 查詢，SSE 日誌在 `/api/jobs/{id}/log`。

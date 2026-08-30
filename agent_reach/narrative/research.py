@@ -12,6 +12,7 @@ import json
 import re
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 from agent_reach.config import Config
@@ -301,6 +302,38 @@ class ResearchService:
             for slice_id, theme in THEMES.items()
         ]
 
+    def serenity_units(self, *, limit: int = 100) -> list[dict]:
+        rows = []
+        blob_root = self.store.blob_dir.resolve()
+        for document in self.store.list_documents(limit=5000):
+            if document.get("source_id") != SERENITY_SOURCE_ID:
+                continue
+            path = Path(str(document.get("blob_path") or "")).resolve()
+            try:
+                path.relative_to(blob_root)
+            except ValueError:
+                continue
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(payload, dict) or "original" not in payload:
+                continue
+            rows.append(
+                {
+                    "document_id": document["id"],
+                    "source_url": document.get("source_url") or "",
+                    "published_at": document.get("published_at") or "",
+                    "original": str(payload.get("original") or ""),
+                    "zh_hant": str(payload.get("zh_hant") or ""),
+                    "en": str(payload.get("en") or ""),
+                    "translation_status": str(payload.get("translation_status") or "pending"),
+                    "thesis_unit": payload.get("thesis_unit") or {},
+                }
+            )
+        rows.sort(key=lambda row: (row["published_at"], row["document_id"]), reverse=True)
+        return rows[: max(1, min(int(limit), 1000))]
+
     def method_profile(
         self,
         *,
@@ -552,6 +585,34 @@ class ResearchService:
         roles = [label for _, _, label, tickers in theme["nodes"] if ticker in tickers]
         return " / ".join(roles) if roles else "peer / downstream context"
 
+    def _official_context(self, *, tickers: list[str], as_of: str) -> dict:
+        symbols = {ticker.upper() for ticker in tickers}
+        filings: dict[str, list[dict]] = {ticker: [] for ticker in tickers}
+        policies: list[dict] = []
+        for document in self.store.list_documents(limit=5000):
+            available = str(document.get("as_of") or document.get("published_at") or "")[:10]
+            if not available or available > as_of[:10]:
+                continue
+            metadata = document.get("metadata") or {}
+            if document.get("source_id") == "sec_edgar":
+                ticker = str(metadata.get("ticker") or "").upper()
+                if ticker in symbols:
+                    filings[ticker].append(document)
+            elif document.get("source_id") in {
+                "congress_gov", "federal_register", "regulations_gov"
+            }:
+                policies.append(document)
+        for rows in filings.values():
+            rows.sort(
+                key=lambda row: (
+                    str((row.get("metadata") or {}).get("available_date") or row.get("as_of")),
+                    row["id"],
+                ),
+                reverse=True,
+            )
+        policies.sort(key=lambda row: (str(row.get("as_of")), row["id"]), reverse=True)
+        return {"filings": filings, "policies": policies}
+
     def _valuation_rows(
         self,
         *,
@@ -630,6 +691,7 @@ class ResearchService:
             ticker: self.quant.research_snapshot(ticker, as_of=cutoff)
             for ticker in theme["tickers"]
         }
+        official = self._official_context(tickers=theme["tickers"], as_of=cutoff)
         manifest = {
             "quant_root": str(self.quant.root),
             "read_only": True,
@@ -650,6 +712,22 @@ class ResearchService:
                     },
                 }
                 for ticker, snapshot in snapshots.items()
+            },
+            "official_documents": {
+                "filings": {
+                    ticker: [
+                        {
+                            "id": row["id"], "sha256": row["sha256"], "as_of": row["as_of"],
+                            "accession": (row.get("metadata") or {}).get("accession"),
+                        }
+                        for row in rows
+                    ]
+                    for ticker, rows in official["filings"].items()
+                },
+                "policies": [
+                    {"id": row["id"], "sha256": row["sha256"], "as_of": row["as_of"]}
+                    for row in official["policies"]
+                ],
             },
         }
         run = self.store.create_research_run(
@@ -733,6 +811,8 @@ class ResearchService:
             },
             "verified_claims": len(verified),
             "pending_claims": sum(claim["verification_state"] == "pending" for claim in claims),
+            "official_filings": sum(len(rows) for rows in official["filings"].values()),
+            "official_policy_documents": len(official["policies"]),
             "issues": [
                 {"ticker": ticker, "issues": snapshot["issues"]}
                 for ticker, snapshot in snapshots.items() if snapshot["issues"]
@@ -755,6 +835,7 @@ class ResearchService:
                 "financial_evidence": [
                     claim for claim in verified if claim.get("ticker") == ticker
                 ],
+                "official_filings": official["filings"][ticker],
                 "relationship_hypotheses": [],
                 "valuation_snapshots": valuations[ticker],
                 "watch_metrics": theme["measurement_contract"]["watch"],
@@ -779,6 +860,7 @@ class ResearchService:
             "coverage": coverage,
             "evidence_grade": grade,
             "policy_exposure": theme["policy_exposure"],
+            "policy_documents": official["policies"],
             "historical_analogues": theme["historical_analogues"],
             "next_move": theme["next_move"],
             "failure_conditions": theme["failure_conditions"],
@@ -997,6 +1079,9 @@ class ResearchService:
             "ticker": symbol,
             "quant": self.quant.research_snapshot(symbol),
             "research_cards": cards,
+            "official_filings": self._official_context(
+                tickers=[symbol], as_of=date.today().isoformat()
+            )["filings"][symbol],
             "relationships": self.relationships(ticker=symbol),
             "valuations": self.store.list_valuations(ticker=symbol),
             "orders_generated": False,

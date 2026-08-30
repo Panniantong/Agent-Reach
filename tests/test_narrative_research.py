@@ -239,6 +239,9 @@ def test_serenity_backfill_keeps_translation_out_of_evidence_and_learns_literal_
     assert body["zh_hant"] == "翻譯不可當證據"
     assert body["thesis_unit"]["extraction_status"] == "literal_signals_pending_review"
     assert body["thesis_unit"]["themes"][0]["tag"] == "FRAME"
+    units = service.serenity_units(limit=10)
+    assert len(units) == 2
+    assert next(row for row in units if row["source_url"] == first_url)["en"] == "translated text"
     dimensions = result["method_profile"]["profile"]["dimensions"]
     assert dimensions["capacity_lead_time"]["observed_count"] == 2
     assert dimensions["capacity_lead_time"]["repeated_in_independent_posts"] is True

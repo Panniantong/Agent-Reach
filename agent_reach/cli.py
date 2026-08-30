@@ -247,7 +247,7 @@ def main():
         choices=["ingest", "discover", "contract", "forecast", "resolve",
                  "calibrate", "status", "seed-reports", "serenity-backfill",
                  "daily-sync", "research", "weekly-freeze", "pack-diff",
-                 "relationship-calibrate"],
+                 "relationship-calibrate", "sec-sync", "policy-sync"],
     )
     p_narr.add_argument("--text", default="")
     p_narr.add_argument("--url", default="")
@@ -259,6 +259,8 @@ def main():
     p_narr.add_argument("--published-at", default="")
     p_narr.add_argument("--as-of", default="")
     p_narr.add_argument("--query", default="")
+    p_narr.add_argument("--cik", default="")
+    p_narr.add_argument("--user-agent", default="")
     p_narr.add_argument("--count", type=int, default=8)
     p_narr.add_argument("--days", type=int, default=90)
     p_narr.add_argument(
@@ -831,6 +833,28 @@ def _cmd_radar_narrative(args):
             horizon=args.horizon,
             as_of=args.as_of,
         )
+    elif action in {"sec-sync", "policy-sync"}:
+        from agent_reach.narrative.official import OfficialSourceAdapter
+
+        official = OfficialSourceAdapter(store=service.store)
+        if action == "sec-sync":
+            if not args.ticker:
+                raise ValueError("sec-sync 必須提供 --ticker")
+            result = official.sync_sec_filings(
+                args.ticker,
+                cik=args.cik,
+                as_of=args.as_of,
+                limit=args.count,
+                user_agent=args.user_agent,
+            )
+        else:
+            if not args.query:
+                raise ValueError("policy-sync 必須提供 --query")
+            result = official.sync_federal_register(
+                args.query,
+                as_of=args.as_of,
+                limit=args.count,
+            )
     else:
         raise ValueError(f"unknown narrative action: {action}")
 

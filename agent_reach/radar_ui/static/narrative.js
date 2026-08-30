@@ -305,7 +305,8 @@
       return '<article class="nr-card"><p class="nr-eyebrow">' + esc(company.value_chain_role) + '</p><h3>' +
         esc(company.ticker) + '</h3><p>' + esc(company.value_capture) + '</p><dl class="nr-kv"><dt>TradingView</dt><dd>' +
         esc((((company.demand_evidence || {}).tradingview || {}).status) || "missing") + '</dd><dt>Finviz</dt><dd>' +
-        esc((((company.demand_evidence || {}).finviz || {}).status) || "missing") + '</dd><dt>估值分歧</dt><dd>' +
+        esc((((company.demand_evidence || {}).finviz || {}).status) || "missing") + '</dd><dt>SEC filings</dt><dd>' +
+        num((company.official_filings || []).length, 0) + '</dd><dt>估值分歧</dt><dd>' +
         (computed ? esc((computed.assumptions || {}).metric) + ' ' + num(computed.low) + '–' + num(computed.high) : "資料不足") +
         '</dd></dl><button type="button" class="nr-button secondary nr-company-jump" data-ticker="' +
         esc(company.ticker) + '">公司卡</button></article>';
@@ -322,6 +323,8 @@
       '<section class="nr-section"><div class="nr-section-head"><h2>公司研究卡</h2><span>' +
       (payload.companies || []).length + ' 家</span></div><div class="nr-grid">' + companyCards + '</div></section>' +
       '<section class="nr-dual-brief"><div><h2>政策曝險</h2>' + boardList(payload.policy_exposure, "尚無") +
+      '<div class="nr-brief-row"><strong>官方政策文件</strong><p>' +
+      num((payload.policy_documents || []).length, 0) + ' 份；未經 review 不宣稱公司影響。</p></div>' +
       '</div><div><h2>版本差異</h2>' + ((diff || {}).changes || []).slice(0, 8).map(row =>
         '<div class="nr-brief-row"><strong>' + esc(row.kind) + '</strong><p>' + esc(row.field || JSON.stringify(row.value || "")) +
         '</p></div>').join("") + (((diff || {}).changes || []).length ? "" : empty("內容與前版相同或尚無前版。")) +
@@ -340,7 +343,8 @@
       '</small><strong>' + esc(theme.title) + '</strong><span>' + researchGrade((theme.latest_pack || {}).evidence_grade || "E") +
       '</span></button>').join("") + '</section><div class="nr-actions"><button class="nr-button" id="nr-run-research">重建此切片</button>' +
       '<button class="nr-button secondary" id="nr-weekly-freeze">凍結全部週報</button><button class="nr-button secondary" id="nr-serenity-backfill">回補 Serenity 90 天</button></div>' +
-      '<div id="nr-research-pack"></div>';
+      '<div id="nr-research-pack"></div><section class="nr-section"><div class="nr-section-head"><h2>Serenity thesis units</h2>' +
+      '<span>原文 · 繁中 · English</span></div><div id="nr-serenity-units"></div></section>';
     all("[data-research-slice]").forEach(button => button.addEventListener("click", () => {
       state.researchSlice = button.dataset.researchSlice; renderResearchThemes();
     }));
@@ -358,6 +362,18 @@
         body:JSON.stringify({days:90,count:2000})}), "Serenity backfill"); }
       catch (error) { log(error.message, true); }
     });
+    try {
+      const units = await api("/api/narrative/research/serenity?limit=30");
+      one("#nr-serenity-units").innerHTML = (units.units || []).length ?
+        units.units.map(row => '<article class="nr-source-unit"><header><a href="' + esc(row.source_url) +
+          '" target="_blank" rel="noopener">' + esc(row.published_at) + '</a>' + tag(row.translation_status) +
+          '</header><div><section><small>ORIGINAL</small><p>' + esc(row.original) +
+          '</p></section><section><small>繁中</small><p>' + esc(row.zh_hant || "待翻譯") +
+          '</p></section><section><small>ENGLISH</small><p>' + esc(row.en || "PENDING TRANSLATION") +
+          '</p></section></div><footer>' + ((row.thesis_unit.themes || []).map(theme =>
+            tag(theme.slice, "guess")).join("") || tag("pending_review", "guess")) + '</footer></article>').join("") :
+        empty("尚無 Serenity 原文；沒有 archive 時不能宣稱 90 天完整。")
+    } catch (error) { one("#nr-serenity-units").innerHTML = errorCard(error); }
     if (!selected || !selected.latest_pack) {
       one("#nr-research-pack").innerHTML = empty("此切片尚未建立 ResearchPack。執行後才會讀取 Quant 並凍結證據快照。");
       setInspector("Blueprint", '<div class="nr-warning">' + tag("FRAME") + ' 靜態切片不是證據。</div>');
@@ -387,12 +403,15 @@
     const box = one("#nr-research-body");
     box.innerHTML = '<form class="nr-form-row" id="nr-research-company-form"><label><span class="nr-label">Ticker</span>' +
       '<input class="nr-input" id="nr-research-ticker" value="' + esc(state.researchTicker) + '"></label>' +
-      '<button class="nr-button" type="submit">載入研究卡</button></form><div id="nr-research-company-card"></div>';
+      '<label><span class="nr-label">SEC User-Agent</span><input class="nr-input" id="nr-sec-user-agent" ' +
+      'placeholder="Agent Reach analyst@example.com"></label><div class="nr-actions"><button class="nr-button" type="submit">載入研究卡</button>' +
+      '<button class="nr-button secondary" type="button" id="nr-sec-sync">同步 SEC</button></div></form>' +
+      '<div id="nr-research-company-card"></div>';
     async function load(ticker) {
       state.researchTicker = String(ticker || "LITE").toUpperCase();
       const data = await api("/api/narrative/research/companies/" + encodeURIComponent(state.researchTicker));
       const watch = researchWatchlist(), watching = watch.includes(state.researchTicker);
-      const cards = data.research_cards || [];
+      const cards = data.research_cards || [], officialFilings = data.official_filings || [];
       one("#nr-research-company-card").innerHTML = '<section class="nr-research-hero"><div><p class="nr-eyebrow">COMPANY RESEARCH CARD</p><h2>' +
         esc(data.ticker) + '</h2><p>TradingView ' + esc((data.quant.coverage || {}).tradingview) + ' · Finviz ' +
         esc((data.quant.coverage || {}).finviz) + '</p></div><button class="nr-button secondary" id="nr-watch-toggle">' +
@@ -406,6 +425,13 @@
             '</small><strong>' + (row.status === "computed_metric_range" ? num(row.low) + '–' + num(row.high) : "資料不足") +
             '</strong><span>' + esc(row.status) + '</span></div>').join("") + '</div></article>').join("") :
           empty("尚無包含此公司的 ResearchPack。")) +
+        '<section class="nr-section"><div class="nr-section-head"><h2>SEC filings</h2><span>PIT · ' +
+        officialFilings.length + ' 份</span></div>' + (officialFilings.length ? officialFilings.slice(0, 20).map(row =>
+          '<div class="nr-evidence">' + researchGrade("A") + '<p><a href="' + esc(row.source_url) +
+          '" target="_blank" rel="noopener">' + esc(row.title) + '</a><small>' +
+          esc(((row.metadata || {}).available_date) || row.as_of) + ' · ' +
+          esc((row.metadata || {}).accession || "") + '</small></p></div>').join("") :
+          empty("尚未主動同步 SEC 文件。文件存在本身不等於公司影響主張。")) + '</section>' +
         '<section class="nr-section"><div class="nr-section-head"><h2>關係契約</h2><span>未校準不顯示 p_relation</span></div>' +
         ((data.relationships.contracts || []).map(row => '<div class="nr-evidence">' + tag("event_contract") + '<p>' +
           esc(row.statement) + '<small>' + esc(row.resolution_date) + '</small></p></div>').join("") ||
@@ -422,6 +448,17 @@
     }
     one("#nr-research-company-form").addEventListener("submit", event => {
       event.preventDefault(); load(one("#nr-research-ticker").value.trim() || "LITE");
+    });
+    one("#nr-sec-sync").addEventListener("click", async () => {
+      const ticker = one("#nr-research-ticker").value.trim().toUpperCase() || "LITE";
+      const userAgent = one("#nr-sec-user-agent").value.trim();
+      if (!userAgent) { log("SEC sync 需要含聯絡 email 的 User-Agent", true); return; }
+      try {
+        followJob(await api("/api/narrative/research/official/sec", {
+          method:"POST", headers:{"content-type":"application/json"},
+          body:JSON.stringify({ticker:ticker,user_agent:userAgent,limit:40})
+        }), "SEC " + ticker);
+      } catch (error) { log(error.message || error, true); }
     });
     await load(state.researchTicker);
   }
