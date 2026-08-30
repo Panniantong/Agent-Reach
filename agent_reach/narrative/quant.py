@@ -6,7 +6,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -90,6 +90,35 @@ def _compact(data: dict) -> dict:
     return {key: data[key] for key in keys if key in data}
 
 
+def _as_of_cutoff(value: str = "") -> datetime:
+    text = str(value or "").strip()
+    if not text:
+        return datetime.now(timezone.utc)
+    if len(text) == 10:
+        parsed = datetime.combine(datetime.fromisoformat(text).date(), time.max, tzinfo=timezone.utc)
+    else:
+        parsed = _parse_date(text)
+    if parsed is None:
+        raise ValueError("as_of must be ISO formatted")
+    return parsed
+
+
+def _csv_value(value: object) -> object:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    normalized = text.replace(",", "")
+    if normalized.endswith("%"):
+        try:
+            return float(normalized[:-1]) / 100.0
+        except ValueError:
+            return text
+    try:
+        return float(normalized)
+    except ValueError:
+        return text
+
+
 class QuantAdapter:
     """Reads approved Quant files and never opens anything for writing."""
 
@@ -99,12 +128,20 @@ class QuantAdapter:
         self.root = (
             Path(root) if root else Path(str(configured)) if configured else DEFAULT_QUANT_DATA_ROOT
         ).resolve()
+        self.tradingview_pit_root = self._inside_root(
+            self.root / "tradingview" / "2026Q2PIT"
+        )
+        self.finviz_root = self._inside_root(self.root / "finviz")
 
     def status(self) -> dict:
         return {
             "root": str(self.root),
             "available": self.root.is_dir(),
             "mode": "read_only",
+            "tradingview_pit_root": str(self.tradingview_pit_root),
+            "tradingview_available": self.tradingview_pit_root.is_dir(),
+            "finviz_root": str(self.finviz_root),
+            "finviz_available": self.finviz_root.is_dir(),
         }
 
     def _inside_root(self, path: Path) -> Path:
@@ -206,6 +243,186 @@ class QuantAdapter:
             result["issues"].append("artifact generated orders and is excluded")
         result["data"] = _compact(data)
         return result
+
+    def read_tradingview_pit(self, ticker: str, *, as_of: str = "") -> dict:
+        """Read one approved TradingView PIT row without following out-of-root fallbacks."""
+        symbol = ticker.upper().strip()
+        if not symbol or not all(char.isalnum() or char in ".-" for char in symbol):
+            raise ValueError("invalid ticker")
+        path = self._inside_root(self.tradingview_pit_root / f"{symbol}.csv")
+        result = {
+            "ticker": symbol,
+            "path": str(path),
+            "exists": path.is_file(),
+            "status": "missing",
+            "issues": [],
+            "point_in_time": True,
+            "read_only": True,
+            "row": {},
+        }
+        if not path.is_file():
+            result["issues"].append("TradingView PIT ticker file missing; no fallback followed")
+            return result
+        cutoff = _as_of_cutoff(as_of)
+        raw = path.read_bytes()
+        result["sha256"] = hashlib.sha256(raw).hexdigest()
+        rows: list[tuple[datetime, dict]] = []
+        seen_dates: set[str] = set()
+        duplicate_dates: set[str] = set()
+        future_rows = 0
+        unordered = False
+        previous: Optional[datetime] = None
+        text = raw.decode("utf-8-sig", errors="replace").splitlines()
+        reader = csv.DictReader(text)
+        fields = list(reader.fieldnames or [])
+        time_field = next((key for key in ("time", "Time", "date", "Date") if key in fields), "")
+        close_field = next((key for key in ("close", "Close") if key in fields), "")
+        if not time_field or not close_field:
+            result["status"] = "invalid"
+            result["issues"].append("TradingView schema requires time/date and close")
+            result["schema"] = fields
+            return result
+        for source_row in reader:
+            row_time = _parse_date(source_row.get(time_field))
+            if row_time is None:
+                continue
+            if previous is not None and row_time < previous:
+                unordered = True
+            previous = row_time
+            date_key = row_time.isoformat()
+            if date_key in seen_dates:
+                duplicate_dates.add(date_key)
+            seen_dates.add(date_key)
+            if row_time > cutoff:
+                future_rows += 1
+                continue
+            normalized = {key: _csv_value(value) for key, value in source_row.items() if key}
+            rows.append((row_time, normalized))
+        result["schema"] = fields
+        result["rows_considered"] = len(rows)
+        result["future_rows_excluded"] = future_rows
+        if unordered:
+            result["issues"].append("TradingView rows are not time sorted")
+        if duplicate_dates:
+            result["issues"].append(f"TradingView contains {len(duplicate_dates)} duplicate timestamps")
+        if not rows:
+            result["status"] = "missing_as_of"
+            result["issues"].append("no TradingView row at or before as_of")
+            return result
+        rows.sort(key=lambda item: item[0])
+        selected_time, selected = rows[-1]
+        result.update(
+            {
+                "status": "ok" if not unordered and not duplicate_dates else "degraded",
+                "as_of": selected_time.isoformat(),
+                "row": selected,
+                "source": "tradingview/2026Q2PIT",
+            }
+        )
+        return result
+
+    def read_finviz_snapshot(self, ticker: str, *, as_of: str = "") -> dict:
+        """Select the latest eligible v151 snapshot by fetched_at/session_date, never latest pointer."""
+        symbol = ticker.upper().strip()
+        if not symbol or not all(char.isalnum() or char in ".-" for char in symbol):
+            raise ValueError("invalid ticker")
+        cutoff = _as_of_cutoff(as_of)
+        snapshots = self._inside_root(self.finviz_root / "screener" / "v151" / "snapshots")
+        result = {
+            "ticker": symbol,
+            "root": str(snapshots),
+            "exists": snapshots.is_dir(),
+            "status": "missing",
+            "issues": [],
+            "point_in_time": True,
+            "read_only": True,
+            "row": {},
+        }
+        if not snapshots.is_dir():
+            result["issues"].append("Finviz v151 snapshot root missing")
+            return result
+        candidates: list[tuple[datetime, str, Path, dict]] = []
+        for metadata_path in snapshots.glob("*/*.json"):
+            try:
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8-sig"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                continue
+            if not isinstance(metadata, dict) or metadata.get("status") not in (None, "ok"):
+                continue
+            fetched = _parse_date(metadata.get("fetched_at"))
+            session_date = str(metadata.get("session_date") or "")[:10]
+            if fetched is None or fetched > cutoff:
+                continue
+            if session_date and session_date > cutoff.date().isoformat():
+                continue
+            configured_csv = ((metadata.get("paths") or {}).get("snapshot_csv"))
+            csv_path = Path(str(configured_csv)) if configured_csv else metadata_path.with_suffix(".csv")
+            try:
+                safe_csv = self._inside_root(csv_path)
+            except ValueError:
+                continue
+            if safe_csv.is_file():
+                candidates.append((fetched, session_date, safe_csv, metadata))
+        candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        if not candidates:
+            result["status"] = "missing_as_of"
+            result["issues"].append("no Finviz snapshot observed at or before as_of")
+            return result
+        for fetched, session_date, csv_path, metadata in candidates:
+            with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
+                found = next(
+                    (row for row in csv.DictReader(handle)
+                     if str(row.get("Ticker") or "").upper() == symbol),
+                    None,
+                )
+            if found is None:
+                continue
+            asset_type = str(found.get("Asset Type") or "").strip()
+            result.update(
+                {
+                    "path": str(csv_path),
+                    "metadata_path": str(csv_path.with_suffix(".json")),
+                    "sha256": str((metadata.get("metrics") or {}).get("normalized_csv_sha256") or ""),
+                    "artifact_id": str(metadata.get("artifact_id") or ""),
+                    "fetched_at": fetched.isoformat(),
+                    "session_date": session_date,
+                    "observed_slot": str(metadata.get("observed_slot") or ""),
+                    "session_mismatch": bool(metadata.get("session_mismatch")),
+                    "schema_version": str(metadata.get("artifact_contract_version") or ""),
+                    "row": {key: _csv_value(value) for key, value in found.items()},
+                    "source": "finviz/screener/v151/snapshots",
+                }
+            )
+            if asset_type:
+                result["status"] = "excluded_non_company"
+                result["issues"].append(f"Finviz Asset Type={asset_type}; excluded from company peers")
+            else:
+                result["status"] = "ok"
+            if result["session_mismatch"]:
+                result["issues"].append("Finviz requested session differs from observed slot")
+            return result
+        result["issues"].append("ticker absent from all eligible Finviz snapshots")
+        return result
+
+    def research_snapshot(self, ticker: str, *, as_of: str = "") -> dict:
+        tradingview = self.read_tradingview_pit(ticker, as_of=as_of)
+        finviz = self.read_finviz_snapshot(ticker, as_of=as_of)
+        issues = [
+            *(f"tradingview: {item}" for item in tradingview.get("issues") or []),
+            *(f"finviz: {item}" for item in finviz.get("issues") or []),
+        ]
+        return {
+            "ticker": ticker.upper(),
+            "as_of": as_of,
+            "tradingview": tradingview,
+            "finviz": finviz,
+            "coverage": {
+                "tradingview": tradingview.get("status"),
+                "finviz": finviz.get("status"),
+            },
+            "issues": issues,
+            "read_only": True,
+        }
 
     def read_prices(self, ticker: str) -> dict:
         symbol = ticker.upper().strip()

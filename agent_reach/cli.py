@@ -245,7 +245,9 @@ def main():
     p_narr.add_argument(
         "narrative_action",
         choices=["ingest", "discover", "contract", "forecast", "resolve",
-                 "calibrate", "status", "seed-reports"],
+                 "calibrate", "status", "seed-reports", "serenity-backfill",
+                 "daily-sync", "research", "weekly-freeze", "pack-diff",
+                 "relationship-calibrate"],
     )
     p_narr.add_argument("--text", default="")
     p_narr.add_argument("--url", default="")
@@ -258,6 +260,20 @@ def main():
     p_narr.add_argument("--as-of", default="")
     p_narr.add_argument("--query", default="")
     p_narr.add_argument("--count", type=int, default=8)
+    p_narr.add_argument("--days", type=int, default=90)
+    p_narr.add_argument(
+        "--serenity-days",
+        type=int,
+        default=2,
+        help="daily-sync 回看 Serenity 的天數（預設 2；90 天回補請用 --days）",
+    )
+    p_narr.add_argument(
+        "--slice",
+        choices=["cpo-external-laser", "inp-substrate", "eda-bridge", "security-control-plane"],
+        default="cpo-external-laser",
+    )
+    p_narr.add_argument("--pack-id", default="")
+    p_narr.add_argument("--base-pack-id", default="")
     p_narr.add_argument("--contract-id", default="")
     p_narr.add_argument("--payload", default="", help="事件契約 JSON 檔")
     p_narr.add_argument("--samples", default="", help="歷史 point-in-time samples JSON 檔")
@@ -788,6 +804,33 @@ def _cmd_radar_narrative(args):
         result = service.calibrate(domain=args.domain, horizon=args.horizon, as_of=args.as_of)
     elif action == "seed-reports":
         result = service.bootstrap_report_seeds(Path(__file__).resolve().parent.parent)
+    elif action in {
+        "serenity-backfill", "daily-sync", "research", "weekly-freeze", "pack-diff"
+    }:
+        from agent_reach.narrative.research import ResearchService
+
+        research = ResearchService(store=service.store, quant=service.quant)
+        if action == "serenity-backfill":
+            result = research.serenity_backfill(days=args.days, count=args.count)
+        elif action == "daily-sync":
+            result = research.daily_sync(
+                as_of=args.as_of,
+                serenity_days=max(1, args.serenity_days),
+            )
+        elif action == "research":
+            result = research.run_research(args.slice, as_of=args.as_of, freeze=True)
+        elif action == "weekly-freeze":
+            result = research.weekly_freeze(as_of=args.as_of)
+        else:
+            if not args.pack_id:
+                raise ValueError("pack-diff 必須提供 --pack-id")
+            result = research.pack_diff(args.pack_id, base_id=args.base_pack_id)
+    elif action == "relationship-calibrate":
+        result = service.calibrate(
+            domain=args.domain or "commercial_relationship",
+            horizon=args.horizon,
+            as_of=args.as_of,
+        )
     else:
         raise ValueError(f"unknown narrative action: {action}")
 
@@ -808,6 +851,18 @@ def _cmd_radar_narrative(args):
         else:
             print("資料不足：校準閘門未通過，不顯示點機率")
         print(f"forecast_id={forecast['id']}")
+    elif action == "research":
+        pack = result.get("pack") or {}
+        payload = result.get("payload") or {}
+        print(
+            f"ResearchPack {pack.get('id', 'not-frozen')} · {payload.get('slice')} · "
+            f"grade={payload.get('evidence_grade')} · as-of={payload.get('as_of')}"
+        )
+    elif action == "serenity-backfill":
+        print(
+            f"Serenity @{result['handle']} · retrieved={result['retrieved']} · "
+            f"coverage_complete={result['coverage_complete']}"
+        )
     else:
         print(json.dumps(result, ensure_ascii=False, indent=2))
 

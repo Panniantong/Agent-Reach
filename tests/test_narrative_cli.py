@@ -8,6 +8,9 @@ from agent_reach.cli import main
 
 
 class _NarrativeStub:
+    store = object()
+    quant = object()
+
     def status(self):
         return {
             "store": {
@@ -29,6 +32,21 @@ class _NarrativeStub:
                 "upper_bound": None,
             }
         }
+
+
+class _ResearchStub:
+    def run_research(self, slice_id, *, as_of, freeze):
+        return {
+            "pack": {"id": "pack_fixture"},
+            "payload": {
+                "slice": slice_id,
+                "evidence_grade": "E",
+                "as_of": as_of or "2026-08-30",
+            },
+        }
+
+    def daily_sync(self, *, as_of, serenity_days):
+        return {"as_of": as_of, "serenity_days": serenity_days}
 
 
 def test_narrative_status_json(capsys):
@@ -90,3 +108,38 @@ def test_narrative_forecast_hides_unqualified_probability(capsys):
     output = capsys.readouterr().out
     assert "資料不足" in output
     assert "校準機率" not in output
+
+
+def test_research_cli_prints_frozen_pack(capsys):
+    with patch("agent_reach.narrative.service.NarrativeService", return_value=_NarrativeStub()):
+        with patch("agent_reach.narrative.research.ResearchService", return_value=_ResearchStub()):
+            with patch(
+                "sys.argv",
+                [
+                    "agent-reach",
+                    "radar-narrative",
+                    "research",
+                    "--slice",
+                    "cpo-external-laser",
+                    "--as-of",
+                    "2026-08-30",
+                ],
+            ):
+                main()
+
+    output = capsys.readouterr().out
+    assert "ResearchPack pack_fixture" in output
+    assert "grade=E" in output
+
+
+def test_daily_sync_has_separate_two_day_default(capsys):
+    with patch("agent_reach.narrative.service.NarrativeService", return_value=_NarrativeStub()):
+        with patch("agent_reach.narrative.research.ResearchService", return_value=_ResearchStub()):
+            with patch(
+                "sys.argv",
+                ["agent-reach", "radar-narrative", "daily-sync", "--json"],
+            ):
+                main()
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["serenity_days"] == 2

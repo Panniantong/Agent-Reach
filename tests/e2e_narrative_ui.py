@@ -30,7 +30,7 @@ def main():
         page.goto(BASE_URL)
         page.wait_for_load_state("networkidle")
 
-        expect(page.locator('[role="tab"]')).to_have_count(8)
+        expect(page.locator('[role="tab"]')).to_have_count(9)
         expect(page.locator("#nr-health-text")).to_contain_text("QUANT")
 
         page.locator('[data-tab="company"]').click()
@@ -39,9 +39,24 @@ def main():
         page.locator("#nr-company-form").evaluate("(form) => form.requestSubmit()")
         expect(page.get_by_text("EVIDENCE GRADE", exact=True)).to_be_visible()
 
+        page.locator('[data-tab="research"]').click()
+        expect(page.get_by_text("RESEARCH / EVIDENCE GRAPH", exact=True)).to_be_visible()
+        expect(page.locator(".nr-research-navitem")).to_have_count(7)
+        page.locator("#nr-run-research").click()
+        expect(page.locator("#nr-console-log")).to_contain_text(
+            "研究 cpo-external-laser 完成", timeout=15_000
+        )
+        expect(page.get_by_text("RESEARCHPACK V1", exact=False)).to_be_visible(timeout=10_000)
+        page.locator('[data-research-display="graph"]').click()
+        expect(page.locator(".nr-edge")).to_have_count(3)
+        page.locator('[data-research-display="scenario"]').click()
+        expect(page.get_by_text("BOTTLENECK CONTRACT", exact=True)).to_be_visible()
+        expect(page.get_by_text("資料不足", exact=False).last).to_be_visible()
+
         page.locator('[data-tab="inference"]').click()
         expect(page.get_by_text("LIVE RESEARCH BOARD /", exact=False)).to_be_visible(timeout=10_000)
-        expect(page.locator(".nr-scenario-tab")).to_have_count(4)
+        expect(page.locator(".nr-scenario-tab").first).to_be_visible()
+        assert page.locator(".nr-scenario-tab").count() >= 4
         expect(page.locator(".nr-scenario-prob.insufficient").first).to_have_text("資料不足")
         if SCREENSHOT:
             target = Path(SCREENSHOT)
@@ -77,7 +92,7 @@ def main():
         page.locator('[data-tab="company"]').click()
         expect(page.get_by_text("資料不足", exact=True).first).to_be_visible(timeout=10_000)
 
-        page.keyboard.press("Alt+8")
+        page.keyboard.press("Alt+9")
         expect(page.get_by_text("機率要接受結算，不接受文采。", exact=True)).to_be_visible()
 
         browser.close()

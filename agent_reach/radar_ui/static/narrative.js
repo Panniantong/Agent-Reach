@@ -3,7 +3,7 @@
 
   const tabs = [
     ["overview", "總覽", "OV"], ["industries", "產業", "IN"],
-    ["company", "公司", "CO"], ["sources", "來源", "SO"],
+    ["research", "研究", "RS"], ["company", "公司", "CO"], ["sources", "來源", "SO"],
     ["history", "歷史", "HI"], ["inference", "推演", "SI"],
     ["resolutions", "結算", "RE"], ["calibration", "校準", "CA"]
   ];
@@ -13,6 +13,10 @@
     ticker: "NVDA",
     boardHorizon: "1y",
     activeScenario: "",
+    researchView: "themes",
+    researchSlice: "cpo-external-laser",
+    researchDisplay: "chain",
+    researchTicker: "LITE",
     eventSource: null
   };
   const esc = value => String(value == null ? "" : value)
@@ -61,7 +65,7 @@
       '</h1><p class="nr-lede">' + esc(lede) + "</p>";
   }
   function tabSpineIndex() {
-    return {overview:2, industries:2, company:3, sources:1, history:3, inference:5, resolutions:6, calibration:6}[state.tab] || 0;
+    return {overview:2, industries:2, research:4, company:3, sources:1, history:3, inference:5, resolutions:6, calibration:6}[state.tab] || 0;
   }
   function drawChrome() {
     one("#nr-rail").innerHTML = tabs.map(item =>
@@ -231,6 +235,289 @@
       esc(state.ticker) + '"></label><div class="nr-actions"><button class="nr-button" type="submit">載入 dossier</button></div></form><div id="nr-company-result"></div>';
     one("#nr-company-form").addEventListener("submit", event => { event.preventDefault(); loadCompany(one("#nr-ticker").value.trim() || "NVDA"); });
     loadCompany(state.ticker);
+  }
+
+  const researchViews = [
+    ["themes", "Themes"], ["company", "Company"], ["briefs", "Briefs"],
+    ["reports", "Reports"], ["watchlist", "Watchlist"], ["live", "Live"],
+    ["monitor", "Monitor"]
+  ];
+  function researchWatchlist() {
+    try { return JSON.parse(localStorage.getItem("serenity-research-watchlist") || "[]"); }
+    catch (_) { return []; }
+  }
+  function saveResearchWatchlist(rows) {
+    localStorage.setItem("serenity-research-watchlist", JSON.stringify(Array.from(new Set(rows))));
+  }
+  function researchNav() {
+    return '<div class="nr-research-nav" role="navigation" aria-label="研究工作區">' +
+      researchViews.map(row => '<button type="button" class="nr-research-navitem' +
+        (state.researchView === row[0] ? " active" : "") + '" data-research-view="' + row[0] +
+        '">' + row[1] + '</button>').join("") + '</div><div id="nr-research-body"></div>';
+  }
+  function researchGrade(value) {
+    return '<span class="nr-grade grade-' + esc(String(value || "E").toLowerCase()) + '">' +
+      esc(value || "E") + '</span>';
+  }
+  function researchChain(payload) {
+    const nodes = ((payload.graph || {}).nodes || []);
+    return '<div class="nr-chain" aria-label="價值鏈">' + nodes.map((node, index) =>
+      '<article class="nr-chain-node"><small>' + esc(node.node_type) + '</small><strong>' +
+      esc(node.label) + '</strong><p>' + tag(node.tag) + ' ' + esc(node.confidence) + '</p>' +
+      '<div>' + (((node.metadata || {}).tickers || []).map(ticker =>
+        '<button type="button" class="nr-chip nr-company-jump" data-ticker="' + esc(ticker) + '">' +
+        esc(ticker) + '</button>').join("") || '<span class="nr-muted">system node</span>') + '</div></article>' +
+      (index < nodes.length - 1 ? '<i class="nr-chain-arrow" aria-hidden="true">→</i>' : "")
+    ).join("") + '</div>';
+  }
+  function researchGraph(payload) {
+    const graph = payload.graph || {}, nodes = graph.nodes || [], edges = graph.edges || [];
+    const byId = Object.fromEntries(nodes.map(node => [node.id, node]));
+    return '<div class="nr-graph-flow">' + edges.map(edge => {
+      const source = byId[edge.source_node_id] || {}, target = byId[edge.target_node_id] || {};
+      const evidence = edge.evidence || [];
+      return '<article class="nr-edge state-' + esc(edge.state) + '"><div class="nr-edge-route"><strong>' +
+        esc(source.label || "UNKNOWN") + '</strong><span><i></i>' + esc(edge.edge_type) + '</span><strong>' +
+        esc(target.label || "UNKNOWN") + '</strong></div><div class="nr-edge-meta">' + tag(edge.tag) +
+        tag(edge.state) + '<span>支持 ' + evidence.filter(row => row.stance === "support").length +
+        ' · 反駁 ' + evidence.filter(row => row.stance === "refute").length + '</span></div></article>';
+    }).join("") + (edges.length ? "" : empty("尚無 typed edges。")) + '</div>';
+  }
+  function researchScenario(payload) {
+    const bottleneck = payload.bottleneck_contract || {};
+    return '<div class="nr-research-scenario"><article class="nr-card wide"><p class="nr-eyebrow">BOTTLENECK CONTRACT</p>' +
+      '<h3>' + esc(bottleneck.title || payload.scarce_layer) + '</h3><p>' + tag(bottleneck.status || "candidate") +
+      '</p><dl class="nr-kv"><dt>量測</dt><dd>' + esc((payload.measurement_contract || {}).supply || "未定義") +
+      '</dd><dt>需求負載</dt><dd>' + esc((payload.measurement_contract || {}).load || "未定義") +
+      '</dd><dt>解除門檻</dt><dd>' + esc(JSON.stringify(bottleneck.easing_threshold || {})) +
+      '</dd><dt>結算</dt><dd>' + esc(bottleneck.resolution_date || "UNKNOWN") + '</dd></dl></article>' +
+      '<article class="nr-card"><p class="nr-eyebrow">FAILURE CONDITIONS</p><ul class="nr-list">' +
+      (payload.failure_conditions || []).map(row => '<li>' + esc(row) + '</li>').join("") +
+      '</ul></article><article class="nr-card"><p class="nr-eyebrow">NEXT MOVE</p><p>' +
+      esc(payload.next_move || "尚未定義") + '</p><div class="nr-warning">未通過關係／局面校準時不顯示數字機率。</div></article></div>';
+  }
+  function researchPackMarkup(pack, diff) {
+    const payload = pack.payload || {}, coverage = payload.coverage || {};
+    const display = state.researchDisplay === "graph" ? researchGraph(payload) :
+      state.researchDisplay === "scenario" ? researchScenario(payload) : researchChain(payload);
+    const companyCards = (payload.companies || []).map(company => {
+      const computed = (company.valuation_snapshots || []).find(row => row.status === "computed_metric_range");
+      return '<article class="nr-card"><p class="nr-eyebrow">' + esc(company.value_chain_role) + '</p><h3>' +
+        esc(company.ticker) + '</h3><p>' + esc(company.value_capture) + '</p><dl class="nr-kv"><dt>TradingView</dt><dd>' +
+        esc((((company.demand_evidence || {}).tradingview || {}).status) || "missing") + '</dd><dt>Finviz</dt><dd>' +
+        esc((((company.demand_evidence || {}).finviz || {}).status) || "missing") + '</dd><dt>估值分歧</dt><dd>' +
+        (computed ? esc((computed.assumptions || {}).metric) + ' ' + num(computed.low) + '–' + num(computed.high) : "資料不足") +
+        '</dd></dl><button type="button" class="nr-button secondary nr-company-jump" data-ticker="' +
+        esc(company.ticker) + '">公司卡</button></article>';
+    }).join("");
+    return '<section class="nr-research-hero"><div><p class="nr-eyebrow">RESEARCHPACK V' + esc(pack.version) +
+      ' / ' + esc(payload.as_of) + '</p><h2>' + esc(payload.title || payload.slice) + '</h2><p>' +
+      esc(payload.system_change) + '</p></div><dl><dt>證據</dt><dd>' + researchGrade(payload.evidence_grade) +
+      '</dd><dt>稀缺層</dt><dd>' + esc(payload.scarce_layer) + '</dd><dt>Hash</dt><dd><code>' +
+      esc(String(pack.content_hash || "").slice(0, 12)) + '</code></dd></dl></section>' +
+      '<div class="nr-view-switch" role="group" aria-label="研究包視圖"><button type="button" data-research-display="chain" class="' +
+      (state.researchDisplay === "chain" ? "active" : "") + '">Chain</button><button data-research-display="graph" class="' +
+      (state.researchDisplay === "graph" ? "active" : "") + '" type="button">Graph</button><button type="button" data-research-display="scenario" class="' +
+      (state.researchDisplay === "scenario" ? "active" : "") + '">Scenario</button></div>' + display +
+      '<section class="nr-section"><div class="nr-section-head"><h2>公司研究卡</h2><span>' +
+      (payload.companies || []).length + ' 家</span></div><div class="nr-grid">' + companyCards + '</div></section>' +
+      '<section class="nr-dual-brief"><div><h2>政策曝險</h2>' + boardList(payload.policy_exposure, "尚無") +
+      '</div><div><h2>版本差異</h2>' + ((diff || {}).changes || []).slice(0, 8).map(row =>
+        '<div class="nr-brief-row"><strong>' + esc(row.kind) + '</strong><p>' + esc(row.field || JSON.stringify(row.value || "")) +
+        '</p></div>').join("") + (((diff || {}).changes || []).length ? "" : empty("內容與前版相同或尚無前版。")) +
+      '</div></section><section class="nr-section"><div class="nr-section-head"><h2>Coverage</h2><span>零不等於沒有貼文</span></div>' +
+      '<pre>' + esc(JSON.stringify(coverage, null, 2)) + '</pre></section>';
+  }
+
+  async function renderResearchThemes() {
+    const box = one("#nr-research-body");
+    const data = await api("/api/narrative/research/themes");
+    const selected = data.themes.find(row => row.id === state.researchSlice) || data.themes[0];
+    if (selected) state.researchSlice = selected.id;
+    box.innerHTML = '<section class="nr-research-theme-strip">' + data.themes.map(theme =>
+      '<button type="button" data-research-slice="' + esc(theme.id) + '" class="' +
+      (theme.id === state.researchSlice ? "active" : "") + '"><small>PHASE ' + esc(theme.phase) +
+      '</small><strong>' + esc(theme.title) + '</strong><span>' + researchGrade((theme.latest_pack || {}).evidence_grade || "E") +
+      '</span></button>').join("") + '</section><div class="nr-actions"><button class="nr-button" id="nr-run-research">重建此切片</button>' +
+      '<button class="nr-button secondary" id="nr-weekly-freeze">凍結全部週報</button><button class="nr-button secondary" id="nr-serenity-backfill">回補 Serenity 90 天</button></div>' +
+      '<div id="nr-research-pack"></div>';
+    all("[data-research-slice]").forEach(button => button.addEventListener("click", () => {
+      state.researchSlice = button.dataset.researchSlice; renderResearchThemes();
+    }));
+    one("#nr-run-research").addEventListener("click", async () => {
+      try { followJob(await api("/api/narrative/research/runs", {method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({slice:state.researchSlice})}), "研究 " + state.researchSlice); }
+      catch (error) { log(error.message, true); }
+    });
+    one("#nr-weekly-freeze").addEventListener("click", async () => {
+      try { followJob(await api("/api/narrative/research/weekly-freeze", {method:"POST",headers:{"content-type":"application/json"},body:"{}"}), "weekly-freeze"); }
+      catch (error) { log(error.message, true); }
+    });
+    one("#nr-serenity-backfill").addEventListener("click", async () => {
+      try { followJob(await api("/api/narrative/research/serenity-backfill", {method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({days:90,count:2000})}), "Serenity backfill"); }
+      catch (error) { log(error.message, true); }
+    });
+    if (!selected || !selected.latest_pack) {
+      one("#nr-research-pack").innerHTML = empty("此切片尚未建立 ResearchPack。執行後才會讀取 Quant 並凍結證據快照。");
+      setInspector("Blueprint", '<div class="nr-warning">' + tag("FRAME") + ' 靜態切片不是證據。</div>');
+      return;
+    }
+    const pack = await api("/api/narrative/research/packs/" + encodeURIComponent(selected.latest_pack.id));
+    const diff = await api("/api/narrative/research/packs/" + encodeURIComponent(pack.id) + "/diff");
+    one("#nr-research-pack").innerHTML = researchPackMarkup(pack, diff);
+    bindResearchPackLinks(pack, diff);
+    setInspector("證據狀態流", '<dl class="nr-kv"><dt>proposed</dt><dd>藍圖／假設</dd><dt>supported</dt><dd>已有證據但不足驗證</dd>' +
+      '<dt>verified</dt><dd>A/B 證據</dd><dt>refuted</dt><dd>反證成立</dd><dt>expired</dt><dd>超過有效期</dd></dl>');
+  }
+  function bindResearchPackLinks(pack, diff) {
+    all("[data-research-display]").forEach(button => button.addEventListener("click", () => {
+      state.researchDisplay = button.dataset.researchDisplay;
+      one("#nr-research-pack").innerHTML = researchPackMarkup(pack, diff);
+      bindResearchPackLinks(pack, diff);
+    }));
+    all(".nr-company-jump").forEach(button => button.addEventListener("click", () => {
+      state.researchTicker = button.dataset.ticker;
+      state.researchView = "company";
+      renderResearch();
+    }));
+  }
+
+  async function renderResearchCompany() {
+    const box = one("#nr-research-body");
+    box.innerHTML = '<form class="nr-form-row" id="nr-research-company-form"><label><span class="nr-label">Ticker</span>' +
+      '<input class="nr-input" id="nr-research-ticker" value="' + esc(state.researchTicker) + '"></label>' +
+      '<button class="nr-button" type="submit">載入研究卡</button></form><div id="nr-research-company-card"></div>';
+    async function load(ticker) {
+      state.researchTicker = String(ticker || "LITE").toUpperCase();
+      const data = await api("/api/narrative/research/companies/" + encodeURIComponent(state.researchTicker));
+      const watch = researchWatchlist(), watching = watch.includes(state.researchTicker);
+      const cards = data.research_cards || [];
+      one("#nr-research-company-card").innerHTML = '<section class="nr-research-hero"><div><p class="nr-eyebrow">COMPANY RESEARCH CARD</p><h2>' +
+        esc(data.ticker) + '</h2><p>TradingView ' + esc((data.quant.coverage || {}).tradingview) + ' · Finviz ' +
+        esc((data.quant.coverage || {}).finviz) + '</p></div><button class="nr-button secondary" id="nr-watch-toggle">' +
+        (watching ? "移出 Watchlist" : "加入 Watchlist") + '</button></section>' +
+        (cards.length ? cards.map(card => '<article class="nr-card full"><p class="nr-eyebrow">' + esc(card.value_chain_role) +
+          '</p><h3>' + esc(card.constrains) + '</h3><dl class="nr-kv"><dt>價值捕獲</dt><dd>' + esc(card.value_capture) +
+          '</dd><dt>替代性</dt><dd>' + esc(card.substitutability) + '</dd><dt>擴產</dt><dd>' + esc(card.capacity_lead_time) +
+          '</dd><dt>認證</dt><dd>' + esc(card.qualification_lead_time) + '</dd></dl><h4>Watch metrics</h4>' +
+          boardList(card.watch_metrics, "尚無") + '<h4>Failure conditions</h4>' + boardList(card.failure_conditions, "尚無") +
+          '<div class="nr-valuation-row">' + (card.valuation_snapshots || []).map(row => '<div><small>' + esc(row.method) +
+            '</small><strong>' + (row.status === "computed_metric_range" ? num(row.low) + '–' + num(row.high) : "資料不足") +
+            '</strong><span>' + esc(row.status) + '</span></div>').join("") + '</div></article>').join("") :
+          empty("尚無包含此公司的 ResearchPack。")) +
+        '<section class="nr-section"><div class="nr-section-head"><h2>關係契約</h2><span>未校準不顯示 p_relation</span></div>' +
+        ((data.relationships.contracts || []).map(row => '<div class="nr-evidence">' + tag("event_contract") + '<p>' +
+          esc(row.statement) + '<small>' + esc(row.resolution_date) + '</small></p></div>').join("") ||
+          empty("尚未建立具名官方揭露的關係契約。")) + '</section>';
+      one("#nr-watch-toggle").addEventListener("click", () => {
+        const current = researchWatchlist();
+        saveResearchWatchlist(current.includes(state.researchTicker) ?
+          current.filter(row => row !== state.researchTicker) : current.concat([state.researchTicker]));
+        load(state.researchTicker);
+      });
+      setInspector(data.ticker + " / Coverage", (data.quant.issues || []).length ?
+        '<ul class="nr-list">' + data.quant.issues.map(row => '<li>' + esc(row) + '</li>').join("") + '</ul>' :
+        '<div class="nr-good">PIT adapters 未回報問題。</div>');
+    }
+    one("#nr-research-company-form").addEventListener("submit", event => {
+      event.preventDefault(); load(one("#nr-research-ticker").value.trim() || "LITE");
+    });
+    await load(state.researchTicker);
+  }
+
+  async function renderResearchBriefs() {
+    const data = await api("/api/narrative/research/packs?limit=100");
+    const latest = {};
+    (data.packs || []).forEach(pack => { if (!latest[pack.slice]) latest[pack.slice] = pack; });
+    one("#nr-research-body").innerHTML = '<div class="nr-grid">' + Object.values(latest).map(pack => {
+      const payload = pack.payload || {};
+      return '<article class="nr-card wide"><p class="nr-eyebrow">' + esc(pack.slice) + ' · V' + pack.version +
+        '</p><h3>' + esc(payload.scarce_layer) + '</h3><p>' + esc(payload.next_move) + '</p><h4>最強失效條件</h4><p>' +
+        esc((payload.failure_conditions || ["未定義"])[0]) + '</p><div>' + researchGrade(payload.evidence_grade) +
+        tag((payload.bottleneck_contract || {}).status || "candidate") + '</div></article>';
+    }).join("") + (Object.keys(latest).length ? "" : empty("尚無 Briefs；先建立研究切片。")) + '</div>';
+    setInspector("Brief 規則", "<p>每個 Brief 只摘要凍結 pack；不從即時 LLM 回覆建立證據。</p>");
+  }
+
+  async function renderResearchReports() {
+    const data = await api("/api/narrative/research/packs?limit=200");
+    one("#nr-research-body").innerHTML = (data.packs || []).length ?
+      '<div class="nr-table-wrap"><table class="nr-table"><thead><tr><th>Pack</th><th>切片</th><th>As-of</th><th>Grade</th><th>Hash</th></tr></thead><tbody>' +
+      data.packs.map(pack => '<tr><td>V' + pack.version + '<br><small>' + esc(pack.id) + '</small></td><td>' + esc(pack.slice) +
+        '</td><td>' + esc(pack.as_of) + '</td><td>' + researchGrade(pack.evidence_grade) + '</td><td><code>' +
+        esc(String(pack.content_hash).slice(0, 12)) + '</code></td></tr>').join("") + '</tbody></table></div>' :
+      empty("尚無凍結報告。");
+    setInspector("不可變週報", "<p>同一 content contract 只產生一個 hash；版本差異由 pack diff 重建。</p>");
+  }
+
+  async function renderResearchWatchlist() {
+    const watch = researchWatchlist();
+    one("#nr-research-body").innerHTML = '<form class="nr-form-row" id="nr-watch-add"><label><span class="nr-label">Ticker</span>' +
+      '<input class="nr-input" id="nr-watch-input" placeholder="LITE"></label><button class="nr-button" type="submit">加入</button></form>' +
+      '<div class="nr-grid">' + watch.map(ticker => '<article class="nr-card"><h3>' + esc(ticker) + '</h3>' +
+        '<button class="nr-button secondary nr-watch-open" data-ticker="' + esc(ticker) + '">打開公司卡</button>' +
+        '<button class="nr-text-button nr-watch-remove" data-ticker="' + esc(ticker) + '">移除</button></article>').join("") +
+      (watch.length ? "" : empty("Watchlist 只保存 UI 偏好，不代表持倉。")) + '</div>';
+    one("#nr-watch-add").addEventListener("submit", event => {
+      event.preventDefault();
+      const ticker = one("#nr-watch-input").value.trim().toUpperCase();
+      if (ticker) { saveResearchWatchlist(watch.concat([ticker])); renderResearchWatchlist(); }
+    });
+    all(".nr-watch-open").forEach(button => button.addEventListener("click", () => {
+      state.researchTicker = button.dataset.ticker; state.researchView = "company"; renderResearch();
+    }));
+    all(".nr-watch-remove").forEach(button => button.addEventListener("click", () => {
+      saveResearchWatchlist(watch.filter(row => row !== button.dataset.ticker)); renderResearchWatchlist();
+    }));
+    setInspector("Watchlist", "<p>本機 UI 偏好；不建立部位、方向或下單。</p>");
+  }
+
+  async function renderResearchLive() {
+    const data = await api("/api/narrative/research/live?limit=100");
+    one("#nr-research-body").innerHTML = (data.events || []).length ?
+      '<div class="nr-table-wrap"><table class="nr-table"><thead><tr><th>時間</th><th>切片</th><th>變化</th><th>內容</th></tr></thead><tbody>' +
+      data.events.map(row => '<tr><td>' + esc(row.at) + '</td><td>' + esc(row.slice) + '</td><td>' +
+        tag(row.kind) + '</td><td><code>' + esc(JSON.stringify(row.change)) + '</code></td></tr>').join("") +
+      '</tbody></table></div>' : empty("尚無 snapshot 差異事件。");
+    setInspector("Deterministic Live", "<p>只比較兩個凍結 PIT pack；不顯示手寫新聞事件。</p>");
+  }
+
+  async function renderResearchMonitor() {
+    const data = await api("/api/narrative/research/monitor");
+    const coverage = data.coverage || {};
+    one("#nr-research-body").innerHTML = '<div class="nr-grid"><article class="nr-card"><p class="nr-eyebrow">RUNS</p><div class="nr-metric">' +
+      num((data.runs || []).length, 0) + '</div></article><article class="nr-card"><p class="nr-eyebrow">PACKS</p><div class="nr-metric">' +
+      num((data.packs || []).length, 0) + '</div></article><article class="nr-card"><p class="nr-eyebrow">SERENITY POSTS</p><div class="nr-metric">' +
+      num((coverage.totals || {}).retrieved, 0) + '</div><p>' + (coverage.complete ? tag("complete") : tag("coverage_degraded", "risk")) +
+      '</p></article></div><section class="nr-section"><div class="nr-section-head"><h2>最近 runs</h2><span>append-only</span></div>' +
+      '<div class="nr-table-wrap"><table class="nr-table"><thead><tr><th>Slice</th><th>As-of</th><th>Status</th><th>Run</th></tr></thead><tbody>' +
+      (data.runs || []).map(row => '<tr><td>' + esc(row.slice) + '</td><td>' + esc(row.as_of) + '</td><td>' + tag(row.status) +
+        '</td><td><small>' + esc(row.id) + '</small></td></tr>').join("") + '</tbody></table></div></section>' +
+      '<section class="nr-section"><div class="nr-section-head"><h2>Coverage ledger</h2><span>zero means unknown</span></div><pre>' +
+      esc(JSON.stringify(coverage, null, 2)) + '</pre></section>';
+    setInspector("守門", '<dl class="nr-kv"><dt>LLM 寫證據</dt><dd>false</dd><dt>LLM 寫機率</dt><dd>false</dd>' +
+      '<dt>下單</dt><dd>false</dd><dt>Quant</dt><dd>read-only</dd></dl>');
+  }
+
+  async function renderResearch() {
+    const stage = one("#nr-stage");
+    stage.innerHTML = heading("RESEARCH / EVIDENCE GRAPH", "稀缺不是標籤，是一份會失效的契約。",
+      "從 Serenity 原文、官方申報與 PIT Quant 建立可重建的產業研究包。") + researchNav();
+    all("[data-research-view]").forEach(button => button.addEventListener("click", () => {
+      state.researchView = button.dataset.researchView; renderResearch();
+    }));
+    const renderers = {
+      themes: renderResearchThemes,
+      company: renderResearchCompany,
+      briefs: renderResearchBriefs,
+      reports: renderResearchReports,
+      watchlist: renderResearchWatchlist,
+      live: renderResearchLive,
+      monitor: renderResearchMonitor
+    };
+    try { await renderers[state.researchView](); }
+    catch (error) { one("#nr-research-body").innerHTML = errorCard(error); log(error.message || error, true); }
   }
 
   async function renderSources() {
@@ -555,7 +842,7 @@
 
   async function render() {
     drawChrome();
-    const renderers = {overview:renderOverview,industries:renderIndustries,company:renderCompany,
+    const renderers = {overview:renderOverview,industries:renderIndustries,research:renderResearch,company:renderCompany,
       sources:renderSources,history:renderHistory,inference:renderInference,
       resolutions:renderResolutions,calibration:renderCalibration};
     try { await renderers[state.tab](); }
@@ -564,7 +851,7 @@
   }
 
   document.addEventListener("keydown", event => {
-    if (event.altKey && /^[1-8]$/.test(event.key)) {
+    if (event.altKey && /^[1-9]$/.test(event.key)) {
       state.tab = tabs[Number(event.key) - 1][0]; render();
     }
   });

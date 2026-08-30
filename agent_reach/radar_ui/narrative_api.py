@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from agent_reach.narrative.ingest import MAX_IMPORT_BYTES
+from agent_reach.narrative.research import ResearchService
 from agent_reach.narrative.service import NarrativeService
 
 
@@ -15,7 +16,9 @@ def register_narrative_routes(app, jobs, service: Optional[NarrativeService] = N
     from fastapi import Body, HTTPException, Request
 
     narrative = service or NarrativeService()
+    research = ResearchService(store=narrative.store, quant=narrative.quant)
     app.state.narrative = narrative
+    app.state.research = research
 
     def fail(exc: Exception):
         if isinstance(exc, LookupError):
@@ -235,5 +238,160 @@ def register_narrative_routes(app, jobs, service: Optional[NarrativeService] = N
             "narrative_calibration",
             {"domain": domain, "horizon": horizon, "as_of": as_of},
             lambda: narrative.calibrate(domain=domain, horizon=horizon, as_of=as_of),
+        )
+        return job.to_dict()
+
+    @app.get("/api/narrative/research/themes")
+    def narrative_research_themes():
+        return {"themes": research.themes()}
+
+    @app.get("/api/narrative/research/packs")
+    def narrative_research_packs(slice_id: str = "", limit: int = 100):
+        return {"packs": research.packs(slice_id=slice_id, limit=limit)}
+
+    @app.get("/api/narrative/research/packs/{pack_id}")
+    def narrative_research_pack(pack_id: str):
+        try:
+            return research.pack(pack_id)
+        except Exception as exc:  # noqa: BLE001
+            fail(exc)
+
+    @app.get("/api/narrative/research/packs/{pack_id}/diff")
+    def narrative_research_pack_diff(pack_id: str, base: str = ""):
+        try:
+            return research.pack_diff(pack_id, base_id=base)
+        except Exception as exc:  # noqa: BLE001
+            fail(exc)
+
+    @app.post("/api/narrative/research/runs")
+    def narrative_research_run(payload: dict = Body(...)):
+        slice_id = str(payload.get("slice") or payload.get("slice_id") or "")
+        as_of = str(payload.get("as_of") or "")
+        job = jobs.submit(
+            "narrative_research",
+            {"slice": slice_id, "as_of": as_of},
+            lambda: research.run_research(slice_id, as_of=as_of, freeze=True),
+        )
+        return job.to_dict()
+
+    @app.post("/api/narrative/research/serenity-backfill")
+    def narrative_serenity_backfill(payload: dict = Body(default={})):
+        days = int(payload.get("days") or 90)
+        count = int(payload.get("count") or 2000)
+        translations = payload.get("translations") or {}
+        job = jobs.submit(
+            "serenity_backfill",
+            {"days": days, "count": count},
+            lambda: research.serenity_backfill(
+                days=days, count=count, translations=translations
+            ),
+        )
+        return job.to_dict()
+
+    @app.get("/api/narrative/research/companies/{ticker}")
+    def narrative_research_company(ticker: str):
+        try:
+            return research.company(ticker)
+        except Exception as exc:  # noqa: BLE001
+            fail(exc)
+
+    @app.get("/api/narrative/research/graphs/{run_id}")
+    def narrative_research_graphs(run_id: str):
+        return {
+            "graphs": [
+                research.store.get_graph(row["id"])
+                for row in research.store.list_graphs(run_id=run_id)
+            ]
+        }
+
+    @app.post("/api/narrative/research/graphs/edges/{edge_id}/review")
+    def narrative_research_edge_review(edge_id: str, payload: dict = Body(...)):
+        try:
+            return research.store.review_graph_edge(
+                edge_id,
+                state=str(payload.get("state") or ""),
+                tag=str(payload.get("tag") or "GUESS"),
+                confidence=str(payload.get("confidence") or "LOW"),
+                reviewer=str(payload.get("reviewer") or "local-user"),
+                reason=str(payload.get("reason") or ""),
+                evidence=payload.get("evidence") or [],
+            )
+        except Exception as exc:  # noqa: BLE001
+            fail(exc)
+
+    @app.get("/api/narrative/research/relationships")
+    def narrative_research_relationships(run_id: str = "", ticker: str = ""):
+        return research.relationships(run_id=run_id, ticker=ticker)
+
+    @app.post("/api/narrative/research/relationships")
+    def narrative_research_relationship_contract(payload: dict = Body(...)):
+        try:
+            return research.create_relationship_contract(payload)
+        except Exception as exc:  # noqa: BLE001
+            fail(exc)
+
+    @app.get("/api/narrative/research/bottlenecks")
+    def narrative_research_bottlenecks(run_id: str = "", status: str = ""):
+        try:
+            return {"bottlenecks": research.store.list_bottlenecks(run_id=run_id, status=status)}
+        except Exception as exc:  # noqa: BLE001
+            fail(exc)
+
+    @app.post("/api/narrative/research/bottlenecks/{bottleneck_id}/review")
+    def narrative_research_bottleneck_review(
+        bottleneck_id: str, payload: dict = Body(...)
+    ):
+        try:
+            return research.store.transition_bottleneck(
+                bottleneck_id,
+                status=str(payload.get("status") or ""),
+                reviewer=str(payload.get("reviewer") or "local-user"),
+                reason=str(payload.get("reason") or ""),
+                dimensions=payload.get("dimensions") or {},
+                evidence_claim_ids=payload.get("evidence_claim_ids") or [],
+            )
+        except Exception as exc:  # noqa: BLE001
+            fail(exc)
+
+    @app.get("/api/narrative/research/live")
+    def narrative_research_live(limit: int = 100):
+        return research.live(limit=limit)
+
+    @app.get("/api/narrative/research/monitor")
+    def narrative_research_monitor():
+        return research.monitor()
+
+    @app.get("/api/narrative/research/coverage")
+    def narrative_research_coverage(run_id: str = "", source_id: str = ""):
+        return research.coverage(run_id=run_id, source_id=source_id)
+
+    @app.post("/api/narrative/research/stress-tests")
+    def narrative_research_stress_test(payload: dict = Body(...)):
+        try:
+            return research.stress_test(
+                str(payload.get("pack_id") or ""),
+                str(payload.get("question") or ""),
+            )
+        except Exception as exc:  # noqa: BLE001
+            fail(exc)
+
+    @app.post("/api/narrative/research/daily-sync")
+    def narrative_research_daily_sync(payload: dict = Body(default={})):
+        as_of = str(payload.get("as_of") or "")
+        serenity_days = int(payload.get("serenity_days") or 2)
+        job = jobs.submit(
+            "narrative_daily_sync",
+            {"as_of": as_of, "serenity_days": serenity_days},
+            lambda: research.daily_sync(as_of=as_of, serenity_days=serenity_days),
+        )
+        return job.to_dict()
+
+    @app.post("/api/narrative/research/weekly-freeze")
+    def narrative_research_weekly_freeze(payload: dict = Body(default={})):
+        as_of = str(payload.get("as_of") or "")
+        job = jobs.submit(
+            "narrative_weekly_freeze",
+            {"as_of": as_of},
+            lambda: research.weekly_freeze(as_of=as_of),
         )
         return job.to_dict()

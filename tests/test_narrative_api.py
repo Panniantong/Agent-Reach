@@ -117,7 +117,7 @@ def test_status_industry_company_and_history_endpoints(narrative_client):
     board = narrative_client.get("/api/narrative/board/NVDA?horizon=1y").json()
     history = narrative_client.get("/api/narrative/history").json()
 
-    assert status["store"]["schema_version"] == 2
+    assert status["store"]["schema_version"] == 3
     assert status["quant"]["mode"] == "read_only"
     assert len(dashboard["sectors"]) == 11
     assert dashboard["macro"]["name"] == "Macro"
@@ -153,19 +153,52 @@ def test_discovery_results_stay_pending_until_review(narrative_client, monkeypat
     assert service.store.list_claims() == []
 
 
-def test_narrative_ui_has_eight_workspaces_and_responsive_accessibility(narrative_client):
+def test_research_run_pack_graph_and_read_only_stress_test(narrative_client):
+    submitted = narrative_client.post(
+        "/api/narrative/research/runs",
+        json={"slice": "cpo-external-laser", "as_of": "2026-08-30"},
+    ).json()
+    job = _wait_for_job(narrative_client, submitted["id"])
+
+    assert job["status"] == "done"
+    pack_id = job["result"]["pack"]["id"]
+    run_id = job["result"]["run"]["id"]
+    pack = narrative_client.get(f"/api/narrative/research/packs/{pack_id}").json()
+    graph = narrative_client.get(f"/api/narrative/research/graphs/{run_id}").json()
+    before = narrative_client.get("/api/narrative/status").json()["store"]["counts"]
+    stress = narrative_client.post(
+        "/api/narrative/research/stress-tests",
+        json={"pack_id": pack_id, "question": "最強反論是什麼？"},
+    ).json()
+    after = narrative_client.get("/api/narrative/status").json()["store"]["counts"]
+
+    assert pack["payload"]["slice"] == "cpo-external-laser"
+    assert pack["payload"]["evidence_grade"] == "E"
+    assert graph["graphs"][0]["edges"]
+    assert all(row["state"] == "proposed" for row in graph["graphs"][0]["edges"])
+    assert stress["mutated"] is False
+    assert stress["can_write_evidence"] is False
+    assert stress["can_write_probability"] is False
+    assert before == after
+
+
+def test_narrative_ui_has_nine_workspaces_and_responsive_accessibility(narrative_client):
     index = narrative_client.get("/").text
     script = narrative_client.get("/static/narrative.js").text
     styles = narrative_client.get("/static/narrative.css").text
 
     assert "/static/narrative.css" in index
     assert "/static/narrative.js" in index
-    for label in ("總覽", "產業", "公司", "來源", "歷史", "推演", "結算", "校準"):
+    for label in ("總覽", "產業", "公司", "研究", "來源", "歷史", "推演", "結算", "校準"):
         assert label in script
     assert 'role="tablist"' in script
     assert "aria-selected" in script
     assert "LIVE RESEARCH BOARD" in script
+    assert "RESEARCH / EVIDENCE GRAPH" in script
+    assert "BOTTLENECK CONTRACT" in script
     assert "nr-scenario-rail" in styles
     assert "nr-workbench" in styles
+    assert "nr-graph-flow" in styles
+    assert "nr-edge.state-verified" in styles
     assert "@media (max-width: 680px)" in styles
     assert "prefers-reduced-motion" in styles

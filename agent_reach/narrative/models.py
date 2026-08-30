@@ -19,6 +19,47 @@ PROBABILITY_STATUSES = ("calibrated", "insufficient_data", "invalid")
 HORIZONS = ("quarter", "1y", "3y", "5y")
 RESOLUTION_KINDS = ("auto", "human_override")
 SCOPE_TYPES = ("macro", "sector", "ticker", "crypto")
+EVIDENCE_GRADES = ("A", "B", "C", "D", "E")
+ENTITY_TYPES = (
+    "DemandDriver",
+    "Technology",
+    "Material",
+    "Component",
+    "Equipment",
+    "Capacity",
+    "Company",
+    "Product",
+    "Facility",
+    "Policy",
+    "FinancialMetric",
+    "EventContract",
+)
+EDGE_TYPES = (
+    "physical_dependency",
+    "commercial_relationship",
+    "financial_sensitivity",
+    "policy_exposure",
+    "causal_hypothesis",
+)
+EDGE_STATES = ("proposed", "supported", "verified", "refuted", "expired")
+EDGE_TRANSITIONS = {
+    "proposed": ("supported", "refuted", "expired"),
+    "supported": ("verified", "refuted", "expired"),
+    "verified": ("refuted", "expired"),
+    "refuted": ("expired",),
+    "expired": (),
+}
+EVIDENCE_STANCES = ("support", "refute")
+BOTTLENECK_STATES = ("candidate", "observed", "easing", "resolved")
+BOTTLENECK_TRANSITIONS = {
+    "candidate": ("observed",),
+    "observed": ("easing", "resolved"),
+    "easing": ("observed", "resolved"),
+    "resolved": (),
+}
+RESEARCH_RUN_STATES = ("running", "complete", "degraded", "failed")
+METHOD_PROFILE_STATES = ("draft", "reviewed", "active", "retired")
+VALUATION_METHODS = ("peer_distribution", "operating_sensitivity", "scenario_dcf")
 
 
 def utc_now() -> str:

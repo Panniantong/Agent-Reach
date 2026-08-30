@@ -20,7 +20,7 @@ class TestCLI:
                 main()
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
-        assert __version__ == "1.7.0"
+        assert __version__ == "1.8.0"
         assert "Agent Reach v" in captured.out
 
     def test_no_command_shows_help(self, capsys):

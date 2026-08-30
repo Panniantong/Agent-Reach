@@ -180,7 +180,7 @@ def test_source_score_excludes_forecasts_after_contract_resolution(store):
     assert store.source_scores(domain="information-technology", horizon="1y") == []
 
 
-def test_schema_v1_migrates_to_v2_with_resolution_source(tmp_path):
+def test_schema_v1_migrates_through_v3_with_resolution_source(tmp_path):
     root = tmp_path / "migration"
     first = NarrativeStore(root)
     with first._connect() as conn:
@@ -193,5 +193,6 @@ def test_schema_v1_migrates_to_v2_with_resolution_source(tmp_path):
             row["name"] for row in conn.execute("PRAGMA table_info(event_contracts)").fetchall()
         }
 
-    assert migrated.status()["schema_version"] == 2
+    assert migrated.status()["schema_version"] == 3
     assert "resolution_source" in columns
+    assert (root / "narrative.sqlite3.pre-v3.bak").is_file()

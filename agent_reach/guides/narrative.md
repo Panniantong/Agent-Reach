@@ -10,7 +10,10 @@ pip install "agent-reach[ui,narrative]"
 agent-reach radar-ui
 ```
 
-開啟 `http://127.0.0.1:8123`，切到「推演」。頁面預設直接載入 NVDA 的結果盤，
+開啟 `http://127.0.0.1:8123`。切到「研究」可使用 Themes、Company、Briefs、
+Reports、Watchlist、Live 與 Monitor；切到「推演」則載入 NVDA 的結果盤。
+研究頁可在 Chain、Graph、Scenario 三種視圖間切換，所有 pack 都顯示 as-of、
+coverage、證據等級、瓶頸契約與版本差異。推演頁預設直接載入 NVDA 的結果盤，
 先顯示體制、歷史韻腳、Quant 證據帶、可重疊局面、支持／反證、失效條件與
 受益／受害對象；原文匯入、事件契約與校準工具收在結果下方的工作台。
 
@@ -22,7 +25,12 @@ forecast，局面仍會完整顯示，但機率只顯示「資料不足」。已
 - 不可變原文：`~/.agent-reach/radar/narrative/blobs/<sha256>.<ext>`
 - Quant 根目錄：預設 `D:\DOT\Quant\data`，只讀
 - 設定覆寫：`narrative_data_dir`、`quant_data_root`
-- SQLite schema 由 `PRAGMA user_version` 管理；較新且不相容的 schema 會拒絕開啟
+- SQLite schema 目前為 v3，由 `PRAGMA user_version` 管理；升級前會留下
+  `narrative.sqlite3.pre-v3.bak`，較新且不相容的 schema 會拒絕開啟
+
+研究引擎的 TradingView 輸入固定在
+`D:\DOT\Quant\data\tradingview\2026Q2PIT`，Finviz 固定在
+`D:\DOT\Quant\data\finviz`。缺檔只形成 coverage gap，不會向根目錄外尋找替代檔。
 
 ## 證據規則
 
@@ -84,6 +92,22 @@ agent-reach radar-narrative calibrate --domain information-technology --horizon 
 agent-reach radar-narrative status --json
 ```
 
+Serenity 與產業研究工作流：
+
+```bash
+agent-reach radar-narrative serenity-backfill --days 90 --count 2000
+agent-reach radar-narrative research --slice cpo-external-laser --as-of 2026-08-30
+agent-reach radar-narrative daily-sync --serenity-days 2
+agent-reach radar-narrative weekly-freeze --as-of 2026-08-30
+agent-reach radar-narrative pack-diff --pack-id pack_... --base-pack-id pack_...
+agent-reach radar-narrative relationship-calibrate --horizon 1y
+```
+
+`serenity-backfill` 排除純轉貼，以 tweet URL／內容雜湊去重；原文與可選的繁中、
+英文翻譯存在同一 document，翻譯不建立第二份證據。沒有 X archive/export 時，
+每日 coverage 的零表示 unknown，不表示當日沒有貼文。MethodProfile 固定先進 draft，
+沒有 analyst voting weight。
+
 歷史 sample 格式：
 
 ```json
@@ -143,6 +167,12 @@ PIT 會明確降級 evidence grade。
 - `/api/narrative/dashboard`、`/company/{ticker}`、`/history`
 - `/api/narrative/board/{ticker}?horizon=1y`（結果優先的局面工作區）
 - `/api/narrative/calibration`
+- `/api/narrative/research/themes`、`/packs`、`/packs/{id}/diff`
+- `/api/narrative/research/runs`、`/companies/{ticker}`、`/graphs/{run_id}`
+- `/api/narrative/research/graphs/edges/{edge_id}/review`（禁止 proposed 直接跳 verified）
+- `/api/narrative/research/relationships`、`/bottlenecks`、`/coverage`
+- `/api/narrative/research/bottlenecks/{id}/review`（observed 需兩個 A/B 維度）
+- `/api/narrative/research/live`、`/monitor`、`/stress-tests`
 
 探索、forecast 與 recalibration 使用 Radar `JobManager`；狀態由
 `/api/jobs/{id}` 查詢，SSE 日誌在 `/api/jobs/{id}/log`。
