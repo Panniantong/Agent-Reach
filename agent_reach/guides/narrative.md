@@ -115,7 +115,9 @@ agent-reach radar-narrative policy-sync --query "export controls" --as-of 2026-0
 8-K、20-F、6-K 及其 `/A` 修正版的 accession、filing date、available date、原文
 與 hash。SEC 要求帶聯絡方式的 descriptive User-Agent；可用 `sec_user_agent` 設定，
 或每次傳 `--user-agent`。`policy-sync` 保存 Federal Register 的 proposed、final、
-effective 狀態。兩者只證明官方文件及其狀態存在，不會自動建立公司影響 claim。
+effective 狀態。Congress.gov 具名法案與 Regulations.gov docket 可由
+`/official/congress`、`/official/regulations` 主動同步；歷史截止日後才更新的 payload
+會被 PIT 排除。這些來源只證明官方文件及其狀態存在，不會自動建立公司影響 claim。
 
 歷史 sample 格式：
 
@@ -182,7 +184,8 @@ PIT 會明確降級 evidence grade。
 - `/api/narrative/research/relationships`、`/bottlenecks`、`/coverage`
 - `/api/narrative/research/bottlenecks/{id}/review`（observed 需兩個 A/B 維度）
 - `/api/narrative/research/live`、`/monitor`、`/stress-tests`
-- `/api/narrative/research/official/sec`、`/official/federal-register`（只在 POST 後取得）
+- `/api/narrative/research/official/sec`、`/official/federal-register`
+- `/api/narrative/research/official/congress`、`/official/regulations`（只在 POST 後取得）
 
 探索、forecast 與 recalibration 使用 Radar `JobManager`；狀態由
 `/api/jobs/{id}` 查詢，SSE 日誌在 `/api/jobs/{id}/log`。

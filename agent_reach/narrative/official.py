@@ -22,6 +22,8 @@ from agent_reach.narrative.store import NarrativeStore
 SEC_DATA = "https://data.sec.gov"
 SEC_WWW = "https://www.sec.gov"
 FEDERAL_REGISTER_API = "https://www.federalregister.gov/api/v1"
+CONGRESS_API = "https://api.congress.gov/v3"
+REGULATIONS_API = "https://api.regulations.gov/v4"
 SEC_FORMS = (
     "10-K", "10-K/A", "10-Q", "10-Q/A", "8-K", "8-K/A",
     "20-F", "20-F/A", "6-K", "6-K/A",
@@ -292,3 +294,137 @@ class OfficialSourceAdapter:
             "claims_created": 0,
             "orders_generated": False,
         }
+
+    def _api_key(self, supplied: str, config_name: str, label: str) -> str:
+        value = str(supplied or self.config.get(config_name, "") or "").strip()
+        if not value:
+            raise ValueError(f"{label} sync requires API key")
+        return value
+
+    def sync_congress_bill(
+        self,
+        *,
+        congress: int,
+        bill_type: str,
+        bill_number: int,
+        api_key: str = "",
+        as_of: str = "",
+    ) -> dict:
+        cutoff = _cutoff(as_of)
+        congress_no = int(congress)
+        number = int(bill_number)
+        kind = str(bill_type or "").lower().strip()
+        if not 1 <= congress_no <= 999 or not 1 <= number or not re.fullmatch(r"[a-z]{1,8}", kind):
+            raise ValueError("invalid Congress bill identifier")
+        key = self._api_key(api_key, "congress_api_key", "Congress.gov")
+        url = f"{CONGRESS_API}/bill/{congress_no}/{kind}/{number}"
+        payload = self._json(self._get(url, params={"api_key": key, "format": "json"}))
+        bill = payload.get("bill") or {}
+        updated = _date_prefix(str(bill.get("updateDate") or ""))
+        pit_eligible = bool(updated) and updated <= cutoff
+        run = self.store.create_research_run(
+            slice_id="official-policy",
+            universe_scope=f"{congress_no}-{kind}-{number}",
+            as_of=cutoff,
+            input_manifest={"source": "congress_gov", "url": url, "updated": updated},
+            model_version="official-source-v1",
+            prompt_version="none",
+        )
+        rows = []
+        if pit_eligible:
+            source_url = str(bill.get("url") or url)
+            document, created = self.store.add_document(
+                content=json.dumps(bill, ensure_ascii=False, sort_keys=True).encode("utf-8"),
+                title=str(bill.get("title") or f"{congress_no} {kind.upper()} {number}"),
+                source_url=source_url,
+                source_id="congress_gov",
+                media_type="application/json",
+                published_at=_date_prefix(str(bill.get("introducedDate") or "")),
+                observed_at=cutoff,
+                as_of=updated,
+                domain="official_policy",
+                metadata={
+                    "congress": congress_no, "bill_type": kind, "bill_number": number,
+                    "update_date": updated, "latest_action": bill.get("latestAction") or {},
+                    "policy_state": "latest_action_as_reported",
+                    "company_impact_claimed": False,
+                },
+                suffix=".json",
+            )
+            rows.append({"document": document, "created": created})
+        self.store.upsert_source_coverage(
+            run_id=run["id"], source_id="congress_gov", coverage_date=cutoff,
+            retrieved=len(rows), index_only=0 if pit_eligible else 1,
+            status="partial" if rows else "index_only",
+            details={"url": url, "updated": updated, "pit_eligible": pit_eligible},
+        )
+        finished = self.store.finish_research_run(
+            run["id"], status="complete" if rows else "degraded"
+        )
+        return {"run": finished, "documents": rows, "pit_eligible": pit_eligible,
+                "claims_created": 0, "orders_generated": False}
+
+    def sync_regulations(
+        self,
+        query: str,
+        *,
+        api_key: str = "",
+        as_of: str = "",
+        limit: int = 40,
+    ) -> dict:
+        term = str(query or "").strip()
+        if len(term) < 3:
+            raise ValueError("regulations query must contain at least 3 characters")
+        cutoff = _cutoff(as_of)
+        key = self._api_key(api_key, "regulations_api_key", "Regulations.gov")
+        url = f"{REGULATIONS_API}/documents"
+        payload = self._json(self._get(
+            url,
+            headers={"X-Api-Key": key},
+            params={"filter[searchTerm]": term, "page[size]": max(1, min(int(limit), 250)),
+                    "sort": "-postedDate"},
+        ))
+        run = self.store.create_research_run(
+            slice_id="official-policy", universe_scope=term, as_of=cutoff,
+            input_manifest={"source": "regulations_gov", "query": term, "limit": limit},
+            model_version="official-source-v1", prompt_version="none",
+        )
+        rows = []
+        excluded = 0
+        for item in payload.get("data") or []:
+            attributes = item.get("attributes") or {} if isinstance(item, dict) else {}
+            posted = _date_prefix(str(attributes.get("postedDate") or ""))
+            modified = _date_prefix(str(attributes.get("lastModifiedDate") or posted))
+            if not posted or posted > cutoff or (modified and modified > cutoff):
+                excluded += 1
+                continue
+            document_id = str(item.get("id") or "")
+            document, created = self.store.add_document(
+                content=json.dumps(item, ensure_ascii=False, sort_keys=True).encode("utf-8"),
+                title=str(attributes.get("title") or document_id),
+                source_url=f"https://www.regulations.gov/document/{quote(document_id)}",
+                source_id="regulations_gov", media_type="application/json",
+                published_at=posted, observed_at=cutoff, as_of=modified or posted,
+                domain="official_policy",
+                metadata={
+                    "document_id": document_id, "docket_id": attributes.get("docketId") or "",
+                    "document_type": attributes.get("documentType") or "",
+                    "posted_date": posted, "last_modified_date": modified,
+                    "withdrawn": bool(attributes.get("withdrawn")),
+                    "policy_state": "withdrawn" if attributes.get("withdrawn") else "posted",
+                    "company_impact_claimed": False,
+                },
+                suffix=".json",
+            )
+            rows.append({"document": document, "created": created})
+        self.store.upsert_source_coverage(
+            run_id=run["id"], source_id="regulations_gov", coverage_date=cutoff,
+            retrieved=len(rows), index_only=excluded,
+            status="partial" if rows else "unknown",
+            details={"query": term, "future_or_modified_after_cutoff": excluded},
+        )
+        finished = self.store.finish_research_run(
+            run["id"], status="complete" if rows else "degraded"
+        )
+        return {"run": finished, "documents": rows, "pit_excluded": excluded,
+                "claims_created": 0, "orders_generated": False}

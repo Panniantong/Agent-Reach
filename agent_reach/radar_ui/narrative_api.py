@@ -432,3 +432,38 @@ def register_narrative_routes(app, jobs, service: Optional[NarrativeService] = N
             ),
         )
         return job.to_dict()
+
+    @app.post("/api/narrative/research/official/congress")
+    def narrative_research_official_congress(payload: dict = Body(...)):
+        job = jobs.submit(
+            "narrative_official_congress",
+            {
+                "congress": payload.get("congress"),
+                "bill_type": payload.get("bill_type"),
+                "bill_number": payload.get("bill_number"),
+                "as_of": str(payload.get("as_of") or ""),
+            },
+            lambda: official.sync_congress_bill(
+                congress=int(payload.get("congress") or 0),
+                bill_type=str(payload.get("bill_type") or ""),
+                bill_number=int(payload.get("bill_number") or 0),
+                api_key=str(payload.get("api_key") or ""),
+                as_of=str(payload.get("as_of") or ""),
+            ),
+        )
+        return job.to_dict()
+
+    @app.post("/api/narrative/research/official/regulations")
+    def narrative_research_official_regulations(payload: dict = Body(...)):
+        query = str(payload.get("query") or "")
+        job = jobs.submit(
+            "narrative_official_regulations",
+            {"query": query, "as_of": str(payload.get("as_of") or "")},
+            lambda: official.sync_regulations(
+                query,
+                api_key=str(payload.get("api_key") or ""),
+                as_of=str(payload.get("as_of") or ""),
+                limit=int(payload.get("limit") or 40),
+            ),
+        )
+        return job.to_dict()

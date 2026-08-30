@@ -137,3 +137,67 @@ def test_federal_register_keeps_proposed_final_effective_states_separate(tmp_pat
         row["metadata"]["company_impact_claimed"] is False
         for row in store.list_documents()
     )
+
+
+def test_congress_bill_rejects_payload_updated_after_as_of(tmp_path):
+    store = NarrativeStore(tmp_path / "narrative")
+    session = _Session([(
+        "/bill/119/hr/1234",
+        _Response({"bill": {
+            "title": "Fixture Act", "introducedDate": "2026-07-01",
+            "updateDate": "2026-09-01T12:00:00Z",
+            "latestAction": {"actionDate": "2026-09-01", "text": "Passed House"},
+            "url": "https://api.congress.gov/v3/bill/119/hr/1234",
+        }}),
+    )])
+    adapter = OfficialSourceAdapter(store=store, session=session)
+
+    result = adapter.sync_congress_bill(
+        congress=119, bill_type="hr", bill_number=1234,
+        api_key="fixture-key", as_of="2026-08-30",
+    )
+
+    assert result["pit_eligible"] is False
+    assert result["documents"] == []
+    assert store.list_documents() == []
+    coverage = store.list_source_coverage(run_id=result["run"]["id"])[0]
+    assert coverage["index_only"] == 1
+
+
+def test_regulations_excludes_records_modified_after_cutoff(tmp_path):
+    payload = {
+        "data": [
+            {
+                "id": "DOC-1",
+                "type": "documents",
+                "attributes": {
+                    "title": "PIT docket document", "docketId": "DCK-1",
+                    "documentType": "Notice", "postedDate": "2026-08-01",
+                    "lastModifiedDate": "2026-08-20", "withdrawn": False,
+                },
+            },
+            {
+                "id": "DOC-2",
+                "type": "documents",
+                "attributes": {
+                    "title": "Later modified document", "docketId": "DCK-1",
+                    "documentType": "Rule", "postedDate": "2026-08-02",
+                    "lastModifiedDate": "2026-09-02", "withdrawn": True,
+                },
+            },
+        ]
+    }
+    store = NarrativeStore(tmp_path / "narrative")
+    adapter = OfficialSourceAdapter(
+        store=store,
+        session=_Session([("/v4/documents", _Response(payload))]),
+    )
+
+    result = adapter.sync_regulations(
+        "semiconductor", api_key="fixture-key", as_of="2026-08-30"
+    )
+
+    assert len(result["documents"]) == 1
+    assert result["pit_excluded"] == 1
+    assert store.list_documents()[0]["metadata"]["document_id"] == "DOC-1"
+    assert result["claims_created"] == 0
