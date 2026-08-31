@@ -66,6 +66,19 @@ class _ResearchStub:
             "candidate_logic": [],
         }
 
+    def serenity_export(self, *, days, as_of):
+        return {
+            "html": "<!DOCTYPE html><title>fixture</title>",
+            "posts": 2,
+            "missing_zh": 1,
+            "sha256": "fixture",
+            "inert": True,
+            "as_of": as_of or "2026-08-31",
+            "from_date": "2026-06-03",
+            "days": days,
+            "archive_complete": False,
+        }
+
 
 class _OfficialStub:
     def sync_sec_filings(self, ticker, *, cik, as_of, limit, user_agent):
@@ -206,6 +219,27 @@ def test_serenity_cli_routes_jsonl_and_method_threshold(capsys, tmp_path):
     payload = json.loads(capsys.readouterr().out)
     assert payload["min_independent_posts"] == 3
     assert payload["persist"] is True
+
+
+def test_serenity_export_cli_writes_standalone_html(capsys, tmp_path):
+    output = tmp_path / "serenity.html"
+    with patch("agent_reach.narrative.service.NarrativeService", return_value=_NarrativeStub()):
+        with patch("agent_reach.narrative.research.ResearchService", return_value=_ResearchStub()):
+            with patch(
+                "sys.argv",
+                [
+                    "agent-reach", "radar-narrative", "serenity-export",
+                    "--days", "90", "--as-of", "2026-08-31",
+                    "--output", str(output), "--json",
+                ],
+            ):
+                main()
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["output"] == str(output.resolve())
+    assert payload["posts"] == 2
+    assert output.read_text(encoding="utf-8").startswith("<!DOCTYPE html>")
+    assert b"\r\n" not in output.read_bytes()
 
 
 def test_sec_sync_routes_explicit_identity_and_as_of(capsys):

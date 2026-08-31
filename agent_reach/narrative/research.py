@@ -365,6 +365,7 @@ class ResearchService:
                 continue
             if not isinstance(payload, dict) or "original" not in payload:
                 continue
+            metadata = document.get("metadata") or {}
             rows.append(
                 {
                     "document_id": document["id"],
@@ -375,6 +376,12 @@ class ResearchService:
                     "en": str(payload.get("en") or ""),
                     "translation_status": str(payload.get("translation_status") or "pending"),
                     "source_language": str(payload.get("source_language") or "und"),
+                    "original_text_verified": bool(
+                        metadata.get("original_text_verified", False)
+                    ),
+                    "images": [
+                        str(value) for value in (metadata.get("images") or []) if value
+                    ],
                     "thesis_unit": payload.get("thesis_unit") or {},
                 }
             )
@@ -384,6 +391,36 @@ class ResearchService:
     def serenity_units(self, *, limit: int = 100) -> list[dict]:
         rows = self._all_serenity_units()
         return rows[: max(1, min(int(limit), 1000))]
+
+    def serenity_export(self, *, days: int = 90, as_of: str = "") -> dict:
+        if not 1 <= int(days) <= 3650:
+            raise ValueError("days must be between 1 and 3650")
+        try:
+            end = date.fromisoformat((as_of or date.today().isoformat())[:10])
+        except ValueError as exc:
+            raise ValueError("as_of must be an ISO date") from exc
+        start = end - timedelta(days=int(days) - 1)
+        units = [
+            row for row in self._all_serenity_units()
+            if start.isoformat()
+            <= str(row.get("published_at") or "")[:10]
+            <= end.isoformat()
+        ]
+        from agent_reach.narrative.serenity_export import render_serenity_archive
+
+        rendered = render_serenity_archive(
+            units,
+            handle=SERENITY_HANDLE,
+            as_of=end.isoformat(),
+            title_suffix=f" · {days}D",
+        )
+        return {
+            **rendered,
+            "as_of": end.isoformat(),
+            "from_date": start.isoformat(),
+            "days": int(days),
+            "archive_complete": False,
+        }
 
     def method_profile(
         self,

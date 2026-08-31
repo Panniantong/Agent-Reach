@@ -331,6 +331,10 @@ def test_x_subs_jsonl_is_read_only_bilingual_evidence_input(
     assert lite["zh_hant"].startswith("LITE")
     claims = service.store.list_claims(domain="serenity_method")
     assert all("積壓訂單" not in claim["text"] for claim in claims)
+    exported = service.serenity_export(days=90)
+    assert exported["posts"] == 2
+    assert exported["missing_zh"] == 0
+    assert 'class="post"' in exported["html"]
 
 
 def test_serenity_methodology_requires_repeated_joint_source_evidence(

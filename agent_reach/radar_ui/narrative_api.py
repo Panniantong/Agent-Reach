@@ -15,6 +15,7 @@ from agent_reach.narrative.service import NarrativeService
 
 def register_narrative_routes(app, jobs, service: Optional[NarrativeService] = None) -> None:
     from fastapi import Body, HTTPException, Request
+    from fastapi.responses import Response
 
     narrative = service or NarrativeService()
     research = ResearchService(store=narrative.store, quant=narrative.quant)
@@ -262,6 +263,22 @@ def register_narrative_routes(app, jobs, service: Optional[NarrativeService] = N
             )
         except Exception as exc:  # noqa: BLE001
             fail(exc)
+
+    @app.get("/api/narrative/research/serenity/export")
+    def narrative_serenity_export(days: int = 90, as_of: str = ""):
+        try:
+            result = research.serenity_export(days=days, as_of=as_of)
+        except Exception as exc:  # noqa: BLE001
+            fail(exc)
+        filename = f"serenity_subs_{result['as_of']}_{result['days']}d.html"
+        return Response(
+            content=result["html"],
+            media_type="text/html",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     @app.get("/api/narrative/research/packs")
     def narrative_research_packs(slice_id: str = "", limit: int = 100):

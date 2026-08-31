@@ -157,6 +157,9 @@ def test_research_run_pack_graph_and_read_only_stress_test(narrative_client):
     methodology = narrative_client.get(
         "/api/narrative/research/serenity/methodology"
     ).json()
+    archive = narrative_client.get(
+        "/api/narrative/research/serenity/export?days=90&as_of=2026-08-31"
+    )
     submitted = narrative_client.post(
         "/api/narrative/research/runs",
         json={"slice": "cpo-external-laser", "as_of": "2026-08-30"},
@@ -177,6 +180,11 @@ def test_research_run_pack_graph_and_read_only_stress_test(narrative_client):
 
     assert methodology["corpus"]["independent_documents"] == 0
     assert methodology["sequence_status"] == "not_established_by_literal_cooccurrence"
+    assert archive.status_code == 200
+    assert archive.headers["content-type"].startswith("text/html")
+    assert "attachment;" in archive.headers["content-disposition"]
+    assert "serenity_subs_2026-08-31_90d.html" in archive.headers["content-disposition"]
+    assert "<!DOCTYPE html>" in archive.text
     assert pack["payload"]["slice"] == "cpo-external-laser"
     assert pack["payload"]["evidence_grade"] == "E"
     assert graph["graphs"][0]["edges"]

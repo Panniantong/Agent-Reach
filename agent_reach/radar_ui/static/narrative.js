@@ -343,6 +343,7 @@
       '</small><strong>' + esc(theme.title) + '</strong><span>' + researchGrade((theme.latest_pack || {}).evidence_grade || "E") +
       '</span></button>').join("") + '</section><div class="nr-actions"><button class="nr-button" id="nr-run-research">重建此切片</button>' +
       '<button class="nr-button secondary" id="nr-weekly-freeze">凍結全部週報</button><button class="nr-button secondary" id="nr-serenity-backfill">回補 Serenity 90 天</button></div>' +
+      '<div class="nr-actions"><a class="nr-button secondary" href="/api/narrative/research/serenity/export?days=90" download>下載 HTML（顯示翻譯缺口）</a></div>' +
       '<div id="nr-research-pack"></div><section class="nr-section"><div class="nr-section-head"><h2>Serenity methodology</h2>' +
       '<span>重複原貼模式 · 不把共現當因果</span></div><div id="nr-serenity-methodology"></div></section>' +
       '<section class="nr-section"><div class="nr-section-head"><h2>Serenity thesis units</h2>' +

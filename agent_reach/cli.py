@@ -248,7 +248,7 @@ def main():
                  "calibrate", "status", "seed-reports", "serenity-backfill",
                  "daily-sync", "research", "weekly-freeze", "pack-diff",
                  "relationship-calibrate", "sec-sync", "policy-sync",
-                 "serenity-methodology"],
+                 "serenity-methodology", "serenity-export"],
     )
     p_narr.add_argument("--text", default="")
     p_narr.add_argument("--url", default="")
@@ -274,6 +274,16 @@ def main():
         type=int,
         default=2,
         help="方法論候選規則至少需出現在幾篇獨立貼文（預設 2）",
+    )
+    p_narr.add_argument(
+        "--output",
+        default="",
+        help="serenity-export 的 HTML 輸出路徑",
+    )
+    p_narr.add_argument(
+        "--force",
+        action="store_true",
+        help="允許 serenity-export 覆寫既有輸出檔",
     )
     p_narr.add_argument(
         "--serenity-days",
@@ -819,7 +829,8 @@ def _cmd_radar_narrative(args):
     elif action == "seed-reports":
         result = service.bootstrap_report_seeds(Path(__file__).resolve().parent.parent)
     elif action in {
-        "serenity-backfill", "serenity-methodology", "daily-sync", "research",
+        "serenity-backfill", "serenity-methodology", "serenity-export",
+        "daily-sync", "research",
         "weekly-freeze", "pack-diff"
     }:
         from agent_reach.narrative.research import ResearchService
@@ -837,6 +848,19 @@ def _cmd_radar_narrative(args):
                 min_independent_posts=args.min_posts,
                 persist=True,
             )
+        elif action == "serenity-export":
+            result = research.serenity_export(days=args.days, as_of=args.as_of)
+            output = Path(
+                args.output
+                or f"serenity_subs_{result['as_of']}_{result['days']}d.html"
+            ).expanduser()
+            if output.suffix.casefold() != ".html":
+                raise ValueError("serenity-export output must end in .html")
+            if output.exists() and not args.force:
+                raise ValueError("output exists; pass --force to overwrite it")
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_bytes(result.pop("html").encode("utf-8"))
+            result["output"] = str(output.resolve())
         elif action == "daily-sync":
             result = research.daily_sync(
                 as_of=args.as_of,

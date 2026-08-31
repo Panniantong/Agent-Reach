@@ -99,6 +99,8 @@ agent-reach radar-narrative serenity-backfill --days 90 --count 2000
 agent-reach radar-narrative serenity-backfill --days 90 --count 2000 \
   --serenity-jsonl "D:\\path\\to\\x_subs_downloader\\posts.jsonl"
 agent-reach radar-narrative serenity-methodology --min-posts 2 --json
+agent-reach radar-narrative serenity-export --days 90 \
+  --output "serenity_subs_90d.html"
 agent-reach radar-narrative research --slice cpo-external-laser --as-of 2026-08-30
 agent-reach radar-narrative daily-sync --serenity-days 2
 agent-reach radar-narrative weekly-freeze --as-of 2026-08-30
@@ -120,6 +122,8 @@ agent-reach radar-narrative policy-sync --query "export controls" --as-of 2026-0
 `twitter-cli user-posts` 依貼文 URL 去重。下載器本身固定把 profile、log 與輸出寫在
 自己的目錄，而且要求互動登入，因此 Agent Reach 不代為啟動。`serenity-methodology`
 只把跨至少兩篇獨立原貼的字面訊號列為待人工核准候選；共現不能建立因果順序。
+`serenity-export` 產生不含可執行 JavaScript 的單一 HTML，版面為時間、原貼連結、
+繁中／英文對照與 X 圖床縮圖；缺少核准翻譯時明確顯示待翻譯，不用模型文字補空白。
 
 `sec-sync` 只接受 SEC 的 submissions 與 Archives 公開端點，保存 10-K、10-Q、
 8-K、20-F、6-K 及其 `/A` 修正版的 accession、filing date、available date、原文
