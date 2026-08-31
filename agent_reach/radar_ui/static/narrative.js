@@ -343,7 +343,9 @@
       '</small><strong>' + esc(theme.title) + '</strong><span>' + researchGrade((theme.latest_pack || {}).evidence_grade || "E") +
       '</span></button>').join("") + '</section><div class="nr-actions"><button class="nr-button" id="nr-run-research">重建此切片</button>' +
       '<button class="nr-button secondary" id="nr-weekly-freeze">凍結全部週報</button><button class="nr-button secondary" id="nr-serenity-backfill">回補 Serenity 90 天</button></div>' +
-      '<div id="nr-research-pack"></div><section class="nr-section"><div class="nr-section-head"><h2>Serenity thesis units</h2>' +
+      '<div id="nr-research-pack"></div><section class="nr-section"><div class="nr-section-head"><h2>Serenity methodology</h2>' +
+      '<span>重複原貼模式 · 不把共現當因果</span></div><div id="nr-serenity-methodology"></div></section>' +
+      '<section class="nr-section"><div class="nr-section-head"><h2>Serenity thesis units</h2>' +
       '<span>原文 · 繁中 · English</span></div><div id="nr-serenity-units"></div></section>';
     all("[data-research-slice]").forEach(button => button.addEventListener("click", () => {
       state.researchSlice = button.dataset.researchSlice; renderResearchThemes();
@@ -363,11 +365,25 @@
       catch (error) { log(error.message, true); }
     });
     try {
+      const methodology = await api("/api/narrative/research/serenity/methodology");
+      const candidates = (methodology.candidate_logic || []).filter(row => row.repeated_in_independent_posts);
+      one("#nr-serenity-methodology").innerHTML =
+        '<div class="nr-metric-grid"><article><small>LOCAL CORPUS</small><strong>' +
+        esc((methodology.corpus || {}).independent_documents || 0) +
+        '</strong><span>archive complete: ' + esc((methodology.corpus || {}).archive_complete) +
+        '</span></article><article><small>SEQUENCE</small><strong>NOT ESTABLISHED</strong><span>' +
+        esc(methodology.sequence_status || "") + '</span></article></div>' +
+        (candidates.length ? candidates.map(row => '<article class="nr-source-unit"><header>' +
+          tag(row.tag, "guess") + tag(row.confidence, "guess") + '</header><p><strong>' +
+          esc(row.label) + '</strong> · ' + esc(row.question) + '</p><footer>' +
+          esc(row.joint_post_count) + ' independent posts · human review required</footer></article>').join("") :
+          empty("目前沒有跨至少兩篇獨立原貼重複的完整方法階段。"));
       const units = await api("/api/narrative/research/serenity?limit=30");
       one("#nr-serenity-units").innerHTML = (units.units || []).length ?
         units.units.map(row => '<article class="nr-source-unit"><header><a href="' + esc(row.source_url) +
           '" target="_blank" rel="noopener">' + esc(row.published_at) + '</a>' + tag(row.translation_status) +
-          '</header><div><section><small>ORIGINAL</small><p>' + esc(row.original) +
+          '</header><div><section><small>ORIGINAL · ' + esc(row.source_language || "und") +
+          '</small><p>' + esc(row.original) +
           '</p></section><section><small>繁中</small><p>' + esc(row.zh_hant || "待翻譯") +
           '</p></section><section><small>ENGLISH</small><p>' + esc(row.en || "PENDING TRANSLATION") +
           '</p></section></div><footer>' + ((row.thesis_unit.themes || []).map(theme =>

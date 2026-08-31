@@ -252,6 +252,17 @@ def register_narrative_routes(app, jobs, service: Optional[NarrativeService] = N
     def narrative_research_serenity(limit: int = 100):
         return {"units": research.serenity_units(limit=limit)}
 
+    @app.get("/api/narrative/research/serenity/methodology")
+    def narrative_serenity_methodology(as_of: str = "", min_posts: int = 2):
+        try:
+            return research.serenity_methodology(
+                as_of=as_of,
+                min_independent_posts=min_posts,
+                persist=False,
+            )
+        except Exception as exc:  # noqa: BLE001
+            fail(exc)
+
     @app.get("/api/narrative/research/packs")
     def narrative_research_packs(slice_id: str = "", limit: int = 100):
         return {"packs": research.packs(slice_id=slice_id, limit=limit)}
@@ -286,11 +297,15 @@ def register_narrative_routes(app, jobs, service: Optional[NarrativeService] = N
         days = int(payload.get("days") or 90)
         count = int(payload.get("count") or 2000)
         translations = payload.get("translations") or {}
+        source_jsonl = str(payload.get("source_jsonl") or "")
         job = jobs.submit(
             "serenity_backfill",
-            {"days": days, "count": count},
+            {"days": days, "count": count, "source_jsonl": source_jsonl},
             lambda: research.serenity_backfill(
-                days=days, count=count, translations=translations
+                days=days,
+                count=count,
+                translations=translations,
+                source_jsonl=source_jsonl or None,
             ),
         )
         return job.to_dict()

@@ -184,6 +184,41 @@ METHOD_SIGNAL_TERMS = {
     "counterevidence": ("風險", "失效", "不成立", "risk", "invalid", "failure", "counter"),
 }
 
+METHOD_STAGES = (
+    {
+        "id": "forcing_function",
+        "label": "System pressure / demand forcing",
+        "dimensions": ("demand_certainty", "policy_exposure"),
+        "minimum_joint_dimensions": 2,
+        "question": "Which observable demand or policy change is forcing adoption?",
+    },
+    {
+        "id": "constraint_test",
+        "label": "Constraint and substitution test",
+        "dimensions": (
+            "substitutability",
+            "capacity_lead_time",
+            "qualification_lead_time",
+        ),
+        "minimum_joint_dimensions": 2,
+        "question": "What cannot be substituted or expanded on the demand timeline?",
+    },
+    {
+        "id": "value_capture_test",
+        "label": "Value-capture test",
+        "dimensions": ("pricing_power", "value_capture"),
+        "minimum_joint_dimensions": 2,
+        "question": "Does the constrained layer retain economics in operating data?",
+    },
+    {
+        "id": "resolution_test",
+        "label": "Catalyst and falsification test",
+        "dimensions": ("rerating_catalyst", "counterevidence"),
+        "minimum_joint_dimensions": 2,
+        "question": "What observable event closes the gap, and what would invalidate it?",
+    },
+)
+
 THEME_SIGNAL_TERMS = {
     "cpo-external-laser": ("cpo", "co-packaged optics", "external light", "外置雷射", "外部光源"),
     "inp-substrate": ("inp", "indium phosphide", "磷化銦", "基板", "substrate"),
@@ -225,7 +260,18 @@ def extract_tickers(text: str) -> list[str]:
 
 def _literal_signal_matches(text: str, terms: tuple[str, ...]) -> list[str]:
     lowered = str(text or "").casefold()
-    return sorted({term for term in terms if term.casefold() in lowered})
+    matches = set()
+    for term in terms:
+        normalized = term.casefold()
+        if re.fullmatch(r"[a-z0-9][a-z0-9.-]*", normalized):
+            if re.search(
+                rf"(?<![a-z0-9]){re.escape(normalized)}(?![a-z0-9])",
+                lowered,
+            ):
+                matches.add(term)
+        elif normalized in lowered:
+            matches.add(term)
+    return sorted(matches)
 
 
 def draft_thesis_unit(text: str, observed_at: str) -> dict:
@@ -302,7 +348,7 @@ class ResearchService:
             for slice_id, theme in THEMES.items()
         ]
 
-    def serenity_units(self, *, limit: int = 100) -> list[dict]:
+    def _all_serenity_units(self) -> list[dict]:
         rows = []
         blob_root = self.store.blob_dir.resolve()
         for document in self.store.list_documents(limit=5000):
@@ -328,10 +374,15 @@ class ResearchService:
                     "zh_hant": str(payload.get("zh_hant") or ""),
                     "en": str(payload.get("en") or ""),
                     "translation_status": str(payload.get("translation_status") or "pending"),
+                    "source_language": str(payload.get("source_language") or "und"),
                     "thesis_unit": payload.get("thesis_unit") or {},
                 }
             )
         rows.sort(key=lambda row: (row["published_at"], row["document_id"]), reverse=True)
+        return rows
+
+    def serenity_units(self, *, limit: int = 100) -> list[dict]:
+        rows = self._all_serenity_units()
         return rows[: max(1, min(int(limit), 1000))]
 
     def method_profile(
@@ -340,6 +391,7 @@ class ResearchService:
         as_of: str,
         evidence_claim_ids: Optional[list[str]] = None,
         observations: Optional[dict[str, dict]] = None,
+        signature_signals: Optional[list] = None,
     ) -> dict:
         observed_dimensions = {
             name: {
@@ -358,13 +410,7 @@ class ResearchService:
             name="Serenity bottleneck research method",
             as_of=as_of,
             dimensions=observed_dimensions,
-            signature_signals=[
-                "system change before ticker selection",
-                "scarce layer before TAM",
-                "qualification and capacity before narrative popularity",
-                "value capture must appear in operating data",
-                "failure condition before rerating thesis",
-            ],
+            signature_signals=signature_signals or [],
             invalidators=[
                 "no official or Quant measurement for the claimed bottleneck",
                 "qualified substitutes expand faster than demand load",
@@ -375,6 +421,195 @@ class ResearchService:
         )
         return {"profile": profile, "created": created, "voting_weight": None}
 
+    def serenity_methodology(
+        self,
+        *,
+        as_of: str = "",
+        min_independent_posts: int = 2,
+        persist: bool = True,
+    ) -> dict:
+        """Build a source-grounded method profile from the complete local corpus.
+
+        Literal dimensions and co-occurrences are computed. The proposed stage
+        order remains an explicit FRAME: bag-of-words evidence cannot establish
+        that Serenity applies the stages causally or in that order.
+        """
+
+        if not 2 <= int(min_independent_posts) <= 20:
+            raise ValueError("min_independent_posts must be between 2 and 20")
+        resolved_as_of = (as_of or date.today().isoformat())[:10]
+        units = [
+            row for row in self._all_serenity_units()
+            if str(row.get("published_at") or "")[:10] <= resolved_as_of
+        ]
+        by_document: dict[str, dict[str, Any]] = {}
+        dimension_posts: dict[str, set[str]] = {
+            name: set() for name in METHOD_DIMENSIONS
+        }
+        dimension_terms: dict[str, set[str]] = {
+            name: set() for name in METHOD_DIMENSIONS
+        }
+        dimension_evidence: dict[str, list[dict]] = {
+            name: [] for name in METHOD_DIMENSIONS
+        }
+        ticker_counts: Counter[str] = Counter()
+        theme_counts: Counter[str] = Counter()
+        configured_theme_documents = 0
+        for row in units:
+            unit = draft_thesis_unit(
+                str(row.get("original") or ""),
+                str(row.get("published_at") or ""),
+            )
+            signals = unit["method_signals"]
+            ticker_counts.update(unit["tickers"])
+            slices = {theme["slice"] for theme in unit["themes"]}
+            theme_counts.update(slices)
+            configured_theme_documents += int(bool(slices))
+            document_id = str(row["document_id"])
+            by_document[document_id] = {
+                "dimensions": set(signals),
+                "source_url": row.get("source_url") or "",
+                "published_at": row.get("published_at") or "",
+            }
+            for dimension, terms in signals.items():
+                dimension_posts[dimension].add(document_id)
+                dimension_terms[dimension].update(terms)
+                dimension_evidence[dimension].append(
+                    {
+                        "document_id": document_id,
+                        "source_url": row.get("source_url") or "",
+                        "published_at": row.get("published_at") or "",
+                        "literal_terms": terms,
+                        "excerpt": str(row.get("original") or "")[:280],
+                    }
+                )
+
+        observations = {}
+        for name in METHOD_DIMENSIONS:
+            evidence = sorted(
+                dimension_evidence[name],
+                key=lambda row: (row["published_at"], row["document_id"]),
+                reverse=True,
+            )
+            observations[name] = {
+                "observed_count": len(dimension_posts[name]),
+                "literal_terms": sorted(dimension_terms[name]),
+                "repeated_in_independent_posts": (
+                    len(dimension_posts[name]) >= int(min_independent_posts)
+                ),
+                "evidence_posts": evidence[:20],
+                "evidence_truncated": len(evidence) > 20,
+                "observation_tag": "COMPUTED",
+                "observation_confidence": "HIGH",
+            }
+
+        stage_rows = []
+        inferred_signals = []
+        for stage in METHOD_STAGES:
+            dimensions = set(stage["dimensions"])
+            supporting = []
+            for document_id, row in by_document.items():
+                matched = sorted(dimensions & row["dimensions"])
+                if len(matched) >= int(stage["minimum_joint_dimensions"]):
+                    supporting.append(
+                        {
+                            "document_id": document_id,
+                            "source_url": row["source_url"],
+                            "published_at": row["published_at"],
+                            "matched_dimensions": matched,
+                        }
+                    )
+            supporting.sort(
+                key=lambda row: (row["published_at"], row["document_id"]),
+                reverse=True,
+            )
+            repeated = len(supporting) >= int(min_independent_posts)
+            stage_row = {
+                **stage,
+                "dimensions": list(stage["dimensions"]),
+                "joint_post_count": len(supporting),
+                "repeated_in_independent_posts": repeated,
+                "evidence_posts": supporting[:20],
+                "status": (
+                    "candidate_pending_human_review" if repeated else "insufficient_data"
+                ),
+                "tag": "INFERRED" if repeated else "FRAME",
+                "confidence": "LOW",
+            }
+            stage_rows.append(stage_row)
+            if repeated:
+                inferred_signals.append(
+                    {
+                        "stage": stage["id"],
+                        "statement": stage["question"],
+                        "joint_post_count": len(supporting),
+                        "tag": "INFERRED",
+                        "confidence": "LOW",
+                    }
+                )
+
+        cooccurrence = []
+        names = list(METHOD_DIMENSIONS)
+        for index, left in enumerate(names):
+            for right in names[index + 1:]:
+                shared = dimension_posts[left] & dimension_posts[right]
+                if len(shared) >= int(min_independent_posts):
+                    cooccurrence.append(
+                        {
+                            "dimensions": [left, right],
+                            "independent_post_count": len(shared),
+                            "tag": "COMPUTED",
+                            "confidence": "HIGH",
+                        }
+                    )
+        cooccurrence.sort(
+            key=lambda row: (-row["independent_post_count"], row["dimensions"])
+        )
+
+        claims_by_document: dict[str, list[str]] = {}
+        for claim in self.store.list_claims(domain="serenity_method", limit=1000):
+            claims_by_document.setdefault(str(claim["document_id"]), []).append(claim["id"])
+        evidence_claim_ids = sorted({
+            claim_id
+            for document_id in by_document
+            for claim_id in claims_by_document.get(document_id, [])
+        })
+        profile = None
+        if persist:
+            profile = self.method_profile(
+                as_of=resolved_as_of,
+                evidence_claim_ids=evidence_claim_ids,
+                observations=observations,
+                signature_signals=inferred_signals,
+            )
+        return {
+            "as_of": resolved_as_of,
+            "source_id": SERENITY_SOURCE_ID,
+            "corpus": {
+                "independent_documents": len(by_document),
+                "archive_complete": False,
+                "zero_means_unknown": True,
+                "ticker_counts": dict(sorted(
+                    ticker_counts.items(), key=lambda pair: (-pair[1], pair[0])
+                )[:50]),
+                "configured_theme_counts": dict(sorted(
+                    theme_counts.items(), key=lambda pair: (-pair[1], pair[0])
+                )),
+                "configured_theme_documents": configured_theme_documents,
+                "unclassified_theme_documents": (
+                    len(by_document) - configured_theme_documents
+                ),
+                "theme_scope": "configured research themes only; unclassified is not no topic",
+            },
+            "dimensions": observations,
+            "candidate_logic": stage_rows,
+            "cooccurrence": cooccurrence,
+            "sequence_status": "not_established_by_literal_cooccurrence",
+            "method_profile": profile,
+            "voting_weight": None,
+            "orders_generated": False,
+        }
+
     def serenity_backfill(
         self,
         *,
@@ -382,21 +617,36 @@ class ResearchService:
         count: int = 2000,
         translations: Optional[dict[str, dict[str, str]]] = None,
         fetcher: Optional[Callable[[str, int, Config], list[Any]]] = None,
+        source_jsonl: Optional[Path | str] = None,
     ) -> dict:
         if not 1 <= int(days) <= 3650:
             raise ValueError("days must be between 1 and 3650")
         now = datetime.now(timezone.utc)
         cutoff = now - timedelta(days=int(days))
+        archive_items: list[Any] = []
+        archive_manifest: dict[str, Any] = {}
+        merged_translations = dict(translations or {})
+        if source_jsonl:
+            from agent_reach.narrative.serenity_source import load_x_subs_jsonl
+
+            archive = load_x_subs_jsonl(source_jsonl, max_records=max(1, int(count)))
+            archive_items = archive.items
+            archive_manifest = archive.manifest
+            merged_translations = {**archive.translations, **merged_translations}
+        sources = [f"twitter:@{SERENITY_HANDLE}"]
+        if archive_manifest:
+            sources.append("x_subs_downloader:posts.jsonl")
         run = self.store.create_research_run(
             slice_id="serenity-method",
             universe_scope="all_original_topics",
             as_of=now.date().isoformat(),
             input_manifest={
-                "source": f"twitter:@{SERENITY_HANDLE}",
+                "sources": sources,
                 "days": int(days),
                 "requested_count": int(count),
                 "pure_reposts_excluded": True,
                 "archive_completeness_claimed": False,
+                "x_subs_archive": archive_manifest,
             },
             model_version=RESEARCH_MODEL_VERSION,
             prompt_version=METHOD_PROMPT_VERSION,
@@ -411,6 +661,7 @@ class ResearchService:
         except Exception as exc:  # noqa: BLE001
             items = []
             fetch_error = str(exc)[:500]
+        items = list(items or []) + archive_items
         eligible = []
         for item in items:
             published = _parse_timestamp(item.ts or "")
@@ -426,10 +677,6 @@ class ResearchService:
         duplicate_by_day: Counter[str] = Counter()
         document_ids: list[str] = []
         claim_ids: list[str] = []
-        method_observations: dict[str, dict[str, Any]] = {
-            name: {"post_keys": set(), "literal_terms": set()}
-            for name in METHOD_DIMENSIONS
-        }
         for published, item in eligible:
             key = item.url or hashlib.sha256(item.text.encode("utf-8")).hexdigest()
             day = published.date().isoformat()
@@ -438,19 +685,17 @@ class ResearchService:
                 continue
             seen.add(key)
             retrieved_by_day[day] += 1
-            supplied = (translations or {}).get(item.url) or {}
+            supplied = merged_translations.get(item.url) or {}
             translated_zh = str(supplied.get("zh_hant") or "")
             translated_en = str(supplied.get("en") or "")
             thesis_unit = draft_thesis_unit(item.text, published.isoformat())
             tickers = thesis_unit["tickers"]
-            for dimension, terms in thesis_unit["method_signals"].items():
-                method_observations[dimension]["post_keys"].add(key)
-                method_observations[dimension]["literal_terms"].update(terms)
+            source_language = str((item.extra or {}).get("sourceLanguage") or "und")
             body = {
                 "original": item.text,
                 "zh_hant": translated_zh,
                 "en": translated_en,
-                "source_language": "und",
+                "source_language": source_language,
                 "translation_status": "complete" if translated_zh and translated_en else "pending",
                 "thesis_unit": thesis_unit,
             }
@@ -470,6 +715,13 @@ class ResearchService:
                     "tickers": tickers,
                     "translation_status": body["translation_status"],
                     "original_only": True,
+                    "backend": str((item.extra or {}).get("backend") or "twitter-cli"),
+                    "subscriber_only": bool((item.extra or {}).get("subscriberOnly")),
+                    "images": (item.extra or {}).get("images") or [],
+                    "source_language": source_language,
+                    "original_text_verified": bool(
+                        (item.extra or {}).get("originalTextVerified", True)
+                    ),
                 },
                 suffix=".json",
             )
@@ -523,26 +775,19 @@ class ResearchService:
                 unavailable=unavailable,
                 rate_limited=rate_limited,
                 details={
-                    "backend": "twitter-cli user-posts",
+                    "backend": (
+                        "twitter-cli user-posts + x_subs_downloader_jsonl"
+                        if archive_manifest else "twitter-cli user-posts"
+                    ),
                     "archive_complete": False,
                     "meaning": "zero retrieved is unknown, not evidence of zero posts",
                     "fetch_error": fetch_error,
+                    "x_subs_archive": archive_manifest,
                 },
             )
             cursor += timedelta(days=1)
-        profile_observations = {
-            name: {
-                "observed_count": len(row["post_keys"]),
-                "literal_terms": sorted(row["literal_terms"]),
-                "repeated_in_independent_posts": len(row["post_keys"]) >= 2,
-            }
-            for name, row in method_observations.items()
-        }
-        profile = self.method_profile(
-            as_of=now.date().isoformat(),
-            evidence_claim_ids=claim_ids,
-            observations=profile_observations,
-        )
+        methodology = self.serenity_methodology(as_of=now.date().isoformat(), persist=True)
+        profile = methodology["method_profile"]
         finished = self.store.finish_research_run(run["id"], status="degraded")
         return {
             "run": finished,
@@ -554,7 +799,9 @@ class ResearchService:
             "claims": claim_ids,
             "coverage_complete": False,
             "fetch_error": fetch_error,
+            "source_manifest": archive_manifest,
             "method_profile": profile,
+            "methodology": methodology,
             "orders_generated": False,
         }
 

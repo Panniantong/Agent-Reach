@@ -247,7 +247,8 @@ def main():
         choices=["ingest", "discover", "contract", "forecast", "resolve",
                  "calibrate", "status", "seed-reports", "serenity-backfill",
                  "daily-sync", "research", "weekly-freeze", "pack-diff",
-                 "relationship-calibrate", "sec-sync", "policy-sync"],
+                 "relationship-calibrate", "sec-sync", "policy-sync",
+                 "serenity-methodology"],
     )
     p_narr.add_argument("--text", default="")
     p_narr.add_argument("--url", default="")
@@ -263,6 +264,17 @@ def main():
     p_narr.add_argument("--user-agent", default="")
     p_narr.add_argument("--count", type=int, default=8)
     p_narr.add_argument("--days", type=int, default=90)
+    p_narr.add_argument(
+        "--serenity-jsonl",
+        default="",
+        help="唯讀匯入 x_subs_downloader 的 posts.jsonl，並與 twitter-cli 結果去重",
+    )
+    p_narr.add_argument(
+        "--min-posts",
+        type=int,
+        default=2,
+        help="方法論候選規則至少需出現在幾篇獨立貼文（預設 2）",
+    )
     p_narr.add_argument(
         "--serenity-days",
         type=int,
@@ -807,13 +819,24 @@ def _cmd_radar_narrative(args):
     elif action == "seed-reports":
         result = service.bootstrap_report_seeds(Path(__file__).resolve().parent.parent)
     elif action in {
-        "serenity-backfill", "daily-sync", "research", "weekly-freeze", "pack-diff"
+        "serenity-backfill", "serenity-methodology", "daily-sync", "research",
+        "weekly-freeze", "pack-diff"
     }:
         from agent_reach.narrative.research import ResearchService
 
         research = ResearchService(store=service.store, quant=service.quant)
         if action == "serenity-backfill":
-            result = research.serenity_backfill(days=args.days, count=args.count)
+            result = research.serenity_backfill(
+                days=args.days,
+                count=args.count,
+                source_jsonl=args.serenity_jsonl or None,
+            )
+        elif action == "serenity-methodology":
+            result = research.serenity_methodology(
+                as_of=args.as_of,
+                min_independent_posts=args.min_posts,
+                persist=True,
+            )
         elif action == "daily-sync":
             result = research.daily_sync(
                 as_of=args.as_of,

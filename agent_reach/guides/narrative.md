@@ -96,6 +96,9 @@ Serenity 與產業研究工作流：
 
 ```bash
 agent-reach radar-narrative serenity-backfill --days 90 --count 2000
+agent-reach radar-narrative serenity-backfill --days 90 --count 2000 \
+  --serenity-jsonl "D:\\path\\to\\x_subs_downloader\\posts.jsonl"
+agent-reach radar-narrative serenity-methodology --min-posts 2 --json
 agent-reach radar-narrative research --slice cpo-external-laser --as-of 2026-08-30
 agent-reach radar-narrative daily-sync --serenity-days 2
 agent-reach radar-narrative weekly-freeze --as-of 2026-08-30
@@ -110,6 +113,13 @@ agent-reach radar-narrative policy-sync --query "export controls" --as-of 2026-0
 英文翻譯存在同一 document，翻譯不建立第二份證據。沒有 X archive/export 時，
 每日 coverage 的零表示 unknown，不表示當日沒有貼文。MethodProfile 固定先進 draft，
 沒有 analyst voting weight。
+
+`--serenity-jsonl` 只讀取 `x_subs_downloader` README 公開定義的
+`id/timestamp/images/en/zh` JSONL，不執行或修改下載器，也不讀取
+`chrome_profile`。其中 `en` 是證據原文，`zh` 只作翻譯展示；匯入結果與
+`twitter-cli user-posts` 依貼文 URL 去重。下載器本身固定把 profile、log 與輸出寫在
+自己的目錄，而且要求互動登入，因此 Agent Reach 不代為啟動。`serenity-methodology`
+只把跨至少兩篇獨立原貼的字面訊號列為待人工核准候選；共現不能建立因果順序。
 
 `sec-sync` 只接受 SEC 的 submissions 與 Archives 公開端點，保存 10-K、10-Q、
 8-K、20-F、6-K 及其 `/A` 修正版的 accession、filing date、available date、原文

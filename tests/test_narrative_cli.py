@@ -48,6 +48,24 @@ class _ResearchStub:
     def daily_sync(self, *, as_of, serenity_days):
         return {"as_of": as_of, "serenity_days": serenity_days}
 
+    def serenity_backfill(self, *, days, count, source_jsonl):
+        return {
+            "handle": "aleabitoreddit",
+            "retrieved": 3,
+            "coverage_complete": False,
+            "days": days,
+            "count": count,
+            "source_jsonl": str(source_jsonl or ""),
+        }
+
+    def serenity_methodology(self, *, as_of, min_independent_posts, persist):
+        return {
+            "as_of": as_of,
+            "min_independent_posts": min_independent_posts,
+            "persist": persist,
+            "candidate_logic": [],
+        }
+
 
 class _OfficialStub:
     def sync_sec_filings(self, ticker, *, cik, as_of, limit, user_agent):
@@ -155,6 +173,39 @@ def test_daily_sync_has_separate_two_day_default(capsys):
 
     payload = json.loads(capsys.readouterr().out)
     assert payload["serenity_days"] == 2
+
+
+def test_serenity_cli_routes_jsonl_and_method_threshold(capsys, tmp_path):
+    archive = tmp_path / "posts.jsonl"
+    archive.write_text("", encoding="utf-8")
+    with patch("agent_reach.narrative.service.NarrativeService", return_value=_NarrativeStub()):
+        with patch("agent_reach.narrative.research.ResearchService", return_value=_ResearchStub()):
+            with patch(
+                "sys.argv",
+                [
+                    "agent-reach", "radar-narrative", "serenity-backfill",
+                    "--serenity-jsonl", str(archive), "--days", "90", "--count", "50",
+                    "--json",
+                ],
+            ):
+                main()
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["source_jsonl"] == str(archive)
+    assert payload["count"] == 50
+
+    with patch("agent_reach.narrative.service.NarrativeService", return_value=_NarrativeStub()):
+        with patch("agent_reach.narrative.research.ResearchService", return_value=_ResearchStub()):
+            with patch(
+                "sys.argv",
+                [
+                    "agent-reach", "radar-narrative", "serenity-methodology",
+                    "--min-posts", "3", "--as-of", "2026-08-31", "--json",
+                ],
+            ):
+                main()
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["min_independent_posts"] == 3
+    assert payload["persist"] is True
 
 
 def test_sec_sync_routes_explicit_identity_and_as_of(capsys):

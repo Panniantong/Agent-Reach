@@ -539,7 +539,7 @@ class NarrativeStore:
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT * FROM documents ORDER BY created_at DESC LIMIT ?",
-                (max(1, min(limit, 500)),),
+                (max(1, min(limit, 5000)),),
             ).fetchall()
         return [self._row(r) for r in rows]
 

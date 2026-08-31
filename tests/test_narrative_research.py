@@ -11,6 +11,8 @@ import pytest
 
 from agent_reach.narrative.quant import QuantAdapter
 from agent_reach.narrative.research import ResearchService
+from agent_reach.narrative.research import draft_thesis_unit
+from agent_reach.narrative.serenity_source import load_x_subs_jsonl
 from agent_reach.narrative.store import NarrativeStore
 
 
@@ -266,6 +268,136 @@ def test_serenity_rate_limit_is_recorded_without_claiming_zero_posts(
     assert result["coverage_complete"] is False
     assert coverage["totals"]["rate_limited"] == 1
     assert coverage["zero_means_unknown"] is True
+
+
+def test_x_subs_jsonl_is_read_only_bilingual_evidence_input(
+    tmp_path, research_quant_root
+):
+    now = datetime.now(timezone.utc)
+    archive_path = tmp_path / "posts.jsonl"
+    records = [
+        {
+            "id": "10001",
+            "timestamp": (now - timedelta(days=1)).isoformat(),
+            "images": ["https://pbs.twimg.com/media/fixture"],
+            "en": "$LITE demand capacity qualification risk.",
+            "zh": "LITE 需求、產能、認證與風險。",
+        },
+        {
+            "id": "10001",
+            "timestamp": (now - timedelta(days=1)).isoformat(),
+            "images": [],
+            "en": "$LITE demand capacity qualification risk.",
+            "zh": "LITE 需求、產能、認證與風險。",
+        },
+        {
+            "id": "10002",
+            "timestamp": (now - timedelta(days=2)).isoformat(),
+            "images": [],
+            "en": "$COHR backlog and lead time matter.",
+            "zh": "COHR 積壓訂單與交期很重要。",
+        },
+    ]
+    archive_path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in records)
+        + "\nnot-json\n",
+        encoding="utf-8",
+    )
+
+    archive = load_x_subs_jsonl(archive_path)
+    assert len(archive.items) == 3
+    assert archive.manifest["malformed_records"] == 1
+    assert archive.manifest["read_only"] is True
+    assert archive.items[0].extra["subscriberOnly"] is True
+    assert archive.items[0].extra["originalTextVerified"] is True
+
+    service = ResearchService(
+        store=NarrativeStore(tmp_path / "narrative"),
+        quant=QuantAdapter(research_quant_root),
+    )
+    result = service.serenity_backfill(
+        days=90,
+        count=20,
+        source_jsonl=archive_path,
+        fetcher=lambda handle, count, config: [],
+    )
+
+    assert result["retrieved"] == 2
+    assert result["deduplicated"] == 1
+    assert result["source_manifest"]["backend"] == "x_subs_downloader_jsonl"
+    units = service.serenity_units(limit=10)
+    lite = next(row for row in units if row["source_url"].endswith("/10001"))
+    assert lite["original"].startswith("$LITE")
+    assert lite["zh_hant"].startswith("LITE")
+    claims = service.store.list_claims(domain="serenity_method")
+    assert all("積壓訂單" not in claim["text"] for claim in claims)
+
+
+def test_serenity_methodology_requires_repeated_joint_source_evidence(
+    tmp_path, research_quant_root
+):
+    now = datetime.now(timezone.utc)
+    posts = [
+        SimpleNamespace(
+            title="method one",
+            url="https://x.com/aleabitoreddit/status/20001",
+            text=(
+                "$LITE demand policy capacity qualification pricing revenue "
+                "catalyst risk."
+            ),
+            ts=(now - timedelta(days=1)).isoformat(),
+            extra={"isRetweet": False},
+        ),
+        SimpleNamespace(
+            title="method two",
+            url="https://x.com/aleabitoreddit/status/20002",
+            text=(
+                "$COHR shipment export control lead time qualified price increase "
+                "margin ramp failure."
+            ),
+            ts=(now - timedelta(days=2)).isoformat(),
+            extra={"isRetweet": False},
+        ),
+    ]
+    service = ResearchService(
+        store=NarrativeStore(tmp_path / "narrative"),
+        quant=QuantAdapter(research_quant_root),
+    )
+    service.serenity_backfill(
+        days=90,
+        count=20,
+        fetcher=lambda handle, count, config: posts,
+    )
+
+    methodology = service.serenity_methodology(persist=False)
+
+    assert methodology["corpus"]["independent_documents"] == 2
+    assert methodology["sequence_status"] == "not_established_by_literal_cooccurrence"
+    assert methodology["voting_weight"] is None
+    candidates = {
+        row["id"]: row
+        for row in methodology["candidate_logic"]
+        if row["repeated_in_independent_posts"]
+    }
+    assert set(candidates) == {
+        "forcing_function",
+        "constraint_test",
+        "value_capture_test",
+        "resolution_test",
+    }
+    assert all(row["tag"] == "INFERRED" for row in candidates.values())
+    assert all(row["confidence"] == "LOW" for row in candidates.values())
+    assert methodology["dimensions"]["capacity_lead_time"]["evidence_posts"]
+    assert methodology["corpus"]["ticker_counts"] == {"COHR": 1, "LITE": 1}
+
+
+def test_method_signal_english_terms_use_token_boundaries():
+    unit = draft_thesis_unit(
+        "The impact is material, but this post contains no enacted policy.",
+        "2026-08-31T00:00:00+00:00",
+    )
+
+    assert "act" not in unit["method_signals"].get("policy_exposure", [])
 
 
 def test_typed_edge_cannot_skip_review_or_verify_unreviewed_evidence(tmp_path):

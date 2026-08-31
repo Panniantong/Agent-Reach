@@ -154,6 +154,9 @@ def test_discovery_results_stay_pending_until_review(narrative_client, monkeypat
 
 
 def test_research_run_pack_graph_and_read_only_stress_test(narrative_client):
+    methodology = narrative_client.get(
+        "/api/narrative/research/serenity/methodology"
+    ).json()
     submitted = narrative_client.post(
         "/api/narrative/research/runs",
         json={"slice": "cpo-external-laser", "as_of": "2026-08-30"},
@@ -172,6 +175,8 @@ def test_research_run_pack_graph_and_read_only_stress_test(narrative_client):
     ).json()
     after = narrative_client.get("/api/narrative/status").json()["store"]["counts"]
 
+    assert methodology["corpus"]["independent_documents"] == 0
+    assert methodology["sequence_status"] == "not_established_by_literal_cooccurrence"
     assert pack["payload"]["slice"] == "cpo-external-laser"
     assert pack["payload"]["evidence_grade"] == "E"
     assert graph["graphs"][0]["edges"]
