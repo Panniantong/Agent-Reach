@@ -39,30 +39,39 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 
 | Purpose | Directory | Example |
 |---------|-----------|---------|
-| Config & tokens | `~/.agent-reach/` | `~/.agent-reach/config.json` |
+| Config & tokens | `~/.agent-reach/` | `~/.agent-reach/config.yaml` |
 | Upstream tool repos | `~/.agent-reach/tools/` | `~/.agent-reach/tools/xiaoyuzhou/` |
 | Temporary files | `/tmp/` | `/tmp/yt-dlp-output/` |
-| Skills | `~/.openclaw/skills/agent-reach/` | SKILL.md |
+| Skills | four roots (see blast radius) | `~/.claude/skills/agent-reach/` etc. |
 
 **Why?** If you clone repos or create files in the workspace, it pollutes the user's project directory and can break their agent over time. Keep the workspace clean.
 
 ### Step 1: Install the basics
 
-```bash
-# 推荐：pipx（最省心）
-pipx install https://github.com/Panniantong/agent-reach/archive/main.zip
-agent-reach install --env=auto               # Read-only check (default)
-# After the user explicitly approves system changes:
-agent-reach install --env=auto --system
+**Default path is pinned pip + a venv.** Fetch `constraints.txt` from the **same ref** as the zip (CI uses this file; zip-from-main without it is unpinned).
 
-# 如果你的 Python 来自 Homebrew / 遇到 PEP 668（externally-managed-environment）
-# 用虚拟环境安装：
+```bash
+# Fetch pins from the same commit/branch as the package zip
+curl -fsSL -o /tmp/agent-reach-constraints.txt \
+  https://raw.githubusercontent.com/Panniantong/agent-reach/main/constraints.txt
+
 python3 -m venv ~/.agent-reach-venv
 source ~/.agent-reach-venv/bin/activate
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install -c /tmp/agent-reach-constraints.txt \
+  https://github.com/Panniantong/agent-reach/archive/main.zip
 agent-reach install --env=auto               # Read-only check (default)
 # After the user explicitly approves system changes:
-agent-reach install --env=auto --system
+# agent-reach install --env=auto --system
+
+# From a git checkout (constraints.txt is in the tree):
+# pip install -c constraints.txt .
+```
+
+**pipx cannot take `-c`.** Do not use pipx if you need the pinned graph. If the user already uses pipx, say so, then prefer the venv recipe above (or clone the repo and `pipx install -e .` from a checkout that already has a locked env for development).
+
+```bash
+# pipx is unpinned relative to constraints.txt — not the default documented path
+# pipx install https://github.com/Panniantong/agent-reach/archive/main.zip
 ```
 
 > 💡 **Windows / Microsoft Store Python alias?**
@@ -72,18 +81,19 @@ agent-reach install --env=auto --system
 >
 > PowerShell 示例：
 > ```powershell
+> curl.exe -fsSL -o $env:TEMP\agent-reach-constraints.txt https://raw.githubusercontent.com/Panniantong/agent-reach/main/constraints.txt
 > py -3 -m venv $env:USERPROFILE\.agent-reach-venv
 > $env:USERPROFILE\.agent-reach-venv\Scripts\Activate.ps1
-> python -m pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+> python -m pip install -c $env:TEMP\agent-reach-constraints.txt https://github.com/Panniantong/agent-reach/archive/main.zip
 > agent-reach install --env=auto
 > ```
 
-The default command checks core infrastructure (gh CLI, Node.js, mcporter, Exa search, yt-dlp config) without changing the host. With explicit `--system` approval it installs/configures the missing pieces and activates these zero-config channels:
+The default command checks core infrastructure (gh CLI, Node.js, mcporter, Exa search, yt-dlp config) without changing the host. With explicit `--system` approval it installs/configures the missing pieces and activates these commercial-core channels:
 
 - Web (Jina Reader), YouTube, GitHub, RSS, Exa Search, V2EX, Bilibili (basic)
 
 > 💡 **macOS / Homebrew Python 提示 `externally-managed-environment`？**
-> 这是 PEP 668 保护，不是 Agent Reach 本身的问题。优先用 `pipx install ...`，或先创建 `venv` 再安装。
+> 这是 PEP 668 保护，不是 Agent Reach 本身的问题。用上面的 `venv` + `pip install -c constraints.txt`，不要为了图省事改用无 pin 的 pipx。
 
 **Install modes:**
 
@@ -93,6 +103,29 @@ agent-reach install --env=auto --safe      # Same check-only behavior (compatibi
 agent-reach install --env=auto --system    # Explicitly allow external/system installs
 agent-reach install --env=auto --dry-run   # Preview what --system would do
 ```
+
+#### `--system` blast radius
+
+`--system` is never the copy-paste default. After the user explicitly approves system changes, it may:
+
+- Copy the skill into whichever of these roots already exist (and may create `~/.agents/skills/agent-reach` if none exist):
+  - `~/.claude/skills/agent-reach/`
+  - `~/.openclaw/skills/agent-reach/`
+  - `~/.config/opencode/skills/agent-reach/`
+  - `~/.agents/skills/agent-reach/`
+  - plus `$OPENCLAW_HOME/.openclaw/skills/agent-reach/` when `OPENCLAW_HOME` is set
+- Install OS packages: `apt-get` (`gh`, `nodejs`, `npm`) or Homebrew (`gh`, `node`)
+- Write mcporter config
+
+Check-only (`install --env=auto` without `--system`) does **not** do those writes.
+
+#### Skill install paths
+
+`agent-reach skill --install` copies the bundled skill into the same four roots (plus `OPENCLAW_HOME`) without the rest of `--system` (no apt/brew/npm, no mcporter writes). Locale: `AGENT_REACH_LANG` / `LANG` selects `SKILL_en.md` vs `SKILL.md`, copied as `SKILL.md` in the target. Existing skill dirs are preserved unless you force a refresh.
+
+#### Uninstall
+
+`agent-reach uninstall` removes `~/.agent-reach/` and skill copies from the four roots above. `--keep-config` keeps YAML. `--dry-run` previews. This does not uninstall the Python package (`pip uninstall agent-reach`).
 
 ### Step 2: Ask the user which optional channels they want
 
@@ -129,7 +162,7 @@ Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohong
 
 Run `agent-reach doctor` and check the output.
 
-Try to get as many channels to ✅ as possible. If something failed during install or shows as ❌/⚠️ in doctor, diagnose the problem and try to fix it — but stay within the boundaries above. If a fix requires elevated permissions or system changes, ask the user first.
+`status: warn` is not off. github / twitter / xiaohongshu / reddit / facebook / instagram / exa_search / linkedin **never return `ok`** by design (Doctor refuses live probes that would refresh cookies, write gh device-id, or start MCP). Do not treat those as broken. Try to get commercial-core channels that *can* be `ok` (web, youtube, rss, plus extended v2ex/bilibili when present) to ✅. If something shows as `[X]`/`error`, diagnose — but stay within the boundaries above. If a fix requires elevated permissions or system changes, ask the user first.
 
 Only ask the user when you genuinely need their input (credentials, permissions, etc.).
 
@@ -373,3 +406,5 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 | RSS | `feedparser` | `python3 -c "import feedparser; ..."` |
 
 > 多后端平台以 `agent-reach doctor --json` 的 `active_backend` 为准。
+>
+> Doctor JSON keys stay `status`, `name`, `message`, `tier`, `backends`, `active_backend`. `status` is `ok|warn|off|error`. `warn` means unverified, not off. Channels that never return `ok`: github, twitter, xiaohongshu, reddit, facebook, instagram, exa_search, linkedin.

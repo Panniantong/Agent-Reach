@@ -59,7 +59,11 @@ def format_report(results: Dict[str, dict]) -> str:
     lines = []
     lines.append("[bold cyan]Agent Reach 状态[/bold cyan]")
     lines.append("[cyan]" + "=" * 40 + "[/cyan]")
-    lines.append("图例：[green]✅[/green] 可用  [yellow][!][/yellow] 已装但需配置/登录  [red][X][/red] 未安装")
+    lines.append(
+        "图例：[green]✅[/green] 已现场确认可用  "
+        "[yellow][!][/yellow] 已装或已配置但未做实时验证（不等于关闭）  "
+        "[red][X][/red] 未安装"
+    )
 
     ok_count = sum(1 for r in results.values() if r["status"] == "ok")
     total = len(results)
@@ -100,15 +104,18 @@ def format_report(results: Dict[str, dict]) -> str:
 
     lines.append("")
     status_color = "green" if ok_count == total else ("yellow" if ok_count > 0 else "red")
-    lines.append(f"状态：[{status_color}]{ok_count}/{total}[/{status_color}] 个渠道可用")
+    lines.append(
+        f"状态：[{status_color}]{ok_count}/{total}[/{status_color}] "
+        "个渠道已现场确认可用；其余可能已配置但未验证，勿把 warn 当成关闭"
+    )
 
     # Summarize inactive optional channels in one line instead of listing each
     all_inactive = list(tier1_inactive.values()) + list(tier2_inactive.values())
     if all_inactive:
         names = [r["name"] for r in all_inactive]
         lines.append(
-            f"还有 {len(names)} 个可选渠道可以解锁（{'、'.join(names)}），"
-            "告诉你的 Agent「帮我装 XXX」即可"
+            f"还有 {len(names)} 个渠道未现场确认（{'、'.join(names)}）；"
+            "warn 不等于关闭，github/twitter/xhs 等登录渠道设计上永不返回 ok"
         )
 
     # Security check: config file permissions (Unix only)

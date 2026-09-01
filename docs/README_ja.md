@@ -1,7 +1,7 @@
 <h1 align="center">👁️ Agent Reach</h1>
 
 <p align="center">
-  <strong>AIエージェントにワンクリックでインターネット全体へのアクセスを</strong>
+  <strong>AIエージェント向けのローカルインストーラー＋診断：厳選した読み取り/検索バックエンド</strong>
 </p>
 
 <p align="center">
@@ -37,7 +37,7 @@ AIエージェントはすでにインターネットにアクセスできます
 Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
 ```
 
-これをエージェントにコピーするだけ。数分後には、ツイートの閲覧、Redditの検索、Bilibiliの視聴が可能になります。
+これをエージェントにコピーするだけ。数分後には GitHub の閲覧、ウェブ検索、YouTube 字幕、RSS が使えます。Cookie プラットフォームは power-user の任意機能です。
 
 **すでにインストール済み？1コマンドでアップデート：**
 
@@ -62,20 +62,21 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | プラットフォーム | 機能 | セットアップ | 備考 |
 |-----------------|------|:----------:|------|
 | 🌐 **Web** | 閲覧 | 設定不要 | 任意のURL → クリーンなMarkdown（[Jina Reader](https://github.com/jina-ai/reader) ⭐9.8K） |
-| 🐦 **Twitter/X** | 閲覧・検索 | 設定不要 / Cookie | 単一ツイートはすぐに閲覧可能。Cookieで検索、タイムライン、投稿が解放（[twitter-cli](https://github.com/public-clis/twitter-cli)） |
-| 📕 **小紅書** | 閲覧・検索・コメント | OpenCLI / Cookie | OpenCLI はユーザー管理の既存 Chrome セッションだけを使用。MCP/旧ツールは Cookie-Editor を使用 |
-| 💼 **LinkedIn** | Jina Reader（公開ページ） | プロフィール、企業、求人検索 | エージェントに「LinkedInの設定を手伝って」と伝えてください |
-| 💬 **WeChat記事** | 検索 + 閲覧 | 設定不要 | WeChat公式アカウント記事の検索+閲覧（完全Markdown）（[Exa](https://exa.ai) + [Camoufox](https://github.com/daijro/camoufox)（オプション）） |
-| 💻 **V2EX** | 人気トピック・ノードトピック・トピック詳細+返信・ユーザープロフィール | 設定不要 | 公開JSON API、認証不要。技術コミュニティのコンテンツに最適 |
-| 📈 **雪球（Xueqiu）** | 株価・検索・人気投稿・人気銘柄 | 設定不要 | 公開APIで自動セッションCookie、ログイン不要 |
-| 🎙️ **小宇宙Podcast** | 文字起こし | 無料APIキー | Podcast音声 → Groq Whisper（無料）による完全テキスト文字起こし |
-| 🔍 **Web検索** | 検索 | 自動設定 | インストール時に自動設定、無料、APIキー不要（[Exa](https://exa.ai)、[mcporter](https://github.com/nicepkg/mcporter)経由） |
-| 📦 **GitHub** | 閲覧・検索 | 設定不要 | [gh CLI](https://cli.github.com) 搭載。公開リポジトリはすぐ使える。`gh auth login`でFork、Issue、PRが解放 |
 | 📺 **YouTube** | 閲覧・**検索** | 設定不要 | 字幕 + 1800以上の動画サイトでの検索（[yt-dlp](https://github.com/yt-dlp/yt-dlp) ⭐148K） |
-| 📺 **Bilibili** | 閲覧・**検索** | 設定不要 | [bili-cli](https://github.com/public-clis/bilibili-cli) で検索・動画情報（ログイン不要）、字幕は OpenCLI。yt-dlp は Bilibili の 412 制限により使用しません |
 | 📡 **RSS** | 閲覧 | 設定不要 | 任意のRSS/Atomフィード（[feedparser](https://github.com/kurtmckee/feedparser) ⭐2.3K） |
-| 📖 **Reddit** | 検索・閲覧 | Cookie | 2024年以降認証が必要 — インストール後 `rdt login` を実行（[rdt-cli](https://github.com/public-clis/rdt-cli)） |
+| 🔍 **Web検索** | 検索 | 自動設定 | インストール時に自動設定、無料、APIキー不要（[Exa](https://exa.ai)、[mcporter](https://github.com/nicepkg/mcporter)経由） |
+| 📦 **GitHub** | 閲覧・検索 | 設定不要 | [gh CLI](https://cli.github.com) 搭載。公開リポジトリはすぐ使える。`gh auth login`でプライベートリポジトリの**読み取り**が可能 |
+| 💻 **V2EX** | 人気トピック・ノードトピック・トピック詳細+返信・ユーザープロフィール | 設定不要 | 公開JSON API、認証不要。技術コミュニティのコンテンツに最適 |
+| 📺 **Bilibili** | 閲覧・**検索** | 設定不要 | [bili-cli](https://github.com/public-clis/bilibili-cli) で検索・動画情報（ログイン不要）、字幕は OpenCLI。yt-dlp は Bilibili の 412 制限により使用しません |
+| 🎙️ **小宇宙Podcast** | 文字起こし | 無料APIキー | Podcast音声 → Groq Whisper（無料）による完全テキスト文字起こし |
+| 🐦 **Twitter/X** | 閲覧・検索 | Cookie（power-user / burner） | Cookieで検索、タイムライン、投稿が解放（[twitter-cli](https://github.com/public-clis/twitter-cli)） |
+| 📕 **小紅書** | 閲覧・検索・コメント | OpenCLI / Cookie（power-user / burner） | OpenCLI はユーザー管理の既存 Chrome セッションだけを使用。MCP/旧ツールは Cookie-Editor を使用 |
+| 📖 **Reddit** | 検索・閲覧 | Cookie（power-user / burner） | 匿名APIは使えない。デスクトップは OpenCLI、または [rdt-cli](https://github.com/public-clis/rdt-cli) + Cookie |
+| 💼 **LinkedIn** | Jina Reader（公開ページ） | 公開ページは Web。MCP ログインは power-user | エージェントに「LinkedInの設定を手伝って」と伝えてください |
+| 📈 **雪球（Xueqiu）** | 株価・検索・人気投稿・人気銘柄 | Cookie（power-user / burner） | エージェントに「雪球の設定を手伝って」と伝えてください |
 
+> **商用コア:** GitHub、Exa、YouTube、RSS、Web/Jina。Cookie / OpenCLI は power-user / burner の任意機能であり、デフォルト製品ではない。
+>
 > **セットアップレベル：** 設定不要 = インストールしてすぐ使える · 自動設定 = インストール時に処理 · mcporter = MCPサービスが必要 · Cookie = ブラウザからエクスポート · プロキシ = 月額$1
 
 ---
@@ -99,9 +100,12 @@ Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/m
 <summary>手動インストール</summary>
 
 ```bash
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+curl -fsSL -o /tmp/agent-reach-constraints.txt \
+  https://raw.githubusercontent.com/Panniantong/agent-reach/main/constraints.txt
+pip install -c /tmp/agent-reach-constraints.txt \
+  https://github.com/Panniantong/agent-reach/archive/main.zip
 agent-reach install --env=auto           # 読み取り専用チェック（デフォルト）
-agent-reach install --env=auto --system  # システム変更を明示的に許可した場合のみ
+# agent-reach install --env=auto --system  # ユーザーがシステム変更を明示承認したあとだけ
 ```
 </details>
 
@@ -222,7 +226,7 @@ channels/
 | YouTube 字幕 + 検索 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | YouTube と対応動画サイト向け（Bilibili には使用しません） |
 | Bilibili | [bili-cli](https://github.com/public-clis/bilibili-cli) ▸ OpenCLI ▸ 検索 API | yt-dlp は 412 制限で退役。bili-cli はログイン不要で検索・閲覧可能 |
 | Web検索 | [Exa](https://exa.ai)（[mcporter](https://github.com/nicepkg/mcporter)経由） | AIセマンティック検索、MCP統合、APIキー不要 |
-| GitHub | [gh CLI](https://cli.github.com) | 公式ツール、認証後フルAPI |
+| GitHub | [gh CLI](https://cli.github.com) | 公式ツール。認証後はプライベートリポジトリの読み取り |
 | RSS閲覧 | [feedparser](https://github.com/kurtmckee/feedparser) | Pythonエコシステムの標準、⭐2.3K |
 | 小紅書 | [OpenCLI](https://github.com/jackwener/opencli)（デスクトップ）▸ [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)（サーバー）▸ xhs-cli | OpenCLI は既存のユーザー管理セッションのみ使用。その他は Cookie-Editor で手動設定 |
 | LinkedIn | [mcp-server-linkedin](https://github.com/stickerdaniel/linkedin-mcp-server) | ⭐900+、MCPサーバー、ブラウザ自動化 |
@@ -268,7 +272,7 @@ Agent Reach は [rdt-cli](https://github.com/public-clis/rdt-cli) でRedditに�
 <details>
 <summary><strong>Agent Reach は Claude Code / Cursor / Windsurf / OpenClaw で動作する？</strong></summary>
 
-はい！Agent Reach はインストーラー + 設定ツールです。シェルコマンドを実行できるあらゆるAIコーディングエージェントで使用できます — Claude Code、Cursor、Windsurf、OpenClaw、Codex等。`pip install https://github.com/Panniantong/agent-reach/archive/main.zip` の後、まず `agent-reach install` で読み取り専用チェックを行い、システム変更を明示的に許可した場合だけ `agent-reach install --system` を実行します。PyPI の同名パッケージは別プロジェクトです。
+はい！Agent Reach はインストーラー + 設定ツールです。シェルコマンドを実行できるあらゆるAIコーディングエージェントで使用できます — Claude Code、Cursor、Windsurf、OpenClaw、Codex等。`pip install -c constraints.txt`（同じ git ref の `constraints.txt`）の後、まず `agent-reach install` で読み取り専用チェックを行い、システム変更を明示的に許可した場合だけ `agent-reach install --system` を実行します。pipx は `-c` を取れません。PyPI の同名パッケージは別プロジェクトです。
 </details>
 
 <details>
