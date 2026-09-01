@@ -1494,8 +1494,8 @@ def _cmd_configure(args):
                     print("  Legacy copies written successfully.")
 
             print(
-                "  凭据未实时验证：不会执行 `twitter status`，因为上游在"
-                "验证失败时会自动读取浏览器 Cookie。"
+                "  凭据已保存，但未实时验证：不会执行 `twitter status`，"
+                "因为上游在验证失败时会自动读取浏览器 Cookie。"
             )
             if not shutil.which("twitter"):
                 print(
