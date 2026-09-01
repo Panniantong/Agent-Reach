@@ -7,10 +7,10 @@ description: >
 
   Also MUST USE when user mentions any platform or shares any URL/链接:
   小红书/xiaohongshu/xhs, Twitter/推特/X, B站/bilibili, Reddit, Facebook,
-  Instagram, V2EX, LinkedIn/领英/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客,
+  Instagram, TikTok/tiktok, V2EX, LinkedIn/领英/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客,
   雪球/股票行情, RSS feeds, or any web URL.
 
-  15 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  16 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -18,18 +18,18 @@ description: >
   发帖/评论/点赞等写操作；已有专门 skill 的平台（先用专门 skill）。
 
   【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。
-  分类：search / social (小红书/推特/B站/V2EX/Reddit/Facebook/Instagram) / career(LinkedIn) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客) / finance(雪球/股票)。
+  分类：search / social (小红书/推特/B站/V2EX/Reddit/Facebook/Instagram/TikTok) / career(LinkedIn) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客) / finance(雪球/股票)。
 metadata:
   homepage: https://github.com/Panniantong/Agent-Reach
 ---
 
 # Agent Reach — 互联网能力路由器
 
-15 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
+16 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
 
 ## 常驻规则（全程适用）
 
-1. **动手前先体检**：多后端/登录态平台（小红书/Reddit/B站/Twitter/Facebook/Instagram）先跑
+1. **动手前先体检**：多后端/登录态平台（小红书/Reddit/B站/Twitter/Facebook/Instagram/TikTok）先跑
    `agent-reach doctor --json`。`active_backend` 有值时按它选命令组；`active_backend: null`
    表示 Doctor 为避免触发浏览器 Cookie 读取或远端写入而没有做实时验证，不代表后端不存在。
    只有用户任务明确需要该平台时，才按对应 reference 的只读命令手动验证。
@@ -47,7 +47,7 @@ metadata:
 | 用户意图 | 分类 | 详细文档 |
 |---------|------|---------|
 | 网页搜索/代码搜索 | search | [references/search.md](references/search.md) |
-| 小红书/推特/B站/V2EX/Reddit/Facebook/Instagram | social | [references/social.md](references/social.md) |
+| 小红书/推特/B站/V2EX/Reddit/Facebook/Instagram/TikTok | social | [references/social.md](references/social.md) |
 | 招聘/职位/LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub/代码 | dev | [references/dev.md](references/dev.md) |
 | 网页/文章/RSS | web | [references/web.md](references/web.md) |
@@ -98,11 +98,13 @@ rdt search "query" --limit 10            # 存量/服务器
 # 小红书（桌面首选 OpenCLI）
 opencli xiaohongshu search "query" -f yaml
 
-# Facebook / Instagram（桌面 OpenCLI，复用浏览器登录态）
+# Facebook / Instagram / TikTok（桌面 OpenCLI，复用浏览器登录态）
 opencli facebook search "query" -f yaml
 opencli facebook groups -f yaml
 opencli instagram search "query" -f yaml       # 搜用户
 opencli instagram user USERNAME -f yaml        # 读指定用户最近帖子
+opencli tiktok search "query" -f yaml
+opencli tiktok user USERNAME -f yaml            # 读指定用户最近视频
 ```
 
 ## 环境检查
@@ -127,7 +129,7 @@ agent-reach doctor --json
 根据用户需求，阅读对应的详细文档：
 
 - [搜索工具](references/search.md) — Exa AI 搜索
-- [社交媒体](references/social.md) — 小红书, Twitter, B站, V2EX, Reddit, Facebook, Instagram（多后端/登录态命令组）
+- [社交媒体](references/social.md) — 小红书, Twitter, B站, V2EX, Reddit, Facebook, Instagram, TikTok（多后端/登录态命令组）
 - [职场招聘](references/career.md) — LinkedIn
 - [开发工具](references/dev.md) — GitHub CLI
 - [网页阅读](references/web.md) — Jina Reader, RSS

@@ -1,6 +1,6 @@
 # Agent Reach
 
-> Give your AI agent eyes to see the internet. Agent Reach installs, routes, and health-checks upstream tools for 15 platforms — Twitter/X, Reddit, Facebook, Instagram, YouTube, GitHub, Bilibili, XiaoHongShu, LinkedIn, V2EX, Xueqiu, Xiaoyuzhou Podcast, RSS, web search, and any web page. One install, zero API fees.
+> Give your AI agent eyes to see the internet. Agent Reach installs, routes, and health-checks upstream tools for 16 platforms — Twitter/X, Reddit, Facebook, Instagram, TikTok, YouTube, GitHub, Bilibili, XiaoHongShu, LinkedIn, V2EX, Xueqiu, Xiaoyuzhou Podcast, RSS, web search, and any web page. One install, zero API fees.
 
 ## Quick Start
 
@@ -14,11 +14,11 @@
 
 ## Key Features
 
-- Read any URL: tweets, Reddit posts, Facebook pages/feed/groups, Instagram profiles/posts, YouTube videos (transcripts), GitHub repos, articles, XiaoHongShu notes, Bilibili videos, RSS feeds
-- Search/discover across platforms: Twitter/X, Reddit, Facebook, Instagram user search, GitHub, YouTube, Bilibili, XiaoHongShu, LinkedIn, V2EX, Xueqiu, Web (via Exa)
+- Read any URL: tweets, Reddit posts, Facebook pages/feed/groups, Instagram profiles/posts, TikTok profiles/public videos, YouTube videos (transcripts), GitHub repos, articles, XiaoHongShu notes, Bilibili videos, RSS feeds
+- Search/discover across platforms: Twitter/X, Reddit, Facebook, Instagram user search, TikTok, GitHub, YouTube, Bilibili, XiaoHongShu, LinkedIn, V2EX, Xueqiu, Web (via Exa)
 - Self-diagnosis: `agent-reach doctor` checks what works and what needs setup
 - Auto-installs dependencies: `agent-reach install --env=auto`
-- Browser-session / cookie auth for platforms that require login (Twitter, Reddit, Facebook, Instagram, XiaoHongShu, Xueqiu)
+- Browser-session / cookie auth for platforms that require login (Twitter, Reddit, Facebook, Instagram, TikTok, XiaoHongShu, Xueqiu)
 - Proxy support for platforms that block server IPs (Reddit, Twitter)
 - Zero API fees: all backends are free and open-source (OpenCLI, twitter-cli, rdt-cli, bili-cli, yt-dlp, Jina Reader, mcporter/Exa, etc.)
 
