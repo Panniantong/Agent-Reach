@@ -36,14 +36,22 @@ If it says "已是最新版本", skip to Step 4 (verify). Otherwise continue.
 
 ### Step 2: Update Agent Reach package
 
+Detect how it was installed first — `pip install` is a **silent no-op** for
+pipx installs (pip updates user/system site-packages, but the `agent-reach`
+executable points at the pipx venv, so the version never changes):
+
 ```bash
-pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip
+if pipx list 2>/dev/null | grep -q agent-reach; then
+  pipx upgrade agent-reach        # pipx reinstalls from its recorded source (main.zip)
+else
+  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip
+fi
 ```
 
-> If pip complains about `externally-managed-environment` (PEP 668), the user
-> originally installed via pipx or a venv — use the matching command:
-> `pipx install --force https://github.com/Panniantong/agent-reach/archive/main.zip`
-> or activate `~/.agent-reach-venv` first.
+> If pip complains about `externally-managed-environment` (PEP 668), the
+> package lives in a venv — activate it first (e.g.
+> `source ~/.agent-reach-venv/bin/activate`) and re-run the `pip install`
+> command above.
 
 ### Step 3: Refresh upstream tools
 
