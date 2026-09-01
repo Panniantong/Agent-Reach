@@ -345,7 +345,22 @@ class TestCheckUpdateRetry:
         assert err == "dns"
         assert attempts == 1
 
-    def test_retry_rate_limit_then_success(self):
+    def test_deterministic_request_error_does_not_retry(self):
+        sleeps = []
+        error = requests.exceptions.InvalidURL("bad URL")
+        with patch("requests.get", side_effect=error):
+            resp, err, attempts = cli._github_get_with_retry(
+                "not-a-url",
+                retries=3,
+                sleeper=lambda seconds: sleeps.append(seconds),
+            )
+
+        assert resp is None
+        assert err == "unknown"
+        assert attempts == 1
+        assert sleeps == []
+
+    def test_rate_limit_does_not_retry(self):
         sleeps = []
 
         class R:
@@ -357,23 +372,17 @@ class TestCheckUpdateRetry:
             def json(self):
                 return self._payload
 
-        sequence = [
-            R(429, headers={"Retry-After": "3"}),
-            R(200, payload={"tag_name": "v1.5.0"}),
-        ]
-
-        with patch("requests.get", side_effect=sequence):
+        with patch("requests.get", return_value=R(429, headers={"Retry-After": "3"})):
             resp, err, attempts = cli._github_get_with_retry(
                 "https://api.github.com/test",
                 retries=3,
                 sleeper=lambda s: sleeps.append(s),
             )
 
-        assert err is None
-        assert resp is not None
-        assert resp.status_code == 200
-        assert attempts == 2
-        assert sleeps == [3.0]
+        assert resp is None
+        assert err == "rate_limit"
+        assert attempts == 1
+        assert sleeps == []
 
     def test_classify_rate_limit_from_403(self):
         class R:
@@ -387,13 +396,147 @@ class TestCheckUpdateRetry:
         assert cli._classify_github_response_error(R()) == "rate_limit"
 
     def test_check_update_reports_classified_error(self, capsys):
-        with patch("agent_reach.cli._github_get_with_retry", return_value=(None, "timeout", 3)):
+        with patch(
+            "agent_reach.cli._fetch_latest_release",
+            return_value=(None, "timeout", 3),
+        ):
             result = cli._cmd_check_update()
 
         captured = capsys.readouterr()
         assert result == "error"
         assert "网络超时" in captured.out
-        assert "已重试 3 次" in captured.out
+        assert "共尝试 3 次" in captured.out
+
+
+class TestLatestReleaseFetch:
+    class Config:
+        def __init__(self, token=None):
+            self.token = token
+
+        def get(self, key, default=None):
+            assert key == "github_token"
+            return self.token or default
+
+    class Response:
+        status_code = 200
+        headers = {}
+
+        def __init__(self, *, payload=None, content=b""):
+            self._payload = payload or {}
+            self.content = content
+
+        def json(self):
+            return self._payload
+
+    def test_configured_token_uses_authenticated_api(self, monkeypatch):
+        calls = []
+
+        def fake_get(url, **kwargs):
+            calls.append((url, kwargs))
+            return self.Response(payload={"tag_name": "v1.5.0", "body": "notes"}), None, 1
+
+        monkeypatch.setattr(cli, "_github_get_with_retry", fake_get)
+
+        release, err, attempts = cli._fetch_latest_release(self.Config("secret-token"))
+
+        assert release == {"tag_name": "v1.5.0", "body": "notes"}
+        assert err is None
+        assert attempts == 1
+        assert calls == [
+            (
+                "https://api.github.com/repos/Panniantong/Agent-Reach/releases/latest",
+                {
+                    "timeout": 10,
+                    "retries": 2,
+                    "headers": {
+                        "Accept": "application/vnd.github+json",
+                        "Authorization": "Bearer secret-token",
+                        "X-GitHub-Api-Version": "2022-11-28",
+                    },
+                },
+            )
+        ]
+
+    def test_without_token_skips_anonymous_api_and_uses_atom(self, monkeypatch):
+        atom = b"""<?xml version='1.0'?>
+        <feed xmlns='http://www.w3.org/2005/Atom'>
+          <entry>
+            <link rel='alternate' href='https://github.com/Panniantong/Agent-Reach/releases/tag/v1.5.0'/>
+            <content type='html'>&lt;h2&gt;Fixes&lt;/h2&gt;&lt;p&gt;More reliable updates&lt;/p&gt;</content>
+          </entry>
+        </feed>"""
+        calls = []
+
+        def fake_get(url, **kwargs):
+            calls.append((url, kwargs))
+            return self.Response(content=atom), None, 1
+
+        monkeypatch.delenv("GH_TOKEN", raising=False)
+        monkeypatch.setattr(cli, "_github_get_with_retry", fake_get)
+
+        release, err, attempts = cli._fetch_latest_release(self.Config())
+
+        assert release == {"tag_name": "v1.5.0", "body": "Fixes\nMore reliable updates"}
+        assert err is None
+        assert attempts == 1
+        assert len(calls) == 1
+        assert calls[0][0] == "https://github.com/Panniantong/Agent-Reach/releases.atom"
+        assert "api.github.com" not in calls[0][0]
+
+    def test_rate_limited_api_falls_back_to_atom_without_retrying_api(self, monkeypatch):
+        atom = b"""<?xml version='1.0'?>
+        <feed xmlns='http://www.w3.org/2005/Atom'>
+          <entry><link rel='alternate' href='https://github.com/Panniantong/Agent-Reach/releases/tag/v1.5.0'/></entry>
+        </feed>"""
+        calls = []
+
+        def fake_get(url, **kwargs):
+            calls.append((url, kwargs))
+            if "api.github.com" in url:
+                return None, "rate_limit", 1
+            return self.Response(content=atom), None, 1
+
+        monkeypatch.setattr(cli, "_github_get_with_retry", fake_get)
+
+        release, err, attempts = cli._fetch_latest_release(self.Config("secret-token"))
+
+        assert release == {"tag_name": "v1.5.0", "body": ""}
+        assert err is None
+        assert attempts == 2
+        assert [url for url, _kwargs in calls] == [
+            "https://api.github.com/repos/Panniantong/Agent-Reach/releases/latest",
+            "https://github.com/Panniantong/Agent-Reach/releases.atom",
+        ]
+        assert "Authorization" in calls[0][1]["headers"]
+        assert "Authorization" not in calls[1][1]["headers"]
+
+    def test_malformed_or_oversized_atom_feed_is_rejected(self):
+        assert cli._release_from_atom(b"not xml") is None
+        assert cli._release_from_atom(b"x" * (cli._MAX_RELEASE_ATOM_BYTES + 1)) is None
+        long_tag = "v" + ("1" * 129) + ".0.0"
+        atom = f"""<?xml version='1.0'?>
+        <feed xmlns='http://www.w3.org/2005/Atom'>
+          <entry><link rel='alternate' href='https://github.com/x/y/releases/tag/{long_tag}'/></entry>
+        </feed>""".encode()
+        assert cli._release_from_atom(atom) is None
+
+    def test_atom_feed_skips_prerelease_before_latest_stable(self):
+        atom = b"""<?xml version='1.0'?>
+        <feed xmlns='http://www.w3.org/2005/Atom'>
+          <entry>
+            <link rel='alternate' href='https://github.com/Panniantong/Agent-Reach/releases/tag/v1.6.0-rc1'/>
+            <content type='html'>&lt;p&gt;Release candidate&lt;/p&gt;</content>
+          </entry>
+          <entry>
+            <link rel='alternate' href='https://github.com/Panniantong/Agent-Reach/releases/tag/v1.5.0'/>
+            <content type='html'>&lt;p&gt;Latest stable&lt;/p&gt;</content>
+          </entry>
+        </feed>"""
+
+        assert cli._release_from_atom(atom) == {
+            "tag_name": "v1.5.0",
+            "body": "Latest stable",
+        }
 
 
 class TestVersionCompare:
@@ -415,15 +558,11 @@ class TestVersionCompare:
 class TestWatchVersionCompare:
     def test_watch_does_not_prompt_downgrade(self, monkeypatch, capsys):
         """watch 与 check-update 同语义:本地领先远端 release 时不提示更新。"""
-        class R:
-            status_code = 200
-            headers = {}
-
-            @staticmethod
-            def json():
-                return {"tag_name": "v1.4.2", "body": ""}
-
-        monkeypatch.setattr(cli, "_github_get_with_retry", lambda *a, **k: (R(), None, 1))
+        monkeypatch.setattr(
+            cli,
+            "_fetch_latest_release",
+            lambda *_args, **_kwargs: ({"tag_name": "v1.4.2", "body": ""}, None, 1),
+        )
         monkeypatch.setattr(
             "agent_reach.doctor.check_all",
             lambda config: {"web": {"status": "ok", "name": "任意网页", "message": "ok",
@@ -433,3 +572,32 @@ class TestWatchVersionCompare:
         out = capsys.readouterr().out
         assert "新版本可用" not in out
         assert "全部正常" in out
+
+    def test_watch_reports_update_check_failure_instead_of_claiming_latest(
+        self, monkeypatch, capsys
+    ):
+        monkeypatch.setattr(
+            cli,
+            "_fetch_latest_release",
+            lambda *_args, **_kwargs: (None, "timeout", 2),
+        )
+        monkeypatch.setattr(
+            "agent_reach.doctor.check_all",
+            lambda config: {
+                "web": {
+                    "status": "ok",
+                    "name": "任意网页",
+                    "message": "ok",
+                    "tier": 0,
+                    "backends": ["Jina Reader"],
+                    "active_backend": "Jina Reader",
+                }
+            },
+        )
+
+        cli._cmd_watch()
+
+        out = capsys.readouterr().out
+        assert "更新检查：网络超时" in out
+        assert "已是最新" not in out
+        assert "全部正常" not in out
