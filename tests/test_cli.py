@@ -263,7 +263,7 @@ class TestCLI:
         monkeypatch.setattr(cli, "_install_system_deps", lambda: None)
         monkeypatch.setattr(cli, "_install_mcporter", lambda: None)
         monkeypatch.setattr(cli, "_install_opencli_deps", lambda: calls.append("opencli"))
-        monkeypatch.setattr(cli, "_install_skill", lambda: None)
+        monkeypatch.setattr(cli, "_install_skill", lambda **_kwargs: None)
         monkeypatch.setattr(
             "agent_reach.doctor.check_all",
             lambda config: {
