@@ -180,6 +180,8 @@ After the Skill is installed, the Agent will auto-detect whether `agent-reach` C
 
 ---
 
+> **Windows note:** Agent Reach resolves your home directory from the `HOME` environment variable first, falling back to `USERPROFILE` (keeping paths consistent with Git Bash / MSYS tooling). If `HOME` points somewhere custom, config, cookies, and skill files are written there instead of `C:\Users\<you>`.
+
 ## Works Out of the Box
 
 No configuration needed — just tell your Agent:
