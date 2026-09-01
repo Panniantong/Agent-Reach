@@ -92,27 +92,27 @@ agent-reach version
 agent-reach doctor
 ```
 
-Running `agent-reach doctor` (text mode) also makes sure an Agent Reach skill
-exists in detected agent skill directories. If the user already has a skill
-there, doctor preserves it instead of overwriting local customizations. Use
-`agent-reach skill --install` when you explicitly want to refresh the bundled
-skill files.
+`agent-reach doctor` is read-only: it does not create or update skill files.
+To explicitly refresh the bundled skill files, run
+`agent-reach skill --install`. This replaces an existing Agent Reach skill, so
+do not run it when the user wants to preserve local skill customizations.
 
 Check the doctor output:
 
-- Every channel shows ✅ / [!] with a clear message, and multi-backend
-  channels (小红书/Reddit/B站/Twitter) report `当前后端：…`
+- Every channel shows ✅ / [!] / [X] with a clear message. Multi-backend
+  channels report `当前后端：…` only when Doctor verifies a usable backend.
 - If a previously-working channel now shows [X]/error, the message contains
   the exact fix (e.g. a venv-reinstall prescription) — run it, then re-check
-- `--json` gives the same data machine-readably (`active_backend` per channel)
+- `--json` gives the same data machine-readably. `active_backend: null` is an
+  expected safety state when Doctor deliberately skips login or browser-session
+  probes; follow the channel message instead of treating `null` as a backend.
 
 ### Step 6: Report to user
 
 Tell the user:
 
 1. What version they're on now (`agent-reach version`)
-2. How many channels are available, and which backend each multi-backend
-   platform is using (from doctor)
+2. How many channels are available, and any backend Doctor actually verified
 3. Anything that needs their action (e.g. a Chrome extension click, or a
    manual Cookie-Editor export when XiaoHongShu uses MCP / a legacy tool)
 4. What changed in this update (release notes shown by `check-update`)
