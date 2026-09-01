@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="description"
+      content="Turn a marketing brief into a campaign concept, copy, launch plan, and key visuals."
+    />
+    <title>Fieldwork — Campaign Concept Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Manrope:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Fieldwork home"
+        ><span class="brand-mark">F/</span> FIELDWORK</a
+      >
+      <div class="top-actions">
+        <span class="status"><i></i> Studio ready</span
+        ><button class="ghost" type="button" id="reset">New brief</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="eyebrow">CAMPAIGN CONCEPT STUDIO <span>01</span></div>
+        <h1>From open brief to<br /><em>focused direction.</em></h1>
+        <p>
+          Shape the strategic thought, launch language, and visual world for
+          your next campaign — in one working session.
+        </p>
+      </section>
+
+      <section class="workspace">
+        <form id="brief-form" class="brief-card">
+          <div class="section-heading">
+            <div>
+              <span class="step">01</span>
+              <h2>Build the brief</h2>
+            </div>
+            <button class="example-button" type="button" id="load-example">
+              Load example
+            </button>
+          </div>
+          <label
+            >Campaign brief <span id="brief-count">0 / 1,500</span>
+            <textarea
+              id="campaign_brief"
+              minlength="10"
+              maxlength="1500"
+              required
+              placeholder="What are we launching, and what should this campaign achieve?"
+            ></textarea>
+          </label>
+          <div class="field-grid">
+            <label
+              >Target audience<input
+                id="audience"
+                minlength="3"
+                maxlength="600"
+                required
+                placeholder="Who needs to care?"
+            /></label>
+            <label
+              >Product details<input
+                id="product"
+                minlength="3"
+                maxlength="1000"
+                required
+                placeholder="Benefits, proof points, and constraints"
+            /></label>
+          </div>
+          <div class="field-grid compact">
+            <label
+              >Tone<select id="tone">
+                <option>Bold</option>
+                <option selected>Warm</option>
+                <option>Playful</option>
+                <option>Premium</option>
+                <option>Direct</option>
+                <option>Optimistic</option>
+              </select></label
+            >
+            <fieldset>
+              <legend>Channels</legend>
+              <div class="chips" id="channels">
+                <label
+                  ><input type="checkbox" value="Social" checked /><span
+                    >Social</span
+                  ></label
+                ><label
+                  ><input type="checkbox" value="Email" checked /><span
+                    >Email</span
+                  ></label
+                ><label
+                  ><input type="checkbox" value="Web" checked /><span
+                    >Web</span
+                  ></label
+                ><label
+                  ><input type="checkbox" value="OOH" /><span>OOH</span></label
+                ><label
+                  ><input type="checkbox" value="Paid media" /><span
+                    >Paid media</span
+                  ></label
+                >
+              </div>
+            </fieldset>
+          </div>
+          <button class="generate" type="submit">
+            <span>Generate campaign direction</span><b>↗</b>
+          </button>
+          <p class="form-note">
+            AI can make mistakes. Review claims and brand guidance before
+            publishing.
+          </p>
+        </form>
+
+        <section class="output-card" aria-live="polite">
+          <div class="section-heading">
+            <div>
+              <span class="step">02</span>
+              <h2>Creative direction</h2>
+            </div>
+            <button class="copy-all" id="copy-all" hidden>Copy all</button>
+          </div>
+          <div id="empty" class="empty-state">
+            <div class="orb"><span>✦</span></div>
+            <h3>Your direction starts here.</h3>
+            <p>
+              Complete the brief and generate a campaign to see the concept,
+              copy, launch plan, and visual studies.
+            </p>
+            <div class="empty-lines"><i></i><i></i><i></i></div>
+          </div>
+          <div id="loading" class="loading-state" hidden>
+            <div class="loader"><i></i><i></i><i></i></div>
+            <h3>Building your campaign world</h3>
+            <p id="loading-copy">Finding the sharpest strategic thread…</p>
+            <div class="skeleton"><i></i><i></i><i></i><i></i></div>
+          </div>
+          <div id="error" class="error-state" hidden>
+            <span>!</span>
+            <h3>We hit a creative block.</h3>
+            <p id="error-copy"></p>
+            <button type="button" id="retry">Try again</button>
+          </div>
+          <article id="results" hidden></article>
+        </section>
+      </section>
+    </main>
+    <footer>
+      <span>FIELDWORK / CREATIVE SYSTEMS</span
+      ><span>OpenAI-powered · Human-approved</span>
+    </footer>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

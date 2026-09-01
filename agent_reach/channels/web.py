@@ -2,6 +2,7 @@
 """Web — any URL via Jina Reader. Always available."""
 
 import urllib.request
+from urllib.error import HTTPError, URLError
 
 from agent_reach.utils.url import normalize_public_http_url
 
@@ -10,6 +11,21 @@ from .base import Channel
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 _MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 _ANTIBOT_SCAN_BYTES = 4096
+
+
+def _reader_error_message(error: HTTPError) -> str:
+    """Turn Jina's HTTP failures into safe, actionable user guidance."""
+    status = error.code
+    if status in {401, 403}:
+        return (
+            f"Jina Reader 拒绝访问（HTTP {status}）；目标页面可能需要登录、"
+            "访问权限或浏览器验证，请确认链接可公开访问，或改用已登录的浏览器读取"
+        )
+    if status == 429:
+        return "Jina Reader 请求过于频繁（HTTP 429）；请稍后重试"
+    if 500 <= status < 600:
+        return f"Jina Reader 暂时不可用（HTTP {status}）；请稍后重试"
+    return f"Jina Reader 读取失败（HTTP {status}）"
 
 
 def _is_antibot_page(body: bytes) -> bool:
@@ -53,8 +69,17 @@ class WebChannel(Channel):
             jina_url,
             headers={"User-Agent": _UA, "Accept": "text/plain"},
         )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            body = resp.read(_MAX_RESPONSE_BYTES + 1)
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                body = resp.read(_MAX_RESPONSE_BYTES + 1)
+        except HTTPError as error:
+            # Avoid exposing Jina's response body: it may contain upstream
+            # challenge details or other untrusted content.
+            raise RuntimeError(_reader_error_message(error)) from error
+        except (URLError, TimeoutError) as error:
+            raise RuntimeError(
+                "无法连接 Jina Reader；请检查网络连接后重试"
+            ) from error
         if len(body) > _MAX_RESPONSE_BYTES:
             raise ValueError(
                 f"Jina Reader response exceeds {_MAX_RESPONSE_BYTES} byte limit"

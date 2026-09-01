@@ -9,6 +9,7 @@ completing dedicated coverage for the channels that still lacked it.
 """
 
 from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError, URLError
 
 import pytest
 
@@ -94,6 +95,48 @@ def test_read_decodes_utf8_body():
     with patch("urllib.request.urlopen", return_value=_resp("café ☕\n".encode("utf-8"))):
         out = channel.read("https://example.com")
     assert out == "café ☕\n"
+
+
+@pytest.mark.parametrize(
+    ("status", "message"),
+    [
+        (401, "可能需要登录"),
+        (403, "可能需要登录"),
+        (429, "请求过于频繁"),
+        (502, "暂时不可用"),
+        (418, "读取失败"),
+    ],
+)
+def test_read_translates_reader_http_errors_into_actionable_messages(status, message):
+    channel = WebChannel()
+    error = HTTPError(
+        "https://r.jina.ai/https://example.com",
+        status,
+        "upstream failure",
+        {},
+        None,
+    )
+
+    with patch("urllib.request.urlopen", side_effect=error):
+        with pytest.raises(RuntimeError, match=message) as exc_info:
+            channel.read("https://example.com")
+
+    assert f"HTTP {status}" in str(exc_info.value)
+    assert exc_info.value.__cause__ is error
+
+
+@pytest.mark.parametrize(
+    "error",
+    [URLError("temporary DNS failure"), TimeoutError("timed out")],
+)
+def test_read_translates_reader_connection_errors(error):
+    channel = WebChannel()
+
+    with patch("urllib.request.urlopen", side_effect=error):
+        with pytest.raises(RuntimeError, match="检查网络连接") as exc_info:
+            channel.read("https://example.com")
+
+    assert exc_info.value.__cause__ is error
 
 
 @pytest.mark.parametrize(
