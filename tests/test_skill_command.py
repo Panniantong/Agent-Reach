@@ -26,6 +26,26 @@ class TestSkillCommand(unittest.TestCase):
         self.assertTrue(default_skill.strip())
         self.assertTrue(english_skill.strip())
 
+    def test_skill_resources_include_guarded_hermes_variant(self):
+        skill_dir = importlib.resources.files("agent_reach").joinpath("skill")
+
+        hermes_skill = skill_dir.joinpath("SKILL_hermes.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("read-only research on unsupported social sites", hermes_skill)
+        self.assertIn("Do not use for", hermes_skill)
+        self.assertIn("agent-reach install --system", hermes_skill)
+        self.assertNotIn("MUST USE", hermes_skill)
+
+    def test_skill_frontmatter_does_not_advertise_glob_support_files(self):
+        """Direct skill installers can only fetch concrete referenced files."""
+        skill_dir = importlib.resources.files("agent_reach").joinpath("skill")
+
+        for resource_name in ("SKILL.md", "SKILL_en.md"):
+            content = skill_dir.joinpath(resource_name).read_text(encoding="utf-8")
+            self.assertNotIn("references/*.md", content, resource_name)
+
     def test_exa_reference_uses_default_registered_tools_only(self):
         """Agent instructions must not call Exa tools disabled by default."""
         search_reference = (
@@ -150,15 +170,11 @@ class TestSkillCommand(unittest.TestCase):
             # The important test is that the function runs without error
 
     def test_uninstall_skill_removes_dir(self):
-        """_uninstall_skill should remove skill directories."""
+        """_uninstall_skill should remove skill directories it installed."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create a fake skill installation
-            skill_path = os.path.join(tmpdir, ".openclaw", "skills", "agent-reach")
-            os.makedirs(skill_path)
-            with open(os.path.join(skill_path, "SKILL.md"), "w", encoding="utf-8") as f:
-                f.write("test")
-
-            self.assertTrue(os.path.exists(skill_path))
+            skill_parent = os.path.join(tmpdir, ".openclaw", "skills")
+            skill_path = os.path.join(skill_parent, "agent-reach")
+            os.makedirs(skill_parent)
 
             with patch(
                 "agent_reach.cli.os.path.expanduser",
@@ -167,7 +183,9 @@ class TestSkillCommand(unittest.TestCase):
                 env = os.environ.copy()
                 env.pop("OPENCLAW_HOME", None)
                 with patch.dict(os.environ, env, clear=True):
-                    _uninstall_skill()
+                    self.assertTrue(_install_skill(force=True))
+                    self.assertTrue(os.path.exists(skill_path))
+                    self.assertTrue(_uninstall_skill())
 
             self.assertFalse(os.path.exists(skill_path))
 

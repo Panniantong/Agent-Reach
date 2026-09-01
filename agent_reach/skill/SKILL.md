@@ -17,7 +17,7 @@ description: >
   NOT for: 写报告/数据分析/翻译等内容加工（本 skill 只负责从互联网获取内容）；
   发帖/评论/点赞等写操作；已有专门 skill 的平台（先用专门 skill）。
 
-  【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。
+  【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读下方链接的对应分类文档。
   分类：search / social (小红书/推特/B站/V2EX/Reddit/Facebook/Instagram) / career(LinkedIn) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客) / finance(雪球/股票)。
 metadata:
   homepage: https://github.com/Panniantong/Agent-Reach

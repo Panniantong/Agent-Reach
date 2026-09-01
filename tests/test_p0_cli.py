@@ -315,7 +315,7 @@ def test_install_does_not_implicitly_read_browser_cookies(monkeypatch, tmp_path,
     monkeypatch.setattr(cli, "_install_system_deps", lambda: None)
     monkeypatch.setattr(cli, "_install_mcporter", lambda: None)
     monkeypatch.setattr(cli, "_install_twitter_deps", lambda: None)
-    monkeypatch.setattr(cli, "_install_skill", lambda: None)
+    monkeypatch.setattr(cli, "_install_skill", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         "agent_reach.doctor.check_all",
         lambda _config: {},
