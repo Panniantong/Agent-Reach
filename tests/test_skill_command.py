@@ -109,6 +109,18 @@ class TestSkillCommand(unittest.TestCase):
         self.assertNotIn("linkedin-scraper.", linkedin_section)
         self.assertNotIn("--transport streamable-http", linkedin_section)
 
+    def test_install_docs_list_complete_skill_payload(self):
+        """Skill install docs must mention references required by SKILL.md links."""
+        install_doc = (
+            Path(__file__).resolve().parents[1] / "docs" / "install.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "| Skills | `~/.openclaw/skills/agent-reach/` | "
+            "`SKILL.md` + `references/*.md` |",
+            install_doc,
+        )
+
     def test_localized_readmes_use_current_linkedin_server_name(self):
         root = Path(__file__).resolve().parents[1]
         for name in ("README_ja.md", "README_ko.md"):
@@ -192,6 +204,26 @@ class TestSkillCommand(unittest.TestCase):
             with open(target, encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("Agent Reach", content)
+            for reference_name in (
+                "search.md",
+                "social.md",
+                "career.md",
+                "dev.md",
+                "web.md",
+                "video.md",
+                "finance.md",
+            ):
+                self.assertTrue(
+                    os.path.exists(
+                        os.path.join(
+                            skill_parent,
+                            "agent-reach",
+                            "references",
+                            reference_name,
+                        )
+                    ),
+                    reference_name,
+                )
 
     def test_install_uses_english_skill_for_english_locale(self):
         """_install_skill should install the English skill file for English locales."""
