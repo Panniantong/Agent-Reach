@@ -1904,7 +1904,8 @@ def _cmd_uninstall(args):
                     print(f"  Could not remove {skill_path}: {e}")
 
     # ── 3. mcporter MCP entries ──
-    if shutil.which("mcporter"):
+    mcporter_cmd = shutil.which("mcporter")
+    if mcporter_cmd:
         from agent_reach.channels.mcporter import (
             McporterConfigError,
             configured_server_names,
@@ -1913,7 +1914,7 @@ def _cmd_uninstall(args):
         try:
             result = subprocess.run(
                 [
-                    "mcporter",
+                    mcporter_cmd,
                     "config",
                     "list",
                     "--json",
@@ -2006,7 +2007,8 @@ def _cmd_setup():
     print("【推荐】全网搜索 — Exa（通过 mcporter）")
     print("  免费，无需 API Key")
 
-    if not shutil.which("mcporter"):
+    mcporter_cmd = shutil.which("mcporter")
+    if not mcporter_cmd:
         print("  当前状态: -- mcporter 未安装")
         print("  安装：npm install -g mcporter")
         print("  然后：mcporter config add exa https://mcp.exa.ai/mcp --scope home")
@@ -2019,7 +2021,7 @@ def _cmd_setup():
             )
 
             r = subprocess.run(
-                ["mcporter", "config", "list", "--json"],
+                [mcporter_cmd, "config", "list", "--json"],
                 capture_output=True,
                 encoding="utf-8",
                 errors="replace",
@@ -2035,7 +2037,7 @@ def _cmd_setup():
                 if setup_now in ("", "y", "yes"):
                     add_r = subprocess.run(
                         [
-                            "mcporter",
+                            mcporter_cmd,
                             "config",
                             "add",
                             "exa",
