@@ -24,8 +24,8 @@ from .base import Channel
 _CREDENTIAL_FILE = "~/.config/rdt-cli/credential.json"
 _CREDENTIAL_TTL_SECONDS = 7 * 86400
 _MAX_CREDENTIAL_BYTES = 1024 * 1024
-# Pinned to the 0.4.2 state — PyPI still only has 0.4.1 (upstream issue #10).
-_RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66"
+# Pinned to the upstream requests transport fix (public-clis/rdt-cli#20).
+_RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@3ff6db5c96c31dc0cf68a0431ede064903237818"
 
 class RedditChannel(Channel):
     name = "reddit"
