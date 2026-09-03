@@ -472,9 +472,7 @@ def _install_skill(force: bool = True):
     import os
     import shutil
 
-    def _is_english_locale(value: str) -> bool:
-        normalized = value.strip().lower()
-        return normalized.startswith("en") or normalized.startswith("english")
+    from agent_reach.locale import is_english_locale
 
     def _skill_resource_name() -> str:
         locale_candidates = (
@@ -483,7 +481,7 @@ def _install_skill(force: bool = True):
             os.environ.get("LC_MESSAGES", ""),
             os.environ.get("LANG", ""),
         )
-        if any(_is_english_locale(candidate) for candidate in locale_candidates):
+        if any(is_english_locale(candidate) for candidate in locale_candidates):
             return "SKILL_en.md"
         return "SKILL.md"
 
