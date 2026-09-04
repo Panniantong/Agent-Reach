@@ -51,6 +51,41 @@ def test_home_and_project_layers_are_merged(
     assert inspection.imports_unchecked is False
 
 
+def test_xdg_home_config_takes_priority(monkeypatch, tmp_path, isolated_home):
+    monkeypatch.chdir(tmp_path)
+    xdg_config_home = tmp_path / "xdg-config"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_config_home))
+    _write_config(
+        xdg_config_home / "mcporter" / "mcporter.json",
+        {"xdg-only": {"command": "xdg"}},
+    )
+    _write_config(
+        isolated_home / ".mcporter" / "mcporter.json",
+        {"legacy-only": {"command": "legacy"}},
+    )
+
+    inspection = inspect_mcporter_config()
+
+    assert inspection.server_names == {"xdg-only"}
+    assert inspection.source == "home"
+
+
+def test_missing_xdg_home_config_falls_back_to_legacy(
+    monkeypatch, tmp_path, isolated_home
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
+    _write_config(
+        isolated_home / ".mcporter" / "mcporter.json",
+        {"legacy-only": {"command": "legacy"}},
+    )
+
+    inspection = inspect_mcporter_config()
+
+    assert inspection.server_names == {"legacy-only"}
+    assert inspection.source == "home"
+
+
 def test_explicit_config_is_the_only_layer(
     monkeypatch, tmp_path, isolated_home
 ):
