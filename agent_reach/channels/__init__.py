@@ -15,6 +15,7 @@ from .instagram import InstagramChannel
 from .linkedin import LinkedInChannel
 from .reddit import RedditChannel
 from .rss import RSSChannel
+from .substack import SubstackChannel
 from .twitter import TwitterChannel
 from .v2ex import V2EXChannel
 from .web import WebChannel
@@ -36,6 +37,7 @@ ALL_CHANNELS: List[Channel] = [
     XiaoyuzhouChannel(),
     V2EXChannel(),
     XueqiuChannel(),
+    SubstackChannel(),
     RSSChannel(),
     ExaSearchChannel(),
     WebChannel(),

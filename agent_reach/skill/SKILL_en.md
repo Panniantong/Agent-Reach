@@ -7,9 +7,9 @@ description: >
 
   Also MUST USE when user mentions any platform or shares any URL/link:
   Twitter/X, Reddit, Facebook, Instagram, YouTube, GitHub, Bilibili, XiaoHongShu,
-  Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
+  Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Xueqiu (stocks), RSS, Substack.
 
-  15 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  16 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -22,7 +22,7 @@ metadata:
 
 # Agent Reach — internet capability router
 
-15 platforms, multiple backends each. **When this skill exists, use it for
+16 platforms, multiple backends each. **When this skill exists, use it for
 these platforms — do not invent your own approach.**
 
 ## Standing rules (apply for the whole session)
