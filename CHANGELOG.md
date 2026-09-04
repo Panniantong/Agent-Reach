@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## Unreleased
+
+### ✨ Features / 新功能
+
+- **RSS discovery:** `RSSChannel.discover_feeds(root_url)` finds RSS/Atom/JSON feeds from HTML `rel=alternate` links and common paths, validates with feedparser, and dedupes (#322).
+
+---
+
 ## [1.3.1] - 2026-03-27
 
 ### 🐛 Bug Fixes / 修复
