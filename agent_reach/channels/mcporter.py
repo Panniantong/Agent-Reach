@@ -94,12 +94,21 @@ def _select_config_layers(
         return [(Path(os.path.abspath(os.fspath(expanded))), "explicit")]
 
     layers = []
-    home_base = Path.home() / ".mcporter"
-    for name in ("mcporter.json", "mcporter.jsonc"):
-        candidate = home_base / name
-        if os.path.lexists(candidate):
-            layers.append((candidate, "home"))
-            break
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME", "").strip()
+    if xdg_config_home:
+        xdg_base = Path(os.path.expanduser(xdg_config_home))
+        if xdg_base.is_absolute():
+            xdg_candidate = xdg_base / "mcporter" / "mcporter.json"
+            if os.path.lexists(xdg_candidate):
+                layers.append((xdg_candidate, "xdg"))
+
+    if not layers:
+        home_base = Path.home() / ".mcporter"
+        for name in ("mcporter.json", "mcporter.jsonc"):
+            candidate = home_base / name
+            if os.path.lexists(candidate):
+                layers.append((candidate, "home"))
+                break
 
     project_path = root / "config" / "mcporter.json"
     if os.path.lexists(project_path):
