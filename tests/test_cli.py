@@ -241,8 +241,10 @@ class TestCLI:
             ]
         ]
         assert cli._BOSS_AGENT_CLI_PR_COMMIT in cli._BOSS_AGENT_CLI_SOURCE
-        assert cli._BOSS_AGENT_CLI_PR_COMMIT == "8ff6bd3eac5dfc1215500043da9647cd6ea4c73f"
-        assert "boss-agent-cli #403-#407" in capsys.readouterr().out
+        assert cli._BOSS_AGENT_CLI_PR_COMMIT == "4c991b77086a203173bf08a4cb64a23af6514fe6"
+        assert "can4hou6joeng4/boss-agent-cli" in cli._BOSS_AGENT_CLI_SOURCE
+        assert "iqjiy" not in cli._BOSS_AGENT_CLI_SOURCE
+        assert "boss-agent-cli upstream pinned commit" in capsys.readouterr().out
 
     def test_install_boss_deps_falls_back_to_uv(self, monkeypatch):
         state = {"boss_installed": False}

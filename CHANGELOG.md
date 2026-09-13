@@ -14,7 +14,7 @@ All notable changes to this project will be documented in this file.
 
 - **根因：** Boss 有两个互不代表的登录态存储——本地 `~/.boss-agent/auth/session.enc`
   和专用 Chrome profile 内的浏览器 cookie。`boss status` / `status --live` **只校验前者**
-  （Bridge/httpx 时代的遗留凭据库），而 `cdp-required` 模式下搜索走的是浏览器 cookie。
+  （Bridge/httpx 时代的遗留凭据库），而 `existing-browser` 严格 CDP 模式下搜索走的是浏览器 cookie。
   「本地有旧凭据 + 浏览器未登录」时 `boss status` 会报 `logged_in: true`，误导 Agent
   跳过登录直接搜索，最终撞上 `AUTH_EXPIRED`；旧 runbook 又禁止把 `_security_check`
   当成未登录，两条规则叠加把 Agent 推向「反爬滑块」的错误分支。
@@ -35,13 +35,14 @@ All notable changes to this project will be documented in this file.
 - 新增 `boss` channel：经 boss-agent-cli + CDP 真 Chrome 搜岗位、取 JD 全文。
 - `check()` 四层只读探测（boss-agent-cli 装没装 → 9222 端口通不通 → 有无 zhipin 页签
   → 浏览器内有无 `wt2` 登录 cookie）。
-- 抓取走公开 API（`search_jobs` + `job_card_browser` + `browser_mode="cdp_required"`）。
-- `agent-reach install --system --channels=boss` 可安装临时锁定 #403–#407 快照提交的后端；
-  上游发布后切回正式版本约束。
+- 抓取走公开 API（`search_jobs` + `job_card_browser` + `browser_source="existing-browser"`）。
+- `agent-reach install --system --channels=boss` 可安装锁定上游 boss-agent-cli
+  （#403–#407 已合并入 master）固定提交的后端；上游发布正式版后切回版本约束。
 - Skill 与安装指南支持“帮我配 Boss直聘”：Agent 启动仅监听回环地址的专用 Chrome，
   用户只负责手动登录，最后由 Agent 验证登录态与 CDP 链路。
-- 固定依赖更新到 #403–#407 的 merge 快照 `8ff6bd3`：已登录 CDP 会话可直接复用，搜索可通过
-  `--browser-mode cdp-required` 禁止 headless 降级。
+- 固定依赖从 fork 快照 `8ff6bd3` 切换到上游 commit `4c991b7`（#403–#407 已合并入
+  master）：已登录 CDP 会话可直接复用，搜索可通过 `--browser-source existing-browser`
+  禁止 headless 降级。
 - code 37 按原始文案分类：环境异常为 `ENVIRONMENT_RISK` 并立即停止；只有明确
   token/stoken 过期才允许一次刷新。专用 Chrome profile 应长期复用并降低频率。
 

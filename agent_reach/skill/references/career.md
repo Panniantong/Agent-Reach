@@ -40,7 +40,7 @@ curl -s "https://r.jina.ai/https://linkedin.com/in/username"
 > `_security_check`）。安全校验页与登录无关：**已登录也会出现**（带 CDP 调试
 > 端口的 Chrome 几乎必现）。绝不用当前页 URL 判断登录态。
 
-> **双登录态存储（cdp-required 模式下以浏览器为准）。** 存在两个凭据存储，
+> **双登录态存储（existing-browser 严格 CDP 模式下以浏览器为准）。** 存在两个凭据存储，
 > **都不能删**，但认证的是不同通道：
 >
 > | 存储 | 角色 |
@@ -58,11 +58,11 @@ curl -s "https://r.jina.ai/https://linkedin.com/in/username"
 >    `_security_check` 页面只在 `AUTH_EXPIRED` 不存在时才按滑块处理。
 > 4. 不要为了「清理旧凭据」删除 session.enc；要刷新它就跑 `login --cdp`。
 
-> **依赖状态**：所需公开 strict-CDP API 在 boss-agent-cli 后继拆分 PR #403–#407 中
-> （#402/#382 已按维护者意见拆分），尚未发布。Agent Reach 的临时安装器锁定五个 PR
-> 的不可变 merge 快照提交
-> `8ff6bd3eac5dfc1215500043da9647cd6ea4c73f`，而不是会移动的 branch；上游发布后
-> 应把安装器切回正式版本约束。
+> **依赖状态**：所需公开 strict-CDP API 来自 boss-agent-cli 后继拆分 PR #403–#407
+> （#402/#382 已按维护者意见拆分），已全部合并入上游 master。Agent Reach 的安装器锁定
+> 上游固定提交
+> `4c991b77086a203173bf08a4cb64a23af6514fe6`，而不是会移动的 branch；上游发布正式版后
+> 应把安装器切回版本约束。
 
 体检（无副作用，不搜索）：
 
@@ -71,13 +71,13 @@ agent-reach doctor          # boss 行：off = 未装或 CDP 不通；warn = 链
                             # message 会注明浏览器内有无 wt2 登录 cookie（以浏览器为准）
 ```
 
-搜索 + JD 使用公开 API（`browser_mode` / `job_card_browser` / `JobItem.lid`）。
-因为 pipx/uv tool 是隔离环境，普通 `python` 不一定能 import 已安装工具；临时阶段
+搜索 + JD 使用公开 API（`browser_source` / `job_card_browser` / `JobItem.lid`）。
+因为 pipx/uv tool 是隔离环境，普通 `python` 不一定能 import 已安装工具；
 用 `uv run --with` 保证脚本和锁定依赖处于同一解释器环境：
 
 ```bash
 uv run --isolated --no-project \
-  --with 'git+https://github.com/iqjiy/boss-agent-cli.git@8ff6bd3eac5dfc1215500043da9647cd6ea4c73f' \
+  --with 'git+https://github.com/can4hou6joeng4/boss-agent-cli.git@4c991b77086a203173bf08a4cb64a23af6514fe6' \
   python - <<'PY'
 from pathlib import Path
 
@@ -87,11 +87,11 @@ from boss_agent_cli.platforms.zhipin import BossPlatform
 
 auth = AuthManager(Path.home() / ".boss-agent")
 
-# 严格 CDP 模式：跳过 Bridge、CDP 失败立即抛错、永不 headless
+# 严格 CDP 模式：复用已登录浏览器、CDP 失败立即抛错、永不 headless
 with BossClient(
     auth,
     cdp_url="http://localhost:9222",
-    browser_mode="cdp_required",
+    browser_source="existing-browser",
 ) as boss:
     raw = boss.search_jobs("大模型", city="深圳", page=1)
     if raw.get("code") != 0:
@@ -170,10 +170,10 @@ PY
    - code 37 + `环境存在异常` → `ENVIRONMENT_RISK`，立即停止，不刷新 Token、不重新登录、不自动重试；
    - 只有文案明确表示 token/stoken 过期的 code 37 才是 `TOKEN_REFRESH_FAILED`；客户端最多自动刷新并重试一次，仍失败再重新登录。
 
-用户要求开始搜索时，Agent 必须指定严格 CDP 模式：
+用户要求开始搜索时，Agent 必须指定严格 CDP 模式（全局选项放在子命令之前）：
 
 ```bash
-boss --browser-mode cdp-required --cdp-url http://localhost:9222 search "大模型" --city 广州 --page 1
+boss --browser-source existing-browser --cdp-url http://localhost:9222 search "大模型" --city 广州 --page 1
 ```
 
 不要无提示连续翻页。boss-agent-cli PR #383 为跨 CLI 进程的普通搜索增加持久

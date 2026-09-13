@@ -130,11 +130,11 @@ class TestSkillCommand(unittest.TestCase):
         self.assertIn(
             'auth = AuthManager(Path.home() / ".boss-agent")', career
         )
-        self.assertIn('browser_mode="cdp_required"', career)
+        self.assertIn('browser_source="existing-browser"', career)
         self.assertIn("job_card_browser", career)
-        self.assertIn("8ff6bd3eac5dfc1215500043da9647cd6ea4c73f", career)
+        self.assertIn("4c991b77086a203173bf08a4cb64a23af6514fe6", career)
         self.assertIn("ENVIRONMENT_RISK", career)
-        self.assertIn("--browser-mode cdp-required", career)
+        self.assertIn("--browser-source existing-browser", career)
         self.assertIn("长期复用", career)
         self.assertNotIn("code 37（TOKEN_REFRESH_FAILED）→ 重新登录", career)
         self.assertNotIn("client = BossClient(auth", career)

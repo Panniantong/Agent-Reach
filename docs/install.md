@@ -354,13 +354,13 @@ agent-reach configure groq-key
 > 必须使用 `--remote-debugging-address=127.0.0.1`，不得暴露到局域网或公网；使用
 > 独立 profile 并长期复用，不要每次删除或新建，也不要默认切换到日常主 Chrome；
 > 不使用时关闭专用 Chrome。Boss 不支持服务器/无桌面环境。搜索命令必须带
-> `--browser-mode cdp-required --cdp-url http://localhost:9222`。
+> `--browser-source existing-browser --cdp-url http://localhost:9222`。
 >
-> 临时依赖：boss-agent-cli 后继拆分 PR #403–#407 尚未发布，安装器锁定五个 PR 的
-> 不可变 merge 快照提交
-> `8ff6bd3eac5dfc1215500043da9647cd6ea4c73f`，不跟随会移动的 branch。上游发布后，
-> Agent Reach 应改用包含 `browser_mode="cdp_required"`、`JobItem.lid` 和
-> `job_card_browser()` 的正式版本。
+> 依赖：boss-agent-cli 后继拆分 PR #403–#407 已合并入上游 master，安装器锁定上游
+> 固定提交
+> `4c991b77086a203173bf08a4cb64a23af6514fe6`，不跟随会移动的 branch。该提交包含
+> `browser_source="existing-browser"`（严格 CDP）、`JobItem.lid` 和 `job_card_browser()`。上游发布正式版后，
+> Agent Reach 应改用版本约束。
 
 ### Step 4: Final check
 

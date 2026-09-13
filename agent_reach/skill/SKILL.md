@@ -107,7 +107,7 @@ Boss直聘配置触发：当用户说“帮我配 Boss直聘”时，先读取 `
 不要往安全校验方向解释。
 
 执行搜索时必须使用
-`boss --browser-mode cdp-required --cdp-url http://localhost:9222 search ...`；
+`boss --browser-source existing-browser --cdp-url http://localhost:9222 search ...`；
 遇到 `ENVIRONMENT_RISK` 立即停止，不刷新、不重新登录、不自动重试。
 
 ```bash

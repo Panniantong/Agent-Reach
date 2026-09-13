@@ -27,7 +27,7 @@ agent-reach configure --from-browser chrome --platform xueqiu
 | 存储 | 谁在用 |
 |---|---|
 | `~/.boss-agent/auth/session.enc` | `boss status` / `status --live`；httpx 通道的低危操作（`detail` / `cities` / `job_card_httpx`）。CDP 搜索也会读它（读不到直接报「未登录」），但复用真 Chrome context 时它的 cookie 从未真正生效 |
-| `~/.boss-chrome-profile` 内的浏览器 cookie | `cdp-required` 模式下 search / greet 等高危操作实际携带的凭据 |
+| `~/.boss-chrome-profile` 内的浏览器 cookie | `existing-browser` 严格 CDP 模式下 search / greet 等高危操作实际携带的凭据 |
 
 `boss status` 只校验本地 session.enc。本地存着几天前的旧凭据、而专用 Chrome
 profile 本身没登录时，它依然报 `logged_in: true`——这不是登录态有效的证明。

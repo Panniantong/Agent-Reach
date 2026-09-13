@@ -127,12 +127,12 @@ in manually. Then verify with `boss --cdp-url http://localhost:9222 login --cdp`
 and `agent-reach doctor`. Do not make the user assemble CDP flags.
 Keep reusing the dedicated Chrome profile; do not recreate it for every run or
 switch to the user's daily profile by default. Search with
-`boss --browser-mode cdp-required --cdp-url http://localhost:9222 search ...`.
+`boss --browser-source existing-browser --cdp-url http://localhost:9222 search ...`.
 On `ENVIRONMENT_RISK`, stop without refreshing, relogging, or retrying.
 
 **Do not trust `boss status` for CDP browser login state** — it only validates the
 local `~/.boss-agent/auth/session.enc` store, which does not represent the
-dedicated Chrome profile's cookies that `cdp-required` searches actually use. Use
+dedicated Chrome profile's cookies that `existing-browser` searches actually use. Use
 the browser `wt2` cookie probe in `agent-reach doctor` plus the user's visual
 confirmation. Never judge login state from the page URL: `security-check` /
 `zhipin-security` / `_security_check` pages are anti-bot challenges that appear
