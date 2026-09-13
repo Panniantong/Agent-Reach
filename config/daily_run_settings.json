@@ -1582,5 +1582,59 @@
     "enabled": true,
     "trials": 24,
     "prefer_optuna": true
+  },
+
+  "forecast_interval": {
+    "enabled": true,
+    "atr_period": 14,
+    "atr_multiplier": 2.0,
+    "min_width_pct": 8.0,
+    "max_width_pct": 15.0,
+    "convergence_enabled": true,
+    "convergence_high_hit_pct": 70.0,
+    "convergence_low_hit_pct": 50.0,
+    "convergence_tighten_factor": 0.9,
+    "convergence_widen_factor": 1.1,
+    "accuracy_guard_enabled": true,
+    "accuracy_degrade_threshold_pct": 50.0,
+    "accuracy_degrade_widen_factor": 1.2,
+    "accuracy_calibrate_threshold_pct": 60.0,
+    "accuracy_calibrate_weeks": 2
+  },
+
+  "deploy_signal": {
+    "enabled": true,
+    "liquidity_enabled": true,
+    "liquidity_high_cny": 1000000000,
+    "liquidity_mid_cny": 200000000,
+    "liquidity_high_cap": 1.0,
+    "liquidity_mid_cap": 0.5,
+    "liquidity_low_cap": 0.25,
+    "low_liquidity_min_trim_pct": 0.02,
+    "signal_strength_enabled": true,
+    "strong_mss_delta": 5.0,
+    "medium_mss_delta": 3.0,
+    "strong_deploy_ratio": 0.85,
+    "medium_deploy_ratio": 0.5,
+    "weak_deploy_ratio": 0.25,
+    "consecutive_signal_boost": 0.25,
+    "consecutive_min_streak": 2
+  },
+
+  "forecast_consensus": {
+    "enabled": true,
+    "homogeneity_warn_min_symbols": 3
+  },
+
+  "macro_defense_tiers": {
+    "enabled": true,
+    "severe_mss": 30.0,
+    "mild_mss": 40.0,
+    "severe_max_position_pct": 40.0,
+    "mild_max_position_pct": 60.0,
+    "severe_deploy_ratio_cap": 0.25,
+    "mild_deploy_ratio_cap": 0.45,
+    "observe_weekly_trigger_max": 3,
+    "observe_bump_to_mild": 35.0
   }
 }

@@ -451,19 +451,26 @@ def enrich_symbol_prediction(
     sym: dict[str, Any],
     enriched: Optional[dict[str, Any]] = None,
     kronos: Optional[dict[str, Any]] = None,
+    settings: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     code = str(pred.get("code") or "")
     lo = float(pred.get("change_pct_low") or 0)
     hi = float(pred.get("change_pct_high") or 0)
     mid = float(pred.get("change_pct_mid") or (lo + hi) / 2)
     hist = symbol_historical_hit_rate(code)
-    min_w, max_w = STOCK_WIDTH_MIN, STOCK_WIDTH_MAX
-    if hist and hist.get("hit_rate_pct", 0) > 90:
-        max_w = STOCK_WIDTH_MAX * 0.85
-    elif hist and hist.get("hit_rate_pct", 0) < 50:
-        min_w = STOCK_WIDTH_MIN * 1.1
-    lo, hi, width_pts = clamp_pct_band(lo, hi, mid=mid, min_width=min_w, max_width=max_w)
+    interval_meta: dict[str, Any] = {}
     base = _optional_float(pred.get("base_price")) or 0.0
+    from agent_reach.daily_run.forecast_interval_policy import apply_symbol_interval_policy
+
+    lo, hi, width_pts, interval_meta = apply_symbol_interval_policy(
+        lo=lo,
+        hi=hi,
+        mid=mid,
+        base_price=base,
+        code=code,
+        enriched=enriched,
+        settings=settings,
+    )
     price_lo = round(base * (1 + lo / 100), 2) if base > 0 else pred.get("price_low")
     price_hi = round(base * (1 + hi / 100), 2) if base > 0 else pred.get("price_high")
     price_mid = round(base * (1 + (lo + hi) / 200), 2) if base > 0 else pred.get("price_mid")
@@ -478,6 +485,10 @@ def enrich_symbol_prediction(
     name = str(pred.get("name") or code)
     ev_s = format_evidence_suffix(evidence)
     low_conf = "；**低置信度，建议轻仓操作**" if conf < 60 else ""
+    degrade_notes = list(interval_meta.get("notes") or [])
+    if any("降级放宽" in str(n) for n in degrade_notes):
+        low_conf = "；**低置信度（预测准确率下滑），区间已放宽**"
+        conf = min(conf, 49.0)
     lo_s = f"{float(price_lo):.0f}" if price_lo is not None else "—"
     hi_s = f"{float(price_hi):.0f}" if price_hi is not None else "—"
     text = (
@@ -499,6 +510,7 @@ def enrich_symbol_prediction(
             "position_hint": position_hint_for_confidence(conf),
             "evidence": evidence,
             "historical_hit": hist,
+            "interval_policy": interval_meta,
             "text": text,
             "reference_close": _optional_float((enriched or {}).get("price") or sym.get("base_price")),
             "reference_as_of": (enriched or {}).get("as_of"),

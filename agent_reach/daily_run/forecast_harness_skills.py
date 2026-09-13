@@ -40,8 +40,18 @@ def run_forecast_harness_refinements(
     report = ForecastHarnessSkillsReport()
 
     from agent_reach.daily_run.forecast_calibrate_harness import apply_forecast_calibrate_harness_refinement
+    from agent_reach.daily_run.forecast_interval_policy import should_trigger_forecast_calibrate
 
+    accuracy_trigger = should_trigger_forecast_calibrate(cfg)
     report.forecast_calibrate = apply_forecast_calibrate_harness_refinement(forecast, settings=cfg)
+    if accuracy_trigger and isinstance(report.forecast_calibrate, dict):
+        report.forecast_calibrate["accuracy_guard_trigger"] = True
+        notes = list(report.forecast_calibrate.get("optimization_notes") or [])
+        notes.insert(
+            0,
+            "准确率连续低于阈值，已自动触发 forecast_calibrate（P3 accuracy guard）",
+        )
+        report.forecast_calibrate["optimization_notes"] = notes
 
     harness_cfg = cfg.get("harness") or {}
     jobs = harness_cfg.get("jobs") or {}

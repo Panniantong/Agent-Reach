@@ -2204,6 +2204,50 @@ def _apply_position_signal_evolution(
     return merged
 
 
+def _deploy_tuning_context(
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, Any]:
+    from agent_reach.daily_run.harness_reading_signals import resolve_harness_reading_signals
+
+    reading = resolve_harness_reading_signals(settings)
+    signals = resolve_harness_trade_signals(state, settings=settings)
+    trend = str(reading.get("trend") or "")
+    trend_confirmed = trend in {"rising", "turning_up"} or bool(signals.get("mss_recovery"))
+    return {
+        "mss": reading.get("latest_mss") or reading.get("lookback_mss"),
+        "mss_delta": reading.get("delta_from_low"),
+        "trend_confirmed": trend_confirmed,
+        "consecutive_same_direction": 0,
+    }
+
+
+def _apply_harness_tuning_overlays(
+    merged: dict[str, float],
+    state: Any,
+    *,
+    settings: dict[str, Any],
+) -> dict[str, float]:
+    from agent_reach.daily_run.deploy_signal_policy import effective_deploy_ratio
+    from agent_reach.daily_run.macro_defense_tiers import apply_macro_defense_tiers
+
+    ctx = _deploy_tuning_context(state, settings=settings)
+    pre_deploy = float(merged.get("deploy_ratio", 1.0))
+    apply_macro_defense_tiers(merged, mss=ctx.get("mss"), settings=settings)
+    macro_cap = float(merged.get("deploy_ratio", pre_deploy))
+    deploy = effective_deploy_ratio(
+        pre_deploy,
+        mss_delta=ctx.get("mss_delta"),
+        trend_confirmed=bool(ctx.get("trend_confirmed")),
+        consecutive_same_direction=int(ctx.get("consecutive_same_direction") or 0),
+        macro_cap=macro_cap,
+        settings=settings,
+    )
+    merged["deploy_ratio"] = float(deploy.get("deploy_ratio", merged.get("deploy_ratio", 1.0)))
+    return merged
+
+
 def resolve_harness_position_policy(
     state: Any,
     *,
@@ -2214,6 +2258,7 @@ def resolve_harness_position_policy(
     if not _overlay_enabled(settings):
         return merged
     merged = _apply_position_signal_evolution(merged, state, settings=settings)
+    merged = _apply_harness_tuning_overlays(merged, state, settings=settings)
     from agent_reach.daily_run.buy_rules_whatif_optimizer import apply_whatif_buy_llm_optimal_to_policy
 
     apply_whatif_buy_llm_optimal_to_policy(merged, state, settings=settings)
@@ -2259,11 +2304,28 @@ def harness_buy_budget(
     settings: dict[str, Any],
     deploy_ratio_override: Optional[float] = None,
     max_position_pct_override: Optional[float] = None,
+    turnover_cny: Optional[float] = None,
+    mss_delta: Optional[float] = None,
+    trend_confirmed: bool = False,
+    consecutive_same_direction: int = 0,
 ) -> float:
     """Gross buy budget (before commission) from harness-evolved position policy."""
     policy = _position_policy(settings)
     deploy_ratio = max(0.0, min(1.0, float(policy.get("deploy_ratio", 1.0))))
     max_pct = max(0.0, float(policy.get("max_position_pct", 35.0)))
+    if deploy_ratio_override is None and (turnover_cny is not None or mss_delta is not None):
+        from agent_reach.daily_run.deploy_signal_policy import effective_deploy_ratio
+
+        overlay = effective_deploy_ratio(
+            deploy_ratio,
+            turnover_cny=turnover_cny,
+            mss_delta=mss_delta,
+            trend_confirmed=trend_confirmed,
+            consecutive_same_direction=consecutive_same_direction,
+            macro_cap=deploy_ratio,
+            settings=settings,
+        )
+        deploy_ratio = float(overlay.get("deploy_ratio", deploy_ratio))
     if deploy_ratio_override is not None:
         deploy_ratio = max(0.0, min(1.0, float(deploy_ratio_override)))
     if max_position_pct_override is not None:

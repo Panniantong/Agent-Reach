@@ -28,6 +28,44 @@ from agent_reach.daily_run.snapshot_builder import _normalize_code
 from agent_reach.daily_run.symbols import build_enriched_symbols, copy_portfolio
 
 
+def _optional_float(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _symbol_turnover_cny(enriched_row: Optional[dict[str, Any]]) -> Optional[float]:
+    if not enriched_row:
+        return None
+    return _optional_float(enriched_row.get("turnover"))
+
+
+def _trade_deploy_budget_kwargs(
+    code: str,
+    enriched: dict[str, dict[str, Any]],
+    settings: dict[str, Any],
+) -> dict[str, Any]:
+    row = enriched.get(_normalize_code(code)) or enriched.get(code) or {}
+    turnover = _symbol_turnover_cny(row)
+    if turnover is None:
+        return {}
+    try:
+        from agent_reach.daily_run.harness_reading_signals import resolve_harness_reading_signals
+
+        reading = resolve_harness_reading_signals(settings)
+        trend = str(reading.get("trend") or "")
+        return {
+            "turnover_cny": turnover,
+            "mss_delta": reading.get("delta_from_low"),
+            "trend_confirmed": trend in {"rising", "turning_up"} or bool(reading.get("mss_recovery")),
+        }
+    except Exception:
+        return {"turnover_cny": turnover}
+
+
 @dataclass
 class TradeAction:
     side: str  # buy | sell
@@ -838,6 +876,28 @@ def _apply_sell(
     if not sell_analysis["allowed"]:
         return ApplyResult(applied=False, portfolio=pf, message=str(sell_analysis["block_reason"]))
 
+    from agent_reach.daily_run.deploy_signal_policy import low_liquidity_trim_blocked
+
+    total_nav = float(pf.get("total") or 0)
+    if total_nav <= 0:
+        total_nav = float(pf.get("cash") or 0) + _holdings_market_value(holdings, enriched)
+    current_weight = 0.0
+    if total_nav > 0:
+        px = _optional_float(_price_for(target, enriched)) or _optional_float(target.get("price"))
+        shares_total = int(target.get("shares") or 0)
+        if px and shares_total:
+            current_weight = shares_total * px / total_nav * 100.0
+    sell_ratio_est = float(sell_analysis.get("sell_ratio") or 0.0)
+    target_weight = current_weight * max(0.0, 1.0 - sell_ratio_est)
+    trim_block = low_liquidity_trim_blocked(
+        current_weight_pct=current_weight,
+        target_weight_pct=target_weight,
+        turnover_cny=_symbol_turnover_cny(enriched.get(code)),
+        settings=settings,
+    )
+    if trim_block:
+        return ApplyResult(applied=False, portfolio=pf, message=trim_block)
+
     sell_ratio_override = None
     sell_kind = None
     if hasattr(decision, "sell_ratio_override"):
@@ -1035,10 +1095,12 @@ def _apply_buy(
         }
     elif max_position_pct_override is not None:
         budget_kwargs["max_position_pct_override"] = float(max_position_pct_override)
+    deploy_kwargs = _trade_deploy_budget_kwargs(code, enriched, settings)
     budget_gross = harness_buy_budget(
         total=total,
         deployable=deployable,
         settings=settings,
+        **deploy_kwargs,
         **budget_kwargs,
     )
     budget = budget_gross / (1 + commission_rate)
@@ -1212,10 +1274,12 @@ def simulate_buy_analysis(
         }
     elif max_position_pct_override is not None:
         budget_kwargs["max_position_pct_override"] = float(max_position_pct_override)
+    deploy_kwargs = _trade_deploy_budget_kwargs(code, enriched, settings)
     budget_gross = harness_buy_budget(
         total=total,
         deployable=deployable,
         settings=settings,
+        **deploy_kwargs,
         **budget_kwargs,
     )
     budget = budget_gross / (1 + commission_rate)

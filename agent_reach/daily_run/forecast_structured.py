@@ -219,6 +219,7 @@ def build_structured_predictions(
                 sym=sym,
                 enriched=enriched_map.get(_normalize_code(code)) or enriched_map.get(code),
                 kronos=kronos_paths.get(code) or sym.get("kronos"),
+                settings=settings,
             )
             enriched_row["role"] = role
             symbols.append(enriched_row)
@@ -235,6 +236,7 @@ def build_structured_predictions(
                         sym=sym,
                         enriched=enriched_map.get(code),
                         kronos=kronos_paths.get(code) or sym.get("kronos"),
+                        settings=settings,
                     )
                     enriched_row["role"] = sym.get("role") or "holding"
                     symbols.append(enriched_row)
@@ -279,7 +281,14 @@ def build_structured_predictions(
         watchlist_intel=watchlist_intel,
         risk_calendar=risk_calendar,
     )
-    return {**base, "content_scope": content_scope}
+    homogeneity: Optional[dict[str, Any]] = None
+    try:
+        from agent_reach.daily_run.forecast_consensus_monitor import build_homogeneity_warning
+
+        homogeneity = build_homogeneity_warning(forecast, settings=settings)
+    except Exception:
+        homogeneity = None
+    return {**base, "content_scope": content_scope, "homogeneity_warning": homogeneity}
 
 
 def _weight_pct(holding: dict[str, Any], portfolio_total: Optional[float]) -> Optional[float]:
@@ -1216,6 +1225,14 @@ def render_structured_forecast_sections(
     holdings_md = render_holdings_plans_markdown(structured, operation_plans, advanced=advanced)
     if holdings_md.strip():
         sections.append((_FORECAST_SECTION_LABELS[4], holdings_md))
+
+    homogeneity = structured.get("homogeneity_warning") or forecast.get("homogeneity_warning")
+    if isinstance(homogeneity, dict) and homogeneity.get("message"):
+        hom_md = (
+            f"⚠️ **{homogeneity['message']}**\n\n"
+            f"- 建议：{homogeneity.get('suggestion') or '复核模型分歧与遗漏因素'}"
+        )
+        sections.append(("模型同质化", hom_md))
 
     timeline_md = render_timeline_markdown(matrix) if matrix else ""
     if timeline_md.strip():

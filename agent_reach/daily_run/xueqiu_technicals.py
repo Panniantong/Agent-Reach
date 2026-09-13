@@ -75,6 +75,54 @@ def _parse_kline_technicals(
     }
 
 
+def _parse_kline_ohlc(data: dict[str, Any]) -> list[tuple[float, float, float]]:
+    payload = data.get("data") or {}
+    columns = list(payload.get("column") or [])
+    items = list(payload.get("item") or [])
+    if not columns or len(items) < 5:
+        raise XueqiuTechnicalsError("Xueqiu K-line rows insufficient")
+    idx_high = _column_index(columns, "high")
+    idx_low = _column_index(columns, "low")
+    idx_close = _column_index(columns, "close")
+    out: list[tuple[float, float, float]] = []
+    for row in items:
+        out.append((float(row[idx_high]), float(row[idx_low]), float(row[idx_close])))
+    return out
+
+
+def compute_atr(ohlc: list[tuple[float, float, float]], *, period: int = 14) -> Optional[float]:
+    if len(ohlc) < period + 1:
+        return None
+    trs: list[float] = []
+    for i in range(1, len(ohlc)):
+        high, low, close = ohlc[i]
+        prev_close = ohlc[i - 1][2]
+        tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+        trs.append(tr)
+    if len(trs) < period:
+        return None
+    window = trs[-period:]
+    return sum(window) / len(window)
+
+
+def compute_atr_from_code(code: str, *, period: int = 14) -> Optional[float]:
+    from agent_reach.channels import xueqiu as xq_mod
+
+    symbol = code_to_xueqiu_symbol(normalize_code(code))
+    begin = int(time.time() * 1000)
+    count = max(-(period + 20), -60)
+    url = (
+        "https://stock.xueqiu.com/v5/stock/chart/kline.json"
+        f"?symbol={symbol}&begin={begin}&period=day&type=before&count={count}&indicator=kline,ma"
+    )
+    data = xq_mod._get_json(url)
+    if data.get("error_code") not in (0, None):
+        raise XueqiuTechnicalsError(str(data.get("error_description") or data.get("error_code")))
+    ohlc = _parse_kline_ohlc(data)
+    atr = compute_atr(ohlc, period=period)
+    return round(atr, 4) if atr is not None else None
+
+
 def fetch_technicals(code: str, *, lookback: int = 20) -> dict[str, Any]:
     """Fetch MA/volume technicals via Xueqiu chart/kline (qfq, daily)."""
     from agent_reach.channels import xueqiu as xq_mod
