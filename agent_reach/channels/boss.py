@@ -4,7 +4,7 @@
 后端是 boss-agent-cli（CDP 调试端口复用已登录的真 Chrome）。headless 是禁区
 （触发 code 36 风控），故 check() 只做四层只读探测，不实例化 BossClient、不拉起浏览器。
 
-抓取走 boss-agent-cli 公开 API（search_jobs + job_card_browser + browser_mode="cdp_required"），
+抓取走 boss-agent-cli 公开 API（search_jobs + job_card_browser + browser_source="existing-browser"），
 调用姿势见 skill/references/career.md；check() 只负责「装没装 + CDP 链路就绪 +
 浏览器内有无登录 cookie」的体检，不搜索。
 
@@ -75,7 +75,12 @@ def _chrome_launch_command(system: str | None = None) -> str:
 
 
 def _cdp_json(path: str):
-    """GET 本地 CDP 端点（禁用系统代理），返回解析后的 JSON；失败返回 None。"""
+    """GET 本地 CDP 端点（禁用系统代理），返回解析后的 JSON；失败返回 None。
+
+    CDP 只绑定回环地址（127.0.0.1），直连即可，故用空 ProxyHandler 显式绕过任何
+    已配置的系统/全局代理——localhost 探测走代理既无意义也可能被拦截。这是有意的
+    localhost-only 假设，不可被 config 的 proxy 覆盖。
+    """
     req = urllib.request.Request(f"{_CDP_URL}{path}", method="GET")
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
@@ -114,24 +119,19 @@ def _security_check_blocks_all(pages) -> bool:
 _WS_ACCEPT_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
-def _recv_exact(sock: socket.socket, size: int) -> bytes:
-    chunks = b""
-    while len(chunks) < size:
-        chunk = sock.recv(size - len(chunks))
-        if not chunk:
-            break
-        chunks += chunk
-    return chunks
-
-
 def _read_ws_text_frame(sock: socket.socket, initial: bytes = b""):
-    """读下一个文本帧的 payload；收到 close 帧或连接断开返回 None。忽略 ping/pong。"""
+    """读下一个文本帧，返回 (payload, leftover)。
+
+    leftover 是本次 recv 多收、属于后续帧的字节，调用方应把它作为下一帧的 initial
+    传回（一次 recv 可能拿到多帧）。收到 close 帧或连接断开返回 (None, leftover)。
+    忽略 ping/pong。
+    """
     buf = initial
     while True:
         while len(buf) < 2:
             chunk = sock.recv(4096)
             if not chunk:
-                return None
+                return None, buf
             buf += chunk
         opcode = buf[0] & 0x0F
         length = buf[1] & 0x7F
@@ -140,7 +140,7 @@ def _read_ws_text_frame(sock: socket.socket, initial: bytes = b""):
             while len(buf) < header_len + 2:
                 chunk = sock.recv(4096)
                 if not chunk:
-                    return None
+                    return None, buf
                 buf += chunk
             length = struct.unpack(">H", buf[header_len:header_len + 2])[0]
             header_len += 2
@@ -148,21 +148,21 @@ def _read_ws_text_frame(sock: socket.socket, initial: bytes = b""):
             while len(buf) < header_len + 8:
                 chunk = sock.recv(4096)
                 if not chunk:
-                    return None
+                    return None, buf
                 buf += chunk
             length = struct.unpack(">Q", buf[header_len:header_len + 8])[0]
             header_len += 8
         while len(buf) < header_len + length:
             chunk = sock.recv(4096)
             if not chunk:
-                return None
+                return None, buf
             buf += chunk
         payload = buf[header_len:header_len + length]
         buf = buf[header_len + length:]
         if opcode == 0x8:  # close
-            return None
+            return None, buf
         if opcode in (0x1, 0x2, 0x0):  # text / binary / continuation
-            return payload
+            return payload, buf
         # ping(0x9)/pong(0xA) 等：忽略，继续读下一帧
 
 
@@ -200,9 +200,11 @@ def _cdp_zhipin_login_cookie() -> bool | None:
         with socket.create_connection((host, port), timeout=_CDP_TIMEOUT) as sock:
             sock.settimeout(_CDP_TIMEOUT)
             key = base64.b64encode(os.urandom(16)).decode()
+            # IPv6 字面量需在 Host 头里加方括号（urlparse().hostname 已剥掉）
+            host_header = f"[{host}]:{port}" if ":" in host else f"{host}:{port}"
             handshake = (
                 f"GET {path} HTTP/1.1\r\n"
-                f"Host: {host}:{port}\r\n"
+                f"Host: {host_header}\r\n"
                 "Upgrade: websocket\r\n"
                 "Connection: Upgrade\r\n"
                 f"Sec-WebSocket-Key: {key}\r\n"
@@ -217,7 +219,9 @@ def _cdp_zhipin_login_cookie() -> bool | None:
                     return None
                 response += chunk
             head, _, rest = response.partition(b"\r\n\r\n")
-            if b" 101 " not in head.split(b"\r\n", 1)[0]:
+            status_line = head.split(b"\r\n", 1)[0]
+            # 精确解析状态码 token：接受 "HTTP/1.1 101"（可空 reason 短语），拒绝 1019 等伪码
+            if status_line.split()[1:2] != [b"101"]:
                 return None
             accept = base64.b64encode(
                 hashlib.sha1((key + _WS_ACCEPT_GUID).encode()).digest()
@@ -225,16 +229,23 @@ def _cdp_zhipin_login_cookie() -> bool | None:
             if accept not in head.decode("latin-1"):
                 return None
             _send_ws_text(sock, json.dumps({"id": 1, "method": "Storage.getCookies"}))
-            payload = _read_ws_text_frame(sock, initial=rest)
-            if payload is None:
-                return None
-            data = json.loads(payload.decode("utf-8"))
-            if data.get("id") != 1 or "result" not in data:
-                return None
-            for cookie in data["result"].get("cookies", []):
-                if cookie.get("name") == "wt2" and "zhipin" in cookie.get("domain", ""):
-                    return True
-            return False
+            # Chrome 可能先推事件帧（无 id）；持续读帧直到拿到 id==1 的响应（设上限防死循环）。
+            # leftover 携带上次 recv 多收的字节，确保一次 recv 到多帧时不丢数据。
+            buf = rest
+            for _ in range(16):
+                payload, buf = _read_ws_text_frame(sock, initial=buf)
+                if payload is None:
+                    return None
+                data = json.loads(payload.decode("utf-8"))
+                if data.get("id") != 1:
+                    continue  # 事件帧等：跳过，读下一帧
+                if "result" not in data:
+                    return None
+                for cookie in data["result"].get("cookies", []):
+                    if cookie.get("name") == "wt2" and "zhipin" in cookie.get("domain", ""):
+                        return True
+                return False
+            return None
     except Exception:
         return None
 
@@ -312,11 +323,13 @@ class BossChannel(Channel):
                 "不要用 `boss status` 判断 CDP 浏览器登录态（它只校验本地 session.enc）。"
             )
 
+        # 四层探测全过：CDP 链路就绪，标记实际服役的后端（base 契约）
+        self.active_backend = self.backends[0]
         return "warn", (
             f"CDP 链路就绪（9222 端口通 + 有可复用 zhipin 页签，{cookie_note}）。"
-            "Doctor 不实际执行搜索、不验证 cookie 服务端有效性或 boss-agent-cli #403-#407 快照 API；"
+            "Doctor 不实际执行搜索、不验证 cookie 服务端有效性或上游 boss-agent-cli #403-#407 API；"
             "先运行 `boss --cdp-url http://localhost:9222 login --cdp` 同步现有登录态；"
-            "搜索时使用 `boss --browser-mode cdp-required --cdp-url http://localhost:9222 search ...`，"
+            "搜索时使用 `boss --browser-source existing-browser --cdp-url http://localhost:9222 search ...`，"
             "确保 CDP 不可用时立即停止而不是降级 headless。"
             "若搜索报 AUTH_EXPIRED，按登录 runbook 处理（用户在专用窗口登录 + login --cdp），"
             "不要往安全校验方向解释。"
