@@ -13,6 +13,7 @@ from agent_reach.channels import get_all_channels, get_channel
 from agent_reach.channels.bilibili import BilibiliChannel
 from agent_reach.channels.facebook import FacebookChannel
 from agent_reach.channels.instagram import InstagramChannel
+from agent_reach.channels.nowcoder import NowcoderChannel
 from agent_reach.channels.v2ex import V2EXChannel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
 from agent_reach.channels.xueqiu import XueqiuChannel
@@ -35,6 +36,7 @@ class TestChannelRegistry:
         assert "twitter" in names
         assert "facebook" in names
         assert "instagram" in names
+        assert "nowcoder" in names
         assert "v2ex" in names
 
 
@@ -53,6 +55,37 @@ class TestOpenCLISiteChannels:
         assert ch.can_handle("https://instagram.com/p/abc123/")
         assert ch.can_handle("https://instagr.am/p/abc123/")
         assert not ch.can_handle("https://facebook.com/openai")
+
+    def test_nowcoder_can_handle_common_urls(self):
+        ch = NowcoderChannel()
+        assert ch.can_handle("https://www.nowcoder.com/")
+        assert ch.can_handle("https://nowcoder.com/search/all?query=java")
+        assert ch.can_handle("https://m.nowcoder.com/discuss/123")
+        assert not ch.can_handle("https://evilnowcoder.com/search/all")
+
+    def test_nowcoder_check_does_not_require_login(self, monkeypatch):
+        monkeypatch.setattr(
+            "agent_reach.backends.opencli_status",
+            lambda: OpenCLIStatus(installed=False),
+        )
+        channel = NowcoderChannel()
+        status, msg = channel.check()
+        assert status == "off"
+        assert "如页面要求登录" in msg
+
+        monkeypatch.setattr(
+            "agent_reach.backends.opencli_status",
+            lambda: OpenCLIStatus(
+                installed=True,
+                extension_connected=True,
+                version="1.8.3",
+            ),
+        )
+        status, msg = channel.check()
+        assert status == "warn"
+        assert "实际命令未实时验证" in msg
+        assert "登录态" not in msg
+        assert "如页面要求登录" in msg
 
     def test_opencli_bridge_ready_is_unverified_for_login_platform(
         self, monkeypatch

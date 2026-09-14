@@ -117,6 +117,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 | 📷 **Instagram** | — | 用户搜索、Profile、用户最近帖子、Explore | 桌面装 OpenCLI（复用 Chrome 登录态） |
 | 📕 **小红书** | — | 搜索、阅读、评论 | OpenCLI 只用用户已有 Chrome 会话；MCP/存量工具用 Cookie-Editor |
 | 💼 **LinkedIn** | Jina Reader 读公开页面 | Profile 详情、公司页面、职位搜索 | 告诉 Agent「帮我配 LinkedIn」 |
+| 💬 **牛客** | — | 搜索面经、面经列表、帖子详情 | 桌面安装 OpenCLI；如页面要求登录则复用 Chrome 会话 |
 | 💻 **V2EX** | 热门帖子、节点帖子、帖子详情+回复、用户信息 | — | 无需配置 |
 | 📈 **雪球** | 股票行情、搜索股票、热门帖子、热门股票排行 | — | 告诉 Agent「帮我配雪球」 |
 | 🎙️ **小宇宙播客** | — | 播客音频转文字（Whisper 转录，免费 Key） | 告诉 Agent「帮我配小宇宙播客」 |
@@ -217,6 +218,7 @@ channels/
 ├── instagram.py    → OpenCLI（桌面浏览器登录态）
 ├── xiaohongshu.py  → OpenCLI ▸ xiaohongshu-mcp ▸ xhs-cli
 ├── linkedin.py     → mcp-server-linkedin ▸ Jina Reader
+├── nowcoder.py     → OpenCLI（浏览器桥接）
 ├── rss.py          → feedparser
 ├── exa_search.py   → Exa via mcporter
 └── __init__.py     → 渠道注册（doctor 检测用）
@@ -240,6 +242,7 @@ channels/
 | 读 RSS | [feedparser](https://github.com/kurtmckee/feedparser) | — | Python 生态标准选择 |
 | 小红书 | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)（服务器）▸ xhs-cli | OpenCLI 只用用户已有会话；其余后端用 Cookie-Editor 手工导出 |
 | LinkedIn | [mcp-server-linkedin](https://github.com/stickerdaniel/linkedin-mcp-server) | Jina Reader | MCP 服务，浏览器自动化 |
+| 牛客面经 | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | — | 浏览器动态渲染，直接调用 `opencli nowcoder search/experience/detail` |
 
 > 📌 这些都是「当前选型」，基于真机实测定期复核。某条路失效了我们换下一条——`agent-reach doctor` 永远告诉你现在走的是哪条。
 

@@ -112,6 +112,7 @@ After installing the basics, **ask the user** which additional channels they nee
 > - 📷 **Instagram** — 用户搜索、Profile、用户最近帖子、Explore（桌面走 OpenCLI，复用 Chrome 登录态）
 > - 📺 **B站完整版** — 热门、排行、搜索、视频详情（bili-cli，无需登录）
 > - 💼 **LinkedIn** — Profile、职位搜索
+> - 💬 **牛客面经** — 搜索面经、面经列表、帖子详情（桌面走 OpenCLI；如页面要求登录则复用 Chrome 会话）
 >
 > 告诉我你要哪些，比如"帮我装小红书和 Twitter"、"帮我装 Facebook 和 Instagram"。或者说"全部装"。
 
@@ -123,7 +124,7 @@ agent-reach install --env=auto --system --channels=facebook,instagram    # Deskt
 agent-reach install --env=auto --system --channels=all                   # User approved everything
 ```
 
-Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `facebook`, `instagram`, `bilibili`, `linkedin`, `all`
+Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `facebook`, `instagram`, `nowcoder`, `bilibili`, `linkedin`, `all`
 
 ### Step 3: Fix what's broken
 
@@ -254,6 +255,17 @@ agent-reach install --system --channels facebook,instagram
 >    ```
 >
 > Facebook Groups 当前只承诺读取用户登录后可见的群组列表/最近动态，不承诺任意群帖子和评论 API。Instagram 的 search 是用户搜索，不是全站帖子关键词搜索；若提示 429/登录错误，先让用户在 Chrome 里重新登录并降低频率。
+
+**牛客面经（桌面 OpenCLI）:**
+牛客搜索页由浏览器动态渲染，因此通过 OpenCLI 的浏览器适配器读取公开搜索结果、面经列表和帖子详情。
+这是只读能力，不自动登录或读取 Cookie；如果页面要求登录，让用户在 Chrome 中手动登录后再执行。
+
+```bash
+agent-reach install --system --channels nowcoder
+opencli nowcoder search "query" --type post --limit 10 --window background --site-session ephemeral -f yaml
+opencli nowcoder experience --limit 15 --window background --site-session ephemeral -f yaml
+opencli nowcoder detail "<id-or-url>" --window background --site-session ephemeral -f yaml
+```
 
 **雪球 / Xueqiu (股票行情 + 热门帖子):**
 > "雪球需要登录后的 Cookie。请先在 Chrome 里登录 xueqiu.com，然后运行："

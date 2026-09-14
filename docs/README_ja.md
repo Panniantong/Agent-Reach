@@ -65,6 +65,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 🐦 **Twitter/X** | 閲覧・検索 | 設定不要 / Cookie | 単一ツイートはすぐに閲覧可能。Cookieで検索、タイムライン、投稿が解放（[twitter-cli](https://github.com/public-clis/twitter-cli)） |
 | 📕 **小紅書** | 閲覧・検索・コメント | OpenCLI / Cookie | OpenCLI はユーザー管理の既存 Chrome セッションだけを使用。MCP/旧ツールは Cookie-Editor を使用 |
 | 💼 **LinkedIn** | Jina Reader（公開ページ） | プロフィール、企業、求人検索 | エージェントに「LinkedInの設定を手伝って」と伝えてください |
+| 💬 **Nowcoder（牛客）** | — | 面接体験の検索・一覧・詳細 | デスクトップの OpenCLI ブラウザブリッジを使用。ログイン要求時だけ既存 Chrome セッションを利用 |
 | 💬 **WeChat記事** | 検索 + 閲覧 | 設定不要 | WeChat公式アカウント記事の検索+閲覧（完全Markdown）（[Exa](https://exa.ai) + [Camoufox](https://github.com/daijro/camoufox)（オプション）） |
 | 💻 **V2EX** | 人気トピック・ノードトピック・トピック詳細+返信・ユーザープロフィール | 設定不要 | 公開JSON API、認証不要。技術コミュニティのコンテンツに最適 |
 | 📈 **雪球（Xueqiu）** | 株価・検索・人気投稿・人気銘柄 | 設定不要 | 公開APIで自動セッションCookie、ログイン不要 |
@@ -206,6 +207,7 @@ channels/
 ├── reddit.py       → OpenCLI ▸ rdt-cli（ログイン状態が必要）
 ├── xiaohongshu.py  → OpenCLI ▸ xiaohongshu-mcp ▸ xhs-cli
 ├── linkedin.py     → linkedin-mcp    ← LinkedIn APIに差し替え可能…
+├── nowcoder.py     → OpenCLI（ブラウザブリッジ）
 ├── rss.py          → feedparser      ← atomaなどに差し替え可能…
 ├── exa_search.py   → mcporter MCP    ← Tavily、SerpAPIなどに差し替え可能…
 └── __init__.py     → チャンネルレジストリ（doctor チェック用）
@@ -226,6 +228,7 @@ channels/
 | RSS閲覧 | [feedparser](https://github.com/kurtmckee/feedparser) | Pythonエコシステムの標準、⭐2.3K |
 | 小紅書 | [OpenCLI](https://github.com/jackwener/opencli)（デスクトップ）▸ [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)（サーバー）▸ xhs-cli | OpenCLI は既存のユーザー管理セッションのみ使用。その他は Cookie-Editor で手動設定 |
 | LinkedIn | [mcp-server-linkedin](https://github.com/stickerdaniel/linkedin-mcp-server) | ⭐900+、MCPサーバー、ブラウザ自動化 |
+| Nowcoder面接体験 | [OpenCLI](https://github.com/jackwener/opencli)（デスクトップ） | — | ブラウザで動的に描画される検索を `opencli nowcoder search/experience/detail` で読み取る |
 | WeChat記事 | [Exa](https://exa.ai)（検索+閲覧）+ [Camoufox](https://github.com/daijro/camoufox)（オプション） | ゼロ設定で検索+全文閲覧、Camoufoxでオプション強化 |
 | 小宇宙Podcast | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 

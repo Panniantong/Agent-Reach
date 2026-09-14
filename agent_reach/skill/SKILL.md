@@ -7,10 +7,10 @@ description: >
 
   Also MUST USE when user mentions any platform or shares any URL/链接:
   小红书/xiaohongshu/xhs, Twitter/推特/X, B站/bilibili, Reddit, Facebook,
-  Instagram, V2EX, LinkedIn/领英/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客,
+  Instagram, V2EX, LinkedIn/领英/招聘/求职/jobs, 牛客/Nowcoder 面经, YouTube, GitHub code search, 小宇宙播客,
   雪球/股票行情, RSS feeds, or any web URL.
 
-  15 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  16 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -18,14 +18,14 @@ description: >
   发帖/评论/点赞等写操作；已有专门 skill 的平台（先用专门 skill）。
 
   【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。
-  分类：search / social (小红书/推特/B站/V2EX/Reddit/Facebook/Instagram) / career(LinkedIn) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客) / finance(雪球/股票)。
+  分类：search / social (小红书/推特/B站/V2EX/Reddit/Facebook/Instagram) / career(LinkedIn/牛客面经) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客) / finance(雪球/股票)。
 metadata:
   homepage: https://github.com/Panniantong/Agent-Reach
 ---
 
 # Agent Reach — 互联网能力路由器
 
-15 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
+16 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
 
 ## 常驻规则（全程适用）
 
@@ -48,7 +48,7 @@ metadata:
 |---------|------|---------|
 | 网页搜索/代码搜索 | search | [references/search.md](references/search.md) |
 | 小红书/推特/B站/V2EX/Reddit/Facebook/Instagram | social | [references/social.md](references/social.md) |
-| 招聘/职位/LinkedIn | career | [references/career.md](references/career.md) |
+| 招聘/职位/LinkedIn/牛客面经 | career | [references/career.md](references/career.md) |
 | GitHub/代码 | dev | [references/dev.md](references/dev.md) |
 | 网页/文章/RSS | web | [references/web.md](references/web.md) |
 | YouTube/B站/播客字幕 | video | [references/video.md](references/video.md) |
@@ -74,6 +74,7 @@ curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1
 
 # B站搜索（bili-cli，无需登录）
 bili search "query" --type video -n 5
+
 ```
 
 ## 需登录态的平台（按 doctor 的 active_backend 选命令）
@@ -105,6 +106,23 @@ opencli instagram search "query" -f yaml       # 搜用户
 opencli instagram user USERNAME -f yaml        # 读指定用户最近帖子
 ```
 
+## 牛客面经（OpenCLI）
+
+牛客的公开搜索、面经列表和帖子详情通过 OpenCLI 的浏览器适配器完成。它是只读路由，
+不自动登录，也不读取或保存浏览器 Cookie。默认建议使用后台窗口和临时站点会话：
+
+```bash
+opencli nowcoder search "query" --type post --limit 10 \
+  --window background --site-session ephemeral -f yaml
+opencli nowcoder experience --limit 15 \
+  --window background --site-session ephemeral -f yaml
+opencli nowcoder detail "<id-or-url>" \
+  --window background --site-session ephemeral -f yaml
+```
+
+先从 `search` 或 `experience` 的结果取得 `id`，再传给 `detail` 获取帖子正文。
+如果牛客页面要求登录，应让用户在 Chrome 中手动完成登录后再重试。
+
 ## 环境检查
 
 ```bash
@@ -128,7 +146,7 @@ agent-reach doctor --json
 
 - [搜索工具](references/search.md) — Exa AI 搜索
 - [社交媒体](references/social.md) — 小红书, Twitter, B站, V2EX, Reddit, Facebook, Instagram（多后端/登录态命令组）
-- [职场招聘](references/career.md) — LinkedIn
+- [职场招聘](references/career.md) — LinkedIn、牛客面经
 - [开发工具](references/dev.md) — GitHub CLI
 - [网页阅读](references/web.md) — Jina Reader, RSS
 - [视频播客](references/video.md) — YouTube, B站, 小宇宙

@@ -65,6 +65,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 🐦 **Twitter/X** | 읽기 · 검색 | Cookie | Cookie로 검색, 타임라인, 트윗 읽기, 아티클 읽기 가능 ([twitter-cli](https://github.com/public-clis/twitter-cli)) |
 | 📕 **XiaoHongShu** | 읽기 · 검색 · 댓글 | OpenCLI / Cookie | OpenCLI는 사용자가 관리하는 기존 Chrome 세션만 사용하며, MCP/기존 도구는 Cookie-Editor 사용 |
 | 💼 **LinkedIn** | Jina Reader (공개 페이지) | Cookie | 전체 프로필, 회사, 채용 공고 검색 가능. 에이전트에 "LinkedIn 설정 도와줘"라고 말하세요 |
+| 💬 **Nowcoder (牛客)** | — | 면접 경험 검색 · 목록 · 상세 | 데스크톱 OpenCLI 브라우저 브리지 사용. 로그인 요청 시에만 기존 Chrome 세션 사용 |
 | 💬 **WeChat Articles** | 검색 + 읽기 | 없음 | Exa를 통한 WeChat 공식 계정 게시글 검색 + 읽기 (설정 없음) + 선택적 [Camoufox](https://github.com/daijro/camoufox) |
 | 💻 **V2EX** | 인기 주제 · 노드 주제 · 주제 상세 + 답글 · 사용자 프로필 | 없음 | 공개 JSON API, 인증 없음. 기술 커뮤니티 콘텐츠에 적합 |
 | 📈 **Xueqiu (雪球)** | 주식 시세 · 검색 · 인기 글 · 인기 종목 | 브라우저 Cookie | 에이전트에 "Xueqiu 설정 도와줘"라고 말하세요 |
@@ -206,6 +207,7 @@ channels/
 ├── reddit.py       → OpenCLI ▸ rdt-cli (로그인 상태 필요)
 ├── xiaohongshu.py  → OpenCLI ▸ xiaohongshu-mcp ▸ xhs-cli
 ├── linkedin.py     → linkedin-mcp    ← LinkedIn API로 교체...
+├── nowcoder.py     → OpenCLI (브라우저 브리지)
 ├── rss.py          → feedparser      ← atoma로 교체...
 ├── exa_search.py   → mcporter MCP    ← Tavily, SerpAPI로 교체...
 └── __init__.py     → 채널 레지스트리 (doctor 검사용)
@@ -227,6 +229,7 @@ channels/
 | RSS 읽기 | [feedparser](https://github.com/kurtmckee/feedparser) | Python 생태계 표준, 2.3K stars |
 | XiaoHongShu | [OpenCLI](https://github.com/jackwener/opencli) (데스크톱) ▸ [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) (서버) ▸ xhs-cli | OpenCLI는 사용자가 관리하는 기존 세션만 사용하며, 그 외에는 Cookie-Editor로 수동 설정 |
 | LinkedIn | [mcp-server-linkedin](https://github.com/stickerdaniel/linkedin-mcp-server) | 1.2K stars, MCP 서버, 브라우저 자동화 |
+| Nowcoder 면접 경험 | [OpenCLI](https://github.com/jackwener/opencli) (데스크톱) | — | 동적으로 렌더링되는 검색을 `opencli nowcoder search/experience/detail`로 직접 호출 |
 | WeChat Articles | [Exa](https://exa.ai) (검색 + 읽기) + [Camoufox](https://github.com/daijro/camoufox) (선택) | 설정 없이 검색 + 전체 글 읽기 |
 | Xiaoyuzhou Podcast | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 

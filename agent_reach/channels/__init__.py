@@ -13,6 +13,7 @@ from .facebook import FacebookChannel
 from .github import GitHubChannel
 from .instagram import InstagramChannel
 from .linkedin import LinkedInChannel
+from .nowcoder import NowcoderChannel
 from .reddit import RedditChannel
 from .rss import RSSChannel
 from .twitter import TwitterChannel
@@ -33,6 +34,7 @@ ALL_CHANNELS: List[Channel] = [
     BilibiliChannel(),
     XiaoHongShuChannel(),
     LinkedInChannel(),
+    NowcoderChannel(),
     XiaoyuzhouChannel(),
     V2EXChannel(),
     XueqiuChannel(),

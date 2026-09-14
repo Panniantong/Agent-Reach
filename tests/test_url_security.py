@@ -7,6 +7,7 @@ from agent_reach.channels.facebook import FacebookChannel
 from agent_reach.channels.github import GitHubChannel
 from agent_reach.channels.instagram import InstagramChannel
 from agent_reach.channels.linkedin import LinkedInChannel
+from agent_reach.channels.nowcoder import NowcoderChannel
 from agent_reach.channels.reddit import RedditChannel
 from agent_reach.channels.twitter import TwitterChannel
 from agent_reach.channels.v2ex import V2EXChannel
@@ -77,6 +78,11 @@ def test_credential_channels_reject_lookalikes_and_userinfo(channel, malicious_u
             "https://linkedin.com:443/in/example",
         ),
         (
+            NowcoderChannel(),
+            "https://www.nowcoder.com/discuss/1",
+            "https://nowcoder.com:443/search/all?query=java",
+        ),
+        (
             V2EXChannel(),
             "https://www.v2ex.com/t/1",
             "https://v2ex.com:443/t/1",
@@ -112,6 +118,7 @@ def test_fixed_domain_channels_accept_subdomains_and_explicit_ports(
         (YouTubeChannel(), "youtube.com"),
         (RedditChannel(), "reddit.com"),
         (LinkedInChannel(), "linkedin.com"),
+        (NowcoderChannel(), "nowcoder.com"),
         (V2EXChannel(), "v2ex.com"),
         (XiaoyuzhouChannel(), "xiaoyuzhoufm.com"),
         (FacebookChannel(), "facebook.com"),
