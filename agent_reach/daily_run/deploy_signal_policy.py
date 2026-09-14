@@ -25,6 +25,10 @@ def deploy_signal_cfg(settings: Optional[dict[str, Any]] = None) -> dict[str, An
         "weak_deploy_ratio": float(raw.get("weak_deploy_ratio") or 0.25),
         "consecutive_signal_boost": float(raw.get("consecutive_signal_boost") or 0.25),
         "consecutive_min_streak": max(2, int(raw.get("consecutive_min_streak") or 2)),
+        "watchlist_buy_precheck_only": raw.get("watchlist_buy_precheck_only", True) is not False,
+        "card_label_watchlist_budget": str(
+            raw.get("card_label_watchlist_budget") or "观察池买入预算不足"
+        ),
     }
 
 

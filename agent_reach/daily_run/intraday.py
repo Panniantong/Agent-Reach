@@ -1903,6 +1903,7 @@ def _decide_trade(
                 str(report.get("code") or ""),
                 allow_defensive=allow_defensive,
                 strikes=hold_debounce_strikes,
+                price=_optional_float(report.get("price")),
             )
 
         if allow_defensive:
@@ -1963,7 +1964,12 @@ def _decide_trade(
                     sell_kind="defensive_trim",
                     sell_ratio_override=hold_sell_ratio_cap,
                 )
-            deep_loss_reason = _deep_loss_sell_block_reason(snapshot, settings, report.get("code"))
+            deep_loss_reason = _deep_loss_sell_block_reason(
+                snapshot,
+                settings,
+                report.get("code"),
+                sell_kind="defensive_trim",
+            )
             if deep_loss_reason:
                 return TradeDecision(
                     action="hold",
@@ -2052,6 +2058,8 @@ def _deep_loss_sell_block_reason(
     snapshot: dict[str, Any],
     settings: dict[str, Any],
     code: Any,
+    *,
+    sell_kind: Optional[str] = None,
 ) -> Optional[str]:
     from agent_reach.daily_run.portfolio_manager import deep_loss_sell_block_reason, holding_is_sellable
     from agent_reach.daily_run.symbols import build_enriched_symbols
@@ -2067,8 +2075,23 @@ def _deep_loss_sell_block_reason(
             continue
         if not holding_is_sellable(holding, settings):
             return None
-        return deep_loss_sell_block_reason(pf, holding, enriched, settings)
+        return deep_loss_sell_block_reason(
+            pf,
+            holding,
+            enriched,
+            settings,
+            sell_kind=sell_kind,
+        )
     return None
+
+
+def _optional_float(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _today_str() -> str:

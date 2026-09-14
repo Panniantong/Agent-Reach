@@ -526,6 +526,8 @@ def deep_loss_sell_analysis(
     holding: dict[str, Any],
     enriched: dict[str, dict[str, Any]],
     settings: dict[str, Any],
+    *,
+    sell_kind: Optional[str] = None,
 ) -> dict[str, Any]:
     """Harness deep-loss sell gate: thresholds, cover requirement, sell ratio."""
     policy = deep_loss_policy(settings)
@@ -533,6 +535,11 @@ def deep_loss_sell_analysis(
     deep = is_deep_loss_holding(holding, enriched, settings)
     loss_abs = abs(unrealized) if unrealized < -0.01 else 0.0
     cover_ratio = float(policy.get("cover_ratio", 1.0))
+    code = _normalize_code(str(holding.get("code") or ""))
+    from agent_reach.daily_run.deep_loss_cover_policy import cover_exempt_for_sell
+
+    if cover_exempt_for_sell(code, settings=settings, sell_kind=sell_kind):
+        cover_ratio = 0.0
     from agent_reach.daily_run.session_regime import supportive_regime_active
 
     supportive_reallocation = False
@@ -552,7 +559,6 @@ def deep_loss_sell_analysis(
         exclude_code=str(holding.get("code") or ""),
     )
     required_cover = round(loss_abs * cover_ratio, 2) if deep and cover_ratio > 0 else 0.0
-    code = _normalize_code(str(holding.get("code") or ""))
     total_shares = int(holding.get("shares") or 0)
     sellable = holding_sellable_shares(holding)
     sell_shares = resolve_deep_loss_sell_shares(
@@ -628,9 +634,17 @@ def deep_loss_sell_block_reason(
     holding: dict[str, Any],
     enriched: dict[str, dict[str, Any]],
     settings: dict[str, Any],
+    *,
+    sell_kind: Optional[str] = None,
 ) -> Optional[str]:
     """Return block message when harness deep-loss sell conditions fail."""
-    return deep_loss_sell_analysis(pf, holding, enriched, settings).get("block_reason")
+    return deep_loss_sell_analysis(
+        pf,
+        holding,
+        enriched,
+        settings,
+        sell_kind=sell_kind,
+    ).get("block_reason")
 
 
 def portfolio_coverable_gains(
@@ -872,7 +886,22 @@ def _apply_sell(
     if ledger_block:
         return ApplyResult(applied=False, portfolio=pf, message=ledger_block)
 
-    sell_analysis = deep_loss_sell_analysis(pf, target, enriched, settings)
+    sell_ratio_override = None
+    sell_kind = None
+    if hasattr(decision, "sell_ratio_override"):
+        sell_ratio_override = getattr(decision, "sell_ratio_override", None)
+        sell_kind = getattr(decision, "sell_kind", None)
+    elif isinstance(decision, dict):
+        sell_ratio_override = decision.get("sell_ratio_override")
+        sell_kind = decision.get("sell_kind")
+
+    sell_analysis = deep_loss_sell_analysis(
+        pf,
+        target,
+        enriched,
+        settings,
+        sell_kind=sell_kind,
+    )
     if not sell_analysis["allowed"]:
         return ApplyResult(applied=False, portfolio=pf, message=str(sell_analysis["block_reason"]))
 
@@ -898,14 +927,6 @@ def _apply_sell(
     if trim_block:
         return ApplyResult(applied=False, portfolio=pf, message=trim_block)
 
-    sell_ratio_override = None
-    sell_kind = None
-    if hasattr(decision, "sell_ratio_override"):
-        sell_ratio_override = getattr(decision, "sell_ratio_override", None)
-        sell_kind = getattr(decision, "sell_kind", None)
-    elif isinstance(decision, dict):
-        sell_ratio_override = decision.get("sell_ratio_override")
-        sell_kind = decision.get("sell_kind")
     if sell_kind == "profit_lock" and sell_ratio_override is not None:
         from agent_reach.daily_run.profit_lock import profit_lock_effective_sell_ratio
 
@@ -1402,6 +1423,34 @@ def trade_buy_budget_blocked(record: dict[str, Any]) -> bool:
     return "可部署买入预算" in reasoning
 
 
+def _symbol_is_holding(code: str, pf: dict[str, Any]) -> bool:
+    norm = _normalize_code(code)
+    for h in pf.get("holdings") or []:
+        if _normalize_code(str(h.get("code") or "")) == norm:
+            return True
+    return False
+
+
+def _annotate_buy_budget_reason(
+    reason: str,
+    *,
+    code: str,
+    pf: dict[str, Any],
+    settings: dict[str, Any],
+) -> str:
+    if _symbol_is_holding(code, pf):
+        return reason
+    from agent_reach.daily_run.deploy_signal_policy import deploy_signal_cfg
+
+    cfg = deploy_signal_cfg(settings)
+    if not cfg.get("watchlist_buy_precheck_only", True):
+        return reason
+    label = str(cfg.get("card_label_watchlist_budget") or "观察池买入预算不足")
+    if label in reason:
+        return reason
+    return f"【{label}】{reason}"
+
+
 def buy_budget_precheck_reason(
     pf: dict[str, Any],
     enriched: dict[str, dict[str, Any]],
@@ -1423,7 +1472,13 @@ def buy_budget_precheck_reason(
     if analysis.get("allowed"):
         return None
     reason = str(analysis.get("block_reason") or "").strip()
-    return reason or "买入预算不足"
+    reason = reason or "买入预算不足"
+    return _annotate_buy_budget_reason(
+        reason,
+        code=prefer_code,
+        pf=pf,
+        settings=settings,
+    )
 
 
 def watchlist_affordability_markdown(
@@ -1755,6 +1810,13 @@ def _decision_block_kind(decision: Any) -> Optional[str]:
 def render_apply_markdown(result: ApplyResult, *, decision: Optional[Any] = None) -> str:
     if not result.applied:
         if _decision_block_kind(decision) == "buy_budget":
+            reasoning = ""
+            if isinstance(decision, dict):
+                reasoning = str(decision.get("reasoning") or "")
+            elif decision is not None:
+                reasoning = str(getattr(decision, "reasoning", "") or "")
+            if "观察池" in reasoning:
+                return "**观察池：** 买入预算预检阻断（部署预算不足一手，非现金不足）"
             return "**调仓执行：** 决策层预算预检阻断，未进入 paper 落账"
         return f"**调仓执行：** 未执行 — {result.message}"
     lines = ["**调仓执行（paper）：**"]

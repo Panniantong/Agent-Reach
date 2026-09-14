@@ -5,6 +5,10 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from agent_reach.daily_run.plan_invalidation import (
+    hold_debounce_invalidated,
+    symbol_operation_plan_text,
+)
 from agent_reach.daily_run.snapshot_builder import _normalize_code
 
 
@@ -29,25 +33,6 @@ def hold_debounce_cfg(settings: Optional[dict[str, Any]] = None) -> dict[str, An
     }
 
 
-def _symbol_operation_plan_text(code: str, settings: Optional[dict[str, Any]] = None) -> str:
-    norm = _normalize_code(code)
-    if not norm:
-        return ""
-    from agent_reach.daily_run.week_open_overlay import load_week_open_overlay
-
-    wo = load_week_open_overlay()
-    if wo:
-        for plan in wo.get("operation_plans") or []:
-            if _normalize_code(str(plan.get("code") or "")) == norm:
-                return str(plan.get("operation_plan") or plan.get("action") or "")
-    runtime = (settings or {}).get("harness_runtime") or {}
-    week_open = runtime.get("week_open") or {}
-    for plan in week_open.get("operation_plans") or []:
-        if _normalize_code(str(plan.get("code") or "")) == norm:
-            return str(plan.get("operation_plan") or plan.get("action") or "")
-    return ""
-
-
 def operation_plan_requires_hold_debounce(code: str, settings: Optional[dict[str, Any]] = None) -> bool:
     """True when Sunday plan is 持有 and not an explicit 减仓/清仓 plan."""
     cfg = hold_debounce_cfg(settings)
@@ -59,7 +44,7 @@ def operation_plan_requires_hold_debounce(code: str, settings: Optional[dict[str
         wo = load_week_open_overlay()
         if not wo or wo.get("enabled") is False:
             return False
-    text = _symbol_operation_plan_text(code, settings)
+    text = symbol_operation_plan_text(code, settings)
     if not text or "持有" not in text:
         return False
     if any(k in text for k in ("减仓", "清仓")):
@@ -73,12 +58,18 @@ def touch_week_open_hold_debounce(
     *,
     allow_defensive: bool,
     strikes: dict[str, int],
+    price: Optional[float] = None,
 ) -> tuple[Optional[str], Optional[float]]:
     """Update per-symbol strike counter; return (block_reason, sell_ratio_cap)."""
     norm = _normalize_code(code)
     if not norm:
         return None, None
     if not operation_plan_requires_hold_debounce(code, settings):
+        return None, None
+
+    invalidated, inv_reason = hold_debounce_invalidated(norm, price, settings=settings)
+    if invalidated:
+        strikes[norm] = 0
         return None, None
 
     if not allow_defensive:
@@ -92,7 +83,8 @@ def touch_week_open_hold_debounce(
         strikes[norm] = count + 1
         return (
             f"周日计划「持有」，defensive_trim 需连续 {required} 次 MSS 信号确认"
-            f"（{strikes[norm]}/{required}）",
+            f"（{strikes[norm]}/{required}）"
+            + (f"；{inv_reason}" if inv_reason else ""),
             None,
         )
     return None, float(cfg["hold_sell_ratio_cap"])

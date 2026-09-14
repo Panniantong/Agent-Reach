@@ -182,7 +182,9 @@
       "block_sell_in_recovery_zone": true,
       "persist_macro_warming_intraday": true,
       "hold_debounce": {
-        "enabled": true
+        "enabled": true,
+        "invalidate_below_plan_stop": true,
+        "invalidate_below_forecast_low": false
       },
       "block_sell_near_day_low": true,
       "near_day_low_tolerance_pct": 0.5,
@@ -327,6 +329,8 @@
     "large_unrealized_loss_pct": 10,
     "deep_loss_sell_require_cover": true,
     "deep_loss_cover_ratio": 1.0,
+    "defensive_trim_exempt_cover": true,
+    "plan_trim_exempt_cover": true,
     "deep_loss_tier_multiplier": 2.0,
     "portfolio_loss_cny_threshold": 5000,
     "coverable_realized_weight": 1.0,
@@ -1618,7 +1622,9 @@
     "medium_deploy_ratio": 0.5,
     "weak_deploy_ratio": 0.25,
     "consecutive_signal_boost": 0.25,
-    "consecutive_min_streak": 2
+    "consecutive_min_streak": 2,
+    "watchlist_buy_precheck_only": true,
+    "card_label_watchlist_budget": "观察池买入预算不足"
   },
 
   "forecast_consensus": {
