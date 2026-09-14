@@ -361,11 +361,7 @@ def test_ytdlp_config_write_refuses_target_symlink(
     import agent_reach.utils.paths as paths
 
     monkeypatch.setattr(paths.sys, "platform", "darwin")
-    monkeypatch.setattr(
-        paths.Path,
-        "home",
-        classmethod(lambda cls: tmp_path),
-    )
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("XDG_CONFIG_HOME")
     config_path = tmp_path / ".config" / "yt-dlp" / "config"
     config_path.parent.mkdir(parents=True)
