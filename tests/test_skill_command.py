@@ -109,6 +109,18 @@ class TestSkillCommand(unittest.TestCase):
         self.assertNotIn("linkedin-scraper.", linkedin_section)
         self.assertNotIn("--transport streamable-http", linkedin_section)
 
+    def test_nowcoder_reference_uses_opencli_read_contract(self):
+        career_reference = (
+            importlib.resources.files("agent_reach")
+            .joinpath("skill", "references", "career.md")
+            .read_text(encoding="utf-8")
+        )
+
+        self.assertIn("opencli nowcoder search", career_reference)
+        self.assertIn("opencli nowcoder experience", career_reference)
+        self.assertIn("opencli nowcoder detail", career_reference)
+        self.assertIn("不自动调用登录", career_reference)
+
     def test_localized_readmes_use_current_linkedin_server_name(self):
         root = Path(__file__).resolve().parents[1]
         for name in ("README_ja.md", "README_ko.md"):

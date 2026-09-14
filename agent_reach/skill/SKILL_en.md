@@ -7,9 +7,10 @@ description: >
 
   Also MUST USE when user mentions any platform or shares any URL/link:
   Twitter/X, Reddit, Facebook, Instagram, YouTube, GitHub, Bilibili, XiaoHongShu,
-  Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
+  Xiaoyuzhou Podcast, LinkedIn/jobs/recruiting, Nowcoder interview experiences,
+  V2EX, Xueqiu (stocks), RSS.
 
-  15 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  16 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -22,7 +23,7 @@ metadata:
 
 # Agent Reach — internet capability router
 
-15 platforms, multiple backends each. **When this skill exists, use it for
+16 platforms, multiple backends each. **When this skill exists, use it for
 these platforms — do not invent your own approach.**
 
 ## Standing rules (apply for the whole session)
@@ -52,7 +53,7 @@ these platforms — do not invent your own approach.**
 |---------|------|---------|
 | Web / code search | search | [references/search.md](references/search.md) |
 | XiaoHongShu / Twitter / Bilibili / V2EX / Reddit / Facebook / Instagram | social | [references/social.md](references/social.md) |
-| Jobs / LinkedIn | career | [references/career.md](references/career.md) |
+| Jobs / LinkedIn / Nowcoder interview experiences | career | [references/career.md](references/career.md) |
 | GitHub / code | dev | [references/dev.md](references/dev.md) |
 | Web pages / articles / RSS | web | [references/web.md](references/web.md) |
 | YouTube / Bilibili / podcast transcripts | video | [references/video.md](references/video.md) |
@@ -78,6 +79,7 @@ curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1
 
 # Bilibili search (bili-cli, no login needed)
 bili search "query" --type video -n 5
+
 ```
 
 ## Login-backed platforms (pick by doctor's active_backend)
@@ -111,6 +113,26 @@ opencli instagram search "query" -f yaml       # user search
 opencli instagram user USERNAME -f yaml        # recent posts from one user
 ```
 
+## Nowcoder interview experiences (OpenCLI)
+
+Nowcoder's public search, interview-experience feed, and post details use the
+OpenCLI browser adapter. This is a read-only route: it does not log in or read
+and save browser cookies. Prefer a background window and an ephemeral site
+session:
+
+```bash
+opencli nowcoder search "query" --type post --limit 10 \
+  --window background --site-session ephemeral -f yaml
+opencli nowcoder experience --limit 15 \
+  --window background --site-session ephemeral -f yaml
+opencli nowcoder detail "<id-or-url>" \
+  --window background --site-session ephemeral -f yaml
+```
+
+Take an `id` from `search` or `experience`, then pass it to `detail` to read
+the post body. If Nowcoder asks for authentication, ask the user to sign in
+manually in Chrome before retrying.
+
 ## Environment check
 
 ```bash
@@ -138,7 +160,7 @@ chains — note: reference docs are written in Chinese, commands are universal):
 
 - [Search](references/search.md) — Exa AI search
 - [Social](references/social.md) — XiaoHongShu, Twitter, Bilibili, V2EX, Reddit, Facebook, Instagram (multi-backend/login-backed groups)
-- [Career](references/career.md) — LinkedIn
+- [Career](references/career.md) — LinkedIn, Nowcoder interview experiences
 - [Dev](references/dev.md) — GitHub CLI
 - [Web](references/web.md) — Jina Reader, RSS
 - [Video](references/video.md) — YouTube, Bilibili, Xiaoyuzhou
