@@ -128,4 +128,20 @@ def format_report(results: Dict[str, dict]) -> str:
         except OSError:
             pass
 
+    # Cookie-based channels carry account-ban risk; say so in the report
+    # when any of them is configured, mirroring the configure-time warning.
+    cookie_channels = {"twitter", "xiaohongshu", "reddit", "xueqiu"}
+    active_cookie = sorted(
+        name for name, r in results.items()
+        if name in cookie_channels and r.get("status") in ("ok", "warn")
+    )
+    if active_cookie:
+        lines.append("")
+        lines.append(
+            "[bold yellow]⚠️  封号风险：[/bold yellow] "
+            f"{'、'.join(active_cookie)} 使用 Cookie 登录态，"
+            "通过脚本/API 调用存在被平台检测并封号的风险。"
+            "请使用专用小号（throwaway account），不要使用主账号。"
+        )
+
     return "\n".join(lines)

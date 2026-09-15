@@ -97,3 +97,18 @@ def isolated_xueqiu_cookie_jar(monkeypatch):
     monkeypatch.setattr(xueqiu, "_cookies_initialized", False)
     yield
     xueqiu._cookie_jar.clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_probe_cache():
+    """Drop the process-wide probe cache before every test.
+
+    probe.probe_command caches results with a TTL. Without this, one test's
+    real probe (e.g. bili --version on the host) poisons a later test that
+    monkeypatches subprocess.run to simulate a broken/missing tool.
+    """
+    from agent_reach import probe
+
+    probe._PROBE_CACHE.clear()
+    yield
+    probe._PROBE_CACHE.clear()
