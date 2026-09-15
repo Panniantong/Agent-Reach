@@ -301,7 +301,12 @@ class TestTradeBlockMessages:
         settings = {
             "thresholds": {"macro_veto": 30, "aggressive_entry": 45, "min_cash_ratio": 0.5},
             "trading": {"commission_rate": 0.0015, "slippage_rate": 0.001, "holding_lock_days": 1},
-            "pnl_overview": {"deep_loss_sell_require_cover": True, "large_unrealized_loss_cny": 5000},
+            "pnl_overview": {
+                "deep_loss_sell_require_cover": True,
+                "large_unrealized_loss_cny": 5000,
+                "plan_trim_exempt_cover": False,
+                "defensive_trim_exempt_cover": False,
+            },
             "harness_runtime": {"trade_signals": {"defensive_trim": True}},
         }
         verdict = VerdictResult(

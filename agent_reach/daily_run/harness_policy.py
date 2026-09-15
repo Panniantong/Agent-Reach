@@ -2286,6 +2286,21 @@ def resolve_harness_position_policy(
     from agent_reach.daily_run.buy_rules_whatif_optimizer import apply_whatif_buy_llm_optimal_to_policy
 
     apply_whatif_buy_llm_optimal_to_policy(merged, state, settings=settings)
+    from agent_reach.daily_run.session_regime import supportive_regime_active
+
+    signals = resolve_harness_trade_signals(state, settings=settings)
+    supportive = supportive_regime_active(settings)
+    if supportive and not signals.get("pnl_target_miss"):
+        if evolution_mode(settings, "deploy_ratio") == "harness":
+            floor = 0.35 if signals.get("defensive_trim") else 0.5
+            merged["deploy_ratio"] = max(float(merged.get("deploy_ratio", 1.0)), floor)
+    if (
+        _overlay_has_phrase(state, "基准买入优于自进化", settings=settings)
+        and not signals.get("defensive_trim")
+        and not signals.get("pnl_target_miss")
+    ):
+        if evolution_mode(settings, "deploy_ratio") == "harness":
+            merged["deploy_ratio"] = max(float(merged.get("deploy_ratio", 1.0)), 0.55)
     merged = _restore_fixed_evolution_keys(merged, base, settings, _EVOLVED_POSITION_KEYS)
     merged["deploy_ratio"] = max(0.05, min(1.0, float(merged.get("deploy_ratio", 1.0))))
     merged["max_position_pct"] = max(5.0, min(100.0, float(merged.get("max_position_pct", 35.0))))
