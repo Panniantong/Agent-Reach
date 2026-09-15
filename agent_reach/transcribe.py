@@ -416,7 +416,9 @@ def transcribe(
     first configured provider (Groq, then OpenAI). In auto mode only, set
     `allow_provider_fallback=True` to permit sending failed chunks to the next
     configured provider; using the flag with an explicit provider is rejected.
-    `out_dir` defaults to a fresh temp directory; intermediate files stay there.
+    With no `out_dir`, intermediate files are automatically removed on exit.
+    An explicit `out_dir` retains each call's files in its own `transcribe-*`
+    child directory, including on failure; existing files are left untouched.
     """
     if allow_provider_fallback and provider != "auto":
         raise TranscribeError(
@@ -436,7 +438,11 @@ def transcribe(
         order = configured[:1]
 
     if out_dir:
-        return _transcribe_in_dir(source, order, cfg, Path(out_dir))
+        output_root = Path(out_dir)
+        output_root.mkdir(parents=True, exist_ok=True)
+        # Fixed media filenames must never collide with another run or input.
+        work_dir = Path(tempfile.mkdtemp(prefix="transcribe-", dir=str(output_root)))
+        return _transcribe_in_dir(source, order, cfg, work_dir)
 
     with tempfile.TemporaryDirectory(prefix="transcribe-") as tmp:
         return _transcribe_in_dir(source, order, cfg, Path(tmp))
