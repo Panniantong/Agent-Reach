@@ -366,10 +366,10 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 | Instagram | `opencli` | `opencli instagram user nasa -f yaml` |
 | GitHub | `gh` | `gh search repos "query"` |
 | Web | `curl` + Jina | `curl -s "https://r.jina.ai/URL"` |
-| Exa Search | `mcporter` | `mcporter call exa.web_search_exa query="..." numResults=5` |
+| Exa Search | `mcporter` | `mcporter call exa.web_search_exa "query=..." numResults=5` |
 | 小红书 | `opencli`（服务器 `mcporter`） | `opencli xiaohongshu search "query" -f yaml` |
 | 小宇宙播客 | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
-| LinkedIn | `mcporter` | `mcporter call linkedin.get_person_profile linkedin_username="..."` |
+| LinkedIn | `mcporter` | `mcporter call linkedin.get_person_profile linkedin_username=...` |
 | RSS | `feedparser` | `python3 -c "import feedparser; ..."` |
 
 > 多后端平台以 `agent-reach doctor --json` 的 `active_backend` 为准。
