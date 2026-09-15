@@ -675,6 +675,20 @@
     "inference_top_k": 0,
     "inference_sample_count": 5,
     "week_forecast_blend_weight": 0.35,
+    "inference_mode": "harness",
+    "harness_evolve": true,
+    "calibrate": {
+      "enabled": true,
+      "lookback_days": 14,
+      "max_codes": 6,
+      "holdout_days": 5,
+      "holdout_folds": 1,
+      "grid": {
+        "inference_T": [0.4, 0.6, 0.8],
+        "inference_sample_count": [3, 5],
+        "week_forecast_blend_weight": [0.25, 0.35, 0.45]
+      }
+    },
     "technical_max_score_delta": 12,
     "attach_to_snapshot": true,
     "attach_predict_days": 5,
@@ -1491,6 +1505,7 @@
       "industry_funnel": true,
       "pnl_overview": true,
       "hyperopt_lite": true,
+      "kronos_calibrate": true,
       "drift_trigger": true
       }
     },
@@ -1533,6 +1548,7 @@
       "intraday_sell": true,
       "industry_funnel": true,
       "hyperopt_lite": true,
+      "kronos_calibrate": true,
       "drift_trigger": true
     },
     "llm_refine": {

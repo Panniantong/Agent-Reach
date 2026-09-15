@@ -24,6 +24,7 @@ class WeeklyHarnessSkillsReport:
     intraday_sell: dict[str, Any] = field(default_factory=dict)
     industry_funnel: dict[str, Any] = field(default_factory=dict)
     hyperopt_lite: dict[str, Any] = field(default_factory=dict)
+    kronos_calibrate: dict[str, Any] = field(default_factory=dict)
     drift_trigger: dict[str, Any] = field(default_factory=dict)
     weekly_layer_a: dict[str, Any] = field(default_factory=dict)
     effective_overlay: dict[str, Any] = field(default_factory=dict)
@@ -60,6 +61,7 @@ class WeeklyHarnessSkillsReport:
                     self.intraday_sell,
                     self.industry_funnel,
                     self.hyperopt_lite,
+                    self.kronos_calibrate,
                     self.drift_trigger,
                     self.weekly_layer_a,
                 )
@@ -148,6 +150,16 @@ def run_weekly_harness_refinements(
         from agent_reach.daily_run.hyperopt_lite_harness import apply_hyperopt_lite_harness_refinement
 
         out.hyperopt_lite = apply_hyperopt_lite_harness_refinement(report, settings=cfg)
+
+    if _job_enabled(harness_cfg, "kronos_calibrate") and not lightweight:
+        from agent_reach.daily_run.kronos_calibrate_harness import apply_kronos_calibrate_harness_refinement
+
+        out.kronos_calibrate = apply_kronos_calibrate_harness_refinement(report, settings=cfg)
+    elif lightweight:
+        out.kronos_calibrate = {
+            "skipped": True,
+            "reason": "harness_lightweight: kronos_calibrate deferred to Saturday grid",
+        }
 
     if _job_enabled(harness_cfg, "drift_trigger"):
         from agent_reach.daily_run.drift_trigger_harness import apply_drift_trigger_harness_refinement
