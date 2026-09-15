@@ -368,6 +368,8 @@ class TestApplyAutoAdjust:
             "watchlist": [],
         }
         settings_enabled.setdefault("pnl_overview", {})["deep_loss_sell_require_cover"] = True
+        settings_enabled.setdefault("pnl_overview", {})["plan_trim_exempt_cover"] = False
+        settings_enabled.setdefault("pnl_overview", {})["defensive_trim_exempt_cover"] = False
         ledger = tmp_path / "trade_ledger.jsonl"
         ledger.write_text("", encoding="utf-8")
         monkeypatch.setattr("agent_reach.daily_run.realized_pnl.default_ledger_path", lambda: ledger)
@@ -417,6 +419,8 @@ class TestApplyAutoAdjust:
             "watchlist": [],
         }
         settings_enabled.setdefault("pnl_overview", {})["deep_loss_sell_require_cover"] = True
+        settings_enabled.setdefault("pnl_overview", {})["plan_trim_exempt_cover"] = False
+        settings_enabled.setdefault("pnl_overview", {})["defensive_trim_exempt_cover"] = False
         settings_enabled["harness_runtime"] = {
             "deep_loss_policy": {
                 "loss_cny_threshold": 5000,
@@ -566,6 +570,8 @@ class TestApplyAutoAdjust:
             "watchlist": [],
         }
         settings_enabled.setdefault("pnl_overview", {})["deep_loss_sell_require_cover"] = True
+        settings_enabled.setdefault("pnl_overview", {})["plan_trim_exempt_cover"] = False
+        settings_enabled.setdefault("pnl_overview", {})["defensive_trim_exempt_cover"] = False
         ledger = tmp_path / "trade_ledger.jsonl"
         ledger.write_text(
             '{"at":"2026-08-01T00:00:00+00:00","actions":[{"side":"sell","code":"688008","shares":100,"price":300,"amount":30000,"commission":45,"realized_pnl":5000}]}\n',
