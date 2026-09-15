@@ -89,7 +89,8 @@ class RedditChannel(Channel):
 
     def _check_rdt(self):
         """Inspect rdt's saved credential without invoking its auto-refresh."""
-        if not shutil.which("rdt"):
+        standard_script = Path.home() / ".local" / "bin" / "rdt"
+        if not shutil.which("rdt") and not standard_script.is_file():
             return None
 
         credential_path = Path.home() / ".config" / "rdt-cli" / "credential.json"
