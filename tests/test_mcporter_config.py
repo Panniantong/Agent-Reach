@@ -51,6 +51,51 @@ def test_home_and_project_layers_are_merged(
     assert inspection.imports_unchecked is False
 
 
+def test_xdg_config_precedes_legacy_home_config(
+    monkeypatch, tmp_path, isolated_home
+):
+    monkeypatch.chdir(tmp_path)
+    xdg_home = tmp_path / "xdg"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_home))
+    _write_config(
+        isolated_home / ".mcporter" / "mcporter.json",
+        {"legacy-only": {"command": "legacy"}},
+    )
+    _write_config(
+        xdg_home / "mcporter" / "mcporter.json",
+        {"xdg-only": {"command": "xdg"}},
+    )
+    _write_config(
+        tmp_path / "config" / "mcporter.json",
+        {"project-only": {"command": "project"}},
+    )
+
+    inspection = inspect_mcporter_config()
+
+    assert inspection.server_names == {"xdg-only", "project-only"}
+    assert inspection.source == "xdg+project"
+
+
+def test_relative_xdg_config_home_is_ignored_for_legacy_fallback(
+    monkeypatch, tmp_path, isolated_home
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("XDG_CONFIG_HOME", "relative-xdg")
+    _write_config(
+        tmp_path / "relative-xdg" / "mcporter" / "mcporter.json",
+        {"relative-xdg": {"command": "relative"}},
+    )
+    _write_config(
+        isolated_home / ".mcporter" / "mcporter.jsonc",
+        {"legacy-jsonc": {"command": "legacy"}},
+    )
+
+    inspection = inspect_mcporter_config()
+
+    assert inspection.server_names == {"legacy-jsonc"}
+    assert inspection.source == "home"
+
+
 def test_explicit_config_is_the_only_layer(
     monkeypatch, tmp_path, isolated_home
 ):
