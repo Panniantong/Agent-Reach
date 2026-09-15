@@ -56,6 +56,10 @@ def _base_settings(**overrides):
             },
         },
         "intraday": {"watchlist_breakout": {"enabled": True, "max_position_pct": 5.0}},
+        "pnl_overview": {
+            "plan_trim_exempt_cover": False,
+            "defensive_trim_exempt_cover": False,
+        },
     }
     settings.update(overrides)
     return settings

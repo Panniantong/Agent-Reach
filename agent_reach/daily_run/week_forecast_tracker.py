@@ -291,6 +291,17 @@ def review_active_forecast(
     review.optimization_notes = list(review.optimization_notes) + _kronos_calibration_notes(
         review.kronos_review
     )
+
+    try:
+        from agent_reach.daily_run.kronos_calibration import append_kronos_error_ledger
+
+        review.kronos_review = {
+            **(review.kronos_review or {}),
+            "ledger": append_kronos_error_ledger(review, updated, settings=cfg),
+        }
+    except Exception:
+        pass
+
     return review
 
 

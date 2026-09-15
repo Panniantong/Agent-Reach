@@ -1772,6 +1772,30 @@ def apply_harness_policy_overlay(settings: dict[str, Any]) -> dict[str, Any]:
         **{k: effective_weekly_whatif[k] for k in effective_weekly_whatif},
     }
     cfg["rejected_strategies"] = rejected_cfg
+    from agent_reach.daily_run.kronos_inference_policy import (
+        harness_kronos_inference_overlay_meta,
+        kronos_effective_cfg,
+        kronos_inference_mode,
+        kronos_inference_policy_base,
+        resolve_harness_kronos_inference_policy,
+        resolve_harness_kronos_symbol_blend,
+    )
+
+    base_kronos_inference = kronos_inference_policy_base(cfg)
+    effective_kronos_inference = resolve_harness_kronos_inference_policy(state, settings=cfg)
+    harness_meta["kronos_inference_policy"] = effective_kronos_inference
+    kronos_inference_meta = harness_kronos_inference_overlay_meta(
+        base_kronos_inference, effective_kronos_inference
+    )
+    if kronos_inference_meta:
+        harness_meta["kronos_inference_overlay"] = kronos_inference_meta
+    effective_symbol_blend = resolve_harness_kronos_symbol_blend(state, settings=cfg)
+    if effective_symbol_blend:
+        harness_meta["kronos_symbol_blend"] = effective_symbol_blend
+    if kronos_inference_mode(cfg) == "harness":
+        kronos_block = dict(cfg.get("kronos") or {})
+        kronos_block.update(kronos_effective_cfg({**cfg, "harness_runtime": harness_meta}))
+        cfg["kronos"] = kronos_block
     base_trend = resolve_harness_base_trend_policy(cfg)
     effective_trend = resolve_harness_trend_policy(state, settings=cfg)
     harness_meta["trend_policy"] = effective_trend
@@ -2262,6 +2286,21 @@ def resolve_harness_position_policy(
     from agent_reach.daily_run.buy_rules_whatif_optimizer import apply_whatif_buy_llm_optimal_to_policy
 
     apply_whatif_buy_llm_optimal_to_policy(merged, state, settings=settings)
+    from agent_reach.daily_run.session_regime import supportive_regime_active
+
+    signals = resolve_harness_trade_signals(state, settings=settings)
+    supportive = supportive_regime_active(settings)
+    if supportive and not signals.get("pnl_target_miss"):
+        if evolution_mode(settings, "deploy_ratio") == "harness":
+            floor = 0.35 if signals.get("defensive_trim") else 0.5
+            merged["deploy_ratio"] = max(float(merged.get("deploy_ratio", 1.0)), floor)
+    if (
+        _overlay_has_phrase(state, "基准买入优于自进化", settings=settings)
+        and not signals.get("defensive_trim")
+        and not signals.get("pnl_target_miss")
+    ):
+        if evolution_mode(settings, "deploy_ratio") == "harness":
+            merged["deploy_ratio"] = max(float(merged.get("deploy_ratio", 1.0)), 0.55)
     merged = _restore_fixed_evolution_keys(merged, base, settings, _EVOLVED_POSITION_KEYS)
     merged["deploy_ratio"] = max(0.05, min(1.0, float(merged.get("deploy_ratio", 1.0))))
     merged["max_position_pct"] = max(5.0, min(100.0, float(merged.get("max_position_pct", 35.0))))
