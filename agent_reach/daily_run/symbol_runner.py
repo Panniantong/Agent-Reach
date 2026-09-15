@@ -865,6 +865,10 @@ def run_close_for_symbols(
         portfolio_summary_obj.intraday_friction_whatif = intraday_friction_whatif
         portfolio_summary_obj.intraday_sell_whatif = intraday_sell_whatif
 
+        from agent_reach.daily_run.daily_pnl_history import append_daily_pnl
+
+        append_daily_pnl(portfolio_summary_obj.to_dict(), source="close")
+
         technical_watch_result: dict[str, Any] = {}
         try:
             from agent_reach.daily_run.technical_scenario_watch import run_close_technical_watch

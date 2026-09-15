@@ -823,3 +823,88 @@ def _run_job_body(
         raise ValueError(f"未知定时任务：{job}，可选 morning | midday | intraday | close | weekly | forecast")
 
     return result, feishu
+
+
+def _intraday_scan_payload(run: dict[str, Any]) -> dict[str, Any]:
+    """Extract scan entry from run_intraday / record_scan result."""
+    inner = run.get("scan") or {}
+    return inner.get("scan") or inner
+
+
+def format_scheduled_run_summary(result: dict[str, Any], job: str) -> dict[str, Any]:
+    """Normalize cron/CLI one-line summaries for legacy and per-symbol schedule results."""
+    symbol_results = result.get("symbol_results") or []
+    job_result = result.get("result") or {}
+
+    snapshot_path = result.get("snapshot_path")
+    if not snapshot_path and symbol_results:
+        snapshot_path = symbol_results[-1].get("snapshot_path")
+
+    out: dict[str, Any] = {
+        "snapshot_path": snapshot_path,
+        "symbol_count": len(symbol_results) if symbol_results else None,
+    }
+
+    def _last_symbol_run() -> dict[str, Any]:
+        if not symbol_results:
+            return {}
+        return symbol_results[-1].get("result") or {}
+
+    if job == "morning":
+        if symbol_results:
+            report = (_last_symbol_run().get("evaluation") or {}).get("report") or {}
+        else:
+            report = (job_result.get("evaluation") or {}).get("report") or {}
+        out["verdict"] = report.get("verdict")
+        out["mss_final"] = report.get("mss_final")
+    elif job == "midday":
+        if symbol_results:
+            scan = _intraday_scan_payload(_last_symbol_run())
+            if not scan.get("scan_id"):
+                scan = symbol_results[-1].get("scan") or scan
+        else:
+            scan = result.get("scan") or _intraday_scan_payload(job_result)
+        out["scan_id"] = scan.get("scan_id")
+        out["mss_final"] = scan.get("mss_final")
+        out["verdict"] = scan.get("verdict")
+    elif job == "intraday":
+        if symbol_results:
+            from agent_reach.daily_run.intraday import pick_batch_scan_id
+
+            scan_ids: list[str] = []
+            mss_vals: list[float] = []
+            verdict = None
+            for row in symbol_results:
+                scan = _intraday_scan_payload(row.get("result") or {})
+                sid = scan.get("scan_id")
+                if sid:
+                    scan_ids.append(str(sid))
+                mss = scan.get("mss_final")
+                if mss is not None:
+                    mss_vals.append(float(mss))
+                if verdict is None and scan.get("verdict"):
+                    verdict = scan.get("verdict")
+            out["scan_id"] = pick_batch_scan_id(scan_ids) if scan_ids else None
+            out["mss_final"] = mss_vals[-1] if mss_vals else None
+            out["verdict"] = verdict
+        else:
+            scan = _intraday_scan_payload(job_result)
+            out["scan_id"] = scan.get("scan_id")
+            out["mss_final"] = scan.get("mss_final")
+            out["verdict"] = scan.get("verdict")
+    elif job == "close":
+        if symbol_results:
+            verify = _last_symbol_run().get("verify") or {}
+        else:
+            verify = job_result.get("verify") or {}
+        out["close_summary"] = str(verify.get("summary") or "")[:80]
+    elif job == "weekly":
+        wr = job_result.get("report") or {}
+        out["weekly_pnl"] = wr.get("weekly_pnl")
+        out["weekly_holdings"] = len(wr.get("holdings") or [])
+    elif job == "forecast":
+        fc = job_result.get("forecast") or {}
+        out["forecast_range"] = f"{fc.get('week_start')}–{fc.get('week_end')}"
+        out["forecast_symbols"] = len(fc.get("symbols") or {})
+        out["forecast_path"] = result.get("forecast_path") or job_result.get("forecast_path")
+    return out

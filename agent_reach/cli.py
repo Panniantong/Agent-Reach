@@ -2180,29 +2180,38 @@ def _cmd_daily_run(args):
                 if result.get("guard"):
                     print(f"   guard={result.get('guard')} · 补跑请加 --force")
                 sys.exit(0)
-            job_result = result.get("result") or {}
+            from agent_reach.daily_run.schedule import format_scheduled_run_summary
+
+            summary = format_scheduled_run_summary(result, job)
             print(f"✅ Scheduled job '{job}' completed")
-            print(f"   snapshot: {result.get('snapshot_path')}")
+            print(f"   snapshot: {summary.get('snapshot_path')}")
+            if summary.get("symbol_count"):
+                print(f"   symbols: {summary['symbol_count']}")
             if job == "morning":
-                report = (job_result.get("evaluation") or {}).get("report") or {}
-                print(f"   verdict={report.get('verdict')} MSS={report.get('mss_final')}")
+                print(f"   verdict={summary.get('verdict')} MSS={summary.get('mss_final')}")
             elif job == "midday":
-                scan = result.get("scan") or (job_result.get("scan") or {})
-                print(f"   {scan.get('scan_id')} MSS={scan.get('mss_final')} · {scan.get('verdict')} · source=midday")
+                print(
+                    f"   {summary.get('scan_id')} MSS={summary.get('mss_final')} · "
+                    f"{summary.get('verdict')} · source=midday"
+                )
             elif job == "intraday":
-                scan = (job_result.get("scan") or {}).get("scan") or {}
-                print(f"   {scan.get('scan_id')} MSS={scan.get('mss_final')} · {scan.get('verdict')}")
+                print(
+                    f"   {summary.get('scan_id')} MSS={summary.get('mss_final')} · "
+                    f"{summary.get('verdict')}"
+                )
             elif job == "close":
-                verify = job_result.get("verify") or {}
-                print(f"   summary: {verify.get('summary', '')[:80]}")
+                print(f"   summary: {summary.get('close_summary', '')}")
             elif job == "weekly":
-                wr = job_result.get("report") or {}
-                pnl = wr.get("weekly_pnl")
-                print(f"   weekly_pnl={pnl} holdings={len(wr.get('holdings') or [])}")
+                print(
+                    f"   weekly_pnl={summary.get('weekly_pnl')} "
+                    f"holdings={summary.get('weekly_holdings')}"
+                )
             elif job == "forecast":
-                fc = job_result.get("forecast") or {}
-                print(f"   forecast {fc.get('week_start')}–{fc.get('week_end')} symbols={len(fc.get('symbols') or {})}")
-                print(f"   path: {result.get('forecast_path') or job_result.get('forecast_path')}")
+                print(
+                    f"   forecast {summary.get('forecast_range')} "
+                    f"symbols={summary.get('forecast_symbols')}"
+                )
+                print(f"   path: {summary.get('forecast_path')}")
             if not args.dry_run:
                 print("   Feishu push sent")
             return

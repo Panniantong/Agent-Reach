@@ -195,3 +195,88 @@ class TestScheduleHarnessSmoke:
 
         result = run_scheduled("weekly", push=False)
         assert result["harness_summary"]["total_changes"] >= 1
+
+
+class TestScheduledRunSummary:
+    def test_format_per_symbol_intraday_summary(self):
+        from agent_reach.daily_run.schedule import format_scheduled_run_summary
+
+        result = {
+            "job": "intraday",
+            "symbol_results": [
+                {
+                    "code": "688008",
+                    "snapshot_path": "/tmp/a.json",
+                    "result": {
+                        "scan": {
+                            "scan": {
+                                "scan_id": "S3",
+                                "mss_final": 48.0,
+                                "verdict": "观察",
+                            }
+                        }
+                    },
+                },
+                {
+                    "code": "002273",
+                    "snapshot_path": "/tmp/b.json",
+                    "result": {
+                        "scan": {
+                            "scan": {
+                                "scan_id": "S3",
+                                "mss_final": 51.0,
+                                "verdict": "观察",
+                            }
+                        }
+                    },
+                },
+            ],
+        }
+        summary = format_scheduled_run_summary(result, "intraday")
+        assert summary["snapshot_path"] == "/tmp/b.json"
+        assert summary["symbol_count"] == 2
+        assert summary["scan_id"] == "S3"
+        assert summary["mss_final"] == 51.0
+        assert summary["verdict"] == "观察"
+
+    def test_format_legacy_intraday_summary(self):
+        from agent_reach.daily_run.schedule import format_scheduled_run_summary
+
+        result = {
+            "job": "intraday",
+            "snapshot_path": "/tmp/legacy.json",
+            "result": {
+                "scan": {
+                    "scan": {
+                        "scan_id": "S4",
+                        "mss_final": 46.0,
+                        "verdict": "谨慎",
+                    }
+                }
+            },
+        }
+        summary = format_scheduled_run_summary(result, "intraday")
+        assert summary["snapshot_path"] == "/tmp/legacy.json"
+        assert summary["scan_id"] == "S4"
+        assert summary["mss_final"] == 46.0
+
+    def test_format_per_symbol_morning_summary(self):
+        from agent_reach.daily_run.schedule import format_scheduled_run_summary
+
+        result = {
+            "job": "morning",
+            "symbol_results": [
+                {
+                    "snapshot_path": "/tmp/morning.json",
+                    "result": {
+                        "evaluation": {
+                            "report": {"verdict": "积极", "mss_final": 55.0}
+                        }
+                    },
+                }
+            ],
+        }
+        summary = format_scheduled_run_summary(result, "morning")
+        assert summary["snapshot_path"] == "/tmp/morning.json"
+        assert summary["verdict"] == "积极"
+        assert summary["mss_final"] == 55.0
