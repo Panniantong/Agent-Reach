@@ -603,7 +603,9 @@ class TestOrchestrator:
         tr.transcribe("https://example.com/video", out_dir=work, config=fake_config)
 
         assert work.exists()
-        assert (work / "compressed.m4a").exists()
+        runs = list(work.glob("transcribe-*"))
+        assert len(runs) == 1
+        assert (runs[0] / "compressed.m4a").exists()
 
 
 class TestDownloadAudioSafety:
