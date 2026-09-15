@@ -1234,8 +1234,12 @@ def render_intraday_trade_markdown(
         title,
         "",
         f"**Lookback MSS：** {decision.lookback_mss} 分 · **趋势：** {decision.trend}",
-        f"**决策：** {decision.reasoning}",
     ]
+    if settings is not None and decision.lookback_mss is not None:
+        from agent_reach.daily_run.harness_display import format_macro_veto_status_line
+
+        lines.append(format_macro_veto_status_line(decision.lookback_mss, macro_veto_default(settings)))
+    lines.append(f"**决策：** {decision.reasoning}")
     if audit_only and skip_reason:
         lines.append(f"ℹ️ **说明：** 本轮未写入调仓序列 — {skip_reason}")
     if decision.friction_blocked:
@@ -1289,18 +1293,9 @@ def render_intraday_trade_markdown(
 
 
 def _harness_overlay_note(settings: dict[str, Any]) -> str:
-    overlay = (settings.get("harness_runtime") or {}).get("threshold_overlay") or {}
-    if not overlay:
-        return ""
-    parts = []
-    for key, row in overlay.items():
-        if key == "min_cash_ratio":
-            parts.append(f"{key} {row['base']:.0%}→{row['effective']:.0%}")
-        elif key == "max_price_deviation_pct":
-            parts.append(f"{key} {row['base']:.1%}→{row['effective']:.1%}")
-        else:
-            parts.append(f"{key} {row['base']:.0f}→{row['effective']:.0f}")
-    return f"（harness: {', '.join(parts)}）"
+    from agent_reach.daily_run.harness_display import format_harness_decision_footnote
+
+    return format_harness_decision_footnote(settings)
 
 
 def _intraday_shanghai_now(

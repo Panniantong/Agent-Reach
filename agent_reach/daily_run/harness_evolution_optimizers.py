@@ -582,10 +582,13 @@ def apply_weekly_harness_llm_refinement(
 ) -> dict[str, Any]:
     """Weekly DeepSeek threshold optimizer → harness policy."""
     from agent_reach.daily_run.harness_skill_base import apply_skill_refinement, merge_harness_evidence
+    from agent_reach.daily_run.macro_defense_tiers import apply_weekly_observe_bump_refinement
+
+    observe = apply_weekly_observe_bump_refinement(report, settings=settings)
 
     opt = optimize_weekly_threshold_with_deepseek(report, settings=settings)
     if opt.get("skipped"):
-        return {**opt, "job": "harness_threshold"}
+        return {**opt, "job": "harness_threshold", "observe_bump": observe}
     evidence = dict(opt.get("evidence") or {})
     evidence["rigor_domain"] = {
         "optimal": opt.get("optimal"),
@@ -600,4 +603,5 @@ def apply_weekly_harness_llm_refinement(
         "optimal": opt.get("optimal"),
         "provider": opt.get("provider"),
     }
+    result["observe_bump"] = observe
     return result

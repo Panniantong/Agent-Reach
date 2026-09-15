@@ -5,6 +5,7 @@ from datetime import date
 
 from agent_reach.daily_run.forecast_tracking import (
     build_daily_structured_checks,
+    build_kronos_divergence_day_checks,
     build_monthly_accuracy_summary,
     build_structured_week_review,
     enrich_week_verification_metrics,
@@ -179,3 +180,48 @@ def test_build_structured_week_review_from_forecast():
     forecast = _forecast_fixture()
     review = build_structured_week_review(forecast, settings={})
     assert review.get("rows") or review.get("metrics")
+
+
+def test_build_kronos_divergence_day_checks():
+    forecast = {
+        "trading_days": ["2026-09-15"],
+        "symbols": {
+            "688008": {
+                "name": "澜起科技",
+                "kronos_divergence_days": ["2026-09-15"],
+                "days": {
+                    "2026-09-15": {
+                        "kronos_change_pct": -0.02,
+                    }
+                },
+            },
+            "002583": {
+                "name": "海能达",
+                "kronos_divergence_days": ["2026-09-15"],
+                "days": {
+                    "2026-09-15": {
+                        "kronos_change_pct": -0.47,
+                    }
+                },
+            },
+        },
+    }
+    snapshot = {
+        "portfolio": {
+            "holdings": [
+                {"code": "688008", "change_pct": 1.72},
+                {"code": "002583", "change_pct": -1.45},
+            ]
+        }
+    }
+    checks = build_kronos_divergence_day_checks(
+        forecast,
+        snapshot,
+        trading_date=date(2026, 9, 15),
+    )
+    assert len(checks) == 2
+    by_code = {c["code"]: c for c in checks}
+    assert by_code["688008"]["hit"] is False
+    assert by_code["002583"]["hit"] is True
+    md = render_daily_structured_checks_markdown(checks)
+    assert "Kronos 分歧日验证" in md

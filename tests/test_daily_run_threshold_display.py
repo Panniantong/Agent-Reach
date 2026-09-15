@@ -8,8 +8,10 @@ import pytest
 from agent_reach.daily_run.harness_display import (
     apply_threshold_refs,
     format_effective_thresholds_markdown,
+    format_harness_decision_footnote,
     format_lookback_overlay_markdown,
     format_lookback_weights_pct,
+    format_macro_veto_status_line,
     format_mss_weights_overlay_markdown,
     format_mss_breakdown_lines,
     threshold_refs_for_display,
@@ -151,6 +153,24 @@ class TestThresholdDisplay:
         assert "MSS 权重（harness 有效值）" in md
         assert "技术面" in md
         assert "汇率" in md
+
+    def test_format_harness_decision_footnote(self):
+        settings = {
+            "harness_runtime": {
+                "threshold_overlay": {
+                    "macro_veto": {"base": 40.0, "effective": 30.0},
+                    "aggressive_entry": {"base": 50.0, "effective": 45.0},
+                }
+            }
+        }
+        note = format_harness_decision_footnote(settings)
+        assert "Harness 有效参数" in note
+        assert "宏观否决线 40→30" in note
+        assert "macro_veto 40→30" not in note
+
+    def test_format_macro_veto_status_line(self):
+        assert "未触发" in format_macro_veto_status_line(49.5, 30.0)
+        assert "已触发" in format_macro_veto_status_line(28.0, 30.0)
 
 
 class TestVerdictEffectiveThresholds:

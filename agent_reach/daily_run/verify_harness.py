@@ -72,6 +72,13 @@ def verify_to_harness_evidence(verify: dict[str, Any]) -> dict[str, Any]:
         if "建仓" in line or "进攻" in line:
             plan.append(f"verify 跟进：{line}")
 
+    block_kind = str(verify.get("primary_block_kind") or verify.get("block_kind") or "")
+    if block_kind == "sell_week_open_hold_debounce":
+        memory.append("澜起类持有计划：defensive_trim 被 hold_debounce 阻断，非宏观否决")
+        policy.append("卡片脚注 Harness 有效参数 ≠ 宏观否决触发次数")
+    elif block_kind == "sell_defensive_trim":
+        memory.append("防御减仓被 rebound/recovery 保护阻断时，检查 hold_debounce 与 plan 一致性")
+
     open_dev = len(verify.get("deviations") or [])
     summary = f"verify {name} deviations={open_dev} hit={verify.get('mss_within_prediction')}"
     return {

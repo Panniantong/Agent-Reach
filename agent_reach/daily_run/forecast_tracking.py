@@ -186,13 +186,99 @@ def build_daily_structured_checks(
     return checks
 
 
+def _kronos_day_direction(change_pct: Optional[float]) -> str:
+    if change_pct is None:
+        return "flat"
+    val = float(change_pct)
+    if val > 0.3:
+        return "up"
+    if val < -0.3:
+        return "down"
+    return "flat"
+
+
+def _actual_direction(change_pct: Optional[float]) -> str:
+    return _kronos_day_direction(change_pct)
+
+
+def build_kronos_divergence_day_checks(
+    forecast: Optional[dict[str, Any]],
+    snapshot: Optional[dict[str, Any]],
+    *,
+    trading_date: Optional[date] = None,
+) -> list[dict[str, Any]]:
+    """Daily close: validate Kronos direction on marked divergence days only."""
+    if not forecast or not snapshot:
+        return []
+    d = trading_date or today_shanghai()
+    ds = d.isoformat()
+    if ds not in (forecast.get("trading_days") or []):
+        return []
+
+    from agent_reach.daily_run.symbols import build_enriched_symbols
+
+    enriched = build_enriched_symbols(snapshot)
+    checks: list[dict[str, Any]] = []
+    for code, sym in (forecast.get("symbols") or {}).items():
+        if ds not in (sym.get("kronos_divergence_days") or []):
+            continue
+        row = enriched.get(_normalize_code(str(code))) or {}
+        actual = _optional_float(row.get("change_pct"))
+        if actual is None:
+            continue
+        day_pred = (sym.get("days") or {}).get(ds) or {}
+        kronos_chg = _optional_float(day_pred.get("kronos_change_pct"))
+        if kronos_chg is None:
+            k_day = ((sym.get("kronos") or {}).get("days") or {}).get(ds) or {}
+            kronos_chg = _optional_float(k_day.get("change_pct"))
+        if kronos_chg is None:
+            continue
+        pred_dir = _kronos_day_direction(kronos_chg)
+        actual_dir = _actual_direction(actual)
+        hit = pred_dir == actual_dir
+        name = str(sym.get("name") or code)
+        dir_cn = {"up": "↑", "down": "↓", "flat": "→"}
+        checks.append(
+            {
+                "kind": "kronos_divergence",
+                "code": _normalize_code(str(code)),
+                "name": name,
+                "text": (
+                    f"Kronos 分歧日：{name} 日预测 {dir_cn.get(pred_dir, pred_dir)}"
+                    f"（{kronos_chg:+.2f}%）/ 实际 {dir_cn.get(actual_dir, actual_dir)}"
+                    f"（{actual:+.2f}%）"
+                ),
+                "hit": hit,
+                "predicted_direction": pred_dir,
+                "actual_direction": actual_dir,
+            }
+        )
+    return checks
+
+
+def render_kronos_divergence_day_markdown(checks: list[dict[str, Any]]) -> str:
+    div_checks = [c for c in checks if c.get("kind") == "kronos_divergence"]
+    if not div_checks:
+        return ""
+    lines = ["**Kronos 分歧日验证（当日）：**"]
+    for item in div_checks[:6]:
+        mark = "✅" if item.get("hit") else "❌"
+        lines.append(f"- {mark} {item.get('text')}")
+    return "\n".join(lines).strip()
+
+
 def render_daily_structured_checks_markdown(checks: list[dict[str, Any]]) -> str:
     if not checks:
         return ""
     lines = ["**周预测关键判断（结构化）：**"]
     for item in checks[:6]:
+        if item.get("kind") == "kronos_divergence":
+            continue
         mark = "✅" if item.get("in_band") else "⚠️"
         lines.append(f"- {mark} {item.get('text')}")
+    div_md = render_kronos_divergence_day_markdown(checks)
+    if div_md:
+        lines.extend(["", div_md])
     return "\n".join(lines).strip()
 
 
