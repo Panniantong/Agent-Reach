@@ -145,6 +145,18 @@ def forecast_review_to_harness_evidence(
     for note in forecast_review.get("optimization_notes") or []:
         playbook.append(str(note)[:200])
 
+    kronos_review = forecast_review.get("kronos_review") or {}
+    ledger = kronos_review.get("ledger") or {}
+    if ledger and not ledger.get("skipped"):
+        memory.append(
+            f"Kronos 台账 +{ledger.get('rows', 0)} 行 "
+            f"MAE {ledger.get('mean_error_pct'):+.2f}%"
+            if ledger.get("mean_error_pct") is not None
+            else f"Kronos 台账 +{ledger.get('rows', 0)} 行"
+        )
+        if int(ledger.get("divergence_count") or 0) >= 2:
+            memory.append("Kronos 收盘分歧偏多 → 周六 hold-out 校准 inference / blend")
+
     if forecast_review.get("mss_hit") is False:
         plan.append("forecast_review：校准 base_spread / vol_multiplier")
 
