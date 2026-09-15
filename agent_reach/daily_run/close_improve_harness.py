@@ -62,6 +62,8 @@ def _item_to_harness(
             policy.append("系统性风险：情绪降温日暂停科技加仓，维持高 cash")
         if "跑输基准" in blob:
             playbook.append(f"基准超额：{item.detail[:160]}")
+        if "macro_veto" in blob or "宏观否决" in blob or "Harness" in blob:
+            policy.append("卡片脚注 Harness 有效参数 ≠ 宏观否决触发次数；MSS≥否决线时标注「宏观避险：未触发」")
 
     elif item.category == "schedule":
         playbook.append(line)

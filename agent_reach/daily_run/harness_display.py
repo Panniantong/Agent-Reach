@@ -201,3 +201,61 @@ def effective_policy_settings(settings: dict[str, Any] | None = None) -> dict[st
     from agent_reach.daily_run.settings import effective_settings, load_settings
 
     return effective_settings(settings if settings is not None else load_settings())
+
+
+_HARNESS_FOOTNOTE_KEY_LABELS: dict[str, str] = {
+    "macro_veto": "宏观否决线",
+    "aggressive_entry": "进攻阈值",
+    "min_cash_ratio": "最低现金比例",
+    "max_price_deviation_pct": "价格偏离上限",
+    "high_position_20d": "高仓位20d",
+    "min_volume_ratio": "量比下限",
+    "max_vwap_deviation_pct": "VWAP偏离上限",
+    "deploy_ratio": "deploy_ratio",
+    "max_position_pct": "max_position_pct",
+}
+
+
+def format_harness_decision_footnote(settings: dict[str, Any]) -> str:
+    """Harness effective-parameter footnote (not a macro-veto trigger counter)."""
+    overlay = (settings.get("harness_runtime") or {}).get("threshold_overlay") or {}
+    if not overlay:
+        return ""
+    parts: list[str] = []
+    for key, row in overlay.items():
+        if not isinstance(row, dict):
+            continue
+        label = _HARNESS_FOOTNOTE_KEY_LABELS.get(key, key)
+        base = row.get("base")
+        eff_val = row.get("effective")
+        if base is None or eff_val is None:
+            continue
+        if key == "min_cash_ratio":
+            parts.append(f"{label} {float(base):.0%}→{float(eff_val):.0%}")
+        elif key == "max_price_deviation_pct":
+            parts.append(f"{label} {float(base):.1%}→{float(eff_val):.1%}")
+        elif key in {"high_position_20d", "min_volume_ratio", "max_vwap_deviation_pct"}:
+            parts.append(f"{label} {base}→{eff_val}")
+        else:
+            parts.append(f"{label} {float(base):.0f}→{float(eff_val):.0f}")
+    if not parts:
+        return ""
+    return f"（Harness 有效参数：{', '.join(parts)}）"
+
+
+def format_macro_veto_status_line(
+    lookback_mss: float,
+    macro_veto: float,
+    *,
+    triggered: bool | None = None,
+) -> str:
+    """Explicit macro-veto trigger state for intraday/close cards."""
+    if triggered is None:
+        triggered = float(lookback_mss) < float(macro_veto)
+    if triggered:
+        return (
+            f"**宏观避险：** 已触发（Lookback MSS {lookback_mss:.0f} < 否决线 {macro_veto:.0f}）"
+        )
+    return (
+        f"**宏观避险：** 未触发（Lookback MSS {lookback_mss:.0f} ≥ 否决线 {macro_veto:.0f}）"
+    )

@@ -525,6 +525,9 @@ def render_forecast_verify_markdown(ctx: CloseCardContext) -> str:
             trading_date = date_cls.fromisoformat(str(snap["_run_date"])[:10])
         active = load_active_forecast(trading_date)
         checks = build_daily_structured_checks(active, snap, trading_date=trading_date)
+        from agent_reach.daily_run.forecast_tracking import build_kronos_divergence_day_checks
+
+        checks.extend(build_kronos_divergence_day_checks(active, snap, trading_date=trading_date))
         structured_md = render_daily_structured_checks_markdown(checks)
     except Exception:
         structured_md = ""
