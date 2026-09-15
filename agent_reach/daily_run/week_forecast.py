@@ -547,7 +547,7 @@ def generate_week_forecast(
     held_codes: set[str] = set()
     k_cfg = kronos_cfg(settings)
     use_kronos = is_kronos_enabled(settings) and bool(trading_days)
-    blend_w = float(k_cfg.get("week_forecast_blend_weight", 0.35))
+    from agent_reach.daily_run.kronos_inference_policy import resolve_symbol_blend_weight
 
     for h in pf.get("holdings") or []:
         code = _normalize_code(str(h.get("code", "")))
@@ -567,6 +567,7 @@ def generate_week_forecast(
             )
             if kronos:
                 kronos_paths[code] = kronos
+                blend_w = resolve_symbol_blend_weight(code, settings)
                 entry = blend_symbol_days_with_kronos(entry, kronos, blend_weight=blend_w)
         symbols[code] = entry
 
@@ -587,12 +588,18 @@ def generate_week_forecast(
             )
             if kronos:
                 kronos_paths[code] = kronos
+                blend_w = resolve_symbol_blend_weight(code, settings)
                 entry = blend_symbol_days_with_kronos(entry, kronos, blend_weight=blend_w)
         symbols[code] = entry
 
     if kronos_paths:
         ok = sum(1 for v in kronos_paths.values() if v.get("available"))
         notes.append(f"Kronos 路径预测 {ok}/{len(kronos_paths)} 只")
+        from agent_reach.daily_run.kronos_inference_policy import render_kronos_inference_footnote
+
+        footnote = render_kronos_inference_footnote(settings)
+        if footnote:
+            notes.append(footnote.strip("_"))
     elif use_kronos:
         notes.append("Kronos 已启用但未产出路径（依赖或 repo_path 未就绪）")
 
