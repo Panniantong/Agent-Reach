@@ -9,6 +9,7 @@ completing dedicated coverage for the channels that still lacked it.
 """
 
 from unittest.mock import MagicMock, patch
+import urllib.error
 
 import pytest
 
@@ -223,3 +224,30 @@ def test_antibot_detection_has_a_fixed_scan_window():
 
     with patch("urllib.request.urlopen", return_value=_resp(body.encode("utf-8"))):
         assert channel.read("https://example.com/long-article") == body
+
+
+# --- read: reader-side refusal explanation (fix #630) ---
+
+def _http_error(code):
+    return urllib.error.HTTPError(
+        "https://r.jina.ai/https://example.com", code, "refused", {}, None
+    )
+
+
+@pytest.mark.parametrize("code", [401, 403, 429])
+def test_read_explains_a_reader_side_refusal(code):
+    channel = WebChannel()
+    with patch("urllib.request.urlopen", side_effect=_http_error(code)):
+        with pytest.raises(RuntimeError) as exc:
+            channel.read("https://example.com")
+    msg = str(exc.value)
+    assert str(code) in msg
+    assert isinstance(exc.value.__cause__, urllib.error.HTTPError)
+
+
+@pytest.mark.parametrize("code", [404, 500, 502])
+def test_read_leaves_other_http_errors_untouched(code):
+    channel = WebChannel()
+    with patch("urllib.request.urlopen", side_effect=_http_error(code)):
+        with pytest.raises(urllib.error.HTTPError):
+            channel.read("https://example.com")
