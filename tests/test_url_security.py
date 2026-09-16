@@ -5,6 +5,7 @@ import pytest
 from agent_reach.channels.bilibili import BilibiliChannel
 from agent_reach.channels.facebook import FacebookChannel
 from agent_reach.channels.github import GitHubChannel
+from agent_reach.channels.hackernews import HackerNewsChannel
 from agent_reach.channels.instagram import InstagramChannel
 from agent_reach.channels.linkedin import LinkedInChannel
 from agent_reach.channels.reddit import RedditChannel
@@ -82,6 +83,11 @@ def test_credential_channels_reject_lookalikes_and_userinfo(channel, malicious_u
             "https://v2ex.com:443/t/1",
         ),
         (
+            HackerNewsChannel(),
+            "https://news.ycombinator.com/item?id=1",
+            "https://news.ycombinator.com:443/item?id=1",
+        ),
+        (
             XiaoyuzhouChannel(),
             "https://www.xiaoyuzhoufm.com/episode/1",
             "https://xiaoyuzhoufm.com:443/episode/1",
@@ -113,6 +119,7 @@ def test_fixed_domain_channels_accept_subdomains_and_explicit_ports(
         (RedditChannel(), "reddit.com"),
         (LinkedInChannel(), "linkedin.com"),
         (V2EXChannel(), "v2ex.com"),
+        (HackerNewsChannel(), "news.ycombinator.com"),
         (XiaoyuzhouChannel(), "xiaoyuzhoufm.com"),
         (FacebookChannel(), "facebook.com"),
         (InstagramChannel(), "instagram.com"),

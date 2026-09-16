@@ -1,6 +1,6 @@
 # 社交媒体 & 社区
 
-小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram。
+小红书、Twitter/X、B站、V2EX、Hacker News、Reddit、Facebook、Instagram。
 
 ## 小红书 / XiaoHongShu（多后端）
 
@@ -215,6 +215,67 @@ user = ch.get_user("Livid")
 ```
 
 > **节点列表**: https://www.v2ex.com/planes
+
+## Hacker News (公开 API)
+
+无需认证。两个官方 API 混合路由：**Firebase API**（列表/用户）+ **Algolia HN Search**（帖子详情+评论树、全文搜索）。读取帖子详情走 Algolia `/items/:id` —— 单次请求返回完整嵌套评论树，比 Firebase 逐条拉评论高效得多。中国大陆访问可能需要代理。
+
+### 列表（top/new/best/ask/show/job）
+
+```bash
+# 返回帖子 ID 列表，再逐个取 /v0/item/<id>.json
+curl -s "https://hacker-news.firebaseio.com/v0/topstories.json"
+curl -s "https://hacker-news.firebaseio.com/v0/item/8863.json"
+```
+
+### 帖子详情 + 完整评论树（单次请求）
+
+```bash
+# item_id 从 URL 获取，如 https://news.ycombinator.com/item?id=8863
+curl -s "https://hn.algolia.com/api/v1/items/8863"
+```
+
+### 全文搜索（Algolia，免 key）
+
+```bash
+# tags 可选：story（默认）/ comment / ask_hn / show_hn / front_page
+curl -s "https://hn.algolia.com/api/v1/search?query=agent+framework&tags=story&hitsPerPage=5"
+
+# 按时间排序（最新优先）
+curl -s "https://hn.algolia.com/api/v1/search_by_date?query=agent+framework&tags=story&hitsPerPage=5"
+```
+
+### 用户信息
+
+```bash
+curl -s "https://hacker-news.firebaseio.com/v0/user/dang.json"
+```
+
+### Python 调用示例
+
+```python
+from agent_reach.channels.hackernews import HackerNewsChannel
+
+ch = HackerNewsChannel()
+
+# 获取热门帖子（top/new/best/ask/show/job）
+stories = ch.get_stories("top", limit=10)
+for s in stories:
+    print(f"[{s['score']}分/{s['comments']}评] {s['title']}")
+
+# 帖子详情 + 完整评论树（depth 字段表示嵌套层级）
+item = ch.get_item(8863)
+for c in item["comments_tree"]:
+    print("  " * c["depth"] + f"{c['author']}: {c['text'][:80]}")
+
+# 全文搜索
+results = ch.search("rust vs go", limit=5)
+
+# 用户信息
+user = ch.get_user("dang")
+```
+
+> **HTML 文本**: HN 返回的正文/评论是 HTML 片段（如 `<p>`、`<a>`），展示时需自行剥离标签。
 
 ## Reddit（多后端，必须登录态）
 

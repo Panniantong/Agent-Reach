@@ -12,6 +12,7 @@ from agent_reach.backends import OpenCLIStatus
 from agent_reach.channels import get_all_channels, get_channel
 from agent_reach.channels.bilibili import BilibiliChannel
 from agent_reach.channels.facebook import FacebookChannel
+from agent_reach.channels.hackernews import HackerNewsChannel
 from agent_reach.channels.instagram import InstagramChannel
 from agent_reach.channels.v2ex import V2EXChannel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
@@ -441,6 +442,49 @@ class TestV2EXChannel:
         assert len(result) == 1
         assert "error" in result[0]
         assert "V2EX" in result[0]["error"]
+
+
+class TestHackerNewsChannel:
+    def test_can_handle_hackernews_urls(self):
+        ch = HackerNewsChannel()
+        assert ch.can_handle("https://news.ycombinator.com/item?id=12345")
+        assert not ch.can_handle("https://github.com/user/repo")
+        assert not ch.can_handle("https://v2ex.com/t/123")
+
+    def test_check_ok_when_api_reachable(self, monkeypatch):
+        import urllib.request
+
+        class FakeResponse:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+            def read(self, _size=-1):
+                return b"123456"
+
+        monkeypatch.setattr(
+            urllib.request,
+            "urlopen",
+            lambda req, timeout=None: FakeResponse(),
+        )
+        status, msg = HackerNewsChannel().check()
+        assert status == "ok"
+        assert "公开 API 可用" in msg
+
+    def test_check_warn_when_api_unreachable(self, monkeypatch):
+        import urllib.request
+
+        def raise_error(req, timeout=None):
+            raise URLError("connection refused")
+
+        monkeypatch.setattr(urllib.request, "urlopen", raise_error)
+        status, msg = HackerNewsChannel().check()
+        assert status == "warn"
+        assert "失败" in msg
 
 
 class TestXueqiuChannel:
