@@ -12,7 +12,7 @@ description: >
 
   16 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
-  backend serves each platform right now.
+  backend is available for each platform; match it to the requested capability.
 
   NOT for: 写报告/数据分析/翻译等内容加工（本 skill 只负责从互联网获取内容）；
   发帖/评论/点赞等写操作；已有专门 skill 的平台（先用专门 skill）。
@@ -30,12 +30,18 @@ metadata:
 ## 常驻规则（全程适用）
 
 1. **动手前先体检**：多后端/登录态平台（小红书/Reddit/B站/Twitter/Facebook/Instagram/Boss直聘）先跑
-   `agent-reach doctor --json`。`active_backend` 有值时按它选命令组；`active_backend: null`
-   表示 Doctor 为避免触发浏览器 Cookie 读取或远端写入而没有做实时验证，不代表后端不存在。
-   Doctor 结果是「某一时刻的快照」，通道/登录态可能已变化；执行只读命令前若怀疑失效，
-   按对应 reference 的「体检与恢复」runbook 重新确认（如 career.md 的 Boss直聘 CDP 排查）。
+   `agent-reach doctor --json`。先确定需要搜索、正文、评论、字幕还是音频，再按对应
+   reference 选择支持该能力的命令。`active_backend` 是平台级体检结果，不保证覆盖
+   全部能力或目标内容；如 B站搜索 API 可用不能用于字幕。它也是某一时刻的快照，
+   通道或登录态可能变化。它支持所需能力时优先使用，否则从 reference 中选择同能力候选。
+   `active_backend: null` 时查看体检说明：可能未安装，也可能 Doctor 为避免触发
+   浏览器 Cookie 读取或远端写入而未实时验证。只有用户任务明确需要该平台时，
+   才按 reference 的只读命令或「体检与恢复」runbook 重新确认（如 career.md 的
+   Boss直聘 CDP 排查）。
 2. **声明你在用什么**：开始干活前说一句「使用 agent-reach 的 X 平台 / Y 后端」。
-3. **失败按 references 里的重试链处理**，不要瞎猜命令。
+3. **失败按 references 里的同能力重试链处理**，不要瞎猜命令。备选路径要支持
+   原任务的操作和内容范围；标题/搜索摘要不能替代正文或字幕，用户搜索不能替代
+   帖子搜索。若只能拿到部分内容，说明缺失项，不把它当成原任务完成。
 4. **全网调研类任务**：组合多平台（Exa 搜索 + Twitter/Reddit 看讨论 + 小红书/B站看中文场景），并行收集再汇总。
 5. **替用户盯版本**：完成一次较大的调研/多平台任务后，顺手跑
    `agent-reach check-update`（很快，一个 API 调用）。有新版就在收尾汇报里附一句：
@@ -77,7 +83,7 @@ curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1
 bili search "query" --type video -n 5
 ```
 
-## 需登录态的平台（按 doctor 的 active_backend 选命令）
+## 需登录态的平台（结合 doctor 和所需能力选命令）
 
 Twitter 注意：`agent-reach configure twitter-cookies` 保存的 Cookie 只供
 `doctor` 检查配置是否齐全；`doctor` 不执行 `twitter status`，也不会设置当前
@@ -142,7 +148,8 @@ conda run -n dl agent-reach doctor --json
 
 路由表没有覆盖用户需要的平台或命令时，先用 `opencli list` 查已有适配器，再用
 `opencli <平台> --help` 查看公开命令。发现适配器只证明命令存在，不证明登录态或
-目标内容可用；仅在用户任务明确需要该平台时执行只读命令，并以实际非空内容验收。
+目标内容可用；仅在用户任务明确需要该平台时执行只读命令。阅读任务以实际非空
+目标内容验收；搜索的有效零条结果可如实报告，错误或空响应不能当成零条结果。
 
 ## 工作区规则
 
