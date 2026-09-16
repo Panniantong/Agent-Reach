@@ -11,6 +11,7 @@ from .bilibili import BilibiliChannel
 from .exa_search import ExaSearchChannel
 from .facebook import FacebookChannel
 from .github import GitHubChannel
+from .hackernews import HackerNewsChannel
 from .instagram import InstagramChannel
 from .linkedin import LinkedInChannel
 from .reddit import RedditChannel
@@ -35,6 +36,7 @@ ALL_CHANNELS: List[Channel] = [
     LinkedInChannel(),
     XiaoyuzhouChannel(),
     V2EXChannel(),
+    HackerNewsChannel(),
     XueqiuChannel(),
     RSSChannel(),
     ExaSearchChannel(),
