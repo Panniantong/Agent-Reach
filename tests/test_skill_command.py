@@ -35,6 +35,9 @@ class TestSkillCommand(unittest.TestCase):
         )
 
         self.assertIn("web_search_exa", search_reference)
+        self.assertIn("agent-reach-exa search", search_reference)
+        self.assertIn("省略 `--num-results` 时返回 10 条", search_reference)
+        self.assertIn("3000 字符默认值", search_reference)
         self.assertNotIn("exa.get_code_context_exa", search_reference)
         self.assertNotIn("get_code_context_exa(", search_reference)
 
