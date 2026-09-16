@@ -240,6 +240,9 @@ curl -s "https://hn.algolia.com/api/v1/items/8863"
 ```bash
 # tags 可选：story（默认）/ comment / ask_hn / show_hn / front_page
 curl -s "https://hn.algolia.com/api/v1/search?query=agent+framework&tags=story&hitsPerPage=5"
+
+# 按时间排序（最新优先）
+curl -s "https://hn.algolia.com/api/v1/search_by_date?query=agent+framework&tags=story&hitsPerPage=5"
 ```
 
 ### 用户信息

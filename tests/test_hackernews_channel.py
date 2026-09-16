@@ -392,3 +392,27 @@ def test_search_without_tags_omits_the_parameter():
         assert ch.search("anything", tags="") == []
 
     assert "tags" not in parse_qs(urlsplit(captured["url"]).query)
+
+
+def test_search_sort_date_uses_search_by_date_endpoint():
+    ch = HackerNewsChannel()
+    captured = {}
+
+    def fake_get_json(url):
+        captured["url"] = url
+        return {"hits": []}
+
+    with patch.object(hn, "_get_json", side_effect=fake_get_json):
+        ch.search("llm", sort="date")
+
+    parts = urlsplit(captured["url"])
+    assert parts.netloc == "hn.algolia.com"
+    assert parts.path == "/api/v1/search_by_date"
+    assert parse_qs(parts.query)["query"] == ["llm"]
+
+
+def test_search_rejects_unknown_sort_without_network():
+    ch = HackerNewsChannel()
+    with patch.object(hn, "_get_json", side_effect=AssertionError("must not fetch")):
+        with pytest.raises(ValueError, match="unknown sort"):
+            ch.search("anything", sort="popular")

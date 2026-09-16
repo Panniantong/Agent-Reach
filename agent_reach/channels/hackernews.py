@@ -227,7 +227,9 @@ class HackerNewsChannel(Channel):
             ),
         }
 
-    def search(self, query: str, limit: int = 10, tags: str = "story") -> list:
+    def search(
+        self, query: str, limit: int = 10, tags: str = "story", sort: str = "relevance"
+    ) -> list:
         """全文搜索（Algolia，免 key）。
 
         Args:
@@ -235,15 +237,23 @@ class HackerNewsChannel(Channel):
             limit: 最多返回条数
             tags:  过滤标签 — story（默认）/ comment / ask_hn / show_hn /
                    front_page；留空搜索全部
+            sort:  排序方式 — relevance（默认，按相关度）/ date（按时间，
+                   走 search_by_date 端点）
 
         Returns a list of dicts with keys:
           id, title, url, hn_url, author, points, comments, created_at,
           snippet
         """
+        if sort == "relevance":
+            endpoint = "search"
+        elif sort == "date":
+            endpoint = "search_by_date"
+        else:
+            raise ValueError(f"unknown sort {sort!r}; expected 'relevance' or 'date'")
         params = urlencode(
             {"query": query, "hitsPerPage": max(1, limit), **({"tags": tags} if tags else {})}
         )
-        data = _get_json(f"{_ALGOLIA_BASE}/search?{params}")
+        data = _get_json(f"{_ALGOLIA_BASE}/{endpoint}?{params}")
         results = []
         for hit in (data.get("hits") or [])[: max(1, limit)]:
             object_id = hit.get("objectID", "")
