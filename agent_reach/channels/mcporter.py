@@ -35,8 +35,8 @@ def inspect_mcporter_config(
     """Read the effective local mcporter config without starting mcporter.
 
     An explicit ``MCPORTER_CONFIG`` is a single layer. Otherwise mcporter
-    0.7.3 loads the first home config
-    (``~/.mcporter/mcporter.json`` / ``mcporter.jsonc``) and then
+    loads the first supported home config from XDG or legacy candidates and
+    then
     ``<cwd>/config/mcporter.json``; project entries override duplicate home
     names. Only exact ``mcpServers`` keys are returned. Editor imports are
     deliberately not opened because Doctor must not expand its
@@ -94,9 +94,7 @@ def _select_config_layers(
         return [(Path(os.path.abspath(os.fspath(expanded))), "explicit")]
 
     layers = []
-    home_base = Path.home() / ".mcporter"
-    for name in ("mcporter.json", "mcporter.jsonc"):
-        candidate = home_base / name
+    for candidate in _home_config_candidates():
         if os.path.lexists(candidate):
             layers.append((candidate, "home"))
             break
@@ -105,6 +103,21 @@ def _select_config_layers(
     if os.path.lexists(project_path):
         layers.append((project_path, "project"))
     return layers
+
+
+def _home_config_candidates() -> list[Path]:
+    legacy_base = Path.home() / ".mcporter"
+    candidates = []
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME", "").strip()
+    if xdg_config_home:
+        expanded = Path(os.path.expanduser(xdg_config_home))
+        if expanded.is_absolute():
+            candidates.append(expanded / "mcporter" / "mcporter.json")
+    candidates.extend(
+        legacy_base / name
+        for name in ("mcporter.json", "mcporter.jsonc")
+    )
+    return candidates
 
 
 def _read_config_object(config_path: Path) -> dict:
