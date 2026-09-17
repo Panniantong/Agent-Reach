@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Web — any URL via Jina Reader. Always available."""
+"""Web — any URL via Jina Reader."""
 
+import urllib.error
 import urllib.request
 
 from agent_reach.utils.url import normalize_public_http_url
@@ -10,6 +11,9 @@ from .base import Channel
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 _MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 _ANTIBOT_SCAN_BYTES = 4096
+_JINA_READER_ROOT = "https://r.jina.ai/"
+# Doctor probe: short enough for poisoned-DNS timeouts, long enough for TLS.
+_PROBE_TIMEOUT = 5
 
 
 def _is_antibot_page(body: bytes) -> bool:
@@ -41,7 +45,25 @@ class WebChannel(Channel):
         return True  # Fallback — handles any URL
 
     def check(self, config=None):
-        # 恒可用兜底渠道：无本地命令、不做网络探测（doctor 已有多个渠道触网），保持零开销
+        # GET + 1 byte, not HEAD: Cloudflare holds HEAD open until timeout.
+        self.active_backend = None
+        req = urllib.request.Request(
+            _JINA_READER_ROOT,
+            headers={"User-Agent": _UA, "Accept": "text/plain"},
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=_PROBE_TIMEOUT) as resp:
+                resp.read(1)
+        except urllib.error.HTTPError:
+            # Host answered (4xx/5xx). Unreachable is connect/DNS/timeout.
+            pass
+        except Exception as e:
+            return (
+                "warn",
+                f"Jina Reader 不可达（{_JINA_READER_ROOT.rstrip('/')}）：{e}。"
+                "网页读取可改用 Exa（exa_search）作为 fallback。",
+            )
         self.active_backend = self.backends[0]
         return "ok", "通过 Jina Reader 读取任意网页（curl https://r.jina.ai/URL）"
 

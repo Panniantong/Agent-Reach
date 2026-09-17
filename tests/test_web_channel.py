@@ -2,17 +2,18 @@
 """Dedicated tests for the ``web`` channel.
 
 ``web`` is the tier-0 catch-all: ``can_handle`` must accept *anything* so it
-can back-stop every other channel, ``check`` must report ready without touching
-the network (it is the zero-overhead fallback), and ``read`` must normalise the
-URL before handing it to Jina Reader. Follow-up to #331 / #360 / #361,
-completing dedicated coverage for the channels that still lacked it.
+can back-stop every other channel, ``check`` must probe Jina Reader (GET of
+the reader root, one byte — not HEAD) before claiming the backend active,
+and ``read`` must normalise the URL before handing it to Jina Reader.
+Follow-up to #331 / #360 / #361 / #685.
 """
 
 from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError, URLError
 
 import pytest
 
-from agent_reach.channels.web import _UA, WebChannel
+from agent_reach.channels.web import _PROBE_TIMEOUT, _UA, WebChannel
 
 _MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 
@@ -39,17 +40,60 @@ def test_can_handle_accepts_any_url():
         assert channel.can_handle(sample) is True, sample
 
 
-# --- check: ready without any network probe (零开销兜底) ---
+# --- check: probe Jina Reader before claiming active ---
 
-def test_check_is_ok_and_touches_no_network():
+def _assert_jina_probe(mock_open):
+    """Doctor must GET the reader root (not HEAD) and use a short timeout."""
+    mock_open.assert_called_once()
+    req = mock_open.call_args.args[0]
+    assert req.full_url == "https://r.jina.ai/"
+    assert req.get_method() == "GET"
+    assert mock_open.call_args.kwargs["timeout"] == _PROBE_TIMEOUT
+
+
+def test_check_ok_when_jina_reachable():
     channel = WebChannel()
-    with patch("urllib.request.urlopen") as mock_open:
+    response = _resp(b"[")
+    with patch("urllib.request.urlopen", return_value=response) as mock_open:
         status, message = channel.check()
     assert status == "ok"
     assert channel.active_backend == "Jina Reader"
     assert "Jina Reader" in message
-    # The fallback channel must stay zero-overhead: no probing on check().
-    mock_open.assert_not_called()
+    _assert_jina_probe(mock_open)
+    response.__enter__.return_value.read.assert_called_once_with(1)
+
+
+def test_check_ok_when_jina_answers_with_http_error():
+    """A 4xx/5xx still means r.jina.ai is reachable."""
+    channel = WebChannel()
+    err = HTTPError("https://r.jina.ai/", 400, "Bad Request", hdrs=None, fp=None)
+    with patch("urllib.request.urlopen", side_effect=err) as mock_open:
+        status, message = channel.check()
+    assert status == "ok"
+    assert channel.active_backend == "Jina Reader"
+    assert "Jina Reader" in message
+    _assert_jina_probe(mock_open)
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        URLError("timed out"),
+        TimeoutError("timed out"),
+        OSError("Network is unreachable"),
+    ],
+)
+def test_check_warn_when_jina_unreachable(exc):
+    channel = WebChannel()
+    channel.active_backend = "Jina Reader"  # stale from a previous ok check
+    with patch("urllib.request.urlopen", side_effect=exc) as mock_open:
+        status, message = channel.check()
+    assert status == "warn"
+    assert channel.active_backend is None
+    assert "Jina Reader" in message
+    assert "exa_search" in message
+    assert "Exa" in message
+    _assert_jina_probe(mock_open)
 
 
 # --- read: URL normalisation + Jina Reader request shape ---
