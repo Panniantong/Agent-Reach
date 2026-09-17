@@ -18,6 +18,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import Mapping, Optional, Sequence
 
+from agent_reach.security.grimdall_guard import safe_execute
 from agent_reach.utils.process import utf8_subprocess_env
 
 #: Exit codes shells use for "found but not executable" / "not found".
@@ -95,7 +96,7 @@ def _run_once(
             subprocess_env.pop(key, None)
         if env:
             subprocess_env.update(env)
-        r = subprocess.run(
+        r = safe_execute(
             [path, *args],
             capture_output=True,
             encoding="utf-8",

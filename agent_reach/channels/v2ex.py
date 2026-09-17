@@ -9,6 +9,7 @@ import urllib.request
 from typing import Any
 from urllib.parse import quote, urlencode, urlsplit
 
+from agent_reach.security.grimdall_guard import safe_execute
 from agent_reach.utils.process import utf8_subprocess_env
 from agent_reach.utils.text import scrub_url_credentials
 
@@ -108,7 +109,7 @@ def _get_json_with_curl(url: str) -> Any:
         url,
     ]
     try:
-        result = subprocess.run(
+        result = safe_execute(
             command,
             capture_output=True,
             encoding="utf-8",
