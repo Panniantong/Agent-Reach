@@ -11,6 +11,7 @@ agents should call upstream tools directly (twitter-cli, yt-dlp, mcporter, etc.)
 import asyncio
 import json
 import sys
+import threading
 
 from agent_reach.config import Config
 from agent_reach.core import AgentReach
@@ -24,6 +25,16 @@ try:
     HAS_MCP = True
 except ImportError:
     HAS_MCP = False
+
+
+_doctor_lock = threading.Lock()
+
+
+def _doctor_report(eyes: AgentReach) -> str:
+    # Channels are shared singletons. Keep reports serial even when a cancelled
+    # MCP request leaves its synchronous probes running in the worker thread.
+    with _doctor_lock:
+        return eyes.doctor_report()
 
 
 def create_server():
@@ -43,20 +54,26 @@ def create_server():
     @server.list_tools()
     async def list_tools():
         return [
-            Tool(name="get_status",
-                 description="Get Agent Reach status: which channels are installed and active.",
-                 inputSchema={"type": "object", "properties": {}}),
+            Tool(
+                name="get_status",
+                description="Get Agent Reach status: which channels are installed and active.",
+                inputSchema={"type": "object", "properties": {}},
+            ),
         ]
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict):
         try:
             if name == "get_status":
-                result = eyes.doctor_report()
+                result = await asyncio.to_thread(_doctor_report, eyes)
             else:
                 result = f"Unknown tool: {name}"
 
-            text = json.dumps(result, ensure_ascii=False, indent=2) if isinstance(result, (dict, list)) else str(result)
+            text = (
+                json.dumps(result, ensure_ascii=False, indent=2)
+                if isinstance(result, (dict, list))
+                else str(result)
+            )
             return [TextContent(type="text", text=text)]
         except Exception as e:
             return [
