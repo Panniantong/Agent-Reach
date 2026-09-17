@@ -1,4 +1,7 @@
-# Exa Search 配置指南
+# Exa Search 配置指南（Tavily 备选）
+
+Agent Reach 默认优先 Tavily；本指南配置 Exa 作为无需 API key 的 fallback。
+需要配置 Tavily 时请先阅读 `guides/setup-tavily.md`。
 
 ## 功能说明
 Exa 是一个 AI 语义搜索引擎。通过 MCP 接入，**免费、无需 API Key**。配置后解锁：

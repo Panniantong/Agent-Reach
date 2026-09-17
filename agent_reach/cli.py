@@ -34,6 +34,7 @@ _SENSITIVE_CONFIG_KEYS = {
     "github-token",
     "groq-key",
     "openai-key",
+    "tavily-key",
     "twitter-cookies",
     "xhs-cookies",
 }
@@ -108,7 +109,7 @@ def main():
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
     p_conf.add_argument("key", nargs="?", default=None,
                         choices=["proxy", "github-token", "groq-key", "openai-key",
-                                 "twitter-cookies", "youtube-cookies",
+                                 "tavily-key", "twitter-cookies", "youtube-cookies",
                                  "xhs-cookies"],
                         help="What to configure (omit if using --from-browser)")
     p_conf.add_argument("value", nargs="*", help="The value(s) to set")
@@ -362,10 +363,10 @@ def _cmd_install(args):
     else:
         core_install_ok = _install_system_deps() is not False
 
-    # ── mcporter (for Exa search) ──
+    # ── mcporter (for the Exa search fallback) ──
     print()
     if dry_run:
-        print("[dry-run] Would install mcporter and configure Exa search")
+        print("[dry-run] Would install mcporter and configure the Exa search fallback")
     elif safe_mode:
         _install_mcporter_safe()
     else:
@@ -1246,11 +1247,11 @@ def _install_system_deps_dryrun():
 
 
 def _install_mcporter():
-    """Install mcporter and configure Exa search."""
+    """Install mcporter and configure the Exa search fallback."""
     import shutil
     import subprocess
 
-    print("Setting up mcporter (search backend)...")
+    print("Setting up mcporter (Exa fallback backend)...")
 
     mcporter_cmd = shutil.which("mcporter")
     if mcporter_cmd:
@@ -1276,7 +1277,7 @@ def _install_mcporter():
             print(f"  [X] mcporter install failed: {e}")
             return False
 
-    # Configure Exa MCP (free, no key needed)
+    # Configure Exa MCP (free, no key needed) as the fallback backend.
     try:
         from agent_reach.channels.mcporter import (
             McporterConfigError,
@@ -1333,11 +1334,11 @@ def _install_mcporter_safe():
 
     if shutil.which("mcporter"):
         print("  ✅ mcporter already installed")
-        print("  To configure Exa search: mcporter config add exa https://mcp.exa.ai/mcp --scope home")
+        print("  To configure Exa fallback: mcporter config add exa https://mcp.exa.ai/mcp --scope home")
     else:
         print("  -- mcporter not installed")
         print("  To install: npm install -g mcporter")
-        print("  Then configure Exa: mcporter config add exa https://mcp.exa.ai/mcp --scope home")
+        print("  Then configure Exa fallback: mcporter config add exa https://mcp.exa.ai/mcp --scope home")
 
 
 def _detect_environment():
@@ -1583,6 +1584,11 @@ def _cmd_configure(args):
     elif args.key == "openai-key":
         config.set("openai_api_key", value)
         print("✅ OpenAI key configured!")
+
+    elif args.key == "tavily-key":
+        config.set("tavily_api_key", value)
+        print("✅ Tavily API key configured!")
+        print("   Run `agent-reach doctor` to verify Tavily, then use it as the primary search backend.")
 
 
 def _cmd_transcribe(args):
@@ -2048,12 +2054,15 @@ def _cmd_setup():
     print("=" * 40)
     print()
 
-    # Step 1: Exa (via mcporter, no API key required)
+    # Step 1: Tavily primary, Exa fallback
     import shutil
     import subprocess
 
-    print("【推荐】全网搜索 — Exa（通过 mcporter）")
-    print("  免费，无需 API Key")
+    print("【推荐】全网搜索 — Tavily（首选）▸ Exa（备选）")
+    print("  Tavily 适合研究和正文抽取；Exa 免费、无需 API Key")
+    print("  配置 Tavily：agent-reach configure tavily-key --stdin")
+    print()
+    print("【备选】Exa（通过 mcporter）")
 
     if not shutil.which("mcporter"):
         print("  当前状态: -- mcporter 未安装")

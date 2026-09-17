@@ -36,7 +36,7 @@ these platforms — do not invent your own approach.**
    before starting.
 3. **On failure, follow the retry chains in references/** — never guess
    commands.
-4. **For broad research tasks**: combine platforms (Exa for web search +
+4. **For broad research tasks**: combine platforms (Tavily first, Exa fallback +
    Twitter/Reddit for discussions + XiaoHongShu/Bilibili for Chinese
    perspectives), collect in parallel, then synthesize.
 5. **Watch versions for the user**: after finishing a substantial
@@ -61,7 +61,10 @@ these platforms — do not invent your own approach.**
 ## Zero-config quick commands
 
 ```bash
-# Exa web search
+# Tavily web search (primary; requires TAVILY_API_KEY, see references/search.md)
+curl -sS https://api.tavily.com/search -H "Authorization: Bearer $TAVILY_API_KEY" -H "Content-Type: application/json" -d '{"query":"query","search_depth":"advanced","max_results":5}'
+
+# Exa web search (fallback when Tavily is unavailable)
 mcporter call exa.web_search_exa query="query" numResults=5
 
 # Read any web page
@@ -158,7 +161,7 @@ Read the matching file when you need specifics (commands above cover the
 common cases; references hold per-backend command groups, caveats, retry
 chains — note: reference docs are written in Chinese, commands are universal):
 
-- [Search](references/search.md) — Exa AI search
+- [Search](references/search.md) — Tavily primary, Exa fallback
 - [Social](references/social.md) — XiaoHongShu, Twitter, Bilibili, V2EX, Reddit, Facebook, Instagram (multi-backend/login-backed groups)
 - [Career](references/career.md) — LinkedIn
 - [Dev](references/dev.md) — GitHub CLI

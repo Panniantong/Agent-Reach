@@ -78,9 +78,13 @@ agent-reach install --env=auto --system
 > agent-reach install --env=auto
 > ```
 
-The default command checks core infrastructure (gh CLI, Node.js, mcporter, Exa search, yt-dlp config) without changing the host. With explicit `--system` approval it installs/configures the missing pieces and activates these zero-config channels:
+The default command checks core infrastructure (gh CLI, Node.js, mcporter, Tavily/Exa search, yt-dlp config) without changing the host. With explicit `--system` approval it installs/configures the missing pieces and activates these zero-config channels:
 
-- Web (Jina Reader), YouTube, GitHub, RSS, Exa Search, V2EX, Bilibili (basic)
+- Web (Jina Reader), YouTube, GitHub, RSS, Tavily Search (Exa fallback), V2EX, Bilibili (basic)
+
+Tavily is optional and needs an API key. Configure it through hidden input with
+`agent-reach configure tavily-key --stdin`; without a key, Exa remains the active
+zero-config fallback.
 
 > 💡 **macOS / Homebrew Python 提示 `externally-managed-environment`？**
 > 这是 PEP 668 保护，不是 Agent Reach 本身的问题。优先用 `pipx install ...`，或先创建 `venv` 再安装。
@@ -402,6 +406,7 @@ If the user wants a different agent to handle it, let them choose.
 | `agent-reach configure twitter-cookies` | 通过隐藏输入保存 Twitter Cookie；直接调用仍需显式环境变量 |
 | `agent-reach configure proxy` | 通过隐藏输入保存代理地址；不是自动解锁开关 |
 | `agent-reach configure groq-key` | 通过隐藏输入配置小宇宙转录 Key |
+| `agent-reach configure tavily-key --stdin` | 通过隐藏输入配置 Tavily Search Key |
 
 After installation, use upstream tools directly. See SKILL.md for the full command reference:
 
@@ -415,7 +420,8 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 | Instagram | `opencli` | `opencli instagram user nasa -f yaml` |
 | GitHub | `gh` | `gh search repos "query"` |
 | Web | `curl` + Jina | `curl -s "https://r.jina.ai/URL"` |
-| Exa Search | `mcporter` | `mcporter call exa.web_search_exa query="..." numResults=5` |
+| Tavily Search | REST API | `TAVILY_API_KEY` + `curl https://api.tavily.com/search` |
+| Exa Search (fallback) | `mcporter` | `mcporter call exa.web_search_exa query="..." numResults=5` |
 | 小红书 | `opencli`（服务器 `mcporter`） | `opencli xiaohongshu search "query" -f yaml` |
 | 小宇宙播客 | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 | LinkedIn | `mcporter` | `mcporter call linkedin.get_person_profile linkedin_username="..."` |

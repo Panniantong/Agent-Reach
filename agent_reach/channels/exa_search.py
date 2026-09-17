@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Exa Search — check if mcporter + Exa MCP is available."""
+"""Web search — Tavily primary with Exa as the no-key fallback."""
 
+import os
 import shutil
+
+import requests
 
 from .base import Channel
 from .mcporter import McporterConfigError, inspect_mcporter_config
@@ -9,15 +12,99 @@ from .mcporter import McporterConfigError, inspect_mcporter_config
 
 class ExaSearchChannel(Channel):
     name = "exa_search"
-    description = "全网语义搜索"
-    backends = ["Exa via mcporter"]
+    description = "全网搜索（Tavily ▸ Exa）"
+    TAVILY_BACKEND = "Tavily via REST"
+    EXA_BACKEND = "Exa via mcporter"
+    backends = [TAVILY_BACKEND, EXA_BACKEND]
     tier = 0
+    _TAVILY_USAGE_URL = "https://api.tavily.com/usage"
 
     def can_handle(self, url: str) -> bool:
         return False  # Search-only channel
 
+    def ordered_backends(self, config=None):
+        """Prefer Tavily while allowing a reversible backend override."""
+        candidates = list(self.backends)
+        override = None
+        if config:
+            for key in ("search_backend", "web_search_backend", f"{self.name}_backend"):
+                override = config.get(key)
+                if override:
+                    break
+        if not override:
+            return candidates
+
+        aliases = {
+            "tavily": self.TAVILY_BACKEND,
+            "exa": self.EXA_BACKEND,
+        }
+        target = aliases.get(str(override).strip().casefold(), str(override).strip())
+        for index, backend in enumerate(candidates):
+            if backend.casefold() == target.casefold() or backend.casefold().startswith(
+                target.casefold()
+            ):
+                candidates.insert(0, candidates.pop(index))
+                break
+        return candidates
+
     def check(self, config=None):
         self.active_backend = None
+        findings = []
+        saw_warn = False
+        saw_error = False
+        for backend in self.ordered_backends(config):
+            if backend == self.TAVILY_BACKEND:
+                status, message = self._check_tavily(config)
+            else:
+                status, message = self._check_exa()
+
+            if status == "ok":
+                self.active_backend = backend
+                return status, message
+            saw_warn = saw_warn or status == "warn"
+            saw_error = saw_error or status == "error"
+            findings.append(f"{backend}: {message}")
+
+        status = "error" if saw_error else "warn" if saw_warn else "off"
+        return status, "\n".join(findings)
+
+    def _check_tavily(self, config=None):
+        """Validate the key without spending a search credit."""
+        api_key = config.get("tavily_api_key") if config else None
+        api_key = api_key or os.environ.get("TAVILY_API_KEY")
+        if not api_key:
+            return "off", (
+                "Tavily 未配置 API key。运行：\n"
+                "  agent-reach configure tavily-key"
+            )
+
+        try:
+            response = requests.get(
+                self._TAVILY_USAGE_URL,
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=10,
+            )
+        except requests.RequestException:
+            return "warn", "Tavily API 暂时无法连接；将继续尝试 Exa。"
+
+        if response.status_code == 200:
+            try:
+                usage = response.json().get("key", {})
+            except (TypeError, ValueError):
+                usage = {}
+            used = usage.get("usage")
+            limit = usage.get("limit")
+            suffix = f"（已用 {used}/{limit} credits）" if isinstance(
+                used, (int, float)
+            ) and isinstance(limit, (int, float)) else ""
+            return "ok", f"Tavily API 可用{suffix}"
+        if response.status_code == 401:
+            return "warn", "Tavily API key 无效；将继续尝试 Exa。"
+        if response.status_code == 429:
+            return "warn", "Tavily API 请求受限；将继续尝试 Exa。"
+        return "warn", f"Tavily API 检查失败（HTTP {response.status_code}）；将继续尝试 Exa。"
+
+    def _check_exa(self):
         if not shutil.which("mcporter"):
             return "off", (
                 "需要 mcporter + Exa MCP。安装：\n"

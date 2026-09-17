@@ -108,7 +108,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 | 🌐 **网页** | 阅读任意网页 | — | 无需配置 |
 | 📺 **YouTube** | 字幕提取 + 视频搜索 | — | 无需配置 |
 | 📡 **RSS** | 阅读任意 RSS/Atom 源 | — | 无需配置 |
-| 🔍 **全网搜索** | — | 全网语义搜索 | 自动配置（MCP 接入，免费无需 Key） |
+| 🔍 **全网搜索** | — | Tavily 研究搜索；Exa 语义搜索备选 | Tavily Key 可选；无 Key 自动走 Exa |
 | 📦 **GitHub** | 读公开仓库 + 搜索 | 私有仓库、提 Issue/PR、Fork | 告诉 Agent「帮我登录 GitHub」 |
 | 🐦 **Twitter/X** | 读单条推文 | 搜索推文、浏览时间线、读长文 | 告诉 Agent「帮我配 Twitter」 |
 | 📺 **B站** | 搜索 + 视频详情（bili-cli，无需登录） | 字幕（OpenCLI） | 告诉 Agent「帮我配 B站」 |
@@ -169,7 +169,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 
 1. **安装 CLI 工具** — 从本仓库安装 `agent-reach` 命令行（自带 yt-dlp、feedparser；不要从 PyPI 安装同名包，它不是本项目）
 2. **检查系统基建** — 检查 Node.js、gh CLI、mcporter，并给出缺失项的安装方式
-3. **按授权安装与配置** — 仅在显式传入 `--system` 时安装依赖并通过 MCP 接入 Exa
+3. **按授权安装与配置** — 仅在显式传入 `--system` 时安装依赖并接入 Tavily（首选）与 Exa（备选）
 4. **检测环境** — 判断是本地电脑还是服务器，给出对应的配置建议
 5. **按授权注册 SKILL.md** — 仅在显式 `--system` 时写入 Agent 的 skills 目录；默认检查不改文件
 6. **问你要不要更多** — 默认只激活 6 个零配置渠道；小红书、Twitter、Reddit、Facebook、Instagram 这些需要登录态的，Agent 会列菜单问你要哪些，点名才装
@@ -187,7 +187,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 - "这个 GitHub 仓库是做什么的" → `gh repo view owner/repo`
 - "这个 YouTube 视频讲了什么" → `yt-dlp` 提取字幕
 - "B站搜一下 AI 教程" → `bili search`（无需登录）
-- "全网搜一下 LLM 框架对比" → Exa 语义搜索
+- "全网搜一下 LLM 框架对比" → Tavily Search → Extract；无 Key 时回退 Exa
 - "订阅这个 RSS" → `feedparser` 解析
 
 **不需要记命令。** Agent 读了 SKILL.md 之后自己知道该调什么。需要登录的平台（小红书、Twitter、Reddit、Facebook、Instagram），告诉 Agent「帮我配 XXX」即可解锁。
@@ -219,7 +219,7 @@ channels/
 ├── xiaohongshu.py  → OpenCLI ▸ xiaohongshu-mcp ▸ xhs-cli
 ├── linkedin.py     → mcp-server-linkedin ▸ Jina Reader
 ├── rss.py          → feedparser
-├── exa_search.py   → Exa via mcporter
+├── exa_search.py   → Tavily via REST ▸ Exa via mcporter
 └── __init__.py     → 渠道注册（doctor 检测用）
 ```
 
@@ -236,7 +236,7 @@ channels/
 | Instagram | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | 官方 Graph API（Business/Creator + 审批） | instaloader 类路径不稳定；OpenCLI 复用真实浏览器会话 |
 | YouTube 字幕 + 搜索 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | — | 154K Star，YouTube 仍是最佳（注意：不再用于 B站） |
 | B站 | [bili-cli](https://github.com/public-clis/bilibili-cli) | OpenCLI ▸ 搜索 API | yt-dlp 被 B站风控 412 封死（2026-06 实测），bili-cli 无登录可搜可读 |
-| 搜全网 | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | — | AI 语义搜索，MCP 接入免 Key |
+| 搜全网 | Tavily REST API | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | Tavily 适合研究和正文抽取；无 Key 或不可用时回退 Exa |
 | GitHub | [gh CLI](https://cli.github.com) | — | 官方工具，认证后完整 API 能力 |
 | 读 RSS | [feedparser](https://github.com/kurtmckee/feedparser) | — | Python 生态标准选择 |
 | 小红书 | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)（服务器）▸ xhs-cli | OpenCLI 只用用户已有会话；其余后端用 Cookie-Editor 手工导出 |
