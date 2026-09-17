@@ -197,3 +197,49 @@ def test_unpacked_scan_requires_manifest_but_does_not_claim_browser_load(
     assert not _unpacked_extension_files_present()
     (unpacked / "manifest.json").write_text('{"name": "OpenCLI"}', encoding="utf-8")
     assert _unpacked_extension_files_present()
+
+
+def test_multi_profile_connected_is_ready():
+    """Two browser profiles connected: per-profile flags prove the bridge is up.
+
+    OpenCLI reports the top-level ``extensionConnected`` as False whenever more
+    than one profile is attached, signalling ``profileRequired`` so the caller
+    picks one with ``--profile``.  That is a "choose a profile" state, not a
+    "no extension" state, and commands still run.
+    """
+    daemon_status = {
+        "ok": True,
+        "pid": 979663,
+        "extensionConnected": False,
+        "profileRequired": True,
+        "profileDisconnected": False,
+        "profiles": [
+            {"contextId": "7sm9h93b", "extensionConnected": True},
+            {"contextId": "buxqtb73", "extensionConnected": True},
+        ],
+    }
+    st, _ = _status_with(
+        ProbeResult("ok", output="1.8.7"),
+        daemon_status,
+        ext_on_disk=True,
+    )
+    assert st.daemon_running and st.extension_connected
+    assert st.ready
+    assert st.hint == ""
+
+
+def test_profiles_present_but_none_connected_is_not_ready():
+    """A profile list with no live extension must not fake a connection."""
+    daemon_status = {
+        "ok": True,
+        "extensionConnected": False,
+        "profiles": [{"contextId": "7sm9h93b", "extensionConnected": False}],
+    }
+    st, _ = _status_with(
+        ProbeResult("ok", output="1.8.7"),
+        daemon_status,
+        ext_on_disk=True,
+    )
+    assert st.daemon_running and not st.extension_connected
+    assert not st.ready
+    assert "扩展当前未连接" in st.hint
