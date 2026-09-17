@@ -53,6 +53,10 @@ class TestSkillCommand(unittest.TestCase):
             with self.subTest(markdown_file=markdown_file):
                 content = markdown_file.read_text(encoding="utf-8")
                 self.assertNotRegex(content, function_call)
+                if "skill" in markdown_file.parts:
+                    for line in content.splitlines():
+                        if "mcporter call" in line:
+                            self.assertNotRegex(line, r"\b[\w-]+=\"[^\"\r\n]*\"")
 
     def test_linkedin_reference_uses_current_tool_contract(self):
         """LinkedIn examples should use the current server and parameters."""
@@ -64,23 +68,23 @@ class TestSkillCommand(unittest.TestCase):
 
         self.assertIn(
             "linkedin.get_person_profile "
-            'linkedin_username="username" '
-            'sections="experience,education"',
+            "linkedin_username=username "
+            "sections=experience,education",
             career_reference,
         )
         self.assertIn(
-            'linkedin.search_people keywords="AI engineer" '
-            'location="Shanghai"',
+            'linkedin.search_people "keywords=AI engineer" '
+            "location=Shanghai",
             career_reference,
         )
         self.assertIn(
-            'linkedin.get_company_profile company_name="openai" '
-            'sections="posts,jobs"',
+            "linkedin.get_company_profile company_name=openai "
+            "sections=posts,jobs",
             career_reference,
         )
         self.assertIn(
-            'linkedin.search_jobs keywords="software engineer" '
-            'location="Remote" max_pages=2',
+            'linkedin.search_jobs "keywords=software engineer" '
+            "location=Remote max_pages=2",
             career_reference,
         )
         self.assertNotIn("linkedin-scraper.", career_reference)
