@@ -32,7 +32,7 @@ def test_twitter_doctor_does_not_start_cli_without_explicit_credentials(
     assert status == "warn"
     assert channel.active_backend is None
     assert "Cookie-Editor" in message
-    assert "浏览器" not in message or "不会" in message
+    assert "browser" not in message.lower() or "does not" in message.lower()
 
 
 def test_twitter_doctor_still_avoids_upstream_fallback_with_saved_credentials(
@@ -54,8 +54,8 @@ def test_twitter_doctor_still_avoids_upstream_fallback_with_saved_credentials(
     status, message = TwitterChannel().check(Config())
 
     assert status == "warn"
-    assert "已配置" in message
-    assert "不会执行" in message
+    assert "configured" in message
+    assert "does not run" in message
 
 
 def test_reddit_doctor_does_not_create_or_refresh_missing_credentials(
@@ -102,7 +102,7 @@ def test_reddit_doctor_reports_stale_saved_credential_without_refresh(
     status, message = RedditChannel().check()
 
     assert status == "warn"
-    assert "超过 7 天" in message
+    assert "more than 7 days old" in message
     assert credential_path.read_bytes() == original
 
 
@@ -168,5 +168,5 @@ def test_xhs_doctor_reports_stale_cookie_without_refresh(
     status, message = XiaoHongShuChannel().check()
 
     assert status == "warn"
-    assert "超过 7 天" in message
+    assert "more than 7 days old" in message
     assert cookie_path.read_bytes() == original
