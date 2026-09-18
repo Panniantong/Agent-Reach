@@ -31,7 +31,7 @@ def home_dir() -> Path:
     return Path.home()
 
 
-def ensure_no_symlink_path(path: str | Path, label: str = "路径") -> Path:
+def ensure_no_symlink_path(path: str | Path, label: str = "path") -> Path:
     """Reject any existing symlink component without resolving the path."""
     target = Path(path)
     absolute = Path(os.path.abspath(os.fspath(target)))
@@ -43,15 +43,15 @@ def ensure_no_symlink_path(path: str | Path, label: str = "路径") -> Path:
         except FileNotFoundError:
             continue
         if stat.S_ISLNK(mode):
-            raise PrivatePathError(f"{label}不能经过符号链接：{current}")
+            raise PrivatePathError(f"{label} must not traverse a symlink: {current}")
     return target
 
 
 def make_private_dir(path: str | Path) -> Path:
     """Create a directory restricted to the current user where supported."""
-    target = ensure_no_symlink_path(path, "私密目录")
+    target = ensure_no_symlink_path(path, "private directory")
     target.mkdir(mode=0o700, parents=True, exist_ok=True)
-    ensure_no_symlink_path(target, "私密目录")
+    ensure_no_symlink_path(target, "private directory")
     if sys.platform != "win32":
         flags = (
             os.O_RDONLY
@@ -60,7 +60,7 @@ def make_private_dir(path: str | Path) -> Path:
         )
         dir_fd = os.open(target, flags)
         try:
-            ensure_no_symlink_path(target, "私密目录")
+            ensure_no_symlink_path(target, "private directory")
             if hasattr(os, "fchmod"):
                 os.fchmod(dir_fd, 0o700)
         finally:
@@ -83,10 +83,10 @@ def atomic_write_private_text(
     """
     target = Path(path)
     parent = target.parent
-    ensure_no_symlink_path(parent, "父目录")
+    ensure_no_symlink_path(parent, "parent directory")
     make_private_dir(parent)
-    ensure_no_symlink_path(parent, "父目录")
-    ensure_no_symlink_path(target, "目标文件")
+    ensure_no_symlink_path(parent, "parent directory")
+    ensure_no_symlink_path(target, "target file")
 
     fd, tmp_name = tempfile.mkstemp(
         dir=str(parent),
@@ -104,8 +104,8 @@ def atomic_write_private_text(
             handle.flush()
             os.fsync(handle.fileno())
 
-        ensure_no_symlink_path(parent, "父目录")
-        ensure_no_symlink_path(target, "目标文件")
+        ensure_no_symlink_path(parent, "parent directory")
+        ensure_no_symlink_path(target, "target file")
         os.replace(tmp_path, target)
 
         if os.name != "nt" and hasattr(os, "O_DIRECTORY"):
@@ -146,7 +146,7 @@ def read_small_text_no_follow(
     if max_bytes < 0:
         raise ValueError("max_bytes must be non-negative")
 
-    target = ensure_no_symlink_path(path, "读取路径")
+    target = ensure_no_symlink_path(path, "读取path")
     flags = (
         os.O_RDONLY
         | getattr(os, "O_NOFOLLOW", 0)
@@ -161,9 +161,9 @@ def read_small_text_no_follow(
     try:
         file_stat = os.fstat(fd)
         if not stat.S_ISREG(file_stat.st_mode):
-            raise PrivatePathError(f"读取目标不是常规文件：{target}")
+            raise PrivatePathError(f"read target is not a regular file: {target}")
         if file_stat.st_size > max_bytes:
-            raise PrivatePathError(f"读取目标超过大小上限：{target}")
+            raise PrivatePathError(f"read target exceeds the size limit: {target}")
 
         chunks = []
         remaining = max_bytes + 1
@@ -175,8 +175,8 @@ def read_small_text_no_follow(
             remaining -= len(chunk)
         payload = b"".join(chunks)
         if len(payload) > max_bytes:
-            raise PrivatePathError(f"读取目标超过大小上限：{target}")
-        ensure_no_symlink_path(target, "读取路径")
+            raise PrivatePathError(f"read target exceeds the size limit: {target}")
+        ensure_no_symlink_path(target, "读取path")
     finally:
         os.close(fd)
     return payload.decode(encoding)
