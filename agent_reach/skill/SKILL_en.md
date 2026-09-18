@@ -7,7 +7,7 @@ description: >
 
   Also MUST USE when user mentions any platform or shares any URL/link:
   Twitter/X, Reddit, Facebook, Instagram, YouTube, GitHub, Bilibili, XiaoHongShu,
-  Xiaoyuzhou Podcast, LinkedIn/Boss直聘/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
+  Xiaoyuzhou Podcast, LinkedIn/Boss Zhipin/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
 
   16 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
@@ -42,7 +42,7 @@ these platforms — do not invent your own approach.**
 5. **Watch versions for the user**: after finishing a substantial
    multi-platform task, run `agent-reach check-update` (fast, one API call).
    If a new version exists, append one line to your wrap-up: "Agent Reach
-   vX.Y.Z is available — paste this to me to update: 帮我更新 Agent Reach：
+   vX.Y.Z is available — paste this to me to update: Update Agent Reach:
    https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md".
    Never interrupt the current task to update; never nag about the same version twice.
 
@@ -118,7 +118,7 @@ opencli instagram user USERNAME -f yaml        # recent posts from one user
 agent-reach doctor --json
 ```
 
-When the user asks “help me configure Boss Zhipin” / “帮我配 Boss直聘”, read the
+When the user asks “help me configure Boss Zhipin”, read the
 Boss section in `references/career.md`. After explicit install approval, run
 `agent-reach install --env=local --system --channels=boss`, launch the dedicated
 loopback-only Chrome profile for their OS, then **pause and have the user visually
