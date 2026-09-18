@@ -1,36 +1,35 @@
-# 搜索工具
+# Search Tools
 
-Exa AI 搜索引擎。
+Exa AI search.
 
-## Exa AI 搜索
+## Exa AI Search
 
-高质量 AI 搜索引擎，适合查找技术文档、官方示例和相关网页。
+A high-quality AI search engine that is useful for technical documentation, official examples, and relevant web pages.
 
 ```bash
 mcporter call exa.web_search_exa query="query" numResults=5
 mcporter call exa.web_search_exa query="library API code example" numResults=5
 ```
 
-### 使用场景
+### Common use cases
 
-| 场景 | 参数 |
-|-----|------|
-| 网页搜索 | `web_search_exa(query: "...", numResults: 5)` |
-| 技术/代码资料 | `web_search_exa(query: "框架名 API 示例", numResults: 5)` |
+| Use case | Parameters |
+|---|---|
+| General web search | `web_search_exa(query: "...", numResults: 5)` |
+| Technical/code research | `web_search_exa(query: "framework API example", numResults: 5)` |
 
-> Exa MCP 的 `get_code_context_exa` 已弃用且默认不注册。代码问题也使用
-> `web_search_exa`；需要精确搜索仓库内容时，改用 `dev.md` 中的 GitHub 搜索。
+> Exa MCP's `get_code_context_exa` is deprecated and is not registered by default. Use `web_search_exa` for code-related research too. For exact repository/code search, use GitHub search from `dev.md`.
 
-### 特点
+### Strengths
 
-- 擅长英文内容和技术文档
-- 可通过查询词定位官方文档和代码示例
-- 结果质量高
+- Strong coverage of English and technical content
+- Good for locating official documentation and code examples
+- High-quality semantic search results
 
-## 与其他搜索工具对比
+## Comparison
 
-| 工具 | 来源 | 适用场景 |
-|-----|------|---------|
-| Exa | agent-reach | 英文/技术/代码搜索 |
-| 智谱搜索 | my-mcp-tools | 中文搜索 |
-| GitHub 搜索 | agent-reach (dev.md) | 仓库/代码搜索 |
+| Tool | Source | Best for |
+|---|---|---|
+| Exa | agent-reach | English/technical/code-oriented web search |
+| Zhipu Search | my-mcp-tools | Chinese-language web search |
+| GitHub Search | agent-reach (`dev.md`) | Repository/code search |
