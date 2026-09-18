@@ -114,6 +114,6 @@ class BilibiliChannel(Channel):
         if not _search_api_ok():
             return None
         return "ok", (
-            "Bilibili Search API 可达（仅搜索，curl 直连）。"
+            "Bilibili Search API is reachable (search only, direct curl access)."
             "For full functionality, install bili-cli: pipx install bilibili-cli"
         )
