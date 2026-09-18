@@ -121,11 +121,11 @@ class TestSkillCommand(unittest.TestCase):
         readme = (root / "README.md").read_text(encoding="utf-8")
 
         for content in (install_doc, skill, readme):
-            self.assertIn("帮我配 Boss直聘", content)
+            self.assertIn("Boss Zhipin", content)
         self.assertIn("agent-reach install --env=local --system --channels=boss", install_doc)
         self.assertIn("--remote-debugging-address=127.0.0.1", install_doc)
-        self.assertIn("用户手动登录", install_doc)
-        self.assertIn("完全控制", install_doc)
+        self.assertIn("log in manually", install_doc)
+        self.assertIn("can control this Chrome", install_doc)
 
         self.assertIn(
             'auth = AuthManager(Path.home() / ".boss-agent")', career
@@ -135,8 +135,8 @@ class TestSkillCommand(unittest.TestCase):
         self.assertIn("4c991b77086a203173bf08a4cb64a23af6514fe6", career)
         self.assertIn("ENVIRONMENT_RISK", career)
         self.assertIn("--browser-source existing-browser", career)
-        self.assertIn("长期复用", career)
-        self.assertNotIn("code 37（TOKEN_REFRESH_FAILED）→ 重新登录", career)
+        self.assertIn("Reuse the dedicated profile long-term", career)
+        self.assertNotIn("code 37 = TOKEN_REFRESH_FAILED", career)
         self.assertNotIn("client = BossClient(auth", career)
 
     def test_localized_readmes_use_current_linkedin_server_name(self):
@@ -245,7 +245,7 @@ class TestSkillCommand(unittest.TestCase):
                 content = f.read()
             self.assertTrue(content.strip())
             self.assertIn("Xiaoyuzhou Podcast, LinkedIn", content)
-            self.assertNotIn("搜推特", content)
+            self.assertNotIn("\u641c\u63a8\u7279", content)
             self.assertTrue(
                 os.path.exists(os.path.join(skill_parent, "agent-reach", "references"))
             )
