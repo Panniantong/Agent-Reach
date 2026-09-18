@@ -70,3 +70,28 @@ def test_search_backend_override_moves_exa_to_the_front():
 
     assert ordered == [channel.EXA_BACKEND, channel.TAVILY_BACKEND]
 
+
+def test_specialized_tasks_route_to_exa_and_general_tasks_to_tavily():
+    channel = ExaSearchChannel()
+
+    for task in (
+        "paper",
+        "论文",
+        "company",
+        "公司",
+        "people",
+        "人物",
+        "semantic",
+        "语义",
+        "rag",
+        "similar",
+    ):
+        assert channel.backend_for_task(task) == channel.EXA_BACKEND
+    for task in ("general", "news", "extract", "crawl", "research"):
+        assert channel.backend_for_task(task) == channel.TAVILY_BACKEND
+
+
+def test_explicit_backend_override_wins_over_task_route():
+    channel = ExaSearchChannel()
+
+    assert channel.backend_for_task("paper", {"search_backend": "tavily"}) == channel.TAVILY_BACKEND

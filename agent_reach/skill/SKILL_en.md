@@ -58,6 +58,18 @@ these platforms — do not invent your own approach.**
 | YouTube / Bilibili / podcast transcripts | video | [references/video.md](references/video.md) |
 | Xueqiu / stock quotes | finance | [references/finance.md](references/finance.md) |
 
+## Search backend task routing
+
+Search is task-routed, not just “one primary backend plus one fallback”:
+
+- General web, news, freshness, URL extraction, Map/Crawl/Research → Tavily.
+- Papers/academic/arXiv, companies/people/financial reports, semantic discovery,
+  RAG, or similar-page discovery → Exa.
+- Use Exa for ordinary search only when Tavily is unavailable; select Exa
+  proactively for the specialized tasks above.
+- See [references/search.md](references/search.md) for commands and
+  `category:<type>` query hints.
+
 ## Zero-config quick commands
 
 ```bash

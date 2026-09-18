@@ -55,6 +55,15 @@ metadata:
 | YouTube/B站/播客字幕 | video | [references/video.md](references/video.md) |
 | 雪球/股票行情 | finance | [references/finance.md](references/finance.md) |
 
+## 搜索后端任务路由
+
+搜索不是简单的“一个主后端 + 一个 fallback”：
+
+- 普通网页、新闻、时效信息、URL 抽取、Map/Crawl/Research → Tavily。
+- 论文/学术/arXiv、公司/人物/财报、语义发现、RAG、找相似页面 → Exa。
+- 只有 Tavily 不可用时，才把普通搜索回退到 Exa；只有明确的 Exa 专项任务才主动选 Exa。
+- 详细命令和 `category:<type>` 写法见 [references/search.md](references/search.md)。
+
 ## 零配置快速命令
 
 ```bash

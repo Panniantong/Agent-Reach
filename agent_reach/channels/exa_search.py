@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Web search — Tavily primary with Exa as the no-key fallback."""
+"""Web search — task-aware Tavily primary with Exa specialization/fallback."""
 
 import os
 import shutil
@@ -12,37 +12,92 @@ from .mcporter import McporterConfigError, inspect_mcporter_config
 
 class ExaSearchChannel(Channel):
     name = "exa_search"
-    description = "全网搜索（Tavily ▸ Exa）"
+    description = "全网搜索（Tavily 默认；Exa 专项/备选）"
     TAVILY_BACKEND = "Tavily via REST"
     EXA_BACKEND = "Exa via mcporter"
     backends = [TAVILY_BACKEND, EXA_BACKEND]
     tier = 0
     _TAVILY_USAGE_URL = "https://api.tavily.com/usage"
+    EXA_TASKS = frozenset(
+        {
+            "academic",
+            "arxiv",
+            "company",
+            "companies",
+            "企业",
+            "公司",
+            "financial_report",
+            "财报",
+            "金融报告",
+            "学术",
+            "论文",
+            "people",
+            "person",
+            "paper",
+            "papers",
+            "rag",
+            "research_paper",
+            "retrieval",
+            "semantic",
+            "semantic_search",
+            "similar",
+            "相似",
+            "语义",
+            "语义搜索",
+            "检索",
+            "人物",
+        }
+    )
 
     def can_handle(self, url: str) -> bool:
         return False  # Search-only channel
 
-    def ordered_backends(self, config=None):
-        """Prefer Tavily while allowing a reversible backend override."""
-        candidates = list(self.backends)
+    def _configured_backend(self, config=None):
+        if not config:
+            return None
         override = None
-        if config:
-            for key in ("search_backend", "web_search_backend", f"{self.name}_backend"):
-                override = config.get(key)
-                if override:
-                    break
+        for key in ("search_backend", "web_search_backend", f"{self.name}_backend"):
+            override = config.get(key)
+            if override:
+                break
         if not override:
-            return candidates
+            return None
 
         aliases = {
             "tavily": self.TAVILY_BACKEND,
             "exa": self.EXA_BACKEND,
         }
         target = aliases.get(str(override).strip().casefold(), str(override).strip())
-        for index, backend in enumerate(candidates):
+        for backend in self.backends:
             if backend.casefold() == target.casefold() or backend.casefold().startswith(
                 target.casefold()
             ):
+                return backend
+        return None
+
+    def backend_for_task(self, task=None, config=None):
+        """Choose the backend for a named search task.
+
+        Tavily remains the default for general/news/extract/crawl/research
+        workflows. Exa is preferred for semantic retrieval and specialized
+        paper, company, people, financial-report, or similar-page discovery.
+        An explicit backend override always wins.
+        """
+        configured = self._configured_backend(config)
+        if configured:
+            return configured
+        normalized = str(task or "general").strip().casefold().replace("-", "_")
+        return self.EXA_BACKEND if normalized in self.EXA_TASKS else self.TAVILY_BACKEND
+
+    def ordered_backends(self, config=None):
+        """Prefer Tavily while allowing a reversible backend override."""
+        candidates = list(self.backends)
+        preferred = self._configured_backend(config)
+        if not preferred:
+            return candidates
+
+        for index, backend in enumerate(candidates):
+            if backend == preferred:
                 candidates.insert(0, candidates.pop(index))
                 break
         return candidates
