@@ -117,7 +117,7 @@ def test_youtube_warns_when_node_only_and_no_config(monkeypatch, tmp_path):
     status, message = ch.check()
     assert status == "warn"
     assert "--js-runtimes" in message
-    assert ch.active_backend == "yt-dlp"  # 本体活着，warn 只关乎 JS runtime
+    assert ch.active_backend == "yt-dlp"  # yt-dlp itself is alive; warn concerns only the JS runtime
 
 
 def test_youtube_warns_with_windows_specific_fix_command(monkeypatch, tmp_path):
