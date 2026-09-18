@@ -131,7 +131,7 @@ class GitHubChannel(Channel):
         except GitHubConfigError as exc:
             return "warn", (
                 f"gh CLI is executable, but authentication configuration could not be checked safely: {exc}。"
-                "Doctor 不执行会写 device-id 的 `gh auth status`，当前未验证。"
+                "Doctor does not run `gh auth status` because it may write a device ID, so authentication was not verified live."
             )
 
         if configured:
