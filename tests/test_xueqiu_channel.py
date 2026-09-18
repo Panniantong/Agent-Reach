@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Dedicated tests for the ``xueqiu`` (雪球) channel.
+"""Dedicated tests for the ``xueqiu``  channel.
 
 Xueqiu wraps several public JSON endpoints and does real shaping of the
 responses — normalising quotes, unwrapping the JSON-in-JSON hot-post
@@ -64,7 +64,7 @@ def test_check_warn_when_quote_empty():
     with patch.object(xq, "_get_json", return_value={"data": {"quote": {}}}):
         status, message = ch.check()
     assert status == "warn"
-    assert "为空" in message
+    assert "returned data is empty" in message
     assert ch.active_backend is None
 
 
@@ -74,7 +74,7 @@ def test_check_warn_on_exception():
     with patch.object(xq, "_get_json", side_effect=urllib.error.URLError("refused")):
         status, message = ch.check()
     assert status == "warn"
-    assert "连接失败" in message
+    assert "connection failed" in message
     assert ch.active_backend is None
 
 
@@ -114,7 +114,7 @@ def test_check_never_reads_browser_cookie_store_implicitly(monkeypatch):
 def test_get_stock_quote_maps_fields():
     ch = XueqiuChannel()
     payload = {"data": {"quote": {
-        "symbol": "SH600519", "name": "贵州茅台", "current": 1700.5,
+        "symbol": "SH600519", "name": "Kweichow Moutai", "current": 1700.5,
         "percent": 1.23, "volume": 1234, "pe_ttm": 30.1,
         "pe_forecast": 27.4, "pb": 8.2, "eps": 59.0,
     }}}
@@ -129,7 +129,7 @@ def test_get_stock_quote_maps_fields():
         "?symbol=SH600519&extend=detail"
     ]
     assert q["symbol"] == "SH600519"
-    assert q["name"] == "贵州茅台"
+    assert q["name"] == "Kweichow Moutai"
     assert q["current"] == 1700.5
     assert q["volume"] == 1234
     assert q["pe_ttm"] == 30.1
@@ -152,20 +152,20 @@ def test_get_stock_quote_falls_back_when_no_items():
 def test_search_stock_maps_and_respects_limit():
     ch = XueqiuChannel()
     stocks = [
-        {"code": "SH600519", "name": "贵州茅台", "exchange": "SH"},
-        {"code": "SZ000858", "name": "五粮液", "exchange": "SZ"},
-        {"code": "SH601318", "name": "中国平安", "exchange": "SH"},
+        {"code": "SH600519", "name": "Kweichow Moutai", "exchange": "SH"},
+        {"code": "SZ000858", "name": "Wuliangye", "exchange": "SZ"},
+        {"code": "SH601318", "name": "Ping An Insurance", "exchange": "SH"},
     ]
     with patch.object(xq, "_get_json", return_value={"stocks": stocks}):
-        results = ch.search_stock("酒", limit=2)
+        results = ch.search_stock("liquor", limit=2)
     assert len(results) == 2
-    assert results[0] == {"symbol": "SH600519", "name": "贵州茅台", "exchange": "SH"}
+    assert results[0] == {"symbol": "SH600519", "name": "Kweichow Moutai", "exchange": "SH"}
 
 
 def test_search_stock_handles_missing_stocks_key():
     ch = XueqiuChannel()
     with patch.object(xq, "_get_json", return_value={}):
-        assert ch.search_stock("无") == []
+        assert ch.search_stock("none" == []
 
 
 # --- get_hot_posts: JSON-in-JSON unwrap, html strip, url build, bad data ---
@@ -173,9 +173,9 @@ def test_search_stock_handles_missing_stocks_key():
 def test_get_hot_posts_unwraps_and_shapes():
     ch = XueqiuChannel()
     inner = {
-        "id": 42, "title": "茅台大涨",
-        "text": "<p>今天<b>大涨</b>&nbsp;了</p>",
-        "user": {"screen_name": "韭菜王"},
+        "id": 42, "title": "Moutai Rallies",
+        "text": "<p>Today <b>rallied</b>&nbsp;strongly</p>",
+        "user": {"screen_name": "Retail Investor"},
         "like_count": 99, "target": "/SH600519/123",
     }
     payload = {"list": [{"data": json.dumps(inner, ensure_ascii=False)}]}
@@ -184,9 +184,9 @@ def test_get_hot_posts_unwraps_and_shapes():
     assert len(posts) == 1
     p = posts[0]
     assert p["id"] == 42
-    assert p["title"] == "茅台大涨"
-    assert p["text"] == "今天大涨 了"          # html stripped, entity decoded
-    assert p["author"] == "韭菜王"
+    assert p["title"] == "Moutai Rallies"
+    assert p["text"] == "Today rallied strongly"          # html stripped, entity decoded
+    assert p["author"] == "Retail Investor"
     assert p["likes"] == 99
     assert p["url"] == "https://xueqiu.com/SH600519/123"
 
@@ -265,8 +265,8 @@ def test_get_hot_posts_rejects_negative_limit():
 def test_get_hot_stocks_ranks_and_falls_back_to_symbol():
     ch = XueqiuChannel()
     items = [
-        {"code": "SH600519", "name": "贵州茅台", "current": 1700, "percent": 1.2},
-        {"symbol": "SZ000858", "name": "五粮液", "current": 150, "percent": -0.5},
+        {"code": "SH600519", "name": "Kweichow Moutai", "current": 1700, "percent": 1.2},
+        {"symbol": "SZ000858", "name": "Wuliangye", "current": 150, "percent": -0.5},
     ]
     with patch.object(xq, "_get_json", return_value={"data": {"items": items}}):
         results = ch.get_hot_stocks(limit=10)
