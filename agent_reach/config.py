@@ -50,7 +50,7 @@ def _atomic_write_yaml(target: Path, data: dict) -> None:
     atomic same-filesystem operation. Existing symlinks are rejected rather
     than followed or silently replaced.
     """
-    _reject_symlink(target, "配置文件")
+    _reject_symlink(target, "config file")
     fd, tmp_name = tempfile.mkstemp(
         dir=str(target.parent),
         prefix=f".{target.name}.",
@@ -73,7 +73,7 @@ def _atomic_write_yaml(target: Path, data: dict) -> None:
         # Fail closed if a link appeared while serialization was in progress.
         # A later race is still safe: os.replace replaces a directory entry and
         # never follows the symlink into its target.
-        _reject_symlink(target, "配置文件")
+        _reject_symlink(target, "config file")
         os.replace(tmp_path, target)
         if os.name != "nt":
             os.chmod(target, stat.S_IRUSR | stat.S_IWUSR)
@@ -125,14 +125,14 @@ class Config:
 
     def _ensure_dir(self):
         """Create config directory if it doesn't exist."""
-        _reject_symlink(self.config_dir, "配置目录")
+        _reject_symlink(self.config_dir, "config directory")
         make_private_dir(self.config_dir)
-        _reject_symlink(self.config_dir, "配置目录")
+        _reject_symlink(self.config_dir, "config directory")
 
     def load(self):
         """Load config from YAML file."""
-        _reject_symlink(self.config_dir, "配置目录")
-        _reject_symlink(self.config_path, "配置文件")
+        _reject_symlink(self.config_dir, "config directory")
+        _reject_symlink(self.config_path, "config file")
         try:
             payload = read_small_text_no_follow(
                 self.config_path,
@@ -146,13 +146,13 @@ class Config:
 
         loaded = yaml.safe_load(payload) or {}
         if not isinstance(loaded, dict):
-            raise ConfigError("配置文件顶层必须是对象")
+            raise ConfigError("config filetop level must be an object")
         self.data = loaded
 
     def save(self):
         """Save config atomically, refusing mutation in read-only mode."""
         if self.read_only:
-            raise ConfigReadOnlyError("当前配置是只读的，不能保存")
+            raise ConfigReadOnlyError("the current config is read-only and cannot be saved")
         self._ensure_dir()
         _atomic_write_yaml(self.config_path, self.data)
 
@@ -170,7 +170,7 @@ class Config:
     def set(self, key: str, value: Any):
         """Set a config value and save."""
         if self.read_only:
-            raise ConfigReadOnlyError("当前配置是只读的，不能修改")
+            raise ConfigReadOnlyError("the current config is read-only and cannot be modified")
         missing = object()
         previous = self.data.get(key, missing)
         self.data[key] = value
@@ -186,7 +186,7 @@ class Config:
     def delete(self, key: str):
         """Delete a config key and save."""
         if self.read_only:
-            raise ConfigReadOnlyError("当前配置是只读的，不能修改")
+            raise ConfigReadOnlyError("the current config is read-only and cannot be modified")
         missing = object()
         previous = self.data.pop(key, missing)
         try:
