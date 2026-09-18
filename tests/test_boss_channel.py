@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """Dedicated tests for the ``boss`` channel.
 
-Boss直聘 走 CDP 调试端口复用已登录的真 Chrome（headless 是禁区，code 36 风控）。
-check() 只做只读探测：boss-agent-cli 装没装 → CDP 端口通不通 → 有无可复用
-zhipin 页签 → 浏览器内有无登录 cookie（wt2）→ 页签是否都停在反爬安全校验页。
-各分支各自返回 (status, message)，且永不触发浏览器启动（无副作用）。
+Boss Zhipin reuses a logged-in real Chrome session through the CDP debugging port; headless mode is avoided because of code 36 risk controls.
+check() performs read-only probes only: boss-agent-cli installed → CDP port reachable → reusable
+Zhipin tab → browser login cookie (wt2) present → tabs on anti-bot security-check pages.
+Each branch returns (status, message) and never launches a browser.
 
-注意 `boss status` 只校验本地 session.enc，不代表 CDP 浏览器已登录——第 4 层
-以浏览器本体（Storage.getCookies）为准。
+`boss status` validates only local session.enc; it does not prove the CDP browser is logged in. Layer 4
+uses the browser itself (Storage.getCookies) as the source of truth.
 """
 
 import base64
@@ -30,7 +30,7 @@ def test_can_handle_matches_zhipin_hosts():
     ch = BossChannel()
     for url in [
         "https://www.zhipin.com/job_detail/abc.html",
-        "https://zhipin.com/web/geek/job?query=大模型",
+        "https://zhipin.com/web/geek/job?query=LLM",
     ]:
         assert ch.can_handle(url) is True, url
     for url in [
@@ -42,7 +42,7 @@ def test_can_handle_matches_zhipin_hosts():
         assert ch.can_handle(url) is False, url
 
 
-# --- check() 四分支 ---
+# --- check() branches ---
 
 def test_check_off_when_cli_missing():
     ch = BossChannel()
@@ -122,7 +122,7 @@ def test_check_warn_when_ready():
     assert "--browser-source existing-browser" in message
     assert "code 37 = TOKEN_REFRESH_FAILED" not in message
     assert "wt2" in message
-    # 就绪路径：check() 必须标记实际服役的后端（base 契约，doctor --json 不再恒 null）
+    # Ready path: check() must mark the backend actually in service (base contract)
     assert ch.active_backend == ch.backends[0]
 
 
@@ -139,13 +139,13 @@ def test_check_warn_when_cookie_probe_fails():
     ), patch.object(boss_mod, "_cdp_zhipin_login_cookie", return_value=None):
         status, message = ch.check()
     assert status == "warn"
-    assert "登录态未知" in message
-    # 链路已就绪（端口通 + 有页签），仅登录态未知 → 仍标记服役后端
+    assert "login state is unknown" in message
+    # CDP is ready; unknown login state still leaves the backend marked as in service
     assert ch.active_backend == ch.backends[0]
 
 
 def test_check_warn_when_browser_not_logged_in():
-    """浏览器内无 wt2 → 明确提示未登录，且指出 boss status 只代表 session.enc。"""
+    """Missing wt2 must report browser logout and explain that boss status covers session.enc only."""
     ch = BossChannel()
 
     def fake_cdp(path):
@@ -182,8 +182,8 @@ def test_check_warn_when_stuck_on_security_check():
     ), patch.object(boss_mod, "_cdp_zhipin_login_cookie", return_value=True):
         status, message = ch.check()
     assert status == "warn"
-    assert "安全校验" in message
-    assert "不代表未登录" in message
+    assert "security-check" in message
+    assert "independent of login state" in message
     assert "boss status" in message
     assert "wt2" in message
     assert ch.active_backend is None
@@ -202,9 +202,9 @@ def test_check_clears_stale_active_backend():
     assert ch.active_backend is None
 
 
-# --- _cdp_zhipin_login_cookie 的 WebSocket 客户端（doctor 只读探测 wt2）---
+# --- _cdp_zhipin_login_cookie WebSocket client (read-only wt2 probe) ---
 
-# 固定 urandom → 固定 Sec-WebSocket-Key，使 accept 可预先算准
+# Fixed urandom produces a deterministic Sec-WebSocket-Key and expected accept value
 _FIXED_KEY16 = b"\x01" * 16
 _FIXED_KEY = base64.b64encode(_FIXED_KEY16).decode()
 _FIXED_ACCEPT = base64.b64encode(
@@ -213,7 +213,7 @@ _FIXED_ACCEPT = base64.b64encode(
 
 
 def _ws_frame(payload: dict) -> bytes:
-    """构造一个服务器→客户端的无 mask 文本帧。"""
+    """Build an unmasked server-to-client text frame."""
     body = json.dumps(payload).encode("utf-8")
     n = len(body)
     header = bytes([0x81])
@@ -236,7 +236,7 @@ def _handshake(status_line: bytes) -> bytes:
 
 
 class _FakeSock:
-    """按顺序吐出预设字节流的假 socket，记录 sendall 内容。"""
+    """Fake socket that returns predefined byte streams and records sendall data."""
 
     def __init__(self, chunks):
         self._chunks = list(chunks)
@@ -259,7 +259,7 @@ class _FakeSock:
 
 
 def _run_ws_probe(monkeypatch, chunks, ws_url="ws://127.0.0.1:9222/devtools/browser/abc"):
-    """用假 socket 跑 _cdp_zhipin_login_cookie，返回 (结果, 假socket)。"""
+    """Run _cdp_zhipin_login_cookie with a fake socket and return (result, socket)."""
     sock = _FakeSock(chunks)
     monkeypatch.setattr(boss_mod.os, "urandom", lambda n: _FIXED_KEY16)
     monkeypatch.setattr(boss_mod.socket, "create_connection", lambda *a, **k: sock)
@@ -275,7 +275,7 @@ _WT2_RESULT = _ws_frame(
 
 
 def test_ws_probe_event_frame_before_response(monkeypatch):
-    """#1：事件帧（无 id）先于响应帧到达，仍应读到 id==1 的响应并识别 wt2。"""
+    """#1: an event frame without id may arrive first; still read id==1 and detect wt2."""
     event = _ws_frame({"method": "Storage.cookiesChanged", "params": {}})
     chunks = [_handshake(b"HTTP/1.1 101 Switching Protocols"), event + _WT2_RESULT]
     result, _ = _run_ws_probe(monkeypatch, chunks)
@@ -283,21 +283,21 @@ def test_ws_probe_event_frame_before_response(monkeypatch):
 
 
 def test_ws_probe_accepts_empty_reason_phrase(monkeypatch):
-    """#2：RFC 合法的空 reason 短语 'HTTP/1.1 101'（无尾部空格）应被接受。"""
+    """#2: RFC-valid HTTP/1.1 101 with an empty reason phrase must be accepted."""
     chunks = [_handshake(b"HTTP/1.1 101"), _WT2_RESULT]
     result, _ = _run_ws_probe(monkeypatch, chunks)
     assert result is True
 
 
 def test_ws_probe_rejects_bogus_1019(monkeypatch):
-    """#2：伪码 1019（含 ' 101 ' 子串）不应被当作成功升级。"""
+    """#2: fake status 1019 must not be treated as a successful upgrade."""
     chunks = [_handshake(b"HTTP/1.1 1019 Weird"), _WT2_RESULT]
     result, _ = _run_ws_probe(monkeypatch, chunks)
     assert result is None
 
 
 def test_ws_probe_ipv6_host_header_bracketed(monkeypatch):
-    """#3：IPv6 回环的 webSocketDebuggerUrl，Host 头必须带方括号。"""
+    """#3: IPv6 loopback webSocketDebuggerUrl must use brackets in the Host header."""
     chunks = [_handshake(b"HTTP/1.1 101 Switching Protocols"), _WT2_RESULT]
     result, sock = _run_ws_probe(monkeypatch, chunks, ws_url="ws://[::1]:9222/devtools/browser/x")
     assert result is True
