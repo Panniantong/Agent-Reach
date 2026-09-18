@@ -79,7 +79,7 @@ def test_missing_explicit_config_fails_closed(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("MCPORTER_CONFIG", "missing.json")
 
-    with pytest.raises(McporterConfigError, match="不存在"):
+    with pytest.raises(McporterConfigError, match="does not exist"):
         inspect_mcporter_config()
 
 
@@ -94,7 +94,7 @@ def test_symlink_config_is_rejected(monkeypatch, tmp_path):
     except OSError:
         pytest.skip("symlinks are unavailable on this platform")
 
-    with pytest.raises(McporterConfigError, match="符号链接"):
+    with pytest.raises(McporterConfigError, match="symlink"):
         inspect_mcporter_config()
 
 
@@ -114,7 +114,7 @@ def test_ancestor_symlink_config_is_rejected(monkeypatch, tmp_path):
         str(linked_root / "config" / "mcporter.json"),
     )
 
-    with pytest.raises(McporterConfigError, match="安全读取"):
+    with pytest.raises(McporterConfigError, match="read safely"):
         inspect_mcporter_config()
 
 
