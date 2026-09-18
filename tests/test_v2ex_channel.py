@@ -49,7 +49,7 @@ def test_check_warn_on_exception_clears_backend():
     with patch.object(v2, "_get_json", side_effect=OSError("no proxy")):
         status, message = ch.check()
     assert status == "warn"
-    assert "连接失败" in message
+    assert "connection failed" in message
     assert ch.active_backend is None
 
 
@@ -189,7 +189,7 @@ def test_get_node_topics_falls_back_to_requested_node_name():
 
 @pytest.mark.parametrize(
     "node_name",
-    ["python&page=99", "foo#bar", "c++", "Python 开发"],
+    ["python&page=99", "foo#bar", "c++", "Python development"],
 )
 def test_get_node_topics_percent_encodes_node_name(node_name):
     ch = V2EXChannel()
@@ -302,11 +302,11 @@ def test_get_user_percent_encodes_username():
         return {}
 
     with patch.object(v2, "_get_json", side_effect=fake_get_json):
-        ch.get_user("张三&admin=true")
+        ch.get_user("José&admin=true")
 
     parts = urlsplit(captured["url"])
     assert parts.fragment == ""
-    assert parse_qs(parts.query)["username"] == ["张三&admin=true"]
+    assert parse_qs(parts.query)["username"] == ["José&admin=true"]
 
 
 def test_fallback_display_urls_percent_encode_path_segments():
