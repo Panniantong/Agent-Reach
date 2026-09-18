@@ -191,7 +191,7 @@ class TestConfig:
         except (OSError, NotImplementedError):
             pytest.skip("symlinks not supported on this platform")
 
-        with pytest.raises(ConfigSecurityError, match="符号链接"):
+        with pytest.raises(ConfigSecurityError, match="symlink"):
             Config(config_path=config_file)
         assert victim.read_text(encoding="utf-8") == "secret: victim-data\n"
 
@@ -205,7 +205,7 @@ class TestConfig:
         except (OSError, NotImplementedError):
             pytest.skip("symlinks not supported on this platform")
 
-        with pytest.raises(ConfigSecurityError, match="符号链接"):
+        with pytest.raises(ConfigSecurityError, match="symlink"):
             config.set("secret", "new-data")
 
         assert config_file.is_symlink()
@@ -220,7 +220,7 @@ class TestConfig:
         except (OSError, NotImplementedError):
             pytest.skip("symlinks not supported on this platform")
 
-        with pytest.raises(ConfigSecurityError, match="配置目录"):
+        with pytest.raises(ConfigSecurityError, match="config directory"):
             Config(config_path=linked_dir / "config.yaml")
         assert list(real_dir.iterdir()) == []
 
@@ -233,7 +233,7 @@ class TestConfig:
         except (OSError, NotImplementedError):
             pytest.skip("symlinks not supported on this platform")
 
-        with pytest.raises(ConfigSecurityError, match="符号链接"):
+        with pytest.raises(ConfigSecurityError, match="symlink"):
             Config(config_path=linked_root / "nested" / "config.yaml")
 
     def test_config_load_refuses_non_regular_file(self, tmp_path):
@@ -244,7 +244,7 @@ class TestConfig:
         config_file = tmp_path / "config.yaml"
         os.mkfifo(config_file)
 
-        with pytest.raises(ConfigSecurityError, match="常规文件"):
+        with pytest.raises(ConfigSecurityError, match="regular file"):
             Config(config_path=config_file)
 
     def test_config_load_is_bounded(self, tmp_path, monkeypatch):
@@ -254,7 +254,7 @@ class TestConfig:
         config_file.write_text("secret: too-long\n", encoding="utf-8")
         monkeypatch.setattr(config_module, "_MAX_CONFIG_BYTES", 4)
 
-        with pytest.raises(ConfigSecurityError, match="大小上限"):
+        with pytest.raises(ConfigSecurityError, match="size limit"):
             Config(config_path=config_file)
 
     def test_save_preserves_previous_file_on_serialization_failure(
