@@ -2,12 +2,14 @@
 """Dedicated tests for the ``web`` channel.
 
 ``web`` is the tier-0 catch-all: ``can_handle`` must accept *anything* so it
-can back-stop every other channel, ``check`` must report ready without touching
-the network (it is the zero-overhead fallback), and ``read`` must normalise the
+can back-stop every other channel, ``check`` must really probe the reader
+(it is an external backend, so claiming it without a probe reports a blocked
+network as available), and ``read`` must normalise the
 URL before handing it to Jina Reader. Follow-up to #331 / #360 / #361,
 completing dedicated coverage for the channels that still lacked it.
 """
 
+import urllib.error
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -39,17 +41,44 @@ def test_can_handle_accepts_any_url():
         assert channel.can_handle(sample) is True, sample
 
 
-# --- check: ready without any network probe (零开销兜底) ---
+# --- check: the reader is really probed (no false-positive "ok") ---
 
-def test_check_is_ok_and_touches_no_network():
+def test_check_reports_ok_when_reader_reachable():
     channel = WebChannel()
-    with patch("urllib.request.urlopen") as mock_open:
+    with patch("urllib.request.urlopen", return_value=_resp(b"x")):
         status, message = channel.check()
     assert status == "ok"
     assert channel.active_backend == "Jina Reader"
     assert "Jina Reader" in message
-    # The fallback channel must stay zero-overhead: no probing on check().
-    mock_open.assert_not_called()
+
+
+def test_check_probes_reader_root_with_get():
+    channel = WebChannel()
+    with patch("urllib.request.urlopen", return_value=_resp(b"x")) as mock_open:
+        channel.check()
+    req = mock_open.call_args.args[0]
+    assert req.full_url == "https://r.jina.ai/"
+    # A HEAD here is held open by Cloudflare until timeout — keep it a GET.
+    assert req.get_method() == "GET"
+
+
+def test_check_reports_warn_when_reader_unreachable():
+    channel = WebChannel()
+    with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("unreachable")):
+        status, message = channel.check()
+    assert status == "warn"
+    assert channel.active_backend is None
+    assert "Jina Reader 不可达" in message
+
+
+def test_check_treats_http_error_as_reachable():
+    """A 4xx still proves DNS/TCP/TLS work, so the reader counts as reachable."""
+    channel = WebChannel()
+    error = urllib.error.HTTPError("https://r.jina.ai/", 403, "Forbidden", {}, None)
+    with patch("urllib.request.urlopen", side_effect=error):
+        status, _message = channel.check()
+    assert status == "ok"
+    assert channel.active_backend == "Jina Reader"
 
 
 # --- read: URL normalisation + Jina Reader request shape ---
