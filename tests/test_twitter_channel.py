@@ -46,8 +46,8 @@ def test_saved_credentials_are_recognised_without_starting_upstream(
         status, message = channel.check(config)
 
     assert status == "warn"
-    assert "已配置" in message
-    assert "不会执行" in message
+    assert "configured" in message
+    assert "does not run" in message
     assert channel.active_backend is None
     run.assert_not_called()
     assert "TWITTER_AUTH_TOKEN" not in os.environ
@@ -93,7 +93,7 @@ def test_bird_with_explicit_env_remains_unverified(monkeypatch):
         status, message = channel.check()
 
     assert status == "warn"
-    assert "未实时验证" in message
+    assert "not verified live" in message
     assert channel.active_backend is None
 
 
@@ -105,7 +105,7 @@ def test_bird_without_explicit_env_is_warn(monkeypatch):
         status, message = channel.check()
 
     assert status == "warn"
-    assert "未检测到显式" in message
+    assert "explicit" in message
     assert channel.active_backend is None
 
 
@@ -131,8 +131,8 @@ def test_opencli_bridge_ready_is_unverified_for_twitter():
         status, message = TwitterChannel()._check_opencli()
 
     assert status == "warn"
-    assert "桥接已连接" in message
-    assert "登录态和实际命令未实时验证" in message
+    assert "bridge is connected" in message
+    assert "登录态和实际命令not verified live" in message
 
 
 def test_verified_backend_result_wins_over_unverified_twitter_cli():
@@ -140,16 +140,16 @@ def test_verified_backend_result_wins_over_unverified_twitter_cli():
     with patch.object(
         TwitterChannel,
         "_check_twitter_cli",
-        return_value=("warn", "twitter-cli 未验证"),
+        return_value=("warn", "twitter-cli unverified"),
     ), patch.object(
         TwitterChannel,
         "_check_opencli",
-        return_value=("ok", "OpenCLI 可用"),
+        return_value=("ok", "OpenCLI available"),
     ), patch.object(TwitterChannel, "_check_bird", return_value=None):
         status, message = channel.check()
 
     assert status == "ok"
-    assert message == "OpenCLI 可用"
+    assert message == "OpenCLI available"
     assert channel.active_backend == "OpenCLI"
 
 
@@ -158,14 +158,14 @@ def test_all_warn_returns_first_warning_without_active_backend():
     with patch.object(
         TwitterChannel,
         "_check_twitter_cli",
-        return_value=("warn", "twitter-cli 未验证"),
+        return_value=("warn", "twitter-cli unverified"),
     ), patch.object(
         TwitterChannel,
         "_check_opencli",
-        return_value=("warn", "扩展未连接"),
+        return_value=("warn", "extension not connected"),
     ), patch.object(TwitterChannel, "_check_bird", return_value=None):
         status, message = channel.check()
 
     assert status == "warn"
-    assert message == "twitter-cli 未验证"
+    assert message == "twitter-cli unverified"
     assert channel.active_backend is None
