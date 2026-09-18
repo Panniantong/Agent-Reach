@@ -38,7 +38,7 @@ def _has_js_runtime_config(config_path) -> bool:
 
 class YouTubeChannel(Channel):
     name = "youtube"
-    description = "YouTube 视频和字幕"
+    description = "YouTube videos and subtitles"
     backends = ["yt-dlp"]
     tier = 0
 
@@ -48,29 +48,29 @@ class YouTubeChannel(Channel):
         return host_matches(url, "youtube.com", "youtu.be")
 
     def check(self, config=None):
-        # 真跑 yt-dlp --version 探活，区分未装 / venv 断链 / 跑不动
+        # Run yt-dlp --version for a real liveness probe: distinguish missing / broken venv / non-executable
         probe = probe_command("yt-dlp", ["--version"], timeout=10, package="yt-dlp")
         if probe.status == "missing":
             self.active_backend = None
-            return "off", f"yt-dlp 未安装。安装：{_YTDLP_UPGRADE_COMMAND}"
+            return "off", f"yt-dlp is not installed. Install: {_YTDLP_UPGRADE_COMMAND}"
         if probe.status == "broken":
             self.active_backend = None
             return "error", (
-                "yt-dlp 已安装但无法执行。重装（含 JS 支持）：\n"
+                "yt-dlp is installed but cannot execute. Reinstall with JavaScript support:\n"
                 f"  {_YTDLP_UPGRADE_COMMAND}\n{probe.hint}"
             )
-        if not probe.ok:  # timeout / error：装了但跑不动
+        if not probe.ok:  # timeout/error: installed but unable to run
             self.active_backend = None
             detail = probe.hint or probe.output or probe.status
-            return "error", f"yt-dlp 无法正常运行：{detail}"
-        # yt-dlp 本体是活的；后面的 JS runtime/转写检查只影响 ok/warn，不影响后端归属
+            return "error", f"yt-dlp cannot run correctly: {detail}"
+        # yt-dlp itself is alive; JS runtime/transcription checks only affect ok/warn, not backend ownership
         self.active_backend = "yt-dlp"
         # Check JS runtime
         has_js = shutil.which("deno") or shutil.which("node")
         if not has_js:
             return "warn", (
-                "yt-dlp 已安装但缺少 JS runtime（YouTube 必须）。\n"
-                "  安装 Node.js 或 deno，然后运行：agent-reach install --system"
+                "yt-dlp is installed but no JavaScript runtime is available (required for YouTube).\n"
+                "  Install Node.js or Deno, then run: agent-reach install --system"
             )
         # Check yt-dlp config for --js-runtimes
         # Deno works out of the box; Node.js requires explicit config
@@ -81,20 +81,20 @@ class YouTubeChannel(Channel):
                 version = _parse_ytdlp_version(probe.output)
                 if version is None:
                     return "warn", (
-                        "无法确认 yt-dlp 版本是否支持 JS runtime 配置。"
-                        "请先升级并重新运行 doctor：\n"
+                        "Could not determine whether this yt-dlp version supports JavaScript runtime configuration."
+                        "Upgrade first, then rerun Doctor:\n"
                         f"  {_YTDLP_UPGRADE_COMMAND}"
                     )
                 if version < _JS_RUNTIMES_SUPPORTED_FROM:
                     return "warn", (
-                        "yt-dlp 版本过旧，不支持 JS runtime 配置。请先升级并重新运行 doctor：\n"
+                        "yt-dlp 版本过旧，不支持 JS runtime 配置。Upgrade first, then rerun Doctor:\n"
                         f"  {_YTDLP_UPGRADE_COMMAND}"
                     )
                 return "warn", (
-                    f"yt-dlp 已安装但未配置 JS runtime。运行：\n  {render_ytdlp_fix_command()}"
+                    f"yt-dlp is installed but no JavaScript runtime is configured. Run:\n  {render_ytdlp_fix_command()}"
                 )
         # Surface transcription readiness so `doctor` reports it.
-        msg = "可提取视频信息和字幕"
+        msg = "Can extract video metadata and subtitles"
         if config is not None:
             providers = []
             if config.is_configured("groq_whisper"):
@@ -109,12 +109,12 @@ class YouTubeChannel(Channel):
                 ]
                 if missing_media_tools:
                     msg += (
-                        "（音频转写需安装 "
+                        " (audio transcription requires "
                         + "、".join(missing_media_tools)
-                        + "）"
+                        + ")"
                     )
                 else:
-                    msg += f"，可转写音频（{'/'.join(providers)}）"
+                    msg += f", audio transcription available ({'/'.join(providers)})"
         return "ok", msg
 
     def transcribe(
