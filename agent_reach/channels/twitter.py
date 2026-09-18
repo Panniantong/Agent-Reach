@@ -33,7 +33,7 @@ def twitter_cli_child_env(config=None) -> dict[str, str]:
 
 class TwitterChannel(Channel):
     name = "twitter"
-    description = "Twitter/X 推文"
+    description = "Twitter/X posts"
     backends = ["twitter-cli", "OpenCLI", "bird CLI (legacy)"]
     tier = 1
 
@@ -43,9 +43,9 @@ class TwitterChannel(Channel):
     def check(self, config=None):
         """Probe candidates in order; first fully-usable backend wins.
 
-        与其他多后端渠道同一套两段式：先收集全部候选状态，第一个 ok 获胜；
-        没有 ok 才轮到第一个 warn——否则「装了但未登录」的 twitter-cli
-        会把排在后面、完整可用的 OpenCLI 挡在门外。
+        Same two-stage routing as other multi-backend channels: collect all candidate states first; the first ok wins;
+        only if there is no ok should the first warn be used—otherwise an installed-but-not-authenticated twitter-cli
+        would incorrectly block a fully working OpenCLI candidate later in the list.
         """
         self.active_backend = None
         findings = []
@@ -61,7 +61,7 @@ class TwitterChannel(Channel):
                 continue
 
             if result is None:
-                continue  # 未安装——不参与候选
+                continue  # Not installed—do not include as a candidate
             findings.append((backend, *result))
 
         for wanted in ("ok", "warn"):
@@ -70,13 +70,13 @@ class TwitterChannel(Channel):
                     self.active_backend = backend if status == "ok" else None
                     return status, message
 
-        if findings:  # 只剩 broken/timeout 候选
+        if findings:  # Only broken/timeout candidates remain
             return "error", "\n".join(m for _, _, m in findings)
 
         return "warn", (
-            "Twitter CLI 未安装。安装方式：\n"
+            "Twitter CLI is not installed. Install with:\n"
             "  pipx install twitter-cli\n"
-            "或：\n"
+            "Or:\n"
             "  uv tool install twitter-cli"
         )
 
@@ -97,15 +97,15 @@ class TwitterChannel(Channel):
         ct0 = os.environ.get("TWITTER_CT0") or child_env.get("TWITTER_CT0")
         if auth_token and ct0:
             return "warn", (
-                "twitter-cli 已安装，且 Cookie-Editor 凭据已配置；"
-                "Doctor 不会执行 `twitter status`，因为上游在验证失败时会"
-                "自动读取浏览器 Cookie。请在你明确同意时手动验证。"
+                "twitter-cli is installed and Cookie-Editor credentials are configured;"
+                "Doctor does not run `twitter status` because upstream may "
+                "automatically read browser cookies when verification fails. Verify manually only with explicit user approval."
             )
         return "warn", (
-            "twitter-cli 已安装但没有完整的显式凭据。请用 Cookie-Editor "
-            "从 x.com 导出后运行：\n"
+            "twitter-cli is installed but complete explicit credentials were not found. Use Cookie-Editor "
+            "to export from x.com, then run:\n"
             "  agent-reach configure twitter-cookies\n"
-            "Doctor 不会自动读取浏览器 Cookie。"
+            "Doctor will not automatically read browser cookies."
         )
 
     def _check_opencli(self):
@@ -119,8 +119,8 @@ class TwitterChannel(Channel):
             return "error", st.hint
         if st.ready:
             return "warn", (
-                "OpenCLI 桥接已连接，但 Twitter/X 登录态和实际命令未实时验证；"
-                "Doctor 不执行平台命令，因此当前不标记为可用。"
+                "OpenCLI bridge is connected, but Twitter/X login state and actual commands were not verified live;"
+                "Doctor does not execute platform commands, so this is not marked available yet."
             )
         return "warn", st.hint
 
@@ -132,11 +132,11 @@ class TwitterChannel(Channel):
             if os.environ.get("AUTH_TOKEN") and os.environ.get("CT0"):
                 return (
                     "warn",
-                    f"{cmd} 已安装且显式环境凭据存在；Doctor 为避免上游"
-                    "浏览器 Cookie 回退，不执行 `check`，未实时验证。",
+                    f"{cmd} is installed and explicit environment credentials are present; to avoid upstream "
+                    "browser-cookie fallback, Doctor does not run `check`, so it was not verified live.",
                 )
             return "warn", (
-                f"{cmd} 已安装但未检测到显式 AUTH_TOKEN/CT0；"
-                "仅使用 Cookie-Editor 手动导出的凭据。"
+                f"{cmd} is installed but explicit AUTH_TOKEN/CT0 credentials were not detected;"
+                "use only credentials manually exported with Cookie-Editor."
             )
         return None
