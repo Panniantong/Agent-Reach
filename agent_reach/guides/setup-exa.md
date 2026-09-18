@@ -1,42 +1,48 @@
-# Exa Search 配置指南
+# Exa Search Setup Guide
 
-## 功能说明
-Exa 是一个 AI 语义搜索引擎。通过 MCP 接入，**免费、无需 API Key**。配置后解锁：
-- 全网语义搜索
-- Reddit 搜索（通过 site:reddit.com）
-- Twitter 搜索（通过 site:x.com）
+## What it provides
 
-## Agent 可自动完成的步骤
+Exa is an AI semantic search engine. Agent Reach connects to it through MCP. The current integration is free and does not require an API key.
 
-用户明确授权后，`agent-reach install --env=auto --system` 会完成以下步骤。
-不带 `--system` 的默认命令只做只读检查。
+After setup, you can use:
 
-### 1. 安装 mcporter
+- General semantic web search
+- Reddit discovery through queries such as `site:reddit.com`
+- Twitter/X discovery through queries such as `site:x.com`
+
+## Steps the agent can perform
+
+After the user explicitly authorizes system changes, `agent-reach install --env=auto --system` can complete these steps. The default install command without `--system` performs read-only checks only.
+
+### 1. Install mcporter
+
 ```bash
 npm install -g mcporter
 ```
 
-### 2. 注册 Exa MCP
+### 2. Register the Exa MCP endpoint
+
 ```bash
 mcporter config add exa https://mcp.exa.ai/mcp --scope home
 ```
 
-### 3. 验证
+### 3. Verify
+
 ```bash
 agent-reach doctor | grep "Search"
 mcporter call exa.web_search_exa query="test" numResults=1
 ```
 
-## 需要用户手动做的步骤
+## User action required
 
-**无。** Exa 通过 MCP 接入，免费、无需注册、无需 API Key。
+None for authentication. The current Exa MCP endpoint does not require registration or an API key.
 
-如果 `agent-reach install --system` 因为网络问题没有配置 Exa，手动运行上面两条命令即可。
+If `agent-reach install --system` could not configure Exa because of a network error, run the two setup commands above manually.
 
-## 常见问题
+## FAQ
 
-**Q: 有搜索次数限制吗？**
-A: MCP 端点由 Exa 官方提供（mcp.exa.ai），当前免费无限制。如果未来有变化，会在 agent-reach 更新中适配。
+**Is there a search quota?**  
+The MCP endpoint is operated by Exa. Availability, pricing, or limits may change upstream; Agent Reach should report current upstream behavior rather than assuming unlimited access.
 
-**Q: mcporter 是什么？**
-A: MCP 协议的命令行桥接工具，用来调用 MCP Server。Agent Reach 用它来连接 Exa 和小红书。
+**What is mcporter?**  
+mcporter is a command-line bridge for calling MCP servers. Agent Reach uses it for integrations such as Exa and XiaoHongShu MCP backends.
