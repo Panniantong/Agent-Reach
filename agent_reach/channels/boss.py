@@ -1,27 +1,27 @@
 # -*- coding: utf-8 -*-
-"""Boss直聘 — 经 boss-agent-cli + CDP 真 Chrome 搜岗位、取 JD。
+"""Boss Zhipin — search jobs and retrieve full JDs through boss-agent-cli + a real Chrome session over CDP.
 
-后端是 boss-agent-cli（CDP 调试端口复用已登录的真 Chrome）。headless 是禁区
-（触发 code 36 风控），故 check() 只做四层只读探测，不实例化 BossClient、不拉起浏览器。
+The backend is boss-agent-cli, which reuses a logged-in real Chrome instance through the CDP debugging port. Headless mode is intentionally avoided
+because it can trigger code 36 account-risk controls, so check() performs only four layers of read-only probing and never instantiates BossClient or launches a browser.
 
-抓取走 boss-agent-cli 公开 API（search_jobs + job_card_browser + browser_source="existing-browser"），
-调用姿势见 skill/references/career.md；check() 只负责「装没装 + CDP 链路就绪 +
-浏览器内有无登录 cookie」的体检，不搜索。
+Retrieval uses the public boss-agent-cli API (search_jobs + job_card_browser + browser_source="existing-browser").
+See skill/references/career.md for usage. check() is responsible only for installation + CDP readiness +
+whether the browser contains a login cookie; it never performs a search.
 
-双登录态存储（体检必须区分，历史教训）。两者都是必需的，但认证的是不同通道：
+Two authentication stores must be distinguished during health checks. Both are required, but they authenticate different paths:
 
-- `~/.boss-agent/auth/session.enc`（`boss status` / `status --live` 只校验它）
-  1. 是硬性门槛：`_get_browser()` 无条件 `get_token()`，读不到就 `AuthRequired`，
-     所以别删它——CDP 搜索会在连上浏览器之前就失败；
-  2. 但**不是搜索的认证凭据**：CDP 连上真 Chrome 后复用 `contexts[0]`，其 cookies
-     只在「没有任何 context」的分支才注入，实际从未生效；
-  3. httpx 通道（低危 op：status/detail/cities/`job_card_httpx`）真用它的
-     cookies + stoken；code 37 的 `force_refresh()` 也回写它。
-- 专用 Chrome profile 内的浏览器 cookie：CDP 模式下 search/greet 等高危 op
-  实际携带的凭据。
+- `~/.boss-agent/auth/session.enc`(`boss status` / `status --live` validate only this store)
+  1. is a hard prerequisite: `_get_browser()` 无条件 `get_token()`, if it cannot be read then `AuthRequired`，
+     do not delete it—the CDP search can fail before connecting to the browser;
+  2. but it is **not the effective search credential**: after CDP connects to real Chrome it reuses `contexts[0]`; its cookies
+     are injected only when there is no browser context, so they do not take effect for the normal existing-browser path;
+  3. the httpx path (lower-risk operations: status/detail/cities/`job_card_httpx`) does use its
+     cookies + stoken; code 37 `force_refresh()` also writes back to it.
+- Browser cookies in the dedicated Chrome profile: in CDP mode, higher-risk operations such as search/greet
+  actually carry these credentials.
 
-所以 session.enc 有效 + 浏览器未登录 = `boss status` 报已登录但搜索报
-`AUTH_EXPIRED`。第 4 层直接问 CDP 浏览器本体（Storage.getCookies），以浏览器为准。
+Therefore, a valid session.enc plus a logged-out browser can make `boss status` report logged in while search returns
+`AUTH_EXPIRED`. Layer 4 queries the CDP browser directly with Storage.getCookies, so browser state is authoritative.
 """
 
 import base64
@@ -75,11 +75,11 @@ def _chrome_launch_command(system: str | None = None) -> str:
 
 
 def _cdp_json(path: str):
-    """GET 本地 CDP 端点（禁用系统代理），返回解析后的 JSON；失败返回 None。
+    """GET a local CDP endpoint with system proxies disabled. Return parsed JSON, or None on failure.
 
-    CDP 只绑定回环地址（127.0.0.1），直连即可，故用空 ProxyHandler 显式绕过任何
-    已配置的系统/全局代理——localhost 探测走代理既无意义也可能被拦截。这是有意的
-    localhost-only 假设，不可被 config 的 proxy 覆盖。
+    CDP is bound only to loopback (127.0.0.1), so direct access is sufficient. An empty ProxyHandler explicitly bypasses any
+    configured system/global proxy; sending localhost probes through a proxy is unnecessary and may be blocked. This is an intentional
+    localhost-only assumption and must not be overridden by the configured proxy.
     """
     req = urllib.request.Request(f"{_CDP_URL}{path}", method="GET")
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -91,7 +91,7 @@ def _cdp_json(path: str):
 
 
 def _has_zhipin_page(pages) -> bool:
-    """CDP /json 页签列表里是否存在可复用的 zhipin.com 页签（精确 hostname 校验）。"""
+    """Return whether the CDP /json tab list contains a reusable zhipin.com tab, using exact hostname validation."""
     for page in pages or []:
         if page.get("type") == "page" and host_matches(page.get("url", ""), "zhipin.com"):
             return True
@@ -102,7 +102,7 @@ _SECURITY_CHECK_MARKERS = ("security-check", "zhipin-security", "_security_check
 
 
 def _security_check_blocks_all(pages) -> bool:
-    """现有 zhipin 页签是否全部停在反爬安全校验页（不是登录页）。"""
+    """Return whether all existing Zhipin tabs are on anti-bot security-check pages rather than login pages."""
     zhipin_urls = [
         page.get("url", "")
         for page in (pages or [])
@@ -120,11 +120,11 @@ _WS_ACCEPT_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
 def _read_ws_text_frame(sock: socket.socket, initial: bytes = b""):
-    """读下一个文本帧，返回 (payload, leftover)。
+    """Read the next text frame and return (payload, leftover).
 
-    leftover 是本次 recv 多收、属于后续帧的字节，调用方应把它作为下一帧的 initial
-    传回（一次 recv 可能拿到多帧）。收到 close 帧或连接断开返回 (None, leftover)。
-    忽略 ping/pong。
+    leftover contains extra bytes received for later frames; the caller should pass it back as the next frame's initial
+    buffer because one recv may contain multiple frames. Return (None, leftover) on a close frame or disconnect.
+    Ignore ping/pong.
     """
     buf = initial
     while True:
@@ -163,7 +163,7 @@ def _read_ws_text_frame(sock: socket.socket, initial: bytes = b""):
             return None, buf
         if opcode in (0x1, 0x2, 0x0):  # text / binary / continuation
             return payload, buf
-        # ping(0x9)/pong(0xA) 等：忽略，继续读下一帧
+        # Ignore ping (0x9), pong (0xA), etc. and continue to the next frame
 
 
 def _send_ws_text(sock: socket.socket, text: str) -> None:
@@ -182,11 +182,11 @@ def _send_ws_text(sock: socket.socket, text: str) -> None:
 
 
 def _cdp_zhipin_login_cookie() -> bool | None:
-    """只读探测专用 Chrome 浏览器内的 zhipin.com 登录 cookie（wt2）。
+    """Read-only probe for the zhipin.com login cookie (wt2) in the dedicated Chrome browser.
 
-    True=有；False=没有（浏览器未登录，CDP 搜索会报 AUTH_EXPIRED）；
-    None=探测失败（CDP WebSocket 不可达等），登录态未知。
-    只证明浏览器 profile 登录过，不验证 cookie 的服务端有效性。
+    True=present; False=absent (the browser is logged out and CDP search will return AUTH_EXPIRED);
+    None=probe failed (for example, CDP WebSocket unreachable), so login state is unknown.
+    This proves only that the browser profile contains a login cookie; it does not validate server-side cookie validity.
     """
     version = _cdp_json("/json/version")
     ws_url = (version or {}).get("webSocketDebuggerUrl")
@@ -200,7 +200,7 @@ def _cdp_zhipin_login_cookie() -> bool | None:
         with socket.create_connection((host, port), timeout=_CDP_TIMEOUT) as sock:
             sock.settimeout(_CDP_TIMEOUT)
             key = base64.b64encode(os.urandom(16)).decode()
-            # IPv6 字面量需在 Host 头里加方括号（urlparse().hostname 已剥掉）
+            # IPv6 literals require brackets in the Host header (urlparse().hostname removes them)
             host_header = f"[{host}]:{port}" if ":" in host else f"{host}:{port}"
             handshake = (
                 f"GET {path} HTTP/1.1\r\n"
@@ -220,7 +220,7 @@ def _cdp_zhipin_login_cookie() -> bool | None:
                 response += chunk
             head, _, rest = response.partition(b"\r\n\r\n")
             status_line = head.split(b"\r\n", 1)[0]
-            # 精确解析状态码 token：接受 "HTTP/1.1 101"（可空 reason 短语），拒绝 1019 等伪码
+            # Parse the status-code token exactly: accept "HTTP/1.1 101" (reason phrase may be empty), reject lookalikes such as 1019
             if status_line.split()[1:2] != [b"101"]:
                 return None
             accept = base64.b64encode(
@@ -229,8 +229,8 @@ def _cdp_zhipin_login_cookie() -> bool | None:
             if accept not in head.decode("latin-1"):
                 return None
             _send_ws_text(sock, json.dumps({"id": 1, "method": "Storage.getCookies"}))
-            # Chrome 可能先推事件帧（无 id）；持续读帧直到拿到 id==1 的响应（设上限防死循环）。
-            # leftover 携带上次 recv 多收的字节，确保一次 recv 到多帧时不丢数据。
+            # Chrome may send event frames first (without id); keep reading until the id==1 response arrives, with a limit to avoid infinite loops.
+            # leftover carries extra bytes from the previous recv so multiple frames in one recv are not lost.
             buf = rest
             for _ in range(16):
                 payload, buf = _read_ws_text_frame(sock, initial=buf)
@@ -238,7 +238,7 @@ def _cdp_zhipin_login_cookie() -> bool | None:
                     return None
                 data = json.loads(payload.decode("utf-8"))
                 if data.get("id") != 1:
-                    continue  # 事件帧等：跳过，读下一帧
+                    continue  # Skip event frames and continue reading
                 if "result" not in data:
                     return None
                 for cookie in data["result"].get("cookies", []):
@@ -252,7 +252,7 @@ def _cdp_zhipin_login_cookie() -> bool | None:
 
 class BossChannel(Channel):
     name = "boss"
-    description = "Boss直聘 职位搜索与 JD"
+    description = "Boss Zhipin job search and job descriptions"
     backends = ["boss-agent-cli (CDP)"]
     tier = 2
 
@@ -262,75 +262,75 @@ class BossChannel(Channel):
     def check(self, config=None):
         self.active_backend = None
 
-        # 层 1：boss-agent-cli 装没装
+        # Layer 1: is boss-agent-cli installed?
         probe = probe_command("boss", ["--version"], timeout=10)
         if probe.status == "missing":
             return "off", (
-                "boss-agent-cli 未安装。请先获得用户授权，再运行：\n"
+                "boss-agent-cli is not installed. Obtain user approval first, then run:\n"
                 "  agent-reach install --system --channels=boss\n"
-                "安装后由用户在专用 Chrome 中手动登录 zhipin.com。"
+                "After installation, the user must log in to zhipin.com manually in the dedicated Chrome profile."
             )
         if probe.status == "broken":
             return "error", (
-                "boss 命令存在但无法执行——安装已损坏。重装：\n"
+                "The boss command exists but cannot execute—the installation is broken. Reinstall:\n"
                 "  agent-reach install --system --channels=boss"
             )
         if not probe.ok:
-            return "warn", f"boss 命令探测失败（{probe.status}），请检查安装"
+            return "warn", f"boss command probe failed ({probe.status}); check the installation"
 
-        # 层 2：CDP 端口通不通
+        # Layer 2: is the CDP port reachable?
         if _cdp_json("/json/version") is None:
             return "off", (
-                "CDP 调试端口不可达。请先启动调试 Chrome：\n"
+                "The CDP debugging port is unreachable. Start the dedicated debugging Chrome first:\n"
                 f"  {_chrome_launch_command()}\n"
-                "  然后由用户在该窗口手动登录 zhipin.com。\n"
-                "仅绑定 127.0.0.1；任何能访问 9222 的进程都可完全控制这个 Chrome。"
+                "  Then have the user log in to zhipin.com manually in that window.\n"
+                "Bind only to 127.0.0.1; any process that can reach port 9222 can fully control this Chrome instance."
             )
 
-        # 层 3：有无可复用 BOSS 页签
+        # Layer 3: is there a reusable Boss Zhipin tab?
         pages = _cdp_json("/json")
         if pages is None:
-            return "warn", "CDP 端口可达但 /json 页签枚举失败"
+            return "warn", "The CDP port is reachable, but /json tab enumeration failed"
         if not _has_zhipin_page(pages):
             return "warn", (
-                "CDP 可达但未发现现成 zhipin.com 页签（不代表未登录：Cookie 可能仍在，"
-                "boss-agent-cli 会自行新建页签）。建议先在 Chrome 登录 zhipin.com。"
+                "CDP is reachable but no existing zhipin.com tab was found (this does not prove the user is logged out; cookies may still exist, "
+                "and boss-agent-cli can create a new tab). Prefer logging in to zhipin.com in Chrome first."
             )
 
-        # 层 4：浏览器内登录 cookie（wt2）。以浏览器为准——`boss status` 只校验
-        # 本地 session.enc，与浏览器登录态互不代表。
+        # Layer 4: browser login cookie (wt2). Browser state is authoritative—`boss status` validates only
+        # local session.enc, which does not represent browser login state.
         browser_cookie = _cdp_zhipin_login_cookie()
         if browser_cookie is False:
             return "warn", (
-                "CDP 链路就绪，但专用 Chrome 浏览器内没有 zhipin.com 登录 cookie（wt2）"
-                "——浏览器未登录，搜索会报 AUTH_EXPIRED。注意 `boss status` 报的 logged_in "
-                "只代表本地 session.enc 凭据，不代表浏览器已登录。请让用户在该 Chrome 窗口"
-                "肉眼确认并登录 zhipin.com（拉起 CDP Chrome 后应先做这一步），然后运行 "
-                "`boss --cdp-url http://localhost:9222 login --cdp` 同步登录态。"
+                "CDP is ready, but the dedicated Chrome browser does not contain the zhipin.com login cookie (wt2)"
+                "—the browser is logged out and search will return AUTH_EXPIRED. Note that the logged_in value from `boss status` "
+                "represents only the local session.enc credentials, not browser authentication. Have the user visually confirm and log in in this Chrome window"
+                " (this should be the first step after launching CDP Chrome), then run "
+                "`boss --cdp-url http://localhost:9222 login --cdp` to synchronize the login state."
             )
 
         cookie_note = (
-            "浏览器内有登录 cookie（wt2）" if browser_cookie else "浏览器登录 cookie 探测失败，登录态未知"
+            "browser contains login cookie (wt2)" if browser_cookie else "browser login-cookie probe failed; login state is unknown"
         )
 
         if _security_check_blocks_all(pages):
             return "warn", (
-                f"CDP 链路就绪，但现有 zhipin 页签都停在安全校验页"
-                "（security-check / zhipin-security）。这是 Boss 反爬挑战，与登录无关"
-                "——已登录也会出现，不代表未登录，不要据此要求用户重新登录，"
-                "让用户手动过滑块即可。"
-                f"浏览器登录态参考：{cookie_note}。"
-                "不要用 `boss status` 判断 CDP 浏览器登录态（它只校验本地 session.enc）。"
+                f"CDP is ready, but all existing Zhipin tabs are on security-check pages"
+                " (security-check / zhipin-security). This is an anti-bot challenge and is independent of login state"
+                "—it may appear even when logged in. Do not treat it as proof of logout or ask the user to log in again solely for this reason; "
+                "have the user handle the challenge manually if needed."
+                f"Browser login-state reference: {cookie_note}。"
+                "Do not use `boss status` to determine CDP browser login state; it validates only local session.enc."
             )
 
-        # 四层探测全过：CDP 链路就绪，标记实际服役的后端（base 契约）
+        # All four probes passed: CDP is ready; mark the backend actually in service (base contract)
         self.active_backend = self.backends[0]
         return "warn", (
-            f"CDP 链路就绪（9222 端口通 + 有可复用 zhipin 页签，{cookie_note}）。"
-            "Doctor 不实际执行搜索、不验证 cookie 服务端有效性或上游 boss-agent-cli #403-#407 API；"
-            "先运行 `boss --cdp-url http://localhost:9222 login --cdp` 同步现有登录态；"
-            "搜索时使用 `boss --browser-source existing-browser --cdp-url http://localhost:9222 search ...`，"
-            "确保 CDP 不可用时立即停止而不是降级 headless。"
-            "若搜索报 AUTH_EXPIRED，按登录 runbook 处理（用户在专用窗口登录 + login --cdp），"
-            "不要往安全校验方向解释。"
+            f"CDP is ready (port 9222 reachable + reusable Zhipin tab present, {cookie_note}. "
+            "Doctor does not perform a real search and does not validate server-side cookie validity or the upstream boss-agent-cli #403-#407 API;"
+            "first run `boss --cdp-url http://localhost:9222 login --cdp` to synchronize the current login state;"
+            "for search, use `boss --browser-source existing-browser --cdp-url http://localhost:9222 search ...`, "
+            "so execution stops immediately if CDP is unavailable instead of falling back to headless mode."
+            "If search returns AUTH_EXPIRED, follow the login runbook (user logs in in the dedicated window + `login --cdp`); "
+            "do not reinterpret it as a security-check problem."
         )
