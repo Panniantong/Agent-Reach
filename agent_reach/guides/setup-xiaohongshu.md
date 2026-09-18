@@ -1,73 +1,72 @@
-# 小红书配置指南
+# XiaoHongShu Setup Guide
 
-## 功能说明
-读取和搜索小红书笔记。桌面优先使用 OpenCLI，服务器使用
-[xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)；
-xhs-cli 仅作为已安装用户的存量备选。
+## What it provides
 
-## 前置条件
-- OpenCLI：用户已经存在且明确控制的 Chrome 小红书会话
-- xiaohongshu-mcp / 存量工具：Cookie-Editor 浏览器扩展
+Read and search XiaoHongShu notes.
 
-## 认证边界
+Preferred backends:
 
-Agent Reach 不替用户执行小红书登录，也不读取浏览器 Cookie。
+- **Desktop:** OpenCLI using an existing Chrome session controlled by the user
+- **Server:** [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)
+- **Legacy fallback:** xhs-cli for users who already have it installed
 
-OpenCLI 只使用用户已经存在且明确控制的 Chrome 会话。
-`agent-reach configure xhs-cookies` 不会把 Cookie 注入 OpenCLI 或 Chrome。
-如果没有现成会话，不要自动登录；改用 Cookie-Editor 手工导出后配置
-xiaohongshu-mcp 或存量工具：
+## Prerequisites
 
-1. 在 Chrome 中安装 [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) 扩展
-2. 用户自行在 xiaohongshu.com 准备要导出的会话
-3. 点击 Cookie-Editor 图标 → Export → Header String
-4. 把导出的字符串发给 Agent，运行：
+- OpenCLI: an existing XiaoHongShu Chrome session the user explicitly controls
+- xiaohongshu-mcp / legacy tools: a manual Cookie-Editor export
+
+## Authentication boundary
+
+Agent Reach must not perform XiaoHongShu login and must not read browser cookies automatically.
+
+OpenCLI may use only an existing Chrome session explicitly controlled by the user. `agent-reach configure xhs-cookies` does not inject cookies into OpenCLI or Chrome.
+
+If there is no existing session, do not automate login. Use Cookie-Editor and configure the MCP/legacy backend:
+
+1. Install [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm).
+2. The user prepares/logs in to the XiaoHongShu session in their own browser.
+3. Choose **Export → Header String**.
+4. Provide the exported value through the secure configuration flow:
 
 ```bash
 agent-reach configure xhs-cookies
 agent-reach doctor
 ```
 
-该显式命令会保存/导入用户提供的 xiaohongshu.com 同域 Cookie 集；执行前请
-确认 Cookie 名称和范围。非 xiaohongshu.com 域 Cookie 会被忽略。
+The command accepts only cookies for the `xiaohongshu.com` domain. Cookies from unrelated domains are ignored.
 
-如果 xiaohongshu-mcp 容器正在运行，配置命令会把 Cookie 导入容器；否则会写入
-owner-only 的本地文件，并打印后续手工导入路径。
+If a xiaohongshu-mcp container is already running, the configuration flow can import the supplied cookies into that backend. Otherwise it stores an owner-only local copy and prints the manual import path.
 
-## 使用示例
+## Usage examples
 
-先按 `agent-reach doctor --json` 的 `active_backend` 选择命令。存量 xhs-cli 示例：
+Choose commands according to `agent-reach doctor --json` and its `active_backend`.
 
-搜索笔记：
+Legacy xhs-cli examples:
+
 ```bash
-xhs search "关键词"
-```
-
-阅读笔记详情：
-```bash
+xhs search "query"
 xhs read NOTE_ID
-```
-
-查看评论：
-```bash
 xhs comments NOTE_ID
 ```
 
-## 常见问题
+## FAQ
 
-**Q: Cookie 过期了？**
-A: 重新通过 Cookie-Editor 手工导出，再运行
-`agent-reach configure xhs-cookies`，并粘贴到隐藏输入提示。
+**Cookie expired?**  
+Export a fresh `xiaohongshu.com` cookie set with Cookie-Editor and rerun `agent-reach configure xhs-cookies`.
 
-**Q: 小红书提示 IP 风险？**
-A: 推荐使用住宅代理：`export HTTP_PROXY="http://user:pass@ip:port"`。
+**IP risk warning?**  
+A user-approved residential proxy may help in environments where the platform blocks the current IP:
 
-**Q: xhs-cli 不支持我的系统？**
-A: 确保 Python 3.10+ 和 pipx 已安装。运行 `pipx install xiaohongshu-cli` 即可。
+```bash
+export HTTP_PROXY="http://user:pass@ip:port"
+```
 
-## 服务器方案：Docker MCP
+**xhs-cli compatibility problem?**  
+xhs-cli is a legacy fallback. Prefer OpenCLI or xiaohongshu-mcp for new setups.
 
-如果你已经在使用 [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) Docker 方案，它也能正常工作：
+## Server option: Docker MCP
+
+If the user already uses the xiaohongshu-mcp Docker backend:
 
 ```bash
 docker run -d \
@@ -78,4 +77,4 @@ docker run -d \
 mcporter config add xiaohongshu http://localhost:18060/mcp --scope home
 ```
 
-该服务器后端使用上面的 Cookie-Editor 手工导出流程。
+Use the same manual Cookie-Editor flow described above for authentication.
