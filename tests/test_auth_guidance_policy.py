@@ -21,14 +21,14 @@ def _policy_documents() -> list[Path]:
 
 def test_xiaohongshu_guidance_never_starts_implicit_login():
     """Do not reintroduce QR or automatic browser-cookie login guidance."""
-    xhs_markers = ("xiaohongshu", "小红书", "小紅書", "xhs")
+    xhs_markers = ("xiaohongshu", "xhs", "\u5c0f\u7ea2\u4e66", "\u5c0f\u7d05\u66f8")
     legacy_auth_markers = (
-        "扫码",
-        "二维码",
+        "\u626b\u7801",
+        "\u4e8c\u7ef4\u7801",
         "qr login",
         "qr scan",
         "qrcode",
-        "ブラウザからcookieを自動抽出",
+        "\u30d6\u30e9\u30a6\u30b6\u304b\u3089cookie\u3092\u81ea\u52d5\u62bd\u51fa",
         "브라우저에서 cookie 자동 추출",
     )
     forbidden_commands = (
@@ -63,12 +63,12 @@ def test_xiaohongshu_opencli_and_export_boundaries_are_truthful():
     )
     for path in boundary_docs:
         text = path.read_text(encoding="utf-8")
-        assert "已经存在且明确控制" in text, path.relative_to(ROOT)
-        assert "不会把 Cookie 注入 OpenCLI" in text, path.relative_to(ROOT)
+        assert "existing Chrome session" in text, path.relative_to(ROOT)
+        assert "does not inject cookies into OpenCLI" in text, path.relative_to(ROOT)
 
     xhs_guide = boundary_docs[1].read_text(encoding="utf-8")
-    assert "xiaohongshu.com 同域 Cookie 集" in xhs_guide
-    assert "非 xiaohongshu.com 域 Cookie" in xhs_guide
+    assert "only cookies for the `xiaohongshu.com` domain" in xhs_guide
+    assert "Cookies from unrelated domains are ignored" in xhs_guide
 
 
 def test_twitter_operational_docs_explain_the_environment_boundary():
@@ -95,11 +95,11 @@ def test_twitter_operational_docs_explain_the_environment_boundary():
     twitter_guide = (
         ROOT / "agent_reach" / "guides" / "setup-twitter.md"
     ).read_text(encoding="utf-8")
-    assert "不会执行 `twitter status`" in twitter_guide
-    assert "不会修改当前 Shell" in twitter_guide
+    assert "does **not** run `twitter status`" in twitter_guide
+    assert "does not modify the current shell" in twitter_guide
     assert "Export → Header String" in twitter_guide
     assert "cookie JSON" not in twitter_guide
-    assert "复制全部" not in twitter_guide
+    assert "\u590d\u5236\u5168\u90e8" not in twitter_guide
 
     for expected in (
         "--sync-legacy-twitter",
@@ -108,8 +108,8 @@ def test_twitter_operational_docs_explain_the_environment_boundary():
         "~/.config/bird/credentials.env",
     ):
         assert expected in twitter_guide
-    assert "默认只写" in twitter_guide
-    assert "不会自动删除" in twitter_guide
+    assert "By default, Agent Reach writes only its own configuration" in twitter_guide
+    assert "does not silently delete them" in twitter_guide
 
     rendered_as_verified = (
         "✅ Twitter/X tweets",
@@ -214,7 +214,7 @@ def test_video_reference_has_content_level_youtube_fallbacks():
         ROOT / "agent_reach" / "skill" / "references" / "video.md"
     ).read_text(encoding="utf-8")
     assert "opencli youtube transcript" in text
-    assert "最多重试 3 次" in text
+    assert "retry up to three times" in text
     assert "agent-reach transcribe" in text
 
 
