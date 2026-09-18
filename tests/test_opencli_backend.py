@@ -45,7 +45,7 @@ def test_not_installed():
     st, _ = _status_with(ProbeResult("missing"))
     assert not st.installed
     assert not st.ready
-    assert "未安装" in opencli_summary(st)
+    assert "not installed" in opencli_summary(st)
 
 
 def test_broken_node_env_gives_npm_hint():
@@ -93,8 +93,8 @@ def test_extension_files_on_disk_are_not_reported_as_loaded_or_ready():
     assert not st.extension_connected
     assert st.extension_installed
     assert not st.ready
-    assert "可用" not in opencli_summary(st)
-    assert "无法确认" in st.hint
+    assert "available" not in opencli_summary(st)
+    assert "cannot prove" in st.hint
 
 
 def test_unpacked_source_files_are_not_reported_as_loaded_or_ready():
@@ -107,8 +107,8 @@ def test_unpacked_source_files_are_not_reported_as_loaded_or_ready():
     assert st.unpacked_extension_files
     assert not st.extension_connected
     assert not st.ready
-    assert "不代表" in st.hint
-    assert "可用" not in opencli_summary(st)
+    assert "does not mean" in st.hint
+    assert "available" not in opencli_summary(st)
 
 
 def test_daemon_not_running_parsed_correctly():
@@ -119,7 +119,7 @@ def test_daemon_not_running_parsed_correctly():
     assert st.installed
     assert not st.daemon_running
     assert not st.extension_connected
-    assert "自动启动" in opencli_summary(st)
+    assert "starts on demand" in opencli_summary(st)
 
 
 def test_probe_never_executes_any_daemon_or_doctor_command():
