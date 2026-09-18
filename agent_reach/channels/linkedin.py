@@ -22,7 +22,7 @@ _CONFIG_COMMAND = (
 
 class LinkedInChannel(Channel):
     name = "linkedin"
-    description = "LinkedIn 职业社交"
+    description = "LinkedIn professional networking"
     backends = ["mcp-server-linkedin", "Jina Reader"]
     tier = 2
 
@@ -35,35 +35,35 @@ class LinkedInChannel(Channel):
         self.active_backend = None
         if not shutil.which("mcporter"):
             return "off", (
-                "基本内容可通过 Jina Reader 读取。完整功能需要：\n"
-                f"  先安装 uv/uvx：{_UV_INSTALL_URL}\n"
+                "Basic public content can be read with Jina Reader. Full functionality requires:\n"
+                f"  First install uv/uvx: {_UV_INSTALL_URL}\n"
                 f"  {_LOGIN_COMMAND}\n"
                 f"  {_CONFIG_COMMAND}\n"
-                "  详见 https://github.com/stickerdaniel/linkedin-mcp-server"
+                "  See https://github.com/stickerdaniel/linkedin-mcp-server"
             )
         try:
             inspection = inspect_mcporter_config()
         except McporterConfigError as exc:
-            return "error", f"mcporter 配置检查失败：{exc}"
+            return "error", f"mcporter configuration check failed: {exc}"
         if inspection.server_names & _LINKEDIN_SERVER_NAMES:
             if not shutil.which("uvx"):
                 return "warn", (
-                    "LinkedIn MCP 已写入 mcporter 配置，但 uvx 未安装，"
-                    "当前无法启动服务。安装：\n"
+                    "LinkedIn MCP is present in mcporter config, but uvx is not installed, "
+                    "so the service cannot start. Install:\n"
                     f"  {_UV_INSTALL_URL}"
                 )
             return "warn", (
-                "LinkedIn MCP 已写入 mcporter 配置，但 Doctor 未启动本地"
-                "服务做连通验证，不能仅凭配置宣称完整可用。"
+                "LinkedIn MCP is present in mcporter config, but Doctor did not start the local "
+                "service to verify connectivity; configuration alone is not enough to claim full availability."
             )
         if inspection.imports_unchecked:
             return "warn", (
-                "mcporter 本地配置未发现 LinkedIn MCP；配置还启用了 editor "
-                "imports，Doctor 为避免扩大凭据读取范围没有展开，当前未验证。"
+                "LinkedIn MCP was not found in local mcporter configuration; editor "
+                "imports are also enabled, and Doctor did not expand them to avoid widening the credential-read scope, so this remains unverified."
             )
         return "off", (
-            "mcporter 已装但 LinkedIn MCP 未配置。运行：\n"
-            f"  先安装 uv/uvx：{_UV_INSTALL_URL}\n"
+            "mcporter is installed but LinkedIn MCP is not configured. Run:\n"
+            f"  First install uv/uvx: {_UV_INSTALL_URL}\n"
             f"  {_LOGIN_COMMAND}\n"
             f"  {_CONFIG_COMMAND}"
         )
