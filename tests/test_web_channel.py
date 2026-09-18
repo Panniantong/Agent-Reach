@@ -39,7 +39,7 @@ def test_can_handle_accepts_any_url():
         assert channel.can_handle(sample) is True, sample
 
 
-# --- check: ready without any network probe (零开销兜底) ---
+# --- check: ready without any network probe (zero-cost fallback) ---
 
 def test_check_is_ok_and_touches_no_network():
     channel = WebChannel()
@@ -188,7 +188,7 @@ def test_read_rejects_high_confidence_antibot_pages(body):
     with patch(
         "urllib.request.urlopen", return_value=_resp(body.encode("utf-8"))
     ) as mock_open:
-        with pytest.raises(RuntimeError, match="反爬验证页"):
+        with pytest.raises(RuntimeError, match="anti-bot verification page"):
             channel.read("https://example.com/protected")
 
     mock_open.assert_called_once()
