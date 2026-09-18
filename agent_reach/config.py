@@ -102,14 +102,17 @@ class Config:
     CONFIG_DIR = home_dir() / ".agent-reach"
     CONFIG_FILE = CONFIG_DIR / "config.yaml"
 
-    # Feature → required config keys
+    # Feature → required config keys. Exa is configured through mcporter and
+    # reported by the channel doctor, not through this YAML file.
     FEATURE_REQUIREMENTS = {
-        "exa_search": ["exa_api_key"],
+        "exa_search": [],
+        "tavily_search": ["tavily_api_key"],
         "twitter_xreach": ["twitter_auth_token", "twitter_ct0"],  # legacy key name; used by twitter-cli
         "groq_whisper": ["groq_api_key"],
         "openai_whisper": ["openai_api_key"],
         "github_token": ["github_token"],
     }
+    EXTERNAL_FEATURES = frozenset({"exa_search"})
 
     def __init__(
         self,
@@ -198,6 +201,8 @@ class Config:
 
     def is_configured(self, feature: str) -> bool:
         """Check if a feature has all required config."""
+        if feature in self.EXTERNAL_FEATURES:
+            return False
         required = self.FEATURE_REQUIREMENTS.get(feature, [])
         return all(self.get(k) for k in required)
 

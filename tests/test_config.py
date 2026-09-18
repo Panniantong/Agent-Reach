@@ -64,7 +64,7 @@ class TestConfig:
     def test_is_configured(self, tmp_config):
         assert not tmp_config.is_configured("exa_search")
         tmp_config.set("exa_api_key", "test-key")
-        assert tmp_config.is_configured("exa_search")
+        assert not tmp_config.is_configured("exa_search")
 
     def test_get_configured_features(self, tmp_config):
         features = tmp_config.get_configured_features()

@@ -82,6 +82,29 @@ def test_configure_uses_hidden_prompt_when_no_value_is_given(
     assert secret not in output.err
 
 
+def test_configure_rejects_sensitive_positional_values(monkeypatch, capsys):
+    import agent_reach.config as config_module
+
+    config = _MemoryConfig()
+    monkeypatch.setattr(config_module, "Config", lambda: config)
+    monkeypatch.setattr(cli, "_configure_logging", lambda _verbose=False: None)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["agent-reach", "configure", "tavily-key", "tvly-positional-secret"],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main()
+
+    assert exc_info.value.code == 2
+    assert config.data == {}
+    output = capsys.readouterr()
+    assert "tvly-positional-secret" not in output.out
+    assert "tvly-positional-secret" not in output.err
+    assert "--stdin" in output.err
+
+
 def test_setup_uses_hidden_prompts_for_secrets(monkeypatch, capsys):
     import getpass
     import shutil
