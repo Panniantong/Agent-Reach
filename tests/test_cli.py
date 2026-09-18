@@ -292,6 +292,48 @@ class TestCLI:
         cli._install_reddit_deps()
         assert calls == ["rdt"]
 
+    @pytest.mark.parametrize("channel", ["reddit", "xiaohongshu"])
+    @pytest.mark.parametrize(
+        ("env", "detected_env"),
+        [("server", "local"), ("local", "server"), ("auto", "server"), ("auto", "local")],
+    )
+    def test_install_channels_use_resolved_environment(
+        self, monkeypatch, capsys, channel, env, detected_env
+    ):
+        """An explicit environment wins; auto detection runs only once."""
+        calls = []
+        detect_calls = []
+        monkeypatch.setattr(
+            cli, "_detect_environment", lambda: detect_calls.append(True) or detected_env
+        )
+        monkeypatch.setattr(cli, "_install_system_deps", lambda: True)
+        monkeypatch.setattr(cli, "_install_mcporter", lambda: True)
+        monkeypatch.setattr(cli, "_install_skill", lambda: True)
+        monkeypatch.setattr(
+            cli, "_install_opencli_deps", lambda: calls.append("opencli") or True
+        )
+        monkeypatch.setattr(cli, "_install_rdt_cli", lambda: calls.append("rdt") or True)
+        monkeypatch.setattr(shutil, "which", lambda _name: None)
+        monkeypatch.setattr("agent_reach.doctor.check_all", lambda _config: {})
+        monkeypatch.setattr("agent_reach.doctor.format_report", lambda _results: "report")
+
+        resolved_env = detected_env if env == "auto" else env
+        args = Namespace(
+            env=env, proxy="", system=True, safe=False, dry_run=False, channels=channel
+        )
+        if channel == "xiaohongshu" and resolved_env == "server":
+            # Server setup prints manual instructions and remains incomplete.
+            with pytest.raises(SystemExit) as exc:
+                cli._cmd_install(args)
+            assert exc.value.code == 1
+            assert "xiaohongshu-mcp" in capsys.readouterr().out
+            assert calls == []
+        else:
+            cli._cmd_install(args)
+            assert calls == ["rdt" if resolved_env == "server" else "opencli"]
+
+        assert len(detect_calls) == (1 if env == "auto" else 0)
+
     def test_install_opencli_uses_resolved_windows_npm_path(self, monkeypatch):
         import agent_reach.backends as backends
         from agent_reach.backends import OpenCLIStatus
