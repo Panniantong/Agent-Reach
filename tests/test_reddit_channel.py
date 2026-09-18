@@ -59,7 +59,7 @@ def test_check_rdt_saved_credential_is_unverified_not_false_ok(
         status, message = RedditChannel()._check_rdt()
 
     assert status == "warn"
-    assert "未实时验证" in message
+    assert "not verified live" in message
     run.assert_not_called()
 
 
@@ -82,7 +82,7 @@ def test_check_rdt_stale_credential_is_not_refreshed(isolated_home):
         status, message = RedditChannel()._check_rdt()
 
     assert status == "warn"
-    assert "超过 7 天" in message
+    assert "more than 7 days old" in message
     assert path.read_bytes() == before
     run.assert_not_called()
 
@@ -95,7 +95,7 @@ def test_check_rdt_unparseable_credential_is_warn(isolated_home):
         status, message = RedditChannel()._check_rdt()
 
     assert status == "warn"
-    assert "无法安全解析" in message
+    assert "could not be parsed safely" in message
 
 
 def test_check_rdt_refuses_symlink_credential(isolated_home):
@@ -108,7 +108,7 @@ def test_check_rdt_refuses_symlink_credential(isolated_home):
         status, message = RedditChannel()._check_rdt()
 
     assert status == "warn"
-    assert "符号链接" in message
+    assert "symlink" in message
 
 
 def test_check_rdt_refuses_ancestor_symlink(isolated_home):
@@ -128,7 +128,7 @@ def test_check_rdt_refuses_ancestor_symlink(isolated_home):
         status, message = RedditChannel()._check_rdt()
 
     assert status == "warn"
-    assert "符号链接" in message
+    assert "symlink" in message
 
 
 def _opencli(installed=True, broken=False, ready=True, hint=""):
@@ -160,8 +160,8 @@ def test_check_opencli_bridge_ready_is_unverified():
     ):
         status, message = RedditChannel()._check_opencli()
     assert status == "warn"
-    assert "桥接已连接" in message
-    assert "登录态和实际命令未实时验证" in message
+    assert "bridge is connected" in message
+    assert "登录态和实际命令not verified live" in message
 
 
 def test_check_opencli_installed_not_ready_is_warn():
@@ -222,5 +222,5 @@ def test_check_no_backend_installed_is_off():
         status, message = channel.check()
 
     assert status == "off"
-    assert "零配置" in message
+    assert "zero-config" in message
     assert channel.active_backend is None
