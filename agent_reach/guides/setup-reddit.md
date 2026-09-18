@@ -1,55 +1,63 @@
-# Reddit 配置指南
+# Reddit Setup Guide
 
-## 功能说明
+## What it provides
 
-Reddit 封锁了几乎所有非浏览器的直接访问（包括数据中心和 ISP 代理 IP），JSON API 返回 403。
+Reddit blocks many non-browser anonymous access paths, and the anonymous JSON endpoints are not a reliable zero-config route. Agent Reach therefore uses authenticated backends.
 
-Agent Reach 通过 **rdt-cli** 实现 Reddit 的搜索和阅读功能：
-- **搜索**：`rdt search "关键词"`
-- **阅读完整帖子+评论**：`rdt read POST_ID`
+Preferred order:
 
-免费，无需代理，无需 API Key。需要登录认证（`rdt login`，自动从浏览器提取 Cookie）。
+1. **OpenCLI on desktop** — reuses an existing Chrome session controlled by the user.
+2. **rdt-cli** — legacy/server fallback using explicit login/cookie configuration.
 
-## Agent 可自动完成的步骤
+Typical commands:
 
-1. 检查 rdt-cli 是否可用：
 ```bash
-which rdt && echo "installed" || echo "not installed"
+opencli reddit search "query" -f yaml
+opencli reddit read POST_ID -f yaml
+
+rdt search "query" --limit 10
+rdt read POST_ID
 ```
 
-2. 如果未安装，自动安装（PyPI 版本暂时落后，从 GitHub 安装最新版）：
+## Steps the agent can perform
+
+Check current backend status:
+
 ```bash
-pipx install 'git+https://github.com/public-clis/rdt-cli.git'
+agent-reach doctor --json
 ```
 
-或一键安装：
+If the user explicitly approves installing the Reddit channel:
+
 ```bash
 agent-reach install --env=auto --system --channels=reddit
 ```
 
-## 使用示例
+For the rdt-cli fallback, Agent Reach pins the GitHub source used by the codebase. Follow Doctor's installation message rather than installing an arbitrary version.
 
-搜索 Reddit 内容：
-```bash
-rdt search "python best practices" -n 5
-```
+## User action required
 
-阅读完整帖子和评论：
+A logged-in session is required.
+
+- Desktop/OpenCLI: the user logs in to reddit.com in their own Chrome session.
+- rdt-cli: use `rdt login` where browser extraction is appropriate, or follow Doctor's manual-cookie guidance on servers.
+
+In networks where reddit.com is blocked, a user-approved proxy may also be required.
+
+## Examples
+
 ```bash
+opencli reddit search "python best practices" -f yaml
+opencli reddit read POST_ID -f yaml
+
+rdt search "python best practices" --limit 5
 rdt read POST_ID
 ```
 
-## 需要用户手动做的步骤
+## Search-only fallback
 
-无。用户明确授权后，rdt-cli 通过
-`agent-reach install --env=auto --system --channels=reddit` 安装。
-
-## Fallback：Exa 搜索
-
-如果你已经配置了 Exa（通过 mcporter），也可以通过 Exa 搜索 Reddit 内容：
+If Exa is configured, it can search indexed Reddit pages without replacing the authenticated Reddit backend:
 
 ```bash
 mcporter call exa.web_search_exa query="site:reddit.com python best practices" numResults=5
 ```
-
-rdt-cli 是当前推荐方案，无需额外配置即可使用。
