@@ -1,10 +1,10 @@
 #!/bin/bash
-# 小宇宙播客转文字脚本
-# 用法: bash transcribe.sh [--polish] <小宇宙链接> [输出文件路径]
-# 环境变量: GROQ_API_KEY (必须)
+# Xiaoyuzhou podcast transcription script
+# Usage: bash transcribe.sh [--polish] <xiaoyuzhou-url> [output-path]
+# Environment variable: GROQ_API_KEY (required)
 #
-# --polish: 转录后调用 Groq Llama 3.3 70B 给文稿补中文标点+合理分段
-#           （Whisper 对中文标点支持较弱，开启后阅读体验显著更好）
+# --polish: after transcription, use Groq Llama 3.3 70B to add Chinese punctuation and reasonable paragraphs
+#           (Whisper can produce weak Chinese punctuation; this improves readability)
 
 set -e
 
@@ -14,16 +14,16 @@ while [ $# -gt 0 ]; do
         --polish) POLISH=1; shift ;;
         --) shift; break ;;
         -h|--help)
-            echo "用法: bash transcribe.sh [--polish] <小宇宙链接> [输出文件路径]"
+            echo "Usage: bash transcribe.sh [--polish] <xiaoyuzhou-url> [output-path]"
             exit 0 ;;
         --*)
-            echo "未知选项: $1" >&2
+            echo "Unknown option: $1" >&2
             exit 1 ;;
         *) break ;;
     esac
 done
 
-URL="${1:?用法: bash transcribe.sh [--polish] <小宇宙链接> [输出文件路径]}"
+URL="${1:?Usage: bash transcribe.sh [--polish] <xiaoyuzhou-url> [output-path]}"
 OUTPUT="${2:-}"
 
 PYTHON_CMD=()
@@ -38,7 +38,7 @@ ensure_python() {
     elif command -v py >/dev/null 2>&1; then
         PYTHON_CMD=(py -3)
     else
-        echo "❌ 未找到 Python（尝试过 python3、python、py -3）" >&2
+        echo "❌ Python was not found (tried python3, python, and py -3)" >&2
         return 1
     fi
 }
@@ -61,7 +61,7 @@ allowed_host = (
 raise SystemExit(0 if parsed.scheme.lower() in {"http", "https"} and allowed_host else 1)
 PY
 then
-    echo "❌ 仅支持 xiaoyuzhoufm.com 及其子域的 http/https 链接" >&2
+    echo "❌ Only http/https URLs from xiaoyuzhoufm.com and its subdomains are supported" >&2
     exit 1
 fi
 
@@ -79,9 +79,9 @@ if [ -z "$GROQ_API_KEY" ]; then
             2>/dev/null || true)
     fi
 fi
-GROQ_API_KEY="${GROQ_API_KEY:?请设置 GROQ_API_KEY 环境变量或运行 agent-reach configure groq-key}"
+GROQ_API_KEY="${GROQ_API_KEY:?Set the GROQ_API_KEY environment variable or run agent-reach configure groq-key}"
 
-# Groq API 限制: 25MB per file
+# Groq API limit: 25 MB per file
 MAX_CHUNK_SIZE_MB=20
 AUDIO_BITRATE="64k"
 CURL_CONNECT_TIMEOUT=15
@@ -95,7 +95,7 @@ MAX_DURATION_SECONDS=10800
 
 TEMP_ROOT="${TMPDIR:-/tmp}"
 if ! WORK_DIR=$(mktemp -d "${TEMP_ROOT%/}/agent-reach-xiaoyuzhou.XXXXXX"); then
-    echo "❌ 无法创建临时目录" >&2
+    echo "❌ Could not create the temporary directory" >&2
     exit 1
 fi
 
@@ -104,11 +104,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "📻 小宇宙播客转文字"
+echo "📻 Xiaoyuzhou Podcast Transcription"
 echo "===================="
 
-# Step 1: 提取音频 URL 和标题
-echo "🔍 正在解析页面..."
+# Step 1: extract audio URL and title
+echo "🔍 Parsing page..."
 PAGE=$(curl --fail --show-error --location --silent \
     --connect-timeout "$CURL_CONNECT_TIMEOUT" \
     --max-time "$PAGE_TIMEOUT" \
@@ -118,15 +118,15 @@ AUDIO_URL=$(echo "$PAGE" | perl -ne 'while (/(https:\/\/media\.xyzcdn\.net\/[^"]
 TITLE=$(echo "$PAGE" | perl -ne 'if (/"title":"([^"]*)"/) { print "$1\n"; last }' | head -1)
 
 if [ -z "$AUDIO_URL" ]; then
-    echo "❌ 无法从页面提取音频链接"
+    echo "❌ Could not extract the audio URL from the page"
     exit 1
 fi
 
-echo "📝 标题: $TITLE"
-echo "🔗 音频: $AUDIO_URL"
+echo "📝 Title: $TITLE"
+echo "🔗 Audio: $AUDIO_URL"
 
-# Step 2: 下载音频
-echo "⬇️  正在下载音频..."
+# Step 2: download audio
+echo "⬇️  Downloading audio..."
 EXT="${AUDIO_URL##*.}"
 curl --fail --show-error --location --silent \
     --connect-timeout "$CURL_CONNECT_TIMEOUT" \
@@ -135,12 +135,12 @@ curl --fail --show-error --location --silent \
     -o "$WORK_DIR/original.$EXT" \
     "$AUDIO_URL"
 FILE_SIZE=$(ls -lh "$WORK_DIR/original.$EXT" | awk '{print $5}')
-echo "📦 文件大小: $FILE_SIZE"
+echo "📦 File size: $FILE_SIZE"
 
-# Step 3: 获取时长
+# Step 3: get duration
 if ! DURATION_RAW=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 \
     "$WORK_DIR/original.$EXT" 2>/dev/null); then
-    echo "❌ ffprobe 无法读取音频时长" >&2
+    echo "❌ ffprobe could not read the audio duration" >&2
     exit 1
 fi
 if DURATION=$(DURATION_RAW="$DURATION_RAW" MAX_DURATION_SECONDS="$MAX_DURATION_SECONDS" \
@@ -164,50 +164,50 @@ print(int(value))
 else
     duration_status=$?
     if [ "$duration_status" -eq 3 ]; then
-        echo "❌ 音频时长超过 3 小时限制" >&2
+        echo "❌ Audio duration exceeds the 3-hour limit" >&2
     else
-        echo "❌ ffprobe 返回无效音频时长: ${DURATION_RAW:-<empty>}" >&2
+        echo "❌ ffprobe returned an invalid audio duration: ${DURATION_RAW:-<empty>}" >&2
     fi
     exit 1
 fi
 DURATION_MIN=$((DURATION / 60))
 DURATION_SEC=$((DURATION % 60))
-echo "⏱️  时长: ${DURATION_MIN}分${DURATION_SEC}秒"
+echo "⏱️  Duration: ${DURATION_MIN}m ${DURATION_SEC}s"
 
-# Step 4: 转为低码率单声道 MP3
-echo "🔄 正在转码..."
+# Step 4: convert to low-bitrate mono MP3
+echo "🔄 Transcoding..."
 ffmpeg -y -i "$WORK_DIR/original.$EXT" -t "$MAX_DURATION_SECONDS" -b:a "$AUDIO_BITRATE" -ac 1 "$WORK_DIR/mono.mp3" 2>/dev/null
 MONO_SIZE=$(stat -c%s "$WORK_DIR/mono.mp3" 2>/dev/null || stat -f%z "$WORK_DIR/mono.mp3")
 MONO_SIZE_MB=$(awk -v bytes="$MONO_SIZE" 'BEGIN { printf "%.1f", bytes / 1024 / 1024 }')
-echo "📦 转码后: ${MONO_SIZE_MB}MB"
+echo "📦 After transcoding: ${MONO_SIZE_MB}MB"
 
-# Step 5: 按大小切片
+# Step 5: split by size
 MAX_BYTES=$((MAX_CHUNK_SIZE_MB * 1024 * 1024))
 
 if [ "$MONO_SIZE" -le "$MAX_BYTES" ]; then
-    # 不需要切片
+    # No chunking required
     cp "$WORK_DIR/mono.mp3" "$WORK_DIR/chunk_0.mp3"
     NUM_CHUNKS=1
-    echo "📎 无需切片"
+    echo "📎 No chunking required"
 else
-    # 计算需要几个 chunk
+    # Calculate the required number of chunks
     NUM_CHUNKS=$(( (MONO_SIZE / MAX_BYTES) + 1 ))
-    CHUNK_DURATION=$(( DURATION / NUM_CHUNKS + 10 ))  # 加 10 秒缓冲
-    echo "✂️  切分为 $NUM_CHUNKS 段 (每段约 $((CHUNK_DURATION / 60)) 分钟)..."
+    CHUNK_DURATION=$(( DURATION / NUM_CHUNKS + 10 ))  # Add a 10-second buffer
+    echo "✂️  Splitting into $NUM_CHUNKS chunks (~$((CHUNK_DURATION / 60)) minutes each)..."
     
     for i in $(seq 0 $((NUM_CHUNKS - 1))); do
         START=$((i * CHUNK_DURATION))
         ffmpeg -y -i "$WORK_DIR/mono.mp3" -ss "$START" -t "$CHUNK_DURATION" -c copy "$WORK_DIR/chunk_${i}.mp3" 2>/dev/null
         CHUNK_SIZE=$(ls -lh "$WORK_DIR/chunk_${i}.mp3" | awk '{print $5}')
-        echo "   段 $((i+1))/$NUM_CHUNKS: $CHUNK_SIZE"
+        echo "   Chunk $((i+1))/$NUM_CHUNKS: $CHUNK_SIZE"
     done
 fi
 
-# Step 6: 调用 Groq Whisper API 转录
-echo "🎙️  正在转录 (Groq Whisper large-v3)..."
+# Step 6: transcribe with the Groq Whisper API
+echo "🎙️  Transcribing (Groq Whisper large-v3)..."
 
 for i in $(seq 0 $((NUM_CHUNKS - 1))); do
-    echo -n "   段 $((i+1))/$NUM_CHUNKS... "
+    echo -n "   Chunk $((i+1))/$NUM_CHUNKS... "
     
     RESPONSE=$(curl --silent --show-error \
         --connect-timeout "$CURL_CONNECT_TIMEOUT" \
@@ -219,26 +219,26 @@ for i in $(seq 0 $((NUM_CHUNKS - 1))); do
         -F file="@$WORK_DIR/chunk_${i}.mp3" \
         -F model="whisper-large-v3" \
         -F language="zh" \
-        -F prompt="以下是一段中文普通话播客录音，请输出包含完整中文标点（，。？！：；“”‘’）的转写文本。" \
+        -F prompt="This is a Mandarin Chinese podcast recording. Transcribe it faithfully and include complete Chinese punctuation (，。？！：；“”‘’)." \
         -F response_format="text")
     
     HTTP_CODE=$(echo "$RESPONSE" | tail -1)
     BODY=$(echo "$RESPONSE" | sed '$d')
     
     if [ "$HTTP_CODE" != "200" ]; then
-        echo "❌ API 错误 (HTTP $HTTP_CODE)"
+        echo "❌ API error (HTTP $HTTP_CODE)"
         echo "$BODY"
         
-        # 如果是速率限制，等待后重试
+        # If rate-limited, wait and retry
         if [ "$HTTP_CODE" = "429" ]; then
-            # 从错误信息中提取等待时间，默认 120 秒
+            # Extract the wait time from the error message; default to 120 seconds
             WAIT_SEC=$(echo "$BODY" | perl -ne 'if (/in (\d+)m/) { print "$1\n"; exit }')
             WAIT_SEC=${WAIT_SEC:-2}
             WAIT_SEC=$((WAIT_SEC * 60 + 30))
             if [ "$WAIT_SEC" -gt 900 ]; then
                 WAIT_SEC=900
             fi
-            echo "   ⏳ 速率限制，等待 ${WAIT_SEC} 秒后重试..."
+            echo "   ⏳ Rate limited; waiting ${WAIT_SEC} seconds before retry..."
             sleep "$WAIT_SEC"
             RESPONSE=$(curl --silent --show-error \
                 --connect-timeout "$CURL_CONNECT_TIMEOUT" \
@@ -250,19 +250,19 @@ for i in $(seq 0 $((NUM_CHUNKS - 1))); do
                 -F file="@$WORK_DIR/chunk_${i}.mp3" \
                 -F model="whisper-large-v3" \
                 -F language="zh" \
-                -F prompt="以下是一段中文普通话播客录音，请输出包含完整中文标点（，。？！：；“”‘’）的转写文本。" \
+                -F prompt="This is a Mandarin Chinese podcast recording. Transcribe it faithfully and include complete Chinese punctuation (，。？！：；“”‘’)." \
                 -F response_format="text")
             HTTP_CODE=$(echo "$RESPONSE" | tail -1)
             BODY=$(echo "$RESPONSE" | sed '$d')
             
             if [ "$HTTP_CODE" != "200" ]; then
-                echo "   ❌ 重试失败"
+                echo "   ❌ Retry failed"
                 exit 1
             fi
         else
             case "$HTTP_CODE" in
                 5??)
-                    echo "   可尝试兜底：agent-reach transcribe \"$AUDIO_URL\""
+                    echo "   Fallback option: agent-reach transcribe \"$AUDIO_URL\""
                     ;;
             esac
             exit 1
@@ -271,15 +271,15 @@ for i in $(seq 0 $((NUM_CHUNKS - 1))); do
     
     echo "$BODY" > "$WORK_DIR/transcript_${i}.txt"
     CHARS=$(wc -m < "$WORK_DIR/transcript_${i}.txt")
-    echo "✅ ($CHARS 字)"
+    echo "✅ ($CHARS characters)"
 done
 
-# Step 6.5 (可选): 用 Llama 3.3 70B 给文稿补标点+分段
+# Step 6.5 (optional): use Llama 3.3 70B to add punctuation and paragraphing
 if [ "$POLISH" = "1" ]; then
     ensure_python || exit 1
-    echo "✨ 正在润色（Llama 3.3 70B 加标点+分段）..."
+    echo "✨ Polishing punctuation and paragraphing with Llama 3.3 70B..."
     for i in $(seq 0 $((NUM_CHUNKS - 1))); do
-        echo -n "   段 $((i+1))/$NUM_CHUNKS... "
+        echo -n "   Chunk $((i+1))/$NUM_CHUNKS... "
         IN_FILE="$WORK_DIR/transcript_${i}.txt" \
         OUT_FILE="$WORK_DIR/polished_${i}.txt" \
         GROQ_API_KEY="$GROQ_API_KEY" \
@@ -293,15 +293,15 @@ OUT = os.environ["OUT_FILE"]
 MODEL = "llama-3.3-70b-versatile"
 MAX_DEPTH = 3
 PROMPT_TMPL = (
-    "以下是一段中文普通话播客的语音转写片段，由于 Whisper 对中文标点支持较弱，"
-    "整段几乎没有标点。请你**只做一件事**：在合适位置补充中文标点（，。！？：；），"
-    "可以适度分段。\n\n"
-    "**严格要求**：\n"
-    "- 不得修改、删除、增加任何汉字或英文/数字\n"
-    "- 不得改写、润色、总结\n"
-    "- 不得添加任何解释、前言、后记\n"
-    "- 直接输出加好标点+合理分段后的全文\n\n"
-    "原文：\n{}"
+    "The following is a Mandarin Chinese podcast transcript segment. Whisper produced weak punctuation, so "
+    "the text has almost no punctuation. Do exactly one task: add appropriate Chinese punctuation (，。！？：；) "
+    "and reasonable paragraph breaks.\n\n"
+    "**Strict requirements**:\n"
+    "- Do not modify, delete, or add any Chinese characters, English text, or numbers\n"
+    "- Do not rewrite, paraphrase, polish wording, or summarize\n"
+    "- Do not add explanations, introductions, or afterwords\n"
+    "- Output only the full text with punctuation and paragraph breaks\n\n"
+    "Original transcript:\n{}"
 )
 
 def call_groq(text):
@@ -341,24 +341,24 @@ def polish(text, depth=0):
         return text
     if fr != "length" or depth >= MAX_DEPTH:
         return out
-    # 输出被截断：从中点切两半递归处理
+    # Output was truncated: split near the midpoint and process both halves recursively
     mid = len(text) // 2
     return polish(text[:mid], depth + 1) + polish(text[mid:], depth + 1)
 
 content = open(IN, encoding="utf-8").read().strip()
 result = polish(content)
 open(OUT, "w", encoding="utf-8").write(result + "\n")
-print(f"✅ ({len(result)} 字)")
+print(f"✅ ({len(result)} characters)")
 PY
     done
 fi
 
-# Step 7: 合并输出
-echo "📄 正在合并文字稿..."
+# Step 7: combine output
+echo "📄 Combining transcript..."
 
 if [ -z "$OUTPUT" ]; then
     if ! OUTPUT=$(mktemp "${TEMP_ROOT%/}/agent-reach-transcript.XXXXXX"); then
-        echo "❌ 无法安全创建输出文件" >&2
+        echo "❌ Could not create the output file safely" >&2
         exit 1
     fi
 fi
@@ -366,11 +366,11 @@ fi
 {
     echo "# $TITLE"
     echo ""
-    echo "来源: $URL"
-    echo "时长: ${DURATION_MIN}分${DURATION_SEC}秒"
-    echo "转录时间: $(date '+%Y-%m-%d %H:%M')"
+    echo "Source: $URL"
+    echo "Duration: ${DURATION_MIN}m ${DURATION_SEC}s"
+    echo "Transcribed at: $(date '+%Y-%m-%d %H:%M')"
     if [ "$POLISH" = "1" ]; then
-        echo "润色: Groq Llama 3.3 70B"
+        echo "Polished with: Groq Llama 3.3 70B"
     fi
     echo ""
     echo "---"
@@ -388,7 +388,7 @@ fi
 
 TOTAL_CHARS=$(wc -m < "$OUTPUT")
 echo ""
-echo "✅ 完成！"
-echo "📄 输出: $OUTPUT"
-echo "📊 总字数: $TOTAL_CHARS"
+echo "✅ Done!"
+echo "📄 Output: $OUTPUT"
+echo "📊 Total characters: $TOTAL_CHARS"
 echo "===================="
