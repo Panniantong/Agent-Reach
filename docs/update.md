@@ -5,7 +5,7 @@
 Copy this to your AI Agent:
 
 ```
-帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
 ```
 
 Or in English:
@@ -32,7 +32,7 @@ Update Agent Reach to the latest version, refresh upstream tools, migrate from r
 agent-reach check-update
 ```
 
-If it says "已是最新版本", skip to Step 4 (verify). Otherwise continue.
+If it says the current version is already up to date, skip to Step 4 (verify). Otherwise continue.
 
 ### Step 2: Update Agent Reach package
 
@@ -67,13 +67,11 @@ which opencli  >/dev/null 2>&1 && npm update -g @jackwener/opencli 2>/dev/null
 ```
 
 **Desktop users without OpenCLI**: since v1.5.0 OpenCLI is the preferred
-backend for 小红书/Reddit (and adds B站 subtitles). Offer it once. For
-小红书, OpenCLI may use only an existing Chrome session explicitly controlled
+backend for XiaoHongShu/Reddit (and adds Bilibili subtitles). Offer it once. For
+XiaoHongShu, OpenCLI may use only an existing Chrome session explicitly controlled
 by the user. The update must never log the user in or read browser cookies:
 
-> "这次更新引入了 OpenCLI 后端。要装吗？装完只需你在 Chrome 商店点一次
-> 『添加扩展』。小红书 OpenCLI 只使用你已有的 Chrome 会话；如果没有现成
-> 会话，我不会自动登录，会改用 Cookie-Editor 配置 MCP / 存量工具。"
+> "This update adds the OpenCLI backend. Would you like to install it? After installation, you only need to click Add Extension in the Chrome Web Store. XiaoHongShu through OpenCLI uses only your existing Chrome session; if no session exists, I will not automate login and will use the Cookie-Editor path for MCP/legacy tools instead."
 
 If yes: `agent-reach install --system --channels opencli` and guide them through the
 extension click. If no, everything keeps working on existing backends.
@@ -101,7 +99,7 @@ skill files.
 Check the doctor output:
 
 - Every channel shows ✅ / [!] with a clear message, and multi-backend
-  channels (小红书/Reddit/B站/Twitter) report `当前后端：…`
+  channels (XiaoHongShu/Reddit/Bilibili/Twitter) report `active backend: …`
 - If a previously-working channel now shows [X]/error, the message contains
   the exact fix (e.g. a venv-reinstall prescription) — run it, then re-check
 - `--json` gives the same data machine-readably (`active_backend` per channel)
