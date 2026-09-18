@@ -11,7 +11,7 @@ whether the browser contains a login cookie; it never performs a search.
 Two authentication stores must be distinguished during health checks. Both are required, but they authenticate different paths:
 
 - `~/.boss-agent/auth/session.enc`(`boss status` / `status --live` validate only this store)
-  1. is a hard prerequisite: `_get_browser()` 无条件 `get_token()`, if it cannot be read then `AuthRequired`，
+  1. is a hard prerequisite: `_get_browser()` unconditionally `get_token()`, if it cannot be read then `AuthRequired`, 
      do not delete it—the CDP search can fail before connecting to the browser;
   2. but it is **not the effective search credential**: after CDP connects to real Chrome it reuses `contexts[0]`; its cookies
      are injected only when there is no browser context, so they do not take effect for the normal existing-browser path;
