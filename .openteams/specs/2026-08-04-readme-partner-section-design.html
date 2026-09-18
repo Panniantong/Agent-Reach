@@ -1,45 +1,16 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Agent Reach README 赞助与友链区域调整</title>
+  <title>Agent Reach README Sponsor and Friends Layout</title>
   <style>
-    :root {
-      color-scheme: light dark;
-      --bg: #f6f7fb;
-      --card: #ffffff;
-      --text: #20242c;
-      --muted: #626a78;
-      --line: #dfe3ea;
-      --accent: #d64f70;
-      --accent-soft: #fff0f4;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #14161b;
-        --card: #1d2027;
-        --text: #f2f3f5;
-        --muted: #aeb4bf;
-        --line: #343944;
-        --accent-soft: #351f28;
-      }
-    }
+    :root { color-scheme: light dark; --bg: #f6f7fb; --card: #ffffff; --text: #20242c; --muted: #626a78; --line: #dfe3ea; --accent: #d64f70; --accent-soft: #fff0f4; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #14161b; --card: #1d2027; --text: #f2f3f5; --muted: #aeb4bf; --line: #343944; --accent-soft: #351f28; } }
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     main { max-width: 920px; margin: 48px auto; padding: 0 24px 64px; }
-    header, section {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 28px 32px;
-      margin-bottom: 18px;
-    }
+    header, section { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 28px 32px; margin-bottom: 18px; }
     h1, h2 { line-height: 1.25; margin-top: 0; }
     h1 { font-size: 30px; margin-bottom: 8px; }
     h2 { font-size: 20px; }
@@ -47,12 +18,7 @@
     .eyebrow { color: var(--accent); font-weight: 700; letter-spacing: .05em; }
     .muted { color: var(--muted); }
     .flow { display: grid; gap: 10px; }
-    .step {
-      border-left: 4px solid var(--accent);
-      background: var(--accent-soft);
-      border-radius: 8px;
-      padding: 12px 16px;
-    }
+    .step { border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 8px; padding: 12px 16px; }
     table { width: 100%; border-collapse: collapse; }
     th, td { border-bottom: 1px solid var(--line); padding: 12px; text-align: left; vertical-align: top; }
     th { color: var(--muted); font-size: 14px; }
@@ -64,59 +30,59 @@
 <main>
   <header>
     <div class="eyebrow">README DESIGN · 2026-08-04</div>
-    <h1>赞助与友链区域调整</h1>
-    <p class="muted">把商业合作集中到 README 顶部，同时保留生态友链的真实身份，避免正文中出现孤立广告。</p>
+    <h1>Sponsor and Friends Layout</h1>
+    <p class="muted">Keep commercial partnerships clearly grouped at the top of the README while preserving ecosystem friend links as non-advertising references.</p>
   </header>
 
   <section>
-    <h2>目标与边界</h2>
+    <h2>Goals and Boundaries</h2>
     <ul>
-      <li>让赞助内容在顶部清晰可见，但不影响项目核心介绍。</li>
-      <li>BrowserAct、腾讯云 OpenClaw、CoreClaw 与星图 AstraFlow 使用统一的左右两列赞助条目。</li>
-      <li>Agent Skills Hub 与 AtomGit 镜像保留在 README 最后的「友情链接」。</li>
-      <li>方舟 Agent Plan 从 README 中删除。</li>
-      <li>不改产品能力、安装流程、Python 代码或上游项目。</li>
+      <li>Keep sponsor content visible near the top without distracting from the project introduction.</li>
+      <li>Use a consistent two-column sponsor row for BrowserAct, Tencent Cloud OpenClaw, CoreClaw, and AstraFlow.</li>
+      <li>Keep Agent Skills Hub and the AtomGit mirror in the final Friends section.</li>
+      <li>Remove Ark Agent Plan from the README.</li>
+      <li>Do not change product behavior, installation flow, Python code, or upstream projects.</li>
     </ul>
   </section>
 
   <section>
-    <h2>页面结构</h2>
+    <h2>Page Structure</h2>
     <div class="flow">
-      <div class="step">项目标题、简介、徽章、语言与页面导航</div>
-      <div class="step"><strong>❤️ 赞助商</strong>：默认展开的折叠区，展示 BrowserAct、腾讯云 OpenClaw、CoreClaw 与星图 AstraFlow</div>
-      <div class="step">为什么需要 Agent Reach、平台能力、安装与设计理念等正文</div>
-      <div class="step"><strong>友情链接</strong>：Agent Skills Hub 与 AtomGit 镜像</div>
+      <div class="step">Project title, description, badges, language links, and navigation</div>
+      <div class="step"><strong>Sponsors</strong>: expanded-by-default section for BrowserAct, Tencent Cloud OpenClaw, CoreClaw, and AstraFlow</div>
+      <div class="step">Why Agent Reach, platform capabilities, installation, and design philosophy</div>
+      <div class="step"><strong>Friends</strong>: Agent Skills Hub and AtomGit mirror</div>
       <div class="step">Star History</div>
     </div>
   </section>
 
   <section>
-    <h2>赞助区呈现</h2>
+    <h2>Sponsor Presentation</h2>
     <table>
-      <thead><tr><th>元素</th><th>约定</th></tr></thead>
+      <thead><tr><th>Element</th><th>Convention</th></tr></thead>
       <tbody>
-        <tr><td>位置</td><td>顶部导航之后、第一段产品正文之前。</td></tr>
-        <tr><td>容器</td><td>使用 <code>&lt;details open&gt;</code>，允许折叠但默认展示。</td></tr>
-        <tr><td>布局</td><td>所有合作方统一使用 HTML 表格；左侧固定宽度小图，右侧为项目说明和链接。</td></tr>
-        <tr><td>素材</td><td>仅使用合作方官方 Logo，保存到 <code>docs/assets/sponsors/</code>。</td></tr>
-        <tr><td>文案</td><td>沿用现有事实，不新增未经确认的优惠、承诺或夸张表述。</td></tr>
+        <tr><td>Position</td><td>After top navigation and before the first product-description section.</td></tr>
+        <tr><td>Container</td><td>Use <code>&lt;details open&gt;</code> so it can collapse but is expanded by default.</td></tr>
+        <tr><td>Layout</td><td>Use a consistent HTML table: fixed-width logo on the left, project description/link on the right.</td></tr>
+        <tr><td>Assets</td><td>Use official partner logos stored under <code>docs/assets/sponsors/</code>.</td></tr>
+        <tr><td>Copy</td><td>Preserve verified facts; do not add unverified promotions, promises, or exaggerated claims.</td></tr>
       </tbody>
     </table>
   </section>
 
   <section>
-    <h2>文件范围与验证</h2>
+    <h2>Files and Validation</h2>
     <ul>
-      <li>同步修改 <code>README.md</code> 与 <code>docs/README_en.md</code>。</li>
-      <li>删除中部 BrowserAct 独立段落，确保全文不再重复。</li>
-      <li>检查图片路径、链接、HTML 标签闭合和中英文内容对应关系。</li>
-      <li>通过文本扫描确认方舟 Agent Plan 已移除，四个保留项目各自只出现在预定区域。</li>
+      <li>Keep <code>README.md</code> and <code>docs/README_en.md</code> synchronized.</li>
+      <li>Remove any duplicated standalone BrowserAct section from the middle of the README.</li>
+      <li>Check image paths, links, and HTML tag closure.</li>
+      <li>Use a text scan to verify Ark Agent Plan is removed and retained partners appear only in intended locations.</li>
     </ul>
   </section>
 
   <section>
-    <h2>提交记录</h2>
-    <p>提交信息只描述本项目自身变化：<code>docs(readme): reorganize partner section</code>。不在提交、分支或 README 中记录外部版式参考来源。</p>
+    <h2>Commit</h2>
+    <p>Describe only this project's change in the commit message: <code>docs(readme): reorganize partner section</code>.</p>
   </section>
 </main>
 </body>
