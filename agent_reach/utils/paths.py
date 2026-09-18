@@ -146,7 +146,7 @@ def read_small_text_no_follow(
     if max_bytes < 0:
         raise ValueError("max_bytes must be non-negative")
 
-    target = ensure_no_symlink_path(path, "读取path")
+    target = ensure_no_symlink_path(path, "read path")
     flags = (
         os.O_RDONLY
         | getattr(os, "O_NOFOLLOW", 0)
@@ -176,7 +176,7 @@ def read_small_text_no_follow(
         payload = b"".join(chunks)
         if len(payload) > max_bytes:
             raise PrivatePathError(f"read target exceeds the size limit: {target}")
-        ensure_no_symlink_path(target, "读取path")
+        ensure_no_symlink_path(target, "read path")
     finally:
         os.close(fd)
     return payload.decode(encoding)
