@@ -104,7 +104,7 @@ After installing the basics, **ask the user** which additional channels they nee
 >
 > - 🌟 **OpenCLI**（桌面推荐）— 一次安装即可提供 Reddit/Facebook/Instagram/B站字幕/Twitter 备选，并作为小红书桌面后端；小红书只使用用户已有且明确控制的 Chrome 会话
 > - 🐦 **Twitter/X** — 搜推文、看时间线（需要登录 Cookie）
-> - 📈 **雪球** — 股票行情、热门帖子（需要登录 Cookie）
+> - 📈 **雪球** — 股票行情、热门帖子（零配置，匿名 token 即可）
 > - 🎙️ **小宇宙播客** — 音频转文字（需要免费 Groq Key）
 > - 📕 **小红书** — 搜索、阅读、评论（OpenCLI 用已有会话；MCP/存量工具用 Cookie-Editor）
 > - 📖 **Reddit** — 搜索和阅读帖子（必须登录态：桌面 OpenCLI 或 rdt-cli + Cookie）

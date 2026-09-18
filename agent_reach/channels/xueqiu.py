@@ -17,7 +17,11 @@ _UA = (
 )
 _REFERER = "https://xueqiu.com/"
 _TIMEOUT = 10
-_XUEQIU_HOME = "https://xueqiu.com"
+# Page visited to obtain anonymous session cookies.  The site root no longer
+# issues `xq_a_token` (only the `acw_tc` anti-DDoS cookie), so the public
+# quote endpoints answer HTTP 400 / error_code 400016; `/hq` still issues the
+# full anonymous token set.
+_XUEQIU_SESSION_URL = "https://xueqiu.com/hq"
 
 # --------------- cookie-aware HTTP helpers --------------- #
 
@@ -76,8 +80,8 @@ def _ensure_cookies(config=None) -> None:
 
     Priority order:
     1. Saved cookie string in ~/.agent-reach/config.yaml  (set by configure --from-browser)
-    2. Homepage visit fallback (only yields public session cookies and may not
-       be sufficient when Xueqiu requires a logged-in session)
+    2. Anonymous session fallback — visits a page that issues `xq_a_token`,
+       which is what the public quote/search/hot endpoints require.
     """
     global _cookies_initialized
     if _cookies_initialized:
@@ -85,10 +89,9 @@ def _ensure_cookies(config=None) -> None:
     if _load_cookies_from_config(config):
         _cookies_initialized = True
         return
-    # Fallback: visit homepage to pick up acw_tc anti-DDoS cookie.
-    # This is not sufficient for authenticated APIs but avoids hard failures
-    # on public endpoints that only need the session cookie.
-    req = urllib.request.Request(_XUEQIU_HOME, headers={"User-Agent": _UA})
+    # Fallback: pick up the anonymous token set (`acw_tc` + `xq_a_token`).
+    # No logged-in session is needed for the endpoints this channel wraps.
+    req = urllib.request.Request(_XUEQIU_SESSION_URL, headers={"User-Agent": _UA})
     _opener.open(req, timeout=_TIMEOUT)
     _cookies_initialized = True
 
@@ -114,7 +117,7 @@ def _strip_html(text: str) -> str:
 class XueqiuChannel(Channel):
     name = "xueqiu"
     description = "雪球股票行情与社区动态"
-    backends = ["Xueqiu API (需要登录 Cookie)"]
+    backends = ["Xueqiu API"]
     tier = 1
 
     # ------------------------------------------------------------------ #
