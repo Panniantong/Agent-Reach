@@ -215,7 +215,7 @@ def test_xhs_cookie_editor_json_ignores_non_xhs_domains(
     saved = json.loads(cookie_path.read_text(encoding="utf-8"))
     assert [cookie["name"] for cookie in saved] == ["web_session", "a1"]
     output = capsys.readouterr().out
-    assert "忽略" in output
+    assert "Ignored" in output
     assert "2" in output
 
 
@@ -254,7 +254,7 @@ def test_xhs_cookie_editor_json_fails_without_valid_xhs_cookie(
     assert exc.value.code == 1
     assert not (tmp_path / ".agent-reach" / "xhs-cookies.json").exists()
     output = capsys.readouterr().out
-    assert "没有有效的 xiaohongshu.com" in output
+    assert "contains no valid xiaohongshu.com" in output
 
 
 def test_xhs_local_fallback_refuses_target_symlink(
