@@ -153,7 +153,7 @@ def test_transcribe_script_rejects_non_xiaoyuzhou_urls_before_curl(
     )
 
     assert result.returncode != 0
-    assert "仅支持 xiaoyuzhoufm.com" in result.stderr
+    assert "Only http/https URLs from xiaoyuzhoufm.com" in result.stderr
     assert not curl_log.exists()
     _assert_work_dir_cleaned(temp_root)
 
@@ -265,7 +265,7 @@ fi
     )
 
     assert result.returncode != 0
-    assert "ffprobe 返回无效音频时长" in result.stderr
+    assert "ffprobe returned an invalid audio duration" in result.stderr
     _assert_work_dir_cleaned(temp_root)
 
 
@@ -322,7 +322,7 @@ fi
     )
 
     assert result.returncode != 0
-    assert "音频时长超过 3 小时限制" in result.stderr
+    assert "Audio duration exceeds the 3-hour limit" in result.stderr
     assert not ffmpeg_marker.exists()
     curl_calls = curl_log.read_text(encoding="utf-8").splitlines()
     assert len(curl_calls) == 2
