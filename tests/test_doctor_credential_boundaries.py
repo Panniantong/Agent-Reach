@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import time
 
@@ -45,6 +46,8 @@ def test_twitter_doctor_still_avoids_upstream_fallback_with_saved_credentials(
                 "twitter_ct0": "explicit-ct0",
             }.get(key, default)
 
+    monkeypatch.delenv("TWITTER_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("TWITTER_CT0", raising=False)
     monkeypatch.setattr(
         "shutil.which",
         lambda name: "/usr/local/bin/twitter" if name == "twitter" else None,
@@ -55,6 +58,47 @@ def test_twitter_doctor_still_avoids_upstream_fallback_with_saved_credentials(
 
     assert status == "warn"
     assert "已配置" in message
+    assert "不会执行" in message
+    assert "TWITTER_AUTH_TOKEN" not in os.environ
+    assert "TWITTER_CT0" not in os.environ
+
+
+def test_twitter_doctor_invalid_saved_cookies_do_not_report_usable_via_browser_fallback(
+    monkeypatch,
+):
+    """Expired Config cookies must not become a false-positive usable probe.
+
+    Upstream ``twitter status`` re-extracts browser cookies when env
+    credentials fail verification, and that fallback cannot be disabled.
+    Doctor must skip the live probe instead of reporting ok.
+    """
+
+    class Config:
+        def get(self, key, default=None):
+            return {
+                "twitter_auth_token": "expired-auth",
+                "twitter_ct0": "expired-ct0",
+            }.get(key, default)
+
+    def fake_browser_fallback_ok(cmd, **kwargs):
+        # If the live probe ran, upstream could return ok:true from the
+        # browser session even though the saved cookies are dead.
+        return subprocess.CompletedProcess(cmd, 0, "ok: true\n", "")
+
+    monkeypatch.delenv("TWITTER_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("TWITTER_CT0", raising=False)
+    monkeypatch.setattr(
+        "shutil.which",
+        lambda name: "/usr/local/bin/twitter" if name == "twitter" else None,
+    )
+    monkeypatch.setattr(subprocess, "run", fake_browser_fallback_ok)
+
+    channel = TwitterChannel()
+    status, message = channel.check(Config())
+
+    assert status == "warn"
+    assert channel.active_backend is None
+    assert "完整可用" not in message
     assert "不会执行" in message
 
 

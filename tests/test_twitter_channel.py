@@ -9,6 +9,7 @@ from agent_reach.channels.twitter import (
     TwitterChannel,
     twitter_cli_child_env,
 )
+from agent_reach.config import Config
 
 
 def _which(*present):
@@ -26,6 +27,29 @@ def test_twitter_cli_without_explicit_auth_is_unverified():
     assert status == "warn"
     assert "Cookie-Editor" in message
     assert channel.active_backend is None
+
+
+def test_doctor_reads_config_yaml_creds_without_starting_twitter_status(
+    tmp_path, monkeypatch
+):
+    """Saved cookies are recognised; live status is skipped (browser fallback)."""
+    config = Config(config_path=tmp_path / "config.yaml")
+    config.set("twitter_auth_token", "saved-auth-token")
+    config.set("twitter_ct0", "saved-ct0")
+    monkeypatch.delenv("TWITTER_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("TWITTER_CT0", raising=False)
+
+    with patch("shutil.which", side_effect=_which("twitter")), patch(
+        "subprocess.run",
+        side_effect=AssertionError("twitter status must not run"),
+    ):
+        status, message = TwitterChannel().check(config)
+
+    assert status == "warn"
+    assert "已配置" in message
+    assert "不会执行" in message
+    assert "TWITTER_AUTH_TOKEN" not in os.environ
+    assert "TWITTER_CT0" not in os.environ
 
 
 def test_saved_credentials_are_recognised_without_starting_upstream(
@@ -54,6 +78,29 @@ def test_saved_credentials_are_recognised_without_starting_upstream(
     assert "TWITTER_CT0" not in os.environ
 
 
+def test_doctor_does_not_start_twitter_status_when_shell_credentials_present(
+    monkeypatch,
+):
+    config = Mock()
+    config.get.side_effect = lambda key: {
+        "twitter_auth_token": "saved-auth-token",
+        "twitter_ct0": "saved-ct0",
+    }.get(key)
+    monkeypatch.setenv("TWITTER_AUTH_TOKEN", "shell-auth-token")
+    monkeypatch.setenv("TWITTER_CT0", "shell-ct0")
+
+    with patch("shutil.which", side_effect=_which("twitter")), patch(
+        "subprocess.run",
+        side_effect=AssertionError("twitter status must not run"),
+    ):
+        status, message = TwitterChannel().check(config)
+
+    assert status == "warn"
+    assert "不会执行" in message
+    assert os.environ["TWITTER_AUTH_TOKEN"] == "shell-auth-token"
+    assert os.environ["TWITTER_CT0"] == "shell-ct0"
+
+
 def test_child_env_keeps_existing_shell_credentials_authoritative(
     monkeypatch,
 ):
@@ -80,6 +127,25 @@ def test_child_env_supplies_only_missing_saved_credentials(monkeypatch):
     monkeypatch.delenv("TWITTER_CT0", raising=False)
 
     assert twitter_cli_child_env(config) == {"TWITTER_CT0": "saved-ct0"}
+
+
+def test_incomplete_saved_credentials_do_not_start_twitter_status(monkeypatch):
+    config = Mock()
+    config.get.side_effect = lambda key: {
+        "twitter_auth_token": "saved-auth-token",
+        "twitter_ct0": "",
+    }.get(key)
+    monkeypatch.delenv("TWITTER_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("TWITTER_CT0", raising=False)
+
+    with patch("shutil.which", side_effect=_which("twitter")), patch(
+        "subprocess.run",
+        side_effect=AssertionError("twitter status must not run"),
+    ):
+        status, message = TwitterChannel().check(config)
+
+    assert status == "warn"
+    assert "Cookie-Editor" in message
 
 
 def test_bird_with_explicit_env_remains_unverified(monkeypatch):

@@ -399,7 +399,7 @@ If the user wants a different agent to handle it, let them choose.
 | `agent-reach doctor` | Show channel status |
 | `agent-reach watch` | Quick health + update check (for scheduled tasks) |
 | `agent-reach check-update` | Check for new versions |
-| `agent-reach configure twitter-cookies` | 通过隐藏输入保存 Twitter Cookie；直接调用仍需显式环境变量 |
+| `agent-reach configure twitter-cookies` | 通过隐藏输入保存 Twitter Cookie，验证时注入子进程；直接调用仍需显式环境变量 |
 | `agent-reach configure proxy` | 通过隐藏输入保存代理地址；不是自动解锁开关 |
 | `agent-reach configure groq-key` | 通过隐藏输入配置小宇宙转录 Key |
 

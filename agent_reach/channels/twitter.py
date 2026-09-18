@@ -83,9 +83,11 @@ class TwitterChannel(Channel):
     def _check_twitter_cli(self, config=None):
         """Inspect explicit credentials without starting twitter-cli.
 
-        Upstream ``twitter status`` automatically reads browser cookies when
-        credentials are missing *or invalid*. Doctor cannot disable that
-        fallback, so executing it would violate the Cookie-Editor-only policy.
+        Upstream ``twitter status`` re-extracts browser cookies when env
+        credentials are missing *or invalid*, and that fallback has no public
+        disable switch. Running the live probe would let expired Config
+        cookies report as usable. Doctor therefore skips ``twitter status``
+        and only checks that Cookie-Editor credentials are present.
         """
         if not shutil.which("twitter"):
             return None
