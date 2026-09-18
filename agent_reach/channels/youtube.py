@@ -87,7 +87,7 @@ class YouTubeChannel(Channel):
                     )
                 if version < _JS_RUNTIMES_SUPPORTED_FROM:
                     return "warn", (
-                        "yt-dlp 版本过旧，不支持 JS runtime 配置。Upgrade first, then rerun Doctor:\n"
+                        "yt-dlp is too old to support JavaScript runtime configuration. Upgrade first, then rerun Doctor:\n"
                         f"  {_YTDLP_UPGRADE_COMMAND}"
                     )
                 return "warn", (
