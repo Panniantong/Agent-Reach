@@ -230,7 +230,7 @@ class XueqiuChannel(Channel):
         actual post payload (title, description, user, like_count, target).
 
         Args:
-            limit: maximum number of results（上限 50）
+            limit: maximum number of results (up to 50)
 
         Returns a list of dicts with keys:
           id, title, text, author, likes, url
@@ -277,7 +277,7 @@ class XueqiuChannel(Channel):
         """Return the hot-stock ranking.
 
         Args:
-            limit:      maximum number of results（上限 50）
+            limit:      maximum number of results (up to 50)
             stock_type: 10=popularity ranking (default), 12=follow ranking
 
         Returns a list of dicts with keys:
