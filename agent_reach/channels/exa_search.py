@@ -2,6 +2,7 @@
 """Web search — task-aware Tavily primary with Exa specialization/fallback."""
 
 import os
+import re
 import shutil
 
 import requests
@@ -40,7 +41,18 @@ class ExaSearchChannel(Channel):
             "retrieval",
             "semantic",
             "semantic_search",
+            "semantic_discovery",
             "similar",
+            "similar_page",
+            "similar_pages",
+            "technical_research",
+            "research_papers",
+            "financial_reports",
+            "company_profile",
+            "people_search",
+            "person_profile",
+            "rag_retrieval",
+            "retrieval_augmented_generation",
             "相似",
             "语义",
             "语义搜索",
@@ -86,13 +98,27 @@ class ExaSearchChannel(Channel):
         configured = self._configured_backend(config)
         if configured:
             return configured
-        normalized = str(task or "general").strip().casefold().replace("-", "_")
+        normalized = self._normalize_task(task)
         return self.EXA_BACKEND if normalized in self.EXA_TASKS else self.TAVILY_BACKEND
 
-    def ordered_backends(self, config=None):
-        """Prefer Tavily while allowing a reversible backend override."""
+    @staticmethod
+    def _normalize_task(task):
+        """Normalize task labels without treating generic research as Exa."""
+        normalized = str(task or "general").strip().casefold()
+        normalized = re.sub(r"[^0-9a-z\u4e00-\u9fff]+", "_", normalized)
+        normalized = re.sub(r"_+", "_", normalized).strip("_")
+        for prefix in ("category_", "task_", "type_", "类别_", "任务_", "类型_"):
+            if normalized.startswith(prefix):
+                normalized = normalized[len(prefix) :]
+                break
+        return normalized
+
+    def ordered_backends(self, config=None, task=None):
+        """Order backends for a task, with explicit config taking precedence."""
         candidates = list(self.backends)
         preferred = self._configured_backend(config)
+        if not preferred and task is not None:
+            preferred = self.backend_for_task(task)
         if not preferred:
             return candidates
 
@@ -102,12 +128,12 @@ class ExaSearchChannel(Channel):
                 break
         return candidates
 
-    def check(self, config=None):
+    def check(self, config=None, task=None):
         self.active_backend = None
         findings = []
         saw_warn = False
         saw_error = False
-        for backend in self.ordered_backends(config):
+        for backend in self.ordered_backends(config, task=task):
             if backend == self.TAVILY_BACKEND:
                 status, message = self._check_tavily(config)
             else:

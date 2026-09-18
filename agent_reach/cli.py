@@ -1399,6 +1399,14 @@ def _read_configure_value(args) -> str:
 
     if values:
         if getattr(args, "key", None) in _SENSITIVE_CONFIG_KEYS:
+            if getattr(args, "key", None) == "tavily-key":
+                print(
+                    "Refusing a positional Tavily key because shell history and "
+                    "process listings may expose it; omit the value for a hidden "
+                    "prompt or use --stdin.",
+                    file=sys.stderr,
+                )
+                raise SystemExit(2)
             print(
                 "Warning: positional secrets are deprecated because shell history "
                 "and process listings may expose them; omit the value for a hidden "

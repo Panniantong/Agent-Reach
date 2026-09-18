@@ -85,6 +85,12 @@ def test_specialized_tasks_route_to_exa_and_general_tasks_to_tavily():
         "语义",
         "rag",
         "similar",
+        "research paper",
+        "category:research paper",
+        "technical research",
+        "financial report",
+        "similar page",
+        "rag retrieval",
     ):
         assert channel.backend_for_task(task) == channel.EXA_BACKEND
     for task in ("general", "news", "extract", "crawl", "research"):
@@ -95,3 +101,23 @@ def test_explicit_backend_override_wins_over_task_route():
     channel = ExaSearchChannel()
 
     assert channel.backend_for_task("paper", {"search_backend": "tavily"}) == channel.TAVILY_BACKEND
+
+
+def test_task_route_is_used_by_backend_order_and_check(monkeypatch):
+    channel = ExaSearchChannel()
+    assert channel.ordered_backends(task="paper") == [
+        channel.EXA_BACKEND,
+        channel.TAVILY_BACKEND,
+    ]
+
+    calls = []
+    monkeypatch.setattr(
+        channel,
+        "_check_exa",
+        lambda: (calls.append(channel.EXA_BACKEND) or ("ok", "Exa configured")),
+    )
+    status, _ = channel.check(task="paper")
+
+    assert status == "ok"
+    assert channel.active_backend == channel.EXA_BACKEND
+    assert calls == [channel.EXA_BACKEND]

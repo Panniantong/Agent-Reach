@@ -35,7 +35,7 @@ def inspect_mcporter_config(
     """Read the effective local mcporter config without starting mcporter.
 
     An explicit ``MCPORTER_CONFIG`` is a single layer. Otherwise mcporter
-    0.7.3 loads the first home config
+    supported mcporter versions load the first home config
     (``~/.mcporter/mcporter.json`` / ``mcporter.jsonc``) and then
     ``<cwd>/config/mcporter.json``; project entries override duplicate home
     names. Only exact ``mcpServers`` keys are returned. Editor imports are
