@@ -114,6 +114,76 @@ class TestDoctor:
         assert "可选渠道可以解锁" in plain
 
 
+def test_check_all_probes_channels_concurrently(monkeypatch):
+    """探测必须并发：所有渠道同时越过屏障才能通过，串行会触发屏障超时。
+
+    不做墙钟计时断言（CI 上不稳定）；屏障要求 8 个 check() 同时在跑，
+    串行执行时第一个 check() 会等满超时并报 BrokenBarrierError → status=error。
+    同时校验结果顺序仍跟随注册表 —— format_report 的分层渲染依赖此顺序。
+    """
+    import threading
+
+    n = 8
+    barrier = threading.Barrier(n, timeout=5)
+
+    class _BarrierChannel:
+        tier = 0
+        backends = []
+        active_backend = None
+
+        def __init__(self, i):
+            self.name = self.description = f"ch{i}"
+
+        def check(self, config=None):
+            barrier.wait()
+            return "ok", "done"
+
+    monkeypatch.setattr(
+        doctor, "get_all_channels", lambda: [_BarrierChannel(i) for i in range(n)]
+    )
+
+    results = doctor.check_all(config=None)
+
+    assert [r["status"] for r in results.values()] == ["ok"] * n
+    assert list(results.keys()) == [f"ch{i}" for i in range(n)]
+
+
+def test_concurrent_doctor_runs_do_not_cross_contaminate_active_backend(monkeypatch):
+    """渠道是注册表单例，check() 会改写 active_backend；
+
+    两个并发的 doctor 调用必须各自拿到自己那轮探测出的后端，不能互相污染。
+    """
+    import threading
+    import time
+
+    class _SingletonChannel:
+        name = "single"
+        description = "单例渠道"
+        tier = 0
+        backends = ["a", "b"]
+        active_backend = None
+
+        def check(self, config=None):
+            self.active_backend = config["token"]
+            time.sleep(0.05)  # 拉宽竞态窗口
+            return "ok", "done"
+
+    monkeypatch.setattr(doctor, "get_all_channels", lambda: [_SingletonChannel()])
+
+    seen = {}
+
+    def run(token):
+        seen[token] = doctor.check_all({"token": token})["single"]["active_backend"]
+
+    threads = [threading.Thread(target=run, args=(t,)) for t in ("t1", "t2")]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert seen == {"t1": "t1", "t2": "t2"}
+
+
 def test_stale_active_backend_does_not_leak_into_errored_result(monkeypatch):
     """渠道单例上一轮的 active_backend 不得泄漏进本轮异常结果(Codex review 发现)。"""
     from agent_reach import doctor
