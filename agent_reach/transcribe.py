@@ -33,6 +33,7 @@ from urllib.parse import urlparse
 import requests
 
 from agent_reach.config import Config
+from agent_reach.cookie_extract import SUPPORTED_BROWSERS
 
 # Whisper API limit is 25MB; leave headroom for multipart overhead.
 SIZE_LIMIT_BYTES = 24 * 1024 * 1024
@@ -247,7 +248,28 @@ def _assert_safe_public_url(url: str) -> None:
         raise TranscribeError("SSRF blocked: private/internal IP is not allowed")
 
 
-def download_audio(url: str, out_dir: Path) -> Path:
+def _yt_dlp_cookies_from_browser_args(config: Optional[Config]) -> List[str]:
+    """Return ``--cookies-from-browser`` argv when Config names a known browser."""
+    if config is None:
+        return []
+    raw = config.get("youtube_cookies_from")
+    if raw is None:
+        return []
+    browser = str(raw).strip().lower()
+    if not browser:
+        return []
+    if browser not in SUPPORTED_BROWSERS:
+        supported = ", ".join(SUPPORTED_BROWSERS)
+        raise TranscribeError(f"invalid youtube_cookies_from {browser!r}; supported: {supported}")
+    return ["--cookies-from-browser", browser]
+
+
+def download_audio(
+    url: str,
+    out_dir: Path,
+    *,
+    config: Optional[Config] = None,
+) -> Path:
     """Download audio with yt-dlp into out_dir; return the resulting file path."""
     _assert_safe_public_url(url)
     _require("yt-dlp")
@@ -265,6 +287,7 @@ def download_audio(url: str, out_dir: Path) -> Path:
             str(MAX_SOURCE_BYTES),
             "-o",
             str(template),
+            *_yt_dlp_cookies_from_browser_args(config),
             "--",
             url,
         ],
@@ -449,7 +472,7 @@ def _transcribe_in_dir(source: str, order: List[str], cfg: Config, work_dir: Pat
     if src_path.is_file():
         audio = src_path
     else:
-        audio = download_audio(source, work_dir)
+        audio = download_audio(source, work_dir, config=cfg)
 
     _require_size_at_most(audio, MAX_SOURCE_BYTES, "source")
     _require_duration_within_budget(audio)

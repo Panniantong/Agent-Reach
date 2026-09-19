@@ -546,7 +546,7 @@ class TestOrchestrator:
                     child.unlink()
                 self.path.rmdir()
 
-        def fake_download(source, out_dir):
+        def fake_download(source, out_dir, *, config=None):
             assert Path(out_dir) == tmp_path / "auto-work"
             audio = Path(out_dir) / "source.m4a"
             audio.write_bytes(b"audio")
@@ -582,7 +582,7 @@ class TestOrchestrator:
         fake_config.set("groq_api_key", "gsk_test")
         work = tmp_path / "caller-owned"
 
-        def fake_download(source, out_dir):
+        def fake_download(source, out_dir, *, config=None):
             audio = Path(out_dir) / "source.m4a"
             audio.write_bytes(b"audio")
             return audio
@@ -771,6 +771,136 @@ class TestDownloadAudioSafety:
         tr.download_audio(url, tmp_path)
 
         assert captured["cmd"][-1] == url
+
+
+class TestDownloadAudioYoutubeCookies:
+    """configure youtube-cookies must reach yt-dlp as --cookies-from-browser."""
+
+    def _stub_yt_dlp(self, monkeypatch, tmp_path):
+        captured: dict = {}
+
+        def fake_run(cmd, timeout=600):
+            captured["cmd"] = cmd
+            (tmp_path / "source.m4a").write_bytes(b"audio")
+
+        monkeypatch.setattr(tr, "_require", lambda _binary: None)
+        monkeypatch.setattr(tr, "_run", fake_run)
+        return captured
+
+    def test_includes_cookies_from_browser_when_configured(
+        self, monkeypatch, fake_config, tmp_path
+    ):
+        fake_config.set("youtube_cookies_from", "chrome")
+        captured = self._stub_yt_dlp(monkeypatch, tmp_path)
+
+        tr.download_audio(
+            "https://example.com/watch?v=123",
+            tmp_path,
+            config=fake_config,
+        )
+
+        cmd = captured["cmd"]
+        flag_index = cmd.index("--cookies-from-browser")
+        assert cmd[flag_index + 1] == "chrome"
+        assert cmd.index("--") > flag_index
+        assert "--cookies" not in cmd
+
+    def test_omits_cookie_flags_when_unset(self, monkeypatch, fake_config, tmp_path):
+        captured = self._stub_yt_dlp(monkeypatch, tmp_path)
+
+        tr.download_audio(
+            "https://example.com/watch?v=123",
+            tmp_path,
+            config=fake_config,
+        )
+
+        cmd = captured["cmd"]
+        assert "--cookies-from-browser" not in cmd
+        assert "--cookies" not in cmd
+
+    def test_configure_youtube_cookies_then_download_uses_browser(self, monkeypatch, tmp_path):
+        from argparse import Namespace
+
+        import agent_reach.cli as cli
+
+        cli._cmd_configure(
+            Namespace(
+                from_browser=None,
+                key="youtube-cookies",
+                value=["chrome"],
+            )
+        )
+        cfg = Config()
+        assert cfg.get("youtube_cookies_from") == "chrome"
+        captured = self._stub_yt_dlp(monkeypatch, tmp_path)
+
+        tr.download_audio(
+            "https://example.com/watch?v=123",
+            tmp_path,
+            config=cfg,
+        )
+
+        cmd = captured["cmd"]
+        flag_index = cmd.index("--cookies-from-browser")
+        assert cmd[flag_index + 1] == "chrome"
+
+    def test_rejects_invalid_browser_before_yt_dlp(self, monkeypatch, fake_config, tmp_path):
+        fake_config.set("youtube_cookies_from", "chrome; rm -rf /")
+        monkeypatch.setattr(tr, "_require", lambda _binary: None)
+        monkeypatch.setattr(
+            tr,
+            "_run",
+            lambda *_args, **_kwargs: pytest.fail(
+                "invalid youtube_cookies_from must not reach yt-dlp"
+            ),
+        )
+
+        with pytest.raises(tr.TranscribeError, match="youtube_cookies_from"):
+            tr.download_audio(
+                "https://example.com/watch?v=123",
+                tmp_path,
+                config=fake_config,
+            )
+
+    def test_transcribe_threads_configured_cookies_into_yt_dlp(
+        self,
+        monkeypatch,
+        fake_config,
+        tmp_path,
+        bounded_audio_duration,
+    ):
+        fake_config.set("groq_api_key", "gsk_test")
+        fake_config.set("youtube_cookies_from", "firefox")
+        work = tmp_path / "work"
+        captured: dict = {}
+
+        def fake_run(cmd, timeout=600):
+            captured["cmd"] = cmd
+            Path(cmd[cmd.index("-o") + 1].replace("%(ext)s", "m4a")).write_bytes(b"audio")
+
+        compressed = tmp_path / "compressed.m4a"
+        compressed.write_bytes(b"x" * 1024)
+        monkeypatch.setattr(tr, "_require", lambda _binary: None)
+        monkeypatch.setattr(tr, "_run", fake_run)
+        monkeypatch.setattr(tr, "compress_audio", lambda *_args: compressed)
+        monkeypatch.setattr(
+            tr.requests,
+            "post",
+            lambda *a, **k: FakeResponse(200, "transcript"),
+        )
+
+        text = tr.transcribe(
+            "https://example.com/watch?v=123",
+            out_dir=work,
+            config=fake_config,
+        )
+
+        assert text == "transcript"
+        cmd = captured["cmd"]
+        assert cmd[0] == "yt-dlp"
+        flag_index = cmd.index("--cookies-from-browser")
+        assert cmd[flag_index + 1] == "firefox"
+        assert cmd.index("--") > flag_index
 
 
 class TestMediaGenerationBudget:
