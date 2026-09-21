@@ -40,11 +40,11 @@ agent-reach configure xhs-cookies
 # 只读检查当前状态
 mcporter call xiaohongshu.check_login_status --timeout 120000
 
-# 搜索
-mcporter call xiaohongshu.search_feeds keyword="query" --timeout 120000
+# 搜索（mcporter 的 key=value 不会剥引号：值含空格时引号包住整个 token，不要写 key="value"）
+mcporter call xiaohongshu.search_feeds keyword=query --timeout 120000
 
 # 笔记详情+评论（feed_id 和 xsec_token 从搜索结果取）
-mcporter call xiaohongshu.get_feed_detail feed_id="..." xsec_token="..." --timeout 120000
+mcporter call xiaohongshu.get_feed_detail feed_id=... xsec_token=... --timeout 120000
 ```
 
 > 首次调用会自动下载约 150MB 无头浏览器，务必带 `--timeout 120000`。
