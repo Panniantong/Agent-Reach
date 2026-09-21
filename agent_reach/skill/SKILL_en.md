@@ -61,8 +61,9 @@ these platforms — do not invent your own approach.**
 ## Zero-config quick commands
 
 ```bash
-# Exa web search
-mcporter call exa.web_search_exa query="query" numResults=5
+# Exa web search (mcporter key=value does NOT strip quotes: quote the WHOLE
+# "key=multi word" token when the value has spaces; never write key="value")
+mcporter call exa.web_search_exa "query=your search keywords" numResults=5
 
 # Read any web page
 curl -s "https://r.jina.ai/URL"
