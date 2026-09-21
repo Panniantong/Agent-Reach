@@ -4,10 +4,12 @@ Twitter 基础阅读通过 Jina Reader 免费可用，无需配置。
 
 高级功能需要 twitter-cli（@public-clis/twitter-cli）：
 
-- 搜索推文（`twitter search`）
-- 读取完整推文和对话链（`twitter tweet`、`twitter thread`）
-- 用户时间线（`twitter timeline`）
+- 读取完整推文和对话链（`twitter tweet`）
+- 用户时间线（`twitter user-posts`、`twitter feed`）
+- 当前账号（`twitter whoami`）
 - 长文阅读（`twitter article`）
+
+关键词搜索在 PyPI twitter-cli **0.8.5**（目前没有更新的 release）上不可用，见文末。不要把 `pipx install twitter-cli` 换成某个未合并的 PR 分支。
 
 twitter-cli 是免费开源工具（pipx 安装），但需要你的 Twitter 账号 cookie。
 
@@ -60,8 +62,9 @@ agent-reach configure twitter-cookies --sync-legacy-twitter
 先让用户确认，再手工删除上述两个文件。
 
 `twitter` 是独立的上游命令，不会读取 Agent Reach 的配置文件。直接运行
-`twitter status/search/read/...` 时，必须按下节在当前 Shell 或子进程环境中
+`twitter whoami` / `user-posts` / `feed` 时，必须按下节在当前 Shell 或子进程环境中
 显式设置 `TWITTER_AUTH_TOKEN` 和 `TWITTER_CT0`。不要依赖自动读取浏览器 Cookie。
+关键词搜索不要用 `twitter search`，见文末。
 
 ## 手动设置 Cookie
 
@@ -76,10 +79,10 @@ export TWITTER_AUTH_TOKEN="你的auth_token"
 export TWITTER_CT0="你的ct0"
 ```
 
-3. 测试：
+3. 测试凭据（不要用 `twitter search`，0.8.5 上它会 404）：
 
 ```bash
-twitter search "test" -n 1
+twitter whoami
 ```
 
 ## 代理配置
@@ -89,14 +92,41 @@ twitter search "test" -n 1
 ```bash
 export HTTP_PROXY="http://user:pass@host:port"
 export HTTPS_PROXY="http://user:pass@host:port"
-twitter search "test" -n 1
+twitter whoami
 ```
 
 也可以使用全局代理工具：
 
 ```bash
-proxychains twitter search "test" -n 1
+proxychains twitter whoami
 ```
+
+## 关键词搜索：ClientTransaction + HTTP 404
+
+`twitter whoami` / `twitter user-posts` 成功，并不代表 `twitter search` 可用。
+0.8.5 初始化 ClientTransaction 时匿名抓取 `https://x.com`，登出首页匹配不到
+`ondemand.s`，于是出现：
+
+```text
+WARNING twitter_cli.client: Failed to init ClientTransaction: 'NoneType' object has no attribute 'group'
+Twitter API error (HTTP 404)
+```
+
+这条警告也会出现在成功的 whoami / user-posts 上；只有 search 接着 HTTP 404
+才是这个故障。不要重试 `twitter search`，也不要 `pipx upgrade twitter-cli`
+（会停在 0.8.5）。`twitter feed` 和 `twitter user-posts` 不是关键词搜索。
+上游修复尚未发布：<https://github.com/public-clis/twitter-cli/issues/78>。
+
+```bash
+# 桌面，Chrome 已登录 x.com
+opencli twitter search "query" -f yaml
+
+# 否则：Exa 公开网页（不是登录态 SearchTimeline）
+mcporter call exa.web_search_exa "query=site:x.com 搜索词" numResults=5
+```
+
+`twitter --version` 高于 0.8.5，且该版本已经用登录态请求首页来初始化
+ClientTransaction 之后，再使用 `twitter search`。
 
 ## Fallback：bird CLI
 

@@ -962,14 +962,25 @@ def _install_xiaoyuzhou_deps():
     return script_ok and ffmpeg_ok
 
 
+def _print_twitter_search_limitation():
+    """Non-fatal note: PyPI 0.8.5 keyword search is broken upstream."""
+    from agent_reach.channels.twitter import TWITTER_SEARCH_CLIENT_TRANSACTION_NOTE
+
+    print(f"  [!] {TWITTER_SEARCH_CLIENT_TRANSACTION_NOTE}")
+
+
 def _install_twitter_deps():
-    """Install twitter-cli for Twitter search + timeline."""
+    """Install twitter-cli for Twitter timelines. Keyword search has a fallback.
+
+    Stay on the PyPI package. Do not pin an unmerged twitter-cli PR branch.
+    """
     import shutil
     import subprocess
 
     print("Setting up Twitter (twitter-cli)...")
     if shutil.which("twitter"):
         print("  ✅ twitter-cli already installed")
+        _print_twitter_search_limitation()
         return True
     for tool, args in [
         ("pipx", ["install", "twitter-cli"]),
@@ -984,6 +995,7 @@ def _install_twitter_deps():
                 )
                 if result.returncode == 0 and shutil.which("twitter"):
                     print("  ✅ twitter-cli installed")
+                    _print_twitter_search_limitation()
                     return True
             except (OSError, subprocess.TimeoutExpired):
                 pass
@@ -1555,6 +1567,7 @@ def _cmd_configure(args):
                     "  注意：独立 `twitter` 命令不会读取 Agent Reach 配置；"
                     "直接使用时需显式设置 TWITTER_AUTH_TOKEN/TWITTER_CT0。"
                 )
+            _print_twitter_search_limitation()
         else:
             print("[X] Could not find auth_token and ct0 in your input.")
             print("   Run `agent-reach configure twitter-cookies` and paste either:")

@@ -54,9 +54,50 @@ agent-reach doctor    # boss 行 message 应显示「浏览器内有登录 cooki
 
 ---
 
+## Twitter/X: `twitter search` 报 ClientTransaction + HTTP 404
+
+**症状：** `twitter whoami` 和 `twitter user-posts` 正常，但任何
+`twitter search` 都失败，例如：
+
+```text
+WARNING twitter_cli.client: Failed to init ClientTransaction: 'NoneType' object has no attribute 'group'
+{"ok": false, "error": {"code": "not_found", "message": "Twitter API error (HTTP 404): ..."}}
+```
+
+同一条 ClientTransaction 警告也会出现在成功的 whoami / user-posts 上。
+只有 search 接着返回 HTTP 404 / `not_found` 才是这条故障。
+
+**原因：** PyPI 的 twitter-cli **0.8.5**（目前没有更新的 release）在初始化
+ClientTransaction 时匿名抓取 `https://x.com`。登出首页已经匹配不到
+`ondemand.s`，于是没有 `x-client-transaction-id`，SearchTimeline 退回到过期
+queryId 并 404。这不是 Cookie 失效，也不是代理问题。上游登录态抓首页的修复
+还没发布：<https://github.com/public-clis/twitter-cli/issues/78>。
+
+**不要**再重试 `twitter search`，也**不要** `pipx upgrade twitter-cli`
+（升级会停在 0.8.5）。`twitter feed` / `twitter user-posts` 仍然可用，但不是
+关键词搜索。不要安装未合并的 twitter-cli PR 分支。
+
+**关键词搜索：**
+
+```bash
+# 桌面，Chrome 已登录 x.com
+opencli twitter search "query" -f yaml
+
+# 否则：Exa 公开网页索引（不是登录态 SearchTimeline）
+mcporter call exa.web_search_exa "query=site:x.com 搜索词" numResults=5
+```
+
+`twitter --version` 高于 0.8.5，且该版本已经用登录态请求首页来初始化
+ClientTransaction 之后，再把 `twitter search` 当搜索入口。
+
+---
+
 ## Twitter/X: twitter-cli 连接失败
 
-**症状：** `twitter search` 或其他命令返回错误
+本节只处理缺凭据、代理和网络。如果 stderr 是上一节的 ClientTransaction，
+并且 search 返回 HTTP 404，不要按本节重试 `twitter search`。
+
+**症状：** `twitter` 命令返回错误，且**不是** ClientTransaction + HTTP 404
 
 **原因：** twitter-cli 需要 `TWITTER_AUTH_TOKEN` 和 `TWITTER_CT0`
 环境变量才能访问 Twitter API。`agent-reach configure twitter-cookies`
@@ -65,14 +106,16 @@ Shell。如果你的网络环境需要代理才能访问 x.com，还需要配置
 
 **解决方案：**
 
-### 方案 1：设置环境变量代理
+### 方案 1：设置环境变量与代理
+
+用 `whoami` 确认凭据和网络。0.8.5 上不要用 `twitter search` 当健康检查。
 
 ```bash
 export TWITTER_AUTH_TOKEN="..."
 export TWITTER_CT0="..."
 export HTTP_PROXY="http://user:pass@host:port"
 export HTTPS_PROXY="http://user:pass@host:port"
-twitter search "test" -n 1
+twitter whoami
 ```
 
 ### 方案 2：使用全局代理工具
@@ -82,21 +125,22 @@ twitter search "test" -n 1
 ```bash
 # macOS — ClashX / Surge 开启"增强模式"
 # Linux — proxychains 或 tun2socks
-proxychains twitter search "test" -n 1
+proxychains twitter whoami
 ```
 
 ### 方案 3：不用 twitter-cli，用 Exa 搜索替代
 
-twitter-cli 不可用时，可以直接用 Exa 搜索 Twitter 内容：
+twitter-cli 不可用，或 search 命中上一节的 ClientTransaction / HTTP 404 时，
+用 Exa 搜索公开的 Twitter 网页：
 
 ```bash
-mcporter call exa.web_search_exa query="site:x.com 搜索词" numResults=5
+mcporter call exa.web_search_exa "query=site:x.com 搜索词" numResults=5
 ```
 
 ### 方案 4：检查认证
 
 ```bash
-twitter check
+twitter whoami
 ```
 
 > 如果返回 "Missing credentials"，需要在运行该命令的进程环境中设置

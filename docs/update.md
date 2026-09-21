@@ -52,7 +52,10 @@ installed — do not install new tools the user never asked for** (the one
 exception: OpenCLI on desktop, see below).
 
 ```bash
-# Python-based CLIs the user already has (upgrade keeps signatures fresh)
+# Python-based CLIs the user already has (upgrade keeps signatures fresh).
+# twitter-cli: PyPI is still 0.8.5. This upgrade does not fix ClientTransaction
+# search HTTP 404s (https://github.com/public-clis/twitter-cli/issues/78).
+# Keyword search stays on `opencli twitter search` or Exa `site:x.com`.
 which twitter >/dev/null 2>&1 && { pipx upgrade twitter-cli 2>/dev/null || uv tool upgrade twitter-cli 2>/dev/null; }
 which bili    >/dev/null 2>&1 && { pipx upgrade bilibili-cli 2>/dev/null || uv tool upgrade bilibili-cli 2>/dev/null; }
 which xhs     >/dev/null 2>&1 && { pipx upgrade xiaohongshu-cli 2>/dev/null || uv tool upgrade xiaohongshu-cli 2>/dev/null; }

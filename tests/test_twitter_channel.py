@@ -25,6 +25,7 @@ def test_twitter_cli_without_explicit_auth_is_unverified():
 
     assert status == "warn"
     assert "Cookie-Editor" in message
+    assert "ClientTransaction" not in message
     assert channel.active_backend is None
 
 
@@ -48,6 +49,10 @@ def test_saved_credentials_are_recognised_without_starting_upstream(
     assert status == "warn"
     assert "已配置" in message
     assert "不会执行" in message
+    assert "ClientTransaction" in message
+    assert "HTTP 404" in message
+    assert "opencli twitter search" in message
+    assert "site:x.com" in message
     assert channel.active_backend is None
     run.assert_not_called()
     assert "TWITTER_AUTH_TOKEN" not in os.environ

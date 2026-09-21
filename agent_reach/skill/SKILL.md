@@ -111,8 +111,17 @@ Boss直聘配置触发：当用户说“帮我配 Boss直聘”时，先读取 `
 遇到 `ENVIRONMENT_RISK` 立即停止，不刷新、不重新登录、不自动重试。
 
 ```bash
-# Twitter 搜索（twitter-cli 首选；失败重试链见 social.md）
-twitter search "query" -n 10
+# Twitter 关键词搜索：PyPI twitter-cli 0.8.5 的 `twitter search` 会失败。
+# 签名（whoami / user-posts 仍可能成功，警告也会出现在那些成功调用上）：
+#   Failed to init ClientTransaction: 'NoneType' object has no attribute 'group'
+#   Twitter API error (HTTP 404)
+# 看到该签名不要重试，不要 pipx upgrade。立刻用同能力命令（细节见 social.md）。
+# 上游尚未发布：https://github.com/public-clis/twitter-cli/issues/78
+opencli twitter search "query" -f yaml
+mcporter call exa.web_search_exa "query=site:x.com 搜索词" numResults=5
+
+# Twitter 时间线 / 用户帖仍用 twitter-cli（先设 TWITTER_AUTH_TOKEN 与 TWITTER_CT0）
+twitter user-posts @username -n 20
 
 # Reddit（无零配置路径：OpenCLI 或 rdt-cli，必须登录态）
 opencli reddit search "query" -f yaml   # 桌面

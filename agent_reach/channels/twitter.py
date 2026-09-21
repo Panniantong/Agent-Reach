@@ -8,6 +8,21 @@ from agent_reach.utils.url import host_matches
 
 from .base import Channel
 
+# PyPI twitter-cli 0.8.5 fetches https://x.com with no cookies while building
+# ClientTransaction. The logged-out homepage no longer matches ondemand.s, so
+# `.group(1)` raises and search falls back to a stale SearchTimeline queryId
+# (HTTP 404). whoami / user-posts / feed do not need that header. Doctor must
+# not shell out to `twitter status` or `twitter search` to detect this.
+TWITTER_SEARCH_CLIENT_TRANSACTION_NOTE = (
+    "PyPI twitter-cli 0.8.5 的 `twitter search` 会因 ClientTransaction "
+    "初始化失败（'NoneType' object has no attribute 'group'）返回 HTTP 404。"
+    "whoami / user-posts / feed 不受影响。不要重试，也不要 pipx upgrade"
+    "（PyPI 没有更新的版本）。关键词搜索改用 `opencli twitter search` "
+    "或 Exa `site:x.com`。上游尚未发布修复："
+    "https://github.com/public-clis/twitter-cli/issues/78 。"
+    "`twitter --version` 高于 0.8.5 且已改为登录态抓取首页后，可忽略本提示。"
+)
+
 
 def twitter_cli_child_env(config=None) -> dict[str, str]:
     """Return saved credentials missing from the current process environment.
@@ -99,7 +114,8 @@ class TwitterChannel(Channel):
             return "warn", (
                 "twitter-cli 已安装，且 Cookie-Editor 凭据已配置；"
                 "Doctor 不会执行 `twitter status`，因为上游在验证失败时会"
-                "自动读取浏览器 Cookie。请在你明确同意时手动验证。"
+                "自动读取浏览器 Cookie。请在你明确同意时手动验证。\n"
+                + TWITTER_SEARCH_CLIENT_TRANSACTION_NOTE
             )
         return "warn", (
             "twitter-cli 已安装但没有完整的显式凭据。请用 Cookie-Editor "
