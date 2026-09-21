@@ -153,8 +153,8 @@ Some channels need credentials only the user can provide. Based on the doctor ou
 >
 > Twitter 只接受用户通过 Cookie-Editor 明确导出的内容。Agent Reach 不替用户执行小红书登录，也不读取小红书浏览器 Cookie；小红书 OpenCLI 只使用用户已有且明确控制的 Chrome 会话。没有现成会话时，改用 Cookie-Editor 导出后配置 xiaohongshu-mcp / 存量工具。雪球、Bilibili 可按平台显式导入，例如 `agent-reach configure --from-browser chrome --platform xueqiu`；命令不会扫描或保存其他平台。
 
-**Twitter search & posting:**
-> "To unlock Twitter search, I need your Twitter cookies. Install the Cookie-Editor Chrome extension, go to x.com/twitter.com, click the extension → Export → Header String, and paste it to me."
+**Twitter cookies:**
+> "To use twitter-cli for whoami, user posts, and timelines, I need your Twitter cookies. Install the Cookie-Editor Chrome extension, go to x.com, click the extension → Export → Header String, and paste it to me. Keyword search on PyPI twitter-cli 0.8.5 fails with ClientTransaction / HTTP 404; I will use OpenCLI or Exa site:x.com for search instead of retrying twitter search."
 
 ```bash
 agent-reach configure twitter-cookies
@@ -162,13 +162,26 @@ agent-reach configure twitter-cookies
 
 这会把 `twitter_auth_token` 和 `twitter_ct0` 保存给 Agent Reach 自己的
 `doctor` 配置检查。`doctor` 不会实时执行上游 `twitter status`，也不会修改
-当前 Shell。直接运行 `twitter search/read/...` 前，必须在该进程环境中显式设置：
+当前 Shell。直接运行 `twitter whoami` / `user-posts` / `feed` 前，必须在该进程环境中显式设置：
 
 ```bash
 export TWITTER_AUTH_TOKEN="..."
 export TWITTER_CT0="..."
-twitter search "query" -n 10
+twitter whoami
 ```
+
+PyPI twitter-cli **0.8.5** 没有更新的 release。`twitter search` 会因
+ClientTransaction 初始化失败（`'NoneType' object has no attribute 'group'`）
+返回 HTTP 404；whoami / user-posts / feed 仍可用。看到该签名不要重试，也不要
+`pipx upgrade twitter-cli`。关键词搜索：
+
+```bash
+opencli twitter search "query" -f yaml
+mcporter call exa.web_search_exa "query=site:x.com 搜索词" numResults=5
+```
+
+上游：<https://github.com/public-clis/twitter-cli/issues/78>。`twitter --version`
+高于 0.8.5 且已改为登录态抓取首页后，再把 `twitter search` 当搜索入口。
 
 > **代理说明（中国大陆等需要翻墙的网络环境）：**
 >
@@ -407,7 +420,7 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 
 | Platform | Upstream Tool | Example |
 |----------|--------------|---------|
-| Twitter/X | `twitter`（备选 `opencli`） | 设置 `TWITTER_AUTH_TOKEN` / `TWITTER_CT0` 后运行 `twitter search "query" -n 10` |
+| Twitter/X | `twitter`（搜索改 `opencli` / Exa） | 凭据用 `twitter whoami` 检查。0.8.5 的 `twitter search` 会 ClientTransaction + HTTP 404，关键词搜索用 `opencli twitter search "query" -f yaml` 或 `mcporter call exa.web_search_exa "query=site:x.com 搜索词" numResults=5` |
 | YouTube | `yt-dlp` | `yt-dlp --dump-json URL` |
 | Bilibili | `bili`（字幕走 `opencli`） | `bili search "query" --type video` / `opencli bilibili subtitle BVxxx` |
 | Reddit | `opencli`（备选 `rdt`） | `opencli reddit search "query" -f yaml` / `rdt read POST_ID` |

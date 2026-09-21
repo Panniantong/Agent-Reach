@@ -4,7 +4,7 @@
 Exa 是一个 AI 语义搜索引擎。通过 MCP 接入，**免费、无需 API Key**。配置后解锁：
 - 全网语义搜索
 - Reddit 搜索（通过 site:reddit.com）
-- Twitter 搜索（通过 site:x.com）
+- Twitter 关键词搜索（通过 site:x.com）。PyPI twitter-cli 0.8.5 的 `twitter search` 会因 ClientTransaction 返回 HTTP 404 时，用这条路径，不要重试 twitter-cli 搜索
 
 ## Agent 可自动完成的步骤
 

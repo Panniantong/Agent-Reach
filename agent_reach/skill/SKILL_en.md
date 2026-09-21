@@ -94,8 +94,18 @@ by the user. If none exists, do not automate login; use a manual Cookie-Editor
 export with xiaohongshu-mcp or a legacy tool instead.
 
 ```bash
-# Twitter search (twitter-cli preferred; retry chain in social.md)
-twitter search "query" -n 10
+# Twitter keyword search: PyPI twitter-cli 0.8.5 `twitter search` fails.
+# Signature (whoami / user-posts can still succeed; the warning shows there too):
+#   Failed to init ClientTransaction: 'NoneType' object has no attribute 'group'
+#   Twitter API error (HTTP 404)
+# On that signature do not retry and do not pipx upgrade. Use a real search path
+# (full chain in references/social.md). Upstream is unreleased:
+# https://github.com/public-clis/twitter-cli/issues/78
+opencli twitter search "query" -f yaml
+mcporter call exa.web_search_exa "query=site:x.com your keywords" numResults=5
+
+# Timelines and user posts still use twitter-cli (set TWITTER_AUTH_TOKEN and TWITTER_CT0 first)
+twitter user-posts @username -n 20
 
 # Reddit (NO zero-config path — OpenCLI or rdt-cli, login required)
 opencli reddit search "query" -f yaml   # desktop

@@ -92,6 +92,8 @@ export TWITTER_CT0="..."
 
 ### 稳定命令
 
+`twitter feed` / `twitter user-posts` / `twitter tweet` / `twitter whoami` 不依赖 SearchTimeline 的 transaction id，同一套 Cookie 下通常可用。它们不是关键词搜索结果，不能用来冒充 `twitter search`。
+
 ```bash
 # 首页时间线（最稳定）
 twitter feed -n 20
@@ -109,33 +111,51 @@ twitter user-posts @username -n 20
 twitter user @username
 ```
 
-### 可能不稳定的命令
+### search 失败时的重试链（ClientTransaction / HTTP 404：不要重试 twitter-cli）
+
+PyPI 上的 twitter-cli **0.8.5** 是目前最新 release，没有更新的版本。它在初始化 `ClientTransaction` 时匿名请求 `https://x.com`。登出首页已经匹配不到 `ondemand.s`，`whoami` / `user-posts` 仍成功时，`twitter search` 固定失败：
+
+```text
+WARNING twitter_cli.client: Failed to init ClientTransaction: 'NoneType' object has no attribute 'group'
+{"ok": false, "error": {"code": "not_found", "message": "Twitter API error (HTTP 404): ..."}}
+```
+
+同一条 ClientTransaction 警告也会打在成功的 whoami / user-posts 上。**只有 search 同时出现 HTTP 404 / `not_found` 才是这条故障**（没有 `x-client-transaction-id`，退回到过期的 SearchTimeline queryId）。这不是 Cookie 失效，也不是代理问题。上游登录态抓首页的修复还没发布：[public-clis/twitter-cli#78](https://github.com/public-clis/twitter-cli/issues/78)。
+
+看到这个签名时立刻停，不要做这些：
+
+- 不要再跑 `twitter search`（重试结果一样）
+- 不要跑 `pipx upgrade twitter-cli` 或 `uv tool upgrade twitter-cli`（会停在 0.8.5）
+- 不要把 `twitter feed` / `twitter user-posts` 写成关键词搜索结果
+
+关键词搜索改走下面的同能力路径（成功即停）：
+
+1. 桌面且 Chrome 已登录 x.com：`opencli twitter search "query" -f yaml`
+2. 否则用 Exa 搜公开网页（不需要 Twitter Cookie）：
 
 ```bash
-# 搜索推文（Twitter 频繁改 GraphQL 端点，可能 404）
-twitter search "query" -n 10
+mcporter call exa.web_search_exa "query=site:x.com 搜索词" numResults=5
+```
 
+Exa 是 `site:x.com` 网页索引，不是登录态 SearchTimeline。汇报时写明来源。
+
+只有错误**不是** ClientTransaction + HTTP 404（缺 `TWITTER_AUTH_TOKEN` / `TWITTER_CT0`、代理或网络）时，才补凭据或代理，然后再试一次 `twitter search`。`twitter --version` 高于 0.8.5，且该版本已经用登录态请求首页来初始化 ClientTransaction 之后，才把 `twitter search` 收回来当搜索入口。不要为了这条故障去安装未合并的 twitter-cli PR 分支。
+
+```bash
 # likes（2024 年后只能看自己的，平台限制）
 twitter likes
 ```
 
-### search 失败时的重试链（按序执行，成功即停）
-
-1. 直接重试一次（偶发失败常见）：`twitter search "query" -n 10`
-2. 升级后再试：`pipx upgrade twitter-cli && twitter search "query" -n 10`
-3. 换 OpenCLI 备选（桌面，复用浏览器登录态）：`opencli twitter search "query" -f yaml`
-4. 都不行就改用 `twitter feed` / `twitter user-posts @somebody` 等稳定命令绕路
-
 ### 重要注意事项
 
-> **安装**: `pipx install twitter-cli`（确保 v0.8.5+）
+> **安装**: `pipx install twitter-cli`（PyPI 默认。0.8.5 的关键词搜索有上面的已知故障，安装命令不要改成某个未合并的 PR）
 >
 > **认证**: 只用 Cookie-Editor 手工导出，再显式设置环境变量
 > `TWITTER_AUTH_TOKEN` + `TWITTER_CT0`；不要依赖自动浏览器读取。
 >
 > **IP 风控**: 不要在 VPS/数据中心 IP 上频繁调用，尤其是 followers/following，有封号风险。使用住宅代理或本地环境。
 >
-> **OpenCLI 备选**: 桌面装了 OpenCLI 的话，`opencli twitter search/article/user-posts -f yaml` 全套可用（浏览器登录态，无需 cookie 环境变量）。
+> **OpenCLI**: 桌面装了 OpenCLI 时，关键词搜索用 `opencli twitter search "query" -f yaml`（浏览器登录态，无需 cookie 环境变量）。`opencli twitter article` / `user-posts` 是阅读备选，不是搜索结果。
 >
 > **输出格式**: 建议用 `--yaml` 或 `--json` 获得结构化输出，对 AI agent 更友好。
 

@@ -183,8 +183,29 @@ class TestCLI:
         output = capsys.readouterr().out
         assert "未实时验证" in output
         assert "不会执行 `twitter status`" in output
+        assert "ClientTransaction" in output
+        assert "HTTP 404" in output
         assert cli.os.environ["TWITTER_AUTH_TOKEN"] == "shell-auth"
         assert cli.os.environ["TWITTER_CT0"] == "shell-ct0"
+
+    def test_install_twitter_notes_search_limitation_without_running_cli(
+        self, monkeypatch, capsys
+    ):
+        monkeypatch.setattr(
+            shutil, "which", lambda name: "/bin/twitter" if name == "twitter" else None
+        )
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: pytest.fail("install must not execute twitter"),
+        )
+
+        assert cli._install_twitter_deps() is True
+        output = capsys.readouterr().out
+        assert "already installed" in output
+        assert "ClientTransaction" in output
+        assert "opencli twitter search" in output
+        assert "issues/78" in output
 
     def test_install_rdt_cli_prefers_github_source(self, monkeypatch, capsys):
         state = {"rdt_installed": False}

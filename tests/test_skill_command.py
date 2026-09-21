@@ -250,6 +250,38 @@ class TestSkillCommand(unittest.TestCase):
                 os.path.exists(os.path.join(skill_parent, "agent-reach", "references"))
             )
 
+    def test_twitter_keyword_search_uses_clienttransaction_fallback(self):
+        """0.8.5 search 404s must skip retry/upgrade and name OpenCLI/Exa."""
+        root = Path(__file__).resolve().parents[1]
+        documents = {
+            root / "agent_reach" / "skill" / "references" / "social.md",
+            root / "agent_reach" / "skill" / "SKILL.md",
+            root / "agent_reach" / "skill" / "SKILL_en.md",
+            root / "docs" / "troubleshooting.md",
+            root / "agent_reach" / "guides" / "setup-twitter.md",
+        }
+        required = (
+            "ClientTransaction",
+            "has no attribute 'group'",
+            "HTTP 404",
+            'opencli twitter search "query" -f yaml',
+            "site:x.com",
+            "https://github.com/public-clis/twitter-cli/issues/78",
+            "0.8.5",
+            "whoami",
+        )
+        forbidden = (
+            "pipx upgrade twitter-cli && twitter search",
+            "直接重试一次",
+            'query="site:x.com',
+        )
+        for path in documents:
+            text = path.read_text(encoding="utf-8")
+            for snippet in required:
+                self.assertIn(snippet, text, f"{path.name} missing {snippet}")
+            for snippet in forbidden:
+                self.assertNotIn(snippet, text, f"{path.name} still has {snippet}")
+
 
 if __name__ == "__main__":
     unittest.main()
