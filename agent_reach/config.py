@@ -109,6 +109,7 @@ class Config:
         "groq_whisper": ["groq_api_key"],
         "openai_whisper": ["openai_api_key"],
         "github_token": ["github_token"],
+        "google_images": ["google_api_key", "google_cx"],
     }
 
     def __init__(

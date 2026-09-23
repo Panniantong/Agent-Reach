@@ -34,6 +34,7 @@ _SENSITIVE_CONFIG_KEYS = {
     "github-token",
     "groq-key",
     "openai-key",
+    "google-key",
     "twitter-cookies",
     "xhs-cookies",
 }
@@ -108,6 +109,7 @@ def main():
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
     p_conf.add_argument("key", nargs="?", default=None,
                         choices=["proxy", "github-token", "groq-key", "openai-key",
+                                 "google-key", "google-cx",
                                  "twitter-cookies", "youtube-cookies",
                                  "xhs-cookies"],
                         help="What to configure (omit if using --from-browser)")
@@ -1583,6 +1585,15 @@ def _cmd_configure(args):
     elif args.key == "openai-key":
         config.set("openai_api_key", value)
         print("✅ OpenAI key configured!")
+
+    elif args.key == "google-key":
+        config.set("google_api_key", value)
+        print("✅ Google Custom Search API key configured!")
+        print("   Also run `agent-reach configure google-cx` if you haven't yet.")
+
+    elif args.key == "google-cx":
+        config.set("google_cx", value)
+        print("✅ Google Custom Search Engine ID (cx) configured!")
 
 
 def _cmd_transcribe(args):

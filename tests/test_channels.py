@@ -12,6 +12,7 @@ from agent_reach.backends import OpenCLIStatus
 from agent_reach.channels import get_all_channels, get_channel
 from agent_reach.channels.bilibili import BilibiliChannel
 from agent_reach.channels.facebook import FacebookChannel
+from agent_reach.channels.google_images import GoogleImagesChannel
 from agent_reach.channels.instagram import InstagramChannel
 from agent_reach.channels.v2ex import V2EXChannel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
@@ -35,6 +36,7 @@ class TestChannelRegistry:
         assert "twitter" in names
         assert "facebook" in names
         assert "instagram" in names
+        assert "google_images" in names
         assert "v2ex" in names
 
 
@@ -1613,6 +1615,58 @@ class TestLinkedInChannel:
         status, msg = ch.check()
         assert status == "off"
         assert ch.active_backend is None
+
+
+class TestGoogleImagesChannel:
+    """Official Custom Search JSON API only — never scrapes google.com."""
+
+    def test_can_handle_returns_false(self):
+        assert GoogleImagesChannel().can_handle("https://www.google.com/search") is False
+
+    def test_no_config_reports_off(self):
+        ch = GoogleImagesChannel()
+        status, msg = ch.check(None)
+        assert status == "off"
+        assert ch.active_backend is None
+        assert "google-key" in msg
+        assert "google-cx" in msg
+
+    def test_missing_both_keys_reports_off_with_both_named(self):
+        class _Cfg:
+            def get(self, key, default=None):
+                return None
+
+        ch = GoogleImagesChannel()
+        status, msg = ch.check(_Cfg())
+        assert status == "off"
+        assert ch.active_backend is None
+        assert "google-key" in msg
+        assert "google-cx" in msg
+
+    def test_only_api_key_configured_reports_off_naming_cx_as_missing(self):
+        class _Cfg:
+            def get(self, key, default=None):
+                return "secret" if key == "google_api_key" else None
+
+        ch = GoogleImagesChannel()
+        status, msg = ch.check(_Cfg())
+        assert status == "off"
+        assert ch.active_backend is None
+        assert "缺少：google-cx" in msg
+
+    def test_both_configured_is_warn_not_ok_and_never_queries(self):
+        """Configured-but-unverified stays warn — doctor must never burn the free quota."""
+
+        class _Cfg:
+            def get(self, key, default=None):
+                return {"google_api_key": "secret", "google_cx": "abc123"}.get(key, default)
+
+        ch = GoogleImagesChannel()
+        status, msg = ch.check(_Cfg())
+        assert status == "warn"
+        assert ch.active_backend is None
+        assert "不发起真实查询" in msg
+        assert "secret" not in msg
 
 
 class TestExaSearchChannel:

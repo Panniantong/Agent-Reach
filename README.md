@@ -109,6 +109,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 | 📺 **YouTube** | 字幕提取 + 视频搜索 | — | 无需配置 |
 | 📡 **RSS** | 阅读任意 RSS/Atom 源 | — | 无需配置 |
 | 🔍 **全网搜索** | — | 全网语义搜索 | 自动配置（MCP 接入，免费无需 Key） |
+| 🖼️ **Google 图片搜索** | — | 找具体商品/实体的真实图片（Custom Search API，免费 100 次/天） | 告诉 Agent「帮我配 Google 图片搜索」 |
 | 📦 **GitHub** | 读公开仓库 + 搜索 | 私有仓库、提 Issue/PR、Fork | 告诉 Agent「帮我登录 GitHub」 |
 | 🐦 **Twitter/X** | 读单条推文 | 搜索推文、浏览时间线、读长文 | 告诉 Agent「帮我配 Twitter」 |
 | 📺 **B站** | 搜索 + 视频详情（bili-cli，无需登录） | 字幕（OpenCLI） | 告诉 Agent「帮我配 B站」 |
@@ -220,6 +221,7 @@ channels/
 ├── linkedin.py     → mcp-server-linkedin ▸ Jina Reader
 ├── rss.py          → feedparser
 ├── exa_search.py   → Exa via mcporter
+├── google_images.py → Google Custom Search API（图片搜索，需配置）
 └── __init__.py     → 渠道注册（doctor 检测用）
 ```
 
@@ -241,6 +243,7 @@ channels/
 | 读 RSS | [feedparser](https://github.com/kurtmckee/feedparser) | — | Python 生态标准选择 |
 | 小红书 | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)（服务器）▸ xhs-cli | OpenCLI 只用用户已有会话；其余后端用 Cookie-Editor 手工导出 |
 | LinkedIn | [mcp-server-linkedin](https://github.com/stickerdaniel/linkedin-mcp-server) | Jina Reader | MCP 服务，浏览器自动化 |
+| 图片搜索 | Google Custom Search API | — | Google 明确禁止自动化抓取搜索/图片结果页；官方 API 是唯一合规路径，免费 100 次/天 |
 
 > 📌 这些都是「当前选型」，基于真机实测定期复核。某条路失效了我们换下一条——`agent-reach doctor` 永远告诉你现在走的是哪条。
 

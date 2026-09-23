@@ -10,7 +10,7 @@ description: >
   Instagram, V2EX, LinkedIn/领英/Boss直聘/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客,
   雪球/股票行情, RSS feeds, or any web URL.
 
-  16 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  17 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -25,7 +25,7 @@ metadata:
 
 # Agent Reach — 互联网能力路由器
 
-16 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
+17 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
 
 ## 常驻规则（全程适用）
 
@@ -47,7 +47,7 @@ metadata:
 
 | 用户意图 | 分类 | 详细文档 |
 |---------|------|---------|
-| 网页搜索/代码搜索 | search | [references/search.md](references/search.md) |
+| 网页搜索/代码搜索/图片搜索 | search | [references/search.md](references/search.md) |
 | 小红书/推特/B站/V2EX/Reddit/Facebook/Instagram | social | [references/social.md](references/social.md) |
 | 招聘/职位/LinkedIn/Boss直聘 | career | [references/career.md](references/career.md) |
 | GitHub/代码 | dev | [references/dev.md](references/dev.md) |
@@ -76,6 +76,19 @@ curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1
 # B站搜索（bili-cli，无需登录）
 bili search "query" --type video -n 5
 ```
+
+## Google 图片搜索（需配置，免费额度 100 次/天）
+
+**绝不抓取 google.com 或图片搜索结果页**——Google 明确禁止自动化抓取且会主动拦截。
+需要真实商品/实体照片时，走 Google 官方 Custom Search JSON API：
+
+```bash
+curl -s "https://www.googleapis.com/customsearch/v1?key=$GOOGLE_API_KEY&cx=$GOOGLE_CX&q=QUERY&searchType=image&num=5"
+```
+
+配置：`agent-reach configure google-key` + `agent-reach configure google-cx`
+（获取方式见 references/search.md）。`doctor` 的 `google_images` 永远
+`active_backend: null`——为避免消耗每日额度，不发起真实查询验证凭据。
 
 ## 需登录态的平台（按 doctor 的 active_backend 选命令）
 
@@ -152,7 +165,7 @@ conda run -n dl agent-reach doctor --json
 
 根据用户需求，阅读对应的详细文档：
 
-- [搜索工具](references/search.md) — Exa AI 搜索
+- [搜索工具](references/search.md) — Exa AI 搜索, Google 图片搜索
 - [社交媒体](references/social.md) — 小红书, Twitter, B站, V2EX, Reddit, Facebook, Instagram（多后端/登录态命令组）
 - [职场招聘](references/career.md) — LinkedIn, Boss直聘
 - [开发工具](references/dev.md) — GitHub CLI
