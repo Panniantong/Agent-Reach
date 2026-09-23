@@ -13,6 +13,7 @@ from agent_reach.channels import get_all_channels, get_channel
 from agent_reach.channels.bilibili import BilibiliChannel
 from agent_reach.channels.facebook import FacebookChannel
 from agent_reach.channels.instagram import InstagramChannel
+from agent_reach.channels.tiktok import TikTokChannel
 from agent_reach.channels.v2ex import V2EXChannel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
 from agent_reach.channels.xueqiu import XueqiuChannel
@@ -35,6 +36,7 @@ class TestChannelRegistry:
         assert "twitter" in names
         assert "facebook" in names
         assert "instagram" in names
+        assert "tiktok" in names
         assert "v2ex" in names
 
 
@@ -1301,6 +1303,106 @@ class TestBilibiliChannel:
         status, msg = ch.check()
         assert status == "off"
         assert ch.active_backend is None
+
+
+class TestTikTokChannel:
+    """两段式：yt-dlp 读单条公开视频（零配置）> OpenCLI 搜索/主页（需登录）。"""
+
+    @staticmethod
+    def _isolate(monkeypatch, opencli=None):
+        import agent_reach.channels.tiktok as tiktok_mod
+        monkeypatch.setattr(
+            tiktok_mod.TikTokChannel, "_check_opencli", lambda self: opencli
+        )
+
+    def test_can_handle_common_urls(self):
+        ch = TikTokChannel()
+        assert ch.can_handle("https://www.tiktok.com/@user/video/1234567890")
+        assert ch.can_handle("https://vm.tiktok.com/XXXXXXX/")
+        assert ch.can_handle("https://vt.tiktok.com/XXXXXXX/")
+        assert not ch.can_handle("https://instagram.com/openai")
+
+    def test_ytdlp_ok_is_active_backend(self, monkeypatch):
+        self._isolate(monkeypatch)
+        monkeypatch.setattr(
+            shutil, "which",
+            lambda cmd: "/usr/local/bin/yt-dlp" if cmd == "yt-dlp" else None,
+        )
+
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 0, "2026.09.01", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        ch = TikTokChannel()
+        status, msg = ch.check()
+        assert status == "ok"
+        assert "yt-dlp 可读取单条公开 TikTok 视频" in msg
+        assert ch.active_backend == "yt-dlp"
+
+    def test_opencli_bridge_ready_is_unverified(self, monkeypatch):
+        monkeypatch.setattr(
+            "agent_reach.backends.opencli_status",
+            lambda: OpenCLIStatus(
+                installed=True,
+                extension_connected=True,
+                version="1.8.6",
+            ),
+        )
+        status, message = TikTokChannel()._check_opencli()
+        assert status == "warn"
+        assert "桥接已连接" in message
+        assert "实际命令未实时验证" in message
+
+    def test_ytdlp_broken_falls_back_to_opencli_warn(self, monkeypatch):
+        """yt-dlp 断链时，OpenCLI 的未验证 warn 候选兜底获胜。"""
+        self._isolate(monkeypatch, opencli=("warn", "OpenCLI 桥接已连接但未验证"))
+        monkeypatch.setattr(
+            shutil, "which",
+            lambda cmd: "/usr/local/bin/yt-dlp" if cmd == "yt-dlp" else None,
+        )
+
+        def fake_run(cmd, **kwargs):
+            raise FileNotFoundError(cmd[0])
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        ch = TikTokChannel()
+        status, msg = ch.check()
+        assert status == "warn"
+        assert ch.active_backend is None
+
+    def test_ytdlp_broken_and_no_fallback_reports_error(self, monkeypatch):
+        self._isolate(monkeypatch, opencli=None)
+        monkeypatch.setattr(
+            shutil, "which",
+            lambda cmd: "/usr/local/bin/yt-dlp" if cmd == "yt-dlp" else None,
+        )
+
+        def fake_run(cmd, **kwargs):
+            raise FileNotFoundError(cmd[0])
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        ch = TikTokChannel()
+        status, msg = ch.check()
+        assert status == "error"
+        assert "无法执行" in msg
+        assert ch.active_backend is None
+
+    def test_ytdlp_missing_and_opencli_unverified_reports_warn(self, monkeypatch):
+        self._isolate(monkeypatch, opencli=("warn", "OpenCLI 桥接已连接但未验证"))
+        monkeypatch.setattr(shutil, "which", lambda _: None)
+        ch = TikTokChannel()
+        status, msg = ch.check()
+        assert status == "warn"
+        assert ch.active_backend is None
+
+    def test_off_when_everything_unreachable(self, monkeypatch):
+        self._isolate(monkeypatch, opencli=None)
+        monkeypatch.setattr(shutil, "which", lambda _: None)
+        ch = TikTokChannel()
+        status, msg = ch.check()
+        assert status == "off"
+        assert ch.active_backend is None
+        assert "OpenCLI" in msg
 
 
 class TestYouTubeChannel:

@@ -7,10 +7,10 @@ description: >
 
   Also MUST USE when user mentions any platform or shares any URL/链接:
   小红书/xiaohongshu/xhs, Twitter/推特/X, B站/bilibili, Reddit, Facebook,
-  Instagram, V2EX, LinkedIn/领英/Boss直聘/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客,
+  Instagram, TikTok/抖音国际版, V2EX, LinkedIn/领英/Boss直聘/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客,
   雪球/股票行情, RSS feeds, or any web URL.
 
-  16 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  17 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -18,14 +18,14 @@ description: >
   发帖/评论/点赞等写操作；已有专门 skill 的平台（先用专门 skill）。
 
   【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。
-  分类：search / social (小红书/推特/B站/V2EX/Reddit/Facebook/Instagram) / career(LinkedIn/Boss直聘) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客) / finance(雪球/股票)。
+  分类：search / social (小红书/推特/B站/V2EX/Reddit/Facebook/Instagram/TikTok) / career(LinkedIn/Boss直聘) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客) / finance(雪球/股票)。
 metadata:
   homepage: https://github.com/Panniantong/Agent-Reach
 ---
 
 # Agent Reach — 互联网能力路由器
 
-16 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
+17 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
 
 ## 常驻规则（全程适用）
 
@@ -48,7 +48,7 @@ metadata:
 | 用户意图 | 分类 | 详细文档 |
 |---------|------|---------|
 | 网页搜索/代码搜索 | search | [references/search.md](references/search.md) |
-| 小红书/推特/B站/V2EX/Reddit/Facebook/Instagram | social | [references/social.md](references/social.md) |
+| 小红书/推特/B站/V2EX/Reddit/Facebook/Instagram/TikTok | social | [references/social.md](references/social.md) |
 | 招聘/职位/LinkedIn/Boss直聘 | career | [references/career.md](references/career.md) |
 | GitHub/代码 | dev | [references/dev.md](references/dev.md) |
 | 网页/文章/RSS | web | [references/web.md](references/web.md) |
@@ -75,6 +75,9 @@ curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1
 
 # B站搜索（bili-cli，无需登录）
 bili search "query" --type video -n 5
+
+# TikTok 读单条公开视频（yt-dlp，无需登录；偶发反爬失败见 social.md）
+yt-dlp -j --skip-download "https://www.tiktok.com/@user/video/1234567890"
 ```
 
 ## 需登录态的平台（按 doctor 的 active_backend 选命令）
@@ -126,6 +129,10 @@ opencli facebook search "query" -f yaml
 opencli facebook groups -f yaml
 opencli instagram search "query" -f yaml       # 搜用户
 opencli instagram user USERNAME -f yaml        # 读指定用户最近帖子
+
+# TikTok 搜索/主页（桌面 OpenCLI，复用浏览器登录态；无零配置搜索路径）
+opencli tiktok search "query" -f yaml
+opencli tiktok user USERNAME -f yaml
 ```
 
 ## 环境检查
@@ -153,7 +160,7 @@ conda run -n dl agent-reach doctor --json
 根据用户需求，阅读对应的详细文档：
 
 - [搜索工具](references/search.md) — Exa AI 搜索
-- [社交媒体](references/social.md) — 小红书, Twitter, B站, V2EX, Reddit, Facebook, Instagram（多后端/登录态命令组）
+- [社交媒体](references/social.md) — 小红书, Twitter, B站, V2EX, Reddit, Facebook, Instagram, TikTok（多后端/登录态命令组）
 - [职场招聘](references/career.md) — LinkedIn, Boss直聘
 - [开发工具](references/dev.md) — GitHub CLI
 - [网页阅读](references/web.md) — Jina Reader, RSS
