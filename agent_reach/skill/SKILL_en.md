@@ -7,9 +7,9 @@ description: >
 
   Also MUST USE when user mentions any platform or shares any URL/link:
   Twitter/X, Reddit, Facebook, Instagram, YouTube, GitHub, Bilibili, XiaoHongShu,
-  Xiaoyuzhou Podcast, LinkedIn/Boss直聘/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
+  Xiaoyuzhou Podcast, LinkedIn/Boss直聘/jobs/recruiting, V2EX, NGA, Xueqiu (stocks), RSS.
 
-  16 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  17 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -22,7 +22,7 @@ metadata:
 
 # Agent Reach — internet capability router
 
-16 platforms, multiple backends each. **When this skill exists, use it for
+17 platforms, multiple backends each. **When this skill exists, use it for
 these platforms — do not invent your own approach.**
 
 ## Standing rules (apply for the whole session)
@@ -172,3 +172,9 @@ If a channel needs setup, fetch the install guide:
 https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
 
 The user only provides cookies / one extension click; the agent does the rest.
+
+## NGA thread exports
+
+Use `agent-reach nga read URL` (Chrome + OpenCLI). Supports `--only-author`,
+`--start-page N`, `--end-page N` / `--all-pages`, `--format json|markdown`,
+`--state-dir DIR`, and `--resume DIR`. See [social.md](references/social.md#nga-论坛).

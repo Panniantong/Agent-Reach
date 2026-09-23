@@ -76,6 +76,9 @@ def main():
     parser.add_argument("--version", action="version", version=f"Agent Reach v{__version__}")
     sub = parser.add_subparsers(dest="command", help="Available commands")
 
+    from agent_reach.nga_export import add_parser as add_nga_parser
+    add_nga_parser(sub)
+
     # ── setup ──
     sub.add_parser("setup", help="Interactive configuration wizard")
 
@@ -102,7 +105,7 @@ def main():
     p_install.add_argument("--channels", default="",
                            help="Comma-separated optional channels to install "
                                 "(twitter,xiaoyuzhou,xueqiu,xiaohongshu,"
-                                "reddit,facebook,instagram,bilibili,linkedin,boss,all)")
+                                "reddit,facebook,instagram,bilibili,linkedin,boss,nga,all)")
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
@@ -255,6 +258,9 @@ def main():
         _cmd_format(args)
     elif args.command == "transcribe":
         _cmd_transcribe(args)
+    elif args.command == "nga":
+        from agent_reach.nga_export import run
+        run(args)
 
 
 # ── Command handlers ────────────────────────────────
@@ -278,6 +284,7 @@ def _cmd_install(args):
         "reddit":      _install_reddit_deps,
         "facebook":    _install_opencli_deps,
         "instagram":   _install_opencli_deps,
+        "nga":         _install_opencli_deps,
         "bilibili":    _install_bili_deps,
         "boss":        _install_boss_deps,
         "opencli":     _install_opencli_deps,  # cross-channel backend, desktop only
@@ -323,7 +330,7 @@ def _cmd_install(args):
         tools_dir = os.path.expanduser("~/.agent-reach/tools")
         os.makedirs(tools_dir, exist_ok=True)
 
-    DESKTOP_ONLY_CHANNELS = {"opencli", "facebook", "instagram", "boss"}
+    DESKTOP_ONLY_CHANNELS = {"opencli", "facebook", "instagram", "boss", "nga"}
     COOKIE_CHANNELS = {"twitter", "xueqiu", "bilibili", "xiaohongshu"}
 
     # Auto-detect environment

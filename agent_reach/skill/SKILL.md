@@ -7,10 +7,10 @@ description: >
 
   Also MUST USE when user mentions any platform or shares any URL/链接:
   小红书/xiaohongshu/xhs, Twitter/推特/X, B站/bilibili, Reddit, Facebook,
-  Instagram, V2EX, LinkedIn/领英/Boss直聘/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客,
+  Instagram, V2EX, NGA, LinkedIn/领英/Boss直聘/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客,
   雪球/股票行情, RSS feeds, or any web URL.
 
-  16 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  17 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -25,7 +25,7 @@ metadata:
 
 # Agent Reach — 互联网能力路由器
 
-16 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
+17 平台、多后端。**本 skill 存在时必须用它访问这些平台，不要自己发明方案。**
 
 ## 常驻规则（全程适用）
 
@@ -48,7 +48,7 @@ metadata:
 | 用户意图 | 分类 | 详细文档 |
 |---------|------|---------|
 | 网页搜索/代码搜索 | search | [references/search.md](references/search.md) |
-| 小红书/推特/B站/V2EX/Reddit/Facebook/Instagram | social | [references/social.md](references/social.md) |
+| 小红书/推特/B站/V2EX/Reddit/Facebook/Instagram/NGA | social | [references/social.md](references/social.md) |
 | 招聘/职位/LinkedIn/Boss直聘 | career | [references/career.md](references/career.md) |
 | GitHub/代码 | dev | [references/dev.md](references/dev.md) |
 | 网页/文章/RSS | web | [references/web.md](references/web.md) |
@@ -166,3 +166,9 @@ conda run -n dl agent-reach doctor --json
 https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
 
 用户只需提供 cookies，其他配置由 agent 完成。
+
+## NGA thread exports
+
+Use `agent-reach nga read URL` (Chrome + OpenCLI). Supports `--only-author`,
+`--start-page N`, `--end-page N` / `--all-pages`, `--format json|markdown`,
+`--state-dir DIR`, and `--resume DIR`. See [social.md](references/social.md#nga-论坛).

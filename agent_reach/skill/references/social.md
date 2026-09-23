@@ -1,6 +1,31 @@
 # 社交媒体 & 社区
 
-小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram。
+小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram、NGA。
+
+## NGA 论坛
+
+通过 Agent Reach 的 `nga` channel，底层复用 OpenCLI + Chrome 现有登录态。
+先运行 `agent-reach doctor --json`；需要时安装 `agent-reach install --system --channels nga`。
+用户在 Chrome 安装 OpenCLI 扩展并登录 NGA 后，用 `opencli doctor` 检查连接。
+不要用 Codex 浏览器连接可用来推断 OpenCLI 已连接，也不要提取 Cookie。
+
+```bash
+# 全帖，仅楼主，逐页保存断点与 JSON/Markdown
+agent-reach nga read 'https://bbs.nga.cn/read.php?tid=12345678' \
+  --all-pages --only-author --state-dir /tmp/nga-export
+
+# 从第 N 页到末页；也可用 --end-page 15 指定结束页
+agent-reach nga read 'https://bbs.nga.cn/read.php?tid=12345678' \
+  --start-page 10 --all-pages --format json
+
+# 原参数续传，不重读成功页
+agent-reach nga read --resume /tmp/nga-export --format markdown
+```
+
+`--only-author` 按楼主 UID 筛选；第一页仅用于元信息时不混入指定范围。
+`--max-pages` 是单次页数预算（默认 100）；退出码 3 和 `complete:false` 表示需要续传。
+登录或验证失败时停止，保留成功页。图片保留链接，不做 OCR，不自动展开折叠内容。
+不要把部分结果描述成整帖。站内搜索尚未实现。
 
 ## 小红书 / XiaoHongShu（多后端）
 
