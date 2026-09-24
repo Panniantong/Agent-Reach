@@ -546,7 +546,7 @@ class TestOrchestrator:
                     child.unlink()
                 self.path.rmdir()
 
-        def fake_download(source, out_dir):
+        def fake_download(source, out_dir, **kwargs):
             assert Path(out_dir) == tmp_path / "auto-work"
             audio = Path(out_dir) / "source.m4a"
             audio.write_bytes(b"audio")
@@ -572,6 +572,52 @@ class TestOrchestrator:
         assert created_work_dirs
         assert not created_work_dirs[0].exists()
 
+    @pytest.mark.parametrize(
+        ("url", "expected"),
+        [
+            ("https://www.youtube.com/watch?v=123", "chrome+BASICTEXT:Profile 2"),
+            ("https://example.com/video", None),
+        ],
+    )
+    def test_transcribe_only_forwards_youtube_cookies_to_youtube_urls(
+        self,
+        monkeypatch,
+        fake_config,
+        tmp_path,
+        bounded_audio_duration,
+        url,
+        expected,
+    ):
+        fake_config.set("groq_api_key", "gsk_test")
+        fake_config.set("youtube_cookies_from", "Chrome + basictext : Profile 2")
+        work = tmp_path / "work"
+        captured = {}
+        compressed = tmp_path / "compressed.m4a"
+        compressed.write_bytes(b"x" * 1024)
+
+        def fake_run(cmd, timeout=600):
+            captured["cmd"] = cmd
+            if cmd[0] == "yt-dlp":
+                (work / "source.m4a").write_bytes(b"audio")
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        monkeypatch.setattr(tr, "_require", lambda _binary: None)
+        monkeypatch.setattr(tr, "_run", fake_run)
+        monkeypatch.setattr(tr, "compress_audio", lambda *_args: compressed)
+        monkeypatch.setattr(
+            tr.requests,
+            "post",
+            lambda *a, **k: FakeResponse(200, "transcript text"),
+        )
+
+        tr.transcribe(url, out_dir=work, config=fake_config)
+
+        if expected is None:
+            assert "--cookies-from-browser" not in captured["cmd"]
+        else:
+            cookie_index = captured["cmd"].index("--cookies-from-browser")
+            assert captured["cmd"][cookie_index + 1] == expected
+
     def test_explicit_out_dir_is_preserved(
         self,
         monkeypatch,
@@ -582,7 +628,7 @@ class TestOrchestrator:
         fake_config.set("groq_api_key", "gsk_test")
         work = tmp_path / "caller-owned"
 
-        def fake_download(source, out_dir):
+        def fake_download(source, out_dir, **kwargs):
             audio = Path(out_dir) / "source.m4a"
             audio.write_bytes(b"audio")
             return audio
@@ -651,6 +697,34 @@ class TestDownloadAudioSafety:
         assert captured["cmd"][marker_index + 1] == "https://example.com/watch?v=123"
         max_size_index = captured["cmd"].index("--max-filesize")
         assert captured["cmd"][max_size_index + 1] == str(tr.MAX_SOURCE_BYTES)
+        assert "--cookies-from-browser" not in captured["cmd"]
+
+    def test_cookie_source_omits_a_blank_firefox_profile(self):
+        assert tr.youtube_cookie_source("firefox : :: none") == "firefox::none"
+
+    @pytest.mark.parametrize(
+        ("source", "message"),
+        [
+            ("netscape", "unsupported YouTube cookie browser"),
+            ("chrome+not_a_keyring", "unsupported YouTube cookie keyring"),
+        ],
+    )
+    def test_rejects_an_unsupported_cookie_source_before_yt_dlp(
+        self, monkeypatch, tmp_path, source, message
+    ):
+        monkeypatch.setattr(tr, "_require", lambda _binary: None)
+        monkeypatch.setattr(
+            tr,
+            "_run",
+            lambda *_args, **_kwargs: pytest.fail("yt-dlp must not run for an invalid source"),
+        )
+
+        with pytest.raises(tr.TranscribeError, match=message):
+            tr.download_audio(
+                "https://example.com/watch?v=123",
+                tmp_path,
+                cookies_from_browser=source,
+            )
 
     def test_preserves_bare_public_urls_supported_by_yt_dlp(self, monkeypatch, tmp_path):
         monkeypatch.setattr(tr, "_require", lambda binary: None)

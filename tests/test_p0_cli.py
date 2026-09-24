@@ -141,6 +141,46 @@ def test_configure_positional_secret_warns_to_use_safe_input(
     assert "legacy-secret" not in error
 
 
+def test_youtube_cookie_source_is_validated_and_scoped_to_transcribe(monkeypatch, capsys):
+    import agent_reach.config as config_module
+
+    config = _MemoryConfig()
+    monkeypatch.setattr(config_module, "Config", lambda: config)
+    monkeypatch.setattr(cli, "_configure_logging", lambda _verbose=False: None)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["agent-reach", "configure", "youtube-cookies", "Chrome + basictext : Profile 2"],
+    )
+
+    cli.main()
+
+    assert config.data["youtube_cookies_from"] == "chrome+BASICTEXT:Profile 2"
+    output = capsys.readouterr().out
+    assert "agent-reach transcribe" in output
+    assert "yt-dlp will use cookies" not in output
+
+
+def test_youtube_cookie_source_rejects_invalid_browser(monkeypatch, capsys):
+    import agent_reach.config as config_module
+
+    config = _MemoryConfig()
+    monkeypatch.setattr(config_module, "Config", lambda: config)
+    monkeypatch.setattr(cli, "_configure_logging", lambda _verbose=False: None)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["agent-reach", "configure", "youtube-cookies", "netscape"],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main()
+
+    assert exc_info.value.code == 2
+    assert config.data == {}
+    assert "unsupported YouTube cookie browser" in capsys.readouterr().err
+
+
 def test_configure_rejects_stdin_combined_with_positional_value(
     monkeypatch, capsys
 ):
