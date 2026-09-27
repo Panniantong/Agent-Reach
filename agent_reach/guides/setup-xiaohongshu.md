@@ -1,73 +1,73 @@
-# 小红书配置指南
+# XiaoHongShu Configuration Guide
 
-## 功能说明
-读取和搜索小红书笔记。桌面优先使用 OpenCLI，服务器使用
-[xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)；
-xhs-cli 仅作为已安装用户的存量备选。
+## Function description
+Read and search XiaoHongShu notes. Desktop uses OpenCLI first, server uses
+[xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp);
+xhs-cli is only available as a legacy fallback for installed users.
 
-## 前置条件
-- OpenCLI：用户已经存在且明确控制的 Chrome 小红书会话
-- xiaohongshu-mcp / 存量工具：Cookie-Editor 浏览器扩展
+## Preconditions
+- OpenCLI: Chrome XiaoHongShu session that already exists and is explicitly controlled by the user
+- xiaohongshu-mcp / Legacy tool: Cookie-Editor browser extension
 
-## 认证边界
+## Authentication Boundary
 
-Agent Reach 不替用户执行小红书登录，也不读取浏览器 Cookie。
+Agent Reach does not perform XiaoHongShu login for users, nor does it read browser cookies.
 
-OpenCLI 只使用用户已经存在且明确控制的 Chrome 会话。
-`agent-reach configure xhs-cookies` 不会把 Cookie 注入 OpenCLI 或 Chrome。
-如果没有现成会话，不要自动登录；改用 Cookie-Editor 手工导出后配置
-xiaohongshu-mcp 或存量工具：
+OpenCLI only uses an existing and explicitly controlled Chrome session.
+`agent-reach configure xhs-cookies` does not inject cookies into OpenCLI or Chrome.
+If no such session exists, do not automate login. Use a manual Cookie-Editor
+export with xiaohongshu-mcp or a legacy tool:
 
-1. 在 Chrome 中安装 [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) 扩展
-2. 用户自行在 xiaohongshu.com 准备要导出的会话
-3. 点击 Cookie-Editor 图标 → Export → Header String
-4. 把导出的字符串发给 Agent，运行：
+1. Install [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) extension in Chrome
+2. The user prepares the session to be exported on xiaohongshu.com
+3. Click the Cookie-Editor icon → Export → Header String
+4. Send the exported string to Agent and run:
 
 ```bash
 agent-reach configure xhs-cookies
 agent-reach doctor
 ```
 
-该显式命令会保存/导入用户提供的 xiaohongshu.com 同域 Cookie 集；执行前请
-确认 Cookie 名称和范围。非 xiaohongshu.com 域 Cookie 会被忽略。
+This explicit command saves/imports the user-provided xiaohongshu.com same-domain cookie set.
+Confirm cookie names and scope first. Non-xiaohongshu.com domain cookies are ignored.
 
-如果 xiaohongshu-mcp 容器正在运行，配置命令会把 Cookie 导入容器；否则会写入
-owner-only 的本地文件，并打印后续手工导入路径。
+If the xiaohongshu-mcp container is running, the command imports the cookies into it.
+Otherwise, it writes an owner-only local file and prints manual import instructions.
 
-## 使用示例
+## Usage example
 
-先按 `agent-reach doctor --json` 的 `active_backend` 选择命令。存量 xhs-cli 示例：
+Use `active_backend` from `agent-reach doctor --json` to select the command group. Legacy xhs-cli example:
 
-搜索笔记：
+Search notes:
 ```bash
-xhs search "关键词"
+xhs search "keywords"
 ```
 
-阅读笔记详情：
+Read the note details:
 ```bash
 xhs read NOTE_ID
 ```
 
-查看评论：
+View comments:
 ```bash
 xhs comments NOTE_ID
 ```
 
-## 常见问题
+## FAQ
 
-**Q: Cookie 过期了？**
-A: 重新通过 Cookie-Editor 手工导出，再运行
-`agent-reach configure xhs-cookies`，并粘贴到隐藏输入提示。
+**Q: Cookie expired?**
+A: Re-export manually through Cookie-Editor and run again
+`agent-reach configure xhs-cookies` and paste it into the hidden input prompt.
 
-**Q: 小红书提示 IP 风险？**
-A: 推荐使用住宅代理：`export HTTP_PROXY="http://user:pass@ip:port"`。
+**Q: Does XiaoHongShu remind you about IP risks?**
+A: It is recommended to use residential proxy: `export HTTP_PROXY="http://user:pass@ip:port"`.
 
-**Q: xhs-cli 不支持我的系统？**
-A: 确保 Python 3.10+ 和 pipx 已安装。运行 `pipx install xiaohongshu-cli` 即可。
+**Q: xhs-cli does not support my system?**
+A: Make sure Python 3.10+ and pipx are installed. Just run `pipx install xiaohongshu-cli`.
 
-## 服务器方案：Docker MCP
+## Server solution: Docker MCP
 
-如果你已经在使用 [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) Docker 方案，它也能正常工作：
+If you are already using the [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) Docker solution, it will also work fine:
 
 ```bash
 docker run -d \
@@ -78,4 +78,4 @@ docker run -d \
 mcporter config add xiaohongshu http://localhost:18060/mcp --scope home
 ```
 
-该服务器后端使用上面的 Cookie-Editor 手工导出流程。
+The server backend uses the Cookie-Editor manual export process above.

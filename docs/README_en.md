@@ -16,14 +16,16 @@
 <p align="center">
   <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-green.svg?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://github.com/Panniantong/agent-reach/stargazers"><img src="https://img.shields.io/github/stars/Panniantong/agent-reach?style=for-the-badge" alt="GitHub Stars"></a>
+  <a href="https://github.com/jermiah/Agent-Reach/stargazers"><img src="https://img.shields.io/github/stars/Panniantong/agent-reach?style=for-the-badge" alt="GitHub Stars"></a>
 </p>
 
 <p align="center">
-  <a href="#quick-start">Quick Start</a> · <a href="../README.md">中文</a> · <a href="README_ja.md">日本語</a> · <a href="README_ko.md">한국어</a> · <a href="#supported-platforms">Platforms</a> · <a href="#design-philosophy">Philosophy</a>
+  <a href="#quick-start">Quick Start</a> · <a href="README_ja.md">Japanese</a> · <a href="README_ko.md">Korean</a> · <a href="#supported-platforms">Platforms</a> · <a href="#design-philosophy">Philosophy</a>
 </p>
 
 > **No token or crypto affiliation:** Agent Reach has no official token, coin, investment product, fee-claim program, wallet connection, or Solana/Pump.fun project. Any crypto project using the Agent Reach name, GitHub URL, or author identity is not affiliated with this repository. Do not connect a wallet or claim fees based on messages, posts, or links that say otherwise.
+
+> This English-language fork is maintained at [jermiah/Agent-Reach](https://github.com/jermiah/Agent-Reach), based on [Panniantong/Agent-Reach](https://github.com/Panniantong/Agent-Reach). Original author credits and license are preserved.
 
 ---
 
@@ -75,7 +77,7 @@ To connect your Agent to these platforms, you'd have to find tools, install depe
 **Agent Reach turns this into one command:**
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Install Agent Reach: https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/install.md
 ```
 
 Copy that to your Agent. A few minutes later, it can read tweets, search Reddit, and watch Bilibili.
@@ -83,7 +85,7 @@ Copy that to your Agent. A few minutes later, it can read tweets, search Reddit,
 **Already installed? Update in one command:**
 
 ```
-Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+Update Agent Reach: https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/update.md
 ```
 
 ### ✅ Before you start, you might want to know
@@ -108,8 +110,9 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 📘 **Facebook** | Search · Profiles · Feed · Groups list | OpenCLI | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
 | 📷 **Instagram** | User search · Profiles · Recent posts · Explore | OpenCLI | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
 | 💼 **LinkedIn** | Jina Reader (public pages) | Full profiles, companies, job search | Tell your Agent "help me set up LinkedIn" |
+| 🎯 **Boss Zhipin** | Job search · Full job descriptions | Dedicated Chrome session | Tell your Agent "help me configure Boss Zhipin"; the Agent opens a dedicated Chrome window and you log in manually |
 | 💻 **V2EX** | Hot topics · Node topics · Topic detail + replies · User profile | Zero config | Public JSON API, no auth required. Great for tech community content |
-| 📈 **Xueqiu (雪球)** | Stock quotes · Search · Hot posts · Hot stocks | Browser cookie | Tell your Agent "help me set up Xueqiu" |
+| 📈 **Xueqiu** | Stock quotes · Search · Hot posts · Hot stocks | Browser cookie | Tell your Agent "help me set up Xueqiu" |
 | 🎙️ **Xiaoyuzhou Podcast** | Transcription | Free API key | Podcast audio → full text transcript via Groq Whisper (free) |
 | 🔍 **Web Search** | Search | Auto-configured | Auto-configured during install, free, no API key ([Exa](https://exa.ai) via [mcporter](https://github.com/nicepkg/mcporter)) |
 | 📦 **GitHub** | Read · Search | Zero config | [gh CLI](https://cli.github.com) powered. Public repos work immediately. `gh auth login` unlocks Fork, Issue, PR |
@@ -136,19 +139,19 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 Copy this to your AI Agent (Claude Code, OpenClaw, Cursor, etc.):
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Install Agent Reach: https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/install.md
 ```
 
 The Agent installs the Python package, checks your environment, and tells you what's ready. System-level changes require an explicit `--system` flag.
 
 > 🔄 **Already installed?** Update in one command:
 > ```
-> Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+> Update Agent Reach: https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/update.md
 > ```
 
 > 🛡️ **Safe by default:** `agent-reach install` checks the machine without installing system packages or writing configuration:
 > ```
-> Safely check and install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+> Safely check and install Agent Reach: https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/install.md
 > ```
 > Use `agent-reach install --system` only after explicitly approving system changes.
 
@@ -156,7 +159,7 @@ The Agent installs the Python package, checks your environment, and tells you wh
 <summary>Manual install</summary>
 
 ```bash
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install https://github.com/jermiah/Agent-Reach/archive/main.zip
 agent-reach install --env=auto
 ```
 </details>
@@ -165,17 +168,15 @@ agent-reach install --env=auto
 <summary>Install as a Skill (Claude Code / OpenClaw / any agent with Skills support)</summary>
 
 ```bash
-npx skills add Panniantong/Agent-Reach@agent-reach
+npx skills add jermiah/Agent-Reach@agent-reach
 ```
 
 After the Skill is installed, the Agent will auto-detect whether `agent-reach` CLI is available and install it if needed.
 
 > If you explicitly install external tools with `agent-reach install --system`, the skill is registered automatically. The default read-only check leaves existing files unchanged.
 >
-> Prefer an English-only skill file? Set an English locale or export `AGENT_REACH_LANG=en`
-> before running `agent-reach install --env=auto --system` or `agent-reach skill --install`.
-> The installed file is always written as `SKILL.md`, so switching languages means rerunning
-> the install command with the new locale and replacing the previously installed skill file.
+> This fork ships English skill instructions and references for every locale.
+> Run `agent-reach skill --install` to refresh an existing installation.
 </details>
 
 ---
@@ -273,7 +274,7 @@ channels/
 ├── facebook.py     → OpenCLI (desktop browser session)
 ├── instagram.py    → OpenCLI (desktop browser session)
 ├── xiaohongshu.py  → OpenCLI ▸ xiaohongshu-mcp ▸ xhs-cli
-├── linkedin.py     → linkedin-mcp ▸ Jina Reader
+├── linkedin.py     → mcp-server-linkedin ▸ Jina Reader
 ├── rss.py          → feedparser
 ├── exa_search.py   → Exa via mcporter
 └── __init__.py     → Channel registry (for doctor checks)
@@ -303,22 +304,53 @@ Each channel file **actually probes** its candidate backends in order (not just 
 
 ---
 
+## Security
+
+Credentials stay in `~/.agent-reach/config.yaml` with owner-only permissions
+(`600`). Installation checks are read-only by default; installing external tools
+or writing configuration requires an explicit `--system` flag.
+
+Cookie-based access can expose an account to platform restrictions. Use a
+dedicated account for automated access: cookies grant access to that account,
+so protecting them also limits the impact of a leak.
+
+| Mode | Command | Behavior |
+|------|---------|----------|
+| Default check | `agent-reach install --env=auto` | Check the environment and list missing dependencies |
+| Install dependencies | `agent-reach install --env=auto --system` | Install and configure tools after explicit authorization |
+| Compatibility safe mode | `agent-reach install --env=auto --safe` | Same as the default read-only check |
+| Preview | `agent-reach install --env=auto --dry-run` | Show planned actions without making changes |
+
+### Uninstall
+
+```bash
+agent-reach uninstall --dry-run  # Preview removal
+agent-reach uninstall            # Remove Agent Reach data, skills, and managed MCP entries
+agent-reach uninstall --keep-config  # Preserve credentials for reinstallation
+pip uninstall agent-reach       # Remove the Python package itself
+```
+
+Optional legacy Twitter credential copies are not automatically removed. The
+uninstaller reports them so you can decide whether other tools still need them.
+
+---
+
 ## Credits
 
 [twitter-cli](https://github.com/public-clis/twitter-cli) · [rdt-cli](https://github.com/public-clis/rdt-cli) · [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) · [bili-cli](https://github.com/public-clis/bilibili-cli) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [Jina Reader](https://github.com/jina-ai/reader) · [Exa](https://exa.ai) · [mcporter](https://github.com/nicobailon/mcporter) · [feedparser](https://github.com/kurtmckee/feedparser) · [mcp-server-linkedin](https://github.com/stickerdaniel/linkedin-mcp-server)
 
-## Contact
+## Original Author Contact
 
 - 📧 **Email:** pnt01@foxmail.com
 - 🐦 **Twitter/X:** [@Neo_Reidlab](https://x.com/Neo_Reidlab)
 
-For collaboration or questions, add me on WeChat — I'll invite you to the community group:
+For collaboration or community access, contact the original author on WeChat:
 
 <p align="center">
   <img src="wechat-group-qr.jpg" width="280" alt="WeChat QR">
 </p>
 
-> For bug reports and feature requests, please use [GitHub Issues](https://github.com/Panniantong/Agent-Reach/issues) — easier to track.
+> For bug reports and feature requests, please use [GitHub Issues](https://github.com/jermiah/Agent-Reach/issues) — easier to track.
 
 ## License
 

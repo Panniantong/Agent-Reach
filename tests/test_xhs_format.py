@@ -11,12 +11,12 @@ class TestFormatXhsResult(unittest.TestCase):
 
     SAMPLE_NOTE = {
         "id": "abc123",
-        "title": "测试笔记",
-        "desc": "这是正文内容",
+        "title": "\u6d4b\u8bd5\u7b14\u8bb0",
+        "desc": "\u8fd9\u662f\u6b63\u6587\u5185\u5bb9",
         "type": "normal",
         "xsec_token": "tok_xxx",
         "user": {
-            "nickname": "小红",
+            "nickname": "\u5c0f\u7ea2",
             "user_id": "u123",
             "avatar": "https://example.com/avatar.jpg",
             "extra_field": "should be dropped",
@@ -45,8 +45,8 @@ class TestFormatXhsResult(unittest.TestCase):
             },
         ],
         "tag_list": [
-            {"id": "t1", "name": "旅行", "type": "topic"},
-            {"id": "t2", "name": "美食", "type": "topic"},
+            {"id": "t1", "name": "\u65c5\u884c", "type": "topic"},
+            {"id": "t2", "name": "\u7f8e\u98df", "type": "topic"},
         ],
         "at_user_list": [],
         "geo_info": {"latitude": 0, "longitude": 0},
@@ -58,17 +58,17 @@ class TestFormatXhsResult(unittest.TestCase):
     def test_single_note_keeps_useful_fields(self):
         result = format_xhs_result(self.SAMPLE_NOTE)
         self.assertEqual(result["id"], "abc123")
-        self.assertEqual(result["title"], "测试笔记")
-        self.assertEqual(result["desc"], "这是正文内容")
+        self.assertEqual(result["title"], "\u6d4b\u8bd5\u7b14\u8bb0")
+        self.assertEqual(result["desc"], "\u8fd9\u662f\u6b63\u6587\u5185\u5bb9")
         self.assertEqual(result["type"], "normal")
-        self.assertEqual(result["user"]["nickname"], "小红")
+        self.assertEqual(result["user"]["nickname"], "\u5c0f\u7ea2")
         self.assertEqual(result["liked_count"], "100")
         self.assertEqual(result["collected_count"], "50")
         self.assertEqual(result["images"], [
             "https://img.example.com/1.jpg",
             "https://img.example.com/2.jpg",
         ])
-        self.assertEqual(result["tags"], ["旅行", "美食"])
+        self.assertEqual(result["tags"], ["\u65c5\u884c", "\u7f8e\u98df"])
 
     def test_single_note_drops_useless_fields(self):
         result = format_xhs_result(self.SAMPLE_NOTE)
@@ -87,36 +87,36 @@ class TestFormatXhsResult(unittest.TestCase):
         result = format_xhs_result(wrapped)
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 2)
-        self.assertEqual(result[0]["title"], "测试笔记")
+        self.assertEqual(result[0]["title"], "\u6d4b\u8bd5\u7b14\u8bb0")
 
     def test_list_input(self):
         result = format_xhs_result([self.SAMPLE_NOTE])
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["title"], "测试笔记")
+        self.assertEqual(result[0]["title"], "\u6d4b\u8bd5\u7b14\u8bb0")
 
     def test_note_card_wrapper(self):
         """Handle notes nested under 'note_card'."""
         wrapped = {"note_card": self.SAMPLE_NOTE}
         result = format_xhs_result(wrapped)
-        self.assertEqual(result["title"], "测试笔记")
+        self.assertEqual(result["title"], "\u6d4b\u8bd5\u7b14\u8bb0")
 
     def test_with_comments(self):
         note = dict(self.SAMPLE_NOTE)
         note["comments"] = [
             {
-                "content": "写得好！",
-                "user_info": {"nickname": "路人甲", "user_id": "u456"},
+                "content": "\u5199\u5f97\u597d\uff01",
+                "user_info": {"nickname": "\u8def\u4eba\u7532", "user_id": "u456"},
                 "like_count": 5,
                 "sub_comment_count": 1,
-                "ip_location": "上海",
+                "ip_location": "\u4e0a\u6d77",
                 "status": 0,
             }
         ]
         result = format_xhs_result(note)
         self.assertEqual(len(result["comments"]), 1)
-        self.assertEqual(result["comments"][0]["content"], "写得好！")
-        self.assertEqual(result["comments"][0]["user"], "路人甲")
+        self.assertEqual(result["comments"][0]["content"], "\u5199\u5f97\u597d\uff01")
+        self.assertEqual(result["comments"][0]["user"], "\u8def\u4eba\u7532")
         self.assertEqual(result["comments"][0]["like_count"], 5)
         self.assertNotIn("ip_location", result["comments"][0])
 

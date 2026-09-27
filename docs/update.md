@@ -5,13 +5,7 @@
 Copy this to your AI Agent:
 
 ```
-帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
-```
-
-Or in English:
-
-```
-Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+Update Agent Reach: https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/update.md
 ```
 
 ---
@@ -32,17 +26,17 @@ Update Agent Reach to the latest version, refresh upstream tools, migrate from r
 agent-reach check-update
 ```
 
-If it says "已是最新版本", skip to Step 4 (verify). Otherwise continue.
+If it says "Already the latest version", skip to Step 4 (verify). Otherwise continue.
 
 ### Step 2: Update Agent Reach package
 
 ```bash
-pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install --upgrade https://github.com/jermiah/Agent-Reach/archive/main.zip
 ```
 
 > If pip complains about `externally-managed-environment` (PEP 668), the user
 > originally installed via pipx or a venv — use the matching command:
-> `pipx install --force https://github.com/Panniantong/agent-reach/archive/main.zip`
+> `pipx install --force https://github.com/jermiah/Agent-Reach/archive/main.zip`
 > or activate `~/.agent-reach-venv` first.
 
 ### Step 3: Refresh upstream tools
@@ -67,13 +61,13 @@ which opencli  >/dev/null 2>&1 && npm update -g @jackwener/opencli 2>/dev/null
 ```
 
 **Desktop users without OpenCLI**: since v1.5.0 OpenCLI is the preferred
-backend for 小红书/Reddit (and adds B站 subtitles). Offer it once. For
-小红书, OpenCLI may use only an existing Chrome session explicitly controlled
+backend for XiaoHongShu/Reddit (and adds Bilibili subtitles). Offer it once. For
+XiaoHongShu, OpenCLI may use only an existing Chrome session explicitly controlled
 by the user. The update must never log the user in or read browser cookies:
 
-> "这次更新引入了 OpenCLI 后端。要装吗？装完只需你在 Chrome 商店点一次
-> 『添加扩展』。小红书 OpenCLI 只使用你已有的 Chrome 会话；如果没有现成
-> 会话，我不会自动登录，会改用 Cookie-Editor 配置 MCP / 存量工具。"
+> "This update introduces the OpenCLI backend. Do you want to install it? All you need to do is click once in the Chrome store
+> "Add extension". XiaoHongShu OpenCLI only uses your existing Chrome session; if there is no existing
+> session, I will not log in automatically and will use Cookie-Editor to configure the MCP/legacy tool instead. "
 
 If yes: `agent-reach install --system --channels opencli` and guide them through the
 extension click. If no, everything keeps working on existing backends.
@@ -92,16 +86,13 @@ agent-reach version
 agent-reach doctor
 ```
 
-Running `agent-reach doctor` (text mode) also makes sure an Agent Reach skill
-exists in detected agent skill directories. If the user already has a skill
-there, doctor preserves it instead of overwriting local customizations. Use
-`agent-reach skill --install` when you explicitly want to refresh the bundled
-skill files.
+`agent-reach doctor` is read-only. Use `agent-reach skill --install` when you
+explicitly want to refresh the bundled English skill files and references.
 
 Check the doctor output:
 
 - Every channel shows ✅ / [!] with a clear message, and multi-backend
-  channels (小红书/Reddit/B站/Twitter) report `当前后端：…`
+  channels (XiaoHongShu/Reddit/Bilibili/Twitter) report `Current backend:…`
 - If a previously-working channel now shows [X]/error, the message contains
   the exact fix (e.g. a venv-reinstall prescription) — run it, then re-check
 - `--json` gives the same data machine-readably (`active_backend` per channel)

@@ -31,17 +31,17 @@ class OpenCLISiteChannel(Channel):
         st = opencli_status()
         if not st.installed:
             return "off", (
-                f"未安装 {self.description} 后端。安装：\n"
+                f"{self.description} backend is not installed. Installation: \n"
                 "  agent-reach install --system --channels opencli\n"
-                f"然后在 Chrome 里登录 {self.login_hint}"
+                f"Then log in to {self.login_hint} in Chrome"
             )
         if st.broken:
             return "error", st.hint
 
         if st.ready:
             return "warn", (
-                f"OpenCLI 桥接已连接，但 {self.description} 的登录态和实际命令"
-                "未实时验证；Doctor 不执行平台命令，因此当前不标记为可用。"
-                f"需要时请先在 Chrome 里登录 {self.login_hint}"
+                f"OpenCLI bridge is connected, but {self.description} login status and commands are "
+                "not verified live. Doctor does not execute platform commands, so the channel is not marked as available. "
+                f"If necessary, please log in to {self.login_hint} in Chrome first"
             )
         return "warn", st.hint

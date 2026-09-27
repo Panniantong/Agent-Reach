@@ -1,301 +1,302 @@
-# 社交媒体 & 社区
+# Social Media and Community
 
-小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram。
+XiaoHongShu, Twitter/X, Bilibili, V2EX, Reddit, Facebook, Instagram.
 
-## 小红书 / XiaoHongShu（多后端）
+## XiaoHongShu (multiple backends)
 
-小红书有三个后端，**先跑 `agent-reach doctor --json` 看 xiaohongshu 的 `active_backend` 是哪个**，再用对应命令组。
+XiaoHongShu has three backends. First run `agent-reach doctor --json` to see which `active_backend` is XiaoHongShu’s, and then use the corresponding command group.
 
-### 后端 A：OpenCLI（桌面首选）
+### Backend A: OpenCLI (desktop preferred)
 
 ```bash
-# 搜索笔记
+# Search notes
 opencli xiaohongshu search "query" -f yaml
 
-# 读笔记正文+互动数据（用搜索结果里的完整 URL，含 xsec_token）
+# Read note content and engagement (use the full search-result URL, including xsec_token)
 opencli xiaohongshu note "NOTE_URL" -f yaml
 
-# 评论（支持楼中楼）
+# Comment (includes nested replies)
 opencli xiaohongshu comments NOTE_ID -f yaml
 
-# 首页推荐 feed
+# Home page recommendation feed
 opencli xiaohongshu feed -f yaml
 
-# 用户主页公开笔记
+# Public notes on user homepage
 opencli xiaohongshu user USER_ID -f yaml
 ```
 
-> 要求 Chrome 打开且装了 OpenCLI 扩展。OpenCLI 只使用用户已经存在且明确控制
-> 的 Chrome 会话；Agent Reach 不替用户登录，也不读取浏览器 Cookie。
-> `agent-reach configure xhs-cookies` 不会把 Cookie 注入 OpenCLI。
-> 如果没有现成会话，不要自动登录；改走后端 B/C，并按对应的
-> Cookie-Editor 手工导出流程配置。
+> Chrome must be open with the OpenCLI extension installed. OpenCLI only uses an
+> existing and explicitly controlled Chrome session. Agent Reach does not log in
+> for the user or read browser cookies.
+> `agent-reach configure xhs-cookies` does not inject cookies into OpenCLI.
+> If no session exists, do not automate login. Use backend B/C with a manual
+> Cookie-Editor export as described below.
 
-### 后端 B：xiaohongshu-mcp（服务器场景）
+### Backend B: xiaohongshu-mcp (server scenario)
 
 ```bash
-# 认证前先让用户用 Cookie-Editor 手工导出，再显式导入
+# Have the user export with Cookie-Editor, then explicitly import the cookies
 agent-reach configure xhs-cookies
 
-# 只读检查当前状态
+# Read only check current status
 mcporter call xiaohongshu.check_login_status --timeout 120000
 
-# 搜索
+# search
 mcporter call xiaohongshu.search_feeds keyword="query" --timeout 120000
 
-# 笔记详情+评论（feed_id 和 xsec_token 从搜索结果取）
+# Note details+Comment (feed_id and xsec_token Take from search results)
 mcporter call xiaohongshu.get_feed_detail feed_id="..." xsec_token="..." --timeout 120000
 ```
 
-> 首次调用会自动下载约 150MB 无头浏览器，务必带 `--timeout 120000`。
-> 认证只走 Cookie-Editor 手工导出；导入后先运行 `check_login_status`。
-> 该显式命令会保存/导入用户提供的 xiaohongshu.com 同域 Cookie 集，用户应
-> 确认范围；非 xiaohongshu.com 域 Cookie 会被忽略。
+> The first call will automatically download about 150MB headless browser, be sure to bring `--timeout 120000`.
+> Authentication only uses Cookie-Editor to manually export; run `check_login_status` first after importing.
+> This explicit command will save/import the xiaohongshu.com same-domain cookie set provided by the user. The user should
+> Confirm scope; non-xiaohongshu.com domain cookies will be ignored.
 
-### 后端 C：xhs-cli（存量备选，上游 2026-03 起停更）
+### Backend C: xhs-cli (legacy installations; upstream maintenance stopped in March 2026)
 
 ```bash
-xhs search "query"          # 搜索
-xhs read NOTE_ID_OR_URL     # 读笔记（必须用搜索结果中的 URL/ID，不能裸 note_id）
-xhs comments NOTE_ID_OR_URL # 评论
-xhs hot                     # 热门
-xhs feed                    # 推荐
+xhs search "query"          # search
+xhs read NOTE_ID_OR_URL     # read notes (must be used in the search results URL/ID, Can't be naked note_id)
+xhs comments NOTE_ID_OR_URL # Comment
+xhs hot                     # Popular
+xhs feed                    # recommend
 ```
 
-> 已知不稳定：`xhs user` / `xhs user-posts` / `xhs favorites` 可能返回 API error（上游停更无人修）。新装用户建议直接走后端 A/B。
+> Known to be unstable: `xhs user` / `xhs user-posts` / `xhs favorites` may return an API error (upstream stops updating and no one fixes it). New users are advised to go directly to backend A/B.
 
-### 通用注意事项
+### General Notes
 
-> **认证边界**: Agent Reach 不得替用户执行小红书登录，也不得读取浏览器
-> Cookie。OpenCLI 只能使用用户已有且明确控制的 Chrome 会话；
-> xiaohongshu-mcp / 存量工具使用 Cookie-Editor 手工导出。
+> **Authentication Boundary**: Agent Reach must not perform XiaoHongShu login for the user, nor must it read the browser
+> Cookies. OpenCLI can only use Chrome sessions that the user already has and explicitly controls;
+> xiaohongshu-mcp / The legacy tool uses Cookie-Editor to manually export.
 >
-> **xsec_token 限制**: 小红书强制 xsec_token 机制，**不能直接用裸 note_id 去读**。正确流程：先搜索/feed 拿结果，再用结果中的完整 URL/ID 去读。三个后端都一样。
+> **xsec_token restriction**: XiaoHongShu enforces the xsec_token mechanism, and **cannot directly use bare note_id to read**. Correct process: First search/feed to get the results, and then use the complete URL/ID in the results to read. All three backends are the same.
 >
-> **频率控制**: 高频请求（批量搜索、深翻评论）会触发验证码，平台限制无法绕过。每次操作间隔 2-3 秒。
+> **Frequency Control**: High-frequency requests (batch search, deep reading of comments) will trigger verification codes, and platform restrictions cannot be bypassed. The interval between each operation is 2-3 seconds.
 >
-> **写操作（发帖/评论/点赞）**: 建议只读。xhs-cli v0.6.x 写操作可能因签名问题返回 406。
+> **Writing operations (post/comment/like)**: Read-only is recommended. xhs-cli v0.6.x write operations may return 406 due to signature issues.
 
 ## Twitter/X (twitter-cli)
 
-### 认证前置条件
+### Authentication prerequisites
 
-`agent-reach configure twitter-cookies` 通过隐藏输入保存的 Cookie 只供
-`agent-reach doctor` 检查显式凭据是否齐全。`doctor` 不执行上游
-`twitter status`，也不会设置当前 Shell。运行下面任何 `twitter` 命令前，
-必须在同一个 Shell 或子进程环境中显式提供：
+`agent-reach configure twitter-cookies` saves credentials through a hidden prompt.
+`agent-reach doctor` only checks that those credentials are present; it does not
+execute `twitter status` or configure the current shell. Before running the commands
+below, explicitly set these variables in the shell or child-process environment:
 
 ```bash
 export TWITTER_AUTH_TOKEN="..."
 export TWITTER_CT0="..."
 ```
 
-### 稳定命令
+### Stable command
 
 ```bash
-# 首页时间线（最稳定）
+# Home Timeline (most stable)
 twitter feed -n 20
 
-# 读取单条推文（含回复）
+# Read a single tweet (with reply)
 twitter tweet URL_OR_ID
 
-# 读取长文 / X Article
+# Read long text / X Article
 twitter article URL_OR_ID
 
-# 用户时间线
+# User timeline
 twitter user-posts @username -n 20
 
-# 用户资料
+# User profile
 twitter user @username
 ```
 
-### 可能不稳定的命令
+### Potentially unstable commands
 
 ```bash
-# 搜索推文（Twitter 频繁改 GraphQL 端点，可能 404）
+# Search tweets (Twitter Change frequently GraphQL endpoint, possible 404)
 twitter search "query" -n 10
 
-# likes（2024 年后只能看自己的，平台限制）
+# Likes (since 2024, platform restrictions allow viewing only your own likes)
 twitter likes
 ```
 
-### search 失败时的重试链（按序执行，成功即停）
+### Retry chain when search fails (execute in order, stop on success)
 
-1. 直接重试一次（偶发失败常见）：`twitter search "query" -n 10`
-2. 升级后再试：`pipx upgrade twitter-cli && twitter search "query" -n 10`
-3. 换 OpenCLI 备选（桌面，复用浏览器登录态）：`opencli twitter search "query" -f yaml`
-4. 都不行就改用 `twitter feed` / `twitter user-posts @somebody` 等稳定命令绕路
+1. Try again directly (occasional failures are common): `twitter search "query" -n 10`
+2. Try again after upgrading: `pipx upgrade twitter-cli && twitter search "query" -n 10`
+3. Change to OpenCLI alternative (desktop, reuse browser login state): `opencli twitter search "query" -f yaml`
+4. If all else fails, use stable commands such as `twitter feed` / `twitter user-posts @somebody` to bypass it.
 
-### 重要注意事项
+### Important Notes
 
-> **安装**: `pipx install twitter-cli`（确保 v0.8.5+）
+> **Installation**: `pipx install twitter-cli` (ensuring v0.8.5+)
 >
-> **认证**: 只用 Cookie-Editor 手工导出，再显式设置环境变量
-> `TWITTER_AUTH_TOKEN` + `TWITTER_CT0`；不要依赖自动浏览器读取。
+> **Authentication**: Only use Cookie-Editor to export manually, and then explicitly set environment variables
+> `TWITTER_AUTH_TOKEN` + `TWITTER_CT0`; don't rely on automatic browser reading.
 >
-> **IP 风控**: 不要在 VPS/数据中心 IP 上频繁调用，尤其是 followers/following，有封号风险。使用住宅代理或本地环境。
+> **IP Risk Control**: Do not make frequent calls on VPS/data center IP, especially followers/following, as there is a risk of account ban. Use a residential proxy or local environment.
 >
-> **OpenCLI 备选**: 桌面装了 OpenCLI 的话，`opencli twitter search/article/user-posts -f yaml` 全套可用（浏览器登录态，无需 cookie 环境变量）。
+> **OpenCLI alternative**: If OpenCLI is installed on the desktop, the full set of `opencli twitter search/article/user-posts -f yaml` is available (browser login state, no cookie environment variable required).
 >
-> **输出格式**: 建议用 `--yaml` 或 `--json` 获得结构化输出，对 AI agent 更友好。
+> **Output format**: It is recommended to use `--yaml` or `--json` to obtain structured output, which is more friendly to AI agents.
 
-## B站 / Bilibili
+## Bilibili
 
-> ⚠️ **不要用 yt-dlp 读 B站**（风控已全面 412 拦截，实测无解）。用 bili-cli / OpenCLI。
+> ⚠️ **Do not use yt-dlp to read Bilibili** (risk control has been fully blocked with 412, and there is no solution in the actual test). Use bili-cli/OpenCLI.
 
 ```bash
-# 搜索 / 热门 / 视频详情（bili-cli，只读无需登录）
+# search / Popular / Video details (bili-cli, Read only no login required)
 bili search "query" --type video -n 5
 bili hot -n 10
 bili video BVxxx
 
-# 字幕（OpenCLI，需桌面 Chrome）
+# subtitle (OpenCLI, Desktop required Chrome)
 opencli bilibili subtitle BVxxx
 ```
 
-> 详细命令（音频转写、API 直连兜底）见 [references/video.md](video.md)。
+> For detailed commands (audio transcription, API direct connection), see [references/video.md](video.md).
 
-## V2EX (公开 API)
+## V2EX (Public API)
 
-无需认证，直接调用公开 API。
+No authentication required, call the public API directly.
 
-### 热门主题
+### Popular Topics
 
 ```bash
 curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1.0"
 ```
 
-### 节点主题
+### Node topics
 
 ```bash
-# node_name 如: python, tech, jobs, qna, programmers
+# node_name like: python, tech, jobs, qna, programmers
 curl -s "https://www.v2ex.com/api/topics/show.json?node_name=python&page=1" -H "User-Agent: agent-reach/1.0"
 ```
 
-### 主题详情
+### Topic details
 
 ```bash
-# topic_id 从 URL 获取，如 https://www.v2ex.com/t/1234567
+# topic_id from URL get, like https://www.v2ex.com/t/1234567
 curl -s "https://www.v2ex.com/api/topics/show.json?id=TOPIC_ID" -H "User-Agent: agent-reach/1.0"
 ```
 
-### 主题回复
+### Topic reply
 
 ```bash
 curl -s "https://www.v2ex.com/api/replies/show.json?topic_id=TOPIC_ID&page=1" -H "User-Agent: agent-reach/1.0"
 ```
 
-### 用户信息
+### User information
 
 ```bash
 curl -s "https://www.v2ex.com/api/members/show.json?username=USERNAME" -H "User-Agent: agent-reach/1.0"
 ```
 
-### Python 调用示例
+### Python call example
 
 ```python
 from agent_reach.channels.v2ex import V2EXChannel
 
 ch = V2EXChannel()
 
-# 获取热门帖子
+# Get popular posts
 topics = ch.get_hot_topics(limit=10)
 for t in topics:
-    print(f"[{t['node_title']}] {t['title']} ({t['replies']} 回复)")
+    print(f"[{t['node_title']}] {t['title']} ({t['replies']} reply)")
 
-# 获取节点帖子
+# Get node posts
 node_topics = ch.get_node_topics("python", limit=5)
 
-# 获取帖子详情 + 回复
+# Get post details + reply
 topic = ch.get_topic(1234567)
 print(topic["title"], "—", topic["author"])
 
-# 获取用户信息
+# Get user information
 user = ch.get_user("Livid")
 ```
 
-> **节点列表**: https://www.v2ex.com/planes
+> **Node List**: https://www.v2ex.com/planes
 
-## Reddit（多后端，必须登录态）
+## Reddit (multiple backends, must be logged in)
 
-**Reddit 没有零配置路径**：匿名 `.json` 端点已被封（403），官方 API 自 2025-11 起人工审批基本不批。两个后端都靠登录态，先跑 `agent-reach doctor --json` 看 reddit 的 `active_backend`。中国大陆访问需代理。
+**Reddit does not have a zero-configuration path**: The anonymous `.json` endpoint has been blocked (403), and the official API has basically not been approved manually since 2025-11. Both backends rely on the login state. First run `agent-reach doctor --json` to see reddit's `active_backend`. Access from mainland China requires a proxy.
 
-### 后端 A：OpenCLI（桌面首选，复用浏览器登录态）
+### Backend A: OpenCLI (desktop preferred, reuse browser login state)
 
 ```bash
-# 搜索帖子
+# Search posts
 opencli reddit search "query" -f yaml
 
-# 读帖子全文 + 评论
+# Read full post + Comment
 opencli reddit read POST_ID -f yaml
 
-# 浏览 subreddit / 热门 / Popular
+# Browse subreddit / Popular / Popular
 opencli reddit subreddit LocalLLaMA -f yaml
 opencli reddit hot -f yaml
 opencli reddit popular -f yaml
 
-# subreddit 元信息（订阅数、简介）
+# subreddit Meta information (Number of subscriptions, Introduction)
 opencli reddit subreddit-info LocalLLaMA -f yaml
 ```
 
-> 要求 Chrome 打开且浏览器里登录过 reddit.com。
+> Requires Chrome to be open and reddit.com logged into the browser.
 
-### 后端 B：rdt-cli（存量/服务器备选，上游 2026-03 起停更）
+### Backend B: rdt-cli (legacy/server alternative, upstream maintenance stopped in March 2026)
 
 ```bash
-rdt search "query" --limit 10   # 搜索帖子
-rdt read POST_ID                # 读帖子全文 + 评论
-rdt sub python --limit 20       # 浏览 subreddit
-rdt popular --limit 10          # 浏览热门
-rdt all --limit 10              # 浏览 /r/all
+rdt search "query" --limit 10   # Search posts
+rdt read POST_ID                # Read full post + Comment
+rdt sub python --limit 20       # Browse subreddit
+rdt popular --limit 10          # Browse popular
+rdt all --limit 10              # Browse /r/all
 ```
 
-> **安装**: `pipx install 'git+https://github.com/public-clis/rdt-cli.git'`（PyPI 版本落后，需从 GitHub 装 v0.4.2+）。先 `rdt login` 才能搜索和阅读（服务器无浏览器时手动写 Cookie，见 doctor 提示）。
-> 建议使用 `--yaml` 输出，对 AI agent 更友好。
+> **Installation**: `pipx install 'git+https://github.com/public-clis/rdt-cli.git'` (the PyPI version is lagging behind, you need to install v0.4.2+ from GitHub). Run `rdt login` before searching or reading (manually write Cookie when the server does not have a browser, see doctor's tips).
+> It is recommended to use `--yaml` output, which is more friendly to AI agents.
 
-### 高级选项：官方 API + PRAW（仅限已有凭证的用户）
+### Advanced options: Official API + PRAW (only for users with existing credentials)
 
-2025-11 前注册过 Reddit script app（持有 client_id/client_secret）的用户可以用 PRAW 走官方 API（100 QPM 免费）。新申请需人工审批且个人项目基本不批，**不要推荐新用户走这条路**。
+Users who have registered the Reddit script app (with client_id/client_secret) before 2025-11 can use PRAW to use the official API (100 QPM free). New applications require manual approval and personal projects are basically not approved. **Do not recommend new users to take this path**.
 
-## Facebook（OpenCLI，必须登录态）
+## Facebook (OpenCLI, must be logged in)
 
-Facebook 走 OpenCLI，复用用户 Chrome 里的 facebook.com 登录态。先跑 `agent-reach doctor --json` 看 facebook 的 `active_backend`，正常应为 `OpenCLI`。不要推荐 Jina/Exa/Graph API 作为默认路径。
+Facebook uses OpenCLI to reuse the facebook.com login status in users’ Chrome. Run `agent-reach doctor --json` first to see `active_backend` on Facebook. Normally it should be `OpenCLI`. Do not recommend Jina/Exa/Graph API as the default path.
 
 ```bash
-# 搜索用户 / 主页 / 帖子
+# Search users / Home page / Post
 opencli facebook search "query" -f yaml
 
-# 用户或主页信息
+# User or Page information
 opencli facebook profile zuck -f yaml
 
-# 当前账号 News Feed
+# Current account News Feed
 opencli facebook feed --limit 10 -f yaml
 
-# 当前账号可见的群组列表/最近动态
+# List of groups visible to the current account/Latest news
 opencli facebook groups --limit 20 -f yaml
 ```
 
-> 要求 Chrome 打开且装了 OpenCLI 扩展，并已登录 facebook.com。Facebook Groups 当前只承诺读取当前账号可见的群组列表/最近动态，不承诺任意群帖子和评论 API。
+> Requires Chrome to be open with the OpenCLI extension installed, and logged in to facebook.com. Facebook Groups currently only commits to reading the group list/recent updates visible to the current account, and does not commit to any group post and comment API.
 
-## Instagram（OpenCLI，必须登录态）
+## Instagram (OpenCLI, must log in)
 
-Instagram 走 OpenCLI，复用用户 Chrome 里的 instagram.com 登录态。先跑 `agent-reach doctor --json` 看 instagram 的 `active_backend`，正常应为 `OpenCLI`。不要默认恢复 instaloader；历史上 cookies/401/429 不稳定。
+Instagram uses OpenCLI and reuses the user’s instagram.com login status in Chrome. Run `agent-reach doctor --json` first and see `active_backend` on instagram. Normally it should be `OpenCLI`. Don't restore instaloader by default; cookies/401/429 are historically unstable.
 
 ```bash
-# 搜索用户（不是全站帖子关键词搜索）
+# Search users (Not a site-wide post keyword search)
 opencli instagram search "query" -f yaml
 
-# 用户 Profile
+# user Profile
 opencli instagram profile nasa -f yaml
 
-# 用户最近帖子
+# User's recent posts
 opencli instagram user nasa --limit 12 -f yaml
 
 # Explore / Discover
 opencli instagram explore --limit 20 -f yaml
 
-# 当前账号收藏
+# Current account collection
 opencli instagram saved --limit 20 -f yaml
 ```
 
-> 要求 Chrome 打开且装了 OpenCLI 扩展，并已登录 instagram.com。`instagram search` 是用户搜索；读帖子需要先确定 username，再用 `instagram user USERNAME`。若出现 429 / login required，先让用户在 Chrome 里重新登录并降低频率。
+> Requires Chrome to be open with the OpenCLI extension installed and logged in to instagram.com. `instagram search` is a user search; to read the post, you need to determine the username first, and then use `instagram user USERNAME`. If 429 / login required appears, first ask the user to log in again in Chrome and reduce the frequency.

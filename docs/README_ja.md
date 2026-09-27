@@ -7,7 +7,7 @@
 <p align="center">
   <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-green.svg?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://github.com/Panniantong/agent-reach/stargazers"><img src="https://img.shields.io/github/stars/Panniantong/agent-reach?style=for-the-badge" alt="GitHub Stars"></a>
+  <a href="https://github.com/jermiah/Agent-Reach/stargazers"><img src="https://img.shields.io/github/stars/Panniantong/agent-reach?style=for-the-badge" alt="GitHub Stars"></a>
 </p>
 
 <p align="center">
@@ -34,7 +34,7 @@ AIエージェントはすでにインターネットにアクセスできます
 **Agent Reach はこれを1つのコマンドにまとめます：**
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Install Agent Reach: https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/install.md
 ```
 
 これをエージェントにコピーするだけ。数分後には、ツイートの閲覧、Redditの検索、Bilibiliの視聴が可能になります。
@@ -42,7 +42,7 @@ Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/m
 **すでにインストール済み？1コマンドでアップデート：**
 
 ```
-Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+Update Agent Reach: https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/update.md
 ```
 
 ### ✅ 始める前に知っておきたいこと
@@ -85,21 +85,21 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 以下をAIエージェント（Claude Code、OpenClaw、Cursor等）にコピーしてください：
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Install Agent Reach: https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/install.md
 ```
 
 エージェントが自動でインストールし、環境を検出し、何が使えるかを教えてくれます。
 
 > 🔄 **すでにインストール済み？** 1コマンドでアップデート：
 > ```
-> Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+> Update Agent Reach: https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/update.md
 > ```
 
 <details>
 <summary>手動インストール</summary>
 
 ```bash
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install https://github.com/jermiah/Agent-Reach/archive/main.zip
 agent-reach install --env=auto           # 読み取り専用チェック（デフォルト）
 agent-reach install --env=auto --system  # システム変更を明示的に許可した場合のみ
 ```
@@ -109,7 +109,7 @@ agent-reach install --env=auto --system  # システム変更を明示的に許�
 <summary>Skillとしてインストール（Claude Code / OpenClaw / Skills対応の任意のエージェント）</summary>
 
 ```bash
-npx skills add Panniantong/Agent-Reach@agent-reach
+npx skills add jermiah/Agent-Reach@agent-reach
 ```
 
 Skillインストール後、エージェントは`agent-reach` CLIが利用可能かを自動検出し、必要に応じてインストールします。
@@ -235,13 +235,13 @@ channels/
 
 ## コントリビューション
 
-このプロジェクトは完全にバイブコーディング 🎸 で作られました。あちこちに粗い部分があるかもしれません — すみません！バグを見つけたら、遠慮なく[Issue](https://github.com/Panniantong/agent-reach/issues)を開いてください。できるだけ早く修正します。
+このプロジェクトは完全にバイブコーディング 🎸 で作られました。あちこちに粗い部分があるかもしれません — すみません！バグを見つけたら、遠慮なく[Issue](https://github.com/jermiah/Agent-Reach/issues)を開いてください。できるだけ早く修正します。
 
 **新しいチャンネルが欲しい？** Issueでリクエストするか、自分でPRを提出してください。
 
 **ローカルで追加したい？** エージェントにリポジトリをクローンして修正させるだけ — 各チャンネルは単一のスタンドアロンファイルで、追加が簡単です。
 
-[PR](https://github.com/Panniantong/agent-reach/pulls)はいつでも歓迎です！
+[PR](https://github.com/jermiah/Agent-Reach/pulls)はいつでも歓迎です！
 
 ---
 
@@ -268,7 +268,7 @@ Agent Reach は [rdt-cli](https://github.com/public-clis/rdt-cli) でRedditに�
 <details>
 <summary><strong>Agent Reach は Claude Code / Cursor / Windsurf / OpenClaw で動作する？</strong></summary>
 
-はい！Agent Reach はインストーラー + 設定ツールです。シェルコマンドを実行できるあらゆるAIコーディングエージェントで使用できます — Claude Code、Cursor、Windsurf、OpenClaw、Codex等。`pip install https://github.com/Panniantong/agent-reach/archive/main.zip` の後、まず `agent-reach install` で読み取り専用チェックを行い、システム変更を明示的に許可した場合だけ `agent-reach install --system` を実行します。PyPI の同名パッケージは別プロジェクトです。
+はい！Agent Reach はインストーラー + 設定ツールです。シェルコマンドを実行できるあらゆるAIコーディングエージェントで使用できます — Claude Code、Cursor、Windsurf、OpenClaw、Codex等。`pip install https://github.com/jermiah/Agent-Reach/archive/main.zip` の後、まず `agent-reach install` で読み取り専用チェックを行い、システム変更を明示的に許可した場合だけ `agent-reach install --system` を実行します。PyPI の同名パッケージは別プロジェクトです。
 </details>
 
 <details>
@@ -306,7 +306,7 @@ Agent Reach は小紅書へのログインを代行せず、ブラウザ Cookie 
   <img src="wechat-group-qr.jpg" width="280" alt="WeChat QR">
 </p>
 
-> バグ報告や機能リクエストは [GitHub Issues](https://github.com/Panniantong/Agent-Reach/issues) をご利用ください — 追跡が容易です。
+> バグ報告や機能リクエストは [GitHub Issues](https://github.com/jermiah/Agent-Reach/issues) をご利用ください — 追跡が容易です。
 
 ## ライセンス
 

@@ -33,7 +33,7 @@ def _is_antibot_page(body: bytes) -> bool:
 
 class WebChannel(Channel):
     name = "web"
-    description = "任意网页"
+    description = "Any web page"
     backends = ["Jina Reader"]
     tier = 0
 
@@ -41,12 +41,12 @@ class WebChannel(Channel):
         return True  # Fallback — handles any URL
 
     def check(self, config=None):
-        # 恒可用兜底渠道：无本地命令、不做网络探测（doctor 已有多个渠道触网），保持零开销
+        # Always available back-end channels: no local commands, no network detection (doctor has access to the network through multiple channels), and zero overhead
         self.active_backend = self.backends[0]
-        return "ok", "通过 Jina Reader 读取任意网页（curl https://r.jina.ai/URL）"
+        return "ok", "Read any web page through Jina Reader (curl https://r.jina.ai/URL)"
 
     def read(self, url: str) -> str:
-        """通过 Jina Reader 读取网页，返回 Markdown 全文。"""
+        """Read web pages through Jina Reader and return the full text of Markdown."""
         url = normalize_public_http_url(url)
         jina_url = f"https://r.jina.ai/{url}"
         req = urllib.request.Request(
@@ -61,7 +61,7 @@ class WebChannel(Channel):
             )
         if _is_antibot_page(body):
             raise RuntimeError(
-                "Jina Reader 返回了反爬验证页，未获取到目标内容；"
-                "请改用站点专用工具或浏览器读取"
+                "Jina Reader returned the anti-bot verification page and failed to obtain the target content; "
+                "Please use site-specific tools or browsers to read it instead."
             )
         return body.decode("utf-8")

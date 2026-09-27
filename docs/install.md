@@ -5,12 +5,12 @@
 Copy this to your AI Agent:
 
 ```
-帮我安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Help me install Agent Reach:https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/install.md
 ```
 
 > 🛡️ **Safe by default:** `agent-reach install` only checks the machine and lists missing dependencies:
 > ```
-> 帮我安全检查并安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+> Help me with security checks and install Agent Reach: https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/install.md
 > ```
 > Only use `--system` after the user explicitly approves system-level installs and configuration writes.
 
@@ -49,32 +49,32 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 ### Step 1: Install the basics
 
 ```bash
-# 推荐：pipx（最省心）
-pipx install https://github.com/Panniantong/agent-reach/archive/main.zip
+# recommend:pipx (The most worry-free)
+pipx install https://github.com/jermiah/Agent-Reach/archive/main.zip
 agent-reach install --env=auto               # Read-only check (default)
 # After the user explicitly approves system changes:
 agent-reach install --env=auto --system
 
-# 如果你的 Python 来自 Homebrew / 遇到 PEP 668（externally-managed-environment）
-# 用虚拟环境安装：
+# if your Python from Homebrew / meet PEP 668 (externally-managed-environment)
+# Install using virtual environment:
 python3 -m venv ~/.agent-reach-venv
 source ~/.agent-reach-venv/bin/activate
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install https://github.com/jermiah/Agent-Reach/archive/main.zip
 agent-reach install --env=auto               # Read-only check (default)
 # After the user explicitly approves system changes:
 agent-reach install --env=auto --system
 ```
 
 > 💡 **Windows / Microsoft Store Python alias?**
-> 如果 `python3 --version` 打开 Microsoft Store，或 `where python3` 指向
-> `...\AppData\Local\Microsoft\WindowsApps\python3.exe`，说明 `python3` 是 Windows
-> 的 Store alias，不是可用的 Python 安装。请改用 Python Launcher `py -3`，或实际安装目录里的 `python.exe`。
+> If `python3 --version` opens the Microsoft Store, or `where python3` points to
+> `...\AppData\Local\Microsoft\WindowsApps\python3.exe`, indicating that `python3` is Windows
+> The Store alias is not available for Python installations. Please use Python Launcher `py -3` instead, or `python.exe` in the actual installation directory.
 >
-> PowerShell 示例：
+> PowerShell example:
 > ```powershell
 > py -3 -m venv $env:USERPROFILE\.agent-reach-venv
 > $env:USERPROFILE\.agent-reach-venv\Scripts\Activate.ps1
-> python -m pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+> python -m pip install https://github.com/jermiah/Agent-Reach/archive/main.zip
 > agent-reach install --env=auto
 > ```
 
@@ -82,8 +82,8 @@ The default command checks core infrastructure (gh CLI, Node.js, mcporter, Exa s
 
 - Web (Jina Reader), YouTube, GitHub, RSS, Exa Search, V2EX, Bilibili (basic)
 
-> 💡 **macOS / Homebrew Python 提示 `externally-managed-environment`？**
-> 这是 PEP 668 保护，不是 Agent Reach 本身的问题。优先用 `pipx install ...`，或先创建 `venv` 再安装。
+> 💡 **macOS/Homebrew Python prompt `externally-managed-environment`?**
+> This is a PEP 668 protection, not an issue with Agent Reach itself. Use `pipx install ...` first, or create `venv` first and then install it.
 
 **Install modes:**
 
@@ -98,30 +98,30 @@ agent-reach install --env=auto --dry-run   # Preview what --system would do
 
 After installing the basics, **ask the user** which additional channels they need. Present this list:
 
-> 基础渠道装好了！你现在可以让我搜网页、看 YouTube、读 GitHub 等。
+> The basic channels are installed! You can now let me search the web, watch YouTube, read GitHub, etc.
 >
-> 还有这些可选渠道，你需要哪些？
+> Among these alternative channels, which ones do you need?
 >
-> - 🌟 **OpenCLI**（桌面推荐）— 一次安装即可提供 Reddit/Facebook/Instagram/B站字幕/Twitter 备选，并作为小红书桌面后端；小红书只使用用户已有且明确控制的 Chrome 会话
-> - 🐦 **Twitter/X** — 搜推文、看时间线（需要登录 Cookie）
-> - 📈 **雪球** — 股票行情、热门帖子（需要登录 Cookie）
-> - 🎙️ **小宇宙播客** — 音频转文字（需要免费 Groq Key）
-> - 📕 **小红书** — 搜索、阅读、评论（OpenCLI 用已有会话；MCP/存量工具用 Cookie-Editor）
-> - 📖 **Reddit** — 搜索和阅读帖子（必须登录态：桌面 OpenCLI 或 rdt-cli + Cookie）
-> - 📘 **Facebook** — 搜索、主页、Feed、群组列表（桌面走 OpenCLI，复用 Chrome 登录态）
-> - 📷 **Instagram** — 用户搜索、Profile、用户最近帖子、Explore（桌面走 OpenCLI，复用 Chrome 登录态）
-> - 📺 **B站完整版** — 热门、排行、搜索、视频详情（bili-cli，无需登录）
-> - 💼 **LinkedIn** — Profile、职位搜索
-> - 🎯 **Boss直聘** — 搜索岗位 + JD 全文（本地专用 Chrome；用户手动登录）
+> - 🌟 **OpenCLI** (Desktop recommendation) - One installation can provide Reddit/Facebook/Instagram/Bilibili subtitles/Twitter alternatives and serve as XiaoHongShu desktop backend; XiaoHongShu only uses Chrome sessions that the user already has and explicitly controls
+> - 🐦 **Twitter/X** — Search tweets and view timeline (requires cookie login)
+> - 📈 **Xueqiu** — Stock quotes, popular posts (requires login cookie)
+> - 🎙️ **Xiaoyuzhou Podcast** — audio to text (requires free Groq Key)
+> - 📕 **XiaoHongShu** — search, read, comment (OpenCLI uses existing session; MCP/legacy tool uses Cookie-Editor)
+> - 📖 **Reddit** — Search and read posts (requires login: desktop OpenCLI or rdt-cli + Cookie)
+> - 📘 **Facebook** — search, homepage, feed, group list (OpenCLI on desktop, reuse Chrome login state)
+> - 📷 **Instagram** — User search, Profile, user’s recent posts, Explore (OpenCLI on desktop, reuse Chrome login state)
+> - 📺 **Bilibili full version** — popular, ranking, search, video details (bili-cli, no login required)
+> - 💼 **LinkedIn** — Profile, job search
+> - 🎯 **Boss Zhipin** — Search positions + JD full text (local Chrome only; users log in manually)
 >
-> 告诉我你要哪些，比如"帮我装小红书和 Twitter"、"帮我装 Facebook 和 Instagram"。或者说"全部装"。
+> Tell me what you want, such as "Help me install XiaoHongShu and Twitter", "Help me install Facebook and Instagram". In other words, "install them all".
 
 Based on the user's choice, run:
 
 ```bash
 agent-reach install --env=auto --system --channels=opencli,xiaohongshu   # Desktop user chose XHS
 agent-reach install --env=auto --system --channels=facebook,instagram    # Desktop Meta channels
-agent-reach install --env=local --system --channels=boss                # Desktop Boss直聘
+agent-reach install --env=local --system --channels=boss                # Desktop Boss Zhipin
 agent-reach install --env=auto --system --channels=all                   # User approved everything
 ```
 
@@ -139,19 +139,19 @@ Only ask the user when you genuinely need their input (credentials, permissions,
 
 Some channels need credentials only the user can provide. Based on the doctor output, ask for what's missing:
 
-> 🔒 **Security tip:** For platforms that need cookies or browser sessions (Twitter, XiaoHongShu, Reddit, Facebook, Instagram, Boss直聘), we recommend using a **dedicated/secondary account** rather than your main account. Cookie/browser-session auth carries two risks:
+> 🔒 **Security tip:** For platforms that need cookies or browser sessions (Twitter, XiaoHongShu, Reddit, Facebook, Instagram, Boss Zhipin), we recommend using a **dedicated/secondary account** rather than your main account. Cookie/browser-session auth carries two risks:
 > 1. **Account ban** — platforms may detect non-browser API calls and restrict or ban the account
 > 2. **Credential exposure** — cookies grant full account access; using a secondary account limits the blast radius if credentials are ever compromised
 
-> 🍪 **Cookie / 登录态：**
+> 🍪 **Cookie / Login status: **
 >
-> 传统 CLI 需要 Cookie 的平台（Twitter、雪球等），**优先使用 Cookie-Editor 导入**，这是最简单最可靠的方式：
-> 1. 用户在自己的浏览器上登录对应平台
-> 2. 安装 [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) Chrome 插件
-> 3. 点击插件 → Export → Header String
-> 4. 把导出的字符串发给 Agent
+> For platforms where traditional CLI requires cookies (Twitter, Xueqiu, etc.), **import using Cookie-Editor** is preferred. This is the simplest and most reliable way:
+> 1. Users log in to the corresponding platform on their own browser
+> 2. Install [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) Chrome extension
+> 3. Click Plug-in → Export → Header String
+> 4. Send the exported string to Agent
 >
-> Twitter 只接受用户通过 Cookie-Editor 明确导出的内容。Agent Reach 不替用户执行小红书登录，也不读取小红书浏览器 Cookie；小红书 OpenCLI 只使用用户已有且明确控制的 Chrome 会话。没有现成会话时，改用 Cookie-Editor 导出后配置 xiaohongshu-mcp / 存量工具。雪球、Bilibili 可按平台显式导入，例如 `agent-reach configure --from-browser chrome --platform xueqiu`；命令不会扫描或保存其他平台。
+> Twitter only accepts content explicitly exported by the user via Cookie-Editor. Agent Reach does not perform XiaoHongShu login for the user, nor does it read XiaoHongShu browser cookies; XiaoHongShu OpenCLI only uses Chrome sessions that the user already has and explicitly controls. When there is no existing session, use Cookie-Editor to export and configure xiaohongshu-mcp / legacy tool instead. Xueqiu and Bilibili can be imported explicitly by platform, such as `agent-reach configure --from-browser chrome --platform xueqiu`; the command will not scan or save other platforms.
 
 **Twitter search & posting:**
 > "To unlock Twitter search, I need your Twitter cookies. Install the Cookie-Editor Chrome extension, go to x.com/twitter.com, click the extension → Export → Header String, and paste it to me."
@@ -160,9 +160,9 @@ Some channels need credentials only the user can provide. Based on the doctor ou
 agent-reach configure twitter-cookies
 ```
 
-这会把 `twitter_auth_token` 和 `twitter_ct0` 保存给 Agent Reach 自己的
-`doctor` 配置检查。`doctor` 不会实时执行上游 `twitter status`，也不会修改
-当前 Shell。直接运行 `twitter search/read/...` 前，必须在该进程环境中显式设置：
+This will save `twitter_auth_token` and `twitter_ct0` to Agent Reach's own
+`doctor` configuration check. `doctor` will not execute the upstream `twitter status` in real time, nor will it modify
+Current Shell. Before running `twitter search/read/...` directly, it must be explicitly set in the process environment:
 
 ```bash
 export TWITTER_AUTH_TOKEN="..."
@@ -170,162 +170,162 @@ export TWITTER_CT0="..."
 twitter search "query" -n 10
 ```
 
-> **代理说明（中国大陆等需要翻墙的网络环境）：**
+> **Agent instructions (mainland China and other network environments that require circumvention): **
 >
-> twitter-cli 和 rdt-cli 使用 Python，在需要代理的网络环境下可通过环境变量配置代理。
+> twitter-cli and rdt-cli use Python, and the proxy can be configured through environment variables in network environments that require a proxy.
 >
-> **你（Agent）需要做的：**
-> 1. 确认用户配了代理：`agent-reach configure proxy`（隐藏输入）
-> 2. 设置环境变量：`export HTTP_PROXY="..." HTTPS_PROXY="..."`
-> 3. Agent Reach 会自动处理剩下的，不需要用户做额外操作
+> **What you (Agent) need to do:**
+> 1. Confirm that the user is assigned a proxy: `agent-reach configure proxy` (hidden input)
+> 2. Set environment variable: `export HTTP_PROXY="..." HTTPS_PROXY="..."`
+> 3. Agent Reach will automatically handle the rest without requiring additional operations from the user.
 >
-> 如果用户报告 "fetch failed"，参考 [troubleshooting.md](troubleshooting.md)
+> If users report "fetch failed", refer to [troubleshooting.md](troubleshooting.md)
 
 **Reddit (login is mandatory — no zero-config path):**
-> Reddit 的匿名接口已被封、官方 API 需人工审批。桌面用户首选 OpenCLI（浏览器里登录过 reddit.com 即可用）；服务器/存量用户用 rdt-cli：
+> Reddit's anonymous interface has been blocked, and the official API requires manual approval. Desktop users prefer OpenCLI (available after logging into reddit.com in the browser); server/existing users use rdt-cli:
 
 ```bash
-# PyPI 落后，从 GitHub 装（与代码内 _RDT_GIT_SOURCE 同一钉定版本）
+# PyPI behind, from GitHub Pack (with code _RDT_GIT_SOURCE same pinned version)
 pipx install 'git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66'
-rdt login   # 自动提取浏览器 Cookie；服务器无浏览器时按 doctor 提示手动写 Cookie
+rdt login   # Automatic extraction of browsers Cookie;Press when the server does not have a browser doctor Prompt to write manually Cookie
 ```
 
-> 中国大陆访问 Reddit 需要代理；服务器 IP 被风控时可配住宅代理（如 https://webshare.io，约 $1/月）：
+> Mainland China needs a proxy to access Reddit; when the server IP is risk-controlled, a residential proxy can be configured (such as https://webshare.io, about $1/month):
 > ```bash
 > agent-reach configure proxy
 > ```
 
-**XiaoHongShu / 小红书（多后端，按环境选）:**
+**XiaoHongShu / XiaoHongShu (multiple backends, choose according to the environment):**
 
-> **认证边界：** Agent Reach 不替用户执行小红书登录，也不读取浏览器
-> Cookie。OpenCLI 只使用用户已经存在且明确控制的 Chrome 会话；
-> `agent-reach configure xhs-cookies` 不会把 Cookie 注入 OpenCLI 或 Chrome。
-> 如果没有现成会话，不要自动登录；改用 Cookie-Editor 手工导出后配置
-> xiaohongshu-mcp 或存量工具：
+> **Authentication Boundary:** Agent Reach does not perform XiaoHongShu login for the user, nor does it read the browser
+> Cookies. OpenCLI only uses an existing and explicitly controlled Chrome session;
+> `agent-reach configure xhs-cookies` does not inject cookies into OpenCLI or Chrome.
+> If there is no existing session, do not log in automatically; instead use Cookie-Editor to manually export and configure
+> xiaohongshu-mcp or legacy tool:
 >
 > ```bash
 > agent-reach configure xhs-cookies
 > ```
 >
-> 该显式命令会保存/导入用户提供的 xiaohongshu.com 同域 Cookie 集；请先确认
-> Cookie 名称和范围。非 xiaohongshu.com 域 Cookie 会被忽略。
+> This explicit command will save/import the xiaohongshu.com same-domain cookie set provided by the user; please confirm first
+> Cookie name and scope. Non-xiaohongshu.com domain cookies will be ignored.
 >
-> **桌面电脑（推荐 OpenCLI）：**
+> **Desktop (OpenCLI recommended):**
 
 ```bash
 agent-reach install --system --channels opencli
 ```
 
-> 装完后引导用户做唯一一步手动操作（Chrome 安全限制，无法代劳）：
-> 1. 打开 https://chromewebstore.google.com/detail/opencli/ildkmabpimmkaediidaifkhjpohdnifk
-> 2. 点「添加至 Chrome」
-> 3. 运行 `opencli doctor` 验证（显示 Extension: connected 即成功）
+> After installation, guide the user to do the only manual operation (Chrome security restrictions cannot do it for you):
+> 1. Open https://chromewebstore.google.com/detail/opencli/ildkmabpimmkaediidaifkhjpohdnifk
+> 2. Click "Add to Chrome"
+> 3. Run `opencli doctor` verification (it will be successful if Extension: connected is displayed)
 >
-> AUTH_REQUIRED 且用户没有现成会话时，不要替用户自动登录；改走下面的
-> xiaohongshu-mcp / 存量工具 Cookie-Editor 路线。
+> When AUTH_REQUIRED and the user does not have an existing session, do not automatically log in for the user; instead use the following
+> xiaohongshu-mcp / Legacy tool Cookie-Editor route.
 >
-> **服务器 / 无桌面环境（xiaohongshu-mcp）：**
-> 1. 从 https://github.com/xpzouying/xiaohongshu-mcp/releases 下载对应平台 binary 到 `~/.agent-reach/tools/`
-> 2. 启动服务（首次运行会自动下载约 150MB 无头浏览器，耐心等完成）
-> 3. 按上面的 Cookie-Editor 流程手工导入 Cookie
-> 4. 接入：`mcporter config add xiaohongshu http://localhost:18060/mcp --scope home`
-> 5. 调用时务必带 `--timeout 120000`
+> **Server/no desktop environment (xiaohongshu-mcp):**
+> 1. Download the corresponding platform binary from https://github.com/xpzouying/xiaohongshu-mcp/releases to `~/.agent-reach/tools/`
+> 2. Start the service (the first run will automatically download about 150MB of headless browser, wait patiently for completion)
+> 3. Follow the above Cookie-Editor process to manually import cookies
+> 4. Access: `mcporter config add xiaohongshu http://localhost:18060/mcp --scope home`
+> 5. Be sure to bring `--timeout 120000` when calling
 >
-> **存量用户（xhs-cli）：** 已装好的 xhs-cli 继续作为备选后端工作
-> （上游 2026-03 起停更，不推荐新装）；认证仍使用上面的 Cookie-Editor
-> 手工导出流程。
+> **Existing users (xhs-cli):** The installed xhs-cli continues to work as an alternative backend
+> (upstream maintenance stopped in March 2026, new installation is not recommended); authentication still uses the above Cookie-Editor
+> Manual export process.
 
-**Facebook / Instagram（桌面 OpenCLI）:**
-> 这两个平台走 OpenCLI：复用用户自己的 Chrome 登录态，不保存账号密码，不走 Meta Graph API 审批流。服务器/无桌面环境不推荐支持。
+**Facebook / Instagram (Desktop OpenCLI):**
+> These two platforms use OpenCLI: reuse the user's own Chrome login status, do not save the account password, and do not go through the Meta Graph API approval flow. Support is not recommended for server/desktop-less environments.
 
 ```bash
 agent-reach install --system --channels facebook,instagram
 ```
 
-> 装完后：
-> 1. 确认 Chrome 已安装 OpenCLI 扩展并通过 `opencli doctor`
-> 2. 在 Chrome 里登录 facebook.com / instagram.com
-> 3. Agent 直接调用：
+> After installation:
+> 1. Confirm that Chrome has installed the OpenCLI extension and passed `opencli doctor`
+> 2. Log in to facebook.com / instagram.com in Chrome
+> 3. Agent calls directly:
 >    ```bash
 >    opencli facebook search "query" -f yaml
 >    opencli facebook profile zuck -f yaml
 >    opencli facebook groups -f yaml
->    opencli instagram search "query" -f yaml     # 用户搜索
+> opencli instagram search "query" -f yaml # User search
 >    opencli instagram profile nasa -f yaml
->    opencli instagram user nasa -f yaml          # 指定用户最近帖子
+> opencli instagram user nasa -f yaml # Specify the latest posts of the user
 >    ```
 >
-> Facebook Groups 当前只承诺读取用户登录后可见的群组列表/最近动态，不承诺任意群帖子和评论 API。Instagram 的 search 是用户搜索，不是全站帖子关键词搜索；若提示 429/登录错误，先让用户在 Chrome 里重新登录并降低频率。
+> Facebook Groups currently only commits to reading the group list/recent updates visible after the user logs in, and does not commit to any group posts and comments API. Instagram's search is a user search, not a site-wide post keyword search; if a 429/login error is prompted, first ask the user to log in again in Chrome and reduce the frequency.
 
-**雪球 / Xueqiu (股票行情 + 热门帖子):**
-> "雪球需要登录后的 Cookie。请先在 Chrome 里登录 xueqiu.com，然后运行："
+**Xueqiu/Xueqiu (Stock Quotes + Popular Posts):**
+> "Xueqiu requires login cookies. Please log in to xueqiu.com in Chrome first, and then run:"
 
 ```bash
 agent-reach configure --from-browser chrome --platform xueqiu
 ```
 
-> 只会读取并保存雪球需要的最小 Cookie；不会顺带读取其他平台。
+> Only the minimum cookies required by Xueqiu will be read and saved; other platforms will not be read incidentally.
 
-**小宇宙播客 / Xiaoyuzhou Podcast (Groq Whisper):**
-> "小宇宙播客转文字已默认安装，只需要一个免费的 Groq API Key。"
+**Xiaoyuzhou Podcast / Xiaoyuzhou Podcast (Groq Whisper):**
+> "Xiaoyuzhou Podcast to Text is installed by default and only requires a free Groq API Key."
 
-脚本已随 Agent Reach 自动安装，用户只需提供 Key：
+The script is automatically installed with Agent Reach, the user only needs to provide the Key:
 
 ```bash
 agent-reach configure groq-key
 ```
 
-> **获取 Groq API Key（免费、无需信用卡、30 秒搞定）：**
-> 1. 打开 https://console.groq.com
-> 2. 用 Google/GitHub 账号登录（或注册）
-> 3. 左侧菜单 → API Keys → Create API Key
-> 4. 复制 Key（以 `gsk_` 开头），发给 Agent 即可
+> **Get Groq API Key (free, no credit card required, 30 seconds): **
+> 1. Open https://console.groq.com
+> 2. Log in (or register) with your Google/GitHub account
+> 3. Left menu → API Keys → Create API Key
+> 4. Copy the Key (starting with `gsk_`) and send it to the Agent
 >
-> **使用方式：**
-> 用户发一个小宇宙链接给 Agent，Agent 自动调用：
+> **How ​​to use:**
+> The user sends a Xiaoyuzhou link to the Agent, and the Agent automatically calls:
 > ```bash
 > bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh https://www.xiaoyuzhoufm.com/episode/xxxxx
 > ```
 >
-> 自动下载音频 → 转码切片 → Groq Whisper 转录 → 输出完整中文文字稿。
+> Automatically download audio → Transcode and slice → Groq Whisper transcription → Output complete Chinese transcript.
 >
-> **免费额度和限制：**
-> - 每小时约 2 小时音频（7200 秒），超出后等 15 分钟自动恢复
-> - 日常听几期播客完全够用
-> - 转录质量高（Whisper large-v3），但不区分说话人
-> - 2 小时以上的播客建议分批处理
+> **Free Quota and Limitations:**
+> - About 2 hours of audio (7200 seconds) per hour, automatically resume after 15 minutes
+> - Listening to a few podcasts every day is enough
+> - High transcription quality (Whisper large-v3), but does not differentiate between speakers
+> - Podcasts longer than 2 hours are recommended to be processed in batches
 
-**LinkedIn (可选 — mcp-server-linkedin):**
-> "LinkedIn 基本内容可通过 Jina Reader 读取。完整功能（Profile 详情、人才与职位搜索）需要 mcp-server-linkedin。"
+**LinkedIn (optional — mcp-server-linkedin):**
+> "Basic LinkedIn content can be read with Jina Reader. Full functionality (Profile details, talent and job search) requires mcp-server-linkedin."
 
-> **配置方式（推荐 stdio）：**
-> 先按官方说明安装 `uv`（会同时提供 `uvx`）：
+> **Configuration method (stdio recommended):**
+> First install `uv` according to the official instructions (`uvx` will be provided at the same time):
 > https://docs.astral.sh/uv/getting-started/installation/
 >
 > ```bash
 > mcporter config add linkedin --command uvx --arg mcp-server-linkedin@latest --env UV_HTTP_TIMEOUT=300 --scope home
 > ```
 >
-> `uvx` 会按需获取并启动最新版服务，无需另装 Python 包或常驻 HTTP 服务。
+> `uvx` will obtain and start the latest version of the service on demand, without the need to install additional Python packages or resident HTTP services.
 >
-> **首次登录（需要浏览器界面）：**
+> **First time login (requires browser interface):**
 > ```bash
 > uvx mcp-server-linkedin@latest --login
 > ```
-> 浏览器弹出后手动登录 LinkedIn；登录态会保存到 `~/.linkedin-mcp/profile/`。无桌面的服务器需在 VNC 等可见桌面中运行同一条登录命令。
+> Manually log in to LinkedIn after the browser pops up; the login status will be saved to `~/.linkedin-mcp/profile/`. Servers without desktops need to run the same login command in a visible desktop such as VNC.
 >
-> 详见 https://github.com/stickerdaniel/linkedin-mcp-server
+> See https://github.com/stickerdaniel/linkedin-mcp-server for details
 
-**Boss直聘（桌面专用 — boss-agent-cli + CDP）:**
+**Boss Zhipin (desktop only — boss-agent-cli + CDP):**
 
-当用户说“帮我配 Boss直聘”时，Agent 完成可自动完成的部分，只把网站登录留给用户：
+When the user says "help me configure Boss Zhipin", the Agent completes the part that can be completed automatically, leaving only the website login to the user:
 
-1. 先说明将安装一个上游 CLI、启动独立 Chrome 配置目录，并请求系统安装授权。
-2. 用户同意后运行：
+1. First explain that you will install an upstream CLI, launch the independent Chrome configuration directory, and request system installation authorization.
+2. Run after user agrees:
    ```bash
    agent-reach install --env=local --system --channels=boss
    ```
-3. 按操作系统启动只绑定本机回环地址的专用 Chrome：
+3. Start the dedicated Chrome that only binds the local loopback address according to the operating system:
    ```bash
    # macOS
    open -na "Google Chrome" --args --remote-debugging-address=127.0.0.1 \
@@ -337,30 +337,32 @@ agent-reach configure groq-key
      --remote-debugging-port=9222 --user-data-dir="$HOME/.boss-chrome-profile" \
      "https://www.zhipin.com/web/geek/job"
    ```
-   Windows PowerShell：
+   Windows PowerShell:
    ```powershell
    Start-Process chrome.exe -ArgumentList '--remote-debugging-address=127.0.0.1','--remote-debugging-port=9222',"--user-data-dir=$env:USERPROFILE\.boss-chrome-profile",'https://www.zhipin.com/web/geek/job'
    ```
-4. 暂停，让**用户肉眼确认**窗口内的登录状态（右上角有头像）；未登录则让**用户手动
-   登录**、扫码或处理滑块。Agent 不索取账号密码、不代替登录，也不要用 `boss status`
-   代替这一步——它只校验本地 `session.enc`，不代表这个 Chrome 已登录。
-5. 用户确认登录完成后运行：
+4. Pause and ask the user to log in manually if needed, then visually confirm the
+   logged-in state (avatar in the top-right). Let the user handle QR codes or sliders.
+   Agent Reach must not request passwords or log in on the user's behalf. Do not
+   substitute `boss status` for this check: it only verifies local `session.enc`,
+   not the dedicated Chrome session.
+5. Run after the user confirms the login is complete:
    ```bash
    boss --cdp-url http://localhost:9222 login --cdp
-   agent-reach doctor    # 看 boss 行 message 里的浏览器 wt2 cookie 探测结果
+   agent-reach doctor    # look boss OK message browser in wt2 cookie Detection results
    ```
 
-> 安全边界：任何能访问调试端口 9222 的本机进程都能完全控制这个 Chrome。
-> 必须使用 `--remote-debugging-address=127.0.0.1`，不得暴露到局域网或公网；使用
-> 独立 profile 并长期复用，不要每次删除或新建，也不要默认切换到日常主 Chrome；
-> 不使用时关闭专用 Chrome。Boss 不支持服务器/无桌面环境。搜索命令必须带
-> `--browser-source existing-browser --cdp-url http://localhost:9222`。
+> Security Boundary: Any native process with access to debug port 9222 has full control over this Chrome.
+> `--remote-debugging-address=127.0.0.1` must be used and must not be exposed to the LAN or public network; use
+> Make an independent profile and reuse it for a long time. Do not delete or create a new one every time, and do not switch to daily main Chrome by default;
+> Close Private Chrome when not in use. Boss does not support server/desktopless environments. The search command must include
+> `--browser-source existing-browser --cdp-url http://localhost:9222`.
 >
-> 依赖：boss-agent-cli 后继拆分 PR #403–#407 已合并入上游 master，安装器锁定上游
-> 固定提交
-> `4c991b77086a203173bf08a4cb64a23af6514fe6`，不跟随会移动的 branch。该提交包含
-> `browser_source="existing-browser"`（严格 CDP）、`JobItem.lid` 和 `job_card_browser()`。上游发布正式版后，
-> Agent Reach 应改用版本约束。
+> Dependency: boss-agent-cli subsequent split PR #403–#407 has been merged into the upstream master, and the installer locks the upstream
+> Fixed commit
+> `4c991b77086a203173bf08a4cb64a23af6514fe6`, does not follow the branch that will move. This commit contains
+> `browser_source="existing-browser"` (strict CDP), `JobItem.lid` and `job_card_browser()`. After the upstream releases the official version,
+> Agent Reach should use version constraints instead.
 
 ### Step 4: Final check
 
@@ -370,15 +372,15 @@ Run `agent-reach doctor` one final time and report the results to your user.
 
 If you are running inside **OpenClaw**, ask your user:
 
-> "Agent Reach 安装好了。要不要我设一个每天自动检查的任务？它会帮你盯着这些渠道是否正常、有没有新版本。有问题才会通知你，没问题不打扰。"
+> "Agent Reach is installed. Do you want me to set up a task to automatically check every day? It will help you keep an eye on whether these channels are normal and whether there are new versions. It will notify you only if there is a problem. If there is no problem, I will not disturb you."
 
 If the user agrees, create a **cron job** (daily, `sessionTarget: "isolated"`, `delivery: "announce"`) with this task:
 
 ```
-运行 agent-reach watch 命令。
-如果输出包含"全部正常"，不需要通知用户，静默结束。
-如果输出包含问题（❌ ⚠️）或新版本（🆕），把完整报告发给用户，并建议修复方案。
-如果有新版本可用，问用户是否要升级（把这句话发给用户的 Agent 即可完整更新：帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md）。
+run agent-reach watch Order.
+If the output contains"All normal", No need to notify users, End of silence.
+If the output contains questions (❌ ⚠️)or new version (🆕), Send full report to user, and suggest fixes.
+If a new version is available, Ask the user if they want to upgrade (Send this sentence to the user Agent can be fully updated:Help me update Agent Reach:https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/update.md).
 ```
 
 If the user wants a different agent to handle it, let them choose.
@@ -392,34 +394,34 @@ If the user wants a different agent to handle it, let them choose.
 | `agent-reach install --env=auto` | Read-only dependency and channel check (default) |
 | `agent-reach install --env=auto --system` | Explicitly install/configure core external tools |
 | `agent-reach install --env=auto --system --channels=twitter,xiaohongshu` | Install approved optional channels |
-| `agent-reach install --env=local --system --channels=boss` | Install the desktop Boss直聘 strict-CDP backend |
+| `agent-reach install --env=local --system --channels=boss` | Install the desktop Boss strict-CDP backend |
 | `agent-reach install --env=auto --system --channels=all` | Install everything after explicit approval |
 | `agent-reach install --env=auto --safe` | Compatibility alias for the safe default |
 | `agent-reach install --env=auto --dry-run` | Preview what would be done |
 | `agent-reach doctor` | Show channel status |
 | `agent-reach watch` | Quick health + update check (for scheduled tasks) |
 | `agent-reach check-update` | Check for new versions |
-| `agent-reach configure twitter-cookies` | 通过隐藏输入保存 Twitter Cookie；直接调用仍需显式环境变量 |
-| `agent-reach configure proxy` | 通过隐藏输入保存代理地址；不是自动解锁开关 |
-| `agent-reach configure groq-key` | 通过隐藏输入配置小宇宙转录 Key |
+| `agent-reach configure twitter-cookies` | Save Twitter cookies through a hidden prompt; direct commands still require environment variables |
+| `agent-reach configure proxy` | Save proxy address via hidden input; not auto-unlock switch |
+| `agent-reach configure groq-key` | Set the Xiaoyuzhou transcription API key through a hidden prompt |
 
 After installation, use upstream tools directly. See SKILL.md for the full command reference:
 
 | Platform | Upstream Tool | Example |
 |----------|--------------|---------|
-| Twitter/X | `twitter`（备选 `opencli`） | 设置 `TWITTER_AUTH_TOKEN` / `TWITTER_CT0` 后运行 `twitter search "query" -n 10` |
+| Twitter/X | `twitter` (alternative to `opencli`) | Run `twitter search "query" -n 10` after setting up `TWITTER_AUTH_TOKEN` / `TWITTER_CT0` |
 | YouTube | `yt-dlp` | `yt-dlp --dump-json URL` |
-| Bilibili | `bili`（字幕走 `opencli`） | `bili search "query" --type video` / `opencli bilibili subtitle BVxxx` |
-| Reddit | `opencli`（备选 `rdt`） | `opencli reddit search "query" -f yaml` / `rdt read POST_ID` |
+| Bilibili | `bili` (subtitles go to `opencli`) | `bili search "query" --type video` / `opencli bilibili subtitle BVxxx` |
+| Reddit | `opencli` (alternative `rdt`) | `opencli reddit search "query" -f yaml` / `rdt read POST_ID` |
 | Facebook | `opencli` | `opencli facebook search "query" -f yaml` |
 | Instagram | `opencli` | `opencli instagram user nasa -f yaml` |
 | GitHub | `gh` | `gh search repos "query"` |
 | Web | `curl` + Jina | `curl -s "https://r.jina.ai/URL"` |
 | Exa Search | `mcporter` | `mcporter call exa.web_search_exa query="..." numResults=5` |
-| 小红书 | `opencli`（服务器 `mcporter`） | `opencli xiaohongshu search "query" -f yaml` |
-| 小宇宙播客 | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
+| XiaoHongShu | `opencli` (server `mcporter`) | `opencli xiaohongshu search "query" -f yaml` |
+| Xiaoyuzhou Podcast | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 | LinkedIn | `mcporter` | `mcporter call linkedin.get_person_profile linkedin_username="..."` |
-| Boss直聘 | `boss` / Python public API | `agent-reach doctor`（浏览器 wt2 探测；`boss status` 只反映本地 session.enc）；搜索和 JD 见 `references/career.md` |
+| Boss Zhipin | `boss` / Python public API | `agent-reach doctor` (browser wt2 detection; `boss status` only reflects local session.enc); search and JD see `references/career.md` |
 | RSS | `feedparser` | `python3 -c "import feedparser; ..."` |
 
-> 多后端平台以 `agent-reach doctor --json` 的 `active_backend` 为准。
+> Multi-backend platforms are subject to `active_backend` of `agent-reach doctor --json`.

@@ -141,7 +141,7 @@ def opencli_status(timeout: int = 10) -> OpenCLIStatus:
             installed=True,
             broken=True,
             hint=(
-                "opencli 命令存在但无法执行（node 环境损坏），重装：\n"
+                "The opencli command exists but cannot be executed (node ​​environment is damaged), reinstall: \n"
                 f"  npm install -g {OPENCLI_PACKAGE}"
             ),
         )
@@ -160,21 +160,21 @@ def opencli_status(timeout: int = 10) -> OpenCLIStatus:
         st.unpacked_extension_files = _unpacked_extension_files_present()
         if st.extension_installed:
             st.hint = (
-                "检测到 Chrome/Edge 的 OpenCLI 扩展文件，但扩展当前未连接；"
-                "仅凭磁盘文件无法确认它已加载或启用。\n"
-                "  打开浏览器扩展页确认 OpenCLI 已启用，再运行一个 opencli 命令验证"
+                "OpenCLI extension file for Chrome/Edge detected, but extension is not currently connected; "
+                "The disk file alone cannot confirm that it is loaded or enabled. \n"
+                "  Open the browser extension page to confirm that OpenCLI is enabled, and then run an opencli command to verify"
             )
         elif st.unpacked_extension_files:
             st.hint = (
-                "检测到 ~/.opencli/extension/ 源文件，但文件存在不代表已经在"
-                " Chrome/Edge 中“加载已解压的扩展程序”。\n"
-                "  请在浏览器扩展页加载并启用该目录，再运行一个 opencli 命令验证"
+                "~/.opencli/extension/ source file detected, but the existence of the file does not mean it is already in"
+                " \"Load unpacked extension\" in Chrome/Edge. \n"
+                "  Please load and enable this directory on the browser extension page, and then run an opencli command to verify"
             )
         else:
             st.hint = (
-                "OpenCLI 已安装，但未检测到已连接的浏览器扩展。\n"
-                f"  1. 安装并启用扩展（Chrome/Edge）：{OPENCLI_EXTENSION_URL}\n"
-                "  2. 保持浏览器打开，再运行一个 opencli 命令验证"
+                "OpenCLI is installed, but the connected browser extension is not detected. \n"
+                f"  1. Install and enable the extension (Chrome/Edge): {OPENCLI_EXTENSION_URL}\n"
+                "  2. Keep the browser open and run another opencli command to verify"
             )
     return st
 
@@ -182,15 +182,15 @@ def opencli_status(timeout: int = 10) -> OpenCLIStatus:
 def opencli_summary(st: OpenCLIStatus) -> str:
     """One-line state description for channel messages / install output."""
     if not st.installed:
-        return "OpenCLI 未安装"
+        return "OpenCLI is not installed"
     if st.broken:
-        return "OpenCLI 无法执行（node 环境损坏）"
+        return "OpenCLI cannot be executed (node ​​environment is damaged)"
     if st.extension_connected:
-        return f"OpenCLI 可用（浏览器登录态，v{st.version}）"
+        return f"OpenCLI is available (browser login state, v{st.version})"
     if st.extension_installed:
-        return "OpenCLI 已安装，检测到扩展文件但当前未连接（无法确认已加载）"
+        return "OpenCLI installed, extension file detected but not currently connected (cannot confirm loaded)"
     if st.unpacked_extension_files:
-        return "OpenCLI 已安装，检测到 unpacked 源文件但尚未确认浏览器已加载"
+        return "OpenCLI installed, unpacked source detected but browser loaded not yet confirmed"
     if st.daemon_running:
-        return "OpenCLI 已安装，等待 Chrome 扩展安装"
-    return "OpenCLI 已安装（daemon 未运行，使用时自动启动；需 Chrome 扩展）"
+        return "OpenCLI installed, waiting for Chrome extension to install"
+    return "OpenCLI is installed (daemon is not running, it starts automatically when used; requires Chrome extension)"

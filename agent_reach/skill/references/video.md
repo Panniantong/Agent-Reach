@@ -1,106 +1,107 @@
-# 视频/播客
+# Video and podcasts
 
-YouTube、B站、小宇宙播客的字幕和转录。
+Subtitles and transcriptions for YouTube, Bilibili, and Xiaoyuzhou Podcast.
 
 ## YouTube (yt-dlp)
 
-### 获取视频元数据
+### Get video metadata
 
 ```bash
 yt-dlp --dump-json "URL"
 ```
 
-### 下载字幕
+### Download subtitles
 
 ```bash
-# 下载字幕 (不下载视频)
+# Download subtitles (Don't download videos)
 yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -o "/tmp/%(id)s" "URL"
 
-# 然后读取 .vtt 文件
+# then read .vtt document
 cat /tmp/VIDEO_ID.*.vtt
 ```
 
-### 获取评论
+### Get comments
 
 ```bash
-# 提取评论（best-effort，不保证完整）
+# Extract comments (best-effort, Not guaranteed to be complete)
 yt-dlp --write-comments --skip-download --write-info-json \
   --extractor-args "youtube:max_comments=20" \
   -o "/tmp/%(id)s" "URL"
-# 评论在 .info.json 的 comments 字段中
+# Comments on .info.json of comments in field
 ```
 
-### 搜索视频
+### Search videos
 
 ```bash
 yt-dlp --dump-json "ytsearch5:query"
 ```
 
-> **字幕注意**: 手动上传的字幕提取可靠；自动生成字幕可能存在行间重复，需后处理。
-> **评论注意**: `--write-comments` 基于网页抓取（非 YouTube Data API），部分评论可能丢失。
+> **Subtitle Note**: Manually uploaded subtitles are extracted reliably; automatically generated subtitles may have line duplication and require post-processing.
+> **Comment Note**: `--write-comments` is based on web scraping (not YouTube Data API), some comments may be lost.
 
-### 字幕失败时的重试链（按序执行，拿到实质内容即停）
+### Retry chain when subtitles fail (execute in order, stop when the actual content is obtained)
 
-`doctor` 只确认 yt-dlp 本体与 JS runtime 能执行，不会请求具体视频；因此
-`active_backend: yt-dlp` 不等于目标视频的字幕已经通过实时验证。
+`doctor` checks that yt-dlp and its JS runtime run; it does not request a specific video.
+`active_backend: yt-dlp` therefore does not prove that subtitles are available for the target video.
 
-1. 先用上面的 `yt-dlp --write-sub --write-auto-sub` 命令。
-2. 若出现 bot 校验、字幕响应为空或没有生成字幕文件，且 OpenCLI 已连接：
-   `opencli youtube transcript "URL" -f yaml`。
-3. OpenCLI 若返回 `Caption URL returned empty response`，最多重试 3 次；这是带
-   过期时间的字幕 URL 偶发失效，不能把空响应当成“视频没有字幕”。
-4. 仍失败或视频本来就没有字幕：`agent-reach transcribe "URL"` 下载音频转写。
+1. First use the `yt-dlp --write-sub --write-auto-sub` command above.
+2. If bot verification occurs, the subtitle response is empty or no subtitle file is generated, and OpenCLI is connected:
+   `opencli youtube transcript "URL" -f yaml`.
+3. If OpenCLI returns `Caption URL returned empty response`, retry up to 3 times.
+   Expiring subtitle URLs can fail intermittently; an empty response does not prove
+   that the video has no subtitles.
+4. Still failed or the video does not have subtitles: `agent-reach transcribe "URL"` download audio transcription.
 
-成功标准是实际得到非空字幕/转录内容，不是命令退出码或 `doctor` 的版本探测结果。
+The success criterion is actually obtaining non-empty subtitles/transcription content, not the command exit code or the version detection result of `doctor`.
 
-### 无字幕兜底：Whisper 音频转写
+### No subtitles: Whisper Audio Transcription
 
 ```bash
-# 视频没有字幕时的兜底：下载音频并用 Whisper 转写（Groq 免费 key 即可）
+# The bottom line when the video has no subtitles:Download the audio and use it Whisper Transcribe (Groq free key That’s it)
 agent-reach transcribe "https://www.youtube.com/watch?v=VIDEO_ID"
 agent-reach transcribe ./local_audio.mp3 -o /tmp/transcript.txt
 ```
 
-> `agent-reach transcribe` 只接收公开 http(s) URL 或本地音频文件。用 `ytsearch5:` 搜索时，先从 yt-dlp 结果里选出具体视频 URL，再转写。
-> 需要先配置 key：`agent-reach configure groq-key`（隐藏输入；免费，console.groq.com）
-> 或 `agent-reach configure openai-key`。默认 auto 模式只使用第一个已配置服务商
->（优先 Groq，否则 OpenAI），失败即停止，不会把音频自动发给另一家。
-> `--allow-provider-fallback` 会显式授权跨服务商降级；同一音频内容可能被 Groq 和
-> OpenAI 分别处理，并可能产生 OpenAI 费用，只应在确认内容可分享给两家后使用。
+> `agent-reach transcribe` only accepts public http(s) URLs or local audio files. When searching with `ytsearch5:`, first select the specific video URL from the yt-dlp results and then transcribe it.
+> Need to configure key first: `agent-reach configure groq-key` (hidden input; free, console.groq.com)
+> or `agent-reach configure openai-key`. The default auto mode only uses the first configured service provider
+> (Groq is preferred, otherwise OpenAI), it will stop if it fails, and the audio will not be automatically sent to another company.
+> `--allow-provider-fallback` will explicitly authorize cross-service provider downgrade; the same audio content may be used by Groq and
+> OpenAI handles it separately and may incur OpenAI fees. It should only be used after confirming that the content can be shared with both parties.
 
-## B站 / Bilibili（bili-cli 为主，OpenCLI 补字幕）
+## Bilibili (based on bili-cli, with OpenCLI supplementing subtitles)
 
-> ⚠️ **不要用 yt-dlp 读 B站**：B站风控已全面 412 拦截 yt-dlp（实测最新版、直连/代理/带 Cookie 全部无效）。yt-dlp 只用于 YouTube。
+> ⚠️ **Do not use yt-dlp to read Bilibili**: Bilibili blocks yt-dlp with HTTP 412, including the tested direct, proxy, and cookie-based paths. yt-dlp is for YouTube only.
 
-### 视频详情/搜索/热门/排行 (bili-cli，只读无需登录)
+### Video details/search/popular/ranking (bili-cli, read-only without logging in)
 
 ```bash
-# 视频详情（标题/UP主/时长/播放互动数据/字幕可用性）
+# Video details (title/UPhost/duration/Play interactive data/Subtitle availability)
 bili video BVxxx
 
-# 搜索视频
+# Search videos
 bili search "query" --type video -n 5
 
-# 热门视频 / 排行榜
+# Popular videos / Ranking list
 bili hot -n 10
 bili rank -n 10
 
-# 下载音频并切分为 ASR-ready WAV（无字幕时配合 agent-reach transcribe 转写）
+# Download audio and split into ASR-ready WAV (Cooperate when there are no subtitles agent-reach transcribe Transcribe)
 bili audio BVxxx
 ```
 
-### 字幕 (OpenCLI，需要桌面 Chrome)
+### Subtitles (OpenCLI, requires desktop Chrome)
 
 ```bash
-# 字幕逐句带时间轴
+# Subtitles sentence by sentence with timeline
 opencli bilibili subtitle BVxxx
 
-# OpenCLI 也能搜索/读视频元数据（备选）
+# OpenCLI Can also search/Read video metadata (alternative)
 opencli bilibili search "query" -f yaml
 opencli bilibili video BVxxx -f yaml
 ```
 
-### 零配置兜底：搜索 API 直连
+### Zero configuration: search API direct connection
 
 ```bash
 UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
@@ -109,40 +110,40 @@ curl -s -b /tmp/bili_ck.txt -A "$UA" -e "https://www.bilibili.com/" \
   "https://api.bilibili.com/x/web-interface/search/all/v2?keyword=QUERY&page=1"
 ```
 
-> **安装 bili-cli**: `pipx install bilibili-cli`（上游 2026-03 起停更但实测健康；只读场景无需登录，`bili login` 扫码可解锁动态/收藏等个人功能）。
+> **Install bili-cli**: `pipx install bilibili-cli` (upstream maintenance stopped in March 2026, but the tool still worked in testing; read-only scenes do not require login, `bili login` scans the code to unlock personal functions such as updates/favorites).
 
-## 小宇宙播客 / Xiaoyuzhou Podcast
+## Xiaoyuzhou Podcast
 
-### 转录单集播客（可选 --polish 增强标点）
+### Transcribe a single podcast episode (optional --polish to enhance punctuation)
 
 ```bash
-# 输出 Markdown 文件到 /tmp/。--polish 让 Llama 3.3 70B 给文稿补中文标点+合理分段
+# output Markdown file to /tmp/.--polish let Llama 3.3 70B Add Chinese punctuation to manuscripts+Reasonable segmentation
 ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh --polish "https://www.xiaoyuzhoufm.com/episode/EPISODE_ID"
 ```
 
-> 转写 prompt 已要求 Whisper 输出中文标点；若标点效果仍不理想，可加 `--polish` 用 Groq 上免费的 Llama 3.3 70B 补标点+合理分段（9 分钟播客约多 ~7 秒）。每次转写多一轮 LLM 调用，按需使用。
+> Transcription prompt has asked Whisper to output Chinese punctuation; if the punctuation effect is still not satisfactory, you can add `--polish` and use the free Llama 3.3 70B on Groq to add punctuation + reasonable segmentation (about 7 seconds longer for a 9-minute podcast). Each transfer adds one more round of LLM calls, which can be used as needed.
 
-### 前置要求
+### Prerequisites
 
 1. **ffmpeg**: `brew install ffmpeg`
-2. **Groq API Key** (免费): https://console.groq.com/keys
-3. **配置 Key**: `agent-reach configure groq-key`（隐藏输入）
-4. **首次运行**: `agent-reach install --env=auto --system --channels=xiaoyuzhou`（需用户明确授权）
+2. **Groq API Key** (free): https://console.groq.com/keys
+3. **Configuration Key**: `agent-reach configure groq-key` (hidden input)
+4. **First run**: `agent-reach install --env=auto --system --channels=xiaoyuzhou` (requires explicit authorization from the user)
 
-### 检查状态
+### Check status
 
 ```bash
 agent-reach doctor
 ```
 
-> 输出 Markdown 文件默认保存到 `/tmp/`。
+> The output Markdown file is saved to `/tmp/` by default.
 
-## 选择指南
+## Selection Guide
 
-| 场景 | 推荐工具 |
+| Scenario | Recommended Tools |
 |-----|---------|
-| YouTube 字幕 | yt-dlp；失败时 OpenCLI（最多 3 次）→ agent-reach transcribe |
-| B站视频详情/搜索 | bili-cli |
-| B站字幕 | opencli bilibili subtitle |
-| 播客转录 | 小宇宙 transcribe.sh |
-| 无字幕音视频 | agent-reach transcribe（B站音频先 `bili audio`） |
+| YouTube subtitles | yt-dlp; OpenCLI on failure (up to 3 times) → agent-reach transcribe |
+| Bilibili video details/search | bili-cli |
+| Bilibili subtitles | opencli bilibili subtitle |
+| Podcast Transcription | Xiaoyuzhou transcribe.sh |
+| Audio and video without subtitles | agent-reach transcribe (audio from Bilibili first `bili audio`) |

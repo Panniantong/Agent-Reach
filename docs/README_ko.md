@@ -7,7 +7,7 @@
 <p align="center">
   <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-green.svg?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://github.com/Panniantong/agent-reach/stargazers"><img src="https://img.shields.io/github/stars/Panniantong/agent-reach?style=for-the-badge" alt="GitHub Stars"></a>
+  <a href="https://github.com/jermiah/Agent-Reach/stargazers"><img src="https://img.shields.io/github/stars/Panniantong/agent-reach?style=for-the-badge" alt="GitHub Stars"></a>
 </p>
 
 <p align="center">
@@ -34,7 +34,7 @@ AI 에이전트는 이미 인터넷에 접근할 수 있습니다 — 하지만 
 **Agent Reach는 이를 하나의 명령으로 바꿉니다:**
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Install Agent Reach: https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/install.md
 ```
 
 이 명령을 에이전트에 복사해서 붙여넣으세요. 몇 분 뒤에는 트윗을 읽고, Reddit을 검색하고, Bilibili를 볼 수 있게 됩니다.
@@ -42,7 +42,7 @@ Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/m
 **이미 설치하셨나요? 한 번에 업데이트하세요:**
 
 ```
-Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+Update Agent Reach: https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/update.md
 ```
 
 ### ✅ 시작하기 전에 알면 좋은 것들
@@ -85,21 +85,21 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 이 명령을 AI 에이전트(Claude Code, OpenClaw, Cursor 등)에 입력하세요:
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Install Agent Reach: https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/install.md
 ```
 
 에이전트가 자동으로 설치하고, 환경을 감지하고, 준비된 항목을 알려줍니다.
 
 > 🔄 **이미 설치하셨나요?** 한 번에 업데이트:
 > ```
-> Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+> Update Agent Reach: https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/update.md
 > ```
 
 <details>
 <summary>수동 설치</summary>
 
 ```bash
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install https://github.com/jermiah/Agent-Reach/archive/main.zip
 agent-reach install --env=auto           # 읽기 전용 확인 (기본값)
 agent-reach install --env=auto --system  # 시스템 변경을 명시적으로 승인한 경우에만
 ```
@@ -109,7 +109,7 @@ agent-reach install --env=auto --system  # 시스템 변경을 명시적으로 �
 <summary>Skill로 설치 (Claude Code / OpenClaw / Skill을 지원하는 모든 에이전트)</summary>
 
 ```bash
-npx skills add Panniantong/Agent-Reach@agent-reach
+npx skills add jermiah/Agent-Reach@agent-reach
 ```
 
 Skill이 설치된 후, 에이전트는 `agent-reach` CLI 사용 가능 여부를 자동 감지하고 필요한 경우 설치합니다.
@@ -236,13 +236,13 @@ channels/
 
 ## 기여
 
-이 프로젝트는 자유분방하게 개발되었습니다 🎸 다소 거친 부분이 있을 수 있지만 양해 부탁드립니다! 버그를 발견하면 주저하지 말고 [Issue](https://github.com/Panniantong/agent-reach/issues)를 열어주세요. 최대한 빨리 수정하겠습니다.
+이 프로젝트는 자유분방하게 개발되었습니다 🎸 다소 거친 부분이 있을 수 있지만 양해 부탁드립니다! 버그를 발견하면 주저하지 말고 [Issue](https://github.com/jermiah/Agent-Reach/issues)를 열어주세요. 최대한 빨리 수정하겠습니다.
 
 **새 채널을 원하시나요?** Issue를 열어 요청하거나, 직접 PR을 제출하세요.
 
 **로컬에 추가하고 싶나요?** 에이전트가 저장소를 복제하고 수정하게 하세요 — 각 채널은 단일 독립 파일이므로 추가하기 쉽습니다.
 
-[PR](https://github.com/Panniantong/agent-reach/pulls)은 언제든 환영합니다!
+[PR](https://github.com/jermiah/Agent-Reach/pulls)은 언제든 환영합니다!
 
 ---
 
@@ -269,7 +269,7 @@ Agent Reach는 Reddit을 위해 [rdt-cli](https://github.com/public-clis/rdt-cli
 <details>
 <summary><strong>Agent Reach는 Claude Code / Cursor / Windsurf / OpenClaw와 호환되나요?</strong></summary>
 
-네! Agent Reach는 설치 + 설정 도구입니다. Shell 명령을 실행할 수 있는 모든 AI 코딩 에이전트가 사용할 수 있습니다 — Claude Code, Cursor, Windsurf, OpenClaw, Codex 등. `pip install https://github.com/Panniantong/agent-reach/archive/main.zip` 실행 후 먼저 `agent-reach install`로 읽기 전용 검사를 하고, 시스템 변경을 명시적으로 승인한 경우에만 `agent-reach install --system`을 실행합니다. PyPI의 동명 패키지는 다른 프로젝트입니다.
+네! Agent Reach는 설치 + 설정 도구입니다. Shell 명령을 실행할 수 있는 모든 AI 코딩 에이전트가 사용할 수 있습니다 — Claude Code, Cursor, Windsurf, OpenClaw, Codex 등. `pip install https://github.com/jermiah/Agent-Reach/archive/main.zip` 실행 후 먼저 `agent-reach install`로 읽기 전용 검사를 하고, 시스템 변경을 명시적으로 승인한 경우에만 `agent-reach install --system`을 실행합니다. PyPI의 동명 패키지는 다른 프로젝트입니다.
 </details>
 
 <details>
@@ -307,7 +307,7 @@ Agent Reach는 XiaoHongShu 로그인을 대신 수행하거나 브라우저 cook
   <img src="wechat-group-qr.jpg" width="280" alt="WeChat QR">
 </p>
 
-> 버그 보고 및 기능 요청은 [GitHub Issues](https://github.com/Panniantong/Agent-Reach/issues)를 이용해주세요 — 추적이 더 수월합니다.
+> 버그 보고 및 기능 요청은 [GitHub Issues](https://github.com/jermiah/Agent-Reach/issues)를 이용해주세요 — 추적이 더 수월합니다.
 
 ## 라이선스
 

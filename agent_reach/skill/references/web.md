@@ -1,33 +1,33 @@
-# 网页阅读
+# Webpage reading
 
-通用网页、RSS。
+General web pages, RSS.
 
-## 通用网页 (Jina Reader)
+## General web page (Jina Reader)
 
 ```bash
-# 读取任意网页内容
+# Read the content of any web page
 curl -s "https://r.jina.ai/URL"
 
-# 示例
+# Example
 curl -s "https://r.jina.ai/https://example.com/article"
 ```
 
-**适用场景**: 大多数网页可以直接用 Jina Reader 读取。
+**Applicable scenarios**: Most web pages can be read directly with Jina Reader.
 
 ## Web Reader (MCP)
 
 ```bash
-# 读取网页内容 (Markdown 格式)
+# Read web content (Markdown Format)
 mcporter call web-reader.webReader url="https://example.com"
 
-# 保留图片
+# keep picture
 mcporter call web-reader.webReader url="https://example.com" retain_images=true
 
-# 纯文本格式
+# plain text format
 mcporter call web-reader.webReader url="https://example.com" return_format="text"
 ```
 
-**适用场景**: 需要更精确控制输出格式时使用。
+**Applicable scenarios**: Use when more precise control of the output format is required.
 
 ## RSS (feedparser)
 
@@ -39,12 +39,12 @@ for e in feedparser.parse('FEED_URL').entries[:5]:
 "
 ```
 
-**适用场景**: 订阅博客、新闻源、播客等 RSS feed。
+**Applicable scenarios**: Subscribe to RSS feeds such as blogs, news sources, podcasts, etc.
 
-## 选择指南
+## Selection Guide
 
-| 场景 | 推荐工具 |
+| Scenario | Recommended Tools |
 |-----|---------|
-| 通用网页 | Jina Reader (`curl r.jina.ai`) |
-| 需要图片/格式控制 | web-reader MCP |
-| RSS 订阅 | feedparser |
+| General web page | Jina Reader (`curl r.jina.ai`) |
+| Image/format control required | web-reader MCP |
+| RSS Subscription | feedparser |

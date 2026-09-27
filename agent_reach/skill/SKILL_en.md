@@ -7,7 +7,7 @@ description: >
 
   Also MUST USE when user mentions any platform or shares any URL/link:
   Twitter/X, Reddit, Facebook, Instagram, YouTube, GitHub, Bilibili, XiaoHongShu,
-  Xiaoyuzhou Podcast, LinkedIn/Boss直聘/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
+  Xiaoyuzhou Podcast, LinkedIn/Boss Zhipin/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
 
   16 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
@@ -17,7 +17,7 @@ description: >
   internet content); posting/commenting/liking (write operations); platforms
   that already have a dedicated skill installed (prefer that skill).
 metadata:
-  homepage: https://github.com/Panniantong/Agent-Reach
+  homepage: https://github.com/jermiah/Agent-Reach
 ---
 
 # Agent Reach — internet capability router
@@ -42,8 +42,8 @@ these platforms — do not invent your own approach.**
 5. **Watch versions for the user**: after finishing a substantial
    multi-platform task, run `agent-reach check-update` (fast, one API call).
    If a new version exists, append one line to your wrap-up: "Agent Reach
-   vX.Y.Z is available — paste this to me to update: 帮我更新 Agent Reach：
-   https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md".
+   vX.Y.Z is available — paste this to me to update: Help me update Agent Reach:
+   https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/update.md".
    Never interrupt the current task to update; never nag about the same version twice.
 
 ## Routing table
@@ -52,7 +52,7 @@ these platforms — do not invent your own approach.**
 |---------|------|---------|
 | Web / code search | search | [references/search.md](references/search.md) |
 | XiaoHongShu / Twitter / Bilibili / V2EX / Reddit / Facebook / Instagram | social | [references/social.md](references/social.md) |
-| Jobs / LinkedIn | career | [references/career.md](references/career.md) |
+| Jobs / LinkedIn / Boss Zhipin | career | [references/career.md](references/career.md) |
 | GitHub / code | dev | [references/dev.md](references/dev.md) |
 | Web pages / articles / RSS | web | [references/web.md](references/web.md) |
 | YouTube / Bilibili / podcast transcripts | video | [references/video.md](references/video.md) |
@@ -118,7 +118,7 @@ opencli instagram user USERNAME -f yaml        # recent posts from one user
 agent-reach doctor --json
 ```
 
-When the user asks “help me configure Boss Zhipin” / “帮我配 Boss直聘”, read the
+When the user asks “help me configure Boss Zhipin” / “help me configure Boss Zhipin”, read the
 Boss section in `references/career.md`. After explicit install approval, run
 `agent-reach install --env=local --system --channels=boss`, launch the dedicated
 loopback-only Chrome profile for their OS, then **pause and have the user visually
@@ -156,11 +156,11 @@ output and `~/.agent-reach/` for persistent data.
 
 Read the matching file when you need specifics (commands above cover the
 common cases; references hold per-backend command groups, caveats, retry
-chains — note: reference docs are written in Chinese, commands are universal):
+chains):
 
 - [Search](references/search.md) — Exa AI search
 - [Social](references/social.md) — XiaoHongShu, Twitter, Bilibili, V2EX, Reddit, Facebook, Instagram (multi-backend/login-backed groups)
-- [Career](references/career.md) — LinkedIn
+- [Career](references/career.md) — LinkedIn, Boss Zhipin
 - [Dev](references/dev.md) — GitHub CLI
 - [Web](references/web.md) — Jina Reader, RSS
 - [Video](references/video.md) — YouTube, Bilibili, Xiaoyuzhou
@@ -169,6 +169,6 @@ chains — note: reference docs are written in Chinese, commands are universal):
 ## Configure a channel
 
 If a channel needs setup, fetch the install guide:
-https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+https://raw.githubusercontent.com/jermiah/Agent-Reach/main/docs/install.md
 
 The user only provides cookies / one extension click; the agent does the rest.

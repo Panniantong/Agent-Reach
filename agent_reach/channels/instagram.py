@@ -6,7 +6,7 @@ from ._opencli_site import OpenCLISiteChannel
 
 class InstagramChannel(OpenCLISiteChannel):
     name = "instagram"
-    description = "Instagram 用户、主页和指定用户帖子"
+    description = "Instagram Users, Pages, and Targeted User Posts"
     site = "instagram"
     domains = ("instagram.com", "instagr.am")
     usage = "opencli instagram search/profile/user/explore -f yaml"
