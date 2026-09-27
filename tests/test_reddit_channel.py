@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Dedicated tests for Reddit's read-only multi-backend health check."""
 
+import base64
 import json
 import time
 from unittest.mock import Mock, patch
@@ -224,3 +225,80 @@ def test_check_no_backend_installed_is_off():
     assert status == "off"
     assert "零配置" in message
     assert channel.active_backend is None
+
+
+def _session_jwt(expires_in_seconds):
+    """A reddit_session-shaped JWT whose payload declares an expiry."""
+    header = base64.urlsafe_b64encode(b'{"alg":"RS256","typ":"JWT"}').rstrip(b"=")
+    payload = base64.urlsafe_b64encode(
+        json.dumps({"sub": "t2_example", "exp": time.time() + expires_in_seconds}).encode("utf-8")
+    ).rstrip(b"=")
+    return f"{header.decode()}.{payload.decode()}.signature-not-verified"
+
+
+def _write_credential(isolated_home, session_value, saved_at=None):
+    path = isolated_home / ".config" / "rdt-cli" / "credential.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"cookies": {"reddit_session": session_value}}
+    if saved_at is not None:
+        payload["saved_at"] = saved_at
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def test_check_rdt_reports_days_left_from_the_cookie_not_the_file(isolated_home):
+    """A session exported long ago can still be valid for months.
+
+    File age answers a different question than the cookie does, and reporting
+    it as if it were the expiry sends the user to re-export something that
+    works.
+    """
+    _write_credential(isolated_home, _session_jwt(120 * 86400), saved_at=time.time() - 30 * 86400)
+    with patch("shutil.which", return_value="/usr/local/bin/rdt"), patch("subprocess.run"):
+        status, message = RedditChannel()._check_rdt()
+
+    assert status == "warn"
+    assert "天后过期" in message
+    assert "未实时验证" in message
+    assert "超过 7 天" not in message
+
+
+def test_check_rdt_reports_an_expired_session_as_expired(isolated_home):
+    _write_credential(isolated_home, _session_jwt(-2 * 86400), saved_at=time.time())
+    with patch("shutil.which", return_value="/usr/local/bin/rdt"), patch("subprocess.run"):
+        status, message = RedditChannel()._check_rdt()
+
+    assert status == "warn"
+    assert "过期" in message
+    assert "Cookie-Editor" in message
+
+
+def test_check_rdt_adds_a_prompt_when_a_session_expires_soon(isolated_home):
+    """A file written minutes ago can hold a token that dies tomorrow."""
+    _write_credential(isolated_home, _session_jwt(86400), saved_at=time.time())
+    with patch("shutil.which", return_value="/usr/local/bin/rdt"), patch("subprocess.run"):
+        status, message = RedditChannel()._check_rdt()
+
+    assert status == "warn"
+    assert "建议尽快" in message
+
+
+def test_check_rdt_falls_back_to_file_age_without_a_readable_expiry(isolated_home):
+    """An opaque cookie keeps the previous behaviour rather than losing a check."""
+    _write_credential(isolated_home, "opaque", saved_at=time.time() - 8 * 86400)
+    with patch("shutil.which", return_value="/usr/local/bin/rdt"), patch("subprocess.run"):
+        status, message = RedditChannel()._check_rdt()
+
+    assert status == "warn"
+    assert "超过 7 天" in message
+
+
+def test_session_expiry_rejects_malformed_tokens():
+    from agent_reach.channels.reddit import _session_cookie_expiry
+
+    for value in (None, 1234, "", "not-a-jwt", "a.b", "a.!!!.c", "a.e30.c"):
+        assert _session_cookie_expiry(value) is None
+
+    for literal in (b'{"exp": NaN}', b'{"exp": Infinity}', b'{"exp": true}'):
+        payload = base64.urlsafe_b64encode(literal).rstrip(b"=").decode()
+        assert _session_cookie_expiry(f"h.{payload}.s") is None
