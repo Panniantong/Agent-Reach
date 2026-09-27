@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Agent Reach README 赞助与友链区域调整</title>
+  <title>Agent Reach README sponsor and partner sections</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -64,59 +64,59 @@
 <main>
   <header>
     <div class="eyebrow">README DESIGN · 2026-08-04</div>
-    <h1>赞助与友链区域调整</h1>
-    <p class="muted">把商业合作集中到 README 顶部，同时保留生态友链的真实身份，避免正文中出现孤立广告。</p>
+    <h1>Sponsor and partner section changes</h1>
+    <p class="muted">Group commercial partnerships at the top of the README, preserve community links as such, and avoid isolated advertisements in the main text.</p>
   </header>
 
   <section>
-    <h2>目标与边界</h2>
+    <h2>Goals and boundaries</h2>
     <ul>
-      <li>让赞助内容在顶部清晰可见，但不影响项目核心介绍。</li>
-      <li>BrowserAct、腾讯云 OpenClaw、CoreClaw 与星图 AstraFlow 使用统一的左右两列赞助条目。</li>
-      <li>Agent Skills Hub 与 AtomGit 镜像保留在 README 最后的「友情链接」。</li>
-      <li>方舟 Agent Plan 从 README 中删除。</li>
-      <li>不改产品能力、安装流程、Python 代码或上游项目。</li>
+      <li>Make sponsors clearly visible at the top without disrupting the project introduction.</li>
+      <li>Use a consistent two-column sponsor layout for BrowserAct, Tencent Cloud OpenClaw, CoreClaw, and AstraFlow.</li>
+      <li>Keep Agent Skills Hub and the AtomGit mirror in the Friends section near the end of the README.</li>
+      <li>Remove Ark Agent Plan from the README.</li>
+      <li>Do not change product capabilities, installation steps, Python code, or upstream projects.</li>
     </ul>
   </section>
 
   <section>
-    <h2>页面结构</h2>
+    <h2>Page structure</h2>
     <div class="flow">
-      <div class="step">项目标题、简介、徽章、语言与页面导航</div>
-      <div class="step"><strong>❤️ 赞助商</strong>：默认展开的折叠区，展示 BrowserAct、腾讯云 OpenClaw、CoreClaw 与星图 AstraFlow</div>
-      <div class="step">为什么需要 Agent Reach、平台能力、安装与设计理念等正文</div>
-      <div class="step"><strong>友情链接</strong>：Agent Skills Hub 与 AtomGit 镜像</div>
+      <div class="step">Project title, introduction, badges, language links, and page navigation</div>
+      <div class="step"><strong>❤️ Sponsors</strong>: an initially expanded collapsible section for BrowserAct, Tencent Cloud OpenClaw, CoreClaw, and AstraFlow</div>
+      <div class="step">Main content: why Agent Reach, platform capabilities, installation, and design philosophy</div>
+      <div class="step"><strong>Friends</strong>: Agent Skills Hub and the AtomGit mirror</div>
       <div class="step">Star History</div>
     </div>
   </section>
 
   <section>
-    <h2>赞助区呈现</h2>
+    <h2>Sponsor presentation</h2>
     <table>
-      <thead><tr><th>元素</th><th>约定</th></tr></thead>
+      <thead><tr><th>Element</th><th>Convention</th></tr></thead>
       <tbody>
-        <tr><td>位置</td><td>顶部导航之后、第一段产品正文之前。</td></tr>
-        <tr><td>容器</td><td>使用 <code>&lt;details open&gt;</code>，允许折叠但默认展示。</td></tr>
-        <tr><td>布局</td><td>所有合作方统一使用 HTML 表格；左侧固定宽度小图，右侧为项目说明和链接。</td></tr>
-        <tr><td>素材</td><td>仅使用合作方官方 Logo，保存到 <code>docs/assets/sponsors/</code>。</td></tr>
-        <tr><td>文案</td><td>沿用现有事实，不新增未经确认的优惠、承诺或夸张表述。</td></tr>
+        <tr><td>Position</td><td>After top navigation and before the first product section.</td></tr>
+        <tr><td>Container</td><td>Use <code>&lt;details open&gt;</code> so the section is visible by default and can be collapsed.</td></tr>
+        <tr><td>Layout</td><td>Use an HTML table for all partners, with a small fixed-width image on the left and a description and link on the right.</td></tr>
+        <tr><td>Assets</td><td>Use only official partner logos, stored in <code>docs/assets/sponsors/</code>.</td></tr>
+        <tr><td>Copy</td><td>Reuse existing facts; do not add unverified offers, promises, or exaggerated claims.</td></tr>
       </tbody>
     </table>
   </section>
 
   <section>
-    <h2>文件范围与验证</h2>
+    <h2>File scope and validation</h2>
     <ul>
-      <li>同步修改 <code>README.md</code> 与 <code>docs/README_en.md</code>。</li>
-      <li>删除中部 BrowserAct 独立段落，确保全文不再重复。</li>
-      <li>检查图片路径、链接、HTML 标签闭合和中英文内容对应关系。</li>
-      <li>通过文本扫描确认方舟 Agent Plan 已移除，四个保留项目各自只出现在预定区域。</li>
+      <li>Update <code>README.md</code> and <code>docs/README_en.md</code> together.</li>
+      <li>Remove the separate BrowserAct section from the middle of the document to avoid duplication.</li>
+      <li>Check image paths, links, closing HTML tags, and consistency between README versions.</li>
+      <li>Scan the text to confirm Ark Agent Plan is removed and the four retained partners appear only in their intended sections.</li>
     </ul>
   </section>
 
   <section>
-    <h2>提交记录</h2>
-    <p>提交信息只描述本项目自身变化：<code>docs(readme): reorganize partner section</code>。不在提交、分支或 README 中记录外部版式参考来源。</p>
+    <h2>Commit record</h2>
+    <p>Describe only this project’s changes in the commit message: <code>docs(readme): reorganize partner section</code>. Do not record external layout references in the commit, branch, or README.</p>
   </section>
 </main>
 </body>

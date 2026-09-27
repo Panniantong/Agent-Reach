@@ -108,8 +108,8 @@ def test_setup_uses_hidden_prompts_for_secrets(monkeypatch, capsys):
     assert config.data["github_token"] == github_secret
     assert config.data["groq_api_key"] == groq_secret
     assert prompts == [
-        "  GITHUB_TOKEN (回车跳过): ",
-        "  GROQ_API_KEY (回车跳过): ",
+        "  GITHUB_TOKEN (Press Enter to skip): ",
+        "  GROQ_API_KEY (Enter to skip): ",
     ]
     output = capsys.readouterr()
     assert github_secret not in output.out
@@ -567,8 +567,8 @@ def test_twitter_configure_never_runs_upstream_browser_fallback(
     )
 
     output = capsys.readouterr().out
-    assert "已保存" in output
-    assert "未实时验证" in output
+    assert "saved" in output
+    assert "not verified live" in output
     assert "Twitter access works" not in output
 
 
@@ -614,8 +614,8 @@ def test_watch_uses_read_only_config(monkeypatch, capsys):
         lambda _config: {
             "web": {
                 "status": "ok",
-                "name": "网页",
-                "message": "可用",
+                "name": "Web page",
+                "message": "Available",
                 "tier": 0,
                 "backends": ["Jina Reader"],
                 "active_backend": "Jina Reader",
@@ -632,7 +632,7 @@ def test_watch_uses_read_only_config(monkeypatch, capsys):
 
     assert len(created) == 1
     assert created[0].read_only is True
-    assert "全部正常" in capsys.readouterr().out
+    assert "All normal" in capsys.readouterr().out
 
 
 def _docker_result(args, returncode=0, stdout="", stderr=""):
@@ -1181,8 +1181,8 @@ def test_server_xhs_install_never_recommends_qr_or_browser_extraction(
     output = capsys.readouterr().out
     assert "Cookie-Editor" in output
     assert "configure xhs-cookies" in output
-    assert "扫码" not in output
-    assert "二维码" not in output
+    assert "Scan code" not in output
+    assert "QR code" not in output
 
 
 def test_configure_usage_does_not_recommend_blocked_twitter_browser_import(
@@ -1349,7 +1349,7 @@ def test_uninstall_warns_about_opt_in_legacy_credential_copies(
     output = capsys.readouterr().out
     assert str(xfetch) in output
     assert str(bird) in output
-    assert "不会自动删除" in output
+    assert "will not automatically delete" in output
     assert xfetch.exists()
     assert bird.exists()
 
@@ -1395,4 +1395,4 @@ def test_uninstall_preserves_mcporter_entries_without_agent_reach_provenance(
 
     output = capsys.readouterr().out
     assert not any("remove" in call for call in calls)
-    assert "来源无法证明" in output
+    assert "cannot prove" in output

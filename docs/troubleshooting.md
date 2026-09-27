@@ -1,71 +1,71 @@
-# 常见问题排查
+# Troubleshooting common problems
 
-## 雪球 / Xueqiu: API 返回 400
+## Xueqiu: API returns 400
 
-**症状：** `agent-reach doctor` 显示雪球 ⚠️，报 `HTTP Error 400`
+**Symptoms:** `agent-reach doctor` displays Xueqiu ⚠️, reporting `HTTP Error 400`
 
-**原因：** 雪球 API 需要登录 Cookie，无法通过匿名访问获取。
+**Reason:** Xueqiu API requires a login cookie, which cannot be obtained through anonymous access.
 
-**解决方案：** 在 Chrome 里登录 xueqiu.com，然后运行：
+**Solution:** Log in to xueqiu.com in Chrome, and then run:
 
 ```bash
 agent-reach configure --from-browser chrome --platform xueqiu
 ```
 
-再次运行 `agent-reach doctor` 确认恢复 ✅。Cookie 过期后重新运行即可。
+Run `agent-reach doctor` again to confirm recovery ✅. Just run it again after the cookie expires.
 
 ---
 
-## Boss直聘: `boss status` 说已登录，但搜索报 `AUTH_EXPIRED`
+## Boss Zhipin: `boss status` reports logged in, but search returns `AUTH_EXPIRED`
 
-**症状：** `boss status` / `status --live` 返回 `logged_in: true`（甚至带用户名），
-但 `boss ... search` 立刻报 `{"code": "AUTH_EXPIRED", "message": "用户未登录"}`。
-专用 Chrome 可能同时停在带 `_security_check` 的 URL 上，看起来像反爬滑块。
+**Symptoms:** `boss status` / `status --live` returns `logged_in: true` (even with username),
+But `boss ... search` immediately reports `{"code": "AUTH_EXPIRED", "message": "User is not logged in"}`.
+Private Chrome may be stuck on a URL with `_security_check` at the same time, looking like an anti-crawl slider.
 
-**原因：** Boss 有两个登录态存储，认证的是不同通道：
+**Reason:** Boss has two login status stores, and the authentication channels are different:
 
-| 存储 | 谁在用 |
+| Storage | Who is using it |
 |---|---|
-| `~/.boss-agent/auth/session.enc` | `boss status` / `status --live`；httpx 通道的低危操作（`detail` / `cities` / `job_card_httpx`）。CDP 搜索也会读它（读不到直接报「未登录」），但复用真 Chrome context 时它的 cookie 从未真正生效 |
-| `~/.boss-chrome-profile` 内的浏览器 cookie | `existing-browser` 严格 CDP 模式下 search / greet 等高危操作实际携带的凭据 |
+| `~/.boss-agent/auth/session.enc` | `boss status` / `status --live`; low-risk operation of httpx channel (`detail` / `cities` / `job_card_httpx`). CDP search will also read it (if it cannot be read, it will directly report "not logged in"), but its cookie will never actually take effect when reusing the real Chrome context |
+| Browser cookies in `~/.boss-chrome-profile` | Credentials actually carried by high-risk operations such as search/greet in `existing-browser` strict CDP mode |
 
-`boss status` 只校验本地 session.enc。本地存着几天前的旧凭据、而专用 Chrome
-profile 本身没登录时，它依然报 `logged_in: true`——这不是登录态有效的证明。
-同时 `_security_check` 页面是反爬挑战，**已登录也会出现**，不能用它判断登录态；
-两者叠加很容易把「浏览器未登录」误判成「卡在滑块」。
+`boss status` only verifies local session.enc. There are old credentials from a few days ago stored locally, and Chrome
+When the profile itself is not logged in, it still reports `logged_in: true` - this is not proof that the login status is valid.
+At the same time, the `_security_check` page is an anti-crawling challenge, and it will appear even if you are logged in. You cannot use it to determine the login status;
+The superimposition of the two can easily misjudge "browser not logged in" as "stuck in the slider".
 
-> 两个存储都不要删。session.enc 缺失会让 CDP 搜索在连上浏览器之前就失败；
-> 需要刷新它时跑 `login --cdp`，不要手工删文件。
+> Do not delete either storage. Missing session.enc will cause CDP searches to fail before connecting to the browser;
+> Run `login --cdp` when you need to refresh it, don't delete files manually.
 
-**判定顺序：**
+**Judgment order:**
 
-1. `AUTH_EXPIRED` 是 ground truth——出现即浏览器未登录，不管 `boss status` 说什么；
-2. `agent-reach doctor` 的 boss 行会直接探测浏览器内有无 `wt2` cookie，以它为准；
-3. `boss status` 仅作参考；页面 URL 完全不作为判据。
+1. `AUTH_EXPIRED` is the ground truth - when it appears, the browser is not logged in, no matter what `boss status` says;
+2. `agent-reach doctor` checks the browser for a `wt2` cookie; use that result;
+3. `boss status` is for reference only; the page URL is not used as a criterion at all.
 
-**解决方案：** 在专用 Chrome 窗口里肉眼确认并手动登录 zhipin.com，然后同步登录态：
+**Solution:** Confirm visually in the dedicated Chrome window and log in to zhipin.com manually, and then synchronize the login status:
 
 ```bash
 boss --cdp-url http://localhost:9222 login --cdp
-agent-reach doctor    # boss 行 message 应显示「浏览器内有登录 cookie（wt2）」
+agent-reach doctor    # The Boss message should report a browser login cookie (wt2)
 ```
 
-> 拉起专用 Chrome 后的第一步永远是让用户肉眼确认登录状态，不要用 `boss status` 代替。
+> The first step after launching dedicated Chrome is always to ask the user to visually confirm the login status. Do not use `boss status` instead.
 
 ---
 
-## Twitter/X: twitter-cli 连接失败
+## Twitter/X: twitter-cli connection failed
 
-**症状：** `twitter search` 或其他命令返回错误
+**Symptoms:** `twitter search` or other commands return errors
 
-**原因：** twitter-cli 需要 `TWITTER_AUTH_TOKEN` 和 `TWITTER_CT0`
-环境变量才能访问 Twitter API。`agent-reach configure twitter-cookies`
-保存的值只供 doctor 检查配置是否齐全；doctor 不执行上游认证，也不会设置当前
-Shell。如果你的网络环境需要代理才能访问 x.com，还需要配置代理。
+**Reason:** twitter-cli requires `TWITTER_AUTH_TOKEN` and `TWITTER_CT0`
+Environment variables are required to access the Twitter API. `agent-reach configure twitter-cookies`
+The saved value is only used by doctor to check whether the configuration is complete; doctor does not perform upstream authentication and will not set the current
+Shell. If your network environment requires a proxy to access x.com, you also need to configure the proxy.
 
-**解决方案：**
+**Solution:**
 
-### 方案 1：设置环境变量代理
+### Option 1: Set environment variable proxy
 
 ```bash
 export TWITTER_AUTH_TOKEN="..."
@@ -75,31 +75,31 @@ export HTTPS_PROXY="http://user:pass@host:port"
 twitter search "test" -n 1
 ```
 
-### 方案 2：使用全局代理工具
+### Option 2: Use the global proxy tool
 
-让代理工具接管所有网络流量，这样 twitter-cli 的请求也会走代理：
+Let the proxy tool take over all network traffic, so that twitter-cli requests will also go through the proxy:
 
 ```bash
-# macOS — ClashX / Surge 开启"增强模式"
-# Linux — proxychains 或 tun2socks
+# macOS — ClashX / Surge turn on"enhanced mode"
+# Linux — proxychains or tun2socks
 proxychains twitter search "test" -n 1
 ```
 
-### 方案 3：不用 twitter-cli，用 Exa 搜索替代
+### Option 3: Instead of using twitter-cli, use Exa search instead
 
-twitter-cli 不可用时，可以直接用 Exa 搜索 Twitter 内容：
+When twitter-cli is not available, you can directly use Exa to search Twitter content:
 
 ```bash
-mcporter call exa.web_search_exa query="site:x.com 搜索词" numResults=5
+mcporter call exa.web_search_exa query="site:x.com search term" numResults=5
 ```
 
-### 方案 4：检查认证
+### Option 4: Check Authentication
 
 ```bash
 twitter check
 ```
 
-> 如果返回 "Missing credentials"，需要在运行该命令的进程环境中设置
-> `TWITTER_AUTH_TOKEN` 和 `TWITTER_CT0`。
+> If "Missing credentials" is returned, it needs to be set in the process environment where the command is run.
+> `TWITTER_AUTH_TOKEN` and `TWITTER_CT0`.
 >
-> **Fallback：** 如果你已经安装了 bird CLI（`npm install -g @steipete/bird`），它也能正常工作。Agent Reach 会自动检测已安装的工具。
+> **Fallback:** If you have bird CLI (`npm install -g @steipete/bird`) installed, it will also work fine. Agent Reach automatically detects installed tools.

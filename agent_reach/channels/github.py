@@ -57,27 +57,27 @@ def _saved_github_host_configured() -> bool:
             max_bytes=_MAX_HOSTS_BYTES,
         )
     except (OSError, PrivatePathError, UnicodeError) as exc:
-        raise GitHubConfigError("gh hosts.yml 无法安全读取") from exc
+        raise GitHubConfigError("gh hosts.yml is not safe to read") from exc
     if raw is None:
         return False
     try:
         payload = yaml.safe_load(raw)
     except yaml.YAMLError as exc:
-        raise GitHubConfigError("gh hosts.yml 不是有效的 UTF-8 YAML") from exc
+        raise GitHubConfigError("gh hosts.yml is not valid UTF-8 YAML") from exc
     if payload is None:
         return False
     if not isinstance(payload, dict):
-        raise GitHubConfigError("gh hosts.yml 顶层必须是对象")
+        raise GitHubConfigError("The top level of gh hosts.yml must be an object")
 
     host = payload.get("github.com")
     if host is None:
         return False
     if not isinstance(host, dict):
-        raise GitHubConfigError("gh hosts.yml 的 github.com 配置无效")
+        raise GitHubConfigError("The github.com configuration of gh hosts.yml is invalid")
 
     users = host.get("users")
     if users is not None and not isinstance(users, dict):
-        raise GitHubConfigError("gh hosts.yml 的 users 配置无效")
+        raise GitHubConfigError("The users configuration of gh hosts.yml is invalid")
     return bool(host.get("oauth_token") or host.get("user") or users)
 
 
@@ -89,12 +89,12 @@ def _explicit_github_credentials(config) -> bool:
     try:
         return bool(config.get("github_token"))
     except Exception as exc:
-        raise GitHubConfigError("Agent Reach 的 GitHub 配置无法读取") from exc
+        raise GitHubConfigError("Agent Reach's GitHub configuration cannot be read") from exc
 
 
 class GitHubChannel(Channel):
     name = "github"
-    description = "GitHub 仓库和代码"
+    description = "GitHub repository and code"
     backends = ["gh CLI"]
     tier = 0
 
@@ -113,16 +113,16 @@ class GitHubChannel(Channel):
             env=_GH_READ_ONLY_ENV,
         )
         if probe.status == "missing":
-            return "warn", "gh CLI 未安装。安装：https://cli.github.com"
+            return "warn", "gh CLI is not installed. Installation: https://cli.github.com"
         if probe.status == "broken":
             return "error", (
-                "gh 命令存在但无法执行——安装已损坏。重装即可修复：\n"
+                "The gh command exists but cannot be executed - the installation is corrupted. It can be repaired by reinstalling: \n"
                 "  brew reinstall gh\n"
-                "或从 https://cli.github.com 重新安装 gh CLI"
+                "Or reinstall gh CLI from https://cli.github.com"
             )
         if not probe.ok:
             detail = probe.hint or probe.status
-            return "error", f"gh CLI 版本检查失败：{detail}"
+            return "error", f"gh CLI version check failed: {detail}"
 
         try:
             configured = _explicit_github_credentials(
@@ -130,16 +130,16 @@ class GitHubChannel(Channel):
             ) or _saved_github_host_configured()
         except GitHubConfigError as exc:
             return "warn", (
-                f"gh CLI 可执行，但认证配置无法安全确认：{exc}。"
-                "Doctor 不执行会写 device-id 的 `gh auth status`，当前未验证。"
+                f"gh CLI runs, but authentication configuration cannot be confirmed securely: {exc}. "
+                "Doctor does not execute `gh auth status`, which writes a device-id; authentication is unverified."
             )
 
         if configured:
             return "warn", (
-                "gh CLI 可执行，且检测到显式认证配置；Doctor 不执行会写"
-                " device-id 的 `gh auth status`，因此未实时验证，未标记为可用。"
+                "gh CLI runs and explicit authentication configuration is present. Doctor does not execute"
+                " `gh auth status`, which writes a device-id; authentication is not verified live and is not marked as available."
             )
         return "warn", (
-            "gh CLI 可执行，但未检测到显式认证配置。运行 `gh auth login` "
-            "完成登录；Doctor 不会自动执行 `gh auth status`。"
+            "gh CLI runs, but no explicit authentication configuration was found. Run `gh auth login` "
+            "to log in. Doctor does not automatically execute `gh auth status`."
         )

@@ -53,9 +53,9 @@ dev = [
 agent-reach = "agent_reach.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Panniantong/agent-reach"
-Repository = "https://github.com/Panniantong/agent-reach"
-Issues = "https://github.com/Panniantong/agent-reach/issues"
+Homepage = "https://github.com/jermiah/Agent-Reach"
+Repository = "https://github.com/jermiah/Agent-Reach"
+Issues = "https://github.com/jermiah/Agent-Reach/issues"
 
 [build-system]
 requires = ["hatchling"]

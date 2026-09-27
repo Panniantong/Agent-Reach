@@ -139,7 +139,7 @@ def _get_json(url: str) -> Any:
 
 class V2EXChannel(Channel):
     name = "v2ex"
-    description = "V2EX 节点、主题与回复"
+    description = "V2EX nodes, topics and replies"
     backends = ["V2EX API (public)"]
     tier = 0
 
@@ -162,12 +162,12 @@ class V2EXChannel(Channel):
                 "https://www.v2ex.com/api/topics/show.json?node_name=python&page=1"
             )
             self.active_backend = self.backends[0]
-            return "ok", "公开 API 可用（热门主题、节点浏览、主题详情、用户信息）"
+            return "ok", "Public API available (popular topics, node browsing, topic details, user information)"
         except Exception as e:
             self.active_backend = None
             return (
                 "warn",
-                f"V2EX API 连接失败（可能需要代理）：{scrub_url_credentials(e)}",
+                f"V2EX API connection failed (a proxy may be required): {scrub_url_credentials(e)}",
             )
 
     # ------------------------------------------------------------------ #
@@ -175,7 +175,7 @@ class V2EXChannel(Channel):
     # ------------------------------------------------------------------ #
 
     def get_hot_topics(self, limit: int = 20) -> list:
-        """获取热门帖子列表。
+        """Get a list of popular posts.
 
         Returns a list of dicts with keys:
           title, url, replies, node_name, node_title, content
@@ -200,11 +200,11 @@ class V2EXChannel(Channel):
         return results
 
     def get_node_topics(self, node_name: str, limit: int = 20) -> list:
-        """获取指定节点的最新帖子。
+        """Get the latest posts of the specified node.
 
         Args:
-            node_name: 节点名称，如 "python"、"tech"、"jobs"
-            limit:     最多返回条数
+            node_name: node name, such as "python", "tech", "jobs"
+            limit: the maximum number of items returned
 
         Returns a list of dicts with keys:
           title, url, replies, node_name, node_title, content
@@ -234,10 +234,10 @@ class V2EXChannel(Channel):
         return results
 
     def get_topic(self, topic_id: int) -> dict:
-        """获取单个帖子详情和回复列表。
+        """Get individual post details and reply list.
 
         Args:
-            topic_id: 帖子 ID（从 URL https://www.v2ex.com/t/<id> 中获取）
+            topic_id: Post ID (obtained from URL https://www.v2ex.com/t/<id>)
 
         Returns a dict with keys:
           id, title, url, content, replies_count, node_name, node_title,
@@ -293,10 +293,10 @@ class V2EXChannel(Channel):
         }
 
     def get_user(self, username: str) -> dict:
-        """获取用户信息。
+        """Get user information.
 
         Args:
-            username: V2EX 用户名
+            username: V2EX username
 
         Returns a dict with keys:
           id, username, url, website, twitter, psn, github, btc,
@@ -324,25 +324,25 @@ class V2EXChannel(Channel):
         }
 
     def search(self, query: str, limit: int = 10) -> list:
-        """搜索帖子。
+        """Search posts.
 
-        注意：V2EX 公开 API 暂不支持全文搜索端点（/api/search.json 不可用）。
-        本方法通过 Jina Reader 代理 V2EX 站内搜索页面获取结果（纯文本，无结构化数据）。
+        Note: V2EX public API does not currently support full-text search endpoint (/api/search.json is not available).
+        This method uses Jina Reader to proxy the V2EX site search page to obtain results (plain text, no structured data).
 
-        如需精确搜索，建议直接访问 https://www.v2ex.com/?q=<query> 或
-        使用 Exa channel 的 site:v2ex.com 搜索。
+        For precise search, it is recommended to visit https://www.v2ex.com/?q=<query> directly or
+        Search using Exa channel site:v2ex.com.
 
         Returns:
             list of dicts with keys: title, url, snippet
-            如果搜索不可用，返回包含单条 {"error": str} 的列表。
+            If search is not available, a list containing a single {"error": str} is returned.
         """
         search_url = _v2ex_url("/", q=query)
         return [
             {
                 "error": (
-                    "V2EX 公开 API 不提供搜索端点。"
-                    f"建议改用：{search_url} "
-                    "或通过 Exa channel 使用 site:v2ex.com 搜索。"
+                    "The V2EX public API does not provide a search endpoint. "
+                    f"It is recommended to use: {search_url} "
+                    "Or search via the Exa channel using site:v2ex.com."
                 )
             }
         ]

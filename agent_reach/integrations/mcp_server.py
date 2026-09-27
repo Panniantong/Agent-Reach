@@ -31,7 +31,7 @@ def create_server():
         print(
             "MCP not installed. Install: python -m pip install "
             "'agent-reach[mcp] @ "
-            "https://github.com/Panniantong/agent-reach/archive/main.zip'",
+            "https://github.com/jermiah/Agent-Reach/archive/main.zip'",
             file=sys.stderr,
         )
         sys.exit(1)

@@ -345,7 +345,7 @@ def _read_xfetch_session(path: Path) -> dict:
         return {}
     loaded = json.loads(payload)
     if not isinstance(loaded, dict):
-        raise ValueError("xfetch 会话文件必须是 JSON object")
+        raise ValueError("xfetch session files must be JSON objects")
     return loaded
 
 
@@ -499,7 +499,7 @@ def configure_from_browser(
                 BrowserConfigResult(
                     "Xueqiu",
                     False,
-                    f"未找到 xq_a_token，请先在 {browser} 中登录 xueqiu.com",
+                    f"xq_a_token not found, please log in to xueqiu.com in {browser} first",
                 )
             )
 
