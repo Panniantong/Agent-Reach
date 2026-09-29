@@ -188,7 +188,19 @@ def test_check_ok_with_deno():
          patch("shutil.which", side_effect=_which("deno")):
         status, message = ch.check()
     assert status == "ok"
-    assert message == "可提取视频信息和字幕"
+    assert "yt-dlp 已安装" in message
+    assert "未实时验证" in message
+    assert ch.active_backend == "yt-dlp"
+
+
+def test_check_does_not_claim_verified_extraction():
+    # See #729: install check must not claim verified access.
+    ch = YouTubeChannel()
+    with patch.object(yt, "probe_command", return_value=ProbeResult("ok")), \
+         patch("shutil.which", side_effect=_which("deno")):
+        status, message = ch.check()
+    assert status == "ok"
+    assert "可提取视频信息和字幕" not in message
     assert ch.active_backend == "yt-dlp"
 
 
