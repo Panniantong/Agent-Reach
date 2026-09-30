@@ -3,7 +3,7 @@
 # 用法: bash transcribe.sh [--polish] <小宇宙链接> [输出文件路径]
 # 环境变量: GROQ_API_KEY (必须)
 #
-# --polish: 转录后调用 Groq Llama 3.3 70B 给文稿补中文标点+合理分段
+# --polish: 转录后调用 Groq 给文稿补中文标点+合理分段
 #           （Whisper 对中文标点支持较弱，开启后阅读体验显著更好）
 
 set -e
@@ -274,10 +274,10 @@ for i in $(seq 0 $((NUM_CHUNKS - 1))); do
     echo "✅ ($CHARS 字)"
 done
 
-# Step 6.5 (可选): 用 Llama 3.3 70B 给文稿补标点+分段
+# Step 6.5 (可选): 用 Groq 给文稿补标点+分段
 if [ "$POLISH" = "1" ]; then
     ensure_python || exit 1
-    echo "✨ 正在润色（Llama 3.3 70B 加标点+分段）..."
+    echo "✨ 正在润色（${POLISH_MODEL:-qwen/qwen3-32b} 加标点+分段）..."
     for i in $(seq 0 $((NUM_CHUNKS - 1))); do
         echo -n "   段 $((i+1))/$NUM_CHUNKS... "
         IN_FILE="$WORK_DIR/transcript_${i}.txt" \
@@ -290,7 +290,9 @@ KEY = os.environ["GROQ_API_KEY"]
 IN = os.environ["IN_FILE"]
 OUT = os.environ["OUT_FILE"]
 
-MODEL = "llama-3.3-70b-versatile"
+MODEL = os.environ.get("POLISH_MODEL", "qwen/qwen3-32b")
+# NOTE: llama-3.3-70b-versatile was removed by Groq (404), see #720.
+# qwen default is non-reasoning so content is not eaten by reasoning tokens.
 MAX_DEPTH = 3
 PROMPT_TMPL = (
     "以下是一段中文普通话播客的语音转写片段，由于 Whisper 对中文标点支持较弱，"
@@ -340,6 +342,11 @@ def polish(text, depth=0):
         sys.stderr.write(f"polish error: {e}\n")
         return text
     if fr != "length" or depth >= MAX_DEPTH:
+        # Guard: reasoning models can return empty content with length finish,
+        # do not recurse on empty output or text will be eaten, see #720.
+        if not out.strip():
+            sys.stderr.write("polish: 模型返回空 content，该块回退原文\n")
+            return text
         return out
     # 输出被截断：从中点切两半递归处理
     mid = len(text) // 2
@@ -370,7 +377,7 @@ fi
     echo "时长: ${DURATION_MIN}分${DURATION_SEC}秒"
     echo "转录时间: $(date '+%Y-%m-%d %H:%M')"
     if [ "$POLISH" = "1" ]; then
-        echo "润色: Groq Llama 3.3 70B"
+        echo "润色: Groq ${POLISH_MODEL:-qwen/qwen3-32b}"
     fi
     echo ""
     echo "---"
