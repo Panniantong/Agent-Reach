@@ -60,7 +60,9 @@ def _atomic_write_yaml(target: Path, data: dict) -> None:
     try:
         if os.name != "nt" and hasattr(os, "fchmod"):
             os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle = os.fdopen(fd, "w", encoding="utf-8")
+        fd = -1
+        with handle:
             yaml.safe_dump(
                 data,
                 handle,
@@ -89,6 +91,11 @@ def _atomic_write_yaml(target: Path, data: dict) -> None:
             except OSError:
                 pass
     except BaseException:
+        if fd >= 0:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
         try:
             tmp_path.unlink(missing_ok=True)
         except OSError:
