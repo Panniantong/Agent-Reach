@@ -115,6 +115,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 | 📖 **Reddit** | —（没有零配置路径：匿名接口已被封） | 搜索 + 读帖子和评论 | 桌面装 OpenCLI 用浏览器登录态；或 rdt-cli + Cookie |
 | 📘 **Facebook** | — | 搜索、主页、Feed、群组列表 | 桌面装 OpenCLI（复用 Chrome 登录态） |
 | 📷 **Instagram** | — | 用户搜索、Profile、用户最近帖子、Explore | 桌面装 OpenCLI（复用 Chrome 登录态） |
+| 🧵 **Threads** | — | 帖子搜索（热门/最新）、帖子+回复、用户最近帖子 | 桌面装 OpenCLI（复用 Chrome 登录态） |
 | 📕 **小红书** | — | 搜索、阅读、评论 | OpenCLI 只用用户已有 Chrome 会话；MCP/存量工具用 Cookie-Editor |
 | 💼 **LinkedIn** | Jina Reader 读公开页面 | Profile 详情、公司页面、职位搜索 | 告诉 Agent「帮我配 LinkedIn」 |
 | 🎯 **Boss直聘** | CDP 链路体检 | 搜索岗位 + JD 全文（专用真 Chrome） | 告诉 Agent「帮我配 Boss直聘」；Agent 打开专用 Chrome，你手动登录 |
@@ -216,6 +217,7 @@ channels/
 ├── reddit.py       → OpenCLI ▸ rdt-cli（无零配置路径，必须登录态）
 ├── facebook.py     → OpenCLI（桌面浏览器登录态）
 ├── instagram.py    → OpenCLI（桌面浏览器登录态）
+├── threads.py      → OpenCLI（桌面浏览器登录态）
 ├── xiaohongshu.py  → OpenCLI ▸ xiaohongshu-mcp ▸ xhs-cli
 ├── linkedin.py     → mcp-server-linkedin ▸ Jina Reader
 ├── rss.py          → feedparser
@@ -234,6 +236,7 @@ channels/
 | Reddit | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | [rdt-cli](https://github.com/public-clis/rdt-cli) | 匿名接口已被封、官方 API 审批制——只剩登录态路线 |
 | Facebook | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | — | Graph API/Groups API 权限收紧；浏览器登录态是当前最实用路径 |
 | Instagram | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | 官方 Graph API（Business/Creator + 审批） | instaloader 类路径不稳定；OpenCLI 复用真实浏览器会话 |
+| Threads | [OpenCLI](https://github.com/jackwener/opencli)（桌面） | 官方 Threads API（需应用审核，只能读自己账号） | OpenCLI 复用真实浏览器会话，可搜全站公开帖子 |
 | YouTube 字幕 + 搜索 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | — | 154K Star，YouTube 仍是最佳（注意：不再用于 B站） |
 | B站 | [bili-cli](https://github.com/public-clis/bilibili-cli) | OpenCLI ▸ 搜索 API | yt-dlp 被 B站风控 412 封死（2026-06 实测），bili-cli 无登录可搜可读 |
 | 搜全网 | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | — | AI 语义搜索，MCP 接入免 Key |

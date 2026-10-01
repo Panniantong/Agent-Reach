@@ -16,6 +16,7 @@ from .instagram import InstagramChannel
 from .linkedin import LinkedInChannel
 from .reddit import RedditChannel
 from .rss import RSSChannel
+from .threads import ThreadsChannel
 from .twitter import TwitterChannel
 from .v2ex import V2EXChannel
 from .web import WebChannel
@@ -31,6 +32,7 @@ ALL_CHANNELS: List[Channel] = [
     RedditChannel(),
     FacebookChannel(),
     InstagramChannel(),
+    ThreadsChannel(),
     BilibiliChannel(),
     XiaoHongShuChannel(),
     LinkedInChannel(),

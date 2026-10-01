@@ -110,6 +110,7 @@ After installing the basics, **ask the user** which additional channels they nee
 > - 📖 **Reddit** — 搜索和阅读帖子（必须登录态：桌面 OpenCLI 或 rdt-cli + Cookie）
 > - 📘 **Facebook** — 搜索、主页、Feed、群组列表（桌面走 OpenCLI，复用 Chrome 登录态）
 > - 📷 **Instagram** — 用户搜索、Profile、用户最近帖子、Explore（桌面走 OpenCLI，复用 Chrome 登录态）
+> - 🧵 **Threads** — 帖子搜索、帖子+回复、用户最近帖子（桌面走 OpenCLI，复用 Chrome 登录态）
 > - 📺 **B站完整版** — 热门、排行、搜索、视频详情（bili-cli，无需登录）
 > - 💼 **LinkedIn** — Profile、职位搜索
 > - 🎯 **Boss直聘** — 搜索岗位 + JD 全文（本地专用 Chrome；用户手动登录）
@@ -120,12 +121,12 @@ Based on the user's choice, run:
 
 ```bash
 agent-reach install --env=auto --system --channels=opencli,xiaohongshu   # Desktop user chose XHS
-agent-reach install --env=auto --system --channels=facebook,instagram    # Desktop Meta channels
+agent-reach install --env=auto --system --channels=facebook,instagram,threads    # Desktop Meta channels
 agent-reach install --env=local --system --channels=boss                # Desktop Boss直聘
 agent-reach install --env=auto --system --channels=all                   # User approved everything
 ```
 
-Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `facebook`, `instagram`, `bilibili`, `linkedin`, `boss`, `all`
+Supported channel names: `opencli`, `twitter`, `xiaoyuzhou`, `xueqiu`, `xiaohongshu`, `reddit`, `facebook`, `instagram`, `threads`, `bilibili`, `linkedin`, `boss`, `all`
 
 ### Step 3: Fix what's broken
 
@@ -256,6 +257,22 @@ agent-reach install --system --channels facebook,instagram
 >    ```
 >
 > Facebook Groups 当前只承诺读取用户登录后可见的群组列表/最近动态，不承诺任意群帖子和评论 API。Instagram 的 search 是用户搜索，不是全站帖子关键词搜索；若提示 429/登录错误，先让用户在 Chrome 里重新登录并降低频率。
+
+**Threads（桌面 OpenCLI）:**
+> 走 OpenCLI，复用用户 Chrome 里的 threads.com 登录态（用 Instagram 账号登录）。需要 OpenCLI 包含 `threads` 适配器。
+
+```bash
+agent-reach install --system --channels threads
+```
+
+> 装完后在 Chrome 里登录 threads.com，然后：
+> ```bash
+> opencli threads search "query" --sort recent -f yaml
+> opencli threads post "https://www.threads.com/@user/post/CODE" -f yaml
+> opencli threads user USERNAME -f yaml
+> ```
+>
+> 未登录时只会渲染少量帖子并返回 `AUTH_REQUIRED`。不要短时间内高频连续调用。
 
 **雪球 / Xueqiu (股票行情 + 热门帖子):**
 > "雪球需要登录后的 Cookie。请先在 Chrome 里登录 xueqiu.com，然后运行："
@@ -413,6 +430,7 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 | Reddit | `opencli`（备选 `rdt`） | `opencli reddit search "query" -f yaml` / `rdt read POST_ID` |
 | Facebook | `opencli` | `opencli facebook search "query" -f yaml` |
 | Instagram | `opencli` | `opencli instagram user nasa -f yaml` |
+| Threads | `opencli` | `opencli threads search "query" -f yaml` |
 | GitHub | `gh` | `gh search repos "query"` |
 | Web | `curl` + Jina | `curl -s "https://r.jina.ai/URL"` |
 | Exa Search | `mcporter` | `mcporter call exa.web_search_exa query="..." numResults=5` |

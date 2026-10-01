@@ -102,7 +102,7 @@ def main():
     p_install.add_argument("--channels", default="",
                            help="Comma-separated optional channels to install "
                                 "(twitter,xiaoyuzhou,xueqiu,xiaohongshu,"
-                                "reddit,facebook,instagram,bilibili,linkedin,boss,all)")
+                                "reddit,facebook,instagram,threads,bilibili,linkedin,boss,all)")
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
@@ -278,6 +278,7 @@ def _cmd_install(args):
         "reddit":      _install_reddit_deps,
         "facebook":    _install_opencli_deps,
         "instagram":   _install_opencli_deps,
+        "threads":     _install_opencli_deps,
         "bilibili":    _install_bili_deps,
         "boss":        _install_boss_deps,
         "opencli":     _install_opencli_deps,  # cross-channel backend, desktop only
@@ -323,7 +324,7 @@ def _cmd_install(args):
         tools_dir = os.path.expanduser("~/.agent-reach/tools")
         os.makedirs(tools_dir, exist_ok=True)
 
-    DESKTOP_ONLY_CHANNELS = {"opencli", "facebook", "instagram", "boss"}
+    DESKTOP_ONLY_CHANNELS = {"opencli", "facebook", "instagram", "threads", "boss"}
     COOKIE_CHANNELS = {"twitter", "xueqiu", "bilibili", "xiaohongshu"}
 
     # Auto-detect environment

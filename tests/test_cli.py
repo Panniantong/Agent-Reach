@@ -351,7 +351,7 @@ class TestCLI:
                 system=True,
                 safe=False,
                 dry_run=False,
-                channels="facebook,instagram,opencli",
+                channels="facebook,instagram,threads,opencli",
             )
         )
 
@@ -376,6 +376,24 @@ class TestCLI:
         assert "服务器环境跳过：boss, facebook, instagram, opencli" in out
         assert "[dry-run] Would install optional channels: bilibili" in out
         assert "boss, facebook, instagram, opencli, bilibili" not in out
+
+    def test_install_server_dry_run_skips_threads(self, monkeypatch, capsys):
+        monkeypatch.setattr(cli, "_install_system_deps_dryrun", lambda: None)
+
+        cli._cmd_install(
+            Namespace(
+                env="server",
+                proxy="",
+                system=True,
+                safe=False,
+                dry_run=True,
+                channels="threads,bilibili",
+            )
+        )
+
+        out = capsys.readouterr().out
+        assert "服务器环境跳过：threads" in out
+        assert "[dry-run] Would install optional channels: bilibili" in out
 
 
 class TestCheckUpdateRetry:

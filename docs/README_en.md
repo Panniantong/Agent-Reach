@@ -107,6 +107,7 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 | 📕 **XiaoHongShu** | Read · Search · Comments | OpenCLI / MCP | OpenCLI uses only an existing user-controlled Chrome session; MCP/legacy tools use a manual Cookie-Editor export |
 | 📘 **Facebook** | Search · Profiles · Feed · Groups list | OpenCLI | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
 | 📷 **Instagram** | User search · Profiles · Recent posts · Explore | OpenCLI | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
+| 🧵 **Threads** | Post search (top/recent) · Post + replies · Recent posts | OpenCLI | Desktop only: [OpenCLI](https://github.com/jackwener/opencli) reuses your logged-in Chrome session |
 | 💼 **LinkedIn** | Jina Reader (public pages) | Full profiles, companies, job search | Tell your Agent "help me set up LinkedIn" |
 | 💻 **V2EX** | Hot topics · Node topics · Topic detail + replies · User profile | Zero config | Public JSON API, no auth required. Great for tech community content |
 | 📈 **Xueqiu (雪球)** | Stock quotes · Search · Hot posts · Hot stocks | Browser cookie | Tell your Agent "help me set up Xueqiu" |
@@ -243,7 +244,7 @@ $ agent-reach doctor
   ⚠️  Twitter/X — doctor checks only that explicit credentials exist; direct CLI still needs its environment variables
   ⬜ Reddit posts and comments — needs login: rdt-cli after `rdt login`, or OpenCLI browser session
   ⬜ XiaoHongShu notes — OpenCLI needs an existing user-controlled session; otherwise use Cookie-Editor with MCP/legacy tools
-  ⬜ Facebook / Instagram — desktop: OpenCLI browser session
+  ⬜ Facebook / Instagram / Threads — desktop: OpenCLI browser session
 
 Status: 6/9 channels available
 ```
@@ -272,6 +273,7 @@ channels/
 ├── reddit.py       → OpenCLI ▸ rdt-cli (no zero-config path, login required)
 ├── facebook.py     → OpenCLI (desktop browser session)
 ├── instagram.py    → OpenCLI (desktop browser session)
+├── threads.py      → OpenCLI (desktop browser session)
 ├── xiaohongshu.py  → OpenCLI ▸ xiaohongshu-mcp ▸ xhs-cli
 ├── linkedin.py     → linkedin-mcp ▸ Jina Reader
 ├── rss.py          → feedparser
@@ -290,6 +292,7 @@ Each channel file **actually probes** its candidate backends in order (not just 
 | Reddit | [OpenCLI](https://github.com/jackwener/opencli) (desktop) | [rdt-cli](https://github.com/public-clis/rdt-cli) | Anonymous endpoints blocked, official API gated — logged-in sessions are the only route left |
 | Facebook | [OpenCLI](https://github.com/jackwener/opencli) (desktop) | — | Graph/Groups API access is heavily restricted; browser sessions are the practical route |
 | Instagram | [OpenCLI](https://github.com/jackwener/opencli) (desktop) | Official Graph API (Business/Creator + review) | Instaloader-style paths are unstable; OpenCLI reuses the real browser session |
+| Threads | [OpenCLI](https://github.com/jackwener/opencli) (desktop) | Official Threads API (app review, own account only) | OpenCLI reuses the real browser session and can search public posts |
 | YouTube subtitles + search | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | — | 154K stars, still the best for YouTube (no longer used for Bilibili) |
 | Bilibili | [bili-cli](https://github.com/public-clis/bilibili-cli) | OpenCLI ▸ search API | yt-dlp is 412-blocked by Bilibili (verified June 2026); bili-cli searches and reads without login |
 | Search the web | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | — | AI semantic search, MCP integration, no API key |
