@@ -54,6 +54,36 @@ agent-reach doctor    # boss 行 message 应显示「浏览器内有登录 cooki
 
 ---
 
+## OpenCLI: doctor 报「扩展当前未连接」，但 `opencli doctor` 显示已连接
+
+**症状 / Symptom：** 连接了多个 Chrome profile 时，`agent-reach doctor` 的 Reddit / Twitter /
+Facebook / Instagram / 小红书行都显示：
+
+```
+检测到 Chrome/Edge 的 OpenCLI 扩展文件，但扩展当前未连接；仅凭磁盘文件无法确认它已加载或启用。
+```
+
+而 `opencli doctor` 显示 `[OK] Extension: connected`，`opencli reddit search ...` 等命令也能正常返回。
+
+**原因 / Cause：** OpenCLI ≥ 1.8 的 daemon 在多 profile 模式下（`profileRequired: true`）
+顶层 `extensionConnected` 保持 `false`，每个 profile 的连接状态在 `profiles[]` 里。
+v1.5.0 及更早版本只读顶层字段（[#740](https://github.com/Panniantong/Agent-Reach/issues/740)）。
+
+**确认方法 / Check：**
+
+```bash
+curl -s -H "X-OpenCLI: 1" http://127.0.0.1:19825/status
+```
+
+若顶层 `"extensionConnected": false` 但 `profiles[]` 中有 `"extensionConnected": true`，即为此问题。
+
+**解决方案 / Fix：** 升级到包含该修复的版本即可。在此之前：
+
+- 这条 ⚠️ 可以忽略，OpenCLI 命令本身不受影响；以 `opencli doctor` 和一次真实命令为准；
+- 或只在一个 Chrome profile 中启用 OpenCLI 扩展。
+
+---
+
 ## Twitter/X: twitter-cli 连接失败
 
 **症状：** `twitter search` 或其他命令返回错误
