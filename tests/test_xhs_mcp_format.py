@@ -11,6 +11,7 @@ import sys
 import pytest
 
 from agent_reach.channels.xiaohongshu import format_xhs_result
+from agent_reach.utils.process import utf8_subprocess_env
 
 MCP_FEED = {
     "id": "note-123",
@@ -31,7 +32,8 @@ def _format_cli(payload):
         [sys.executable, "-m", "agent_reach.cli", "format", "xhs"],
         input=json.dumps(payload, ensure_ascii=False),
         capture_output=True,
-        text=True,
+        encoding="utf-8",
+        env=utf8_subprocess_env(),
         timeout=10,
         check=True,
     )
