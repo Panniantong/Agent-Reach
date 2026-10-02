@@ -102,7 +102,7 @@ class RedditChannel(Channel):
             return "warn", (
                 f"rdt-cli 已安装，但 credential.json 无法安全读取：{exc}。"
             )
-        except OSError:
+        except (OSError, UnicodeError):
             return "warn", (
                 "rdt-cli 已安装，但 credential.json 无法安全读取；"
                 "Doctor 未执行会自动刷新 Cookie 的 `rdt status`。"

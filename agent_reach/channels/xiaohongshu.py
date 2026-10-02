@@ -266,7 +266,7 @@ class XiaoHongShuChannel(Channel):
             return "warn", (
                 f"xhs-cli 已安装，但 cookies.json 无法安全读取：{exc}。"
             )
-        except OSError:
+        except (OSError, UnicodeError):
             return "warn", (
                 "xhs-cli 已安装，但 cookies.json 无法安全读取；"
                 "Doctor 未执行会自动提取浏览器 Cookie 的 `xhs status`。"
