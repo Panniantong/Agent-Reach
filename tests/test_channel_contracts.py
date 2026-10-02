@@ -110,6 +110,7 @@ def test_youtube_warns_when_node_only_and_no_config(monkeypatch, tmp_path):
 
     monkeypatch.setattr("shutil.which", fake_which)
     monkeypatch.setattr("subprocess.run", _fake_run_ok)  # yt-dlp probe really executes now
+    monkeypatch.setattr("agent_reach.probe._run_posix_probe", _fake_run_ok)
     # Point to a non-existent config file
     monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path / ".config/yt-dlp/config"))
 
@@ -133,6 +134,7 @@ def test_youtube_warns_with_windows_specific_fix_command(monkeypatch, tmp_path):
 
     monkeypatch.setattr("shutil.which", fake_which)
     monkeypatch.setattr("subprocess.run", _fake_run_ok)  # yt-dlp probe really executes now
+    monkeypatch.setattr("agent_reach.probe._run_posix_probe", _fake_run_ok)
     monkeypatch.setattr("agent_reach.utils.paths.sys.platform", "win32")
     monkeypatch.setenv("APPDATA", str(tmp_path / "AppData" / "Roaming"))
 
@@ -156,6 +158,7 @@ def test_youtube_ok_when_deno_installed(monkeypatch):
 
     monkeypatch.setattr("shutil.which", fake_which)
     monkeypatch.setattr("subprocess.run", _fake_run_ok)  # yt-dlp probe really executes now
+    monkeypatch.setattr("agent_reach.probe._run_posix_probe", _fake_run_ok)
 
     ch = YouTubeChannel()
     status, _msg = ch.check()

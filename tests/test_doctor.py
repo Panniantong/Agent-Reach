@@ -286,6 +286,7 @@ def test_real_doctor_path_is_zero_write_and_never_runs_risky_status_commands(
         return subprocess.CompletedProcess(argv, 0, output, "")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr("agent_reach.probe._run_posix_probe", fake_run)
     monkeypatch.setattr(opencli, "_fetch_daemon_status", lambda timeout=2: None)
     monkeypatch.setattr(opencli, "_extension_installed_on_disk", lambda: False)
     monkeypatch.setattr(
