@@ -58,8 +58,11 @@ metadata:
 ## 零配置快速命令
 
 ```bash
-# Exa 网页搜索
-mcporter call exa.web_search_exa query="query" numResults=5
+# Exa 网页搜索（objective 为必填，影响排序和摘要质量）
+mcporter call exa.web_search_exa query="query" objective="..." numResults=5
+
+# 搜索摘要不够时，读全文
+mcporter call exa.web_fetch_exa urls="https://example.com" maxCharacters=8000
 
 # 通用网页阅读
 curl -s "https://r.jina.ai/URL"
