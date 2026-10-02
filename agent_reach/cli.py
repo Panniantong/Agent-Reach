@@ -52,6 +52,10 @@ def _ensure_utf8_console():
             sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
         if hasattr(sys.stderr, "buffer"):
             sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+        # Upstream tools emit UTF-8 JSON to pipes. The Windows console input
+        # already has its own Unicode handling, so only reconfigure redirects.
+        if not sys.stdin.isatty() and hasattr(sys.stdin, "reconfigure"):
+            sys.stdin.reconfigure(encoding="utf-8", errors="strict")
     except Exception:
         # Do not crash CLI just because encoding patch failed.
         pass
@@ -649,7 +653,11 @@ def _cmd_format(args):
     if args.platform == "xhs":
         from agent_reach.channels.xiaohongshu import format_xhs_result
 
-        raw = sys.stdin.read().strip()
+        try:
+            raw = sys.stdin.read().strip()
+        except UnicodeDecodeError:
+            print("Error: stdin is not valid UTF-8", file=sys.stderr)
+            sys.exit(1)
         if not raw:
             print("Error: no input on stdin", file=sys.stderr)
             sys.exit(1)
