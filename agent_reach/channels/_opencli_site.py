@@ -39,6 +39,15 @@ class OpenCLISiteChannel(Channel):
             return "error", st.hint
 
         if st.ready:
+            from agent_reach.backends.opencli_live import live_probe
+
+            live = live_probe(self.site)
+            if live is not None:
+                ok, detail = live
+                if ok:
+                    self.active_backend = "OpenCLI"
+                    return "ok", detail
+                return "warn", detail
             return "warn", (
                 f"OpenCLI 桥接已连接，但 {self.description} 的登录态和实际命令"
                 "未实时验证；Doctor 不执行平台命令，因此当前不标记为可用。"

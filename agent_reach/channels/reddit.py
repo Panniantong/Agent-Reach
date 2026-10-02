@@ -81,6 +81,11 @@ class RedditChannel(Channel):
         if st.broken:
             return "error", st.hint
         if st.ready:
+            from agent_reach.backends.opencli_live import live_probe
+
+            live = live_probe("reddit")
+            if live is not None:
+                return ("ok" if live[0] else "warn"), live[1]
             return "warn", (
                 "OpenCLI 桥接已连接，但 Reddit 登录态和实际命令未实时验证；"
                 "Doctor 不执行平台命令，因此当前不标记为可用。"

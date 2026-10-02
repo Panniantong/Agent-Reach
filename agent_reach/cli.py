@@ -140,6 +140,9 @@ def main():
     p_doctor = sub.add_parser("doctor", help="Check platform availability")
     p_doctor.add_argument("--json", action="store_true",
                           help="Output machine-readable JSON instead of the text report")
+    p_doctor.add_argument("--live", action="store_true",
+                          help="Run one read-only command per OpenCLI channel to really verify it "
+                               "(results cached 6h; also enabled by AGENT_REACH_DOCTOR_LIVE=1)")
 
     # ── uninstall ──
     p_uninstall = sub.add_parser("uninstall", help="Remove all Agent Reach config, tokens, and skill files")
@@ -2022,6 +2025,8 @@ def _cmd_doctor(args=None):
     from agent_reach.config import Config
     from agent_reach.doctor import check_all, format_report
     config = Config(read_only=True)
+    if args is not None and getattr(args, "live", False):
+        os.environ["AGENT_REACH_DOCTOR_LIVE"] = "1"
     results = check_all(config)
 
     if args is not None and getattr(args, "json", False):
