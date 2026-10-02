@@ -6,6 +6,46 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### 🐛 Bug Fixes / 修复
+
+#### 🔐 Boss直聘 — 登录态误判（双凭据存储）
+
+- **根因：** Boss 有两个互不代表的登录态存储——本地 `~/.boss-agent/auth/session.enc`
+  和专用 Chrome profile 内的浏览器 cookie。`boss status` / `status --live` **只校验前者**
+  （Bridge/httpx 时代的遗留凭据库），而 `existing-browser` 严格 CDP 模式下搜索走的是浏览器 cookie。
+  「本地有旧凭据 + 浏览器未登录」时 `boss status` 会报 `logged_in: true`，误导 Agent
+  跳过登录直接搜索，最终撞上 `AUTH_EXPIRED`；旧 runbook 又禁止把 `_security_check`
+  当成未登录，两条规则叠加把 Agent 推向「反爬滑块」的错误分支。
+- **修复：** `check()` 新增第 4 层只读探测 `_cdp_zhipin_login_cookie()`，用纯标准库
+  实现的最小 WebSocket 客户端直接问 CDP 浏览器本体（`Storage.getCookies`）有无 zhipin
+  的 `wt2` cookie，**以浏览器为准**，不引入新依赖、不拉起浏览器、不执行搜索。
+  无 wt2 → 明确报「浏览器未登录，搜索会报 AUTH_EXPIRED」并指向「用户登录 +
+  `login --cdp`」；探测失败 → 报「登录态未知」；安全校验页提示也附带浏览器 cookie 状态。
+- **Runbook 修正：** 删除误导规则「判断登录态只信 `boss status`」，改为以 doctor 的
+  浏览器 cookie 探测为准；拉起专用 Chrome 后**强制暂停让用户肉眼确认**登录状态；
+  `AUTH_EXPIRED` 定为 ground truth（直接走登录流程，禁止往安全校验方向解释），
+  `_security_check` 仅在无 `AUTH_EXPIRED` 时按滑块处理。
+
+### ✨ Features / 新增
+
+#### 🎯 Boss直聘 channel
+
+- 新增 `boss` channel：经 boss-agent-cli + CDP 真 Chrome 搜岗位、取 JD 全文。
+- `check()` 四层只读探测（boss-agent-cli 装没装 → 9222 端口通不通 → 有无 zhipin 页签
+  → 浏览器内有无 `wt2` 登录 cookie）。
+- 抓取走公开 API（`search_jobs` + `job_card_browser` + `browser_source="existing-browser"`）。
+- `agent-reach install --system --channels=boss` 可安装锁定上游 boss-agent-cli
+  （#403–#407 已合并入 master）固定提交的后端；上游发布正式版后切回版本约束。
+- Skill 与安装指南支持“帮我配 Boss直聘”：Agent 启动仅监听回环地址的专用 Chrome，
+  用户只负责手动登录，最后由 Agent 验证登录态与 CDP 链路。
+- 固定依赖从 fork 快照 `8ff6bd3` 切换到上游 commit `4c991b7`（#403–#407 已合并入
+  master）：已登录 CDP 会话可直接复用，搜索可通过 `--browser-source existing-browser`
+  禁止 headless 降级。
+- code 37 按原始文案分类：环境异常为 `ENVIRONMENT_RISK` 并立即停止；只有明确
+  token/stoken 过期才允许一次刷新。专用 Chrome profile 应长期复用并降低频率。
+
 ## [1.3.1] - 2026-03-27
 
 ### 🐛 Bug Fixes / 修复

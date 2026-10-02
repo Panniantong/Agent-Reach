@@ -16,6 +16,44 @@ agent-reach configure --from-browser chrome --platform xueqiu
 
 ---
 
+## Boss直聘: `boss status` 说已登录，但搜索报 `AUTH_EXPIRED`
+
+**症状：** `boss status` / `status --live` 返回 `logged_in: true`（甚至带用户名），
+但 `boss ... search` 立刻报 `{"code": "AUTH_EXPIRED", "message": "用户未登录"}`。
+专用 Chrome 可能同时停在带 `_security_check` 的 URL 上，看起来像反爬滑块。
+
+**原因：** Boss 有两个登录态存储，认证的是不同通道：
+
+| 存储 | 谁在用 |
+|---|---|
+| `~/.boss-agent/auth/session.enc` | `boss status` / `status --live`；httpx 通道的低危操作（`detail` / `cities` / `job_card_httpx`）。CDP 搜索也会读它（读不到直接报「未登录」），但复用真 Chrome context 时它的 cookie 从未真正生效 |
+| `~/.boss-chrome-profile` 内的浏览器 cookie | `existing-browser` 严格 CDP 模式下 search / greet 等高危操作实际携带的凭据 |
+
+`boss status` 只校验本地 session.enc。本地存着几天前的旧凭据、而专用 Chrome
+profile 本身没登录时，它依然报 `logged_in: true`——这不是登录态有效的证明。
+同时 `_security_check` 页面是反爬挑战，**已登录也会出现**，不能用它判断登录态；
+两者叠加很容易把「浏览器未登录」误判成「卡在滑块」。
+
+> 两个存储都不要删。session.enc 缺失会让 CDP 搜索在连上浏览器之前就失败；
+> 需要刷新它时跑 `login --cdp`，不要手工删文件。
+
+**判定顺序：**
+
+1. `AUTH_EXPIRED` 是 ground truth——出现即浏览器未登录，不管 `boss status` 说什么；
+2. `agent-reach doctor` 的 boss 行会直接探测浏览器内有无 `wt2` cookie，以它为准；
+3. `boss status` 仅作参考；页面 URL 完全不作为判据。
+
+**解决方案：** 在专用 Chrome 窗口里肉眼确认并手动登录 zhipin.com，然后同步登录态：
+
+```bash
+boss --cdp-url http://localhost:9222 login --cdp
+agent-reach doctor    # boss 行 message 应显示「浏览器内有登录 cookie（wt2）」
+```
+
+> 拉起专用 Chrome 后的第一步永远是让用户肉眼确认登录状态，不要用 `boss status` 代替。
+
+---
+
 ## Twitter/X: twitter-cli 连接失败
 
 **症状：** `twitter search` 或其他命令返回错误
