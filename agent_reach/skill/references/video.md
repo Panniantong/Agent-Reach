@@ -61,6 +61,8 @@ agent-reach transcribe "https://www.youtube.com/watch?v=VIDEO_ID"
 agent-reach transcribe ./local_audio.mp3 -o /tmp/transcript.txt
 ```
 
+> `-o` 或小宇宙脚本的输出路径需指向普通文件（也可为指向普通文件的符号链接）。保存失败时保留已有稿件；目录、设备和管道不能作为输出文件。
+
 > `agent-reach transcribe` 只接收公开 http(s) URL 或本地音频文件。用 `ytsearch5:` 搜索时，先从 yt-dlp 结果里选出具体视频 URL，再转写。
 > 需要先配置 key：`agent-reach configure groq-key`（隐藏输入；免费，console.groq.com）
 > 或 `agent-reach configure openai-key`。默认 auto 模式只使用第一个已配置服务商
