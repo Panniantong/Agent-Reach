@@ -293,6 +293,7 @@ if [ "$POLISH" = "1" ]; then
         if IN_FILE="$WORK_DIR/transcript_${i}.txt" \
         OUT_FILE="$WORK_DIR/polished_${i}.txt" \
         GROQ_API_KEY="$GROQ_API_KEY" POLISH_MODEL="$POLISH_MODEL" \
+        PYTHONUTF8=1 PYTHONIOENCODING=utf-8 \
         "${PYTHON_CMD[@]}" <<'PY'
 import json, os, sys, time, urllib.request, urllib.error
 

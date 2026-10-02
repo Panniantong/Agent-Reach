@@ -103,6 +103,8 @@ def _run_polish(tmp_path, local_api, text="原文内容", model=None):
             "OUT_FILE": str(output),
             "GROQ_API_KEY": "test-only-key",
             "POLISH_MODEL": model or "qwen/qwen3.8-27b",
+            "PYTHONUTF8": "1",
+            "PYTHONIOENCODING": "utf-8",
         }
     )
     result = subprocess.run(
@@ -168,10 +170,12 @@ def test_polish_honors_explicit_model_override(tmp_path, local_api):
     assert "reasoning_effort" not in local_api["requests"][0]
 
 
-def test_full_script_sends_utf8_file_field_and_reports_partial_polish(
-    tmp_path, local_api, bash_executable
+@pytest.mark.parametrize("provider_available", [False, True])
+def test_full_script_sends_utf8_file_field_and_reports_polish_status(
+    tmp_path, local_api, bash_executable, provider_available
 ):
-    local_api["respond"] = lambda _text, _n: (404, "", "stop")
+    if not provider_available:
+        local_api["respond"] = lambda _text, _n: (404, "", "stop")
     env, curl_log, temp_root, bash_env = _script_env(
         tmp_path,
         """
@@ -199,6 +203,7 @@ esac
         bash_env, "ffmpeg", 'for output in "$@"; do :; done; printf x > "$output"'
     )
     env.update(_api_redirect(tmp_path, local_api))
+    env.update({"PYTHONIOENCODING": "cp1252", "PYTHONUTF8": "0"})
     output = tmp_path / "out.md"
     result = subprocess.run(
         [
@@ -216,8 +221,11 @@ esac
     )
     assert result.returncode == 0, result.stderr
     assert "原文内容" in output.read_text(encoding="utf-8")
-    assert "部分未完成，保留原文" in output.read_text(encoding="utf-8")
-    assert "⚠️" in result.stdout
+    assert ("部分未完成，保留原文" in output.read_text(encoding="utf-8")) is (
+        not provider_available
+    )
+    if not provider_available:
+        assert "⚠️" in result.stdout
     assert "prompt=<" in curl_log.read_text(encoding="utf-8")
     assert "以下是一段" not in curl_log.read_text(encoding="utf-8")
     assert "以下是一段中文普通话播客录音".encode("utf-8") in local_api["multipart"][0]
