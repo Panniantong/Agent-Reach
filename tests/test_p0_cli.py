@@ -192,8 +192,9 @@ def test_browser_cookie_import_requires_explicit_platform(monkeypatch):
     assert exc.value.code == 2
 
 
+@pytest.mark.parametrize("browser", ["chrome", "vivaldi"])
 def test_browser_cookie_import_passes_explicit_platform_and_profile(
-    monkeypatch, capsys
+    browser, monkeypatch, capsys
 ):
     """The CLI forwards an allowed minimal-cookie platform and exact profile."""
     import agent_reach.config as config_module
@@ -215,7 +216,7 @@ def test_browser_cookie_import_passes_explicit_platform_and_profile(
             "agent-reach",
             "configure",
             "--from-browser",
-            "chrome",
+            browser,
             "--platform",
             "xueqiu",
             "--profile",
@@ -225,7 +226,7 @@ def test_browser_cookie_import_passes_explicit_platform_and_profile(
 
     cli.main()
 
-    assert captured["browser"] == "chrome"
+    assert captured["browser"] == browser
     assert captured["platform"] == "xueqiu"
     assert captured["profile"] == "Profile 2"
     assert "Cookies configured" in capsys.readouterr().out

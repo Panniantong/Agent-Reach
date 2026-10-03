@@ -39,6 +39,7 @@ def test_rookiepy_is_limited_at_source_to_the_requested_platform(monkeypatch):
         edge=lambda domains: [],
         brave=lambda domains: [],
         opera=lambda domains: [],
+        vivaldi=lambda domains: [],
     )
     monkeypatch.setitem(sys.modules, "rookiepy", fake_rookiepy)
 
@@ -65,12 +66,40 @@ def test_xueqiu_collects_only_xq_a_token(monkeypatch):
         edge=lambda domains: [],
         brave=lambda domains: [],
         opera=lambda domains: [],
+        vivaldi=lambda domains: [],
     )
     monkeypatch.setitem(sys.modules, "rookiepy", fake_rookiepy)
 
     extracted = cookie_extract.extract_all("chrome", platform="xueqiu")
 
     assert extracted == {"xueqiu": {"xq_a_token": "needed"}}
+
+
+def test_rookiepy_dispatches_vivaldi(monkeypatch):
+    calls = []
+
+    def vivaldi(domains):
+        calls.append(domains)
+        return [
+            {"name": "xq_a_token", "value": "needed", "domain": ".xueqiu.com"},
+            {"name": "device_id", "value": "unrelated", "domain": ".xueqiu.com"},
+            {"name": "remember", "value": "private", "domain": ".xueqiu.com"},
+        ]
+
+    fake_rookiepy = SimpleNamespace(
+        chrome=lambda domains: [],
+        firefox=lambda domains: [],
+        edge=lambda domains: [],
+        brave=lambda domains: [],
+        opera=lambda domains: [],
+        vivaldi=vivaldi,
+    )
+    monkeypatch.setitem(sys.modules, "rookiepy", fake_rookiepy)
+
+    extracted = cookie_extract.extract_all("vivaldi", platform="xueqiu")
+
+    assert extracted == {"xueqiu": {"xq_a_token": "needed"}}
+    assert calls == [[".xueqiu.com"]]
 
 
 def test_cookie_backend_cannot_smuggle_a_lookalike_domain(monkeypatch):
@@ -91,6 +120,7 @@ def test_cookie_backend_cannot_smuggle_a_lookalike_domain(monkeypatch):
         edge=lambda domains: [],
         brave=lambda domains: [],
         opera=lambda domains: [],
+        vivaldi=lambda domains: [],
     )
     monkeypatch.setitem(sys.modules, "rookiepy", fake_rookiepy)
 
@@ -132,6 +162,7 @@ def test_explicit_profile_uses_only_that_cookie_database(tmp_path, monkeypatch):
         edge=lambda **kwargs: [],
         brave=lambda **kwargs: [],
         opera=lambda **kwargs: [],
+        vivaldi=lambda **kwargs: [],
     )
     monkeypatch.setitem(sys.modules, "browser_cookie3", fake_browser_cookie3)
 
@@ -142,6 +173,61 @@ def test_explicit_profile_uses_only_that_cookie_database(tmp_path, monkeypatch):
     assert calls == [
         (str(cookie_db), ".xueqiu.com"),
     ]
+
+
+def test_explicit_vivaldi_profile_uses_browser_cookie3_vivaldi(
+    tmp_path, monkeypatch
+):
+    cookie_db = tmp_path / "Profile 1" / "Network" / "Cookies"
+    cookie_db.parent.mkdir(parents=True)
+    cookie_db.write_bytes(b"test database placeholder")
+    monkeypatch.setattr(
+        cookie_extract, "_chromium_user_data_dir", lambda browser: tmp_path
+    )
+    monkeypatch.setitem(sys.modules, "rookiepy", None)
+
+    calls = []
+
+    def vivaldi(*, cookie_file=None, domain_name=""):
+        calls.append((cookie_file, domain_name))
+        return []
+
+    fake_browser_cookie3 = SimpleNamespace(
+        chrome=lambda **kwargs: [],
+        firefox=lambda **kwargs: [],
+        edge=lambda **kwargs: [],
+        brave=lambda **kwargs: [],
+        opera=lambda **kwargs: [],
+        vivaldi=vivaldi,
+    )
+    monkeypatch.setitem(sys.modules, "browser_cookie3", fake_browser_cookie3)
+
+    cookie_extract.extract_all(
+        "vivaldi", platform="xueqiu", profile="Profile 1"
+    )
+
+    assert calls == [
+        (str(cookie_db), ".xueqiu.com"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("platform", "expected_tail"),
+    [
+        ("linux", (".config", "vivaldi")),
+        ("darwin", ("Application Support", "Vivaldi")),
+        ("win32", ("Vivaldi", "User Data")),
+    ],
+)
+def test_vivaldi_user_data_dir_per_os(
+    monkeypatch, tmp_path, platform, expected_tail
+):
+    monkeypatch.setattr(sys, "platform", platform)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    root = cookie_extract._chromium_user_data_dir("vivaldi")
+
+    assert root is not None and root.parts[-2:] == expected_tail
 
 
 def test_missing_explicit_profile_fails_instead_of_falling_back(tmp_path, monkeypatch):
