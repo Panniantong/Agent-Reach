@@ -130,12 +130,9 @@ opencli instagram user USERNAME -f yaml        # 读指定用户最近帖子
 
 ## 环境检查
 
-> 本机 Python 环境默认是 conda `dl`；若 `agent-reach` 不在 PATH，用
-> `conda run -n dl agent-reach ...` 前缀。
-
 ```bash
 # 检查可用 channel 与每个平台当前激活的后端
-conda run -n dl agent-reach doctor --json
+agent-reach doctor --json
 ```
 
 ## OpenCLI 适配器发现
