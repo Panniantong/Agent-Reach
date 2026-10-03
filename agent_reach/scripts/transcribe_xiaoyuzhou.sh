@@ -176,7 +176,7 @@ echo "⏱️  时长: ${DURATION_MIN}分${DURATION_SEC}秒"
 
 # Step 4: 转为低码率单声道 MP3
 echo "🔄 正在转码..."
-ffmpeg -y -i "$WORK_DIR/original.$EXT" -t "$MAX_DURATION_SECONDS" -b:a "$AUDIO_BITRATE" -ac 1 "$WORK_DIR/mono.mp3" 2>/dev/null
+ffmpeg -nostdin -y -i "$WORK_DIR/original.$EXT" -t "$MAX_DURATION_SECONDS" -b:a "$AUDIO_BITRATE" -ac 1 "$WORK_DIR/mono.mp3" 2>/dev/null
 MONO_SIZE=$(stat -c%s "$WORK_DIR/mono.mp3" 2>/dev/null || stat -f%z "$WORK_DIR/mono.mp3")
 MONO_SIZE_MB=$(awk -v bytes="$MONO_SIZE" 'BEGIN { printf "%.1f", bytes / 1024 / 1024 }')
 echo "📦 转码后: ${MONO_SIZE_MB}MB"
@@ -197,7 +197,7 @@ else
     
     for i in $(seq 0 $((NUM_CHUNKS - 1))); do
         START=$((i * CHUNK_DURATION))
-        ffmpeg -y -i "$WORK_DIR/mono.mp3" -ss "$START" -t "$CHUNK_DURATION" -c copy "$WORK_DIR/chunk_${i}.mp3" 2>/dev/null
+        ffmpeg -nostdin -y -i "$WORK_DIR/mono.mp3" -ss "$START" -t "$CHUNK_DURATION" -c copy "$WORK_DIR/chunk_${i}.mp3" 2>/dev/null
         CHUNK_SIZE=$(ls -lh "$WORK_DIR/chunk_${i}.mp3" | awk '{print $5}')
         echo "   段 $((i+1))/$NUM_CHUNKS: $CHUNK_SIZE"
     done
