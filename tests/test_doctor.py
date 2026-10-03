@@ -323,3 +323,50 @@ def test_real_doctor_path_is_zero_write_and_never_runs_risky_status_commands(
     ):
         assert payload[channel_name]["status"] == "warn"
         assert payload[channel_name]["active_backend"] is None
+
+
+class TestDoctorTimeout:
+    def test_blocked_channel_degrades_to_timeout_error(self, tmp_config, monkeypatch):
+        import threading
+        import time
+
+        gate = threading.Event()
+
+        class Blocking(_StubChannel):
+            def check(self, config=None):
+                gate.wait(30)
+                return "ok", "never"
+
+        monkeypatch.setattr(
+            doctor,
+            "get_all_channels",
+            lambda: [
+                Blocking("stuck", "卡住", 0, "ok", "never"),
+                _StubChannel("fine", "正常", 0, "ok", "fine", ["x"]),
+            ],
+        )
+
+        started = time.monotonic()
+        results = doctor.check_all(tmp_config, per_channel_timeout=0.2)
+        assert time.monotonic() - started < 10
+
+        assert results["stuck"]["status"] == "error"
+        assert "超时" in results["stuck"]["message"]
+        assert results["stuck"]["active_backend"] is None
+        assert results["fine"]["status"] == "ok"
+        gate.set()
+
+    def test_cmd_doctor_exit_code(self, tmp_config, monkeypatch, capsys):
+        import agent_reach.cli as cli
+
+        monkeypatch.setattr(
+            "agent_reach.doctor.check_all",
+            lambda config, **kwargs: {"a": {"status": "ok"}, "b": {"status": "error"}},
+        )
+        assert cli._cmd_doctor(Namespace(json=True)) == 1
+
+        monkeypatch.setattr(
+            "agent_reach.doctor.check_all",
+            lambda config, **kwargs: {"a": {"status": "ok"}, "b": {"status": "warn"}},
+        )
+        assert cli._cmd_doctor(Namespace(json=True)) == 0

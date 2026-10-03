@@ -12,36 +12,69 @@ from agent_reach.channels import get_all_channels
 from agent_reach.config import Config
 from agent_reach.utils.text import scrub_url_credentials
 
+import concurrent.futures
+import sys
 
-def check_all(config: Config) -> Dict[str, dict]:
+#: Per-channel bound for `check_all` (issue #732). Channel checks run in
+#: parallel threads; a channel that exceeds this never blocks the report —
+#: it degrades to status="error" instead of hanging `doctor` indefinitely.
+DOCTOR_PER_CHANNEL_TIMEOUT_S = 30.0
+
+
+def _run_channel_check(ch, config):
+    """Run one channel check, degrading exceptions to an error entry."""
+    try:
+        status, message = ch.check(config)
+        active = getattr(ch, "active_backend", None)
+    except Exception as e:  # noqa: BLE001 — doctor must survive any channel
+        # Channels are registry singletons: a stale active_backend from a
+        # previous check must not leak into an errored result.
+        status = "error"
+        message = f"体检异常：{e}"
+        active = None
+    return ch.name, status, scrub_url_credentials(message), active
+
+
+def check_all(config: Config, per_channel_timeout: float = DOCTOR_PER_CHANNEL_TIMEOUT_S) -> Dict[str, dict]:
     """Check all channels and return status dict.
 
-    A single misbehaving channel must never take the whole report down,
-    so per-channel exceptions degrade to status="error".
+    A single misbehaving channel must never take the whole report down:
+    exceptions degrade to status="error", and a channel that exceeds
+    `per_channel_timeout` degrades to a timeout error entry. Checks run in
+    parallel threads so the overall runtime stays bounded.
     """
-    results = {}
-    for ch in get_all_channels():
-        try:
-            status, message = ch.check(config)
-            active = getattr(ch, "active_backend", None)
-        except Exception as e:  # noqa: BLE001 — doctor must survive any channel
-            # Channels are registry singletons: a stale active_backend from a
-            # previous check must not leak into an errored result.
-            status = "error"
-            message = f"体检异常：{e}"
-            active = None
-        # Doctor is the final output boundary for both expected channel
-        # messages and unexpected exceptions. Upstream probe output can echo a
-        # configured URL, so scrub every path before JSON/text rendering.
-        message = scrub_url_credentials(message)
-        results[ch.name] = {
-            "status": status,
-            "name": ch.description,
-            "message": message,
-            "tier": ch.tier,
-            "backends": ch.backends,
-            "active_backend": active,
-        }
+    channels = list(get_all_channels())
+    results: Dict[str, dict] = {}
+    if not channels:
+        return results
+    pool = concurrent.futures.ThreadPoolExecutor(
+        max_workers=len(channels), thread_name_prefix="doctor"
+    )
+    try:
+        futures = {ch.name: pool.submit(_run_channel_check, ch, config) for ch in channels}
+        for ch in channels:
+            try:
+                name, status, message, active = futures[ch.name].result(
+                    timeout=per_channel_timeout
+                )
+            except concurrent.futures.TimeoutError:
+                name, status, active = ch.name, "error", None
+                message = scrub_url_credentials(
+                    f"检查超时（>{per_channel_timeout:g}s），已跳过该渠道"
+                )
+            results[name] = {
+                "status": status,
+                "name": ch.description,
+                "message": message,
+                "tier": ch.tier,
+                "backends": ch.backends,
+                "active_backend": active,
+            }
+            if sys.stderr.isatty():
+                print(f"  [{status}] {name}", file=sys.stderr)
+    finally:
+        # Never wait for stuck probe threads; the report is already complete.
+        pool.shutdown(wait=False, cancel_futures=True)
     return results
 
 
