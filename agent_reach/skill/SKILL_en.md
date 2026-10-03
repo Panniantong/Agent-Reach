@@ -70,8 +70,9 @@ curl -s "https://r.jina.ai/URL"
 # GitHub search
 gh search repos "query" --sort stars --limit 10
 
-# YouTube subtitles (never use yt-dlp for Bilibili; retry chain in video.md)
-yt-dlp --write-sub --write-auto-sub --skip-download -o "/tmp/%(id)s" "URL"
+# YouTube subtitles: original speech track (-orig) only; other auto-caption languages are machine translations
+# Manual-subtitle track order and retry chain in video.md (never use yt-dlp for Bilibili)
+yt-dlp --write-auto-sub --sub-lang ".*-orig" --skip-download -o "/tmp/%(id)s" "URL"
 
 # V2EX hot topics
 curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1.0"
