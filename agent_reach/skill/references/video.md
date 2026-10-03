@@ -20,6 +20,12 @@ yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -
 cat /tmp/VIDEO_ID.*.vtt
 ```
 
+> **字幕轨道选择**: 按以下顺序选择轨道，并说明实际使用的轨道：
+> 1. 目标语言的手动字幕 (`--write-sub --sub-lang <lang>`)
+> 2. 原语言语音识别：`--write-auto-sub --sub-lang "<lang>-orig"`（语言未知时用 `".*-orig"`）
+> 3. 仅当视频本身语言（`--dump-json` 的 `language` 字段）为 `<lang>` 时，才可用普通自动 `<lang>` 轨道
+> 4. 其他情况为机器翻译：须经用户同意方可使用，并明确标注为翻译
+
 ### 获取评论
 
 ```bash

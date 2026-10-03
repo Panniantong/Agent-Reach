@@ -67,7 +67,7 @@ curl -s "https://r.jina.ai/URL"
 # GitHub 搜索
 gh search repos "query" --sort stars --limit 10
 
-# YouTube 字幕（注意：B站不要用 yt-dlp，失败重试链见 video.md）
+# YouTube 字幕（B站不要用 yt-dlp；优先 -orig 原语言轨道，其他语言的自动字幕是机器翻译，使用须标注；详见 video.md）
 yt-dlp --write-sub --write-auto-sub --skip-download -o "/tmp/%(id)s" "URL"
 
 # V2EX 热门
