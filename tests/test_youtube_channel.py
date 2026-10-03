@@ -188,7 +188,7 @@ def test_check_ok_with_deno():
          patch("shutil.which", side_effect=_which("deno")):
         status, message = ch.check()
     assert status == "ok"
-    assert message == "可提取视频信息和字幕"
+    assert message == "yt-dlp 已安装且运行环境就绪；视频访问与字幕未经实时验证"
     assert ch.active_backend == "yt-dlp"
 
 
