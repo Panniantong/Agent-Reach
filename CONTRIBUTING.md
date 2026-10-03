@@ -51,11 +51,10 @@ pytest
 
 Agent Reach uses a unified channel interface. To add a new platform:
 
-1. Create a new file in `agent_reach/channels/`
-2. Implement the channel contract (see existing channels for examples)
-3. Add tests in `tests/test_channels.py`
-4. Update `agent_reach/doctor.py` to include the new channel
-5. Update documentation
+1. Create a new file in `agent_reach/channels/` subclassing `Channel` (`base.py`): implement `can_handle(url)` and `check(config)`, and set `name`, `description`, `backends` and `tier`
+2. Register an instance in `ALL_CHANNELS` in `agent_reach/channels/__init__.py` — `doctor` picks it up from there automatically
+3. Add tests in `tests/test_<platform>_channel.py` (`tests/test_channel_contracts.py` covers every registered channel automatically)
+4. Update documentation (`agent_reach/skill/SKILL.md`, `SKILL_en.md`, the relevant `skill/references/*.md`, README and CHANGELOG)
 
 ## Pull Request Guidelines
 
