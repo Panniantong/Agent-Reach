@@ -101,7 +101,7 @@ def _probe_audio_duration(path: Path) -> float:
         "-of",
         "default=noprint_wrappers=1:nokey=1",
         "-i",
-        str(path),
+        str(path.absolute()),
     ]
     try:
         proc = subprocess.run(
@@ -292,7 +292,7 @@ def compress_audio(src: Path, out_dir: Path) -> Path:
             "error",
             "-y",
             "-i",
-            str(src),
+            str(src.absolute()),
             "-t",
             str(MAX_AUDIO_SECONDS),
             "-vn",
@@ -302,7 +302,7 @@ def compress_audio(src: Path, out_dir: Path) -> Path:
             "16000",
             "-b:a",
             "32k",
-            str(dst),
+            str(dst.absolute()),
         ]
     )
     return dst
@@ -330,7 +330,7 @@ def chunk_audio(src: Path, out_dir: Path, segment_seconds: int = CHUNK_SECONDS) 
             "error",
             "-y",
             "-i",
-            str(src),
+            str(src.absolute()),
             "-t",
             str(MAX_AUDIO_SECONDS),
             "-f",
@@ -343,7 +343,7 @@ def chunk_audio(src: Path, out_dir: Path, segment_seconds: int = CHUNK_SECONDS) 
             "16000",
             "-b:a",
             "32k",
-            str(pattern),
+            str(pattern.absolute()),
         ]
     )
     chunks = sorted(out_dir.glob("chunk_*.m4a"))
