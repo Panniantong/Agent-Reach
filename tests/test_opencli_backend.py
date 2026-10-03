@@ -3,6 +3,8 @@
 
 from unittest.mock import patch
 
+import pytest
+
 from agent_reach.backends import opencli_status, opencli_summary
 from agent_reach.backends.opencli import (
     OPENCLI_EXTENSION_ID,
@@ -181,6 +183,27 @@ def test_store_install_scan_includes_edge_profiles(tmp_path, monkeypatch):
     )
     monkeypatch.delenv("LOCALAPPDATA", raising=False)
 
+    assert _extension_installed_on_disk()
+
+
+@pytest.mark.parametrize(
+    "relative_root",
+    [
+        "Library/Application Support/Vivaldi",
+        ".config/vivaldi",
+        "AppData/Local/Vivaldi/User Data",
+    ],
+    ids=["macos", "linux", "windows"],
+)
+@pytest.mark.parametrize("profile", ["Default", "Profile 1"])
+def test_store_install_scan_includes_vivaldi_profiles(
+    isolated_home, relative_root, profile
+):
+    extension_dir = (
+        isolated_home / relative_root / profile / "Extensions" / OPENCLI_EXTENSION_ID
+    )
+    assert not _extension_installed_on_disk()
+    extension_dir.mkdir(parents=True)
     assert _extension_installed_on_disk()
 
 

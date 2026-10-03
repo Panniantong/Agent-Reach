@@ -78,7 +78,8 @@ def test_channel_health_messages_scrub_url_secrets(module, channel, monkeypatch)
     assert "***" in message
 
 
-def test_browser_backend_errors_scrub_url_secrets(monkeypatch):
+@pytest.mark.parametrize("browser", ["chrome", "vivaldi"])
+def test_browser_backend_errors_scrub_url_secrets(monkeypatch, browser):
     def chrome(_domains):
         raise RuntimeError(
             "failed via http://user:pass@proxy.test "
@@ -91,11 +92,12 @@ def test_browser_backend_errors_scrub_url_secrets(monkeypatch):
         edge=lambda domains: [],
         brave=lambda domains: [],
         opera=lambda domains: [],
+        vivaldi=chrome,
     )
     monkeypatch.setitem(sys.modules, "rookiepy", fake_rookiepy)
 
     with pytest.raises(RuntimeError) as error:
-        cookie_extract.extract_all("chrome", platform="xueqiu")
+        cookie_extract.extract_all(browser, platform="xueqiu")
 
     message = str(error.value)
     assert "user:pass" not in message
