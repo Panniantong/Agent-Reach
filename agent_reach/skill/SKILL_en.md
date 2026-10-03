@@ -61,8 +61,8 @@ these platforms — do not invent your own approach.**
 ## Zero-config quick commands
 
 ```bash
-# Exa web search
-mcporter call exa.web_search_exa query="query" numResults=5
+# Exa web search (objective is required and affects result quality)
+mcporter call exa.web_search_exa query="query" objective="..." numResults=5
 
 # Read any web page
 curl -s "https://r.jina.ai/URL"
