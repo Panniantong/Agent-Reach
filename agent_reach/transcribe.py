@@ -247,27 +247,31 @@ def _assert_safe_public_url(url: str) -> None:
         raise TranscribeError("SSRF blocked: private/internal IP is not allowed")
 
 
-def download_audio(url: str, out_dir: Path) -> Path:
+def download_audio(url: str, out_dir: Path, *, cookies_from_browser: Optional[str] = None) -> Path:
     """Download audio with yt-dlp into out_dir; return the resulting file path."""
     _assert_safe_public_url(url)
     _require("yt-dlp")
     template = out_dir / "source.%(ext)s"
+    argv = [
+        "yt-dlp",
+        "-x",
+        "--audio-format",
+        "m4a",
+        "--audio-quality",
+        "0",
+        "--no-playlist",
+        "--max-filesize",
+        str(MAX_SOURCE_BYTES),
+        "-o",
+        str(template),
+    ]
+    # A configured cookie source (agent-reach configure youtube-cookies) lets
+    # restricted videos download with the viewer's login; argv list, no shell.
+    if cookies_from_browser:
+        argv += ["--cookies-from-browser", cookies_from_browser]
+    argv += ["--", url]
     _run(
-        [
-            "yt-dlp",
-            "-x",
-            "--audio-format",
-            "m4a",
-            "--audio-quality",
-            "0",
-            "--no-playlist",
-            "--max-filesize",
-            str(MAX_SOURCE_BYTES),
-            "-o",
-            str(template),
-            "--",
-            url,
-        ],
+        argv,
         timeout=1800,  # long podcasts over slow networks — generous but bounded
     )
     files = sorted(out_dir.glob("source.*"))
@@ -449,7 +453,10 @@ def _transcribe_in_dir(source: str, order: List[str], cfg: Config, work_dir: Pat
     if src_path.is_file():
         audio = src_path
     else:
-        audio = download_audio(source, work_dir)
+        # A youtube-cookies configure step stores the browser here; without it
+        # restricted downloads stay anonymous (issue #702).
+        cookies_from_browser = cfg.get("youtube_cookies_from") or None
+        audio = download_audio(source, work_dir, cookies_from_browser=cookies_from_browser)
 
     _require_size_at_most(audio, MAX_SOURCE_BYTES, "source")
     _require_duration_within_budget(audio)
