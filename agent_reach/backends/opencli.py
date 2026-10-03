@@ -41,9 +41,11 @@ _CHROME_PROFILE_ROOTS = (
     "~/Library/Application Support/Google/Chrome",  # macOS Chrome
     "~/Library/Application Support/Chromium",       # macOS Chromium
     "~/Library/Application Support/Microsoft Edge",  # macOS Edge
+    "~/Library/Application Support/Vivaldi",        # macOS Vivaldi
     "~/.config/google-chrome",                      # Linux Chrome
     "~/.config/chromium",                           # Linux Chromium
     "~/.config/microsoft-edge",                     # Linux Edge
+    "~/.config/vivaldi",                            # Linux Vivaldi
 )
 
 _OPENCLI_UNPACKED_EXTENSION = "~/.opencli/extension"
@@ -87,6 +89,7 @@ def _extension_installed_on_disk() -> bool:
     if local_app_data:  # Windows
         roots.append(os.path.join(local_app_data, "Google", "Chrome", "User Data"))
         roots.append(os.path.join(local_app_data, "Microsoft", "Edge", "User Data"))
+        roots.append(os.path.join(local_app_data, "Vivaldi", "User Data"))
     for root in roots:
         if glob.glob(os.path.join(root, "*", "Extensions", OPENCLI_EXTENSION_ID)):
             return True
