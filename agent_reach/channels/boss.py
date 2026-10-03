@@ -63,7 +63,7 @@ def _chrome_launch_command(system: str | None = None) -> str:
             "Start-Process chrome.exe -ArgumentList "
             "'--remote-debugging-address=127.0.0.1',"
             "'--remote-debugging-port=9222',"
-            '"--user-data-dir=$env:USERPROFILE\\.boss-chrome-profile",'
+            '"--user-data-dir=`"$env:USERPROFILE\\.boss-chrome-profile`"",'
             "'https://www.zhipin.com/web/geek/job'"
         )
     return (

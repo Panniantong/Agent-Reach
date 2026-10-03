@@ -134,7 +134,7 @@ PY
 
    Windows PowerShell：
    ```powershell
-   Start-Process chrome.exe -ArgumentList '--remote-debugging-address=127.0.0.1','--remote-debugging-port=9222',"--user-data-dir=$env:USERPROFILE\.boss-chrome-profile",'https://www.zhipin.com/web/geek/job'
+   Start-Process chrome.exe -ArgumentList '--remote-debugging-address=127.0.0.1','--remote-debugging-port=9222',"--user-data-dir=`"$env:USERPROFILE\.boss-chrome-profile`"",'https://www.zhipin.com/web/geek/job'
    ```
 
    只绑定回环地址。任何能访问 9222 的进程都能完全控制该 Chrome；不要监听公网。
