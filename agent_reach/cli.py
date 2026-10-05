@@ -236,7 +236,9 @@ def main():
         sys.exit(0)
 
     if args.command == "doctor":
-        sys.exit(_cmd_doctor(args))
+        code = _cmd_doctor(args)
+        if code:
+            sys.exit(code)
     elif args.command == "check-update":
         _cmd_check_update()
     elif args.command == "watch":

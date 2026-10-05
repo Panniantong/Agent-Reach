@@ -4,6 +4,9 @@
 Each channel knows how to check itself. Doctor just collects the results.
 """
 
+import sys
+import threading
+import time
 from typing import Dict
 
 from rich.markup import escape
@@ -11,9 +14,6 @@ from rich.markup import escape
 from agent_reach.channels import get_all_channels
 from agent_reach.config import Config
 from agent_reach.utils.text import scrub_url_credentials
-
-import concurrent.futures
-import sys
 
 #: Per-channel bound for `check_all` (issue #732). Channel checks run in
 #: parallel threads; a channel that exceeds this never blocks the report —
@@ -41,40 +41,56 @@ def check_all(config: Config, per_channel_timeout: float = DOCTOR_PER_CHANNEL_TI
     A single misbehaving channel must never take the whole report down:
     exceptions degrade to status="error", and a channel that exceeds
     `per_channel_timeout` degrades to a timeout error entry. Checks run in
-    parallel threads so the overall runtime stays bounded.
+    parallel daemon threads so the overall runtime stays bounded by a single
+    shared deadline — N stuck channels still return in ~per_channel_timeout,
+    not N x timeout — and stuck probes never keep the process alive at exit.
     """
     channels = list(get_all_channels())
     results: Dict[str, dict] = {}
     if not channels:
         return results
-    pool = concurrent.futures.ThreadPoolExecutor(
-        max_workers=len(channels), thread_name_prefix="doctor"
-    )
-    try:
-        futures = {ch.name: pool.submit(_run_channel_check, ch, config) for ch in channels}
-        for ch in channels:
-            try:
-                name, status, message, active = futures[ch.name].result(
-                    timeout=per_channel_timeout
-                )
-            except concurrent.futures.TimeoutError:
-                name, status, active = ch.name, "error", None
-                message = scrub_url_credentials(
-                    f"检查超时（>{per_channel_timeout:g}s），已跳过该渠道"
-                )
-            results[name] = {
-                "status": status,
-                "name": ch.description,
-                "message": message,
-                "tier": ch.tier,
-                "backends": ch.backends,
-                "active_backend": active,
-            }
-            if sys.stderr.isatty():
-                print(f"  [{status}] {name}", file=sys.stderr)
-    finally:
-        # Never wait for stuck probe threads; the report is already complete.
-        pool.shutdown(wait=False, cancel_futures=True)
+    completed: Dict[str, tuple] = {}
+    lock = threading.Lock()
+
+    def _target(ch, cfg):
+        outcome = _run_channel_check(ch, cfg)
+        with lock:
+            completed[ch.name] = outcome
+
+    threads = []
+    for ch in channels:
+        t = threading.Thread(
+            target=_target, args=(ch, config), name=f"doctor-{ch.name}", daemon=True
+        )
+        t.start()
+        threads.append(t)
+    deadline = time.monotonic() + per_channel_timeout
+    for t in threads:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        t.join(timeout=remaining)
+    for ch in channels:
+        if ch.name in completed:
+            name, status, message, active = completed[ch.name]
+        else:
+            name, status, active = ch.name, "error", None
+            message = scrub_url_credentials(
+                f"检查超时（>{per_channel_timeout:g}s），已跳过该渠道"
+            )
+        results[name] = {
+            "status": status,
+            "name": ch.description,
+            "message": message,
+            "tier": ch.tier,
+            "backends": ch.backends,
+            "active_backend": active,
+        }
+        if sys.stderr.isatty():
+            print(f"  [{status}] {name}", file=sys.stderr)
+    # Daemon threads need no shutdown: stuck probes die with the process
+    # instead of joining at interpreter exit. A late-finishing probe may
+    # still write completed[] after return; the returned report is unaffected.
     return results
 
 
