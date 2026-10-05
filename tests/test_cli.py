@@ -88,6 +88,28 @@ class TestCLI:
         assert "preserving existing files" not in out
         assert f"Skill installed for Agent: {skill_dir}" not in out
 
+    def test_doctor_reports_corrupt_config_without_traceback(
+        self, monkeypatch, tmp_path, capsys
+    ):
+        """A broken config.yaml must exit code 2 with one clear line."""
+        config_dir = tmp_path / ".agent-reach"
+        config_dir.mkdir()
+        (config_dir / "config.yaml").write_text(
+            "not: [valid\n  yaml", encoding="utf-8"
+        )
+        monkeypatch.setattr(Config, "CONFIG_DIR", config_dir)
+        monkeypatch.setattr(Config, "CONFIG_FILE", config_dir / "config.yaml")
+        monkeypatch.setattr("sys.argv", ["agent-reach", "doctor"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 2
+        captured = capsys.readouterr()
+        assert "配置错误" in captured.err
+        assert "YAML" in captured.err
+        assert "Traceback" not in captured.err + captured.out
+
     def test_transcribe_command_prints_text(self, capsys):
         with patch("agent_reach.transcribe.transcribe", return_value="hello transcript"):
             with patch("sys.argv", ["agent-reach", "transcribe", "audio.mp3"]):

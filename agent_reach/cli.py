@@ -16,6 +16,7 @@ import sys
 import time
 
 from agent_reach import __version__
+from agent_reach.config import ConfigError
 
 # Pinned to the 0.4.2 state — PyPI still only has 0.4.1 (upstream issue #10).
 _RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66"
@@ -235,26 +236,32 @@ def main():
         print(f"Agent Reach v{__version__}")
         sys.exit(0)
 
-    if args.command == "doctor":
-        _cmd_doctor(args)
-    elif args.command == "check-update":
-        _cmd_check_update()
-    elif args.command == "watch":
-        _cmd_watch()
-    elif args.command == "setup":
-        _cmd_setup()
-    elif args.command == "install":
-        _cmd_install(args)
-    elif args.command == "configure":
-        _cmd_configure(args)
-    elif args.command == "uninstall":
-        _cmd_uninstall(args)
-    elif args.command == "skill":
-        _cmd_skill(args)
-    elif args.command == "format":
-        _cmd_format(args)
-    elif args.command == "transcribe":
-        _cmd_transcribe(args)
+    try:
+        if args.command == "doctor":
+            _cmd_doctor(args)
+        elif args.command == "check-update":
+            _cmd_check_update()
+        elif args.command == "watch":
+            _cmd_watch()
+        elif args.command == "setup":
+            _cmd_setup()
+        elif args.command == "install":
+            _cmd_install(args)
+        elif args.command == "configure":
+            _cmd_configure(args)
+        elif args.command == "uninstall":
+            _cmd_uninstall(args)
+        elif args.command == "skill":
+            _cmd_skill(args)
+        elif args.command == "format":
+            _cmd_format(args)
+        elif args.command == "transcribe":
+            _cmd_transcribe(args)
+    except ConfigError as exc:
+        # Config problems (corrupt YAML, non-UTF-8, unsafe path) are user
+        # errors — report one line instead of a raw traceback.
+        print(f"配置错误：{exc}", file=sys.stderr)
+        raise SystemExit(2) from None
 
 
 # ── Command handlers ────────────────────────────────

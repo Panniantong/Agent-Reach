@@ -140,11 +140,16 @@ class Config:
             )
         except PrivatePathError as exc:
             raise ConfigSecurityError(str(exc)) from exc
+        except UnicodeError as exc:
+            raise ConfigError("配置文件不是有效的 UTF-8 文本") from exc
         if payload is None:
             self.data = {}
             return
 
-        loaded = yaml.safe_load(payload) or {}
+        try:
+            loaded = yaml.safe_load(payload) or {}
+        except yaml.YAMLError as exc:
+            raise ConfigError("配置文件 YAML 解析失败") from exc
         if not isinstance(loaded, dict):
             raise ConfigError("配置文件顶层必须是对象")
         self.data = loaded
