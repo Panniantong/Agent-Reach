@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Xueqiu (雪球) — stock quotes, search, trending posts & hot stocks."""
 
+import html
 import http.cookiejar
 import json
 import re
@@ -104,11 +105,9 @@ def _get_json(url: str, config=None) -> Any:
 
 
 def _strip_html(text: str) -> str:
-    """Remove HTML tags and decode common entities."""
+    """Remove HTML tags and decode character references once."""
     text = re.sub(r"<[^>]+>", "", text)
-    for entity, char in (("&nbsp;", " "), ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">")):
-        text = text.replace(entity, char)
-    return text.strip()
+    return html.unescape(text).replace("\xa0", " ").strip()
 
 
 class XueqiuChannel(Channel):
