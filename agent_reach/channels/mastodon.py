@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """Mastodon — public API channel for accounts, statuses, and federated account search.
 
-Mastodon is federated: always query the account's HOME instance (a remote
-instance's copy of an account is incomplete). Public endpoints need no login;
-an optional `mastodon_token` (env `MASTODON_TOKEN`, read scope) unlocks
-fuzzy federated account search via /api/v2/search. Read-only — never performs
-write actions.
+Mastodon is federated: account data is always queried on the account's HOME
+instance (a remote instance's copy of an account is incomplete), while a
+status URL is queried on its host instance (status ids are instance-local).
+Public endpoints need no login; an optional `mastodon_token` (env
+`MASTODON_TOKEN`, read scope) unlocks fuzzy federated account search via
+/api/v2/search — it is only ever sent to the instance passed to search().
+Read-only — never performs write actions.
 """
 
 import ipaddress
@@ -54,15 +56,16 @@ _KNOWN_INSTANCES = frozenset(
 )
 
 # https://<instance>/@user · https://<instance>/@user@remote · .../@user/<status id>
+# (domain parts may contain hyphens, e.g. @user@hci-social.org)
 _FEDIVERSE_URL_RE = re.compile(
     r"^https?://(?P<host>[^/@:\s]+)(?::\d+)?"
     r"/@(?P<user>[A-Za-z0-9_.]+)"
-    r"(?:@(?P<remote>[A-Za-z0-9_.]+))?"
+    r"(?:@(?P<remote>[A-Za-z0-9_.-]+))?"
     r"(?:/(?P<sid>\d+))?"
     r"(?:/.*)?$",
     re.IGNORECASE,
 )
-_FULL_HANDLE_RE = re.compile(r"^[A-Za-z0-9_.]+@[A-Za-z0-9_.]+$")
+_FULL_HANDLE_RE = re.compile(r"^[A-Za-z0-9_.]+@[A-Za-z0-9_.-]+$")
 
 
 class _Text(HTMLParser):
@@ -117,14 +120,17 @@ def parse_handle(arg: str) -> tuple[str, str]:
 
 
 def _parse_status_url(url: str) -> tuple[str, str]:
-    """'https://inst/@user[ @remote]/<id>' -> (home_instance, status_id)."""
+    """'https://inst/@user[ @remote]/<id>' -> (host_instance, status_id).
+
+    The numeric id is LOCAL to the URL's host instance — even in the
+    "/@user@remote/<id>" display form — so always query the host.
+    """
     m = _FEDIVERSE_URL_RE.match(str(url or "").strip())
     if not m or not m.group("sid"):
         raise ValueError(
             f"invalid Mastodon status URL: {url!r} (expected https://<instance>/@<user>/<id>)"
         )
-    # A "/@user@remote/<id>" path points at a remote account — fetch from its home instance.
-    return (m.group("remote") or m.group("host")).lower(), m.group("sid")
+    return m.group("host").lower(), m.group("sid")
 
 
 def _mastodon_url(instance: str, path: str, **params: Any) -> str:
@@ -339,12 +345,12 @@ class MastodonChannel(Channel):
     # ------------------------------------------------------------------ #
 
     def check(self, config=None):
-        token = _mastodon_token(config)
         try:
-            _get_json(_mastodon_url(_DEFAULT_INSTANCE, "/api/v1/instance"), token)
+            # Probe without credentials — the token must never reach third parties.
+            _get_json(_mastodon_url(_DEFAULT_INSTANCE, "/api/v1/instance"))
             self.active_backend = self.backends[0]
             message = "公开 API 可用（账号资料、用户帖子、单条帖子）"
-            if token:
+            if _mastodon_token(config):
                 message += "；检测到 MASTODON_TOKEN，联邦账号搜索可用"
             else:
                 message += "；联邦账号搜索可选配置 MASTODON_TOKEN"
@@ -372,8 +378,7 @@ class MastodonChannel(Channel):
         """
         user, instance = parse_handle(handle)
         data = _get_json(
-            _mastodon_url(instance, "/api/v1/accounts/lookup", acct=f"{user}@{instance}"),
-            _mastodon_token(config),
+            _mastodon_url(instance, "/api/v1/accounts/lookup", acct=f"{user}@{instance}")
         )
         return _account_payload(data, instance)
 
@@ -396,10 +401,8 @@ class MastodonChannel(Channel):
           content, favourites, reblogs, replies
         """
         user, instance = parse_handle(handle)
-        token = _mastodon_token(config)
         account = _get_json(
-            _mastodon_url(instance, "/api/v1/accounts/lookup", acct=f"{user}@{instance}"),
-            token,
+            _mastodon_url(instance, "/api/v1/accounts/lookup", acct=f"{user}@{instance}")
         )
         account_id = quote(str(account.get("id", "")), safe="")
         results: list[dict] = []
@@ -412,8 +415,7 @@ class MastodonChannel(Channel):
             if exclude_replies:
                 params["exclude_replies"] = "true"
             batch = _get_json(
-                _mastodon_url(instance, f"/api/v1/accounts/{account_id}/statuses", **params),
-                token,
+                _mastodon_url(instance, f"/api/v1/accounts/{account_id}/statuses", **params)
             )
             if not batch:
                 break
@@ -429,8 +431,9 @@ class MastodonChannel(Channel):
         """获取单条帖子全文。
 
         Args:
-            url: 帖子 URL，如 https://mastodon.social/@user/1234567
-                 （/@user@remote/<id> 形式会自动改查该账号的home实例）
+            url: 帖子 URL，如 https://mastodon.social/@user/1234567。
+                 帖子 id 是各实例本地的，/@user@remote/<id> 只是展示形式——
+                 始终向 URL 的 host 实例查询。
 
         Returns a dict with keys:
           id, date, kind, author, author_display, url, content,
@@ -438,8 +441,7 @@ class MastodonChannel(Channel):
         """
         instance, status_id = _parse_status_url(url)
         data = _get_json(
-            _mastodon_url(instance, f"/api/v1/statuses/{quote(str(status_id), safe='')}"),
-            _mastodon_token(config),
+            _mastodon_url(instance, f"/api/v1/statuses/{quote(str(status_id), safe='')}")
         )
         return _status_payload(data, instance)
 
@@ -451,6 +453,10 @@ class MastodonChannel(Channel):
         config=None,
     ) -> list:
         """按名字模糊搜索联邦账号（需要 MASTODON_TOKEN）。
+
+        Args:
+            instance: 必须是签发 MASTODON_TOKEN 的那个实例——token 只会随本
+                请求发往该实例，绝不会发给其他第三方实例。
 
         无 token 时降级：查询是精确 handle（@user@instance）仍走公开 lookup；
         模糊查询返回包含 {"error": ...} 的列表并提示如何配置。

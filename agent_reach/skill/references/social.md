@@ -247,6 +247,7 @@ curl -s "https://mastodon.social/api/v1/statuses/1234567" -H "User-Agent: agent-
 ```bash
 # 模糊搜索联邦账号需要 MASTODON_TOKEN（任意实例网页端 Preferences → Development
 # → New Application，勾选 read 即可）；token 放进 agent-reach 配置后 doctor 也会识别
+# 注意：token 只会发给你请求的这个实例——请用签发 token 的那个实例
 curl -s "https://mastodon.social/api/v2/search?q=QUERY&type=accounts&limit=10" \
   -H "User-Agent: agent-reach/1.0" -H "Authorization: Bearer $MASTODON_TOKEN"
 # 无 token 时仍支持精确 handle 查询（走上面的 lookup）
@@ -274,7 +275,7 @@ status = ch.get_status("https://mastodon.social/@user/1234567")
 # URL 一站式读取：主页 URL 返回账号+最近帖子，帖子 URL 返回单帖
 page = ch.read("https://mstdn.social/@kate")
 
-# 联邦账号搜索（需 MASTODON_TOKEN；无 token 时精确 handle 仍可查）
+# 联邦账号搜索（需 MASTODON_TOKEN，instance 传签发 token 的实例；无 token 时精确 handle 仍可查）
 results = ch.search("kate starbird")
 ```
 

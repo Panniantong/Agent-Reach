@@ -86,6 +86,7 @@ def test_can_handle_rejects_other_platforms_and_lookalikes():
 def test_parse_handle_accepts_handle_forms():
     assert m.parse_handle("@kate@mstdn.social") == ("kate", "mstdn.social")
     assert m.parse_handle("kate@mstdn.social") == ("kate", "mstdn.social")
+    assert m.parse_handle("@user@hci-social.org") == ("user", "hci-social.org")
 
 
 def test_parse_handle_accepts_profile_urls_with_trailing_slash():
@@ -95,7 +96,8 @@ def test_parse_handle_accepts_profile_urls_with_trailing_slash():
     assert m.parse_handle("https://mstdn.social/@kate/123") == ("kate", "mstdn.social")
 
 
-def test_parse_handle_remote_status_url_resolves_to_home_instance():
+def test_parse_handle_url_with_remote_account_resolves_to_remote_instance():
+    # account resolution: the remote part of the URL is the account's home instance
     assert m.parse_handle("https://mastodon.social/@kate@mstdn.social/42") == (
         "kate",
         "mstdn.social",
@@ -271,17 +273,30 @@ def test_lookup_account_keeps_remote_acct_untouched():
     assert account["handle"] == "kate@uw.edu"
 
 
-def test_lookup_account_forwards_token_from_config():
+def test_non_search_calls_never_send_token():
+    # The token must only ever be sent by search() to its (issuing) instance —
+    # lookup/statuses/status/check go out credential-free.
     ch = MastodonChannel()
-    captured = {}
+    tokens = []
 
     def fake_get_json(url, token=""):
-        captured["token"] = token
-        return _account()
+        tokens.append(token)
+        if len(tokens) <= 2:  # lookup_account + get_statuses' internal lookup
+            return _account()
+        if len(tokens) == 3:  # get_statuses page
+            return [_status(sid="1")]
+        if len(tokens) == 4:  # get_status
+            return _status(sid="1")
+        return {}  # check probe
 
+    cfg = {"mastodon_token": "secret"}
     with patch.object(m, "_get_json", side_effect=fake_get_json):
-        ch.lookup_account("@kate@mstdn.social", config={"mastodon_token": "tok"})
-    assert captured["token"] == "tok"
+        ch.lookup_account("@kate@mstdn.social", config=cfg)
+        ch.get_statuses("@kate@mstdn.social", limit=1, config=cfg)
+        ch.get_status("https://mstdn.social/@kate/1", config=cfg)
+        ch.check(config=cfg)
+
+    assert tokens == ["", "", "", "", ""]
 
 
 # --- get_statuses ---
@@ -385,7 +400,7 @@ def test_get_status_fetches_single_status_by_url():
     assert status["content"] == "hello"
 
 
-def test_get_status_remote_url_uses_home_instance():
+def test_get_status_remote_display_url_queries_url_host():
     ch = MastodonChannel()
     captured = {}
 
@@ -393,11 +408,13 @@ def test_get_status_remote_url_uses_home_instance():
         captured["url"] = url
         return _status(sid="55")
 
+    # "/@user@remote/<id>" is a display form: the numeric id is local to the
+    # URL HOST, so the host is queried — never re-resolved to the remote.
     with patch.object(m, "_get_json", side_effect=fake_get_json):
-        ch.get_status("https://mastodon.social/@bob@remote.social/55", config={})
+        ch.get_status("https://mastodon.social/@bob@hci-social.org/55", config={})
 
     parts = urlsplit(captured["url"])
-    assert parts.hostname == "remote.social"
+    assert parts.hostname == "mastodon.social"
     assert parts.path == "/api/v1/statuses/55"
 
 
