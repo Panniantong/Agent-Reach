@@ -46,6 +46,34 @@ All notable changes to this project will be documented in this file.
 - code 37 按原始文案分类：环境异常为 `ENVIRONMENT_RISK` 并立即停止；只有明确
   token/stoken 过期才允许一次刷新。专用 Chrome profile 应长期复用并降低频率。
 
+#### 🐘 Mastodon channel
+
+- 新增 `mastodon` channel：只读、公开 API、零配置（tier 0），纯标准库实现。
+- 账号资料（`/accounts/lookup`）、用户帖子（自动翻页、默认排除回复）、单条帖子全文；
+  始终查询账号所在实例（联邦宇宙远程副本不完整）。
+- `read()` 支持 URL 路由：主页 URL 返回账号 + 最近帖子，帖子 URL（含
+  `/@user@remote/<id>` 形式）返回单帖并自动改查 home 实例。
+- 联邦账号搜索可选配 `MASTODON_TOKEN`（env / config key `mastodon_token`）；
+  无 token 时降级：精确 `@user@instance` handle 仍走公开 lookup，模糊搜索返回
+  配置指引。
+- `can_handle` 采用常见实例域名白名单（mastodon.social、mstdn.social、fosstodon.org
+  等），不做裸 `/@user` 路径匹配（避免与 YouTube/Medium 误判）；白名单外实例用
+  handle 形式调用；`can_handle` 不发网络请求。
+- 安全：实例域名来自用户输入，URL 校验拒绝非 HTTPS、userinfo、异常端口、IP 字面量
+  与非 `/api/` 路径（复用 `normalize_public_http_url`），响应限 1 MiB，TLS EOF 走
+  系统 curl 有界回退。
+- Add `mastodon` channel: read-only, public API, zero config (tier 0), stdlib-only.
+- Account profile, user statuses (paginated, replies excluded by default), and
+  single-status fetch — always queried on the account's home instance.
+- Federated account search optionally uses `MASTODON_TOKEN`; without a token it
+  degrades to exact-handle lookup and returns setup guidance for fuzzy queries.
+- `can_handle` is a known-instance domain allowlist (no bare `/@user` path
+  matching, which would collide with YouTube/Medium); other instances work via
+  the `@user@instance` handle form.
+- Security: strict URL validation for user-supplied instance domains (HTTPS
+  only, no userinfo/odd ports/IP literals/non-`/api/` paths), 1 MiB response
+  cap, bounded curl fallback for TLS EOF.
+
 ## [1.3.1] - 2026-03-27
 
 ### 🐛 Bug Fixes / 修复

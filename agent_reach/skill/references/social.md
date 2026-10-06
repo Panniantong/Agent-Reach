@@ -1,6 +1,6 @@
 # 社交媒体 & 社区
 
-小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram。
+小红书、Twitter/X、B站、V2EX、Mastodon、Reddit、Facebook、Instagram。
 
 ## 小红书 / XiaoHongShu（多后端）
 
@@ -215,6 +215,72 @@ user = ch.get_user("Livid")
 ```
 
 > **节点列表**: https://www.v2ex.com/planes
+
+## Mastodon (公开 API)
+
+无需认证，直接调用账号**所在实例**的公开 API（联邦宇宙，远程实例上的账号副本不完整，务必查 home 实例）。
+
+### 账号资料
+
+```bash
+# handle 形式：@user@instance
+curl -s "https://mstdn.social/api/v1/accounts/lookup?acct=kate@mstdn.social" -H "User-Agent: agent-reach/1.0"
+```
+
+### 用户帖子（最新在前）
+
+```bash
+# 先用 lookup 拿到账号 id，再拉帖子；exclude_replies=true 只看原创帖
+curl -s "https://mstdn.social/api/v1/accounts/ACCOUNT_ID/statuses?limit=40&exclude_replies=true" -H "User-Agent: agent-reach/1.0"
+# 翻页：上一页最后一条的 id 作为 max_id 传入
+```
+
+### 单条帖子
+
+```bash
+# status id 从帖子 URL 获取，如 https://mastodon.social/@user/1234567
+curl -s "https://mastodon.social/api/v1/statuses/1234567" -H "User-Agent: agent-reach/1.0"
+```
+
+### 账号搜索（可选 token）
+
+```bash
+# 模糊搜索联邦账号需要 MASTODON_TOKEN（任意实例网页端 Preferences → Development
+# → New Application，勾选 read 即可）；token 放进 agent-reach 配置后 doctor 也会识别
+curl -s "https://mastodon.social/api/v2/search?q=QUERY&type=accounts&limit=10" \
+  -H "User-Agent: agent-reach/1.0" -H "Authorization: Bearer $MASTODON_TOKEN"
+# 无 token 时仍支持精确 handle 查询（走上面的 lookup）
+```
+
+### Python 调用示例
+
+```python
+from agent_reach.channels.mastodon import MastodonChannel
+
+ch = MastodonChannel()
+
+# 账号资料
+account = ch.lookup_account("@kate@mstdn.social")
+print(account["display_name"], account["followers"])
+
+# 用户帖子（自动翻页）
+statuses = ch.get_statuses("@kate@mstdn.social", limit=20)
+for s in statuses:
+    print(s["date"], s["kind"], s["content"][:80])
+
+# 单条帖子
+status = ch.get_status("https://mastodon.social/@user/1234567")
+
+# URL 一站式读取：主页 URL 返回账号+最近帖子，帖子 URL 返回单帖
+page = ch.read("https://mstdn.social/@kate")
+
+# 联邦账号搜索（需 MASTODON_TOKEN；无 token 时精确 handle 仍可查）
+results = ch.search("kate starbird")
+```
+
+> **实例域名**：`can_handle` 只识别常见实例（mastodon.social、mstdn.social、fosstodon.org 等）；
+> 其他实例的账号用 `@user@instance` handle 形式调用即可，token 经环境变量 `MASTODON_TOKEN` 或
+> config key `mastodon_token` 配置。
 
 ## Reddit（多后端，必须登录态）
 
