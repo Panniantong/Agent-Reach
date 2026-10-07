@@ -3,7 +3,12 @@
 
 import pytest
 
-from agent_reach.config import Config, ConfigReadOnlyError, ConfigSecurityError
+from agent_reach.config import (
+    Config,
+    ConfigError,
+    ConfigReadOnlyError,
+    ConfigSecurityError,
+)
 
 
 @pytest.fixture
@@ -255,6 +260,22 @@ class TestConfig:
         monkeypatch.setattr(config_module, "_MAX_CONFIG_BYTES", 4)
 
         with pytest.raises(ConfigSecurityError, match="大小上限"):
+            Config(config_path=config_file)
+
+    def test_load_wraps_malformed_yaml_as_config_error(self, tmp_path):
+        """A corrupt config must raise ConfigError, never a raw YAML traceback."""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("not: [valid\n  yaml", encoding="utf-8")
+
+        with pytest.raises(ConfigError, match="YAML"):
+            Config(config_path=config_file)
+
+    def test_load_wraps_non_utf8_config_as_config_error(self, tmp_path):
+        """Undecodable bytes must fail closed as ConfigError, not UnicodeDecodeError."""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_bytes(b"\xff\xfe\x00bad")
+
+        with pytest.raises(ConfigError, match="UTF-8"):
             Config(config_path=config_file)
 
     def test_save_preserves_previous_file_on_serialization_failure(
