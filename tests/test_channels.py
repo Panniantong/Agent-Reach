@@ -1744,6 +1744,19 @@ class TestXiaoyuzhouChannel:
 class TestRSSChannel:
     """can_handle URL patterns + the three check() branches (ok / off / error)."""
 
+    def test_feed_hints_are_matched_only_in_the_path(self):
+        from agent_reach.channels.rss import RSSChannel
+
+        ch = RSSChannel()
+        for url in [
+            "https://atom.io/",
+            "https://example.com/article?redirect=/feed",
+            "https://example.com/article?attachment=feed.xml",
+            "https://example.com/article#atom",
+        ]:
+            assert not ch.can_handle(url), url
+        assert ch.can_handle("https://example.com/feed.xml?key=secret")
+
     def test_can_handle_feed_urls(self):
         from agent_reach.channels.rss import RSSChannel
         ch = RSSChannel()

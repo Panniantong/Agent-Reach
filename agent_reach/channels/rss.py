@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """RSS — check if feedparser is available."""
 
+from urllib.parse import urlsplit
+
 from .base import Channel
 
 
@@ -11,7 +13,11 @@ class RSSChannel(Channel):
     tier = 0
 
     def can_handle(self, url: str) -> bool:
-        return any(x in url.lower() for x in ["/feed", "/rss", ".xml", "atom"])
+        try:
+            path = urlsplit(url).path.lower()
+        except ValueError:
+            return False
+        return any(x in path for x in ["/feed", "/rss", ".xml", "atom"])
 
     def check(self, config=None):
         try:
