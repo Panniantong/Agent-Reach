@@ -546,7 +546,7 @@ class TestOrchestrator:
                     child.unlink()
                 self.path.rmdir()
 
-        def fake_download(source, out_dir):
+        def fake_download(source, out_dir, *, cookies_from_browser=None):
             assert Path(out_dir) == tmp_path / "auto-work"
             audio = Path(out_dir) / "source.m4a"
             audio.write_bytes(b"audio")
@@ -582,7 +582,7 @@ class TestOrchestrator:
         fake_config.set("groq_api_key", "gsk_test")
         work = tmp_path / "caller-owned"
 
-        def fake_download(source, out_dir):
+        def fake_download(source, out_dir, *, cookies_from_browser=None):
             audio = Path(out_dir) / "source.m4a"
             audio.write_bytes(b"audio")
             return audio
@@ -651,6 +651,69 @@ class TestDownloadAudioSafety:
         assert captured["cmd"][marker_index + 1] == "https://example.com/watch?v=123"
         max_size_index = captured["cmd"].index("--max-filesize")
         assert captured["cmd"][max_size_index + 1] == str(tr.MAX_SOURCE_BYTES)
+
+    def test_passes_cookies_from_browser_to_yt_dlp(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(tr, "_require", lambda binary: None)
+        captured = {}
+
+        def fake_run(cmd, timeout=600):
+            captured["cmd"] = cmd
+            (tmp_path / "source.m4a").write_bytes(b"audio")
+
+        monkeypatch.setattr(tr, "_run", fake_run)
+
+        tr.download_audio(
+            "https://example.com/watch?v=123", tmp_path, cookies_from_browser="chrome"
+        )
+
+        assert "--cookies-from-browser" in captured["cmd"]
+        flag_index = captured["cmd"].index("--cookies-from-browser")
+        assert captured["cmd"][flag_index + 1] == "chrome"
+        # The flag must precede the end-of-options marker, never the URL.
+        assert flag_index < captured["cmd"].index("--")
+
+    def test_omits_cookie_flag_when_unconfigured(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(tr, "_require", lambda binary: None)
+        captured = {}
+
+        def fake_run(cmd, timeout=600):
+            captured["cmd"] = cmd
+            (tmp_path / "source.m4a").write_bytes(b"audio")
+
+        monkeypatch.setattr(tr, "_run", fake_run)
+
+        tr.download_audio("https://example.com/watch?v=123", tmp_path)
+
+        assert "--cookies-from-browser" not in captured["cmd"]
+
+    def test_transcribe_forwards_configured_cookie_source(self, monkeypatch, tmp_path, fake_config):
+        fake_config.set("youtube_cookies_from", "chrome")
+        seen = {}
+
+        def fake_download(source, out_dir, *, cookies_from_browser=None):
+            seen["cookies_from_browser"] = cookies_from_browser
+            raise tr.TranscribeError("stop after download")
+
+        monkeypatch.setattr(tr, "download_audio", fake_download)
+
+        with pytest.raises(tr.TranscribeError, match="stop after download"):
+            tr._transcribe_in_dir("https://example.com/video", ["groq"], fake_config, tmp_path)
+
+        assert seen["cookies_from_browser"] == "chrome"
+
+    def test_transcribe_passes_no_cookie_source_when_unconfigured(self, monkeypatch, tmp_path, fake_config):
+        seen = {}
+
+        def fake_download(source, out_dir, *, cookies_from_browser=None):
+            seen["cookies_from_browser"] = cookies_from_browser
+            raise tr.TranscribeError("stop after download")
+
+        monkeypatch.setattr(tr, "download_audio", fake_download)
+
+        with pytest.raises(tr.TranscribeError, match="stop after download"):
+            tr._transcribe_in_dir("https://example.com/video", ["groq"], fake_config, tmp_path)
+
+        assert seen["cookies_from_browser"] is None
 
     def test_preserves_bare_public_urls_supported_by_yt_dlp(self, monkeypatch, tmp_path):
         monkeypatch.setattr(tr, "_require", lambda binary: None)
