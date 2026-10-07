@@ -75,6 +75,25 @@ def _fetch_daemon_status(timeout: int = 2):
     return payload
 
 
+def _daemon_reports_extension_connected(daemon_status: dict) -> bool:
+    """True if the daemon reports a live extension connection.
+
+    OpenCLI >= 1.8 multi-profile daemons may keep the top-level
+    ``extensionConnected`` false (``profileRequired: true``) and report each
+    browser profile's connection under ``profiles``. Any connected profile is
+    live daemon evidence that a browser has loaded and enabled the extension.
+    """
+    if daemon_status.get("extensionConnected") is True:
+        return True
+    profiles = daemon_status.get("profiles")
+    if not isinstance(profiles, list):
+        return False
+    return any(
+        isinstance(profile, dict) and profile.get("extensionConnected") is True
+        for profile in profiles
+    )
+
+
 def _extension_installed_on_disk() -> bool:
     """True if store-installed OpenCLI files exist in a browser profile.
 
@@ -151,8 +170,8 @@ def opencli_status(timeout: int = 10) -> OpenCLIStatus:
     daemon_status = _fetch_daemon_status(timeout)
     if daemon_status is not None:
         st.daemon_running = True
-        st.extension_connected = bool(
-            daemon_status.get("extensionConnected")
+        st.extension_connected = _daemon_reports_extension_connected(
+            daemon_status
         )
 
     if not st.extension_connected:

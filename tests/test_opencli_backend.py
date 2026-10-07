@@ -70,6 +70,51 @@ def test_daemon_running_extension_connected_is_ready():
     assert "1.8.3" in opencli_summary(st)
 
 
+def test_multi_profile_daemon_with_connected_profile_is_ready():
+    # OpenCLI 1.8.8 with several Chrome profiles: top-level flag stays false.
+    daemon_status = {
+        "ok": True,
+        "pid": 1248,
+        "daemonVersion": "1.8.8",
+        "extensionConnected": False,
+        "profileRequired": True,
+        "profiles": [
+            {"contextId": "y2yx6hbc", "extensionConnected": True},
+            {"contextId": "s5qz59qg", "extensionConnected": False},
+        ],
+    }
+    st, _ = _status_with(
+        ProbeResult("ok", output="1.8.8"),
+        daemon_status,
+        ext_on_disk=True,
+    )
+    assert st.daemon_running and st.extension_connected
+    assert st.ready
+    assert st.hint == ""
+    assert "1.8.8" in opencli_summary(st)
+
+
+def test_multi_profile_daemon_without_connected_profile_not_ready():
+    daemon_status = {
+        "ok": True,
+        "pid": 1248,
+        "extensionConnected": False,
+        "profileRequired": True,
+        "profiles": [
+            {"contextId": "y2yx6hbc", "extensionConnected": False},
+            "malformed",
+            {"contextId": "s5qz59qg", "extensionConnected": "true"},
+        ],
+    }
+    st, _ = _status_with(
+        ProbeResult("ok", output="1.8.8"),
+        daemon_status,
+        ext_on_disk=False,
+    )
+    assert st.daemon_running and not st.extension_connected
+    assert not st.ready
+
+
 def test_extension_never_installed_not_ready_with_store_guide():
     daemon_status = {"ok": True, "pid": 1, "extensionConnected": False}
     st, _ = _status_with(

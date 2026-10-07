@@ -10,6 +10,15 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug Fixes / 修复
 
+#### 🌐 OpenCLI — 多 Chrome profile 时误报扩展未连接
+
+- **根因：** OpenCLI ≥ 1.8 的 daemon 在连接多个浏览器 profile 时，顶层
+  `extensionConnected` 保持 `false`（`profileRequired: true`），每个 profile 的连接状态
+  放在 `profiles[]` 中。`opencli_status()` 只读顶层字段，导致 Reddit / Twitter /
+  Facebook / Instagram / 小红书等 OpenCLI 渠道一律报「扩展当前未连接」。
+- **修复：** 任一 profile 报告 `extensionConnected: true` 即视为桥接已连接（仍是 daemon
+  的实时证据，不依赖磁盘文件）。
+
 #### 🔐 Boss直聘 — 登录态误判（双凭据存储）
 
 - **根因：** Boss 有两个互不代表的登录态存储——本地 `~/.boss-agent/auth/session.enc`
