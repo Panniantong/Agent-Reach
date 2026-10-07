@@ -236,7 +236,9 @@ def main():
         sys.exit(0)
 
     if args.command == "doctor":
-        _cmd_doctor(args)
+        code = _cmd_doctor(args)
+        if code:
+            sys.exit(code)
     elif args.command == "check-update":
         _cmd_check_update()
     elif args.command == "watch":
@@ -2026,7 +2028,7 @@ def _cmd_doctor(args=None):
 
     if args is not None and getattr(args, "json", False):
         print(json.dumps(results, ensure_ascii=False, indent=2))
-        return
+        return 1 if any(r.get("status") == "error" for r in results.values()) else 0
 
     report = format_report(results)
     try:
@@ -2035,6 +2037,7 @@ def _cmd_doctor(args=None):
         print(report)
     else:
         rich_print(report)
+    return 1 if any(r.get("status") == "error" for r in results.values()) else 0
 
 
 def _cmd_setup():

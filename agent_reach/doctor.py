@@ -4,6 +4,9 @@
 Each channel knows how to check itself. Doctor just collects the results.
 """
 
+import sys
+import threading
+import time
 from typing import Dict
 
 from rich.markup import escape
@@ -12,29 +15,70 @@ from agent_reach.channels import get_all_channels
 from agent_reach.config import Config
 from agent_reach.utils.text import scrub_url_credentials
 
+#: Per-channel bound for `check_all` (issue #732). Channel checks run in
+#: parallel threads; a channel that exceeds this never blocks the report —
+#: it degrades to status="error" instead of hanging `doctor` indefinitely.
+DOCTOR_PER_CHANNEL_TIMEOUT_S = 30.0
 
-def check_all(config: Config) -> Dict[str, dict]:
+
+def _run_channel_check(ch, config):
+    """Run one channel check, degrading exceptions to an error entry."""
+    try:
+        status, message = ch.check(config)
+        active = getattr(ch, "active_backend", None)
+    except Exception as e:  # noqa: BLE001 — doctor must survive any channel
+        # Channels are registry singletons: a stale active_backend from a
+        # previous check must not leak into an errored result.
+        status = "error"
+        message = f"体检异常：{e}"
+        active = None
+    return ch.name, status, scrub_url_credentials(message), active
+
+
+def check_all(config: Config, per_channel_timeout: float = DOCTOR_PER_CHANNEL_TIMEOUT_S) -> Dict[str, dict]:
     """Check all channels and return status dict.
 
-    A single misbehaving channel must never take the whole report down,
-    so per-channel exceptions degrade to status="error".
+    A single misbehaving channel must never take the whole report down:
+    exceptions degrade to status="error", and a channel that exceeds
+    `per_channel_timeout` degrades to a timeout error entry. Checks run in
+    parallel daemon threads so the overall runtime stays bounded by a single
+    shared deadline — N stuck channels still return in ~per_channel_timeout,
+    not N x timeout — and stuck probes never keep the process alive at exit.
     """
-    results = {}
-    for ch in get_all_channels():
-        try:
-            status, message = ch.check(config)
-            active = getattr(ch, "active_backend", None)
-        except Exception as e:  # noqa: BLE001 — doctor must survive any channel
-            # Channels are registry singletons: a stale active_backend from a
-            # previous check must not leak into an errored result.
-            status = "error"
-            message = f"体检异常：{e}"
-            active = None
-        # Doctor is the final output boundary for both expected channel
-        # messages and unexpected exceptions. Upstream probe output can echo a
-        # configured URL, so scrub every path before JSON/text rendering.
-        message = scrub_url_credentials(message)
-        results[ch.name] = {
+    channels = list(get_all_channels())
+    results: Dict[str, dict] = {}
+    if not channels:
+        return results
+    completed: Dict[str, tuple] = {}
+    lock = threading.Lock()
+
+    def _target(ch, cfg):
+        outcome = _run_channel_check(ch, cfg)
+        with lock:
+            completed[ch.name] = outcome
+
+    threads = []
+    for ch in channels:
+        t = threading.Thread(
+            target=_target, args=(ch, config), name=f"doctor-{ch.name}", daemon=True
+        )
+        t.start()
+        threads.append(t)
+    deadline = time.monotonic() + per_channel_timeout
+    for t in threads:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        t.join(timeout=remaining)
+    for ch in channels:
+        if ch.name in completed:
+            name, status, message, active = completed[ch.name]
+        else:
+            name, status, active = ch.name, "error", None
+            message = scrub_url_credentials(
+                f"检查超时（>{per_channel_timeout:g}s），已跳过该渠道"
+            )
+        results[name] = {
             "status": status,
             "name": ch.description,
             "message": message,
@@ -42,6 +86,11 @@ def check_all(config: Config) -> Dict[str, dict]:
             "backends": ch.backends,
             "active_backend": active,
         }
+        if sys.stderr.isatty():
+            print(f"  [{status}] {name}", file=sys.stderr)
+    # Daemon threads need no shutdown: stuck probes die with the process
+    # instead of joining at interpreter exit. A late-finishing probe may
+    # still write completed[] after return; the returned report is unaffected.
     return results
 
 
