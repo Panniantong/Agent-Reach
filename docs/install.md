@@ -266,6 +266,11 @@ agent-reach configure --from-browser chrome --platform xueqiu
 
 > 只会读取并保存雪球需要的最小 Cookie；不会顺带读取其他平台。
 
+也支持 Vivaldi：将 `--from-browser chrome` 改为 `--from-browser vivaldi`。
+需要指定浏览器配置时，可添加 `--profile "Profile 1"`（使用实际配置目录名）；
+指定的配置不存在时会报错，不会回退到默认配置。Vivaldi 的 OpenCLI 扩展文件检测
+支持 macOS、Linux 和 Windows；文件存在仍不代表扩展已连接。
+
 **小宇宙播客 / Xiaoyuzhou Podcast (Groq Whisper):**
 > "小宇宙播客转文字已默认安装，只需要一个免费的 Groq API Key。"
 

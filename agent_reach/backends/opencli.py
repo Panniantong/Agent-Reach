@@ -41,9 +41,11 @@ _CHROME_PROFILE_ROOTS = (
     "~/Library/Application Support/Google/Chrome",  # macOS Chrome
     "~/Library/Application Support/Chromium",       # macOS Chromium
     "~/Library/Application Support/Microsoft Edge",  # macOS Edge
+    "~/Library/Application Support/Vivaldi",         # macOS Vivaldi
     "~/.config/google-chrome",                      # Linux Chrome
     "~/.config/chromium",                           # Linux Chromium
     "~/.config/microsoft-edge",                     # Linux Edge
+    "~/.config/vivaldi",                            # Linux Vivaldi
 )
 
 _OPENCLI_UNPACKED_EXTENSION = "~/.opencli/extension"
@@ -87,6 +89,7 @@ def _extension_installed_on_disk() -> bool:
     if local_app_data:  # Windows
         roots.append(os.path.join(local_app_data, "Google", "Chrome", "User Data"))
         roots.append(os.path.join(local_app_data, "Microsoft", "Edge", "User Data"))
+        roots.append(os.path.join(local_app_data, "Vivaldi", "User Data"))
     for root in roots:
         if glob.glob(os.path.join(root, "*", "Extensions", OPENCLI_EXTENSION_ID)):
             return True
@@ -160,7 +163,7 @@ def opencli_status(timeout: int = 10) -> OpenCLIStatus:
         st.unpacked_extension_files = _unpacked_extension_files_present()
         if st.extension_installed:
             st.hint = (
-                "检测到 Chrome/Edge 的 OpenCLI 扩展文件，但扩展当前未连接；"
+                "检测到 Chromium 系浏览器的 OpenCLI 扩展文件，但扩展当前未连接；"
                 "仅凭磁盘文件无法确认它已加载或启用。\n"
                 "  打开浏览器扩展页确认 OpenCLI 已启用，再运行一个 opencli 命令验证"
             )
