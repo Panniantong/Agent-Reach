@@ -75,7 +75,16 @@ if [ -z "$GROQ_API_KEY" ]; then
             CONFIG_FOR_PYTHON=$(cygpath -w "$CONFIG_FILE")
         fi
         GROQ_API_KEY=$(AGENT_REACH_CONFIG_FILE="$CONFIG_FOR_PYTHON" \
-            "${PYTHON_CMD[@]}" -c 'import os, yaml; print((yaml.safe_load(open(os.environ["AGENT_REACH_CONFIG_FILE"])) or {}).get("groq_api_key", ""))' \
+            "${PYTHON_CMD[@]}" -c 'import os
+try:
+    import yaml
+    val = (yaml.safe_load(open(os.environ["AGENT_REACH_CONFIG_FILE"])) or {}).get("groq_api_key", "")
+except Exception:
+    import re
+    with open(os.environ["AGENT_REACH_CONFIG_FILE"]) as f:
+        m = re.search(r"^\s*groq_api_key:\s*[\x27\x22]?([^\x27\x22\s]+)[\x27\x22]?", f.read(), re.M)
+        val = m.group(1) if m else ""
+print(val or "")' \
             2>/dev/null || true)
     fi
 fi
