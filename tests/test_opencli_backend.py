@@ -184,6 +184,29 @@ def test_store_install_scan_includes_edge_profiles(tmp_path, monkeypatch):
     assert _extension_installed_on_disk()
 
 
+def test_store_install_scan_includes_windows_vivaldi_profile(tmp_path, monkeypatch):
+    from agent_reach.backends import opencli
+
+    real_roots = opencli._CHROME_PROFILE_ROOTS
+    vivaldi_root = tmp_path / "Vivaldi" / "User Data"
+    (
+        vivaldi_root
+        / "Default"
+        / "Extensions"
+        / OPENCLI_EXTENSION_ID
+        / "1.0.0"
+    ).mkdir(parents=True)
+
+    monkeypatch.setattr(
+        "agent_reach.backends.opencli._CHROME_PROFILE_ROOTS", ()
+    )
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    assert _extension_installed_on_disk()
+    assert "~/Library/Application Support/Vivaldi" in real_roots
+    assert "~/.config/vivaldi" in real_roots
+
+
 def test_unpacked_scan_requires_manifest_but_does_not_claim_browser_load(
     tmp_path, monkeypatch
 ):

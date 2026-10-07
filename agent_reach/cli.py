@@ -119,7 +119,8 @@ def main():
         help="Read the value from stdin instead of exposing it in process arguments",
     )
     p_conf.add_argument("--from-browser", metavar="BROWSER",
-                        choices=["chrome", "firefox", "edge", "brave", "opera"],
+                        choices=["chrome", "firefox", "edge", "brave", "opera",
+                                 "vivaldi"],
                         help="Extract cookies for one explicitly selected platform")
     p_conf.add_argument(
         "--platform",
@@ -201,9 +202,9 @@ def main():
                 f"{args.platform} requires Cookie-Editor export; use "
                 f"`agent-reach configure {manual_keys[args.platform]} ...`"
             )
-        if args.profile and args.from_browser not in {"chrome", "edge", "brave"}:
+        if args.profile and args.from_browser not in {"chrome", "edge", "brave", "vivaldi"}:
             p_conf.error(
-                "--profile is supported only for Chrome/Edge/Brave"
+                "--profile is supported only for Chrome/Edge/Brave/Vivaldi"
             )
         if args.sync_legacy_twitter:
             p_conf.error("--sync-legacy-twitter is only valid with twitter-cookies")

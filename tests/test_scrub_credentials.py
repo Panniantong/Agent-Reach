@@ -91,6 +91,7 @@ def test_browser_backend_errors_scrub_url_secrets(monkeypatch):
         edge=lambda domains: [],
         brave=lambda domains: [],
         opera=lambda domains: [],
+        vivaldi=lambda domains: [],
     )
     monkeypatch.setitem(sys.modules, "rookiepy", fake_rookiepy)
 
