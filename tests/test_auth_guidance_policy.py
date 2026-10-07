@@ -218,6 +218,23 @@ def test_video_reference_has_content_level_youtube_fallbacks():
     assert "agent-reach transcribe" in text
 
 
+def test_youtube_auto_subtitles_use_original_language_track():
+    """Non -orig automatic captions are YouTube machine translations (#742)."""
+    docs = (
+        ROOT / "agent_reach" / "skill" / "SKILL.md",
+        ROOT / "agent_reach" / "skill" / "SKILL_en.md",
+        ROOT / "agent_reach" / "skill" / "references" / "video.md",
+    )
+    for path in docs:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("yt-dlp") and "--write-auto-sub" in line:
+                assert '--sub-lang ".*-orig"' in line, f"{path.relative_to(ROOT)}: {line}"
+
+    video = (ROOT / "agent_reach" / "skill" / "references" / "video.md").read_text(encoding="utf-8")
+    assert "--list-subs" in video
+    assert "机器翻译" in video
+
+
 def test_skill_routes_finance_and_documents_opencli_discovery():
     skills = (
         ROOT / "agent_reach" / "skill" / "SKILL.md",

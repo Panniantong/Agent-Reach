@@ -12,13 +12,29 @@ yt-dlp --dump-json "URL"
 
 ### 下载字幕
 
+YouTube 自动字幕里只有 `<lang>-orig` 是对原声的语音识别；其它语言的自动字幕
+（`en`、`zh-Hans`、`en-de` 等）都是 YouTube 的机器翻译。阿拉伯语、日语等视频
+同样会提供 `en` / `zh-Hans` 自动字幕，直接按语言名下载会把译文当成原话。
+
 ```bash
-# 下载字幕 (不下载视频)
-yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -o "/tmp/%(id)s" "URL"
+# 1. 先看有哪些轨道（不下载视频）
+#    "Available subtitles" = 人工字幕；"automatic captions" 里 -orig = 原声识别，其余 = 机器翻译
+yt-dlp --list-subs --skip-download "URL"
+
+# 2a. 有人工字幕：下载需要的语言（LANG 换成上面列出的代码，优先视频原语言）
+yt-dlp --write-sub --sub-lang "LANG" --skip-download -o "/tmp/%(id)s" "URL"
+
+# 2b. 没有人工字幕：只下载原声识别轨
+yt-dlp --write-auto-sub --sub-lang ".*-orig" --skip-download -o "/tmp/%(id)s" "URL"
 
 # 然后读取 .vtt 文件
 cat /tmp/VIDEO_ID.*.vtt
 ```
+
+选轨顺序：人工字幕 → `-orig` 原声识别 → 不带 `-orig` 的自动 `<lang>` 轨（仅当
+`yt-dlp --print "%(language)s" "URL"` 正好是 `<lang>` 时）→ 其它都是机器翻译，
+只有用户接受译文时才用，并明确告诉用户"这是 YouTube 机器翻译，不是原话"。
+回复里说明用的是哪条轨道。
 
 ### 获取评论
 
@@ -44,7 +60,7 @@ yt-dlp --dump-json "ytsearch5:query"
 `doctor` 只确认 yt-dlp 本体与 JS runtime 能执行，不会请求具体视频；因此
 `active_backend: yt-dlp` 不等于目标视频的字幕已经通过实时验证。
 
-1. 先用上面的 `yt-dlp --write-sub --write-auto-sub` 命令。
+1. 先按上面的选轨步骤用 yt-dlp 下载字幕。
 2. 若出现 bot 校验、字幕响应为空或没有生成字幕文件，且 OpenCLI 已连接：
    `opencli youtube transcript "URL" -f yaml`。
 3. OpenCLI 若返回 `Caption URL returned empty response`，最多重试 3 次；这是带
