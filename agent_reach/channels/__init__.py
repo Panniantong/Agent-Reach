@@ -14,6 +14,7 @@ from .facebook import FacebookChannel
 from .github import GitHubChannel
 from .instagram import InstagramChannel
 from .linkedin import LinkedInChannel
+from .mastodon import MastodonChannel
 from .reddit import RedditChannel
 from .rss import RSSChannel
 from .twitter import TwitterChannel
@@ -37,6 +38,7 @@ ALL_CHANNELS: List[Channel] = [
     BossChannel(),
     XiaoyuzhouChannel(),
     V2EXChannel(),
+    MastodonChannel(),
     XueqiuChannel(),
     RSSChannel(),
     ExaSearchChannel(),
