@@ -1585,10 +1585,44 @@ def _cmd_configure(args):
         print("✅ OpenAI key configured!")
 
 
-def _cmd_transcribe(args):
-    """Transcribe a URL or local audio file via an explicitly selected provider."""
+def _save_transcript_output(path, text):
+    """Publish a complete regular-file transcript, following existing symlinks."""
+    import stat
+    import tempfile
     from pathlib import Path
 
+    target = Path(path).resolve()
+    try:
+        previous = target.stat()
+    except FileNotFoundError:
+        previous = None
+    if previous is not None and not stat.S_ISREG(previous.st_mode):
+        raise OSError("transcript output must be a regular file")
+
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", prefix=".agent-reach-output.",
+            dir=target.parent, delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if previous is not None:
+            temporary.chmod(stat.S_IMODE(previous.st_mode))
+        os.replace(temporary, target)
+    finally:
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except PermissionError:
+                temporary.chmod(0o600)
+                temporary.unlink()
+
+
+def _cmd_transcribe(args):
+    """Transcribe a URL or local audio file via an explicitly selected provider."""
     from agent_reach.transcribe import TranscribeError, transcribe
     from agent_reach.utils.text import scrub_url_credentials
 
@@ -1607,7 +1641,11 @@ def _cmd_transcribe(args):
         sys.exit(1)
 
     if args.output:
-        Path(args.output).write_text(text + "\n", encoding="utf-8")
+        try:
+            _save_transcript_output(args.output, text + "\n")
+        except (OSError, RuntimeError) as exc:
+            print(f"❌ Could not save transcript: {exc}", file=sys.stderr)
+            sys.exit(1)
         print(f"✅ Transcript written to {args.output}")
     else:
         print(text)

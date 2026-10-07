@@ -384,7 +384,63 @@ fi
         fi
         echo ""
     done
-} > "$OUTPUT"
+} > "$WORK_DIR/report.md"
+
+# Stage beside the resolved output so a failed write leaves the old transcript
+# intact. The standalone managed script cannot rely on importing Agent Reach.
+REPORT_FOR_PYTHON="$WORK_DIR/report.md"
+OUTPUT_FOR_PYTHON="$OUTPUT"
+if command -v cygpath >/dev/null 2>&1; then
+    REPORT_FOR_PYTHON=$(cygpath -w "$REPORT_FOR_PYTHON")
+    OUTPUT_FOR_PYTHON=$(cygpath -w "$OUTPUT_FOR_PYTHON")
+fi
+if REPORT_FILE="$REPORT_FOR_PYTHON" OUTPUT_FILE="$OUTPUT_FOR_PYTHON" \
+    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 \
+    "${PYTHON_CMD[@]}" <<'PY'
+import os
+import shutil
+import stat
+import sys
+import tempfile
+from pathlib import Path
+
+try:
+    target = Path(os.environ["OUTPUT_FILE"]).resolve()
+    try:
+        previous = target.stat()
+    except FileNotFoundError:
+        previous = None
+    if previous is not None and not stat.S_ISREG(previous.st_mode):
+        raise OSError("transcript output must be a regular file")
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb", prefix=".agent-reach-output.", dir=target.parent, delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            with open(os.environ["REPORT_FILE"], "rb") as report:
+                shutil.copyfileobj(report, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if previous is not None:
+            temporary.chmod(stat.S_IMODE(previous.st_mode))
+        os.replace(temporary, target)
+    finally:
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except PermissionError:
+                temporary.chmod(0o600)
+                temporary.unlink()
+except (OSError, RuntimeError) as exc:
+    sys.stderr.write(f"无法保存文字稿: {exc}\n")
+    raise SystemExit(1)
+PY
+then
+    :
+else
+    exit 1
+fi
 
 TOTAL_CHARS=$(wc -m < "$OUTPUT")
 echo ""
