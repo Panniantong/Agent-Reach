@@ -13,7 +13,13 @@ zhipin 页签 → 浏览器内有无登录 cookie（wt2）→ 页签是否都停
 import base64
 import hashlib
 import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 from agent_reach.channels import boss as boss_mod
 from agent_reach.channels.boss import BossChannel
@@ -86,6 +92,58 @@ def test_chrome_launch_command_is_portable_and_loopback_only():
         assert "--remote-debugging-port=9222" in command
         assert "boss-chrome-profile" in command
         assert "https://www.zhipin.com/web/geek/job" in command
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows Start-Process argument handling")
+@pytest.mark.parametrize(
+    "source", ["doctor", "docs/install.md", "agent_reach/skill/references/career.md"]
+)
+def test_windows_chrome_command_preserves_profile_spaces(tmp_path, monkeypatch, source):
+    executable = shutil.which("powershell")
+    if not executable:
+        pytest.skip("Windows PowerShell is not installed")
+    if source == "doctor":
+        command = boss_mod._chrome_launch_command("Windows")
+    else:
+        document = (Path(__file__).resolve().parents[1] / source).read_text(encoding="utf-8")
+        command = next(
+            line.strip() for line in document.splitlines() if "Start-Process chrome.exe" in line
+        )
+
+    # Record actual child argv instead of launching Chrome or touching a real profile.
+    recorder = tmp_path / "record arguments.py"
+    recorder.write_text("import json, sys\nprint(json.dumps(sys.argv[1:]))\n", encoding="utf-8")
+    output = tmp_path / "arguments.json"
+    profile = tmp_path / "Test User"
+    monkeypatch.setenv("USERPROFILE", str(profile))
+    monkeypatch.setenv("AGENT_REACH_TEST_PYTHON", sys.executable)
+    monkeypatch.setenv("AGENT_REACH_TEST_RECORDER", str(recorder))
+    monkeypatch.setenv("AGENT_REACH_TEST_OUTPUT", str(output))
+    command = command.replace(
+        "Start-Process chrome.exe -ArgumentList ",
+        "Start-Process $env:AGENT_REACH_TEST_PYTHON -Wait -WindowStyle Hidden "
+        "-RedirectStandardOutput $env:AGENT_REACH_TEST_OUTPUT "
+        "-ArgumentList ('\"' + $env:AGENT_REACH_TEST_RECORDER + '\"'),",
+        1,
+    )
+    assert "chrome.exe" not in command, "Failed to replace Chrome with the argument recorder"
+    result = subprocess.run(
+        [
+            executable, "-NoProfile", "-NonInteractive", "-Command",
+            "$ErrorActionPreference = 'Stop'\n" + command,
+        ],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(output.read_text(encoding="utf-8-sig")) == [
+        "--remote-debugging-address=127.0.0.1",
+        "--remote-debugging-port=9222",
+        f"--user-data-dir={profile}\\.boss-chrome-profile",
+        "https://www.zhipin.com/web/geek/job",
+    ]
 
 
 def test_check_warn_when_no_zhipin_page():

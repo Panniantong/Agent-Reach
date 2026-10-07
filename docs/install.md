@@ -339,7 +339,7 @@ agent-reach configure groq-key
    ```
    Windows PowerShell：
    ```powershell
-   Start-Process chrome.exe -ArgumentList '--remote-debugging-address=127.0.0.1','--remote-debugging-port=9222',"--user-data-dir=$env:USERPROFILE\.boss-chrome-profile",'https://www.zhipin.com/web/geek/job'
+   Start-Process chrome.exe -ArgumentList '--remote-debugging-address=127.0.0.1','--remote-debugging-port=9222',"--user-data-dir=`"$env:USERPROFILE\.boss-chrome-profile`"",'https://www.zhipin.com/web/geek/job'
    ```
 4. 暂停，让**用户肉眼确认**窗口内的登录状态（右上角有头像）；未登录则让**用户手动
    登录**、扫码或处理滑块。Agent 不索取账号密码、不代替登录，也不要用 `boss status`
