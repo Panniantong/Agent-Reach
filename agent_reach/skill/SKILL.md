@@ -68,7 +68,10 @@ curl -s "https://r.jina.ai/URL"
 gh search repos "query" --sort stars --limit 10
 
 # YouTube 字幕（注意：B站不要用 yt-dlp，失败重试链见 video.md）
-yt-dlp --write-sub --write-auto-sub --skip-download -o "/tmp/%(id)s" "URL"
+# --extractor-args 防止返回机器翻译字幕；--sub-lang 优先原语言
+yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh-Hant,zh,en,en-orig" \
+  --extractor-args "youtube:skip=translated_subs" \
+  --skip-download -o "/tmp/%(id)s" "URL"
 
 # V2EX 热门
 curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1.0"
@@ -130,12 +133,9 @@ opencli instagram user USERNAME -f yaml        # 读指定用户最近帖子
 
 ## 环境检查
 
-> 本机 Python 环境默认是 conda `dl`；若 `agent-reach` 不在 PATH，用
-> `conda run -n dl agent-reach ...` 前缀。
-
 ```bash
 # 检查可用 channel 与每个平台当前激活的后端
-conda run -n dl agent-reach doctor --json
+agent-reach doctor --json
 ```
 
 ## OpenCLI 适配器发现
