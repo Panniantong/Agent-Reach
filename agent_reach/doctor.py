@@ -4,6 +4,7 @@
 Each channel knows how to check itself. Doctor just collects the results.
 """
 
+import concurrent.futures
 from typing import Dict
 
 from rich.markup import escape
@@ -12,36 +13,67 @@ from agent_reach.channels import get_all_channels
 from agent_reach.config import Config
 from agent_reach.utils.text import scrub_url_credentials
 
+_CHANNEL_TIMEOUT_SECONDS = 15
+
+
+def _check_one_channel(ch, config):
+    """Invoke a single channel check; returns (channel, status, message, active)."""
+    status, message = ch.check(config)
+    active = getattr(ch, "active_backend", None)
+    return ch, status, message, active
+
 
 def check_all(config: Config) -> Dict[str, dict]:
     """Check all channels and return status dict.
 
     A single misbehaving channel must never take the whole report down,
-    so per-channel exceptions degrade to status="error".
+    so per-channel exceptions degrade to status="error" and each channel
+    is bounded by a hard wall-clock timeout to prevent indefinite hangs.
     """
     results = {}
-    for ch in get_all_channels():
-        try:
-            status, message = ch.check(config)
-            active = getattr(ch, "active_backend", None)
-        except Exception as e:  # noqa: BLE001 — doctor must survive any channel
-            # Channels are registry singletons: a stale active_backend from a
-            # previous check must not leak into an errored result.
-            status = "error"
-            message = f"体检异常：{e}"
-            active = None
-        # Doctor is the final output boundary for both expected channel
-        # messages and unexpected exceptions. Upstream probe output can echo a
-        # configured URL, so scrub every path before JSON/text rendering.
-        message = scrub_url_credentials(message)
-        results[ch.name] = {
-            "status": status,
-            "name": ch.description,
-            "message": message,
-            "tier": ch.tier,
-            "backends": ch.backends,
-            "active_backend": active,
+    channels = list(get_all_channels())
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        futures = {
+            executor.submit(_check_one_channel, ch, config): ch
+            for ch in channels
         }
+        for future in concurrent.futures.as_completed(
+            futures, timeout=_CHANNEL_TIMEOUT_SECONDS * len(channels) + 5
+        ):
+            ch = futures[future]
+            try:
+                ch_done, status, message, active = future.result(
+                    timeout=_CHANNEL_TIMEOUT_SECONDS
+                )
+            except concurrent.futures.TimeoutError:
+                status = "error"
+                message = f"{getattr(ch, 'description', ch.name)} 体检超时（>{_CHANNEL_TIMEOUT_SECONDS}s）"
+                active = None
+            except Exception as e:  # noqa: BLE001 — doctor must survive any channel
+                status = "error"
+                message = f"体检异常：{e}"
+                active = None
+            else:
+                ch = ch_done
+            message = scrub_url_credentials(message)
+            results[ch.name] = {
+                "status": status,
+                "name": ch.description,
+                "message": message,
+                "tier": ch.tier,
+                "backends": ch.backends,
+                "active_backend": active,
+            }
+    for ch in channels:
+        if ch.name not in results:
+            results[ch.name] = {
+                "status": "error",
+                "name": ch.description,
+                "message": f"{ch.description} 体检超时（>{_CHANNEL_TIMEOUT_SECONDS}s）",
+                "tier": ch.tier,
+                "backends": ch.backends,
+                "active_backend": None,
+            }
     return results
 
 
