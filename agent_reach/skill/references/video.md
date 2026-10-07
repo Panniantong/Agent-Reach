@@ -13,8 +13,10 @@ yt-dlp --dump-json "URL"
 ### 下载字幕
 
 ```bash
-# 下载字幕 (不下载视频)
-yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -o "/tmp/%(id)s" "URL"
+# 下载字幕 (不下载视频；skip=translated_subs 防止返回机器翻译字幕)
+yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh-Hant,zh,en,orig" \
+  --extractor-args "youtube:skip=translated_subs" \
+  --skip-download -o "/tmp/%(id)s" "URL"
 
 # 然后读取 .vtt 文件
 cat /tmp/VIDEO_ID.*.vtt
