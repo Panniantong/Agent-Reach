@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,6 +15,32 @@ from agent_reach.utils.paths import (
 
 _MAX_CONFIG_BYTES = 1024 * 1024
 _MISSING = object()
+_JSONC_COMMENTS = re.compile(r'("(?:\\.|[^"\\])*")|//[^\r\n]*|/\*[\s\S]*?\*/')
+_JSONC_TRAILING_COMMAS = re.compile(r'("(?:\\.|[^"\\])*")|,(?=\s*[}\]])')
+
+
+def _parse_config_json(raw: str):
+    """Accept mcporter's comments/trailing commas, retaining JSON validation."""
+    # String tokens win over comment delimiters, preserving URLs and escapes.
+    # Whitespace prevents a comment from joining otherwise invalid tokens.
+    without_comments = _JSONC_COMMENTS.sub(
+        lambda match: match.group(1) if match.group(1) is not None else " " * len(match.group()),
+        raw,
+    )
+    def trailing_comma(match):
+        if match.group(1) is not None:
+            return match.group(1)
+        previous = match.start() - 1
+        while previous >= 0 and without_comments[previous].isspace():
+            previous -= 1
+        # Empty containers and missing values are not trailing-comma syntax.
+        if previous < 0 or without_comments[previous] in "[{,:":
+            return ","
+        return ""
+
+    normalized = _JSONC_TRAILING_COMMAS.sub(trailing_comma, without_comments)
+    return json.loads(normalized)
+
 
 
 class McporterConfigError(ValueError):
@@ -122,7 +149,7 @@ def _read_config_object(config_path: Path) -> dict:
     if raw is None:
         raise McporterConfigError("mcporter 配置文件不存在")
     try:
-        payload = json.loads(raw)
+        payload = _parse_config_json(raw)
     except json.JSONDecodeError as exc:
         raise McporterConfigError("mcporter 配置不是有效的 UTF-8 JSON") from exc
     if not isinstance(payload, dict):
