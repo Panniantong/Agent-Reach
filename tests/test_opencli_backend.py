@@ -70,7 +70,7 @@ def test_daemon_running_extension_connected_is_ready():
     assert "1.8.3" in opencli_summary(st)
 
 
-def test_extension_never_installed_not_ready_with_store_guide():
+def test_extension_never_installed_not_ready_with_official_release_guide():
     daemon_status = {"ok": True, "pid": 1, "extensionConnected": False}
     st, _ = _status_with(
         ProbeResult("ok", output="1.8.3"),
@@ -79,7 +79,9 @@ def test_extension_never_installed_not_ready_with_store_guide():
     )
     assert st.daemon_running and not st.extension_connected
     assert not st.ready
-    assert "chromewebstore.google.com" in st.hint
+    assert "github.com/jackwener/opencli/releases" in st.hint
+    assert "chrome://extensions" in st.hint
+    assert "chromewebstore.google.com" not in st.hint
 
 
 def test_extension_files_on_disk_are_not_reported_as_loaded_or_ready():
@@ -95,6 +97,8 @@ def test_extension_files_on_disk_are_not_reported_as_loaded_or_ready():
     assert not st.ready
     assert "可用" not in opencli_summary(st)
     assert "无法确认" in st.hint
+    assert "可能与当前 CLI 不兼容" in st.hint
+    assert "github.com/jackwener/opencli/releases" in st.hint
 
 
 def test_unpacked_source_files_are_not_reported_as_loaded_or_ready():

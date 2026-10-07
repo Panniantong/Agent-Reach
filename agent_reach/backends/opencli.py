@@ -26,9 +26,12 @@ from dataclasses import dataclass
 from agent_reach.probe import probe_command
 
 OPENCLI_PACKAGE = "@jackwener/opencli"
+# Historical Web Store listing ID. Retained only to recognize users who may
+# need to migrate; OpenCLI's official installation guide points to Releases.
 OPENCLI_EXTENSION_ID = "ildkmabpimmkaediidaifkhjpohdnifk"
-OPENCLI_EXTENSION_URL = (
-    f"https://chromewebstore.google.com/detail/opencli/{OPENCLI_EXTENSION_ID}"
+OPENCLI_EXTENSION_URL = "https://github.com/jackwener/opencli/releases"
+OPENCLI_EXTENSION_GUIDE_URL = (
+    "https://github.com/jackwener/OpenCLI/blob/main/docs/guide/browser-bridge.md"
 )
 
 # OpenCLIApp 0.1.35 injected this now-unsupported variable into every child.
@@ -76,7 +79,7 @@ def _fetch_daemon_status(timeout: int = 2):
 
 
 def _extension_installed_on_disk() -> bool:
-    """True if store-installed OpenCLI files exist in a browser profile.
+    """True if the historical Web Store listing exists in a browser profile.
 
     This is disk evidence only: a user may have disabled or removed the
     extension while stale files remain, so callers must not treat it as proof
@@ -160,21 +163,27 @@ def opencli_status(timeout: int = 10) -> OpenCLIStatus:
         st.unpacked_extension_files = _unpacked_extension_files_present()
         if st.extension_installed:
             st.hint = (
-                "检测到 Chrome/Edge 的 OpenCLI 扩展文件，但扩展当前未连接；"
-                "仅凭磁盘文件无法确认它已加载或启用。\n"
-                "  打开浏览器扩展页确认 OpenCLI 已启用，再运行一个 opencli 命令验证"
+                "检测到旧 Chrome 商店条目对应的扩展文件，但该版本可能与当前 CLI 不兼容；"
+                "仅凭磁盘文件也无法确认它已加载或启用。\n"
+                f"  请从 OpenCLI 官方 Releases 下载最新 opencli-extension-v*.zip："
+                f"{OPENCLI_EXTENSION_URL}\n"
+                "  解压后在 chrome://extensions 启用开发者模式并选择“加载已解压的扩展程序”"
             )
         elif st.unpacked_extension_files:
             st.hint = (
                 "检测到 ~/.opencli/extension/ 源文件，但文件存在不代表已经在"
                 " Chrome/Edge 中“加载已解压的扩展程序”。\n"
-                "  请在浏览器扩展页加载并启用该目录，再运行一个 opencli 命令验证"
+                "  请在 chrome://extensions 加载并启用该目录，再运行一个 opencli 命令验证"
             )
         else:
             st.hint = (
                 "OpenCLI 已安装，但未检测到已连接的浏览器扩展。\n"
-                f"  1. 安装并启用扩展（Chrome/Edge）：{OPENCLI_EXTENSION_URL}\n"
-                "  2. 保持浏览器打开，再运行一个 opencli 命令验证"
+                f"  1. 从 OpenCLI 官方 Releases 下载最新 opencli-extension-v*.zip："
+                f"{OPENCLI_EXTENSION_URL}\n"
+                "  2. 解压后打开 chrome://extensions，启用开发者模式并选择"
+                "“加载已解压的扩展程序”\n"
+                "  3. 保持浏览器打开，再运行一个 opencli 命令验证\n"
+                f"  官方指南：{OPENCLI_EXTENSION_GUIDE_URL}"
             )
     return st
 
