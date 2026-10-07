@@ -59,8 +59,8 @@ PLATFORM_SPECS: Tuple[PlatformSpec, ...] = (
 _PLATFORM_SPECS_BY_KEY: Dict[str, PlatformSpec] = {
     spec["config_key"]: spec for spec in PLATFORM_SPECS
 }
-SUPPORTED_BROWSERS = ("chrome", "firefox", "edge", "brave", "opera")
-PROFILE_SELECTABLE_BROWSERS = ("chrome", "edge", "brave")
+SUPPORTED_BROWSERS = ("chrome", "firefox", "edge", "brave", "opera", "vivaldi")
+PROFILE_SELECTABLE_BROWSERS = ("chrome", "edge", "brave", "vivaldi")
 _MAX_XFETCH_SESSION_BYTES = 64 * 1024
 _COOKIE_EDITOR_ONLY = {
     "twitter": "twitter-cookies",
@@ -82,6 +82,11 @@ _CHROMIUM_USER_DATA_DIRS: Dict[str, ChromiumPaths] = {
         "darwin": "~/Library/Application Support/BraveSoftware/Brave-Browser",
         "linux": "~/.config/BraveSoftware/Brave-Browser",
         "win32": ("BraveSoftware", "Brave-Browser", "User Data"),
+    },
+    "vivaldi": {
+        "darwin": "~/Library/Application Support/Vivaldi",
+        "linux": "~/.config/vivaldi",
+        "win32": ("Vivaldi", "User Data"),
     },
 }
 
@@ -268,6 +273,7 @@ def extract_all(
                 "edge": rookiepy.edge,
                 "brave": rookiepy.brave,
                 "opera": rookiepy.opera,
+                "vivaldi": rookiepy.vivaldi,
             }
             raw_cookies = browser_funcs[browser](list(spec["domains"]))
             # Wrap into objects with .name, .value, .domain for compatibility
