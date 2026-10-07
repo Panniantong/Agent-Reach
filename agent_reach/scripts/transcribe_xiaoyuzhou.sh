@@ -1,10 +1,10 @@
 #!/bin/bash
 # 小宇宙播客转文字脚本
 # 用法: bash transcribe.sh [--polish] <小宇宙链接> [输出文件路径]
-# 环境变量: GROQ_API_KEY (必须)
+# 环境变量: GROQ_API_KEY (必须), POLISH_MODEL (可选，默认 qwen/qwen3.8-27b)
 #
-# --polish: 转录后调用 Groq Llama 3.3 70B 给文稿补中文标点+合理分段
-#           （Whisper 对中文标点支持较弱，开启后阅读体验显著更好）
+# --polish: 转录后调用指定的 Groq 模型补中文标点+合理分段
+#           保持字母、数字和汉字顺序不变；失败块保留原文并显示警告
 
 set -e
 
@@ -92,6 +92,8 @@ MAX_PAGE_BYTES=5242880
 MAX_AUDIO_BYTES=1073741824
 MAX_API_RESPONSE_BYTES=33554432
 MAX_DURATION_SECONDS=10800
+POLISH_MODEL="${POLISH_MODEL:-qwen/qwen3.8-27b}"
+POLISH_INCOMPLETE=0
 
 TEMP_ROOT="${TMPDIR:-/tmp}"
 if ! WORK_DIR=$(mktemp -d "${TEMP_ROOT%/}/agent-reach-xiaoyuzhou.XXXXXX"); then
@@ -103,6 +105,14 @@ cleanup() {
     rm -rf -- "$WORK_DIR"
 }
 trap cleanup EXIT
+
+# Native Windows curl may encode non-ASCII argv using the ANSI code page.
+# Read the UTF-8 field bytes from this invocation's private workspace instead.
+PROMPT_FILE="$WORK_DIR/whisper-prompt.txt"
+printf '%s' '以下是一段中文普通话播客录音，请输出包含完整中文标点（，。？！：；“”‘’）的转写文本。' > "$PROMPT_FILE"
+if command -v cygpath >/dev/null 2>&1; then
+    PROMPT_FILE=$(cygpath -w "$PROMPT_FILE")
+fi
 
 echo "📻 小宇宙播客转文字"
 echo "===================="
@@ -219,7 +229,7 @@ for i in $(seq 0 $((NUM_CHUNKS - 1))); do
         -F file="@$WORK_DIR/chunk_${i}.mp3" \
         -F model="whisper-large-v3" \
         -F language="zh" \
-        -F prompt="以下是一段中文普通话播客录音，请输出包含完整中文标点（，。？！：；“”‘’）的转写文本。" \
+        -F "prompt=<$PROMPT_FILE" \
         -F response_format="text")
     
     HTTP_CODE=$(echo "$RESPONSE" | tail -1)
@@ -250,7 +260,7 @@ for i in $(seq 0 $((NUM_CHUNKS - 1))); do
                 -F file="@$WORK_DIR/chunk_${i}.mp3" \
                 -F model="whisper-large-v3" \
                 -F language="zh" \
-                -F prompt="以下是一段中文普通话播客录音，请输出包含完整中文标点（，。？！：；“”‘’）的转写文本。" \
+                -F "prompt=<$PROMPT_FILE" \
                 -F response_format="text")
             HTTP_CODE=$(echo "$RESPONSE" | tail -1)
             BODY=$(echo "$RESPONSE" | sed '$d')
@@ -274,23 +284,25 @@ for i in $(seq 0 $((NUM_CHUNKS - 1))); do
     echo "✅ ($CHARS 字)"
 done
 
-# Step 6.5 (可选): 用 Llama 3.3 70B 给文稿补标点+分段
+# Step 6.5 (可选): 用 POLISH_MODEL 给文稿补标点+分段
 if [ "$POLISH" = "1" ]; then
     ensure_python || exit 1
-    echo "✨ 正在润色（Llama 3.3 70B 加标点+分段）..."
+    echo "✨ 正在润色（$POLISH_MODEL 加标点+分段）..."
     for i in $(seq 0 $((NUM_CHUNKS - 1))); do
         echo -n "   段 $((i+1))/$NUM_CHUNKS... "
-        IN_FILE="$WORK_DIR/transcript_${i}.txt" \
+        if IN_FILE="$WORK_DIR/transcript_${i}.txt" \
         OUT_FILE="$WORK_DIR/polished_${i}.txt" \
-        GROQ_API_KEY="$GROQ_API_KEY" \
+        GROQ_API_KEY="$GROQ_API_KEY" POLISH_MODEL="$POLISH_MODEL" \
+        PYTHONUTF8=1 PYTHONIOENCODING=utf-8 \
         "${PYTHON_CMD[@]}" <<'PY'
-import json, os, sys, urllib.request, urllib.error
+import json, os, sys, time, urllib.request, urllib.error
 
 KEY = os.environ["GROQ_API_KEY"]
 IN = os.environ["IN_FILE"]
 OUT = os.environ["OUT_FILE"]
 
-MODEL = "llama-3.3-70b-versatile"
+MODEL = os.environ["POLISH_MODEL"]
+INPUT_CHARS = 1000
 MAX_DEPTH = 3
 PROMPT_TMPL = (
     "以下是一段中文普通话播客的语音转写片段，由于 Whisper 对中文标点支持较弱，"
@@ -305,12 +317,15 @@ PROMPT_TMPL = (
 )
 
 def call_groq(text):
-    body = json.dumps({
+    request_body = {
         "model": MODEL,
         "temperature": 0.2,
-        "max_completion_tokens": 8192,
+        "max_completion_tokens": max(512, min(3000, len(text) * 2 + 256)),
         "messages": [{"role": "user", "content": PROMPT_TMPL.format(text)}],
-    }).encode()
+    }
+    if MODEL.startswith("qwen/"):
+        request_body["reasoning_effort"] = "none"
+    body = json.dumps(request_body, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(
         "https://api.groq.com/openai/v1/chat/completions",
         data=body,
@@ -330,26 +345,71 @@ def call_groq(text):
         resp["choices"][0].get("finish_reason"),
     )
 
-def polish(text, depth=0):
-    try:
-        out, fr = call_groq(text)
-    except urllib.error.HTTPError as e:
-        sys.stderr.write(f"polish HTTP {e.code}: {e.read().decode(errors='replace')[:200]}\n")
-        return text  # fallback to raw
-    except Exception as e:
-        sys.stderr.write(f"polish error: {e}\n")
-        return text
-    if fr != "length" or depth >= MAX_DEPTH:
-        return out
-    # 输出被截断：从中点切两半递归处理
+def original(text, reason):
+    sys.stderr.write(f"polish: {reason}; 保留原文\n")
+    return text, False
+
+
+def content_sequence(text):
+    return "".join(char for char in text if char.isalnum())
+
+
+def split_and_polish(text, depth):
     mid = len(text) // 2
-    return polish(text[:mid], depth + 1) + polish(text[mid:], depth + 1)
+    left, left_ok = polish(text[:mid], depth + 1)
+    right, right_ok = polish(text[mid:], depth + 1)
+    return left + right, left_ok and right_ok
+
+
+def polish(text, depth=0):
+    for attempt in range(3):
+        try:
+            out, finish_reason = call_groq(text)
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code == 413 and depth < MAX_DEPTH and len(text) > 1:
+                return split_and_polish(text, depth)
+            if exc.code == 429 and attempt < 2:
+                try:
+                    wait = float(exc.headers.get("Retry-After", "2"))
+                except (TypeError, ValueError):
+                    wait = 2
+                time.sleep(max(0, min(60, wait)))
+                continue
+            return original(text, f"HTTP {exc.code}")
+        except Exception as exc:
+            return original(text, f"请求失败 ({type(exc).__name__})")
+    if not out:
+        return original(text, "模型返回空内容")
+    if finish_reason == "length":
+        if depth < MAX_DEPTH and len(text) > 1:
+            return split_and_polish(text, depth)
+        return original(text, "模型输出被截断")
+    if content_sequence(out) != content_sequence(text):
+        return original(text, "模型改写或丢失正文")
+    return out, True
+
 
 content = open(IN, encoding="utf-8").read().strip()
-result = polish(content)
+pieces = []
+complete = True
+for start in range(0, len(content), INPUT_CHARS):
+    out, ok = polish(content[start:start + INPUT_CHARS])
+    pieces.append(out)
+    complete = complete and ok
+result = "".join(pieces)
 open(OUT, "w", encoding="utf-8").write(result + "\n")
+if not complete:
+    print(f"⚠️ 部分块未润色，已保留原文 ({len(result)} 字)")
+    raise SystemExit(2)
 print(f"✅ ({len(result)} 字)")
 PY
+        then
+            :
+        else
+            POLISH_INCOMPLETE=1
+            echo "⚠️ 润色未全部完成；未处理的正文保留原文"
+        fi
     done
 fi
 
@@ -370,7 +430,11 @@ fi
     echo "时长: ${DURATION_MIN}分${DURATION_SEC}秒"
     echo "转录时间: $(date '+%Y-%m-%d %H:%M')"
     if [ "$POLISH" = "1" ]; then
-        echo "润色: Groq Llama 3.3 70B"
+        if [ "$POLISH_INCOMPLETE" = "1" ]; then
+            echo "润色: ${POLISH_MODEL}（部分未完成，保留原文）"
+        else
+            echo "润色: $POLISH_MODEL"
+        fi
     fi
     echo ""
     echo "---"

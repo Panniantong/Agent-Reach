@@ -116,16 +116,18 @@ curl -s -b /tmp/bili_ck.txt -A "$UA" -e "https://www.bilibili.com/" \
 ### 转录单集播客（可选 --polish 增强标点）
 
 ```bash
-# 输出 Markdown 文件到 /tmp/。--polish 让 Llama 3.3 70B 给文稿补中文标点+合理分段
+# --polish 通过 Groq 模型补中文标点+合理分段，默认 qwen/qwen3.8-27b
 ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh --polish "https://www.xiaoyuzhoufm.com/episode/EPISODE_ID"
 ```
 
-> 转写 prompt 已要求 Whisper 输出中文标点；若标点效果仍不理想，可加 `--polish` 用 Groq 上免费的 Llama 3.3 70B 补标点+合理分段（9 分钟播客约多 ~7 秒）。每次转写多一轮 LLM 调用，按需使用。
+> 转写 prompt 已要求 Whisper 输出中文标点；若仍需补标点，可加 `--polish`。默认 `qwen/qwen3.8-27b` 当前为预览模型，权限、费用和速率限制依账户及服务配置而定；可用 `POLISH_MODEL="你的可用模型"` 显式覆盖。润色会额外调用模型，按需使用。
+>
+> 润色只允许改标点和空白，保留字母、数字和汉字的顺序。API 失败、空响应、截断或正文改写时，未完成的块保留原文；终端显示警告，Markdown 标注“部分未完成，保留原文”。请求和重试均有上限，不能保证满足每个账户的配额。
 
 ### 前置要求
 
 1. **ffmpeg**: `brew install ffmpeg`
-2. **Groq API Key** (免费): https://console.groq.com/keys
+2. **Groq API Key**（模型权限与额度依账户而定）: https://console.groq.com/keys
 3. **配置 Key**: `agent-reach configure groq-key`（隐藏输入）
 4. **首次运行**: `agent-reach install --env=auto --system --channels=xiaoyuzhou`（需用户明确授权）
 
