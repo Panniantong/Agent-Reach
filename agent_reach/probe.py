@@ -13,7 +13,9 @@ Channels use probe_command() inside check() so doctor reports real health,
 not just file existence.
 """
 
+import os
 import shutil
+import signal
 import subprocess
 from dataclasses import dataclass
 from typing import Mapping, Optional, Sequence
@@ -95,14 +97,18 @@ def _run_once(
             subprocess_env.pop(key, None)
         if env:
             subprocess_env.update(env)
-        r = subprocess.run(
-            [path, *args],
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            env=subprocess_env,
-        )
+        command = [path, *args]
+        if os.name == "posix":
+            r = _run_posix_probe(command, timeout=timeout, env=subprocess_env)
+        else:
+            r = subprocess.run(
+                command,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                env=subprocess_env,
+            )
     except FileNotFoundError:
         # which() found it but exec failed: the shebang interpreter is gone
         return ProbeResult("broken", hint=reinstall_hint(package))
@@ -118,3 +124,30 @@ def _run_once(
     if r.returncode != 0:
         return ProbeResult("error", output=output.strip())
     return ProbeResult("ok", output=output.strip())
+
+
+def _run_posix_probe(
+    command: Sequence[str], timeout: int, env: Mapping[str, str]
+) -> subprocess.CompletedProcess[str]:
+    """Stop our entire probe group when a wrapper times out or is interrupted."""
+    with subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        start_new_session=True,
+    ) as process:
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except BaseException:
+            # CLI wrappers can leave their children running after the wrapper
+            # alone is killed. This dedicated group belongs only to this probe,
+            # even if its leader exited while descendants held the output pipes.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            raise
+        return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)

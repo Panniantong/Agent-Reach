@@ -964,6 +964,7 @@ class TestXiaoHongShuChannel:
             return subprocess.CompletedProcess(cmd, 1, "", "ok: false\nerror:\n  code: not_authenticated\n")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr("agent_reach.probe._run_posix_probe", fake_run)
 
         ch = XiaoHongShuChannel()
         status, msg = ch.check()
@@ -992,6 +993,7 @@ class TestXiaoHongShuChannel:
             return subprocess.CompletedProcess(cmd, 0, "ok: true\n", "")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr("agent_reach.probe._run_posix_probe", fake_run)
 
         ch = XiaoHongShuChannel()
         status, msg = ch.check()
@@ -1008,6 +1010,7 @@ class TestXiaoHongShuChannel:
             return subprocess.CompletedProcess(cmd, 0, "ok: true\n", "")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr("agent_reach.probe._run_posix_probe", fake_run)
 
         ch = XiaoHongShuChannel()
         status, msg = ch.check()
@@ -1162,6 +1165,7 @@ class TestXiaoHongShuChannel:
             return subprocess.CompletedProcess(cmd, 0, "ok: true\n", "")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr("agent_reach.probe._run_posix_probe", fake_run)
 
         class _Cfg:
             def get(self, key, default=None):
@@ -1195,6 +1199,7 @@ class TestBilibiliChannel:
             return subprocess.CompletedProcess(cmd, 0, "bili, version 0.6.2", "")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr("agent_reach.probe._run_posix_probe", fake_run)
         from agent_reach.channels.bilibili import BilibiliChannel
         ch = BilibiliChannel()
         status, msg = ch.check()
@@ -1230,6 +1235,7 @@ class TestBilibiliChannel:
             raise FileNotFoundError(cmd[0])
 
         monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr("agent_reach.probe._run_posix_probe", fake_run)
         from agent_reach.channels.bilibili import BilibiliChannel
         ch = BilibiliChannel()
         status, msg = ch.check()
@@ -1249,6 +1255,7 @@ class TestBilibiliChannel:
             raise FileNotFoundError(cmd[0])
 
         monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr("agent_reach.probe._run_posix_probe", fake_run)
         from agent_reach.channels.bilibili import BilibiliChannel
         ch = BilibiliChannel()
         status, msg = ch.check()
@@ -1312,6 +1319,7 @@ class TestYouTubeChannel:
             raise FileNotFoundError(cmd[0])
 
         monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr("agent_reach.probe._run_posix_probe", fake_run)
         from agent_reach.channels.youtube import YouTubeChannel
         ch = YouTubeChannel()
         status, msg = ch.check()
@@ -1331,6 +1339,7 @@ class TestGitHubChannel:
             raise FileNotFoundError(cmd[0])
 
         monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr("agent_reach.probe._run_posix_probe", fake_run)
         from agent_reach.channels.github import GitHubChannel
         ch = GitHubChannel()
         status, msg = ch.check()
@@ -1353,6 +1362,7 @@ class TestGitHubChannel:
             return subprocess.CompletedProcess(cmd, 0, "gh version 2.92.0", "")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr("agent_reach.probe._run_posix_probe", fake_run)
         from agent_reach.channels.github import GitHubChannel
         ch = GitHubChannel()
         status, msg = ch.check()
@@ -1375,6 +1385,7 @@ class TestGitHubChannel:
             return subprocess.CompletedProcess(cmd, 0, "gh version 2.92.0", "")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr("agent_reach.probe._run_posix_probe", fake_run)
         from agent_reach.channels.github import GitHubChannel
         ch = GitHubChannel()
         status, msg = ch.check()
@@ -1399,6 +1410,12 @@ class TestGitHubChannel:
         monkeypatch.setattr(
             subprocess,
             "run",
+            lambda cmd, **kwargs: subprocess.CompletedProcess(
+                cmd, 0, "gh version 2.92.0", ""
+            ),
+        )
+        monkeypatch.setattr(
+            "agent_reach.probe._run_posix_probe",
             lambda cmd, **kwargs: subprocess.CompletedProcess(
                 cmd, 0, "gh version 2.92.0", ""
             ),
@@ -1433,6 +1450,12 @@ class TestGitHubChannel:
         monkeypatch.setattr(
             subprocess,
             "run",
+            lambda cmd, **kwargs: subprocess.CompletedProcess(
+                cmd, 0, "gh version 2.92.0", ""
+            ),
+        )
+        monkeypatch.setattr(
+            "agent_reach.probe._run_posix_probe",
             lambda cmd, **kwargs: subprocess.CompletedProcess(
                 cmd, 0, "gh version 2.92.0", ""
             ),
@@ -1717,6 +1740,7 @@ class TestXiaoyuzhouChannel:
             raise FileNotFoundError(cmd[0])
 
         monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr("agent_reach.probe._run_posix_probe", fake_run)
         from agent_reach.channels.xiaoyuzhou import XiaoyuzhouChannel
         ch = XiaoyuzhouChannel()
         status, msg = ch.check()
@@ -1732,6 +1756,7 @@ class TestXiaoyuzhouChannel:
             return subprocess.CompletedProcess(cmd, 0, "ffmpeg version 7.0", "")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr("agent_reach.probe._run_posix_probe", fake_run)
         monkeypatch.setattr("os.path.isfile", lambda p: True)  # transcribe.sh 已安装
         monkeypatch.setenv("GROQ_API_KEY", "gsk_test")
         from agent_reach.channels.xiaoyuzhou import XiaoyuzhouChannel
