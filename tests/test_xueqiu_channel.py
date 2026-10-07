@@ -38,6 +38,16 @@ def test_strip_html_removes_tags_and_decodes_entities():
     assert _strip_html("   <br/>  padded  ") == "padded"
 
 
+@pytest.mark.parametrize("text,expected", [
+    ("<p>&quot;A&quot; &#39;B&#39;</p>", "\"A\" 'B'"),
+    ("<p>&#20013;&#x6587; &mdash; &#x1F680;</p>", "中文 — 🚀"),
+    ("&amp;lt;b&amp;gt;literal&amp;lt;/b&amp;gt;", "&lt;b&gt;literal&lt;/b&gt;"),
+    ("a&#160;b&#xA0;c", "a b c"),
+])
+def test_strip_html_decodes_named_and_numeric_entities_once(text, expected):
+    assert _strip_html(text) == expected
+
+
 # --- check(): single public endpoint, items present/empty/error ---
 
 def test_check_validates_detail_quote_endpoint():
@@ -280,3 +290,10 @@ def test_get_hot_stocks_empty_when_no_items():
     ch = XueqiuChannel()
     with patch.object(xq, "_get_json", return_value={"data": {}}):
         assert ch.get_hot_stocks() == []
+
+
+def test_get_hot_posts_decodes_entities_before_truncating_text():
+    payload = {"list": [{"data": json.dumps({"text": "<p>" + "&#20013;" * 201 + "</p>"})}]}
+    with patch.object(xq, "_get_json", return_value=payload):
+        posts = XueqiuChannel().get_hot_posts()
+    assert posts[0]["text"] == "中" * 200
