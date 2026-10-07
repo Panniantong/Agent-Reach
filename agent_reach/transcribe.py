@@ -288,6 +288,7 @@ def compress_audio(src: Path, out_dir: Path) -> Path:
     _run(
         [
             "ffmpeg",
+            "-nostdin",
             "-loglevel",
             "error",
             "-y",
@@ -326,6 +327,7 @@ def chunk_audio(src: Path, out_dir: Path, segment_seconds: int = CHUNK_SECONDS) 
     _run(
         [
             "ffmpeg",
+            "-nostdin",
             "-loglevel",
             "error",
             "-y",
