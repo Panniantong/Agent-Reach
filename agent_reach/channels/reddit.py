@@ -9,7 +9,9 @@ users who already hold credentials). Every working backend rides a
 logged-in session: OpenCLI reuses the browser's, rdt-cli imports cookies.
 """
 
+import base64
 import json
+import math
 import shutil
 import time
 from pathlib import Path
@@ -22,10 +24,53 @@ from agent_reach.utils.paths import (
 from .base import Channel
 
 _CREDENTIAL_FILE = "~/.config/rdt-cli/credential.json"
+#: Fallback age limit, used only when the cookie does not state its own expiry.
 _CREDENTIAL_TTL_SECONDS = 7 * 86400
+#: Below this, warn that a re-export is due soon rather than reporting "valid".
+_EXPIRY_WARN_SECONDS = 3 * 86400
 _MAX_CREDENTIAL_BYTES = 1024 * 1024
 # Pinned to the 0.4.2 state — PyPI still only has 0.4.1 (upstream issue #10).
 _RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66"
+
+
+def _session_cookie_expiry(token: object) -> float | None:
+    """Seconds until ``reddit_session`` expires, or None if it does not say.
+
+    ``reddit_session`` is a JWT and its payload carries an ``exp`` claim, so the
+    cookie states when it stops working. The stored ``saved_at`` only says when
+    it was written, and the two are far apart in practice: a session exported
+    months ago can still be valid, while a file written minutes ago can hold a
+    token that expires tomorrow.
+
+    The signature is deliberately not verified. This is the user's own cookie
+    read for a diagnostic, not a credential being authenticated, and the result
+    is only ever used to phrase a doctor message. It must not become an input
+    to an access decision.
+    """
+    if not isinstance(token, str):
+        return None
+    parts = token.split(".")
+    if len(parts) != 3:
+        return None
+    payload = parts[1]
+    payload += "=" * (-len(payload) % 4)
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(payload))
+    except ValueError:
+        # binascii.Error, JSONDecodeError and UnicodeDecodeError are all
+        # ValueError subclasses; a cookie we cannot read is simply one that
+        # does not state an expiry.
+        return None
+    if not isinstance(claims, dict):
+        return None
+    expiry = claims.get("exp")
+    if isinstance(expiry, bool) or not isinstance(expiry, (int, float)):
+        return None
+    if not math.isfinite(expiry):
+        # json.loads accepts NaN and Infinity; neither is an expiry.
+        return None
+    return expiry - time.time()
+
 
 class RedditChannel(Channel):
     name = "reddit"
@@ -122,6 +167,26 @@ class RedditChannel(Channel):
         if not isinstance(cookies, dict) or not cookies.get("reddit_session"):
             return "warn", self._rdt_login_hint()
 
+        # The cookie states its own expiry; the file only records when it was
+        # written. Those answer different questions, and using file age for a
+        # session that is still valid for months sends the user to re-export
+        # something that works.
+        remaining = _session_cookie_expiry(cookies.get("reddit_session"))
+        if remaining is not None:
+            if remaining <= 0:
+                return "warn", (
+                    f"rdt-cli 已安装，但 reddit_session 已于 "
+                    f"{-remaining / 86400:.1f} 天前过期；请用 Cookie-Editor "
+                    f"重新导出。Doctor 不会自动读取浏览器或刷新文件。"
+                )
+            due = "，建议尽快用 Cookie-Editor 重新导出" if remaining < _EXPIRY_WARN_SECONDS else ""
+            return "warn", (
+                f"rdt-cli 已安装，reddit_session 约 {remaining / 86400:.1f} "
+                f"天后过期{due}；Doctor 为避免上游自动刷新浏览器 Cookie，"
+                f"不执行 `rdt status`，因此未实时验证。"
+            )
+
+        # The cookie does not say — fall back to how old the file is.
         saved_at = data.get("saved_at")
         if isinstance(saved_at, (int, float)) and (
             time.time() - saved_at > _CREDENTIAL_TTL_SECONDS
