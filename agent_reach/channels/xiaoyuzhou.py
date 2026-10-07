@@ -61,5 +61,22 @@ class XiaoyuzhouChannel(Channel):
                 "  2. 运行: agent-reach configure groq-key（隐藏输入）"
             )
 
+        # The shipped script invokes all three before it can produce a
+        # transcript. ffmpeg alone can be installed while ffprobe is absent.
+        missing = []
+        for tool, flag in (("ffprobe", "-version"), ("curl", "--version"), ("perl", "-v")):
+            tool_probe = probe_command(tool, [flag], timeout=10)
+            if tool_probe.status == "missing":
+                missing.append(tool)
+            elif not tool_probe.ok:
+                return "error", f"小宇宙转录工具 {tool} 无法执行，请修复该工具后重试"
+        if missing:
+            return "off", (
+                "小宇宙转录还缺少运行工具：" + "、".join(missing) + "。\n"
+                "  ffprobe 随 ffmpeg 安装；curl/perl 可通过系统包管理器安装。\n"
+                "  Ubuntu/Debian: apt install ffmpeg curl perl\n"
+                "  macOS: brew install ffmpeg curl perl"
+            )
+
         self.active_backend = "groq-whisper"
         return "ok", "完整可用（播客下载 + Whisper 转录）"
