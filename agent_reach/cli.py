@@ -68,6 +68,14 @@ def _configure_logging(verbose: bool = False):
 def main():
     _ensure_utf8_console()
 
+    # Unified entry (`<channel> <action>`, `read`, `channels`, `check`) prints
+    # JSON only and runs before the legacy argparse tree.
+    from agent_reach.runtime import cli as unified
+
+    if unified.handles(sys.argv[1:]):
+        _configure_logging(False)
+        sys.exit(unified.main(sys.argv[1:]))
+
     parser = argparse.ArgumentParser(
         prog="agent-reach",
         description="Give your AI Agent eyes to see the entire internet",

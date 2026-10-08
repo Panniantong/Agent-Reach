@@ -2,6 +2,7 @@
 """V2EX — public API channel for topics, nodes, users, and replies."""
 
 import json
+import re
 import shutil
 import ssl
 import subprocess
@@ -9,10 +10,11 @@ import urllib.request
 from typing import Any
 from urllib.parse import quote, urlencode, urlsplit
 
+from agent_reach.runtime.result import BAD_INPUT, NOT_FOUND, ReachError, make_item, unix_to_iso
 from agent_reach.utils.process import utf8_subprocess_env
 from agent_reach.utils.text import scrub_url_credentials
 
-from .base import Channel
+from .base import Action, Channel, Param
 
 _UA = "agent-reach/1.0"
 _TIMEOUT = 10
@@ -137,11 +139,73 @@ def _get_json(url: str) -> Any:
         return _get_json_with_curl(url)
 
 
+_TOPIC_URL_RE = re.compile(r"^(?:https?://)?(?:www\.)?v2ex\.com/t/(\d+)")
+
+
+def _parse_topic_id(target: str) -> int:
+    """Accept a topic id or a https://www.v2ex.com/t/<id> link."""
+    t = str(target).strip()
+    if t.isdigit():
+        return int(t)
+    match = _TOPIC_URL_RE.match(t)
+    if match:
+        return int(match.group(1))
+    raise ReachError(BAD_INPUT, "target must be a V2EX topic link (https://www.v2ex.com/t/<id>) or id")
+
+
+def _topic_item(topic: dict, text: Any = None, raw: Any = None) -> dict:
+    member = topic.get("member") or {}
+    return make_item(
+        title=topic.get("title"),
+        url=topic.get("url"),
+        author=member.get("username"),
+        published_at=unix_to_iso(topic.get("created")),
+        text=topic.get("content") if text is None else text,
+        raw=topic if raw is None else raw,
+    )
+
+
+
 class V2EXChannel(Channel):
     name = "v2ex"
     description = "V2EX 节点、主题与回复"
     backends = ["V2EX API (public)"]
     tier = 0
+
+    level = "default"
+    actions = (
+        Action(
+            "hot",
+            "Today's hot topics",
+            (Param("limit", "max items", required=False, type=int, default=10),),
+            (("v2ex-api", "_api_hot"),),
+            live_test={"limit": 3},
+        ),
+        Action(
+            "node",
+            "Latest topics in a node",
+            (
+                Param("node_name", "node name, e.g. python, programmer, jobs"),
+                Param("limit", "max items", required=False, type=int, default=10),
+            ),
+            (("v2ex-api", "_api_node"),),
+            live_test={"node_name": "python", "limit": 3},
+        ),
+        Action(
+            "read",
+            "Read a topic and its replies",
+            (Param("target", "topic link or id"),),
+            (("v2ex-api", "_api_read"),),
+            live_test={"target": "https://www.v2ex.com/t/1000"},
+        ),
+        Action(
+            "user",
+            "A member's profile",
+            (Param("username", "V2EX username"),),
+            (("v2ex-api", "_api_user"),),
+            live_test={"username": "Livid"},
+        ),
+    )
 
     # ------------------------------------------------------------------ #
     # URL routing
@@ -345,4 +409,47 @@ class V2EXChannel(Channel):
                     "或通过 Exa channel 使用 site:v2ex.com 搜索。"
                 )
             }
+        ]
+
+    # ------------------------------------------------------------------ #
+    # Unified entry backends
+    # ------------------------------------------------------------------ #
+
+    def _api_hot(self, *, limit: int, timeout: float) -> list:
+        data = _get_json("https://www.v2ex.com/api/topics/hot.json")
+        return [_topic_item(t) for t in data[:limit]]
+
+    def _api_node(self, *, node_name: str, limit: int, timeout: float) -> list:
+        data = _get_json(_v2ex_url("/api/topics/show.json", node_name=node_name, page=1))
+        if not isinstance(data, list):
+            raise ReachError(NOT_FOUND, f"V2EX node not found: {node_name}")
+        return [_topic_item(t) for t in data[:limit]]
+
+    def _api_read(self, *, target: str, timeout: float) -> list:
+        topic_id = _parse_topic_id(target)
+        data = _get_json(_v2ex_url("/api/topics/show.json", id=topic_id))
+        topic = data[0] if isinstance(data, list) and data else data
+        if not isinstance(topic, dict) or not topic.get("id"):
+            raise ReachError(NOT_FOUND, f"V2EX topic not found: {topic_id}")
+        replies = _get_json(_v2ex_url("/api/replies/show.json", topic_id=topic_id, page=1))
+        replies = replies if isinstance(replies, list) else []
+        lines = [topic.get("content") or ""]
+        for r in replies:
+            who = (r.get("member") or {}).get("username", "")
+            lines.append(f"\n@{who}: {r.get('content', '')}")
+        return [_topic_item(topic, text="\n".join(lines).strip(), raw={"topic": topic, "replies": replies})]
+
+    def _api_user(self, *, username: str, timeout: float) -> list:
+        data = _get_json(_v2ex_url("/api/members/show.json", username=username))
+        if not isinstance(data, dict) or not data.get("id"):
+            raise ReachError(NOT_FOUND, f"V2EX user not found: {username}")
+        return [
+            make_item(
+                title=data.get("username"),
+                url=data.get("url"),
+                author=data.get("username"),
+                published_at=unix_to_iso(data.get("created")),
+                text=data.get("bio"),
+                raw=data,
+            )
         ]
