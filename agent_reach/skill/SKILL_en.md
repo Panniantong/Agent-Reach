@@ -103,6 +103,8 @@ rdt search "query" --limit 10            # legacy/server
 
 # XiaoHongShu (desktop prefers OpenCLI)
 opencli xiaohongshu search "query" -f yaml
+# Newest notes (confirm support with search --help first)
+opencli xiaohongshu search "query" --sort latest --limit 20 -f yaml
 
 # Facebook / Instagram (desktop OpenCLI, browser session)
 opencli facebook search "query" -f yaml
