@@ -120,6 +120,8 @@ rdt search "query" --limit 10            # 存量/服务器
 
 # 小红书（桌面首选 OpenCLI）
 opencli xiaohongshu search "query" -f yaml
+# 按最新排序（先用 search --help 确认当前后端支持）
+opencli xiaohongshu search "query" --sort latest --limit 20 -f yaml
 
 # Facebook / Instagram（桌面 OpenCLI，复用浏览器登录态）
 opencli facebook search "query" -f yaml

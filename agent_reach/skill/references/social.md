@@ -31,6 +31,37 @@ opencli xiaohongshu user USER_ID -f yaml
 > 如果没有现成会话，不要自动登录；改走后端 B/C，并按对应的
 > Cookie-Editor 手工导出流程配置。
 
+#### 搜索排序（OpenCLI）
+
+要发现较新的笔记，显式使用 `--sort latest`。以下参数已在 OpenCLI 1.8.8 的
+命令帮助中确认；先运行 `opencli xiaohongshu search --help`，检查本机是否支持。
+
+```bash
+# 综合排序（默认）
+opencli xiaohongshu search "query" --sort comprehensive --limit 20 -f yaml
+
+# 最新排序
+opencli xiaohongshu search "query" --sort latest --limit 20 -f yaml
+```
+
+| `--sort` 值 | 小红书排序方式 |
+|------------|----------------|
+| `comprehensive` | 综合（默认） |
+| `latest` | 最新 |
+| `most-liked` | 最多点赞 |
+| `most-commented` | 最多评论 |
+| `most-collected` | 最多收藏 |
+
+排序由上游在小红书搜索页面选择。不要把综合排序取到的少量结果在本地重排，
+再声称完成了全站最新搜索；那样无法找回综合排序漏掉的笔记。
+验收时用同一关键词分别运行综合与最新排序，确认页面选中的排序标签，再检查实际笔记及其来源链接。
+两次结果不同不自动证明排序正确，相同也不自动证明排序失效。
+OpenCLI 的 `published_at` 由笔记 ID 推算，仅作辅助，不能当作核实过的页面发布时间。
+空结果、登录要求、验证码或筛选错误都应明确报告，不能把退出码当成排序成功。
+
+此示例只针对 OpenCLI。MCP 使用下面的 `filters.sort_by`，不要把 `--sort latest` 直接传给 MCP。
+如果本机帮助中没有该选项，报告版本不支持，再按上游升级说明处理。
+
 ### 后端 B：xiaohongshu-mcp（服务器场景）
 
 ```bash
@@ -43,6 +74,9 @@ mcporter call xiaohongshu.check_login_status --timeout 120000
 # 搜索
 mcporter call xiaohongshu.search_feeds keyword="query" --timeout 120000
 
+# 最新排序：filters 是 JSON 对象，sort_by 使用中文枚举
+mcporter call xiaohongshu.search_feeds "keyword=query" 'filters={"sort_by":"最新"}' --timeout 120000
+
 # 笔记详情+评论（feed_id 和 xsec_token 从搜索结果取）
 mcporter call xiaohongshu.get_feed_detail feed_id="..." xsec_token="..." --timeout 120000
 ```
@@ -51,6 +85,28 @@ mcporter call xiaohongshu.get_feed_detail feed_id="..." xsec_token="..." --timeo
 > 认证只走 Cookie-Editor 手工导出；导入后先运行 `check_login_status`。
 > 该显式命令会保存/导入用户提供的 xiaohongshu.com 同域 Cookie 集，用户应
 > 确认范围；非 xiaohongshu.com 域 Cookie 会被忽略。
+
+#### 搜索排序（MCP）
+
+先用 `mcporter list xiaohongshu --schema` 确认 `search_feeds` 的 `filters` 对象支持
+`sort_by`。其值为 `综合`（默认）、`最新`、`最多点赞`、`最多评论`、`最多收藏`。
+引号包住整个 `filters=...` 参数，让 mcporter 解析为 JSON 对象，不能传平铺的
+`sort_by=最新` 或 OpenCLI 的英文枚举。参数结构来自 xiaohongshu-mcp 的
+[工具定义](https://github.com/xpzouying/xiaohongshu-mcp/blob/main/mcp_server.go)。
+
+上面的 JSON 写法适用于 POSIX shell 和 PowerShell 7 的标准原生命令传参。
+Windows PowerShell 5.1（或 PowerShell 7 的 Legacy 传参模式）会移除内部双引号，
+应使用下面的转义写法；不要把这个 Legacy 写法照搬到 POSIX / 标准传参模式：
+
+```powershell
+mcporter call xiaohongshu.search_feeds "keyword=query" 'filters={\"sort_by\":\"最新\"}' --timeout 120000
+```
+
+用户要求“按最新找笔记”时，使用 doctor 选中的后端：OpenCLI 传 `--sort latest`，
+MCP 传 `filters.sort_by=最新`；不要为了排序切换已有可用会话。
+存量 xhs-cli 不在本节的已核验排序范围内，先看本机帮助，不能虚构参数。
+真实验收仍需用户控制的登录环境，核对选中排序及来源页面；schema 和离线测试
+只证明参数与适配器行为，不证明当前网站已成功返回最新笔记。
 
 ### 后端 C：xhs-cli（存量备选，上游 2026-03 起停更）
 
