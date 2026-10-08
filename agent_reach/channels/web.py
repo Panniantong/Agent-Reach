@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Web — any URL via Jina Reader. Always available."""
 
+import urllib.error
 import urllib.request
 
 from agent_reach.utils.url import normalize_public_http_url
@@ -10,6 +11,31 @@ from .base import Channel
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 _MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 _ANTIBOT_SCAN_BYTES = 4096
+_PROBE_TIMEOUT = 3
+
+
+def _probe_jina() -> bool:
+    """Check that Jina Reader is actually reachable right now.
+
+    Any HTTP response — 4xx included — proves DNS, TCP and TLS all work,
+    which is the only thing this check needs to establish.
+
+    Must stay a GET: a HEAD to the root is held open by Cloudflare until the
+    socket times out, which would report a working reader as unreachable.
+    Only one byte is read before the connection is closed.
+    """
+    req = urllib.request.Request(
+        "https://r.jina.ai/",
+        headers={"User-Agent": _UA},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=_PROBE_TIMEOUT) as resp:
+            resp.read(1)
+        return True
+    except urllib.error.HTTPError:
+        return True
+    except Exception:
+        return False
 
 
 def _is_antibot_page(body: bytes) -> bool:
@@ -41,9 +67,16 @@ class WebChannel(Channel):
         return True  # Fallback — handles any URL
 
     def check(self, config=None):
-        # 恒可用兜底渠道：无本地命令、不做网络探测（doctor 已有多个渠道触网），保持零开销
-        self.active_backend = self.backends[0]
-        return "ok", "通过 Jina Reader 读取任意网页（curl https://r.jina.ai/URL）"
+        # Jina Reader 是外部后端，并不恒可用：被墙或无代理时该渠道读不了任何网页，
+        # 此时报 ok 就是假阳性。base.py 要求外部后端必须真实探测后再声明 active。
+        if _probe_jina():
+            self.active_backend = self.backends[0]
+            return "ok", "通过 Jina Reader 读取任意网页（curl https://r.jina.ai/URL）"
+        self.active_backend = None
+        return "warn", (
+            "Jina Reader 不可达（网络受限，可能需要代理）。"
+            "替代方案：改用 Exa 后端读全文，mcporter call exa.web_fetch_exa"
+        )
 
     def read(self, url: str) -> str:
         """通过 Jina Reader 读取网页，返回 Markdown 全文。"""
