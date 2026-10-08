@@ -176,6 +176,12 @@ After the Skill is installed, the Agent will auto-detect whether `agent-reach` C
 > before running `agent-reach install --env=auto --system` or `agent-reach skill --install`.
 > The installed file is always written as `SKILL.md`, so switching languages means rerunning
 > the install command with the new locale and replacing the previously installed skill file.
+
+The same locale setting applies to the human-readable health report:
+
+```bash
+AGENT_REACH_LANG=en agent-reach doctor
+```
 </details>
 
 ---

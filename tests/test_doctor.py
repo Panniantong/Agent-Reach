@@ -101,7 +101,8 @@ class TestDoctor:
                     "tier": 2,
                     "backends": ["mcporter"],
                 },
-            }
+            },
+            language="zh",
         )
 
         # Strip Rich markup tags for assertion (PR #170 added [bold], [yellow] etc.)
@@ -112,6 +113,59 @@ class TestDoctor:
         assert "1/3 个渠道可用" in plain
         # Inactive optional channels should be summarized in one line
         assert "可选渠道可以解锁" in plain
+
+    def test_format_report_uses_english_locale(self, monkeypatch):
+        monkeypatch.setenv("AGENT_REACH_LANG", "en")
+        report = doctor.format_report(
+            {
+                "github": {
+                    "status": "warn",
+                    "name": "GitHub 仓库和代码",
+                    "message": "gh CLI 未安装。安装：https://cli.github.com",
+                    "tier": 0,
+                    "backends": ["gh CLI"],
+                },
+                "youtube": {
+                    "status": "ok",
+                    "name": "YouTube 视频和字幕",
+                    "message": "可提取视频信息和字幕",
+                    "tier": 0,
+                    "backends": ["yt-dlp"],
+                },
+                "exa_search": {
+                    "status": "warn",
+                    "name": "全网语义搜索",
+                    "message": (
+                        "Exa 已写入 mcporter 配置，但 Doctor 未启动远端服务做连通验证，"
+                        "不能仅凭配置宣称可用。"
+                    ),
+                    "tier": 1,
+                    "backends": ["Exa via mcporter"],
+                },
+                "bilibili": {
+                    "status": "ok",
+                    "name": "B站视频、字幕和搜索",
+                    "message": (
+                        "B站搜索 API 可达（仅搜索，curl 直连）。"
+                        "完整功能建议安装 bili-cli：pipx install bilibili-cli"
+                    ),
+                    "tier": 1,
+                    "backends": ["B站搜索 API", "OpenCLI"],
+                    "active_backend": "B站搜索 API",
+                },
+            }
+        )
+
+        import re
+
+        plain = re.sub(r"\[[^\]]*\]", "", report)
+        assert "Agent Reach status" in plain
+        assert "GitHub repositories and code" in plain
+        assert "gh CLI is not installed" in plain
+        assert "Video metadata and subtitles can be extracted" in plain
+        assert "Semantic web search" in plain
+        assert "active backend: Bilibili search API" in plain
+        assert not re.search(r"[\u4e00-\u9fff]", plain)
 
 
 def test_stale_active_backend_does_not_leak_into_errored_result(monkeypatch):
