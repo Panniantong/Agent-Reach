@@ -31,6 +31,20 @@ def test_check_rdt_returns_none_when_not_installed():
         assert RedditChannel()._check_rdt() is None
 
 
+def test_check_rdt_detects_standard_script_when_which_misses(isolated_home):
+    wrapper = isolated_home / ".local" / "bin" / "rdt"
+    wrapper.parent.mkdir(parents=True)
+    wrapper.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+
+    with patch("shutil.which", return_value=None):
+        result = RedditChannel()._check_rdt()
+
+    assert result is not None
+    status, message = result
+    assert status == "warn"
+    assert "Cookie-Editor" in message
+
+
 def test_check_rdt_missing_credential_is_warn():
     with patch("shutil.which", return_value="/usr/local/bin/rdt"):
         status, message = RedditChannel()._check_rdt()
