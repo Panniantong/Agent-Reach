@@ -10,7 +10,13 @@ from argparse import Namespace
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_reach.cli import _cmd_skill, _install_skill, _uninstall_skill
+from agent_reach.cli import (
+    _cmd_skill,
+    _install_skill,
+    _skill_references_dirname,
+    _skill_resource_name,
+    _uninstall_skill,
+)
 
 
 class TestSkillCommand(unittest.TestCase):
@@ -25,6 +31,95 @@ class TestSkillCommand(unittest.TestCase):
 
         self.assertTrue(default_skill.strip())
         self.assertTrue(english_skill.strip())
+
+    def test_english_references_mirror_default_file_set(self):
+        """references_en/ must cover exactly the same files as references/."""
+        skill_dir = importlib.resources.files("agent_reach").joinpath("skill")
+
+        default_names = sorted(
+            entry.name
+            for entry in skill_dir.joinpath("references").iterdir()
+            if entry.name.endswith(".md")
+        )
+        english_names = sorted(
+            entry.name
+            for entry in skill_dir.joinpath("references_en").iterdir()
+            if entry.name.endswith(".md")
+        )
+
+        self.assertEqual(default_names, english_names)
+
+    def test_english_references_carry_identical_commands(self):
+        """Translation must never alter an executable command line."""
+        skill_dir = importlib.resources.files("agent_reach").joinpath("skill")
+
+        def executable_lines(text: str) -> list[str]:
+            lines, inside = [], False
+            for raw in text.splitlines():
+                if raw.strip().startswith("```"):
+                    inside = not inside
+                    continue
+                if not inside:
+                    continue
+                stripped = raw.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                # Drop a trailing inline comment, but only outside quoted text.
+                if "#" in stripped and stripped.count('"') % 2 == 0:
+                    stripped = stripped.split("#")[0].strip()
+                if stripped:
+                    lines.append(stripped)
+            return lines
+
+        for entry in skill_dir.joinpath("references").iterdir():
+            if not entry.name.endswith(".md"):
+                continue
+            english = skill_dir.joinpath("references_en", entry.name)
+            with self.subTest(reference=entry.name):
+                self.assertEqual(
+                    executable_lines(entry.read_text(encoding="utf-8")),
+                    executable_lines(english.read_text(encoding="utf-8")),
+                )
+
+    def test_english_skill_surface_is_free_of_han_characters(self):
+        """The English skill must not fall back to Chinese prose."""
+        skill_dir = importlib.resources.files("agent_reach").joinpath("skill")
+        han = re.compile(r"[\u4e00-\u9fff]")
+
+        english_skill = skill_dir.joinpath("SKILL_en.md").read_text(encoding="utf-8")
+        self.assertFalse(han.findall(english_skill))
+
+        for entry in skill_dir.joinpath("references_en").iterdir():
+            if not entry.name.endswith(".md"):
+                continue
+            prose = [
+                line
+                for line in entry.read_text(encoding="utf-8").splitlines()
+                # Sample queries and printed labels inside code stay as-is.
+                if han.search(line) and not line.strip().startswith(("opencli", "print("))
+            ]
+            with self.subTest(reference=entry.name):
+                self.assertEqual(prose, [])
+
+    def test_locale_selects_matching_references_dir(self):
+        """Locale variables must steer which packaged references dir is used."""
+        cases = [
+            ({"AGENT_REACH_LANG": "en"}, "references_en"),
+            ({"AGENT_REACH_LANG": "en_GB.UTF-8"}, "references_en"),
+            ({"AGENT_REACH_LANG": "", "LANG": "English_United States"}, "references_en"),
+            ({"AGENT_REACH_LANG": "", "LC_ALL": "zh_CN.UTF-8"}, "references"),
+            ({"AGENT_REACH_LANG": "", "LANG": "", "LC_ALL": "", "LC_MESSAGES": ""}, "references"),
+        ]
+        for overrides, expected in cases:
+            env = {"AGENT_REACH_LANG": "", "LC_ALL": "", "LC_MESSAGES": "", "LANG": ""}
+            env.update(overrides)
+            with self.subTest(env=overrides):
+                with patch.dict(os.environ, env, clear=False):
+                    self.assertEqual(_skill_references_dirname(), expected)
+                    self.assertEqual(
+                        _skill_resource_name(),
+                        "SKILL_en.md" if expected == "references_en" else "SKILL.md",
+                    )
 
     def test_exa_reference_uses_default_registered_tools_only(self):
         """Agent instructions must not call Exa tools disabled by default."""
