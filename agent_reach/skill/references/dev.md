@@ -53,6 +53,33 @@ gh issue list --repo owner/repo --json number,title --jq '.[] | "\(.number): \(.
 ```
 
 
+## 评论读取与搜索
+
+GitHub 的 Issue / PR 对话评论与 PR 代码行评论是两类数据。搜索代码不会搜索评论，
+搜索 Issue / PR 评论也不覆盖 GitHub Discussions 或小红书评论。先用 `gh auth status`
+确认 GitHub CLI 认证；私有仓库还需要相应权限。
+
+```bash
+# 搜索一个仓库的 Issue / PR 评论；返回的是匹配的 Issue / PR，不是评论明细
+gh search issues "keyword" --repo OWNER/REPO --include-prs --match comments --limit 20
+
+# 阅读指定 Issue 的对话（包含正文和评论）
+gh issue view NUMBER --repo OWNER/REPO --comments
+
+# 阅读指定 PR 的对话
+gh pr view NUMBER --repo OWNER/REPO --comments
+
+# 获取指定 Issue 或 PR 的对话评论，逐页读取并保留评论原始链接
+gh api --paginate repos/OWNER/REPO/issues/NUMBER/comments --jq '.[] | {id, body, html_url}'
+
+# 获取指定 PR 的代码行评论；与上面的对话评论分开读取
+gh api --paginate repos/OWNER/REPO/pulls/NUMBER/comments --jq '.[] | {id, body, path, line, html_url}'
+```
+
+`gh search issues` 用于发现匹配的讨论；需要定位某一条评论时，再读取该讨论的评论明细，
+按 `body` 筛选并保留 `html_url`。`--limit 20` 是本次返回的讨论数量上限，不能据此声称
+搜索了所有评论。以上路径不写入评论，也不提供小红书全站评论索引。
+
 ## 选择指南
 
 | 工具 | 来源 | 用途 |

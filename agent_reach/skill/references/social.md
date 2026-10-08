@@ -15,8 +15,11 @@ opencli xiaohongshu search "query" -f yaml
 # 读笔记正文+互动数据（用搜索结果里的完整 URL，含 xsec_token）
 opencli xiaohongshu note "NOTE_URL" -f yaml
 
-# 评论（支持楼中楼）
-opencli xiaohongshu comments NOTE_ID -f yaml
+# 读取指定笔记的一级评论（用搜索结果中的完整 URL，保留 xsec_token）
+opencli xiaohongshu comments "NOTE_URL" --limit 20 -f yaml
+
+# 同时展开楼中楼；limit 限制一级评论数量，不代表总回复数
+opencli xiaohongshu comments "NOTE_URL" --limit 20 --with-replies -f yaml
 
 # 首页推荐 feed
 opencli xiaohongshu feed -f yaml
@@ -63,6 +66,34 @@ xhs feed                    # 推荐
 ```
 
 > 已知不稳定：`xhs user` / `xhs user-posts` / `xhs favorites` 可能返回 API error（上游停更无人修）。新装用户建议直接走后端 A/B。
+
+### 评论读取与评论关键词检索
+
+| 任务 | 路径 | 范围 |
+|-----|------|------|
+| 找相关笔记 | `opencli xiaohongshu search "query" -f yaml` | 搜索笔记，不是搜索全站评论 |
+| 读指定笔记的评论 | `opencli xiaohongshu comments "NOTE_URL" --limit 20 -f yaml` | 当前账号可见、实际加载的一级评论 |
+| 读楼中楼回复 | 在上述命令加 `--with-replies` | 展开的回复可能使总条数超过 `--limit` |
+| MCP 读评论 | `xiaohongshu.get_feed_detail`，传搜索结果的 `feed_id` 与 `xsec_token` | 默认最多前 10 条一级评论；更多评论需按本机 schema 配置 `load_all_comments` 与 `limit` |
+| 找评论里的关键词 | 先读指定笔记评论，再按下表筛选实际返回的评论正文 | 仅覆盖已读取的评论，不是小红书全站评论搜索 |
+
+评论结构按后端区分，不要把 OpenCLI 的字段名照搬给 MCP：
+
+| 后端 | 正文字段与楼中楼 |
+|------|------------------|
+| OpenCLI | 筛选每行的 `text`；请求 `--with-replies` 时，回复也是结果行，`is_reply` 与 `reply_to` 标明关系 |
+| xiaohongshu-mcp | 从详情结果的 `comments.list` 读取一级评论的 `content`，递归检查已返回的 `subComments` 中的 `content`；保留 `id`、`noteId` 和父评论关系 |
+
+MCP 需要更多评论或楼中楼时，先核对本机 schema，再显式设置
+`load_all_comments=true`、有限的 `limit`，以及 `click_more_replies=true`。
+`reply_limit` 会跳过回复过多的评论，不能据此声称楼中楼已经全部读完。
+匹配结果保留笔记原始 URL、评论 ID（后端提供时）、作者和父评论关系；不要编造评论直链。
+
+先用 `opencli xiaohongshu comments --help` 或 `mcporter list xiaohongshu --schema`
+确认当前版本的参数。没有返回匹配评论时，应说明查询了哪些笔记、读取了多少条，
+不能推断整个评论区或全站没有该关键词。不要为获得更多结果反复深翻评论。
+
+需要 GitHub Issue / PR 评论检索时，见 [开发工具的评论说明](dev.md#评论读取与搜索)。
 
 ### 通用注意事项
 
