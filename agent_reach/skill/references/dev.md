@@ -5,6 +5,9 @@ GitHub CLI
 ## GitHub (gh CLI)
 
 GitHub 官方命令行工具，用于仓库、Issue、PR、Actions、Release 以及 API 访问。
+安装与命令说明见 [GitHub CLI 官方手册](https://cli.github.com/manual/)。
+运行前确认 `gh --version` 与 `gh auth status`；以下命令需要相应仓库访问权限，
+列出命令不代表当前环境已安装或已完成认证。
 
 ```bash
 # 认证
@@ -55,8 +58,9 @@ gh issue list --repo owner/repo --json number,title --jq '.[] | "\(.number): \(.
 
 ## 选择指南
 
-| 工具 | 来源 | 用途 |
+| 工具 | 官方来源 | 用途 |
 |-----|------|------|
-| gh CLI | agent-reach | Git 操作 |
-| zread | my-mcp-tools | 读仓库内容 |
-| context7 | my-mcp-tools | 查技术文档 |
+| gh CLI | [GitHub CLI](https://cli.github.com/manual/) | GitHub 仓库、代码搜索与协作 |
+
+此处只推荐上文有调用说明的 GitHub CLI。额外的 MCP 工具不随 Agent Reach
+自动提供；只有在用户自行配置并确认工具存在、来源和权限后才能调用。
