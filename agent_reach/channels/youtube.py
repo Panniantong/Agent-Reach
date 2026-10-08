@@ -94,7 +94,9 @@ class YouTubeChannel(Channel):
                     f"yt-dlp 已安装但未配置 JS runtime。运行：\n  {render_ytdlp_fix_command()}"
                 )
         # Surface transcription readiness so `doctor` reports it.
-        msg = "可提取视频信息和字幕"
+        # NOTE: doctor only checks local install here, no live probe,
+        # so do not claim verified extraction (see #729).
+        msg = "yt-dlp 已安装（视频访问与字幕未实时验证）"
         if config is not None:
             providers = []
             if config.is_configured("groq_whisper"):
