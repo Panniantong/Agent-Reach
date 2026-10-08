@@ -4,15 +4,35 @@
 
 **症状：** `agent-reach doctor` 显示雪球 ⚠️，报 `HTTP Error 400`
 
-**原因：** 雪球 API 需要登录 Cookie，无法通过匿名访问获取。
+**判断：** HTTP 400 本身不能证明 Cookie 过期，也不表示股票不存在。
+若结构化响应包含 `error_code=400016`，表示当前会话被拒绝；doctor 会区分
+保存的配置、环境变量和匿名会话，不会自动删除凭据或切换身份。
 
-**解决方案：** 在 Chrome 里登录 xueqiu.com，然后运行：
+**恢复路径：** 若提示当前使用 `config.yaml` 中保存的 `xueqiu_cookie`，并且你
+决定停止使用它，可显式清除这一项：
+
+```bash
+agent-reach configure --unset xueqiu-cookie
+```
+
+该命令保留其他配置，不清除浏览器 Cookie，也不修改环境变量。
+若 `XUEQIU_COOKIE` 仍存在，文件配置删除后它可能成为凭据来源；请在自己
+控制的运行环境中移除或更新它，不要打印或分享变量值。
+已有 Python 进程可能缓存旧会话，因此请在新进程中重新运行 doctor 或实际读取。
+
+清除成功只表示本地配置项已移除，不代表雪球访问已恢复。没有有效凭据时将
+尝试匿名会话，但匿名入口或网络也可能失败；当前首页入口问题的修复见
+[PR #667](https://github.com/Panniantong/Agent-Reach/pull/667)。不要把清除凭据
+当作该入口问题的修复，也不要自动重复登录。
+
+如确实需要登录身份且用户明确同意导入，可使用已有命令：
 
 ```bash
 agent-reach configure --from-browser chrome --platform xueqiu
 ```
 
-再次运行 `agent-reach doctor` 确认恢复 ✅。Cookie 过期后重新运行即可。
+以实际返回非空行情或内容确认恢复；网络失败、其他 HTTP 错误或格式异常应
+分别排查，不能统一归因为 Cookie 过期。
 
 ---
 

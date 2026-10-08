@@ -7,6 +7,7 @@ import re
 import urllib.parse
 import urllib.request
 from typing import Any
+from urllib.error import HTTPError, URLError
 
 from .base import Channel
 
@@ -26,6 +27,46 @@ _opener = urllib.request.build_opener(
     urllib.request.HTTPCookieProcessor(_cookie_jar),
 )
 _cookies_initialized = False
+_cookie_source: str | None = None
+
+
+class XueqiuSessionRejected(RuntimeError):
+    """A structured 400016 response, not proof that a saved cookie expired."""
+
+
+def _session_rejected(payload: Any) -> bool:
+    return isinstance(payload, dict) and payload.get("error_code") in (400016, "400016")
+
+
+def _http_session_rejected(error: HTTPError) -> bool:
+    """Inspect only a small 400 body, without exposing server-provided text."""
+    if error.code != 400:
+        return False
+    try:
+        body = error.read(4097)
+        if len(body) > 4096:
+            return False
+        return _session_rejected(json.loads(body.decode("utf-8")))
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def _session_recovery_message() -> str:
+    message = "雪球拒绝当前会话（error_code=400016），不能仅据此断定 Cookie 已过期。"
+    if _cookie_source == "file":
+        return message + (
+            "当前使用 config.yaml 中保存的 xueqiu_cookie，可能已过期或不被接受。"
+            "如决定停止使用它，请运行：agent-reach configure --unset xueqiu-cookie；"
+            "该命令不清除浏览器 Cookie 或环境变量，请在新进程中重试。"
+        )
+    if _cookie_source == "env":
+        return message + (
+            "当前使用环境变量 XUEQIU_COOKIE，可能已过期或不被接受；"
+            "请在自己控制的运行环境中移除或更新该变量，并在新进程中重试。"
+        )
+    if _cookie_source == "anonymous":
+        return message + "当前匿名会话未被接受，请检查匿名会话获取路径及网络；不要据此删除保存的凭据。"
+    return message + "当前凭据来源未确认，请先检查调用环境；不要自动删除或导入凭据。"
 
 
 def _inject_cookie_string(cookie_str: str) -> None:
@@ -58,6 +99,7 @@ def _inject_cookie_string(cookie_str: str) -> None:
 
 def _load_cookies_from_config(config=None) -> bool:
     """Try to load Xueqiu cookies from agent-reach config file (xueqiu_cookie key)."""
+    global _cookie_source
     try:
         from ..config import Config
 
@@ -66,6 +108,7 @@ def _load_cookies_from_config(config=None) -> bool:
         if not cookie_str:
             return False
         _inject_cookie_string(cookie_str)
+        _cookie_source = "file" if "xueqiu_cookie" in cfg.data else "env"
         return True
     except Exception:
         return False
@@ -79,9 +122,10 @@ def _ensure_cookies(config=None) -> None:
     2. Homepage visit fallback (only yields public session cookies and may not
        be sufficient when Xueqiu requires a logged-in session)
     """
-    global _cookies_initialized
+    global _cookies_initialized, _cookie_source
     if _cookies_initialized:
         return
+    _cookie_source = None
     if _load_cookies_from_config(config):
         _cookies_initialized = True
         return
@@ -89,6 +133,7 @@ def _ensure_cookies(config=None) -> None:
     # This is not sufficient for authenticated APIs but avoids hard failures
     # on public endpoints that only need the session cookie.
     req = urllib.request.Request(_XUEQIU_HOME, headers={"User-Agent": _UA})
+    _cookie_source = "anonymous"
     _opener.open(req, timeout=_TIMEOUT)
     _cookies_initialized = True
 
@@ -99,8 +144,13 @@ def _get_json(url: str, config=None) -> Any:
     req = urllib.request.Request(
         url, headers={"User-Agent": _UA, "Referer": _REFERER}
     )
+    # Leave HTTP errors and their streams untouched for data callers.
+    # Only the health check owns bounded inspection of a rejected response.
     with _opener.open(req, timeout=_TIMEOUT) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        data = json.loads(resp.read().decode("utf-8"))
+    if _session_rejected(data):
+        raise XueqiuSessionRejected("Xueqiu error_code=400016")
+    return data
 
 
 def _strip_html(text: str) -> str:
@@ -143,16 +193,21 @@ class XueqiuChannel(Channel):
                 self.active_backend = self.backends[0]
                 return "ok", "公开 API 可用（行情、搜索、热帖、热股）"
             return "warn", "API 响应异常（返回数据为空）"
-        except Exception as e:
-            from agent_reach.utils.text import scrub_url_credentials
-
-            detail = scrub_url_credentials(e).rstrip(": ")
-            return "warn", (
-                f"Xueqiu API 连接失败：{detail}。"
-                "如需登录 Cookie，请运行：agent-reach configure "
-                "--from-browser chrome --platform xueqiu；"
-                "doctor 不会自动读取浏览器 Cookie。"
-            )
+        except XueqiuSessionRejected:
+            return "warn", _session_recovery_message()
+        except HTTPError as e:
+            try:
+                if _http_session_rejected(e):
+                    return "warn", _session_recovery_message()
+                return "warn", f"Xueqiu API 请求失败（HTTP {e.code}）；没有足够证据判断 Cookie 过期，请检查请求和服务状态。"
+            finally:
+                e.close()
+        except (URLError, TimeoutError, OSError):
+            return "warn", "Xueqiu API 连接失败；请检查网络、代理或服务状态，不能据此判断 Cookie 过期。"
+        except (ValueError, TypeError, AttributeError):
+            return "warn", "Xueqiu API 响应格式异常；不能据此判断 Cookie 过期。"
+        except Exception:
+            return "warn", "Xueqiu API 检查失败；没有足够证据判断 Cookie 过期，doctor 不会修改凭据或读取浏览器 Cookie。"
 
     # ------------------------------------------------------------------ #
     # Data-fetching methods
