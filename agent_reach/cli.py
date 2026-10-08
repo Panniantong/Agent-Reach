@@ -113,6 +113,10 @@ def main():
                         help="What to configure (omit if using --from-browser)")
     p_conf.add_argument("value", nargs="*", help="The value(s) to set")
     p_conf.add_argument(
+        "--unset", choices=["xueqiu-cookie"],
+        help="Remove only the saved Xueqiu cookie from config.yaml (not browser cookies)",
+    )
+    p_conf.add_argument(
         "--stdin",
         dest="read_stdin",
         action="store_true",
@@ -187,7 +191,13 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "configure" and args.from_browser:
+    if args.command == "configure" and args.unset:
+        if (
+            args.key or args.value or args.read_stdin or args.from_browser
+            or args.platform or args.profile or args.sync_legacy_twitter
+        ):
+            p_conf.error("--unset cannot be combined with setting values or browser import options")
+    elif args.command == "configure" and args.from_browser:
         if args.read_stdin:
             p_conf.error("--stdin cannot be combined with --from-browser")
         if not args.platform:
@@ -1422,12 +1432,43 @@ def _read_configure_value(args) -> str:
         raise SystemExit(1) from None
 
 
+def _cmd_unset_xueqiu_cookie():
+    """Remove one explicitly selected saved credential; never probe or import."""
+    import yaml
+
+    from agent_reach.config import Config, ConfigError
+
+    try:
+        config = Config()
+        if "xueqiu_cookie" in config.data:
+            config.delete("xueqiu_cookie")
+            print("Removed saved xueqiu_cookie from config.yaml.")
+        else:
+            print("No saved xueqiu_cookie in config.yaml; no file was changed.")
+    except (ConfigError, OSError, UnicodeError, yaml.YAMLError) as exc:
+        # YAML and OS exceptions can contain credential text. Never echo them.
+        print(
+            f"Could not clear saved xueqiu_cookie ({type(exc).__name__}); "
+            "check configuration access and format before retrying.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1) from None
+
+    if os.environ.get("XUEQIU_COOKIE"):
+        print("Warning: XUEQIU_COOKIE is still set and can supply a cookie; this command does not change it.")
+    print("Browser cookies and running sessions were not changed. Retry in a new process; access is not yet verified.")
+
+
 def _cmd_configure(args):
     """Set a config value and test it, or auto-extract from browser."""
     import shutil
     from typing import cast
 
     from agent_reach.config import Config
+
+    if getattr(args, "unset", None) == "xueqiu-cookie":
+        _cmd_unset_xueqiu_cookie()
+        return
 
     config = Config()
 

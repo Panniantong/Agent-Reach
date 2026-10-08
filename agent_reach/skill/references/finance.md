@@ -9,7 +9,8 @@ agent-reach doctor --json
 ```
 
 `xueqiu.active_backend` 有值时按该后端使用；值为 `null` 只表示 Doctor 没有完成
-实时内容验证。雪球需要已登录会话或最小 Cookie，不能把 HTTP 400 当成股票不存在。
+实时内容验证。登录身份与匿名会话是否可用需要分别验证，不能把 HTTP 400
+当成股票不存在，也不能仅据此判断 Cookie 过期。
 
 ## OpenCLI（桌面已有 Chrome 登录态时优先）
 
@@ -42,5 +43,24 @@ agent-reach configure --from-browser chrome --platform xueqiu
 ## 验收与失败处理
 
 - 以返回股票名称、代码、价格或非空内容列表为成功；退出码 0 但字段为空不算成功。
-- HTTP 400 通常是会话/Cookie 问题，不表示股票代码不存在。
+- `error_code=400016` 表示当前会话被拒绝，不足以单独证明 Cookie 过期；
+  网络错误和其他 HTTP 400 需要分别排查。
 - `whoami` 成功而 `stock`/`hot` 失败时，按适配器解析或平台接口问题报告，不要误诊成未登录。
+
+### 停止使用已保存的 API Cookie
+
+此处只适用于 Agent Reach 的雪球 API 路径，不会修复 OpenCLI 浏览器登录态。
+当 doctor 提示正在使用 `config.yaml` 中保存的 Cookie，且用户明确决定停止
+使用它时，运行：
+
+```bash
+agent-reach configure --unset xueqiu-cookie
+```
+
+只移除 `xueqiu_cookie`，保留其他配置；不清除浏览器 Cookie，不修改环境变量。
+`XUEQIU_COOKIE` 仍设置时可能继续提供凭据，用户应在自己控制的运行环境中
+移除或更新它，不要输出凭据值。已有进程可能缓存旧会话，请在新进程中重试。
+
+清除后会尝试匿名会话，但不保证访问恢复；匿名入口问题与 Cookie 清除是
+两件事，入口修复见 [PR #667](https://github.com/Panniantong/Agent-Reach/pull/667)。
+以实际非空内容验收。不要自动清除凭据、导入浏览器 Cookie或在失败时切换身份。

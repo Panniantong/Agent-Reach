@@ -75,7 +75,12 @@ def test_channel_health_messages_scrub_url_secrets(module, channel, monkeypatch)
 
     assert "user:pass" not in message
     assert "top-secret" not in message
-    assert "***" in message
+    if module is xueqiu_module:
+        # Xueqiu omits unstructured exception text entirely, including non-URL secrets.
+        assert "检查失败" in message
+        assert "proxy.test" not in message
+    else:
+        assert "***" in message
 
 
 def test_browser_backend_errors_scrub_url_secrets(monkeypatch):
