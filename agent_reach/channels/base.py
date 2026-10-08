@@ -23,7 +23,36 @@ Backend routing semantics:
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
+
+
+@dataclass(frozen=True)
+class Param:
+    """One argument of a unified action."""
+
+    name: str
+    help: str
+    required: bool = True
+    type: type = str
+    default: object = None
+
+
+@dataclass(frozen=True)
+class Action:
+    """A unified action (`agent-reach <channel> <action>`).
+
+    `backends` is ordered: (backend label, channel method name). The
+    dispatcher tries them in order and falls back on retryable errors.
+    `live_test` holds params for `agent-reach check`; a backend passes when
+    the call succeeds and returns at least one item.
+    """
+
+    name: str
+    help: str
+    params: Tuple[Param, ...]
+    backends: Tuple[Tuple[str, str], ...]
+    live_test: Optional[Dict[str, object]] = None
 
 
 class Channel(ABC):
@@ -33,6 +62,13 @@ class Channel(ABC):
     description: str = ""             # e.g. "YouTube 视频和字幕"
     backends: List[str] = []          # ordered candidates — backends[0] = preferred
     tier: int = 0                     # 0=zero-config, 1=needs free key, 2=needs setup
+
+    #: Unified-entry tier: "default" / "optional" / "experimental".
+    #: Empty means the channel is not on the unified entry yet. `tier` above
+    #: is the legacy doctor grouping and goes away at cutover.
+    level: str = ""
+    #: Unified actions this channel exposes.
+    actions: Tuple[Action, ...] = ()
 
     #: Backend currently serving this channel; set by check(), None = unavailable.
     active_backend: Optional[str] = None
