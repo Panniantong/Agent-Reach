@@ -151,8 +151,12 @@ def opencli_status(timeout: int = 10) -> OpenCLIStatus:
     daemon_status = _fetch_daemon_status(timeout)
     if daemon_status is not None:
         st.daemon_running = True
+        profiles = daemon_status.get("profiles") or []
         st.extension_connected = bool(
             daemon_status.get("extensionConnected")
+        ) or any(
+            isinstance(profile, dict) and profile.get("extensionConnected")
+            for profile in profiles
         )
 
     if not st.extension_connected:
