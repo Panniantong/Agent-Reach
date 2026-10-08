@@ -280,3 +280,56 @@ def test_get_hot_stocks_empty_when_no_items():
     ch = XueqiuChannel()
     with patch.object(xq, "_get_json", return_value={"data": {}}):
         assert ch.get_hot_stocks() == []
+
+
+def test_get_hot_stocks_clamps_count_to_documented_maximum():
+    ch = XueqiuChannel()
+    captured = {}
+    payload = {"data": {"items": [{"symbol": "SH600519"}] * 60}}
+
+    def fake_get_json(url):
+        captured["url"] = url
+        return payload
+
+    with patch.object(xq, "_get_json", side_effect=fake_get_json):
+        stocks = ch.get_hot_stocks(limit=500)
+
+    assert parse_qs(urlsplit(captured["url"]).query)["size"] == ["50"]
+    assert len(stocks) == 50
+
+
+def test_get_hot_stocks_zero_limit_skips_network():
+    ch = XueqiuChannel()
+    with patch.object(
+        xq,
+        "_get_json",
+        side_effect=AssertionError("zero limit must not make a request"),
+    ):
+        assert ch.get_hot_stocks(limit=0) == []
+
+
+def test_get_hot_stocks_rejects_negative_limit():
+    ch = XueqiuChannel()
+    with patch.object(xq, "_get_json", return_value={"data": {"items": []}}) as mock_get:
+        with pytest.raises(ValueError, match="non-negative"):
+            ch.get_hot_stocks(limit=-1)
+        mock_get.assert_not_called()
+
+
+def test_search_stock_zero_limit_skips_network():
+    ch = XueqiuChannel()
+    with patch.object(
+        xq,
+        "_get_json",
+        side_effect=AssertionError("zero limit must not make a request"),
+    ):
+        assert ch.search_stock("茅台", limit=0) == []
+
+
+def test_search_stock_rejects_negative_limit():
+    ch = XueqiuChannel()
+    with patch.object(xq, "_get_json", return_value={"data": {"stocks": []}}) as mock_get:
+        with pytest.raises(ValueError, match="non-negative"):
+            ch.search_stock("茅台", limit=-1)
+        mock_get.assert_not_called()
+
