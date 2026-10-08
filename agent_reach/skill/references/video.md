@@ -72,6 +72,28 @@ agent-reach transcribe ./local_audio.mp3 -o /tmp/transcript.txt
 
 > ⚠️ **不要用 yt-dlp 读 B站**：B站风控已全面 412 拦截 yt-dlp（实测最新版、直连/代理/带 Cookie 全部无效）。yt-dlp 只用于 YouTube。
 
+### 按能力选择路径
+
+`doctor` 的 `active_backend` 只描述平台级体检结果。即使它是 `bili-cli` 或
+`B站搜索 API`，字幕仍走 OpenCLI；OpenCLI 桥接已连接也不保证目标视频有字幕。
+
+| 所需能力 | 首选 | 同能力备选 / 边界 |
+|---------|------|-----------------|
+| 搜索视频 | `bili search` | `opencli bilibili search` → 下方搜索 API；只返回搜索结果 |
+| 视频详情 | `bili video` | `opencli bilibili video`；搜索摘要不能替代视频详情 |
+| 热门 / 排行 | `bili hot` / `bili rank` | 本文未列出同能力备选；关键词搜索不是热门或排行 |
+| 字幕及时间轴 | `opencli bilibili subtitle` | 本文没有第二条字幕提取路径；搜索 API 和 `bili video` 不返回字幕正文 |
+| 音频 | `bili audio` | 取得实际音频文件后才可转写；搜索结果和元数据不能替代音频 |
+
+按当前环境选择支持所需能力的路径，未安装或没有现成浏览器会话的候选可跳过。
+成功要检查输出是否包含目标内容；空响应、风控页面和仅有元数据均不算字幕成功。
+搜索返回有效的零条结果可如实报告，但 API 错误不能解释成“没有匹配视频”。
+
+字幕无法取得而用户需要视频内容时，可用 `bili audio BVxxx` 下载音频，再把
+实际输出的本地文件交给 `agent-reach transcribe /path/to/audio.wav`。
+这会把音频交给已配置的服务商，沿用上方转写的服务商边界；结果应标明“音频转写”，
+不能声称是原字幕或保留了原字幕时间轴。若没有可用音频/转写配置，说明缺失能力。
+
 ### 视频详情/搜索/热门/排行 (bili-cli，只读无需登录)
 
 ```bash
@@ -100,14 +122,18 @@ opencli bilibili search "query" -f yaml
 opencli bilibili video BVxxx -f yaml
 ```
 
-### 零配置兜底：搜索 API 直连
+### 零配置搜索兜底：搜索 API 直连（仅搜索）
 
 ```bash
 UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 curl -s -c /tmp/bili_ck.txt -o /dev/null -A "$UA" "https://www.bilibili.com/"
-curl -s -b /tmp/bili_ck.txt -A "$UA" -e "https://www.bilibili.com/" \
-  "https://api.bilibili.com/x/web-interface/search/all/v2?keyword=QUERY&page=1"
+curl -s -G -b /tmp/bili_ck.txt -A "$UA" -e "https://www.bilibili.com/" \
+  --data-urlencode "keyword=QUERY" --data-urlencode "page=1" \
+  "https://api.bilibili.com/x/web-interface/search/all/v2"
 ```
+
+检查 JSON 的 `code` 和搜索结果；非零 `code` 是失败。这条路径不提供视频详情、
+评论、字幕或音频，不应作为这些任务的重试步骤。
 
 > **安装 bili-cli**: `pipx install bilibili-cli`（上游 2026-03 起停更但实测健康；只读场景无需登录，`bili login` 扫码可解锁动态/收藏等个人功能）。
 
@@ -142,7 +168,8 @@ agent-reach doctor
 | 场景 | 推荐工具 |
 |-----|---------|
 | YouTube 字幕 | yt-dlp；失败时 OpenCLI（最多 3 次）→ agent-reach transcribe |
-| B站视频详情/搜索 | bili-cli |
-| B站字幕 | opencli bilibili subtitle |
+| B站搜索 | bili-cli → OpenCLI 搜索 → 搜索 API（仅搜索） |
+| B站视频详情 | bili-cli → OpenCLI 视频详情 |
+| B站字幕 | OpenCLI；失败后可用音频转写获取内容，须标明不是原字幕 |
 | 播客转录 | 小宇宙 transcribe.sh |
 | 无字幕音视频 | agent-reach transcribe（B站音频先 `bili audio`） |

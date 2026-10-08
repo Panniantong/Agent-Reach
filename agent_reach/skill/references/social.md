@@ -4,7 +4,18 @@
 
 ## 小红书 / XiaoHongShu（多后端）
 
-小红书有三个后端，**先跑 `agent-reach doctor --json` 看 xiaohongshu 的 `active_backend` 是哪个**，再用对应命令组。
+小红书有三个后端。先跑 `agent-reach doctor --json` 看环境，再按所需能力选择
+命令；`active_backend` 不证明所有命令都可用，未实时验证的候选仅在当前任务需要时只读验证。
+
+| 所需能力 | 本文列出的路径（按环境选择） |
+|---------|---------------------------|
+| 搜索笔记 | OpenCLI `search` / MCP `search_feeds` / xhs-cli `search` |
+| 笔记正文 | OpenCLI `note` / MCP `get_feed_detail` / xhs-cli `read`；换后端时沿用搜索结果的完整 URL / token |
+| 评论 | OpenCLI `comments` / MCP `get_feed_detail` / xhs-cli `comments`；检查是否含所需评论，不能只取正文 |
+| 推荐 feed | OpenCLI `feed` / xhs-cli `feed`；关键词搜索不是推荐 feed |
+| 用户主页公开笔记 | OpenCLI `user`；本文未列出可靠的同能力备选，不用关键词搜索冒充用户笔记列表 |
+
+后端切换不保证评论覆盖范围相同；若楼中楼、分页或正文缺失，报告缺失项。
 
 ### 后端 A：OpenCLI（桌面首选）
 
@@ -119,12 +130,14 @@ twitter search "query" -n 10
 twitter likes
 ```
 
-### search 失败时的重试链（按序执行，成功即停）
+### search 失败时的重试链（按序执行，取得有效搜索响应即停）
 
 1. 直接重试一次（偶发失败常见）：`twitter search "query" -n 10`
 2. 升级后再试：`pipx upgrade twitter-cli && twitter search "query" -n 10`
 3. 换 OpenCLI 备选（桌面，复用浏览器登录态）：`opencli twitter search "query" -f yaml`
-4. 都不行就改用 `twitter feed` / `twitter user-posts @somebody` 等稳定命令绕路
+4. 同能力路径都失败时，说明搜索暂不可用。`twitter feed` / `twitter user-posts`
+   可用于补充当前时间线或已知用户的讨论，但不等价于关键词搜索；标明来源和范围，
+   不把它们报告成搜索结果。不要猜测用户账号来替代全站搜索。
 
 ### 重要注意事项
 
@@ -154,6 +167,9 @@ opencli bilibili subtitle BVxxx
 ```
 
 > 详细命令（音频转写、API 直连兜底）见 [references/video.md](video.md)。
+
+按 [video.md 的能力表](video.md#按能力选择路径) 选择备选：搜索 API 只兜底搜索，
+字幕只走字幕路径；音频转写须明确标注，不能当成原字幕。
 
 ## V2EX (公开 API)
 
@@ -219,6 +235,10 @@ user = ch.get_user("Livid")
 ## Reddit（多后端，必须登录态）
 
 **Reddit 没有零配置路径**：匿名 `.json` 端点已被封（403），官方 API 自 2025-11 起人工审批基本不批。两个后端都靠登录态，先跑 `agent-reach doctor --json` 看 reddit 的 `active_backend`。中国大陆访问需代理。
+
+换后端时匹配同一操作：OpenCLI `search` 对应 `rdt search`，`read` 对应
+`rdt read`，`subreddit` 对应 `rdt sub`。正文与评论应检查实际返回内容及分页范围；
+`popular` / `hot` / `all` 和关键词搜索的内容范围不同，不能互相冒充成功兜底。
 
 ### 后端 A：OpenCLI（桌面首选，复用浏览器登录态）
 

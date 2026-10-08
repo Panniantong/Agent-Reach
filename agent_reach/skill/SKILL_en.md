@@ -11,7 +11,7 @@ description: >
 
   16 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
-  backend serves each platform right now.
+  backend is available for each platform; match it to the requested capability.
 
   NOT for: writing reports/analysis/translation (this skill only FETCHES
   internet content); posting/commenting/liking (write operations); platforms
@@ -29,13 +29,19 @@ these platforms — do not invent your own approach.**
 
 1. **Health-check before acting**: for multi-backend/login-backed platforms (XiaoHongShu /
    Reddit / Bilibili / Twitter / Facebook / Instagram), run `agent-reach doctor --json` first.
-   Use a populated `active_backend`; `active_backend: null` means Doctor deliberately skipped a
-   live probe to avoid browser-cookie reads or remote writes, not that no backend exists. Only when
+   Identify the needed capability (search, body, comments, subtitles, or audio), then select a
+   supporting command from the reference. `active_backend` is a platform-level health result,
+   not proof of every capability or target content: Bilibili's search API cannot fetch subtitles.
+   Prefer it when it supports the requested capability; otherwise use a supporting candidate.
+   For `active_backend: null`, read the diagnostic message: the tool may be missing, or Doctor
+   may have skipped live verification to avoid browser-cookie reads or remote writes. Only when
    the user's task requires that platform, run the reference's read-only command to verify it.
 2. **Announce what you use**: say "using agent-reach, platform X via backend Y"
    before starting.
-3. **On failure, follow the retry chains in references/** — never guess
-   commands.
+3. **On failure, follow same-capability retry chains in references/** — never guess
+   commands. A fallback must support the original operation and content scope. Titles/search
+   snippets cannot replace bodies or subtitles; user search cannot replace post search.
+   If only partial content is available, state what is missing rather than mark the task complete.
 4. **For broad research tasks**: combine platforms (Exa for web search +
    Twitter/Reddit for discussions + XiaoHongShu/Bilibili for Chinese
    perspectives), collect in parallel, then synthesize.
@@ -80,7 +86,7 @@ curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1
 bili search "query" --type video -n 5
 ```
 
-## Login-backed platforms (pick by doctor's active_backend)
+## Login-backed platforms (use doctor and the requested capability)
 
 Twitter boundary: cookies saved by `agent-reach configure twitter-cookies`
 are used only by `doctor` to check whether explicit credentials are present.
@@ -145,7 +151,9 @@ interpreting it as a security check.
 When the routing table lacks a needed platform or command, run `opencli list`,
 then inspect `opencli <platform> --help`. Discovery proves only that an adapter
 exists, not that authentication or target content works. Run read-only commands
-only when the user's task requires that platform, and require non-empty content.
+only when the user's task requires that platform. Reading requires non-empty target
+content; a valid search response with zero matches can be reported as such, but an
+error or empty response is not a zero-result search.
 
 ## Workspace rules
 
