@@ -29,8 +29,12 @@ mcporter call exa.web_search_exa query="library API code example" numResults=5
 
 ## 与其他搜索工具对比
 
-| 工具 | 来源 | 适用场景 |
+| 工具 | 本 Skill 调用说明 | 适用场景 |
 |-----|------|---------|
-| Exa | agent-reach | 英文/技术/代码搜索 |
-| 智谱搜索 | my-mcp-tools | 中文搜索 |
-| GitHub 搜索 | agent-reach (dev.md) | 仓库/代码搜索 |
+| Exa | 本页 mcporter 示例 | 英文/技术/代码搜索 |
+| GitHub 搜索 | [dev.md](dev.md) | 仓库/代码搜索 |
+
+表格只列出本 Skill 已说明调用方式的路径，不代表相关工具已安装或服务已配置。
+使用 Exa 前确认 mcporter 中已注册 Exa 服务；仓库/代码搜索的安装与认证检查见
+[dev.md](dev.md)。其他搜索服务只有在用户自行配置并确认可用后才能使用，
+不能从工具名称推断当前环境拥有该能力。
