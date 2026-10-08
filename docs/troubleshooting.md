@@ -2,17 +2,22 @@
 
 ## 雪球 / Xueqiu: API 返回 400
 
-**症状：** `agent-reach doctor` 显示雪球 ⚠️，报 `HTTP Error 400`
+**症状：** `agent-reach doctor` 显示雪球 ⚠️，报 `HTTP Error 400`（`error_code: 400016`）
 
-**原因：** 雪球 API 需要登录 Cookie，无法通过匿名访问获取。
+**原因：** 行情、搜索、热帖、热股只需要一个**匿名** `xq_a_token`，并不需要登录态。但雪球
+首页 `https://xueqiu.com/` 已不再下发 `xq_a_token`（只下发反 DDoS 的 `acw_tc`），用它取
+cookie 后续调用必然 400016。渠道改为访问 `https://xueqiu.com/hq`，该页仍下发完整的匿名
+token 组（`xq_a_token`/`xqat`/`xq_r_token`/`xq_id_token`）。
 
-**解决方案：** 在 Chrome 里登录 xueqiu.com，然后运行：
+**若升级后仍报 400：** 通常是 `~/.agent-reach/config.yaml` 里存过一个**已过期**的
+`xueqiu_cookie`。配置里的 cookie 优先级高于匿名兜底，注入成功并不代表它仍然有效，过期后
+会持续屏蔽兜底。删掉 `xueqiu_cookie:` 那一行，再运行 `agent-reach doctor` 确认恢复 ✅。
+
+只有在需要登录态专属内容时，才需要显式导入 Cookie：
 
 ```bash
 agent-reach configure --from-browser chrome --platform xueqiu
 ```
-
-再次运行 `agent-reach doctor` 确认恢复 ✅。Cookie 过期后重新运行即可。
 
 ---
 

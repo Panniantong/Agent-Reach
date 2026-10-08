@@ -744,7 +744,12 @@ class TestXueqiuChannel:
         cookie_names = {c.name for c in xq_mod._cookie_jar}
         assert "xq_a_token" in cookie_names
 
-    def test_ensure_cookies_uses_public_homepage_fallback(self, monkeypatch):
+    def test_ensure_cookies_uses_anonymous_token_page_fallback(self, monkeypatch):
+        """The fallback must hit a page that still issues `xq_a_token` (#664).
+
+        `https://xueqiu.com/` only sets the `acw_tc` anti-DDoS cookie now, so
+        every public quote call answered HTTP 400 / `error_code: 400016`.
+        """
         import agent_reach.channels.xueqiu as xueqiu_mod
 
         monkeypatch.setattr(xueqiu_mod, "_cookies_initialized", False)
@@ -765,7 +770,7 @@ class TestXueqiuChannel:
         )
         xueqiu_mod._ensure_cookies()
 
-        assert requested == ["https://xueqiu.com"]
+        assert requested == ["https://xueqiu.com/hq"]
         assert xueqiu_mod._cookies_initialized is True
 
     def test_get_json_sends_referer_and_browser_ua(self, monkeypatch):

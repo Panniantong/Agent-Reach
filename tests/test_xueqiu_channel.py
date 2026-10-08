@@ -109,6 +109,18 @@ def test_check_never_reads_browser_cookie_store_implicitly(monkeypatch):
     assert browser_reads == []
 
 
+# --- backend label: the wrapped endpoints are anonymous (#664) ---
+
+def test_backend_label_does_not_claim_a_login_cookie_is_required():
+    """Quote/search/hot endpoints answer with an anonymous `xq_a_token`.
+
+    The label used to read "Xueqiu API (需要登录 Cookie)", which sent doctor
+    users to `configure --from-browser` for a 400 that a session URL change
+    actually fixes.
+    """
+    assert XueqiuChannel.backends == ["Xueqiu API"]
+
+
 # --- get_stock_quote: field mapping + missing-data fallback ---
 
 def test_get_stock_quote_maps_fields():
