@@ -144,9 +144,13 @@ class Config:
             self.data = {}
             return
 
-        loaded = yaml.safe_load(payload) or {}
+        loaded = yaml.safe_load(payload)
+        if loaded is None:
+            loaded = {}
         if not isinstance(loaded, dict):
             raise ConfigError("配置文件顶层必须是对象")
+        if not all(isinstance(key, str) for key in loaded):
+            raise ConfigError("配置文件的键必须是字符串")
         self.data = loaded
 
     def save(self):
