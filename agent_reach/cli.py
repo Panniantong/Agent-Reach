@@ -615,6 +615,7 @@ def _uninstall_skill():
         )
 
     removed = False
+    cleanup_failed = False
     for skill_path_template, platform_name in skill_dirs:
         skill_path = os.path.expanduser(skill_path_template)
         if os.path.isdir(skill_path):
@@ -626,10 +627,14 @@ def _uninstall_skill():
                 print(f"  Removed {platform_name} skill: {skill_path}")
                 removed = True
             except Exception as e:
+                cleanup_failed = True
                 print(f"  Could not remove {skill_path}: {e}")
 
-    if not removed:
+    if not removed and not cleanup_failed:
         print("  No skill installations found.")
+
+
+    return not cleanup_failed
 
 
 def _cmd_skill(args):
@@ -638,7 +643,8 @@ def _cmd_skill(args):
         if not _install_skill():
             raise SystemExit(1)
     elif args.uninstall:
-        _uninstall_skill()
+        if _uninstall_skill() is False:
+            raise SystemExit(1)
 
 
 def _cmd_format(args):
@@ -1891,6 +1897,7 @@ def _cmd_uninstall(args):
         print()
 
     removed_any = False
+    cleanup_failed = False
     mcporter_cleanup_skipped = False
 
     # ── 1. Config directory (~/.agent-reach/) ──
@@ -1906,6 +1913,7 @@ def _cmd_uninstall(args):
                     print(f"  Removed config directory: {config_dir}")
                     removed_any = True
                 except Exception as e:
+                    cleanup_failed = True
                     print(f"  Could not remove {config_dir}: {e}")
         else:
             print(f"  Config directory not found (already clean): {config_dir}")
@@ -1950,6 +1958,7 @@ def _cmd_uninstall(args):
                     print(f"  Removed {platform_name} skill: {skill_path}")
                     removed_any = True
                 except Exception as e:
+                    cleanup_failed = True
                     print(f"  Could not remove {skill_path}: {e}")
 
     # ── 3. mcporter MCP entries ──
@@ -2001,7 +2010,9 @@ def _cmd_uninstall(args):
         print("Dry run complete. No changes were made.")
         print("Run without --dry-run to actually remove the above.")
     else:
-        if removed_any:
+        if cleanup_failed:
+            print("Agent Reach cleanup incomplete: one or more removals failed.")
+        elif removed_any:
             print("Agent Reach data removed.")
         elif mcporter_cleanup_skipped:
             print("No proven Agent Reach-managed mcporter data was removed.")
@@ -2016,6 +2027,10 @@ def _cmd_uninstall(args):
     print("  npm uninstall -g mcporter")
     print("  pipx uninstall twitter-cli")
     print("  npm uninstall -g undici")
+
+
+    if cleanup_failed:
+        raise SystemExit(1)
 
 
 def _cmd_doctor(args=None):
