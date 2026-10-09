@@ -6,8 +6,10 @@ from types import SimpleNamespace
 import pytest
 
 from agent_reach import cookie_extract
+from agent_reach.channels import hackernews as hackernews_module
 from agent_reach.channels import v2ex as v2ex_module
 from agent_reach.channels import xueqiu as xueqiu_module
+from agent_reach.channels.hackernews import HackerNewsChannel
 from agent_reach.channels.v2ex import V2EXChannel
 from agent_reach.channels.xueqiu import XueqiuChannel
 from agent_reach.utils.text import scrub_url_credentials
@@ -59,6 +61,7 @@ def test_leaves_non_secret_urls_and_plain_text_unchanged():
     ("module", "channel"),
     [
         (v2ex_module, V2EXChannel()),
+        (hackernews_module, HackerNewsChannel()),
         (xueqiu_module, XueqiuChannel()),
     ],
 )
