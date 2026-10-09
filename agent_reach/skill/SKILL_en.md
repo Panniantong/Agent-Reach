@@ -6,10 +6,10 @@ description: >
   web for X", "see what people say about X", "look this up".
 
   Also MUST USE when user mentions any platform or shares any URL/link:
-  Twitter/X, Reddit, Facebook, Instagram, YouTube, GitHub, Bilibili, XiaoHongShu,
+  Twitter/X, Reddit, Facebook, Instagram, TikTok, YouTube, GitHub, Bilibili, XiaoHongShu,
   Xiaoyuzhou Podcast, LinkedIn/Boss直聘/jobs/recruiting, V2EX, Xueqiu (stocks), RSS.
 
-  16 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
+  17 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs).
   Zero config for 6 channels. Run `agent-reach doctor --json` to see which
   backend serves each platform right now.
 
@@ -22,7 +22,7 @@ metadata:
 
 # Agent Reach — internet capability router
 
-16 platforms, multiple backends each. **When this skill exists, use it for
+17 platforms, multiple backends each. **When this skill exists, use it for
 these platforms — do not invent your own approach.**
 
 ## Standing rules (apply for the whole session)
@@ -51,7 +51,7 @@ these platforms — do not invent your own approach.**
 | User intent | Category | Details |
 |---------|------|---------|
 | Web / code search | search | [references/search.md](references/search.md) |
-| XiaoHongShu / Twitter / Bilibili / V2EX / Reddit / Facebook / Instagram | social | [references/social.md](references/social.md) |
+| XiaoHongShu / Twitter / Bilibili / V2EX / Reddit / Facebook / Instagram / TikTok | social | [references/social.md](references/social.md) |
 | Jobs / LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub / code | dev | [references/dev.md](references/dev.md) |
 | Web pages / articles / RSS | web | [references/web.md](references/web.md) |
@@ -78,6 +78,9 @@ curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1
 
 # Bilibili search (bili-cli, no login needed)
 bili search "query" --type video -n 5
+
+# TikTok: read one public video (yt-dlp, no login; occasional anti-bot retry chain in social.md)
+yt-dlp -j --skip-download "https://www.tiktok.com/@user/video/1234567890"
 ```
 
 ## Login-backed platforms (pick by doctor's active_backend)
@@ -109,6 +112,10 @@ opencli facebook search "query" -f yaml
 opencli facebook groups -f yaml
 opencli instagram search "query" -f yaml       # user search
 opencli instagram user USERNAME -f yaml        # recent posts from one user
+
+# TikTok search/profile (desktop OpenCLI, browser session; no zero-config search path)
+opencli tiktok search "query" -f yaml
+opencli tiktok user USERNAME -f yaml
 ```
 
 ## Environment check
@@ -159,7 +166,7 @@ common cases; references hold per-backend command groups, caveats, retry
 chains — note: reference docs are written in Chinese, commands are universal):
 
 - [Search](references/search.md) — Exa AI search
-- [Social](references/social.md) — XiaoHongShu, Twitter, Bilibili, V2EX, Reddit, Facebook, Instagram (multi-backend/login-backed groups)
+- [Social](references/social.md) — XiaoHongShu, Twitter, Bilibili, V2EX, Reddit, Facebook, Instagram, TikTok (multi-backend/login-backed groups)
 - [Career](references/career.md) — LinkedIn
 - [Dev](references/dev.md) — GitHub CLI
 - [Web](references/web.md) — Jina Reader, RSS

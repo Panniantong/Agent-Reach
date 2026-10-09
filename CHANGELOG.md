@@ -30,6 +30,16 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Features / 新增
 
+#### 🎵 TikTok channel
+
+- 新增 `tiktok` channel：`backends = ["yt-dlp", "OpenCLI"]`，两段式能力——
+  读单条公开视频零配置（yt-dlp 内置提取器，无需登录），搜索/用户主页/关注列表
+  需 OpenCLI（浏览器登录态，jackwener/opencli 的 tiktok 适配器）。
+- yt-dlp 侧沿用 YouTube 渠道同款 `probe_command` 真探活；已知 TikTok 反爬偶发
+  返回 JS 挑战页（yt-dlp/yt-dlp#15418），文档标注为「重试/换网络可恢复」，
+  区别于 Bilibili 那种已验证的永久 412 封锁，因此 yt-dlp 予以保留而非移除。
+- Skill 路由表、`references/social.md`、README 平台表和后端选型表同步更新。
+
 #### 🎯 Boss直聘 channel
 
 - 新增 `boss` channel：经 boss-agent-cli + CDP 真 Chrome 搜岗位、取 JD 全文。

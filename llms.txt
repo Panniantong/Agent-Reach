@@ -14,8 +14,8 @@
 
 ## Key Features
 
-- Read any URL: tweets, Reddit posts, Facebook pages/feed/groups, Instagram profiles/posts, YouTube videos (transcripts), GitHub repos, articles, XiaoHongShu notes, Bilibili videos, RSS feeds
-- Search/discover across platforms: Twitter/X, Reddit, Facebook, Instagram user search, GitHub, YouTube, Bilibili, XiaoHongShu, LinkedIn, V2EX, Xueqiu, Web (via Exa)
+- Read any URL: tweets, Reddit posts, Facebook pages/feed/groups, Instagram profiles/posts, TikTok videos, YouTube videos (transcripts), GitHub repos, articles, XiaoHongShu notes, Bilibili videos, RSS feeds
+- Search/discover across platforms: Twitter/X, Reddit, Facebook, Instagram user search, TikTok (login-backed search/profile), GitHub, YouTube, Bilibili, XiaoHongShu, LinkedIn, V2EX, Xueqiu, Web (via Exa)
 - Self-diagnosis: `agent-reach doctor` checks what works and what needs setup
 - Auto-installs dependencies: `agent-reach install --env=auto`
 - Browser-session / cookie auth for platforms that require login (Twitter, Reddit, Facebook, Instagram, XiaoHongShu, Xueqiu)

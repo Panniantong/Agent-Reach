@@ -1,6 +1,6 @@
 # 社交媒体 & 社区
 
-小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram。
+小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram、TikTok。
 
 ## 小红书 / XiaoHongShu（多后端）
 
@@ -299,3 +299,40 @@ opencli instagram saved --limit 20 -f yaml
 ```
 
 > 要求 Chrome 打开且装了 OpenCLI 扩展，并已登录 instagram.com。`instagram search` 是用户搜索；读帖子需要先确定 username，再用 `instagram user USERNAME`。若出现 429 / login required，先让用户在 Chrome 里重新登录并降低频率。
+
+## TikTok（yt-dlp 零配置读取 + OpenCLI 搜索/主页需登录）
+
+TikTok 是两层能力：读一条公开视频不需要任何配置（yt-dlp 内置提取器）；搜索、用户主页、关注列表等需要登录态（OpenCLI）。先跑 `agent-reach doctor --json` 看 tiktok 的 `active_backend`。
+
+### 读单条公开视频（yt-dlp，零配置）
+
+```bash
+# 完整链接
+yt-dlp --write-sub --write-auto-sub --skip-download -o "/tmp/%(id)s" "https://www.tiktok.com/@user/video/1234567890"
+
+# 短链接（vm./vt.tiktok.com）会自动跟随重定向
+yt-dlp "https://vm.tiktok.com/XXXXXXX/"
+
+# 只要 JSON 元数据（标题、作者、字幕轨列表等），不下载视频本体
+yt-dlp -j --skip-download "URL"
+```
+
+> 公开视频无需登录、无需 Cookie。TikTok 反爬偶发返回 "Unable to extract webpage video data"（JS 挑战页），属已知上游问题（yt-dlp/yt-dlp#15418）：先直接重试一次，仍失败再换网络/地区重试。不要为绕过这个偶发问题去传登录 Cookie。
+
+### 搜索 / 主页 / 关注列表（OpenCLI，必须登录态）
+
+```bash
+# 搜索
+opencli tiktok search "query" -f yaml
+
+# 用户主页信息
+opencli tiktok profile USERNAME -f yaml
+
+# 用户视频列表
+opencli tiktok user USERNAME -f yaml
+
+# Explore / 推荐
+opencli tiktok explore -f yaml
+```
+
+> 要求 Chrome 打开且装了 OpenCLI 扩展，并已登录 tiktok.com。TikTok 没有零配置搜索路径——匿名接口不对外开放，只能走登录态。
