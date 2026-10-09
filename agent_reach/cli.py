@@ -505,20 +505,16 @@ def _install_skill(force: bool = True):
             return skill_pkg.joinpath("SKILL.md").read_text(encoding="utf-8")
 
     def _copy_skill_dir(target: str) -> str | None:
-        """Copy entire skill directory (locale-specific SKILL.md + references/)."""
+        """Prepare the full replacement before retiring an existing skill."""
+        import tempfile
+
+        staged = None
+        backup = None
+        committed = False
         try:
             if not force and os.path.exists(os.path.join(target, "SKILL.md")):
                 return "preserved"
 
-            # Clear existing installation. A symlinked skill dir (dotfiles
-            # setups) breaks shutil.rmtree — unlink the link itself instead.
-            if os.path.islink(target):
-                os.unlink(target)
-            elif os.path.exists(target):
-                shutil.rmtree(target)
-            os.makedirs(target, exist_ok=True)
-
-            # Get skill directory from package (with fallback for editable installs)
             try:
                 skill_pkg = importlib.resources.files("agent_reach").joinpath("skill")
                 skill_md = _read_skill_markdown(skill_pkg)
@@ -527,26 +523,57 @@ def _install_skill(force: bool = True):
                 skill_pkg = Path(__file__).resolve().parent / "skill"
                 skill_md = _read_skill_markdown(skill_pkg)
 
-            # Copy SKILL.md using the selected locale file
-            with open(os.path.join(target, "SKILL.md"), "w", encoding="utf-8") as f:
-                f.write(skill_md)
-
-            # Copy references/ directory
-            refs_pkg = skill_pkg.joinpath("references")
-            refs_target = os.path.join(target, "references")
-            os.makedirs(refs_target, exist_ok=True)
-
-            for ref_file in refs_pkg.iterdir():
-                name = ref_file.name if hasattr(ref_file, 'name') else str(ref_file).split('/')[-1]
+            # All package reads and new-file writes happen away from the live
+            # installation. Failed decoding or a full disk leaves it usable.
+            parent = os.path.dirname(target)
+            staged = tempfile.mkdtemp(prefix=".agent-reach-stage-", dir=parent)
+            with open(os.path.join(staged, "SKILL.md"), "w", encoding="utf-8") as handle:
+                handle.write(skill_md)
+            refs_target = os.path.join(staged, "references")
+            os.makedirs(refs_target)
+            for ref_file in skill_pkg.joinpath("references").iterdir():
+                name = ref_file.name
                 if name.endswith(".md"):
-                    content = ref_file.read_text(encoding="utf-8") if hasattr(ref_file, 'read_text') else ref_file.read_text()
-                    with open(os.path.join(refs_target, name), "w", encoding="utf-8") as f:
-                        f.write(content)
+                    content = ref_file.read_text(encoding="utf-8")
+                    with open(os.path.join(refs_target, name), "w", encoding="utf-8") as handle:
+                        handle.write(content)
 
+            if os.path.lexists(target):
+                if not os.path.isdir(target) and not os.path.islink(target):
+                    raise FileExistsError(f"Skill destination is not a directory: {target}")
+                backup = tempfile.mkdtemp(prefix=".agent-reach-old-", dir=parent)
+                os.rmdir(backup)
+                os.replace(target, backup)
+            try:
+                os.replace(staged, target)
+                staged = None
+                committed = True
+            except OSError:
+                if backup is not None:
+                    try:
+                        os.replace(backup, target)
+                        backup = None
+                    except OSError as restore_error:
+                        print(
+                            "  Warning: Could not restore previous skill; "
+                            f"backup remains at {backup}: {restore_error}"
+                        )
+                raise
             return "installed"
         except Exception as e:
             print(f"  Warning: Could not install skill: {e}")
             return None
+        finally:
+            if staged is not None:
+                shutil.rmtree(staged, ignore_errors=True)
+            if committed and backup is not None:
+                try:
+                    if os.path.islink(backup):
+                        os.unlink(backup)
+                    else:
+                        shutil.rmtree(backup)
+                except OSError:
+                    print(f"  Warning: Previous skill backup remains at {backup}")
 
     # Install into every known skill root that already exists.
     skill_dirs = [
