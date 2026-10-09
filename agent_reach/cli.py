@@ -617,7 +617,7 @@ def _uninstall_skill():
     removed = False
     for skill_path_template, platform_name in skill_dirs:
         skill_path = os.path.expanduser(skill_path_template)
-        if os.path.isdir(skill_path):
+        if os.path.isdir(skill_path) or os.path.islink(skill_path):
             try:
                 if os.path.islink(skill_path):
                     os.unlink(skill_path)
@@ -1936,9 +1936,16 @@ def _cmd_uninstall(args):
         ("~/.agents/skills/agent-reach", "Agent"),
     ]
 
+    openclaw_home = os.environ.get("OPENCLAW_HOME")
+    if openclaw_home:
+        skill_dirs.insert(
+            0,
+            (os.path.join(openclaw_home, ".openclaw", "skills", "agent-reach"), "OpenClaw"),
+        )
+
     for skill_path_template, platform_name in skill_dirs:
         skill_path = os.path.expanduser(skill_path_template)
-        if os.path.isdir(skill_path):
+        if os.path.isdir(skill_path) or os.path.islink(skill_path):
             if dry_run:
                 print(f"[dry-run] Would remove {platform_name} skill: {skill_path}")
             else:
