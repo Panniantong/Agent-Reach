@@ -319,6 +319,7 @@ def test_real_doctor_path_is_zero_write_and_never_runs_risky_status_commands(
         "reddit",
         "facebook",
         "instagram",
+        "threads",
         "xiaohongshu",
     ):
         assert payload[channel_name]["status"] == "warn"

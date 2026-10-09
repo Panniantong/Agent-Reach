@@ -30,6 +30,13 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Features / 新增
 
+#### 🧵 Threads 渠道（OpenCLI 后端）
+
+- 新增 `threads` 渠道：识别 `threads.com` / `threads.net` 链接，`agent-reach install --channels threads`
+  路由到 OpenCLI（仅桌面），doctor 与 Facebook / Instagram 一致。
+- SKILL 与 `references/social.md` 补充 `opencli threads search/post/user` 命令组。
+- 需要 OpenCLI 包含 Threads 适配器（jackwener/OpenCLI#2565）。
+
 #### 🎯 Boss直聘 channel
 
 - 新增 `boss` channel：经 boss-agent-cli + CDP 真 Chrome 搜岗位、取 JD 全文。

@@ -13,6 +13,7 @@ from agent_reach.channels import get_all_channels, get_channel
 from agent_reach.channels.bilibili import BilibiliChannel
 from agent_reach.channels.facebook import FacebookChannel
 from agent_reach.channels.instagram import InstagramChannel
+from agent_reach.channels.threads import ThreadsChannel
 from agent_reach.channels.v2ex import V2EXChannel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
 from agent_reach.channels.xueqiu import XueqiuChannel
@@ -35,6 +36,7 @@ class TestChannelRegistry:
         assert "twitter" in names
         assert "facebook" in names
         assert "instagram" in names
+        assert "threads" in names
         assert "v2ex" in names
 
 
@@ -53,6 +55,14 @@ class TestOpenCLISiteChannels:
         assert ch.can_handle("https://instagram.com/p/abc123/")
         assert ch.can_handle("https://instagr.am/p/abc123/")
         assert not ch.can_handle("https://facebook.com/openai")
+
+    def test_threads_can_handle_common_urls(self):
+        ch = ThreadsChannel()
+        assert ch.can_handle("https://www.threads.com/@zuck/post/Dd8ZIkwiNKQ")
+        assert ch.can_handle("https://threads.net/@zuck")
+        assert ch.can_handle("https://www.threads.net/search?q=coffee")
+        assert not ch.can_handle("https://instagram.com/zuck")
+        assert not ch.can_handle("https://example.com/threads.com")
 
     def test_opencli_bridge_ready_is_unverified_for_login_platform(
         self, monkeypatch
@@ -79,6 +89,13 @@ class TestOpenCLISiteChannels:
         assert instagram.active_backend is None
         assert "桥接已连接" in msg
         assert "instagram.com" in msg
+
+        threads = ThreadsChannel()
+        status, msg = threads.check()
+        assert status == "warn"
+        assert threads.active_backend is None
+        assert "桥接已连接" in msg
+        assert "threads.com" in msg
 
     def test_opencli_missing_reports_off(self, monkeypatch):
         monkeypatch.setattr(

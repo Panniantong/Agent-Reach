@@ -8,6 +8,7 @@ from agent_reach.channels.github import GitHubChannel
 from agent_reach.channels.instagram import InstagramChannel
 from agent_reach.channels.linkedin import LinkedInChannel
 from agent_reach.channels.reddit import RedditChannel
+from agent_reach.channels.threads import ThreadsChannel
 from agent_reach.channels.twitter import TwitterChannel
 from agent_reach.channels.v2ex import V2EXChannel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
@@ -96,6 +97,11 @@ def test_credential_channels_reject_lookalikes_and_userinfo(channel, malicious_u
             "https://www.instagram.com/example",
             "https://instagram.com:443/example",
         ),
+        (
+            ThreadsChannel(),
+            "https://www.threads.com/@example",
+            "https://threads.net:443/@example",
+        ),
     ],
 )
 def test_fixed_domain_channels_accept_subdomains_and_explicit_ports(
@@ -116,6 +122,7 @@ def test_fixed_domain_channels_accept_subdomains_and_explicit_ports(
         (XiaoyuzhouChannel(), "xiaoyuzhoufm.com"),
         (FacebookChannel(), "facebook.com"),
         (InstagramChannel(), "instagram.com"),
+        (ThreadsChannel(), "threads.com"),
     ],
 )
 def test_fixed_domain_channels_reject_suffix_lookalikes_and_userinfo(

@@ -1,6 +1,6 @@
 # 社交媒体 & 社区
 
-小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram。
+小红书、Twitter/X、B站、V2EX、Reddit、Facebook、Instagram、Threads。
 
 ## 小红书 / XiaoHongShu（多后端）
 
@@ -299,3 +299,21 @@ opencli instagram saved --limit 20 -f yaml
 ```
 
 > 要求 Chrome 打开且装了 OpenCLI 扩展，并已登录 instagram.com。`instagram search` 是用户搜索；读帖子需要先确定 username，再用 `instagram user USERNAME`。若出现 429 / login required，先让用户在 Chrome 里重新登录并降低频率。
+
+## Threads（OpenCLI，必须登录态）
+
+Threads 走 OpenCLI，复用用户 Chrome 里的 threads.com 登录态（用 Instagram 账号登录）。需要 OpenCLI 包含 `threads` 适配器（`opencli threads --help` 能列出 search/post/user）。
+
+```bash
+# 搜索帖子（默认热门，--sort recent 看最新）
+opencli threads search "query" --limit 20 -f yaml
+opencli threads search "query" --sort recent --limit 20 -f yaml
+
+# 读帖子正文 + 回复（完整 URL 或 shortcode，threads.net 链接也可以）
+opencli threads post "https://www.threads.com/@user/post/CODE" --limit 30 -f yaml
+
+# 用户最近帖子（--replies 连同其回复）
+opencli threads user USERNAME --limit 20 -f yaml
+```
+
+> 未登录时 Threads 只渲染少量帖子，命令会返回 `AUTH_REQUIRED`，先让用户在 Chrome 里登录 threads.com。命令会慢速滚动加载，`--limit` 越大越慢；不要短时间内高频连续调用，容易被限流。
