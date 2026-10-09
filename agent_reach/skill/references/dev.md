@@ -12,8 +12,10 @@ gh auth login
 gh auth status
 
 # 搜索
-gh search repos "query" --sort stars --limit 10
-gh search code "query" --language python
+# repos 搜索不要加引号：引号是精确短语匹配，多词查询会静默返回 0 条结果
+gh search repos query terms --sort stars --limit 10
+# code 搜索的引号是有意义的，匹配连续的精确字符串（如函数签名）
+gh search code "def transcribe_audio" --language python
 
 # 仓库
 gh repo view owner/repo
