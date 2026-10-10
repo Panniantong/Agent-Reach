@@ -31,6 +31,7 @@ _BOSS_AGENT_CLI_SOURCE = (
 _MAX_CONFIGURE_VALUE_CHARS = 1024 * 1024
 _SENSITIVE_CONFIG_KEYS = {
     "proxy",
+    "exa-key",
     "github-token",
     "groq-key",
     "openai-key",
@@ -107,7 +108,7 @@ def main():
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
     p_conf.add_argument("key", nargs="?", default=None,
-                        choices=["proxy", "github-token", "groq-key", "openai-key",
+                        choices=["proxy", "exa-key", "github-token", "groq-key", "openai-key",
                                  "twitter-cookies", "youtube-cookies",
                                  "xhs-cookies"],
                         help="What to configure (omit if using --from-browser)")
@@ -1397,6 +1398,13 @@ def _read_configure_value(args) -> str:
         return value.rstrip("\r\n")
 
     if values:
+        if getattr(args, "key", None) == "exa-key":
+            print(
+                "Exa API keys cannot be passed as positional arguments; "
+                "omit the value for a hidden prompt or use --stdin.",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
         if getattr(args, "key", None) in _SENSITIVE_CONFIG_KEYS:
             print(
                 "Warning: positional secrets are deprecated because shell history "
@@ -1575,6 +1583,10 @@ def _cmd_configure(args):
     elif args.key == "github-token":
         config.set("github_token", value)
         print("✅ GitHub token configured!")
+
+    elif args.key == "exa-key":
+        config.set("exa_api_key", value)
+        print("✅ Exa API key configured (not live-probed).")
 
     elif args.key == "groq-key":
         config.set("groq_api_key", value)

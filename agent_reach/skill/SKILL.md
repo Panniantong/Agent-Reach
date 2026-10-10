@@ -58,7 +58,9 @@ metadata:
 ## 零配置快速命令
 
 ```bash
-# Exa 网页搜索
+# Exa 网页搜索：Doctor 提示 REST Key 已配置时使用直连
+agent-reach-exa search "query" --num-results 5
+# 未配置个人 Key 时保留免 Key MCP 路径
 mcporter call exa.web_search_exa query="query" numResults=5
 
 # 通用网页阅读

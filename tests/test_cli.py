@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for Agent Reach CLI."""
 
+import io
 import shutil
 import subprocess
 from argparse import Namespace
@@ -15,6 +16,50 @@ from agent_reach.config import Config
 
 
 class TestCLI:
+    def test_configure_exa_key_reads_stdin_without_echoing_secret(
+        self, monkeypatch, tmp_path, capsys
+    ):
+        config_dir = tmp_path / ".agent-reach"
+        config_file = config_dir / "config.yaml"
+        monkeypatch.setattr(Config, "CONFIG_DIR", config_dir)
+        monkeypatch.setattr(Config, "CONFIG_FILE", config_file)
+        monkeypatch.setattr(cli.sys, "stdin", io.StringIO("opaque-test-key\n"))
+
+        cli._cmd_configure(
+            Namespace(
+                from_browser=None,
+                key="exa-key",
+                value=[],
+                read_stdin=True,
+            )
+        )
+
+        output = capsys.readouterr().out
+        assert "opaque-test-key" not in output
+        assert "not live-probed" in output
+        assert Config(config_path=config_file).get("exa_api_key") == "opaque-test-key"
+
+    def test_configure_exa_key_rejects_positional_secret(
+        self, monkeypatch, tmp_path, capsys
+    ):
+        config_dir = tmp_path / ".agent-reach"
+        monkeypatch.setattr(Config, "CONFIG_DIR", config_dir)
+        monkeypatch.setattr(Config, "CONFIG_FILE", config_dir / "config.yaml")
+        with pytest.raises(SystemExit) as raised:
+            cli._cmd_configure(
+                Namespace(
+                    from_browser=None,
+                    key="exa-key",
+                    value=["opaque-test-key"],
+                    read_stdin=False,
+                )
+            )
+        assert raised.value.code == 2
+        output = capsys.readouterr()
+        assert "opaque-test-key" not in output.out
+        assert "opaque-test-key" not in output.err
+        assert "cannot be passed as positional arguments" in output.err
+
     def test_version(self, capsys):
         with pytest.raises(SystemExit) as exc_info:
             with patch("sys.argv", ["agent-reach", "version"]):

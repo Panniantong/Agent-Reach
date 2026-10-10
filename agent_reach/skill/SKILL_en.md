@@ -61,7 +61,9 @@ these platforms — do not invent your own approach.**
 ## Zero-config quick commands
 
 ```bash
-# Exa web search
+# Exa web search: use direct REST when Doctor reports a configured REST key
+agent-reach-exa search "query" --num-results 5
+# Keep the no-key MCP path when no personal key is configured
 mcporter call exa.web_search_exa query="query" numResults=5
 
 # Read any web page

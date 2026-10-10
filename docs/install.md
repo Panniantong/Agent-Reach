@@ -401,6 +401,7 @@ If the user wants a different agent to handle it, let them choose.
 | `agent-reach check-update` | Check for new versions |
 | `agent-reach configure twitter-cookies` | 通过隐藏输入保存 Twitter Cookie；直接调用仍需显式环境变量 |
 | `agent-reach configure proxy` | 通过隐藏输入保存代理地址；不是自动解锁开关 |
+| `agent-reach configure exa-key` | 通过隐藏输入配置可选的 Exa REST 直连 Key |
 | `agent-reach configure groq-key` | 通过隐藏输入配置小宇宙转录 Key |
 
 After installation, use upstream tools directly. See SKILL.md for the full command reference:
@@ -415,7 +416,7 @@ After installation, use upstream tools directly. See SKILL.md for the full comma
 | Instagram | `opencli` | `opencli instagram user nasa -f yaml` |
 | GitHub | `gh` | `gh search repos "query"` |
 | Web | `curl` + Jina | `curl -s "https://r.jina.ai/URL"` |
-| Exa Search | `mcporter` | `mcporter call exa.web_search_exa query="..." numResults=5` |
+| Exa Search | `agent-reach-exa`（个人 Key）或 `mcporter`（免 Key） | `agent-reach-exa search "..." --num-results 5` / `mcporter call exa.web_search_exa query="..." numResults=5` |
 | 小红书 | `opencli`（服务器 `mcporter`） | `opencli xiaohongshu search "query" -f yaml` |
 | 小宇宙播客 | `transcribe.sh` | `bash ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh <URL>` |
 | LinkedIn | `mcporter` | `mcporter call linkedin.get_person_profile linkedin_username="..."` |

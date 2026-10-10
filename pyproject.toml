@@ -51,6 +51,7 @@ dev = [
 
 [project.scripts]
 agent-reach = "agent_reach.cli:main"
+agent-reach-exa = "agent_reach.exa_api:main"
 
 [project.urls]
 Homepage = "https://github.com/Panniantong/agent-reach"
