@@ -269,13 +269,14 @@ def _cmd_install(args):
 
     safe_mode = getattr(args, "safe", False) or not getattr(args, "system", False)
     dry_run = args.dry_run
+    env: str = args.env
 
     # Validate channel names before constructing config or changing the system.
     CHANNEL_INSTALLERS = {
         "twitter":     _install_twitter_deps,
         "xiaoyuzhou":  _install_xiaoyuzhou_deps,
-        "xiaohongshu": _install_xhs_deps,
-        "reddit":      _install_reddit_deps,
+        "xiaohongshu": lambda: _install_xhs_deps(env),
+        "reddit":      lambda: _install_reddit_deps(env),
         "facebook":    _install_opencli_deps,
         "instagram":   _install_opencli_deps,
         "bilibili":    _install_bili_deps,
@@ -327,7 +328,6 @@ def _cmd_install(args):
     COOKIE_CHANNELS = {"twitter", "xueqiu", "bilibili", "xiaohongshu"}
 
     # Auto-detect environment
-    env = args.env
     if env == "auto":
         env = _detect_environment()
 
@@ -1030,7 +1030,7 @@ def _install_boss_deps():
     return False
 
 
-def _install_xhs_deps():
+def _install_xhs_deps(env: str | None = None):
     """Set up XiaoHongShu — backend depends on environment.
 
     Desktop: OpenCLI (reuses the browser session, zero config).
@@ -1042,7 +1042,9 @@ def _install_xhs_deps():
     import shutil
 
     print("Setting up XiaoHongShu...")
-    if _detect_environment() == "server":
+    if env is None:
+        env = _detect_environment()
+    if env == "server":
         print("  服务器环境推荐 xiaohongshu-mcp：")
         print("    1. 下载 binary：https://github.com/xpzouying/xiaohongshu-mcp/releases")
         print("       （建议放到 ~/.agent-reach/tools/ 下）")
@@ -1117,13 +1119,15 @@ def _install_opencli_deps():
         return False
 
 
-def _install_reddit_deps():
+def _install_reddit_deps(env: str | None = None):
     """Set up Reddit — desktop prefers OpenCLI, rdt-cli for servers/legacy.
 
     No zero-config path exists (anonymous .json blocked, official API
     approval-gated since 2025-11) — every backend needs a logged-in session.
     """
-    if _detect_environment() != "server":
+    if env is None:
+        env = _detect_environment()
+    if env != "server":
         installed = _install_opencli_deps()
         print("  Reddit 走 OpenCLI（浏览器里登录过 reddit.com 即可用）")
         import shutil
