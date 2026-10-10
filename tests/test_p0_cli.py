@@ -601,13 +601,6 @@ def test_watch_uses_read_only_config(monkeypatch, capsys):
             super().__init__(*args, **kwargs)
             created.append(self)
 
-    class _Release:
-        status_code = 200
-
-        @staticmethod
-        def json():
-            return {"tag_name": "v0.0.0", "body": ""}
-
     monkeypatch.setattr(config_module, "Config", RecordingConfig)
     monkeypatch.setattr(
         "agent_reach.doctor.check_all",
@@ -624,8 +617,8 @@ def test_watch_uses_read_only_config(monkeypatch, capsys):
     )
     monkeypatch.setattr(
         cli,
-        "_github_get_with_retry",
-        lambda *_args, **_kwargs: (_Release(), None, 1),
+        "_fetch_latest_release",
+        lambda *_args, **_kwargs: ({"tag_name": "v0.0.0", "body": ""}, None, 1),
     )
 
     cli._cmd_watch()
