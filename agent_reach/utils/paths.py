@@ -189,10 +189,17 @@ def get_ytdlp_config_dir() -> Path:
     platform, falling back to ``~/.config/yt-dlp`` when the variable is not
     set. Writing anywhere else can make Agent Reach and Doctor agree with each
     other while the real yt-dlp process silently ignores the setting.
+
+    The fallback resolves ``~`` through :func:`home_dir` rather than
+    ``Path.home()``. yt-dlp expands it with its own ``compat_expanduser``,
+    which honors ``HOME`` on Windows too (yt-dlp#792), while Python's
+    ``expanduser`` ignores ``HOME`` there and returns ``USERPROFILE``. Other
+    upstreams Agent Reach locates (gh, mcporter, rdt-cli, xiaohongshu-cli)
+    genuinely use ``USERPROFILE`` on Windows and stay on ``Path.home()``.
     """
 
     xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
-    config_home = Path(xdg_config_home) if xdg_config_home else Path.home() / ".config"
+    config_home = Path(xdg_config_home) if xdg_config_home else home_dir() / ".config"
     return config_home / "yt-dlp"
 
 
