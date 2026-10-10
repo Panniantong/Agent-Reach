@@ -34,6 +34,7 @@ _SENSITIVE_CONFIG_KEYS = {
     "github-token",
     "groq-key",
     "openai-key",
+    "apify-token",
     "twitter-cookies",
     "xhs-cookies",
 }
@@ -108,6 +109,7 @@ def main():
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
     p_conf.add_argument("key", nargs="?", default=None,
                         choices=["proxy", "github-token", "groq-key", "openai-key",
+                                 "apify-token", "youtube-transcript-backend",
                                  "twitter-cookies", "youtube-cookies",
                                  "xhs-cookies"],
                         help="What to configure (omit if using --from-browser)")
@@ -176,6 +178,21 @@ def main():
     )
     p_tr.add_argument("-o", "--output", default=None,
                       help="Write transcript to a file instead of stdout")
+
+    # ── youtube-transcript ──
+    p_yt = sub.add_parser(
+        "youtube-transcript",
+        help="Fetch a YouTube transcript from the configured hosted backend (opt-in)",
+    )
+    p_yt.add_argument("url", help="YouTube video URL or 11-character video ID")
+    p_yt.add_argument("--lang", default=None,
+                      help="Preferred caption languages, comma separated (e.g. en,es)")
+    p_yt.add_argument("--backend", default=None,
+                      help="Override youtube_transcript_backend for this call (e.g. apify)")
+    p_yt.add_argument("--json", action="store_true",
+                      help="Print the provider's full item (segments, language, metadata) as JSON")
+    p_yt.add_argument("-o", "--output", default=None,
+                      help="Write the transcript to a file instead of stdout")
 
     sub.add_parser("check-update", help="Check for new versions and changes")
 
@@ -255,6 +272,8 @@ def main():
         _cmd_format(args)
     elif args.command == "transcribe":
         _cmd_transcribe(args)
+    elif args.command == "youtube-transcript":
+        _cmd_youtube_transcript(args)
 
 
 # ── Command handlers ────────────────────────────────
@@ -1584,6 +1603,25 @@ def _cmd_configure(args):
         config.set("openai_api_key", value)
         print("✅ OpenAI key configured!")
 
+    elif args.key == "apify-token":
+        config.set("apify_token", value)
+        print("✅ Apify token configured!")
+        if not config.get("youtube_transcript_backend"):
+            print("   To use it for YouTube transcripts: "
+                  "agent-reach configure youtube-transcript-backend apify")
+
+    elif args.key == "youtube-transcript-backend":
+        from agent_reach.transcript_backends import BACKENDS
+
+        backend = value.strip().lower()
+        if backend not in BACKENDS:
+            print(f"Unknown backend: {value} (choose from: {', '.join(BACKENDS)})")
+            raise SystemExit(1)
+        config.set("youtube_transcript_backend", backend)
+        print(f"✅ Hosted YouTube transcript backend: {backend}")
+        print("   yt-dlp stays the default; use `agent-reach youtube-transcript URL` "
+              "when it is bot-challenged.")
+
 
 def _cmd_transcribe(args):
     """Transcribe a URL or local audio file via an explicitly selected provider."""
@@ -1611,6 +1649,28 @@ def _cmd_transcribe(args):
         print(f"✅ Transcript written to {args.output}")
     else:
         print(text)
+
+
+def _cmd_youtube_transcript(args):
+    """Fetch one YouTube transcript from the hosted backend the user selected."""
+    import json
+    from pathlib import Path
+
+    from agent_reach.transcript_backends import TranscriptBackendError, fetch_transcript
+    from agent_reach.utils.text import scrub_url_credentials
+
+    try:
+        item = fetch_transcript(args.url, lang=args.lang, backend=args.backend)
+    except TranscriptBackendError as e:
+        print(f"❌ {scrub_url_credentials(e)}")
+        sys.exit(1)
+
+    out = json.dumps(item, ensure_ascii=False, indent=2) if args.json else item["text"]
+    if args.output:
+        Path(args.output).write_text(out + "\n", encoding="utf-8")
+        print(f"✅ Transcript written to {args.output}")
+    else:
+        print(out)
 
 
 def _parse_twitter_cookie_input(value: str):
