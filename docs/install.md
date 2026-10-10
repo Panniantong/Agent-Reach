@@ -295,6 +295,21 @@ agent-reach configure groq-key
 > - 转录质量高（Whisper large-v3），但不区分说话人
 > - 2 小时以上的播客建议分批处理
 
+**YouTube 托管字幕后端（可选，服务器 / 云主机）:**
+> "在 VPS 上 yt-dlp 常被 YouTube 的 bot 校验拦住。可以选一个托管字幕服务作为兜底，默认关闭，yt-dlp 仍是首选。"
+
+目前支持 Apify（任意字幕 Actor，默认 `apimint/youtube-transcript-scraper`）：
+
+```bash
+agent-reach configure apify-token
+agent-reach configure youtube-transcript-backend apify
+agent-reach youtube-transcript "https://www.youtube.com/watch?v=VIDEO_ID"
+```
+
+> 也可以只设置环境变量：`APIFY_TOKEN`、`YOUTUBE_TRANSCRIPT_BACKEND=apify`，
+> 换 Actor 用 `APIFY_TRANSCRIPT_ACTOR=owner/actor-name`。按调用计费，费用记在用户自己的 Apify 账户。
+> 详见 `references/video.md` 的“可选：托管字幕后端”。
+
 **LinkedIn (可选 — mcp-server-linkedin):**
 > "LinkedIn 基本内容可通过 Jina Reader 读取。完整功能（Profile 详情、人才与职位搜索）需要 mcp-server-linkedin。"
 
@@ -402,6 +417,8 @@ If the user wants a different agent to handle it, let them choose.
 | `agent-reach configure twitter-cookies` | 通过隐藏输入保存 Twitter Cookie；直接调用仍需显式环境变量 |
 | `agent-reach configure proxy` | 通过隐藏输入保存代理地址；不是自动解锁开关 |
 | `agent-reach configure groq-key` | 通过隐藏输入配置小宇宙转录 Key |
+| `agent-reach configure apify-token` | 通过隐藏输入保存 Apify token（可选的 YouTube 托管字幕后端） |
+| `agent-reach youtube-transcript URL` | 从已配置的托管后端取 YouTube 字幕（默认关闭） |
 
 After installation, use upstream tools directly. See SKILL.md for the full command reference:
 

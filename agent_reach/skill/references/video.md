@@ -49,9 +49,45 @@ yt-dlp --dump-json "ytsearch5:query"
    `opencli youtube transcript "URL" -f yaml`。
 3. OpenCLI 若返回 `Caption URL returned empty response`，最多重试 3 次；这是带
    过期时间的字幕 URL 偶发失效，不能把空响应当成“视频没有字幕”。
-4. 仍失败或视频本来就没有字幕：`agent-reach transcribe "URL"` 下载音频转写。
+4. 仍失败（或在没有 OpenCLI 的服务器上），且 `doctor` 的 YouTube 一栏显示“已配置托管字幕后端”：
+   `agent-reach youtube-transcript "URL"`（见下方“可选：托管字幕后端”）。
+5. 仍失败或视频本来就没有字幕：`agent-reach transcribe "URL"` 下载音频转写。
 
 成功标准是实际得到非空字幕/转录内容，不是命令退出码或 `doctor` 的版本探测结果。
+
+### 可选：托管字幕后端（服务器 / 云主机）
+
+VPS 和云主机的 IP 常被 YouTube 要求 "Sign in to confirm you're not a bot"，yt-dlp
+和音频下载都会失败。此时可以让托管服务在它自己的网络上抓字幕。默认关闭；
+只有用户显式选择后端并提供凭据后才会使用，yt-dlp 始终是首选。
+
+```bash
+agent-reach youtube-transcript "https://www.youtube.com/watch?v=VIDEO_ID"
+agent-reach youtube-transcript VIDEO_ID --lang en,es        # 语言偏好
+agent-reach youtube-transcript VIDEO_ID --json              # 带时间轴 segments 和元数据
+```
+
+目前支持的后端：
+
+| 后端 | 需要的配置 | 说明 |
+|-----|-----------|------|
+| `apify` | `apify_token`（或环境变量 `APIFY_TOKEN`） | 通过 `run-sync-get-dataset-items` 一次请求运行 Apify 上的字幕 Actor；默认 Actor `apimint/youtube-transcript-scraper`，可用 `apify_transcript_actor`（或 `APIFY_TRANSCRIPT_ACTOR`）换成任意字幕 Actor |
+
+```bash
+# 启用（隐藏输入保存 token；也可以直接设置环境变量）
+agent-reach configure apify-token
+agent-reach configure youtube-transcript-backend apify
+# 或：export APIFY_TOKEN=... YOUTUBE_TRANSCRIPT_BACKEND=apify
+
+# 可选：换成其他 Actor（Store 页面上的 owner/name）
+export APIFY_TRANSCRIPT_ACTOR=owner/actor-name
+# 该 Actor 的输入字段不叫 urls 时，给一个 JSON 模板，{url} 会被替换成视频链接
+export APIFY_TRANSCRIPT_INPUT='{"startUrls": [{"url": "{url}"}]}'
+```
+
+> 托管服务按调用计费，费用由用户自己的服务商账户承担。只把公开视频链接发给用户选定的服务；
+> 命令只接受 YouTube 链接或 11 位视频 ID。输出里的 `text` 字段统一为纯文本字幕。
+> 新增服务商：在 `agent_reach/transcript_backends.py` 的 `BACKENDS` 里加一个类即可。
 
 ### 无字幕兜底：Whisper 音频转写
 
@@ -141,7 +177,7 @@ agent-reach doctor
 
 | 场景 | 推荐工具 |
 |-----|---------|
-| YouTube 字幕 | yt-dlp；失败时 OpenCLI（最多 3 次）→ agent-reach transcribe |
+| YouTube 字幕 | yt-dlp；失败时 OpenCLI（最多 3 次）→ 已配置时托管字幕后端 → agent-reach transcribe |
 | B站视频详情/搜索 | bili-cli |
 | B站字幕 | opencli bilibili subtitle |
 | 播客转录 | 小宇宙 transcribe.sh |

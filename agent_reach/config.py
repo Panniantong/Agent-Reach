@@ -109,6 +109,7 @@ class Config:
         "groq_whisper": ["groq_api_key"],
         "openai_whisper": ["openai_api_key"],
         "github_token": ["github_token"],
+        "apify_transcript": ["apify_token"],  # hosted YouTube transcripts (opt-in)
     }
 
     def __init__(

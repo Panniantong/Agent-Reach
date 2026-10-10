@@ -240,3 +240,44 @@ def test_check_ok_flags_missing_ffprobe_for_transcription():
     assert status == "ok"
     assert "ffprobe" in message
     assert "可转写音频" not in message
+
+
+# --- check(): optional hosted transcript backend ---
+
+def test_check_mentions_hosted_backend_only_when_configured(tmp_path, monkeypatch):
+    from agent_reach.config import Config
+
+    for key in ("APIFY_TOKEN", "YOUTUBE_TRANSCRIPT_BACKEND"):
+        monkeypatch.delenv(key, raising=False)
+    cfg = Config(config_path=tmp_path / "config.yaml")
+    ch = YouTubeChannel()
+    with patch.object(yt, "probe_command", return_value=ProbeResult("ok")), \
+         patch("shutil.which", side_effect=_which("deno")), \
+         patch("requests.post") as post:
+        _, message = ch.check(config=cfg)
+        assert "托管字幕后端" not in message
+
+        cfg.set("apify_token", "apify_api_test")
+        _, message = ch.check(config=cfg)
+        assert "托管字幕后端" not in message  # a token alone does not opt in
+
+        cfg.set("youtube_transcript_backend", "apify")
+        status, message = ch.check(config=cfg)
+    post.assert_not_called()  # doctor never calls the hosted service
+    assert status == "ok"
+    assert "托管字幕后端（apify）" in message
+    assert "agent-reach youtube-transcript" in message
+    assert ch.active_backend == "yt-dlp"
+
+
+def test_check_mentions_hosted_backend_when_ytdlp_missing(tmp_path, monkeypatch):
+    from agent_reach.config import Config
+
+    monkeypatch.setenv("YOUTUBE_TRANSCRIPT_BACKEND", "apify")
+    monkeypatch.setenv("APIFY_TOKEN", "apify_api_test")
+    ch = YouTubeChannel()
+    with patch.object(yt, "probe_command", return_value=ProbeResult("missing")):
+        status, message = ch.check(config=Config(config_path=tmp_path / "config.yaml"))
+    assert status == "off"
+    assert ch.active_backend is None
+    assert "托管字幕后端（apify）" in message

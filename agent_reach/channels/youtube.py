@@ -48,6 +48,19 @@ class YouTubeChannel(Channel):
         return host_matches(url, "youtube.com", "youtu.be")
 
     def check(self, config=None):
+        status, message = self._check_ytdlp(config)
+        # 托管字幕后端是可选兜底：只读配置，不发网络请求，也不改变 active_backend
+        from agent_reach.transcript_backends import configured_backend
+
+        hosted = configured_backend(config)
+        if hosted:
+            message += (
+                f"\n  已配置托管字幕后端（{hosted}）：yt-dlp 遇到 bot 校验时可用 "
+                "`agent-reach youtube-transcript URL`"
+            )
+        return status, message
+
+    def _check_ytdlp(self, config=None):
         # 真跑 yt-dlp --version 探活，区分未装 / venv 断链 / 跑不动
         probe = probe_command("yt-dlp", ["--version"], timeout=10, package="yt-dlp")
         if probe.status == "missing":
