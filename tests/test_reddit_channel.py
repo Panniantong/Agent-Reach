@@ -5,6 +5,8 @@ import json
 import time
 from unittest.mock import Mock, patch
 
+import pytest
+
 from agent_reach.channels.reddit import RedditChannel
 
 
@@ -103,7 +105,10 @@ def test_check_rdt_refuses_symlink_credential(isolated_home):
     victim.write_text('{"secret": "do-not-read"}', encoding="utf-8")
     path = isolated_home / ".config" / "rdt-cli" / "credential.json"
     path.parent.mkdir(parents=True)
-    path.symlink_to(victim)
+    try:
+        path.symlink_to(victim)
+    except OSError:
+        pytest.skip("symlinks are not supported on this platform")
     with patch("shutil.which", return_value="/usr/local/bin/rdt"):
         status, message = RedditChannel()._check_rdt()
 
@@ -119,10 +124,13 @@ def test_check_rdt_refuses_ancestor_symlink(isolated_home):
         '{"cookies": {"reddit_session": "do-not-read"}}',
         encoding="utf-8",
     )
-    (isolated_home / ".config").symlink_to(
-        victim_dir,
-        target_is_directory=True,
-    )
+    try:
+        (isolated_home / ".config").symlink_to(
+            victim_dir,
+            target_is_directory=True,
+        )
+    except OSError:
+        pytest.skip("symlinks are not supported on this platform")
 
     with patch("shutil.which", return_value="/usr/local/bin/rdt"):
         status, message = RedditChannel()._check_rdt()

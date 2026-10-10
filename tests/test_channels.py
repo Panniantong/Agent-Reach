@@ -946,10 +946,13 @@ class TestXiaoHongShuChannel:
             json.dumps({"a1": "do-not-read"}),
             encoding="utf-8",
         )
-        (isolated_home / ".xiaohongshu-cli").symlink_to(
-            victim_dir,
-            target_is_directory=True,
-        )
+        try:
+            (isolated_home / ".xiaohongshu-cli").symlink_to(
+                victim_dir,
+                target_is_directory=True,
+            )
+        except OSError:
+            pytest.skip("symlinks are not supported on this platform")
 
         status, message = XiaoHongShuChannel()._check_xhs_cli()
 
@@ -1426,10 +1429,13 @@ class TestGitHubChannel:
             "github.com:\n  oauth_token: do-not-read\n",
             encoding="utf-8",
         )
-        (isolated_home / ".config").symlink_to(
-            real_config,
-            target_is_directory=True,
-        )
+        try:
+            (isolated_home / ".config").symlink_to(
+                real_config,
+                target_is_directory=True,
+            )
+        except OSError:
+            pytest.skip("symlinks are not supported on this platform")
         monkeypatch.setattr(
             subprocess,
             "run",
