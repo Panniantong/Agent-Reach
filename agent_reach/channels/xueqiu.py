@@ -17,7 +17,7 @@ _UA = (
 )
 _REFERER = "https://xueqiu.com/"
 _TIMEOUT = 10
-_XUEQIU_HOME = "https://xueqiu.com"
+_XUEQIU_HOME = "https://xueqiu.com/hq"
 
 # --------------- cookie-aware HTTP helpers --------------- #
 
@@ -76,7 +76,7 @@ def _ensure_cookies(config=None) -> None:
 
     Priority order:
     1. Saved cookie string in ~/.agent-reach/config.yaml  (set by configure --from-browser)
-    2. Homepage visit fallback (only yields public session cookies and may not
+    2. Public market-page fallback (only yields anonymous session cookies and may not
        be sufficient when Xueqiu requires a logged-in session)
     """
     global _cookies_initialized
@@ -85,7 +85,7 @@ def _ensure_cookies(config=None) -> None:
     if _load_cookies_from_config(config):
         _cookies_initialized = True
         return
-    # Fallback: visit homepage to pick up acw_tc anti-DDoS cookie.
+    # Fallback: visit the market page to pick up anonymous session cookies.
     # This is not sufficient for authenticated APIs but avoids hard failures
     # on public endpoints that only need the session cookie.
     req = urllib.request.Request(_XUEQIU_HOME, headers={"User-Agent": _UA})
