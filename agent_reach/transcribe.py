@@ -446,7 +446,7 @@ def _transcribe_in_dir(source: str, order: List[str], cfg: Config, work_dir: Pat
     work_dir.mkdir(parents=True, exist_ok=True)
 
     src_path = Path(source)
-    if src_path.is_file():
+    if not source.lower().startswith(("http://", "https://")) and src_path.is_file():
         audio = src_path
     else:
         audio = download_audio(source, work_dir)

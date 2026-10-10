@@ -415,6 +415,32 @@ class TestOrchestrator:
         )
         assert text == "transcript text"
 
+    @pytest.mark.parametrize("scheme", ["https", "HTTP"])
+    def test_long_url_skips_local_file_lookup(
+        self,
+        monkeypatch,
+        fake_config,
+        chunk_file,
+        bounded_audio_duration,
+        scheme,
+    ):
+        fake_config.set("groq_api_key", "gsk_test")
+        source = f"{scheme}://example.com/audio.mp3?token=" + "a" * 5000
+        downloads = []
+
+        def fake_download(url, out_dir):
+            downloads.append(url)
+            return chunk_file
+
+        monkeypatch.setattr(tr, "download_audio", fake_download)
+        monkeypatch.setattr(tr, "compress_audio", lambda *_args: chunk_file)
+        monkeypatch.setattr(
+            tr.requests, "post", lambda *a, **k: FakeResponse(200, "transcript text")
+        )
+
+        assert tr.transcribe(source, config=fake_config) == "transcript text"
+        assert downloads == [source]
+
     def test_chunks_concatenated_with_newlines(
         self,
         monkeypatch,
