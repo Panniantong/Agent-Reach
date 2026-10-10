@@ -2,6 +2,7 @@
 """YouTube — check if yt-dlp is available with JS runtime."""
 
 import re
+import shlex
 import shutil
 
 from agent_reach.probe import probe_command
@@ -25,14 +26,21 @@ def _parse_ytdlp_version(version: str):
 
 
 def _has_js_runtime_config(config_path) -> bool:
-    """Return whether yt-dlp config explicitly enables a JS runtime."""
+    """Look for runtime configuration hints outside shell-style comments.
+
+    Keep the existing substring heuristic inside tokens: quoted alias expansions
+    can contain runtime flags too. This is not a full effective-config parser.
+    """
     try:
         payload = read_small_text_no_follow(
             config_path,
             max_bytes=1024 * 1024,
+            encoding="utf-8-sig",
         )
-        return payload is not None and "--js-runtimes" in payload
-    except (OSError, UnicodeError, PrivatePathError):
+        if payload is None or "--js-runtimes" not in payload:
+            return False
+        return any("--js-runtimes" in token for token in shlex.split(payload, comments=True))
+    except (OSError, UnicodeError, PrivatePathError, ValueError):
         return False
 
 

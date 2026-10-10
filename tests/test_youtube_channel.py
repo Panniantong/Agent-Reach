@@ -14,6 +14,8 @@ reddit (#364), xueqiu (#365) and v2ex (#366).
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import pytest
+
 from agent_reach.channels import youtube as yt
 from agent_reach.channels.youtube import YouTubeChannel, _has_js_runtime_config
 from agent_reach.probe import ProbeResult
@@ -55,6 +57,38 @@ def test_has_js_runtime_config_false_when_flag_absent(tmp_path):
     cfg = tmp_path / "config"
     cfg.write_text("--no-mtime\n", encoding="utf-8")
     assert _has_js_runtime_config(cfg) is False
+
+
+@pytest.mark.parametrize("payload, expected", [
+    ("# --js-runtimes node\n", False),
+    ("  # --js-runtimes node\n--no-mtime\n", False),
+    ("--no-mtime # --js-runtimes node\n", False),
+    ("--js-runtimes=node\n", True),
+    ("--js-runtimes\nnode\n", True),
+    ('--js-runtimes "node:/tools/Node JS/node"\n', True),
+    ("--js-runtimes node # enabled explicitly\n", True),
+    ('--js-runtimes "node\n', False),
+    # Preserve existing heuristics; this fix does not resolve aliases or resets.
+    ("--js-runtimes node\n--no-js-runtimes\n", True),
+    ("--no-js-runtimes\n--js-runtimes node\n", True),
+    ('--alias jsr "--js-runtimes node" --jsr\n', True),
+    ('--output "video --js-runtimes node.%(ext)s"\n', True),
+    ('--output "--js-""runtimes node"\n', False),
+    ("\ufeff--js-runtimes node\n", True),
+    ("\ufeff# --js-runtimes node\n", False),
+    ("--js-runtimes node\r\n", True),
+    ("--js-runtimes node\r\n--no-js-runtimes\r\n", True),
+    # These tokens are values for --output, not runtime-reset/end-of-options flags.
+    ('--js-runtimes node --output "--no-js-runtimes"\n', True),
+    ('--output "--no-js-runtimes" --js-runtimes node\n', True),
+    ('--output "--" --js-runtimes node\n', True),
+    ('--output "--js-runtimes" --js-runtimes node\n', True),
+    ('--js-runtimes "node:/tools/#bin/node" # runtime path contains a hash\n', True),
+])
+def test_has_js_runtime_config_ignores_shell_comments(tmp_path, payload, expected):
+    cfg = tmp_path / "config"
+    cfg.write_text(payload, encoding="utf-8")
+    assert _has_js_runtime_config(cfg) is expected
 
 
 def test_has_js_runtime_config_swallows_oserror(tmp_path):
@@ -116,6 +150,24 @@ def test_check_warn_when_node_only_and_config_missing_flag():
          patch.object(yt, "_has_js_runtime_config", return_value=False):
         status, message = ch.check()
     assert status == "warn"
+    assert ch.active_backend == "yt-dlp"
+
+
+@pytest.mark.parametrize("payload", [
+    "# --js-runtimes node\n",
+    "--no-mtime # --js-runtimes node\n",
+])
+def test_check_warns_when_runtime_is_only_mentioned(tmp_path, payload):
+    cfg = tmp_path / "config"
+    cfg.write_text(payload, encoding="utf-8")
+    ch = YouTubeChannel()
+    with patch.object(yt, "probe_command", return_value=ProbeResult("ok", output="2026.07.04")), \
+         patch("shutil.which", side_effect=_which("node")), \
+         patch.object(yt, "get_ytdlp_config_path", return_value=cfg):
+        status, message = ch.check()
+
+    assert status == "warn"
+    assert "--js-runtimes node" in message
     assert ch.active_backend == "yt-dlp"
 
 
