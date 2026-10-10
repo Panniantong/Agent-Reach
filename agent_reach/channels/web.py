@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Web — any URL via Jina Reader. Always available."""
 
+import urllib.error
 import urllib.request
 
 from agent_reach.utils.url import normalize_public_http_url
@@ -53,8 +54,17 @@ class WebChannel(Channel):
             jina_url,
             headers={"User-Agent": _UA, "Accept": "text/plain"},
         )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            body = resp.read(_MAX_RESPONSE_BYTES + 1)
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                body = resp.read(_MAX_RESPONSE_BYTES + 1)
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403, 429):
+                raise RuntimeError(
+                    f"Jina Reader 拒绝了本次读取（HTTP {e.code}）——通常是出站 IP 被限流或屏蔽，"
+                    "并非目标页面不存在；doctor 仍会显示 web 渠道可用（check 不触网）。"
+                    "可稍后重试、更换网络出口，或改用站点专用工具/浏览器读取"
+                ) from e
+            raise
         if len(body) > _MAX_RESPONSE_BYTES:
             raise ValueError(
                 f"Jina Reader response exceeds {_MAX_RESPONSE_BYTES} byte limit"
