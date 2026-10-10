@@ -172,7 +172,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 3. **按授权安装与配置** — 仅在显式传入 `--system` 时安装依赖并通过 MCP 接入 Exa
 4. **检测环境** — 判断是本地电脑还是服务器，给出对应的配置建议
 5. **按授权注册 SKILL.md** — 仅在显式 `--system` 时写入 Agent 的 skills 目录；默认检查不改文件
-   Qoder CLI 会安装到 `~/.qoder/skills/agent-reach/`（自定义 `QODER_CONFIG_DIR` 时自动跟随）；Qoder IDE 也可以直接通过 **Extensions → Skills → Add Skills → Upload Skill** 导入 `agent_reach/skill/SKILL.md`。
+   Qoder CLI 和 IDE 共用 `~/.qoder/skills/agent-reach/`（自定义 `QODER_CONFIG_DIR` 时自动跟随）。请在 Qoder IDE 终端运行上述安装流程；手动安装时要复制整个 `agent_reach/skill/` 目录，而不是只复制 `SKILL.md`，否则 7 个 `references/*.md` 辅助文件不会随 Skill 安装。
 6. **问你要不要更多** — 默认只激活 6 个零配置渠道；小红书、Twitter、Reddit、Facebook、Instagram 这些需要登录态的，Agent 会列菜单问你要哪些，点名才装
 
 安装完之后，`agent-reach doctor` 一条命令告诉你每个渠道的状态、当前走哪条路。
