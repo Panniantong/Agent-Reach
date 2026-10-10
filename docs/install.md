@@ -42,7 +42,12 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 | Config & tokens | `~/.agent-reach/` | `~/.agent-reach/config.json` |
 | Upstream tool repos | `~/.agent-reach/tools/` | `~/.agent-reach/tools/xiaoyuzhou/` |
 | Temporary files | `/tmp/` | `/tmp/yt-dlp-output/` |
-| Skills | `~/.openclaw/skills/agent-reach/` | SKILL.md |
+| Skills | `~/.openclaw/skills/agent-reach/`, `~/.qoder/skills/agent-reach/`, or another detected Agent skills root | SKILL.md |
+
+Qoder CLI and IDE share the same user-level Skill directory. Run the installer
+from the Qoder IDE terminal, or copy the complete `agent_reach/skill/` directory
+to `~/.qoder/skills/agent-reach/`; copying only `SKILL.md` omits the referenced
+`references/*.md` files.
 
 **Why?** If you clone repos or create files in the workspace, it pollutes the user's project directory and can break their agent over time. Keep the workspace clean.
 

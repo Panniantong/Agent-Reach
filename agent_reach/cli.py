@@ -548,12 +548,19 @@ def _install_skill(force: bool = True):
             print(f"  Warning: Could not install skill: {e}")
             return None
 
-    # Install into every known skill root that already exists.
+    # Install into every known skill root that already exists. Qoder's config
+    # directory can exist before its ``skills`` child is created, so treat an
+    # explicit QODER_CONFIG_DIR or an existing default config root as a
+    # discovered client and let _copy_skill_dir create the target hierarchy.
+    qoder_config_dir = os.environ.get("QODER_CONFIG_DIR")
+    qoder_home = qoder_config_dir or os.path.expanduser("~/.qoder")
+    qoder_detected = bool(qoder_config_dir) or os.path.isdir(qoder_home)
     skill_dirs = [
         (os.path.expanduser("~/.agents/skills"), "Agent"),
         (os.path.expanduser("~/.config/opencode/skills"), "OpenCode"),
         (os.path.expanduser("~/.openclaw/skills"), "OpenClaw"),
         (os.path.expanduser("~/.claude/skills"), "Claude Code"),
+        (os.path.join(qoder_home, "skills"), "Qoder"),
     ]
 
     # Insert OPENCLAW_HOME path at the beginning if environment variable is set
@@ -566,7 +573,7 @@ def _install_skill(force: bool = True):
 
     installed = False
     for skill_dir, platform_name in skill_dirs:
-        if os.path.isdir(skill_dir):
+        if os.path.isdir(skill_dir) or (platform_name == "Qoder" and qoder_detected):
             target = os.path.join(skill_dir, "agent-reach")
             status = _copy_skill_dir(target)
             if status:
@@ -589,7 +596,7 @@ def _install_skill(force: bool = True):
         else:
             print("  -- Could not install agent skill (optional)")
             print(
-                "  -- Tip: install OpenCode, OpenClaw, Claude Code, "
+                "  -- Tip: install OpenCode, OpenClaw, Claude Code, Qoder, "
                 "or create ~/.agents/skills/ manually"
             )
     return installed
@@ -599,10 +606,12 @@ def _uninstall_skill():
     """Remove SKILL.md from all known agent skill directories."""
     import shutil
 
+    qoder_home = os.environ.get("QODER_CONFIG_DIR") or os.path.expanduser("~/.qoder")
     skill_dirs = [
         ("~/.config/opencode/skills/agent-reach", "OpenCode"),
         ("~/.openclaw/skills/agent-reach", "OpenClaw"),
         ("~/.claude/skills/agent-reach", "Claude Code"),
+        (os.path.join(qoder_home, "skills", "agent-reach"), "Qoder"),
         ("~/.agents/skills/agent-reach", "Agent"),
     ]
 
@@ -1929,10 +1938,12 @@ def _cmd_uninstall(args):
         print("      若确认不再被 xfetch/bird 使用，请手动删除。")
 
     # ── 2. Skill files ──
+    qoder_home = os.environ.get("QODER_CONFIG_DIR") or os.path.expanduser("~/.qoder")
     skill_dirs = [
         ("~/.config/opencode/skills/agent-reach", "OpenCode"),
         ("~/.openclaw/skills/agent-reach", "OpenClaw"),
         ("~/.claude/skills/agent-reach", "Claude Code"),
+        (os.path.join(qoder_home, "skills", "agent-reach"), "Qoder"),
         ("~/.agents/skills/agent-reach", "Agent"),
     ]
 

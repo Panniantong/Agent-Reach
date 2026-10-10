@@ -96,7 +96,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 | 💰 **完全免费** | 所有工具开源、所有 API 免费。唯一可能花钱的是服务器代理（$1/月），本地电脑不需要 |
 | 🔒 **隐私安全** | Cookie 只存在你本地，不上传不外传。代码完全开源，随时可审查 |
 | 🔄 **持续换代** | 每个平台都是「首选 + 备选」多后端路由。某个接入方式失效了，我们换下一个，你无感（2026-06 实例：yt-dlp 被 B站风控封死 → 已切换 bili-cli，用户零操作） |
-| 🤖 **兼容所有 Agent** | Claude Code、OpenClaw、Cursor、Windsurf……任何能跑命令行的 Agent 都能用 |
+| 🤖 **兼容所有 Agent** | Claude Code、Qoder、OpenClaw、Cursor、Windsurf……任何能跑命令行的 Agent 都能用 |
 | 🩺 **自带诊断** | `agent-reach doctor` 一条命令告诉你哪个通、哪个不通、怎么修 |
 
 ---
@@ -143,9 +143,9 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 > openclaw config set tools.profile "coding"
 > ```
 > 或在 `~/.openclaw/openclaw.json` 中设置 `"tools": { "profile": "coding" }`。
-> 设置后重启 Gateway（`openclaw gateway restart`）并开启新对话即可。其他平台（Claude Code、Cursor、Windsurf 等）不受此限制。
+> 设置后重启 Gateway（`openclaw gateway restart`）并开启新对话即可。其他平台（Claude Code、Qoder、Cursor、Windsurf 等）不受此限制。
 
-复制这句话给你的 AI Agent（Claude Code、OpenClaw、Cursor 等）：
+复制这句话给你的 AI Agent（Claude Code、Qoder、OpenClaw、Cursor 等）：
 
 ```
 帮我安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
@@ -172,6 +172,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 3. **按授权安装与配置** — 仅在显式传入 `--system` 时安装依赖并通过 MCP 接入 Exa
 4. **检测环境** — 判断是本地电脑还是服务器，给出对应的配置建议
 5. **按授权注册 SKILL.md** — 仅在显式 `--system` 时写入 Agent 的 skills 目录；默认检查不改文件
+   Qoder CLI 和 IDE 共用 `~/.qoder/skills/agent-reach/`（自定义 `QODER_CONFIG_DIR` 时自动跟随）。请在 Qoder IDE 终端运行上述安装流程；手动安装时要复制整个 `agent_reach/skill/` 目录，而不是只复制 `SKILL.md`，否则 7 个 `references/*.md` 辅助文件不会随 Skill 安装。
 6. **问你要不要更多** — 默认只激活 6 个零配置渠道；小红书、Twitter、Reddit、Facebook、Instagram 这些需要登录态的，Agent 会列菜单问你要哪些，点名才装
 
 安装完之后，`agent-reach doctor` 一条命令告诉你每个渠道的状态、当前走哪条路。
