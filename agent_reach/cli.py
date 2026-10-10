@@ -74,6 +74,13 @@ def main():
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Show debug logs")
     parser.add_argument("--version", action="version", version=f"Agent Reach v{__version__}")
+    parser.add_argument(
+        "--grimdall-enforce",
+        action="store_true",
+        help="Enforce Grimdall execution guardrails: block secret exfiltration, "
+        "unapproved curl/wget egress, and destructive commands instead of "
+        "logging them (Shadow Mode is the default)",
+    )
     sub = parser.add_subparsers(dest="command", help="Available commands")
 
     # ── setup ──
@@ -186,6 +193,13 @@ def main():
     sub.add_parser("version", help="Show version")
 
     args = parser.parse_args()
+
+    # Grimdall guardrails default to Shadow Mode; --grimdall-enforce opts into
+    # hard blocks so existing installs never break on day one.
+    if getattr(args, "grimdall_enforce", False):
+        from agent_reach.security.grimdall_guard import set_enforce_mode
+
+        set_enforce_mode(True)
 
     if args.command == "configure" and args.from_browser:
         if args.read_stdin:
