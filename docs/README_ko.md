@@ -222,7 +222,7 @@ channels/
 | Reddit | [rdt-cli](https://github.com/public-clis/rdt-cli) | 304 stars, cookie 인증, 검색 + 전체 글 + 댓글 |
 | YouTube 자막 + 검색 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | YouTube 및 지원 비디오 사이트용(Bilibili에는 사용하지 않음) |
 | Bilibili | [bili-cli](https://github.com/public-clis/bilibili-cli) ▸ OpenCLI ▸ 검색 API | yt-dlp는 412 차단으로 폐기. bili-cli는 로그인 없이 검색·읽기 가능 |
-| 웹 검색 | [Exa](https://exa.ai) via [mcporter](https://github.com/nicobailon/mcporter) | AI 시맨틱 검색, MCP 통합, API key 불필요 |
+| 웹 검색 | [Exa](https://exa.ai) via [mcporter](https://github.com/openclaw/mcporter) | AI 시맨틱 검색, MCP 통합, API key 불필요 |
 | GitHub | [gh CLI](https://cli.github.com) | 공식 도구, 인증 후 전체 API |
 | RSS 읽기 | [feedparser](https://github.com/kurtmckee/feedparser) | Python 생태계 표준, 2.3K stars |
 | XiaoHongShu | [OpenCLI](https://github.com/jackwener/opencli) (데스크톱) ▸ [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) (서버) ▸ xhs-cli | OpenCLI는 사용자가 관리하는 기존 세션만 사용하며, 그 외에는 Cookie-Editor로 수동 설정 |
@@ -294,7 +294,7 @@ Agent Reach는 XiaoHongShu 로그인을 대신 수행하거나 브라우저 cook
 
 ## 크레딧
 
-[twitter-cli](https://github.com/public-clis/twitter-cli) · [rdt-cli](https://github.com/public-clis/rdt-cli) · [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) · [bili-cli](https://github.com/public-clis/bilibili-cli) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [Jina Reader](https://github.com/jina-ai/reader) · [Exa](https://exa.ai) · [mcporter](https://github.com/nicobailon/mcporter) · [feedparser](https://github.com/kurtmckee/feedparser) · [mcp-server-linkedin](https://github.com/stickerdaniel/linkedin-mcp-server)
+[twitter-cli](https://github.com/public-clis/twitter-cli) · [rdt-cli](https://github.com/public-clis/rdt-cli) · [xhs-cli](https://github.com/jackwener/xiaohongshu-cli) · [bili-cli](https://github.com/public-clis/bilibili-cli) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [Jina Reader](https://github.com/jina-ai/reader) · [Exa](https://exa.ai) · [mcporter](https://github.com/openclaw/mcporter) · [feedparser](https://github.com/kurtmckee/feedparser) · [mcp-server-linkedin](https://github.com/stickerdaniel/linkedin-mcp-server)
 
 ## 연락처
 
