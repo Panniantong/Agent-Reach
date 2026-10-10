@@ -7,6 +7,7 @@ import shlex
 import stat
 import sys
 import tempfile
+import warnings
 from pathlib import Path
 
 
@@ -62,7 +63,18 @@ def make_private_dir(path: str | Path) -> Path:
         try:
             ensure_no_symlink_path(target, "私密目录")
             if hasattr(os, "fchmod"):
-                os.fchmod(dir_fd, 0o700)
+                current_mode = stat.S_IMODE(os.fstat(dir_fd).st_mode)
+                if current_mode != 0o700:
+                    try:
+                        os.fchmod(dir_fd, 0o700)
+                    except PermissionError:
+                        # Sandboxes and managed runtimes can deny chmod even
+                        # when the directory is otherwise safe to use.
+                        warnings.warn(
+                            f"无法收紧 {target} 的权限（当前 {oct(current_mode)}）",
+                            RuntimeWarning,
+                            stacklevel=2,
+                        )
         finally:
             os.close(dir_fd)
     return target

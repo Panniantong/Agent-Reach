@@ -2,12 +2,78 @@
 """Behavior tests for cross-platform path and remediation helpers."""
 
 import shutil
+import stat
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from agent_reach.utils import paths
+
+
+def test_make_private_dir_skips_chmod_when_already_private(monkeypatch, tmp_path):
+    target = tmp_path / "private"
+    target.mkdir(mode=0o700)
+    calls = []
+
+    monkeypatch.setattr(paths.sys, "platform", "linux")
+    monkeypatch.setattr(paths.os, "open", lambda *_args: 42)
+    monkeypatch.setattr(paths.os, "close", lambda _fd: None)
+    monkeypatch.setattr(
+        paths.os,
+        "fstat",
+        lambda _fd: SimpleNamespace(st_mode=stat.S_IFDIR | 0o700),
+    )
+    monkeypatch.setattr(
+        paths.os, "fchmod", lambda *args: calls.append(args), raising=False
+    )
+
+    assert paths.make_private_dir(target) == target
+    assert calls == []
+
+
+def test_make_private_dir_warns_when_sandbox_denies_chmod(monkeypatch, tmp_path):
+    target = tmp_path / "private"
+    target.mkdir(mode=0o755)
+
+    monkeypatch.setattr(paths.sys, "platform", "linux")
+    monkeypatch.setattr(paths.os, "open", lambda *_args: 42)
+    monkeypatch.setattr(paths.os, "close", lambda _fd: None)
+    monkeypatch.setattr(
+        paths.os,
+        "fstat",
+        lambda _fd: SimpleNamespace(st_mode=stat.S_IFDIR | 0o755),
+    )
+
+    def deny_chmod(*_args):
+        raise PermissionError("chmod denied by sandbox")
+
+    monkeypatch.setattr(paths.os, "fchmod", deny_chmod, raising=False)
+
+    with pytest.warns(RuntimeWarning, match="无法收紧"):
+        assert paths.make_private_dir(target) == target
+
+
+def test_make_private_dir_repairs_existing_mode(monkeypatch, tmp_path):
+    target = tmp_path / "private"
+    target.mkdir(mode=0o755)
+    calls = []
+
+    monkeypatch.setattr(paths.sys, "platform", "linux")
+    monkeypatch.setattr(paths.os, "open", lambda *_args: 42)
+    monkeypatch.setattr(paths.os, "close", lambda _fd: None)
+    monkeypatch.setattr(
+        paths.os,
+        "fstat",
+        lambda _fd: SimpleNamespace(st_mode=stat.S_IFDIR | 0o755),
+    )
+    monkeypatch.setattr(
+        paths.os, "fchmod", lambda *args: calls.append(args), raising=False
+    )
+
+    assert paths.make_private_dir(target) == target
+    assert calls == [(42, 0o700)]
 
 
 def test_posix_ytdlp_fix_is_single_line_executable_and_idempotent(
