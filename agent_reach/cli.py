@@ -548,8 +548,13 @@ def _install_skill(force: bool = True):
             print(f"  Warning: Could not install skill: {e}")
             return None
 
-    # Install into every known skill root that already exists.
-    qoder_home = os.environ.get("QODER_CONFIG_DIR") or os.path.expanduser("~/.qoder")
+    # Install into every known skill root that already exists. Qoder's config
+    # directory can exist before its ``skills`` child is created, so treat an
+    # explicit QODER_CONFIG_DIR or an existing default config root as a
+    # discovered client and let _copy_skill_dir create the target hierarchy.
+    qoder_config_dir = os.environ.get("QODER_CONFIG_DIR")
+    qoder_home = qoder_config_dir or os.path.expanduser("~/.qoder")
+    qoder_detected = bool(qoder_config_dir) or os.path.isdir(qoder_home)
     skill_dirs = [
         (os.path.expanduser("~/.agents/skills"), "Agent"),
         (os.path.expanduser("~/.config/opencode/skills"), "OpenCode"),
@@ -568,7 +573,7 @@ def _install_skill(force: bool = True):
 
     installed = False
     for skill_dir, platform_name in skill_dirs:
-        if os.path.isdir(skill_dir):
+        if os.path.isdir(skill_dir) or (platform_name == "Qoder" and qoder_detected):
             target = os.path.join(skill_dir, "agent-reach")
             status = _copy_skill_dir(target)
             if status:
