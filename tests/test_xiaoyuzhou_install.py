@@ -3,6 +3,7 @@
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -190,6 +191,56 @@ def test_transcribe_script_accepts_http_xiaoyuzhou_hosts(
     assert result.returncode != 0
     assert curl_log.exists()
     _assert_work_dir_cleaned(temp_root)
+
+
+def test_transcribe_script_skips_unrunnable_python3_stub(
+    tmp_path, bash_executable
+):
+    """A python3 that exists but cannot run must not shadow a working python.
+
+    On Windows ``command -v python3`` hits the Microsoft Store App Execution
+    Alias (``WindowsApps/python3.exe``), which exits without running Python.
+    Existence-only detection picked that stub, so every URL was rejected with
+    the misleading "仅支持 xiaoyuzhoufm.com" message even on machines with a
+    working interpreter — the URL check is the first step to use Python.
+    """
+    env, curl_log, temp_root, bash_env = _script_env(
+        tmp_path,
+        "#!/bin/sh\nprintf 'called\\n' >> \"$CURL_LOG\"\nexit 42\n",
+    )
+    _append_bash_function(
+        bash_env,
+        "python3",
+        "echo 'Python was not found; run without arguments to install from"
+        " the Microsoft Store' >&2\nreturn 49\n",
+    )
+    _append_bash_function(
+        bash_env,
+        "python",
+        f'"{_bash_path(Path(sys.executable))}" "$@"\n',
+    )
+
+    result = subprocess.run(
+        [
+            bash_executable,
+            TRANSCRIBE_SCRIPT.relative_to(ROOT).as_posix(),
+            "https://www.xiaoyuzhoufm.com/episode/123",
+            _bash_path(tmp_path / "out.txt"),
+        ],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        cwd=ROOT,
+    )
+
+    # The fake curl exits 42, so the run must fail — but the URL has to reach
+    # curl instead of being misreported as an unsupported host.
+    assert result.returncode != 0
+    assert "仅支持 xiaoyuzhoufm.com" not in result.stderr
+    assert curl_log.exists()
+    _assert_work_dir_cleaned(temp_root)
+
 
 
 def test_transcribe_script_uses_secure_temp_and_bounded_curl_calls():
