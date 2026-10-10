@@ -30,6 +30,18 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Features / 新增
 
+#### 🖼️ Google 图片搜索 channel
+
+- 新增 `google_images` channel：路由到 Google 官方 Custom Search JSON API
+  （`searchType=image`），免费额度 100 次/天。
+- **不抓取 google.com**：Google 明确禁止自动化抓取搜索/图片结果页且会主动拦截，
+  实测确认此路无解；官方 API 是唯一合规且可靠的路径。
+- `check()` 只确认 `google_api_key` + `google_cx` 两项凭据是否齐全，不发起真实
+  查询——避免每次 `doctor` 都消耗免费额度。凭据齐全时归类 `warn`（配置存在但
+  未实时验证），与 GitHub/Twitter 等其他凭据渠道的既有约定一致。
+- 新增 `agent-reach configure google-key` / `agent-reach configure google-cx`。
+- Skill 路由表、`references/search.md`、README 平台表和后端选型表同步更新。
+
 #### 🎯 Boss直聘 channel
 
 - 新增 `boss` channel：经 boss-agent-cli + CDP 真 Chrome 搜岗位、取 JD 全文。

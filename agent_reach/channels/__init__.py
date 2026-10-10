@@ -12,6 +12,7 @@ from .boss import BossChannel
 from .exa_search import ExaSearchChannel
 from .facebook import FacebookChannel
 from .github import GitHubChannel
+from .google_images import GoogleImagesChannel
 from .instagram import InstagramChannel
 from .linkedin import LinkedInChannel
 from .reddit import RedditChannel
@@ -40,6 +41,7 @@ ALL_CHANNELS: List[Channel] = [
     XueqiuChannel(),
     RSSChannel(),
     ExaSearchChannel(),
+    GoogleImagesChannel(),
     WebChannel(),
 ]
 
