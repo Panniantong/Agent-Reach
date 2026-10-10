@@ -1564,9 +1564,22 @@ def _cmd_configure(args):
             raise SystemExit(1)
 
     elif args.key == "youtube-cookies":
-        config.set("youtube_cookies_from", value)
-        print(f"✅ YouTube cookie source configured: {value}")
-        print("   yt-dlp will use cookies from this browser for age-restricted/member videos.")
+        from agent_reach.transcribe import TranscribeError, youtube_cookie_source
+
+        try:
+            cookie_source = youtube_cookie_source(value)
+        except TranscribeError as exc:
+            print(f"agent-reach configure: error: {exc}", file=sys.stderr)
+            raise SystemExit(2) from None
+        if cookie_source is None:
+            print(f"Missing value for {args.key}")
+            raise SystemExit(1)
+        config.set("youtube_cookies_from", cookie_source)
+        print(f"✅ YouTube cookie source configured: {cookie_source}")
+        print(
+            "   agent-reach transcribe will pass this browser to yt-dlp "
+            "for age-restricted/member videos."
+        )
 
     elif args.key == "xhs-cookies":
         if not _configure_xhs_cookies(value):

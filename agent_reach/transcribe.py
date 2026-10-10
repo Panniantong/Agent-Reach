@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import ipaddress
 import math
+import re
 import shutil
 import socket
 import subprocess
@@ -33,6 +34,7 @@ from urllib.parse import urlparse
 import requests
 
 from agent_reach.config import Config
+from agent_reach.utils.url import host_matches
 
 # Whisper API limit is 25MB; leave headroom for multipart overhead.
 SIZE_LIMIT_BYTES = 24 * 1024 * 1024
@@ -42,6 +44,16 @@ MAX_CHUNKS = 24  # 4 hours at the standard 10-minute segment size
 MAX_TOTAL_CHUNK_BYTES = 96 * 1024 * 1024
 MAX_AUDIO_SECONDS = MAX_CHUNKS * CHUNK_SECONDS
 FFPROBE_TIMEOUT_SECONDS = 30
+YTDLP_BROWSERS = frozenset(
+    {"brave", "chrome", "chromium", "edge", "firefox", "opera", "safari", "vivaldi", "whale"}
+)
+YTDLP_KEYRINGS = frozenset({"KWALLET", "KWALLET5", "KWALLET6", "GNOMEKEYRING", "BASICTEXT"})
+_COOKIE_SOURCE_RE = re.compile(
+    r"(?P<browser>[^+:]+)"
+    r"(?:\s*\+\s*(?P<keyring>[^:]+))?"
+    r"(?:\s*:\s*(?!:)(?P<profile>.+?))?"
+    r"(?:\s*::\s*(?P<container>.+))?"
+)
 
 PROVIDERS = {
     "groq": {
@@ -247,11 +259,60 @@ def _assert_safe_public_url(url: str) -> None:
         raise TranscribeError("SSRF blocked: private/internal IP is not allowed")
 
 
-def download_audio(url: str, out_dir: Path) -> Path:
+def youtube_cookie_source(value: object) -> str | None:
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str):
+        raise TranscribeError("YouTube cookie browser must be a string")
+    source = value.strip()
+    if not source:
+        return None
+    if any(character in source for character in "\r\n\0"):
+        raise TranscribeError("YouTube cookie browser contains an invalid control character")
+    match = _COOKIE_SOURCE_RE.fullmatch(source)
+    if match is None:
+        raise TranscribeError("invalid YouTube cookie browser specification")
+    browser = match.group("browser").strip().lower()
+    if browser not in YTDLP_BROWSERS:
+        supported = ", ".join(sorted(YTDLP_BROWSERS))
+        raise TranscribeError(
+            f"unsupported YouTube cookie browser {browser!r}; choose one of: {supported}"
+        )
+    keyring = match.group("keyring")
+    if keyring is not None and keyring.strip().upper() not in YTDLP_KEYRINGS:
+        supported = ", ".join(sorted(YTDLP_KEYRINGS))
+        raise TranscribeError(
+            f"unsupported YouTube cookie keyring {keyring.strip()!r}; choose one of: {supported}"
+        )
+    normalized = browser
+    if keyring is not None:
+        normalized += f"+{keyring.strip().upper()}"
+    profile = match.group("profile")
+    if profile is not None and profile.strip():
+        normalized += f":{profile.strip()}"
+    container = match.group("container")
+    if container is not None:
+        normalized += f"::{container.strip()}"
+    return normalized
+
+
+def _is_youtube_url(url: str) -> bool:
+    candidate = url if "://" in url else f"https://{url}"
+    return host_matches(candidate, "youtube.com", "youtu.be")
+
+
+def download_audio(
+    url: str,
+    out_dir: Path,
+    *,
+    cookies_from_browser: str | None = None,
+) -> Path:
     """Download audio with yt-dlp into out_dir; return the resulting file path."""
     _assert_safe_public_url(url)
     _require("yt-dlp")
     template = out_dir / "source.%(ext)s"
+    cookie_source = youtube_cookie_source(cookies_from_browser)
+    cookie_args = ["--cookies-from-browser", cookie_source] if cookie_source else []
     _run(
         [
             "yt-dlp",
@@ -261,6 +322,7 @@ def download_audio(url: str, out_dir: Path) -> Path:
             "--audio-quality",
             "0",
             "--no-playlist",
+            *cookie_args,
             "--max-filesize",
             str(MAX_SOURCE_BYTES),
             "-o",
@@ -449,7 +511,12 @@ def _transcribe_in_dir(source: str, order: List[str], cfg: Config, work_dir: Pat
     if src_path.is_file():
         audio = src_path
     else:
-        audio = download_audio(source, work_dir)
+        cookie_source = cfg.get("youtube_cookies_from") if _is_youtube_url(source) else None
+        audio = download_audio(
+            source,
+            work_dir,
+            cookies_from_browser=cookie_source,
+        )
 
     _require_size_at_most(audio, MAX_SOURCE_BYTES, "source")
     _require_duration_within_budget(audio)
