@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Reach — 给你的 AI Agent 一键装上互联网能力</title>
+<meta name="description" content="给你的 AI Agent 一键装上互联网能力 — 安装器 + 体检工具 + 路由表，不是又一层封装。">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👁️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+SC:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f2f1ec;
+    --surface:#ffffff;
+    --surface-2:#eae8e1;
+    --ink:#14171b;
+    --ink-soft:#53585e;
+    --ink-faint:#8a8f94;
+    --rule:#d9d6cd;
+    --accent:#3b4fe0;
+    --accent-ink:#ffffff;
+    --accent-soft:#e7e9fb;
+    --term-bg:#15181d;
+    --term-ink:#e7e6e1;
+    --term-ink-soft:#9aa0a6;
+    --ok:#1f8a4c;
+    --ok-soft:#e2f2e7;
+    --cfg:#a8650a;
+    --cfg-soft:#f7ecda;
+    --blk:#c23b3b;
+    --blk-soft:#f8e4e0;
+    --band-bg:#14171b;
+    --band-ink:#f2f1ec;
+    --band-sub:#c9c7bd;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#14171b;
+      --surface:#1b1e23;
+      --surface-2:#20242a;
+      --ink:#ecebe6;
+      --ink-soft:#a3a8ad;
+      --ink-faint:#6d7278;
+      --rule:#2b2f35;
+      --accent:#8b98ff;
+      --accent-ink:#0f1220;
+      --accent-soft:#242a4a;
+      --term-bg:#0e1013;
+      --term-ink:#e7e6e1;
+      --term-ink-soft:#82878d;
+      --ok:#3fbf7a;
+      --ok-soft:#173225;
+      --cfg:#d99a3f;
+      --cfg-soft:#332512;
+      --blk:#e2685f;
+      --blk-soft:#391f1d;
+      --band-bg:#20242a;
+      --band-ink:#ecebe6;
+      --band-sub:#a3a8ad;
+    }
+  }
+
+  *{box-sizing:border-box;}
+  html{background:var(--bg);}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"IBM Plex Sans","IBM Plex Sans SC",-apple-system,BlinkMacSystemFont,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;}
+  h1,h2,h3{text-wrap:balance; margin:0; font-weight:600;}
+  p{margin:0;}
+  a{color:inherit;}
+  img{max-width:100%;}
+  .wrap{max-width:1080px; margin:0 auto; padding:0 28px;}
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:20px 0; border-bottom:1px solid var(--rule);
+  }
+  .brand{display:flex; align-items:center; gap:10px; font-weight:600; font-size:17px;}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--ok); box-shadow:0 0 0 3px var(--ok-soft); animation:pulse 2.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.45;}}
+  @media (prefers-reduced-motion: reduce){ .brand .dot{animation:none;} }
+  .toplinks{display:flex; gap:22px; font-size:13.5px; color:var(--ink-soft);}
+  .toplinks a{text-decoration:none;}
+  .toplinks a:hover{color:var(--accent);}
+  .toplinks a:focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:2px;}
+
+  /* ---------- hero ---------- */
+  .hero{padding:64px 0 56px; display:grid; grid-template-columns:1.05fr .95fr; gap:48px; align-items:start;}
+  @media (max-width:860px){ .hero{grid-template-columns:1fr;} }
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:8px;
+    font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--ink-soft); background:var(--surface); border:1px solid var(--rule);
+    padding:5px 10px; border-radius:99px; margin-bottom:20px;
+  }
+  .hero h1{font-size:44px; line-height:1.16; letter-spacing:-.015em;}
+  .hero h1 span{color:var(--accent);}
+  .hero .sub{margin-top:16px; font-size:17px; line-height:1.6; color:var(--ink-soft); max-width:46ch;}
+  .cta-row{display:flex; gap:12px; margin-top:28px; flex-wrap:wrap;}
+  .btn{
+    font-family:inherit; font-size:14.5px; font-weight:600; padding:12px 20px; border-radius:8px;
+    text-decoration:none; display:inline-flex; align-items:center; gap:8px; border:1px solid transparent;
+  }
+  .btn-primary{background:var(--accent); color:var(--accent-ink);}
+  .btn-primary:hover{opacity:.9;}
+  .btn-ghost{background:transparent; color:var(--ink); border-color:var(--rule);}
+  .btn-ghost:hover{border-color:var(--ink-soft);}
+  .btn:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+
+  .terminal{
+    background:var(--term-bg); border-radius:12px; overflow:hidden; box-shadow:0 18px 40px -22px rgba(0,0,0,.5);
+    border:1px solid var(--rule);
+  }
+  .term-head{display:flex; align-items:center; gap:7px; padding:11px 14px; border-bottom:1px solid rgba(255,255,255,.08);}
+  .term-head i{width:9px;height:9px;border-radius:50%; background:#5a5f66;}
+  .term-head span{margin-left:8px; font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--term-ink-soft);}
+  .term-body{padding:18px 16px 20px; font-family:"IBM Plex Mono",monospace; font-size:13px; line-height:1.85; color:var(--term-ink); white-space:pre-wrap; word-break:break-word;}
+  .term-body .prompt{color:#6ee78a;}
+  .term-body .comment{color:var(--term-ink-soft);}
+  .term-body .url{color:#8fb4ff; word-break:break-all;}
+  .caret{display:inline-block; width:7px; height:14px; background:var(--term-ink); vertical-align:-2px; margin-left:2px; animation:blink 1.1s step-end infinite;}
+  @keyframes blink{50%{opacity:0;}}
+  @media (prefers-reduced-motion: reduce){ .caret{animation:none;} }
+
+  .hero-meta{display:flex; gap:18px; margin-top:16px; font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--ink-faint);}
+
+  /* ---------- section shell ---------- */
+  section{padding:56px 0;}
+  .section-head{max-width:60ch; margin-bottom:32px;}
+  .kicker{font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); margin-bottom:10px; display:block;}
+  .section-head h2{font-size:28px; letter-spacing:-.01em;}
+  .section-head p{margin-top:12px; color:var(--ink-soft); font-size:15.5px; line-height:1.65;}
+  .rule{border:0; border-top:1px solid var(--rule); margin:0;}
+
+  /* ---------- problem list ---------- */
+  .problems{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:10px; overflow:hidden;}
+  @media (max-width:720px){ .problems{grid-template-columns:1fr;} }
+  .problem{background:var(--surface); padding:18px 20px; display:flex; gap:12px; align-items:flex-start;}
+  .problem .icon{font-size:17px; line-height:1; margin-top:1px;}
+  .problem .ask{font-size:14px; color:var(--ink);}
+  .problem .fail{font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--blk); margin-top:5px;}
+
+  /* ---------- status board ---------- */
+  .board{border:1px solid var(--rule); border-radius:10px; overflow:hidden; background:var(--surface);}
+  .board-row{
+    display:grid; grid-template-columns: 26px 1.15fr 1.5fr .55fr; gap:16px; align-items:center;
+    padding:13px 18px; border-bottom:1px solid var(--rule);
+  }
+  .board-row:last-child{border-bottom:none;}
+  .board-row.head{background:var(--surface-2); font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); padding:10px 18px;}
+  @media (max-width:720px){
+    .board-row{grid-template-columns: 22px 1fr; row-gap:6px;}
+    .board-row .chain, .board-row .status{grid-column:2; }
+    .board-row.head{display:none;}
+  }
+  .dot{width:9px; height:9px; border-radius:50%; display:inline-block; flex:none;}
+  .dot.ok{background:var(--ok);}
+  .dot.cfg{background:var(--cfg);}
+  .dot.blk{background:var(--blk);}
+  .plat{font-size:14.5px; font-weight:500; display:flex; align-items:center; gap:8px;}
+  .plat .emo{font-size:15px;}
+  .chain{font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--ink-soft);}
+  .status{font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.03em; text-transform:uppercase; font-weight:600; padding:3px 9px; border-radius:99px; display:inline-block; width:fit-content;}
+  .status.ok{color:var(--ok); background:var(--ok-soft);}
+  .status.cfg{color:var(--cfg); background:var(--cfg-soft);}
+  .status.blk{color:var(--blk); background:var(--blk-soft);}
+  .board-legend{display:flex; gap:22px; margin-top:14px; font-size:12.5px; color:var(--ink-soft); flex-wrap:wrap;}
+  .board-legend span{display:inline-flex; align-items:center; gap:7px;}
+
+  /* ---------- philosophy ---------- */
+  .phil{display:grid; grid-template-columns:1fr 1fr; gap:40px; align-items:start;}
+  @media (max-width:860px){ .phil{grid-template-columns:1fr;} }
+  .phil-text p{color:var(--ink-soft); font-size:15px; line-height:1.75;}
+  .phil-text p + p{margin-top:14px;}
+  .phil-text strong{color:var(--ink);}
+  .filetree{
+    background:var(--term-bg); color:var(--term-ink); border-radius:10px; padding:18px 20px;
+    font-family:"IBM Plex Mono",monospace; font-size:12.5px; line-height:1.95; overflow-x:auto; border:1px solid var(--rule);
+  }
+  .filetree .path{color:#8fb4ff;}
+  .filetree .arrow{color:var(--term-ink-soft);}
+  .filetree .note{color:var(--term-ink-soft);}
+
+  /* ---------- trust tiles ---------- */
+  .tiles{display:grid; grid-template-columns:repeat(4,1fr); gap:14px;}
+  @media (max-width:860px){ .tiles{grid-template-columns:repeat(2,1fr);} }
+  @media (max-width:480px){ .tiles{grid-template-columns:1fr;} }
+  .tile{background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:18px;}
+  .tile .icon{font-size:19px;}
+  .tile h3{font-size:14.5px; margin-top:10px;}
+  .tile p{font-size:13px; color:var(--ink-soft); margin-top:6px; line-height:1.6;}
+
+  /* ---------- cta band ---------- */
+  .band{background:var(--band-bg); color:var(--band-ink); border-radius:16px; padding:44px 40px; display:grid; grid-template-columns:1fr auto; gap:32px; align-items:center;}
+  @media (max-width:720px){ .band{grid-template-columns:1fr; text-align:left;} }
+  .band h2{font-size:24px; color:var(--band-ink);}
+  .band p{color:var(--band-sub); margin-top:10px; font-size:14.5px; max-width:46ch;}
+  .band .btn-primary{background:var(--band-ink); color:var(--band-bg); white-space:nowrap;}
+
+  footer{border-top:1px solid var(--rule); padding:32px 0 48px;}
+  .foot-row{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; font-size:13px; color:var(--ink-faint);}
+  .foot-links{display:flex; gap:18px; flex-wrap:wrap;}
+  .foot-links a{text-decoration:none; color:var(--ink-soft);}
+  .foot-links a:hover{color:var(--accent);}
+</style>
+</head>
+<body>
+
+<header class="topbar wrap">
+  <div class="brand"><span class="dot"></span> Agent Reach</div>
+  <nav class="toplinks">
+    <a href="#board">支持平台</a>
+    <a href="#philosophy">设计理念</a>
+    <a href="#trust">安全性</a>
+    <a href="https://github.com/Panniantong/Agent-Reach" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+</header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <div>
+      <span class="eyebrow">v1.5.0 · MIT · 15 个内置渠道</span>
+      <h1>给你的 AI Agent<br><span>一键装上互联网能力</span></h1>
+      <p class="sub">Agent Reach 不是又一层封装。它是安装器 + 体检工具 + 路由表：替你选好当下最稳的接入方式、装好、体检好——装完之后，Agent 直接调用上游工具，中间没有黑盒。</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md" target="_blank" rel="noopener">复制安装指令 →</a>
+        <a class="btn btn-ghost" href="https://github.com/Panniantong/Agent-Reach" target="_blank" rel="noopener">查看源码</a>
+      </div>
+      <div class="hero-meta">
+        <span>pip install -e .</span>
+        <span>agent-reach doctor</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="terminal">
+        <div class="term-head"><i></i><i></i><i></i><span>把这句话发给你的 Agent</span></div>
+        <div class="term-body"><span class="comment">// Claude Code / OpenClaw / Cursor…</span>
+<span class="prompt">›</span> 帮我安装 Agent Reach：
+<span class="url">https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md</span>
+
+<span class="comment">// 装好之后，随时体检</span>
+<span class="prompt">›</span> agent-reach doctor
+<span class="comment">web        ✓ Jina Reader</span>
+<span class="comment">twitter    ✓ twitter-cli</span>
+<span class="comment">reddit     ⚠ 需要登录态</span><span class="caret"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="problem">
+    <div class="section-head">
+      <span class="kicker">问题</span>
+      <h2>Agent 会写代码、改文档、管项目——但让它去网上找点东西，就抓瞎</h2>
+      <p>每个平台都有自己的门槛：要付费的 API、要绕过的封锁、要登录的账号、要清洗的 HTML。自己一个个踩坑，光是让 Agent 读条推特就得折腾半天。</p>
+    </div>
+    <div class="problems">
+      <div class="problem"><span class="icon">🐦</span><div><div class="ask">"搜一下推特上大家怎么评价这个产品"</div><div class="fail">→ Twitter API 要付费</div></div></div>
+      <div class="problem"><span class="icon">📖</span><div><div class="ask">"Reddit 上有没有人遇到过同样的 bug"</div><div class="fail">→ 403，服务器 IP 被拒</div></div></div>
+      <div class="problem"><span class="icon">📕</span><div><div class="ask">"小红书上这个品的口碑怎么样"</div><div class="fail">→ 必须登录才能看</div></div></div>
+      <div class="problem"><span class="icon">📺</span><div><div class="ask">"B站这个技术视频讲了什么"</div><div class="fail">→ 通用下载工具被风控拦截</div></div></div>
+      <div class="problem"><span class="icon">🔍</span><div><div class="ask">"全网搜一下最新的 LLM 框架对比"</div><div class="fail">→ 没有好用的搜索，要么付费要么质量差</div></div></div>
+      <div class="problem"><span class="icon">🌐</span><div><div class="ask">"看看这个网页写了啥"</div><div class="fail">→ 抓回一堆 HTML 标签</div></div></div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="board">
+    <div class="section-head">
+      <span class="kicker">agent-reach doctor</span>
+      <h2>每个渠道都是「首选 + 备选」的路由表</h2>
+      <p>接入方式会换代——2026-06 一次实例：yt-dlp 被 B站风控封死 → 已切换 bili-cli，用户零操作。下面是当前的选型状态。</p>
+    </div>
+
+    <div class="board">
+      <div class="board-row head">
+        <span></span><span>渠道</span><span>当前后端链</span><span>状态</span>
+      </div>
+
+      <div class="board-row"><span class="dot ok"></span><span class="plat"><span class="emo">🌐</span>网页</span><span class="chain">Jina Reader</span><span class="status ok">零配置</span></div>
+      <div class="board-row"><span class="dot ok"></span><span class="plat"><span class="emo">📺</span>YouTube</span><span class="chain">yt-dlp</span><span class="status ok">零配置</span></div>
+      <div class="board-row"><span class="dot ok"></span><span class="plat"><span class="emo">📡</span>RSS</span><span class="chain">feedparser</span><span class="status ok">零配置</span></div>
+      <div class="board-row"><span class="dot ok"></span><span class="plat"><span class="emo">🔍</span>全网搜索</span><span class="chain">Exa <span class="arrow">via</span> mcporter</span><span class="status ok">自动配置</span></div>
+      <div class="board-row"><span class="dot ok"></span><span class="plat"><span class="emo">📦</span>GitHub</span><span class="chain">gh CLI</span><span class="status ok">零配置</span></div>
+      <div class="board-row"><span class="dot ok"></span><span class="plat"><span class="emo">💻</span>V2EX</span><span class="chain">官方接口</span><span class="status ok">零配置</span></div>
+      <div class="board-row"><span class="dot ok"></span><span class="plat"><span class="emo">📈</span>雪球</span><span class="chain">官方行情接口</span><span class="status ok">零配置</span></div>
+      <div class="board-row"><span class="dot cfg"></span><span class="plat"><span class="emo">🐦</span>Twitter / X</span><span class="chain">twitter-cli <span class="arrow">▸</span> OpenCLI <span class="arrow">▸</span> bird</span><span class="status cfg">Cookie 解锁</span></div>
+      <div class="board-row"><span class="dot cfg"></span><span class="plat"><span class="emo">📺</span>B站</span><span class="chain">bili-cli <span class="arrow">▸</span> OpenCLI <span class="arrow">▸</span> 搜索 API</span><span class="status cfg">登录解锁字幕</span></div>
+      <div class="board-row"><span class="dot cfg"></span><span class="plat"><span class="emo">💼</span>LinkedIn</span><span class="chain">mcp-server-linkedin <span class="arrow">▸</span> Jina Reader</span><span class="status cfg">登录解锁详情</span></div>
+      <div class="board-row"><span class="dot blk"></span><span class="plat"><span class="emo">📖</span>Reddit</span><span class="chain">OpenCLI <span class="arrow">▸</span> rdt-cli</span><span class="status blk">需要登录态</span></div>
+      <div class="board-row"><span class="dot blk"></span><span class="plat"><span class="emo">📘</span>Facebook</span><span class="chain">OpenCLI（桌面登录态）</span><span class="status blk">需要登录态</span></div>
+      <div class="board-row"><span class="dot blk"></span><span class="plat"><span class="emo">📷</span>Instagram</span><span class="chain">OpenCLI（桌面登录态）</span><span class="status blk">需要登录态</span></div>
+      <div class="board-row"><span class="dot blk"></span><span class="plat"><span class="emo">📕</span>小红书</span><span class="chain">OpenCLI <span class="arrow">▸</span> xiaohongshu-mcp <span class="arrow">▸</span> xhs-cli</span><span class="status blk">需要登录态</span></div>
+      <div class="board-row"><span class="dot blk"></span><span class="plat"><span class="emo">🎙️</span>小宇宙播客</span><span class="chain">Whisper 转录</span><span class="status blk">需配置 Key</span></div>
+    </div>
+
+    <div class="board-legend">
+      <span><span class="dot ok"></span>装好即用，零配置</span>
+      <span><span class="dot cfg"></span>基础功能免配置，登录后解锁更多</span>
+      <span><span class="dot blk"></span>没有零配置路径，必须登录态</span>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="philosophy">
+    <div class="section-head">
+      <span class="kicker">设计理念</span>
+      <h2>能力层，不是又一个工具</h2>
+    </div>
+    <div class="phil">
+      <div class="phil-text">
+        <p>Agent Reach 比任何具体实现高一层——负责<strong>选型、安装、体检、路由</strong>，不负责底层读取本身。读取由 Agent 直接调用上游工具完成，没有包装层。</p>
+        <p>换接入方式 = 调整列表顺序，不是重写代码。<span class="mono">agent-reach doctor</span> 会告诉你每个平台当前在用哪个后端，坏掉的会给出修复处方。</p>
+        <p>每个渠道文件按序<strong>真实探测</strong>各候选后端（不只是看命令存不存在），第一个完整可用的当选。</p>
+      </div>
+      <div class="filetree">channels/<br>
+├── web.py&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">→</span> <span class="path">Jina Reader</span><br>
+├── twitter.py&nbsp;&nbsp;<span class="arrow">→</span> <span class="path">twitter-cli ▸ OpenCLI ▸ bird</span><br>
+├── youtube.py&nbsp;&nbsp;<span class="arrow">→</span> <span class="path">yt-dlp</span><br>
+├── github.py&nbsp;&nbsp;&nbsp;<span class="arrow">→</span> <span class="path">gh CLI</span><br>
+├── bilibili.py&nbsp;<span class="arrow">→</span> <span class="path">bili-cli ▸ OpenCLI</span> <span class="note">(yt-dlp 已退役)</span><br>
+├── reddit.py&nbsp;&nbsp;&nbsp;<span class="arrow">→</span> <span class="path">OpenCLI ▸ rdt-cli</span> <span class="note">(无零配置路径)</span><br>
+├── linkedin.py&nbsp;<span class="arrow">→</span> <span class="path">mcp-server-linkedin ▸ Jina</span><br>
+└── __init__.py&nbsp;<span class="arrow">→</span> <span class="note">渠道注册，doctor 检测用</span>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="trust">
+    <div class="section-head">
+      <span class="kicker">安全性</span>
+      <h2>凭据只在你本地，改动前先看会做什么</h2>
+    </div>
+    <div class="tiles">
+      <div class="tile"><div class="icon">🔒</div><h3>凭据本地存储</h3><p>Cookie / Token 只存在 <span class="mono">~/.agent-reach/config.yaml</span>，权限 600，不上传不外传。</p></div>
+      <div class="tile"><div class="icon">🛡️</div><h3>默认安全</h3><p>安装默认只检查环境，只有显式 <span class="mono">--system</span> 才会写配置、装依赖。</p></div>
+      <div class="tile"><div class="icon">🔍</div><h3>Dry Run</h3><p><span class="mono">agent-reach install --dry-run</span> 预览所有操作，不做任何改动。</p></div>
+      <div class="tile"><div class="icon">👀</div><h3>完全开源</h3><p>代码透明可审查，依赖的上游工具也全部开源。</p></div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section>
+    <div class="band">
+      <div>
+        <h2>免费，开源，随用随体检</h2>
+        <p>所有工具开源、所有 API 免费。唯一可能花钱的是服务器代理（约 $1/月），本地电脑不需要。</p>
+      </div>
+      <a class="btn btn-primary" href="https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md" target="_blank" rel="noopener">复制安装指令 →</a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <div class="foot-row">
+    <span>MIT License · © Agent Reach</span>
+    <div class="foot-links">
+      <a href="https://github.com/Panniantong/Agent-Reach" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/Panniantong/Agent-Reach/blob/main/docs/README_en.md" target="_blank" rel="noopener">English</a>
+      <a href="https://github.com/Panniantong/Agent-Reach/issues" target="_blank" rel="noopener">Issues</a>
+      <a href="mailto:pnt01@foxmail.com">pnt01@foxmail.com</a>
+      <a href="https://x.com/Neo_Reidlab" target="_blank" rel="noopener">@Neo_Reidlab</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
