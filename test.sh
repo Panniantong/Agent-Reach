@@ -53,7 +53,15 @@ fi
 
 echo "[2/5] Installing this checkout and test dependencies"
 python -m pip install --quiet --upgrade pip
-python -m pip install --quiet -c "$REPO_ROOT/constraints.txt" -e "$REPO_ROOT[dev]"
+# Install the editable target from a subshell cd'd into the repo with a
+# relative ".[dev]". On Windows (Git Bash + native Python), an absolute
+# "$REPO_ROOT[dev]" defeats MSYS path conversion: the trailing [dev] makes
+# the argument look like a non-existent path, so the "/d/..." form is
+# passed through unchanged and native pip rejects it as "not a valid
+# editable requirement". A relative path avoids the conversion. The
+# constraints path is kept absolute on purpose: the file exists, so MSYS
+# converts it cleanly, and test_integration_script pins that exact spelling.
+( cd "$REPO_ROOT" && python -m pip install --quiet -c "$REPO_ROOT/constraints.txt" -e ".[dev]" )
 
 echo "[3/5] Verifying the installed CLI"
 agent-reach version
