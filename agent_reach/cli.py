@@ -549,11 +549,13 @@ def _install_skill(force: bool = True):
             return None
 
     # Install into every known skill root that already exists.
+    qoder_home = os.environ.get("QODER_CONFIG_DIR") or os.path.expanduser("~/.qoder")
     skill_dirs = [
         (os.path.expanduser("~/.agents/skills"), "Agent"),
         (os.path.expanduser("~/.config/opencode/skills"), "OpenCode"),
         (os.path.expanduser("~/.openclaw/skills"), "OpenClaw"),
         (os.path.expanduser("~/.claude/skills"), "Claude Code"),
+        (os.path.join(qoder_home, "skills"), "Qoder"),
     ]
 
     # Insert OPENCLAW_HOME path at the beginning if environment variable is set
@@ -589,7 +591,7 @@ def _install_skill(force: bool = True):
         else:
             print("  -- Could not install agent skill (optional)")
             print(
-                "  -- Tip: install OpenCode, OpenClaw, Claude Code, "
+                "  -- Tip: install OpenCode, OpenClaw, Claude Code, Qoder, "
                 "or create ~/.agents/skills/ manually"
             )
     return installed
@@ -599,10 +601,12 @@ def _uninstall_skill():
     """Remove SKILL.md from all known agent skill directories."""
     import shutil
 
+    qoder_home = os.environ.get("QODER_CONFIG_DIR") or os.path.expanduser("~/.qoder")
     skill_dirs = [
         ("~/.config/opencode/skills/agent-reach", "OpenCode"),
         ("~/.openclaw/skills/agent-reach", "OpenClaw"),
         ("~/.claude/skills/agent-reach", "Claude Code"),
+        (os.path.join(qoder_home, "skills", "agent-reach"), "Qoder"),
         ("~/.agents/skills/agent-reach", "Agent"),
     ]
 
@@ -1929,10 +1933,12 @@ def _cmd_uninstall(args):
         print("      若确认不再被 xfetch/bird 使用，请手动删除。")
 
     # ── 2. Skill files ──
+    qoder_home = os.environ.get("QODER_CONFIG_DIR") or os.path.expanduser("~/.qoder")
     skill_dirs = [
         ("~/.config/opencode/skills/agent-reach", "OpenCode"),
         ("~/.openclaw/skills/agent-reach", "OpenClaw"),
         ("~/.claude/skills/agent-reach", "Claude Code"),
+        (os.path.join(qoder_home, "skills", "agent-reach"), "Qoder"),
         ("~/.agents/skills/agent-reach", "Agent"),
     ]
 
