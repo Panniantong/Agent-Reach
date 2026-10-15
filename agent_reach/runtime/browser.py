@@ -165,7 +165,7 @@ def _open_lock(path: Path) -> int:
 def try_lock(fd: int) -> bool:
     """Take an exclusive lock on `fd` without blocking."""
     try:
-        if os.name == "nt":
+        if sys.platform == "win32":
             import msvcrt
 
             msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
@@ -269,7 +269,7 @@ def _system_chrome() -> Optional[str]:
             if base:
                 candidates.append(os.path.join(base, "Google", "Chrome", "Application", "chrome.exe"))
     else:
-        candidates = [shutil.which(n) for n in ("google-chrome", "google-chrome-stable", "chromium")]
+        candidates = [c for n in ("google-chrome", "google-chrome-stable", "chromium") if (c := shutil.which(n)) is not None]
     return next((c for c in candidates if c and os.path.exists(c)), None)
 
 
@@ -356,7 +356,7 @@ def ensure_chrome() -> str:
 
 def can_load_extension() -> bool:
     """macOS/Linux: the watcher loads the extension over the launch pipe. Windows: Web Store only."""
-    return os.name != "nt"
+    return sys.platform != "win32"
 
 
 def chrome_argv(exe: str, url: str, *, pipe: bool) -> List[str]:
@@ -450,7 +450,7 @@ def _detach_kwargs() -> dict:
     # agent_reach/ folder where the user ran the command would shadow the installed package.
     root = browser_root()
     make_private_dir(root)
-    if os.name == "nt":
+    if sys.platform == "win32":
         return {"cwd": str(root), "creationflags": subprocess.DETACHED_PROCESS
                 | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW}
     return {"cwd": str(root), "start_new_session": True}
@@ -586,7 +586,7 @@ def open_url(url: str) -> None:
 
 def _profile_pids() -> List[int]:
     """Processes started with our --user-data-dir (Chrome and its helpers)."""
-    if os.name == "nt":
+    if sys.platform == "win32":
         return []
     try:
         out = subprocess.run(["ps", "-axww", "-o", "pid=,command="], capture_output=True, text=True, timeout=10).stdout
@@ -636,7 +636,10 @@ def delete_profile() -> bool:
         if not wait_for(lambda: not _profile_pids(), 5.0, interval=0.2):
             for pid in _profile_pids():
                 with contextlib.suppress(OSError):
-                    os.kill(pid, signal.SIGKILL)
+                    if sys.platform != "win32":
+                        os.kill(pid, signal.SIGKILL)
+                    else:
+                        os.kill(pid, signal.SIGTERM)
         wait_for(lambda: not watcher_running(), 20.0, interval=0.2)
     shutil.rmtree(root, ignore_errors=True)
     return not root.exists()

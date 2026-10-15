@@ -12,6 +12,7 @@ YouTube backend; it just no longer serves bilibili.
 import json
 import re
 import urllib.request
+from typing import Any
 
 from agent_reach.runtime.result import (
     BAD_INPUT,
@@ -50,7 +51,7 @@ def _bvid(target: str, timeout: float) -> str:
     raise ReachError(BAD_INPUT, "target must be a BV id or a bilibili.com / b23.tv video link")
 
 
-def _bili_json(args: list, timeout: float) -> dict:
+def _bili_json(args: list, timeout: float) -> Any:
     """Run bili-cli with --json; map its error envelope to unified codes."""
     try:
         out = run_cmd(["bili", *args, "--json"], timeout=timeout, env=session_env("bili-cli"))

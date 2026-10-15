@@ -2,6 +2,7 @@
 """LinkedIn — job search through mcp-server-linkedin via mcporter."""
 
 import json
+from typing import Any, Dict
 
 from agent_reach.backends.mcporter import configured_server_names
 from agent_reach.runtime.result import NEED_SETUP, UPSTREAM_BROKEN, ReachError, make_item
@@ -98,12 +99,13 @@ class LinkedInChannel(Channel):
         else:
             out = run_cmd(["mcporter", "config", "list", "--json"], timeout=min(timeout, 20))
             names = configured_server_names(out)
-            server = next((n for n in ("linkedin", "mcp-server-linkedin", "linkedin-scraper", "linkedin-scraper-mcp") if n in names), None)
+            _server = next((n for n in ("linkedin", "mcp-server-linkedin", "linkedin-scraper", "linkedin-scraper-mcp") if n in names), None)
             base = ["mcporter"]
-            if server is None:
+            if _server is None:
                 raise ReachError(NEED_SETUP, "LinkedIn is not set up", hint="Run `agent-reach add linkedin`, then `agent-reach login linkedin`.")
+            server = _server
         # The official server names the query `keywords`; the scraper variants use `query`.
-        args = {"keywords": query} if server in ("linkedin", "mcp-server-linkedin") else {"query": query, "max_results": limit}
+        args: Dict[str, Any] = {"keywords": query} if server in ("linkedin", "mcp-server-linkedin") else {"query": query, "max_results": limit}
         if location:
             args["location"] = location
         try:

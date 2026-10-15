@@ -7,6 +7,7 @@ directories; the private directory is created only on the first write.
 
 import os
 import stat
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Optional
@@ -58,7 +59,7 @@ def _atomic_write_yaml(target: Path, data: dict) -> None:
     )
     tmp_path = Path(tmp_name)
     try:
-        if os.name != "nt" and hasattr(os, "fchmod"):
+        if sys.platform != "win32" and hasattr(os, "fchmod"):
             os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             yaml.safe_dump(
@@ -75,11 +76,11 @@ def _atomic_write_yaml(target: Path, data: dict) -> None:
         # never follows the symlink into its target.
         _reject_symlink(target, "配置文件")
         os.replace(tmp_path, target)
-        if os.name != "nt":
+        if sys.platform != "win32":
             os.chmod(target, stat.S_IRUSR | stat.S_IWUSR)
 
         # Persist the rename where directory fsync is supported.
-        if os.name != "nt" and hasattr(os, "O_DIRECTORY"):
+        if sys.platform != "win32" and hasattr(os, "O_DIRECTORY"):
             try:
                 dir_fd = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY)
                 try:

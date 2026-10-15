@@ -71,7 +71,7 @@ TOOLS: Dict[str, Tool] = {
 _BY_COMMAND = {c: t for t in TOOLS.values() for c in t.commands}
 
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
-_WIN = os.name == "nt"
+_WIN = sys.platform == "win32"
 
 
 def tools_root() -> Path:

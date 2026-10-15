@@ -104,7 +104,7 @@ def maybe_refresh() -> None:
         started_path().touch()
         kwargs: dict = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
                         "close_fds": True, "cwd": str(state.root())}
-        if os.name == "nt":
+        if sys.platform == "win32":
             kwargs["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
         else:
             kwargs["start_new_session"] = True

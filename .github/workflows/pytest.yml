@@ -29,6 +29,10 @@ jobs:
         run: |
           pytest -q
 
+      - name: Type-check
+        run: |
+          mypy agent_reach
+
   windows-test:
     runs-on: windows-latest
     steps:

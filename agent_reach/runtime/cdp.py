@@ -155,7 +155,8 @@ class PipeConnection:
                     except ValueError:
                         continue
                     with self._lock:
-                        slot = self._waiting.get(msg.get("id")) if isinstance(msg, dict) else None
+                        msg_id = msg.get("id") if isinstance(msg, dict) else None
+                        slot = self._waiting.get(msg_id) if isinstance(msg_id, int) else None
                     if slot is not None:
                         slot.append(msg)
                         slot[0].set()

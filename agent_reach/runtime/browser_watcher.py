@@ -27,6 +27,8 @@ from . import browser
 
 def _launch_with_pipe(chrome: str, url: str):
     """Start Chrome with the CDP pipe on its fds 3 (commands in) and 4 (replies out)."""
+    if sys.platform == "win32":  # pragma: no cover
+        raise NotImplementedError("pipe launch is not supported on Windows")
     import fcntl
 
     from .cdp import PipeConnection
@@ -90,6 +92,7 @@ def watch(idle: Optional[float] = None, poll: float = 15.0, *, launch: Optional[
 
         def gone() -> bool:
             if conn is not None:
+                assert proc is not None
                 return conn.closed.is_set() or proc.poll() is not None
             return not browser.is_running()
 

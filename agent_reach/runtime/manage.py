@@ -321,7 +321,7 @@ def render_skill(lang: Optional[str] = None) -> str:
     from importlib.resources import files
 
     lang = lang or _skill_lang()
-    template = files("agent_reach").joinpath("skill", "SKILL_en.md" if lang == "en" else "SKILL.md").read_text("utf-8")
+    template = files("agent_reach").joinpath("skill").joinpath("SKILL_en.md" if lang == "en" else "SKILL.md").read_text("utf-8")
     labels = {"default": "default", "optional": "optional", "experimental": "experimental"}
     rows = ["| channel | level | actions | login |", "|---|---|---|---|"]
     for ch in _channels():

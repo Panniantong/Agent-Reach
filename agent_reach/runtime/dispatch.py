@@ -123,10 +123,10 @@ def run_action(
         try:
             items = _call_with_deadline(getattr(channel, method_name), clean, clock)
         except BaseException as exc:  # noqa: BLE001
-            err = classify(exc)
-            attempts.append({"backend": label, "result": err.code, "message": err.message})
-            errors.append(err)
-            if err.code in FINAL_CODES:
+            exc_err = classify(exc)
+            attempts.append({"backend": label, "result": exc_err.code, "message": exc_err.message})
+            errors.append(exc_err)
+            if exc_err.code in FINAL_CODES:
                 break
             continue
         attempts.append({"backend": label, "result": "ok"})
@@ -139,12 +139,12 @@ def run_action(
             attempts=attempts,
         )
 
-    final = errors and next((e for e in errors if e.code in FINAL_CODES), None)
-    err = final or (_pick_error(errors) if errors else ReachError(BAD_INPUT, f"no backend named '{only_backend}'"))
+    final: Optional[ReachError] = next((e for e in errors if e.code in FINAL_CODES), None) if errors else None
+    final_err = final or (_pick_error(errors) if errors else ReachError(BAD_INPUT, f"no backend named '{only_backend}'"))
     return envelope(
         channel=channel.name,
         action=action_name,
         elapsed_ms=elapsed(),
         attempts=attempts,
-        error=err,
+        error=final_err,
     )

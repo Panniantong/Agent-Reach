@@ -75,7 +75,7 @@ def _replace(src: Path, dst: Path) -> None:
             os.replace(src, dst)
             return
         except PermissionError:
-            if os.name != "nt" or attempt == 19:
+            if sys.platform != "win32" or attempt == 19:
                 raise
             time.sleep(0.05)
 
@@ -107,7 +107,7 @@ def atomic_write_private_text(
     )
     tmp_path = Path(tmp_name)
     try:
-        if os.name != "nt" and hasattr(os, "fchmod"):
+        if sys.platform != "win32" and hasattr(os, "fchmod"):
             os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
         handle = os.fdopen(fd, "w", encoding=encoding)
         fd = -1
@@ -120,7 +120,7 @@ def atomic_write_private_text(
         ensure_no_symlink_path(target, "目标文件")
         _replace(tmp_path, target)
 
-        if os.name != "nt" and hasattr(os, "O_DIRECTORY"):
+        if sys.platform != "win32" and hasattr(os, "O_DIRECTORY"):
             try:
                 dir_fd = os.open(
                     parent,

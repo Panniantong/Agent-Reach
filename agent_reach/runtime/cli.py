@@ -20,7 +20,7 @@ import json
 import os
 import subprocess
 import sys
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, cast
 
 from agent_reach.channels import get_all_channels
 from agent_reach.channels.base import Action, Channel
@@ -91,7 +91,7 @@ class _ArgError(Exception):
 class _Parser(argparse.ArgumentParser):
     """argparse that raises instead of printing usage and exiting."""
 
-    def error(self, message: str):  # type: ignore[override]
+    def error(self, message: str):
         raise _ArgError(message)
 
 
@@ -151,7 +151,7 @@ def _cmd_action(channel: Channel, args: Sequence[str]) -> int:
         ns = _parse_action_args(action, args[1:])
     except _ArgError as exc:
         return _bad_input(channel.name, action.name, f"{exc}; usage: {_usage(channel, action)}")
-    timeout = ns.pop("timeout")
+    timeout = cast(float, ns.pop("timeout"))
     return _emit(run_action(channel, action.name, ns, timeout=timeout))
 
 

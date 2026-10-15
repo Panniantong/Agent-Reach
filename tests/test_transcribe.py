@@ -282,7 +282,7 @@ class TestOrchestrator:
         events = []
 
         def fake_run(cmd, **_kwargs):
-            events.append(os.path.basename(cmd[0]))
+            events.append(os.path.splitext(os.path.basename(cmd[0]))[0].lower())
             seconds = tr.MAX_AUDIO_SECONDS + 1
             return subprocess.CompletedProcess(
                 cmd,
