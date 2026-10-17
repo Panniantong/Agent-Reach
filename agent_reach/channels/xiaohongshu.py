@@ -22,9 +22,9 @@ class XiaoHongShuChannel(Channel):
     prereqs = ("node", "chrome")
 
     def setup_problems(self):
-        from agent_reach.runtime.browser import setup_problems
+        from agent_reach.runtime.browser_binding import setup_problems
 
-        return setup_problems()
+        return setup_problems(self.name)
 
     actions = (
         Action(
@@ -34,14 +34,14 @@ class XiaoHongShuChannel(Channel):
                 Param("query", "what to search for"),
                 Param("limit", "max results", required=False, type=int, default=5),
             ),
-            (("opencli", "_opencli_search"),),
+            (("cloakbrowser", "_cloak_search"), ("opencli", "_opencli_search")),
             live_test={"query": "咖啡", "limit": 2},
         ),
         Action(
             "read",
             "Read a note (full link including xsec_token, as returned by search)",
             (Param("target", "full note link with xsec_token"),),
-            (("opencli", "_opencli_read"),),
+            (("cloakbrowser", "_cloak_read"), ("opencli", "_opencli_read")),
         ),
     )
 
@@ -71,9 +71,24 @@ class XiaoHongShuChannel(Channel):
         url = str(target).strip()
         if not host_matches(url, "xiaohongshu.com", "xhslink.com"):
             raise ReachError(BAD_INPUT, "target must be a full Xiaohongshu note link including xsec_token")
-        items = opencli_items(
-            opencli_call("xiaohongshu", ["note", url], timeout=timeout, login_hint=_XHS_LOGIN_HINT)
-        )
+        rows = opencli_call("xiaohongshu", ["note", url], timeout=timeout, login_hint=_XHS_LOGIN_HINT)
+        if isinstance(rows, list) and rows and all(isinstance(r, dict) and "field" in r and "value" in r for r in rows):
+            note = {r["field"]: r["value"] for r in rows}
+            note["url"] = url
+            rows = [note]
+        items = opencli_items(rows)
         if not items:
             raise ReachError(NOT_FOUND, "note not found")
         return items[:1]
+
+    def _cloak_search(self, *, query, limit, timeout):
+        from agent_reach.backends.cloak import call
+        return call(self.name, "search", query=query, limit=limit, timeout=timeout)
+
+    def _cloak_read(self, *, target, timeout):
+        from agent_reach.backends.cloak import call
+        return call(self.name, "read", target=target, timeout=timeout)
+
+    def on_remove(self):
+        from agent_reach.backends.cloak import logout
+        logout(self.name)

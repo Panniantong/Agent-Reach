@@ -9,6 +9,7 @@ def test_channel_registry_contract():
     assert channels, "channel registry must not be empty"
     names = [ch.name for ch in channels]
     assert len(names) == len(set(names)), "channel names must be unique"
+    assert "xiaoyuzhou" not in names
 
     for ch in channels:
         assert isinstance(ch.name, str) and ch.name

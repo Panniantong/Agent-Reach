@@ -74,7 +74,7 @@ def test_constraints_pin_ytdlp_to_current_stable_release():
         if line.startswith("yt-dlp==")
     )
 
-    assert pin == "yt-dlp==2026.07.04"
+    assert pin == "yt-dlp==2026.8.19"
 
 
 def test_project_installs_official_ytdlp_default_dependencies():
@@ -82,7 +82,7 @@ def test_project_installs_official_ytdlp_default_dependencies():
     pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
     constraints = (root / "constraints.txt").read_text(encoding="utf-8")
 
-    assert '"yt-dlp[default]>=2026.07.04"' in pyproject
+    assert '"yt-dlp[default]==2026.8.19"' in pyproject
     assert "yt-dlp-ejs==0.8.0" in constraints
 
 

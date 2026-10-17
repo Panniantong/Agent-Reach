@@ -1,3 +1,5 @@
+> Session reuse and the resumable MCP flow require the matching runtime and Skill. See [one-sentence-harness.md](one-sentence-harness.md).
+
 <h1 align="center">👁️ Agent Reach</h1>
 
 <p align="center">
@@ -5,7 +7,7 @@
 </p>
 
 <p align="center">
-  Login-walled platforms, what's inside videos and podcasts, Chinese platforms, clean structured data. One command, one JSON shape.
+  Login-walled platforms, what's inside videos, Chinese platforms, clean structured data. One command, one JSON shape.
 </p>
 
 <p align="center">
@@ -62,8 +64,8 @@
 CLI agents such as Claude Code, Codex, Hermes Agent and OpenClaw come with web search and page fetching, but they mostly can't reach:
 
 - **Login-walled platforms**: XiaoHongShu, Twitter/X, Reddit, LinkedIn, Boss Zhipin... a plain fetch gets nothing or a login page.
-- **What's inside video and audio**: YouTube and Bilibili subtitles, full transcripts of Xiaoyuzhou podcasts.
-- **Chinese platforms**: Bilibili, XiaoHongShu, V2EX, Xueqiu, Xiaoyuzhou, which general search covers poorly.
+- **What's inside video**: YouTube and Bilibili subtitles, plus speech-to-text for YouTube videos.
+- **Chinese platforms**: Bilibili, XiaoHongShu, V2EX and Xueqiu, which general search covers poorly.
 - **Clean structured data**: Xueqiu quotes, V2EX topics and replies, GitHub repos and issues, as fields instead of HTML to guess from.
 
 Agent Reach installs the open-source tools behind these platforms, keeps them up to date, health-checks them, and gives the agent one entry point:
@@ -82,9 +84,9 @@ Every command prints the same JSON shape, so the agent doesn't have to learn eac
 
 - **Which agents?** Any agent that can run shell commands. `agent-reach setup` places one copy of the usage instructions (a skill) that Codex, OpenCode and others read directly, and links it into the skill folders of Claude Code, OpenClaw, Cursor and others when they are installed.
 - **Does it cost money?** The program and its backends are open source and free. The only keys you may need are for speech-to-text: Groq (has a free tier) or OpenAI Whisper.
-- **Does it touch my browser or accounts?** It never reads your own browser's cookies and never logs in for you. For login channels, you log in yourself in the dedicated Agent Reach browser. See [Security](#security).
+- **Sessions**: use the explicitly selected browser/tool session. No automatic cookie migration or new browser; the user authenticates only when needed.
 - **Which OS?** macOS first, Linux works, Windows best effort.
-- **Do I have to install anything else?** No. Whatever a channel needs (Node.js, Chrome, ffmpeg, the browser extension) is installed by `agent-reach add` itself, with no admin password. All you do is log in or provide a key.
+- **Dependencies**: add installs tools. Connect the OpenCLI extension in your existing Chrome; login is needed only when the existing session fails verification.
 - **How do I hear about new versions?** Agent Reach checks at most once a day in the background. When there is a new version, your agent tells you in plain words what changed and asks whether to update; it updates only if you say yes.
 
 ---
@@ -104,7 +106,6 @@ Every command prints the same JSON shape, so the agent doesn't have to learn eac
 | reddit | optional | search, read posts with comments, browse a subreddit | browser + login |
 | linkedin | optional | job search | login |
 | boss | optional | job and JD search | browser + login |
-| xiaoyuzhou | optional | full podcast transcripts | Groq key |
 | xueqiu | optional | real-time quotes, stock search, hot posts, hot stocks | quotes need nothing; hot posts/stocks need a browser login |
 | twitter | experimental | search tweets, profiles, user tweets, threads | browser + login |
 | facebook | experimental | search, profiles | browser + login |
@@ -113,7 +114,7 @@ Every command prints the same JSON shape, so the agent doesn't have to learn eac
 - **default**: works right after install; you can remove one (`agent-reach remove <channel>`) and updates won't add it back.
 - **optional**: turn on with `agent-reach add <channel>`; Agent Reach installs everything it needs into its own folder.
 - **experimental**: works, but the platform fights automation harder and it can break at any time.
-- **browser**: the Agent Reach browser, a separate Chrome window. If the machine has no Chrome, Agent Reach downloads its own copy; it also installs the OpenCLI extension in it by itself (on Windows you click "Add to Chrome" once in the window that opens). After that it opens by itself when needed (the first open takes about 40 seconds) and closes after 10 minutes without use.
+- **browser**: reuse a selected existing session. Use `browser profiles` and `browser use ID` for OpenCLI. Boss requires an existing CDP page; only explicit `login boss --new-browser` opens its persistent profile.
 
 ---
 
@@ -122,7 +123,7 @@ Every command prints the same JSON shape, so the agent doesn't have to learn eac
 Send this to your agent:
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Install this modified Agent Reach checkout/wheel using its docs/install.md.
 ```
 
 The agent does the rest by following [install.md](install.md). Along the way you may be asked to:
@@ -133,7 +134,7 @@ The agent does the rest by following [install.md](install.md). Along the way you
 
 The only thing you do yourself is log in; the agent never logs in for you and never asks for your password:
 
-- Xiaohongshu, Reddit, Twitter and the like: log in yourself in the Agent Reach browser.
+- Xiaohongshu, Reddit, Twitter: select an existing Chrome session and verify it before asking for login.
 - Bilibili: subtitles need a QR-scan login; search and video info work without it.
 
 > ⚠️ The PyPI package named `agent-reach` is NOT this project. Don't install it from PyPI; use the GitHub URL in install.md.
@@ -182,7 +183,7 @@ Platforms change and tools break all the time. Switching backends only reorders 
 
 ### 📌 Kept current, private installs
 
-The tools Agent Reach installs (OpenCLI, bili-cli, boss-agent-cli, mcporter and others) live in `~/.agent-reach/tools/`, away from your global environment. Versions are not pinned: each install takes the latest version, and `agent-reach update` upgrades them to the latest even when Agent Reach itself has no new release. Known-bad upstream versions are excluded in a new Agent Reach release; `agent-reach doctor` shows the version actually installed for each tool.
+Tools are private under ~/.agent-reach/tools/. Selected dependencies use tested versions; Boss is pinned to a verified Git commit. Do not overwrite this local fork with an upstream update.
 
 ### 🩺 Working means live-tested
 
@@ -205,7 +206,7 @@ On failure `ok` is `false` and `error` holds a `code` (`NEED_SETUP` / `NEED_LOGI
 
 - **Everything lives under `~/.agent-reach/`**: `config.yaml` (keys and proxy), `state.json`, `tools/` (private tool installs), `sessions/` (logins of CLI tools), `browser/` (the dedicated browser profile), `mcporter.json`. The one exception is the skill: one copy in `~/.agents/skills/agent-reach/`, with only links to it in other AIs' skill folders.
 - **Agent Reach never logs in for you and never reads your own browser's cookies.** For login channels you log in yourself, in the Agent Reach browser or in the tool's own login flow (e.g. Bilibili QR scan).
-- **The Agent Reach browser's debugging port listens on loopback only** (127.0.0.1:9222), but while it is open any local process can use it to control that browser. That's why it closes itself after 10 minutes without use.
+- **CDP** listens on loopback only. Close the standard Boss CDP window manually when finished.
 - **Use a secondary account for login channels.** Platforms may restrict accounts used for automated access.
 - **Don't paste API keys into chat**: run `agent-reach configure groq-key` in your own terminal; input is hidden.
 
@@ -250,3 +251,8 @@ For collaboration or questions, add me on WeChat — I'll invite you to the comm
 ## Star History
 
 <a href="https://www.star-history.com/?type=date&repos=Panniantong%2FAgent-Reach"><picture><source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Panniantong/Agent-Reach&type=date&theme=dark&legend=top-left&sealed_token=K3_u-LJQTVURYu-38Tqa_VWJOSqMf_HbAw-QKSdGwEq6seqznugdIpXdSeztEdOutT40IBXwVxTmg8wS_OSygb5UWf1x8e-Fai6aygrjq6QH8vU09EcqQCN7atp-76HmxX-j9fnZ9NiSrLDNzK98TnXBFJ_Wb_y80I0nWr3O8DdGnLXFhAJgoNK3Jz8D" /><source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Panniantong/Agent-Reach&type=date&legend=top-left&sealed_token=P2746KOq7grpS8Q-nrqEzci1-Z0-dOw-M3KEqju-l3TyF24NMyRDR7TnxdReJWlXyomoT4mjjqC28-2-c2G6CnzmS1hgYdEDiGPmLkmEqKP5tgjORXshdrUFxoSxTqmIKEMFFmGZUX1v3ec-q_XMyftTVWzluiQH7CvKoZ1uDKU3PJN05mO22u7qlLeG" /><img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Panniantong/Agent-Reach&type=date&legend=top-left&sealed_token=P2746KOq7grpS8Q-nrqEzci1-Z0-dOw-M3KEqju-l3TyF24NMyRDR7TnxdReJWlXyomoT4mjjqC28-2-c2G6CnzmS1hgYdEDiGPmLkmEqKP5tgjORXshdrUFxoSxTqmIKEMFFmGZUX1v3ec-q_XMyftTVWzluiQH7CvKoZ1uDKU3PJN05mO22u7qlLeG" /></picture></a>
+
+
+### Local enhancement: CloakBrowser first
+
+Xiaohongshu and BOSS search prefer CloakBrowser, then OpenCLI. Native Boss remains the third search backend. Both support read; BOSS read currently uses only CloakBrowser. Import existing site cookies explicitly before use; queries never migrate credentials automatically. See [CloakBrowser integration](cloakbrowser.md).

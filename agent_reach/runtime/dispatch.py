@@ -39,6 +39,8 @@ def _validate(action: Action, params: Dict[str, Any]) -> Dict[str, Any]:
                 value = p.type(value)
             except (TypeError, ValueError):
                 raise ReachError(BAD_INPUT, f"{p.name} must be {p.type.__name__}") from None
+        if p.type is int and p.name in {"limit", "page"} and (not isinstance(value, int) or value < 1):
+            raise ReachError(BAD_INPUT, f"{p.name} must be a positive integer")
         clean[p.name] = value
     unknown = set(params) - {p.name for p in action.params}
     if unknown:
@@ -107,9 +109,12 @@ def run_action(
         err = ReachError(BAD_INPUT, f"unknown action '{action_name}' for {channel.name}; valid: {valid}")
         return envelope(channel=channel.name, action=action_name, elapsed_ms=elapsed(), error=err)
     try:
+        import math
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ReachError(BAD_INPUT, "timeout must be finite and positive")
         clean = _validate(action, params)
-    except ReachError as err:
-        return envelope(channel=channel.name, action=action_name, elapsed_ms=elapsed(), error=err)
+    except ReachError as validation_error:
+        return envelope(channel=channel.name, action=action_name, elapsed_ms=elapsed(), error=validation_error)
 
     backends = [b for b in action.backends if only_backend in (None, b[0])]
     clock = Clock(timeout - (time.monotonic() - started))
@@ -139,7 +144,7 @@ def run_action(
             attempts=attempts,
         )
 
-    final = errors and next((e for e in errors if e.code in FINAL_CODES), None)
+    final = next((e for e in errors if e.code in FINAL_CODES), None)
     err = final or (_pick_error(errors) if errors else ReachError(BAD_INPUT, f"no backend named '{only_backend}'"))
     return envelope(
         channel=channel.name,

@@ -48,6 +48,9 @@ def run_cmd(
     run_env = utf8_subprocess_env()
     if env:
         run_env.update(env)
+    # The local API worker is already in a supervised process group. Keep its
+    # children there so the API's hard deadline can stop the entire execution.
+    supervised = os.environ.get("REACH_API_SUPERVISED") == "1"
     proc = subprocess.Popen(
         [exe, *argv[1:]],
         stdout=subprocess.PIPE,
@@ -55,19 +58,38 @@ def run_cmd(
         stdin=subprocess.DEVNULL,
         env=run_env,
         cwd=cwd or os.path.expanduser("~"),
-        start_new_session=(os.name != "nt"),
+        start_new_session=(os.name != "nt" and not supervised),
     )
     try:
         out, err = proc.communicate(timeout=max(timeout, 0.1))
     except subprocess.TimeoutExpired:
-        if os.name != "nt":
+        if os.name == "nt":
+            # Kill this command's descendants too (Playwright driver + Chrome).
+            # Killing only Python leaves the profile locked by orphan browsers.
+            taskkill = str(Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32/taskkill.exe")
+            try:
+                subprocess.run([taskkill, "/PID", str(proc.pid), "/T", "/F"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                               timeout=5, check=False)
+            except (OSError, subprocess.TimeoutExpired):
+                proc.kill()
+        elif not supervised:
             try:
                 os.killpg(proc.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
         else:
             proc.kill()
-        proc.communicate()
+        try:
+            proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            # A descendant may still own a pipe; never wait indefinitely.
+            if proc.stdout is not None:
+                proc.stdout.close()
+            if proc.stderr is not None:
+                proc.stderr.close()
+            proc.wait(timeout=5)
         raise ReachError(TIMEOUT, f"{name} did not finish within {timeout:.0f}s")
     stdout = out.decode("utf-8", errors="replace")
     stderr = err.decode("utf-8", errors="replace")

@@ -17,7 +17,6 @@ from .twitter import TwitterChannel
 from .v2ex import V2EXChannel
 from .web import WebChannel
 from .xiaohongshu import XiaoHongShuChannel
-from .xiaoyuzhou import XiaoyuzhouChannel
 from .xueqiu import XueqiuChannel
 from .youtube import YouTubeChannel
 
@@ -32,7 +31,6 @@ ALL_CHANNELS: List[Channel] = [
     XiaoHongShuChannel(),
     LinkedInChannel(),
     BossChannel(),
-    XiaoyuzhouChannel(),
     V2EXChannel(),
     XueqiuChannel(),
     WebChannel(),

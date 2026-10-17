@@ -171,9 +171,9 @@ def test_old_record_without_version_gets_one_without_reinstall(env):
     assert env["installs"] == ["bili-cli"]
 
 
-def test_install_spec_is_unpinned_and_honours_floor_and_exclude():
-    assert tools.install_spec(tools.TOOLS["bili-cli"]) == "bilibili-cli"
-    assert "git+" not in tools.install_spec(tools.TOOLS["boss-agent-cli"])
+def test_install_spec_uses_tested_versions_or_floor_and_exclude():
+    assert tools.install_spec(tools.TOOLS["bili-cli"]) == "bilibili-cli==0.6.2"
+    assert tools.install_spec(tools.TOOLS["boss-agent-cli"]).endswith("@4c991b77086a203173bf08a4cb64a23af6514fe6")
     assert tools.install_spec(tools.Tool("y", "pip", "pkg", ("y",), floor="1.0", exclude=("1.5",))) == "pkg>=1.0,!=1.5"
     npm = tools.Tool("x", "npm", "pkg", ("x",), floor="1.0.0", exclude=("1.2.0", "1.1.0"))
     assert tools.install_spec(npm) == "pkg@>=1.0.0 <1.1.0 || >1.1.0 <1.2.0 || >1.2.0"
@@ -239,11 +239,14 @@ def test_npm_tool_gets_private_node_first(env):
     assert "agent-reach login linky" in out["next"]
 
 
-def test_browser_channel_add_opens_login_and_remove_cleans_up(env):
+def test_browser_channel_add_never_opens_login_and_explicit_dedicated_remove_cleans_up(env):
+    from agent_reach.runtime.browser_binding import bind_profile
+    bind_profile("site", "dedicated")
+    bind_profile("site2", "dedicated")
     out = manage.add("site")
     assert "ensure_chrome" in env["calls"]
-    assert env["calls"][-2:] == ["setup", ("start", "https://www.site.example/login")]
-    assert isinstance(out["next"], str) and "logs in" in out["next"]
+    assert env["calls"] == ["ensure_chrome"]
+    assert isinstance(out["next"], str) and "Reuse existing login" in out["next"]
     manage.add("site2")
     browser.profile_dir().mkdir(parents=True)
     first = manage.remove("site")
@@ -290,7 +293,7 @@ def test_sync_upgrades_prunes_drops_and_reports(env):
     data = state.load()
     data["tools"]["old-tool"] = {"owner": "agent-reach", "scope": "private", "version": "0.1.0"}
     data["tools"]["user-thing"] = {"owner": "user", "scope": "global", "version": "1.0.0"}
-    data["channels"]["gone"] = {"added_at": "2026-01-01T00:00:00Z"}
+    data["channels"]["xiaoyuzhou"] = {"added_at": "2026-01-01T00:00:00Z"}
     data["checks"]["bili"] = {"at": state.now(), "actions": {"search": False}, "codes": {"search": "NEED_LOGIN"},
                               "previous": {"search": True}}
     state.save(data)
@@ -301,8 +304,8 @@ def test_sync_upgrades_prunes_drops_and_reports(env):
     assert set(state.load()["tools"]) == {"bili-cli"}, "records of unused user copies are dropped, the copies kept"
     assert state.load()["tools"]["bili-cli"]["version"] == "2.0.0"
     assert env["installs"].count("bili-cli") == 2, "shared tools upgrade once per sync"
-    assert out["dropped_channels"] == ["gone"] and "gone" not in state.load()["channels"]
-    assert any("gone" in a for a in out["user_actions"])
+    assert out["dropped_channels"] == ["xiaoyuzhou"] and "xiaoyuzhou" not in state.load()["channels"]
+    assert any("xiaoyuzhou" in a for a in out["user_actions"])
     assert any("log in to bili" in a for a in out["user_actions"]), "a login that worked before and now fails"
 
 
@@ -418,6 +421,7 @@ def test_doctor_states(env):
         Bili.passes = True
     data = state.load()
     data["checks"]["bili"]["at"] = "2000-01-01T00:00:00Z"
+    data["checks"]["bili"]["evidence"]["search"]["at"] = "2000-01-01T00:00:00Z"
     state.save(data)
     assert _status("bili") == "unverified"
 
@@ -443,6 +447,9 @@ def test_doctor_marks_regressed_only_when_the_previous_check_passed(env):
     try:
         manage.run_checks(["bili"])
         assert _doctor("bili")["regressed"] is True
+        state.mutate(lambda data: data["tools"].__setitem__("bili-cli", {"version": "changed"}))
+        assert _doctor("bili")["status"] == "unverified"
+        assert _doctor("bili")["regressed"] is False, "stale evidence cannot prove regression"
         manage.run_checks(["bili"])
         assert _doctor("bili")["regressed"] is False, "an already-broken channel is not a regression"
     finally:
@@ -531,6 +538,8 @@ def test_skill_one_real_copy_linked_only_for_present_ais(env):
     result = manage.place_skill()
     real = home / ".agents" / "skills" / "agent-reach"
     assert (real / "SKILL.md").is_file()
+    for name in ("sessions.md", "maintenance.md"):
+        assert (real / "references" / name).is_file()
     for link in (home / ".claude" / "skills" / "agent-reach", home / ".openclaw" / "skills" / "agent-reach"):
         assert link.is_symlink() and os.path.realpath(link) == os.path.realpath(real)
     assert not (home / ".codex" / "skills").exists(), "codex reads ~/.agents/skills itself"
@@ -566,6 +575,8 @@ def test_skill_falls_back_to_a_copy_without_symlink_rights(env, monkeypatch):
     result = manage.place_skill()
     copy = home / ".claude" / "skills" / "agent-reach"
     assert not copy.is_symlink() and (copy / "SKILL.md").is_file()
+    for name in ("sessions.md", "maintenance.md"):
+        assert (copy / "references" / name).read_text() == (manage.skill_dir() / "references" / name).read_text()
     assert result["copies"] == [str(copy)] and result["links"] == []
     (copy / "SKILL.md").write_text("---\nname: agent-reach\n---\nstale\n")
     manage.place_skill()

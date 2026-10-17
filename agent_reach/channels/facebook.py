@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Facebook — OpenCLI backend using the user's logged-in Chrome session."""
+"""Facebook — Cloak search first; OpenCLI search/profile fallback."""
 
 from ._opencli_site import OpenCLISiteChannel
 from .base import Action, Param
@@ -23,7 +23,7 @@ class FacebookChannel(OpenCLISiteChannel):
                 Param("query", "what to search for"),
                 Param("limit", "max results", required=False, type=int, default=5),
             ),
-            (("opencli", "_opencli_search"),),
+            (("cloakbrowser", "_cloak_search"), ("opencli", "_opencli_search")),
             live_test={"query": "openai", "limit": 2},
         ),
         Action(
@@ -40,3 +40,7 @@ class FacebookChannel(OpenCLISiteChannel):
 
     def _opencli_profile(self, *, username: str, timeout: float) -> list:
         return self._opencli(["profile", username], timeout, empty_is_error=False)[:1]
+
+    def _cloak_search(self, *, query, limit, timeout):
+        from agent_reach.backends.cloak import call
+        return call(self.name, "search", query=query, limit=limit, timeout=timeout)

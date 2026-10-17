@@ -32,9 +32,9 @@ class TwitterChannel(Channel):
     prereqs = ("node", "chrome")
 
     def setup_problems(self):
-        from agent_reach.runtime.browser import setup_problems
+        from agent_reach.runtime.browser_binding import setup_problems
 
-        return setup_problems()
+        return setup_problems(self.name)
 
     actions = (
         Action(
@@ -44,7 +44,7 @@ class TwitterChannel(Channel):
                 Param("query", "what to search for"),
                 Param("limit", "max results", required=False, type=int, default=5),
             ),
-            (("opencli", "_opencli_search"),),
+            (("cloakbrowser", "_cloak_search"), ("opencli", "_opencli_search")),
             live_test={"query": "openai", "limit": 2},
         ),
         Action(
@@ -79,6 +79,11 @@ class TwitterChannel(Channel):
     def _opencli_search(self, *, query: str, limit: int, timeout: float) -> list:
         return _x(["search", query, "--limit", str(limit)], timeout)[:limit]
 
+    def _cloak_search(self, *, query: str, limit: int, timeout: float) -> list:
+        from agent_reach.backends.cloak import call
+
+        return call(self.name, "search", query=query, limit=limit, timeout=timeout)
+
     def _opencli_profile(self, *, username: str, timeout: float) -> list:
         return _x(["profile", username.lstrip("@")], timeout)[:1]
 
@@ -88,3 +93,8 @@ class TwitterChannel(Channel):
     def _opencli_thread(self, *, target: str, timeout: float) -> list:
         tweet_id = str(target).rstrip("/").split("/")[-1].split("?")[0]
         return _x(["thread", tweet_id], timeout)
+
+    def on_remove(self) -> None:
+        from agent_reach.backends.cloak import logout
+
+        logout(self.name)

@@ -17,6 +17,14 @@ from agent_reach.channels.web import _UA, WebChannel
 _MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 
 
+def test_search_does_not_turn_unrecognized_payload_into_empty_success():
+    from agent_reach.runtime.result import ReachError
+
+    with patch("agent_reach.channels.web._exa_call", return_value="Service temporarily unavailable"):
+        with pytest.raises(ReachError, match="no recognizable search results"):
+            WebChannel()._exa_search(query="python", limit=3, timeout=5)
+
+
 def _resp(body=b"# Example\nfull text\n"):
     """A urlopen() return value usable as a context manager."""
     cm = MagicMock()

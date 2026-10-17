@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """V2EX — public API channel for topics, nodes, users, and replies."""
 
+import http.client
 import json
 import re
 import shutil
@@ -127,13 +128,13 @@ def _get_json_with_curl(url: str) -> Any:
 
 
 def _get_json(url: str) -> Any:
-    """Fetch JSON, retrying only Python's known TLS EOF via native curl."""
+    """Fetch JSON, retrying TLS EOF or a truncated HTTP response once via native curl."""
     try:
         return _get_json_with_urllib(url)
     except Exception as exc:
         if isinstance(exc, ssl.SSLCertVerificationError):
             raise
-        if not _is_unexpected_tls_eof(exc):
+        if not isinstance(exc, http.client.IncompleteRead) and not _is_unexpected_tls_eof(exc):
             raise
         return _get_json_with_curl(url)
 

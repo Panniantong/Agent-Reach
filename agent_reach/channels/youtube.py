@@ -72,7 +72,7 @@ def _iso_date(yyyymmdd) -> str:
 
 def vtt_to_text(vtt: str) -> str:
     """Plain text from WebVTT: drop headers, timings, tags; collapse auto-caption repeats."""
-    out = []
+    out: list[str] = []
     for line in vtt.splitlines():
         s = line.strip()
         if (

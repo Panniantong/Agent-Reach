@@ -12,11 +12,14 @@ YouTube backend; it just no longer serves bilibili.
 import json
 import re
 import urllib.request
+from typing import Any
 
 from agent_reach.runtime.result import (
     BAD_INPUT,
     NEED_LOGIN,
     NOT_FOUND,
+    PLATFORM_BLOCKED,
+    RATE_LIMITED,
     UPSTREAM_BROKEN,
     ReachError,
     make_item,
@@ -50,7 +53,7 @@ def _bvid(target: str, timeout: float) -> str:
     raise ReachError(BAD_INPUT, "target must be a BV id or a bilibili.com / b23.tv video link")
 
 
-def _bili_json(args: list, timeout: float) -> dict:
+def _bili_json(args: list, timeout: float) -> Any:
     """Run bili-cli with --json; map its error envelope to unified codes."""
     try:
         out = run_cmd(["bili", *args, "--json"], timeout=timeout, env=session_env("bili-cli"))
@@ -66,6 +69,10 @@ def _bili_json(args: list, timeout: float) -> dict:
         err = payload.get("error") or {}
         code = str(err.get("code", ""))
         message = str(err.get("message", "bili-cli failed"))[:300]
+        if any(word in code.lower() for word in ("risk", "captcha", "verification")):
+            raise ReachError(PLATFORM_BLOCKED, message)
+        if "rate" in code.lower() or "频繁" in message:
+            raise ReachError(RATE_LIMITED, message)
         if code == "not_found":
             raise ReachError(NOT_FOUND, message)
         if "login" in code or "auth" in code or "credential" in code:

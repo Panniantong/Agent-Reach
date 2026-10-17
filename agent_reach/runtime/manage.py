@@ -6,13 +6,14 @@ wraps it in {schema_version, ok, action, result, error}.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from agent_reach import __version__
@@ -54,8 +55,49 @@ def _uses_browser(ch) -> bool:
     return bool(ch.login_url)
 
 
+def uses_cloak(ch) -> bool:
+    """Derive the primary browser backend from the channel's action declarations."""
+    return any(a.backends and a.backends[0][0] == "cloakbrowser" for a in ch.actions)
+
+
+def fingerprint(channel: str) -> str:
+    """Invalidate checks when this build, channel dependencies, source, or network changes."""
+    from agent_reach.config import Config
+
+    from .browser_binding import profile_for
+
+    data = state.load()
+    cfg = Config(read_only=True)
+    ch = _channel(channel)
+    relevant = set(ch.prereqs) | set(ch.tools) | set(channel_tools(ch))
+    relevant.update(name for action in ch.actions for name, _ in action.backends)
+    value = [__version__, channel, profile_for(channel),
+             os.environ.get("REACH_CLOAK_PROXY") or cfg.get("proxy"),
+             {k: data["tools"].get(k, {}).get("version") for k in sorted(relevant)}]
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def fresh_actions(channel: str, check: Optional[dict]) -> dict[str, bool]:
+    """Keep each action's evidence independent when another action is checked later."""
+    if not check:
+        return {}
+    evidence = check.get("evidence", {})
+    signature = fingerprint(channel)
+    return {name: passed for name, passed in check.get("actions", {}).items()
+            if evidence.get(name, {}).get("fingerprint") == signature
+            and state.age_seconds(evidence[name].get("at")) < CHECK_FRESH_SECONDS
+            and (check.get("codes", {}).get(name) != "RATE_LIMITED"
+                 or state.age_seconds(evidence[name].get("at")) < 3600)}
+
+
+def fresh_check(channel: str, check: Optional[dict]) -> bool:
+    return bool(fresh_actions(channel, check))
+
+
 def channel_tools(ch) -> List[str]:
     """Everything `add` installs for the channel, prerequisites first."""
+    if uses_cloak(ch):
+        return ["cloakbrowser"]
     names = list(ch.prereqs) + (["chrome"] if _uses_browser(ch) else []) + list(ch.tools)
     return list(dict.fromkeys(names))
 
@@ -86,7 +128,7 @@ def browser_login_next(ch) -> str:
 
 # ── checks ──
 
-def run_checks(names: Optional[List[str]] = None, timeout: float = 60.0) -> dict:
+def run_checks(names: Optional[List[str]] = None, timeout: float = 60.0, search_only: bool = False) -> dict:
     """Live-test the added channels (or the named ones); persist results in state."""
     from .dispatch import run_action
 
@@ -99,20 +141,29 @@ def run_checks(names: Optional[List[str]] = None, timeout: float = 60.0) -> dict
     else:
         data = state.load()
         selected = [c for c in selected if is_added(c, data)]
+    import math
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ReachError(BAD_INPUT, "timeout must be finite and positive")
     results = []
     for ch in selected:
         for action in ch.actions:
-            if action.live_test is None:
+            if action.live_test is None or (search_only and action.name not in {"search", "jobs"}):
                 continue
-            for label, _ in action.backends:
+            # Search acceptance exercises the same route as an agent command, once.
+            backends = [(None, None)] if search_only else action.backends
+            for label, _ in backends:
                 out = run_action(ch, action.name, dict(action.live_test), timeout=timeout, only_backend=label)
+                label = out.get("backend") or label or (out["meta"]["attempts"][-1]["backend"] if out["meta"]["attempts"] else None)
                 passed = bool(out["ok"] and out["items"])
                 err = out["error"] or (None if passed else {"code": "EMPTY", "message": "succeeded but returned no items"})
                 results.append({
                     "channel": ch.name, "action": action.name, "backend": label, "passed": passed,
                     "elapsed_ms": out["meta"]["elapsed_ms"],
                     "error": err and {"code": err["code"], "message": err["message"]},
+                    "item_count": len(out["items"]), "attempts": out["meta"]["attempts"],
                 })
+                if err and err["code"] in {"PLATFORM_BLOCKED", "RATE_LIMITED", "NEED_LOGIN"}:
+                    break
     by_action: Dict[tuple, bool] = {}
     codes: Dict[tuple, str] = {}
     for r in results:
@@ -120,15 +171,21 @@ def run_checks(names: Optional[List[str]] = None, timeout: float = 60.0) -> dict
         by_action[key] = by_action.get(key, False) or r["passed"]
         if not r["passed"] and key not in codes:
             codes[key] = r["error"]["code"]
-    data = state.load()
-    for ch in selected:
-        actions = {a: ok for (c, a), ok in by_action.items() if c == ch.name}
-        if actions:
-            failed = {a: codes[(ch.name, a)] for a, ok in actions.items() if not ok}
-            previous = data["checks"].get(ch.name, {}).get("actions", {})
-            data["checks"][ch.name] = {"at": state.now(), "actions": actions, "codes": failed, "previous": previous}
-    state.save(data)
-    return {"ok": bool(results) and all(by_action.values()), "results": results}
+    signatures = {ch.name: fingerprint(ch.name) for ch in selected}
+    def save_checks(data):
+        for ch in selected:
+            actions = {a: ok for (c, a), ok in by_action.items() if c == ch.name}
+            if actions:
+                failed = {a: codes[(ch.name, a)] for a, ok in actions.items() if not ok}
+                previous = data["checks"].get(ch.name, {}).get("actions", {})
+                evidence = {r["action"]: {"backend": r["backend"], "at": state.now(),
+                                           "item_count": r["item_count"], "fingerprint": signatures[ch.name]}
+                            for r in results if r["channel"] == ch.name}
+                data["checks"][ch.name] = {"at": state.now(), "actions": actions, "codes": failed,
+                                           "previous": previous, "scope": "search" if search_only else "all",
+                                           "evidence": evidence}
+    state.mutate(save_checks)
+    return {"ok": bool(results) and all(by_action.values()), "scope": "search" if search_only else "all", "results": results}
 
 
 def regressed(check: Optional[dict]) -> bool:
@@ -142,20 +199,67 @@ def regressed(check: Optional[dict]) -> bool:
 def channel_status(ch, data: dict) -> dict:
     if not is_added(ch, data):
         return {"status": "not_added", "problems": [], "hint": f"agent-reach add {ch.name}"}
+    if uses_cloak(ch):
+        from agent_reach.backends.cloak import status
+        backend = status(ch.name)
+        from .browser_binding import profile_for
+        fallbacks = [{"backend": "opencli", "installed": tools.present("opencli"),
+                      "configured": bool(profile_for(ch.name)), "logged_in": None}]
+        if ch.name == "boss":
+            fallbacks.append({"backend": "boss-agent-cli", "installed": tools.present("boss-agent-cli"),
+                              "configured": None, "logged_in": None})
+        available = (backend["installed"] and backend["configured"] or
+                     any(b["installed"] and b["configured"] for b in fallbacks))
+        result: dict[str, Any] = {"status": "unverified" if available else "needs_setup",
+                "problems": [] if available else ["No configured channel backend"],
+                "backends": [backend, *fallbacks],
+                "hint": f"agent-reach cloak status {ch.name}; agent-reach check {ch.name} --search"}
+        check = data["checks"].get(ch.name)
+        actions = fresh_actions(ch.name, check)
+        query = next((a.name for a in ch.actions if a.name in ("search", "jobs")), None)
+        if result["status"] == "unverified" and query in actions:
+            failed = [a for a, ok in actions.items() if not ok]
+            result.update(checked_at=check["at"], verified_actions=[a for a, ok in actions.items() if ok])
+            codes = [check.get("codes", {}).get(a) for a in failed]
+            result["status"] = ("needs_login" if codes and all(c == "NEED_LOGIN" for c in codes)
+                                else "cooldown" if codes and all(c == "RATE_LIMITED" for c in codes)
+                                else "needs_user_action" if codes and all(c == "PLATFORM_BLOCKED" for c in codes)
+                                else "broken" if failed else "search_ready" if check.get("scope") == "search" else "ready")
+        failures = (data.get("setup_failures", {}).get(ch.name, {}),
+                    data.get("cooldowns", {}).get(ch.name, {}))
+        for failure in sorted(failures, key=lambda item: item.get("at", "")):
+            age = state.age_seconds(failure.get("at"))
+            ttl = 3600 if failure.get("code") == "RATE_LIMITED" else 600
+            if (failure.get("code") in {"RATE_LIMITED", "UPSTREAM_BROKEN"} and age < ttl
+                    and (not check or check.get("at", "") <= failure["at"])):
+                result = {**result,
+                          "status": "cooldown" if failure["code"] == "RATE_LIMITED" else "broken",
+                          "problems": [failure.get("message") or "Channel setup failed"],
+                          "retry_after_seconds": max(0, int(ttl - age))}
+        return result
     problems = [f"{t} not installed: run `agent-reach add {ch.name}`" for t in channel_tools(ch) if not tools.present(t)]
     problems += ch.setup_problems()
     if problems:
         return {"status": "needs_setup", "problems": problems}
     check = data["checks"].get(ch.name)
-    if check and state.age_seconds(check["at"]) < CHECK_FRESH_SECONDS:
-        failed = [a for a, ok in check["actions"].items() if not ok]
+    actions = fresh_actions(ch.name, check)
+    query = next((a.name for a in ch.actions if a.name in ("search", "jobs")), None)
+    if actions and (check.get("scope") != "search" or query in actions):
+        failed = [a for a, ok in actions.items() if not ok]
         if failed:
             codes = check.get("codes", {})
             if all(codes.get(a) == "NEED_LOGIN" for a in failed):
                 return {"status": "needs_login", "problems": [f"needs login for: {', '.join(failed)}"],
                         "hint": f"agent-reach login {ch.name}", "checked_at": check["at"]}
+            if all(codes.get(a) == "RATE_LIMITED" for a in failed):
+                return {"status": "cooldown", "problems": [f"rate limited: {', '.join(failed)}"],
+                        "checked_at": check["at"]}
+            if all(codes.get(a) == "PLATFORM_BLOCKED" for a in failed):
+                return {"status": "needs_user_action", "problems": [f"platform verification: {', '.join(failed)}"],
+                        "checked_at": check["at"]}
             return {"status": "broken", "problems": [f"live check failed: {', '.join(failed)}"], "checked_at": check["at"]}
-        return {"status": "ready", "problems": [], "checked_at": check["at"]}
+        return {"status": "search_ready" if check.get("scope") == "search" else "ready", "problems": [],
+                "checked_at": check["at"], "verified_actions": list(actions)}
     return {"status": "unverified", "problems": [], "hint": f"agent-reach check {ch.name}"}
 
 
@@ -164,14 +268,19 @@ def doctor() -> dict:
     data = state.load()
     channels = []
     for ch in _channels():
+        check = data["checks"].get(ch.name)
+        current = fresh_actions(ch.name, check)
         channels.append({"channel": ch.name, "level": ch.level, **channel_status(ch, data),
-                         "regressed": regressed(data["checks"].get(ch.name))})
+                         "regressed": regressed({**check, "actions": current}) if check and current else False})
     return {"version": __version__, "channels": channels, "tools": tools.recorded()}
 
 
 # ── add / remove ──
 
 def _install_channel(ch, *, allow_upgrade: bool = False) -> List[dict]:
+    if uses_cloak(ch):
+        from agent_reach.backends.cloak import setup
+        return [setup()]
     installed = [tools.ensure(t, allow_upgrade=allow_upgrade) for t in channel_tools(ch)]
     ch.on_add()
     return installed
@@ -183,40 +292,29 @@ def _sentence(text: str) -> str:
 
 
 def _next_step(ch) -> Optional[str]:
-    """What the user still does after `add`, as one plain sentence (None = nothing).
-
-    Browser-login channels: the Agent Reach browser is made ready (extension
-    loaded and bound) and the login page opened; the user only logs in there.
-    """
-    if _uses_browser(ch):
-        from . import browser
-
-        try:
-            if "opencli" in channel_tools(ch):
-                browser.setup()
-            browser.start(ch.login_url)
-        except ReachError as err:
-            return _sentence(err.hint or err.message)
-        return browser_login_next(ch)
-    parts = [_sentence(p) for p in ch.setup_problems()]
-    if ch.login_argv:
-        parts.append(f"The user logs in to {ch.name}: run `agent-reach login {ch.name}`.")
-    return " ".join(parts) or None
+    """Installation never opens a browser or assumes an existing session expired."""
+    if uses_cloak(ch):
+        return (f"Run agent-reach ensure {ch.name} to reuse an authorized existing session. "
+                f"If login is needed, use agent-reach cloak login {ch.name} and continue with ensure.")
+    if ch.login_url or ch.login_argv:
+        return f"Reuse existing login first: agent-reach login {ch.name}. This inspects connection options without opening a browser."
+    return " ".join(_sentence(p) for p in ch.setup_problems()) or None
 
 
 def add(name: str, *, allow_upgrade: bool = False) -> dict:
-    """Install whatever the channel needs (prerequisites included), add it, open its login."""
+    """Install whatever the channel needs (prerequisites included), add it, describe existing-session reuse."""
     ch = _channel(name)
     installed = _install_channel(ch, allow_upgrade=allow_upgrade)
-    data = state.load()
-    data["channels"][name] = {"added_at": state.now()}
-    data["removed_defaults"] = [n for n in data["removed_defaults"] if n != name]
-    state.save(data)
+    def save_channel(data):
+        data["channels"][name] = {"added_at": state.now()}
+        data["removed_defaults"] = [n for n in data["removed_defaults"] if n != name]
+    state.mutate(save_channel)
     return {"channel": name, "added": True, "tools": installed, "next": _next_step(ch)}
 
 
 def _needed_tools(data: dict) -> set:
-    return tools.closure(t for c in _channels() if is_added(c, data) for t in channel_tools(c))
+    return tools.closure(t for c in _channels() if is_added(c, data)
+                         for t in (channel_tools(c) + (list(c.tools) + list(c.prereqs) if uses_cloak(c) else [])))
 
 
 def _prune(data: dict) -> List[str]:
@@ -248,7 +346,11 @@ def remove(name: str) -> dict:
             if cfg.get(key):
                 cfg.delete(key)
     cookies, browser_deleted, warnings = 0, False, []
-    if _uses_browser(ch):
+    from .browser_binding import profile_for, unbind_profile
+    existing = ch.name == "boss" or ("opencli" in ch.tools and profile_for(ch.name) != "dedicated")
+    if "opencli" in ch.tools:
+        unbind_profile(ch.name)
+    if _uses_browser(ch) and not existing:
         others = [c for c in _channels() if c.name != name and _uses_browser(c) and is_added(c, data)]
         try:
             if others:
@@ -321,7 +423,7 @@ def render_skill(lang: Optional[str] = None) -> str:
     from importlib.resources import files
 
     lang = lang or _skill_lang()
-    template = files("agent_reach").joinpath("skill", "SKILL_en.md" if lang == "en" else "SKILL.md").read_text("utf-8")
+    template = files("agent_reach").joinpath("skill").joinpath("SKILL_en.md" if lang == "en" else "SKILL.md").read_text("utf-8")
     labels = {"default": "default", "optional": "optional", "experimental": "experimental"}
     rows = ["| channel | level | actions | login |", "|---|---|---|---|"]
     for ch in _channels():
@@ -368,14 +470,20 @@ def _remove(path: Path) -> None:
 def _write_real_copy(text: str) -> Path:
     real = skill_dir()
     _remove(real)  # old instructions are replaced, not merged
-    real.mkdir(parents=True)
-    (real / "SKILL.md").write_text(text, encoding="utf-8")
+    _write_copy(real, text)
     return real
 
 
 def _write_copy(target: Path, text: str) -> None:
+    from importlib.resources import files
+
     target.mkdir(parents=True)
     (target / "SKILL.md").write_text(text, encoding="utf-8")
+    references = target / "references"
+    references.mkdir(exist_ok=True)
+    for source in files("agent_reach").joinpath("skill").joinpath("references").iterdir():
+        if source.is_file() and source.name.endswith(".md"):
+            (references / source.name).write_text(source.read_text("utf-8"), encoding="utf-8")
 
 
 def _link_into(skills_dir: Path, text: str) -> tuple:
@@ -515,8 +623,6 @@ def migrate() -> dict:
             hints.append(channel)
     if cfg.get("xueqiu_cookie"):
         hints.append("xueqiu")
-    if cfg.get("groq_api_key"):
-        hints.append("xiaoyuzhou")
     defaults = {c.name for c in _channels() if c.level == "default"}
     data = state.load()
     data["migrated_from"] = "1.5"
@@ -551,6 +657,14 @@ def setup() -> dict:
             added.append({"channel": ch.name, "ok": False, "tools": [],
                           "error": {"code": err.code, "message": err.message, "hint": err.hint}})
     optional = [_optional_entry(c) for c in _channels() if not is_added(c, data)]
+    mcp = None
+    if (home_dir() / ".cursor").is_dir():
+        from . import mcp_registration
+
+        try:
+            mcp = mcp_registration.install()
+        except ReachError as err:
+            mcp = {"agent": "cursor", "installed": False, "reason": err.message}
     return {
         "version": __version__,
         "default_channels": added,
@@ -558,6 +672,7 @@ def setup() -> dict:
         "optional_channels": optional,
         "logins": [{"channel": c.name, "command": f"agent-reach login {c.name}"} for c in defaults if _has_login(c)],
         "migration": migration,
+        "mcp": mcp,
     }
 
 
@@ -709,9 +824,10 @@ _OWNED = ("config.yaml", "state.json", "mcporter.json", "sessions", "browser",
 
 
 def uninstall(dry_run: bool = False) -> dict:
-    from . import browser
+    from . import browser, mcp_registration
 
     root = state.root()
+    mcp = mcp_registration.uninstall(dry_run=dry_run)
     targets = _skill_uninstall_targets()  # before state.json goes: it records the links
     targets += [root / n for n in _OWNED]
     targets += [tools.tool_dir(n) for n in tools.TOOLS] + [tools.npm_global_dir(), root / "tools" / "xiaoyuzhou"]
@@ -730,12 +846,13 @@ def uninstall(dry_run: bool = False) -> dict:
     removing = {str(t) for t in targets} | {str(root / "tools")}
     kept = sorted(str(p) for p in root.iterdir() if str(p) not in removing) if root.exists() else []
     return {"dry_run": dry_run, "removed": [str(t) for t in targets], "global_tools_removed": globals_,
-            "kept_unrecognized": kept, "remove_program": UNINSTALL_PROGRAM}
+            "kept_unrecognized": kept, "remove_program": UNINSTALL_PROGRAM, "mcp": mcp}
 
 
 # ── configure ──
 
-CONFIG_KEYS = {"groq-key": "groq_api_key", "openai-key": "openai_api_key", "proxy": "proxy", "github-token": "github_token"}
+CONFIG_KEYS = {"groq-key": "groq_api_key", "openai-key": "openai_api_key", "proxy": "proxy", "github-token": "github_token",
+               "model-key": "model_api_key", "model-base-url": "model_base_url", "model-name": "model_name"}
 
 
 def configure(key: str, value: str) -> dict:

@@ -178,7 +178,12 @@ class WebChannel(Channel):
 
     def _exa_search(self, *, query: str, limit: int, timeout: float) -> list:
         text = _exa_call("web_search_exa", {"query": query, "objective": query, "numResults": limit}, timeout)
-        return _parse_exa_text(text)[:limit]
+        items = _parse_exa_text(text)
+        if not items:
+            # Do not report an unrecognized response as a successful zero-hit
+            # search. The hosted MCP does not give us a verified empty schema.
+            raise ReachError(UPSTREAM_BROKEN, "Exa returned no recognizable search results")
+        return items[:limit]
 
     def _exa_read(self, *, target: str, timeout: float) -> list:
         url = _public_url(target)

@@ -90,7 +90,7 @@ def watch(idle: Optional[float] = None, poll: float = 15.0, *, launch: Optional[
 
         def gone() -> bool:
             if conn is not None:
-                return conn.closed.is_set() or proc.poll() is not None
+                return conn.closed.is_set() or (proc is not None and proc.poll() is not None)
             return not browser.is_running()
 
         while True:

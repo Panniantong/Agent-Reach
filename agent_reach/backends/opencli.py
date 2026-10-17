@@ -2,8 +2,7 @@
 """OpenCLI backend: run `opencli <site> ...` in the Agent Reach browser.
 
 OpenCLI (github.com/jackwener/opencli) drives Chrome through a browser-bridge
-extension + local daemon. Agent Reach binds it to its own dedicated browser
-profile (see agent_reach.runtime.browser) and never touches the user's Chrome.
+extension + local daemon. Agent Reach uses an explicitly selected per-channel browser profile.
 """
 
 import json
@@ -24,7 +23,13 @@ def _opencli_error(text: str, login_hint: str):
     """Map OpenCLI's YAML error block (printed even with -f json) to a ReachError."""
     import yaml
 
-    from agent_reach.runtime.result import NEED_LOGIN, UPSTREAM_BROKEN, ReachError
+    from agent_reach.runtime.result import (
+        NEED_LOGIN,
+        PLATFORM_BLOCKED,
+        RATE_LIMITED,
+        UPSTREAM_BROKEN,
+        ReachError,
+    )
 
     try:
         doc = yaml.safe_load(text)
@@ -34,6 +39,10 @@ def _opencli_error(text: str, login_hint: str):
     code = str((err or {}).get("code", "")).upper()
     message = str((err or {}).get("message", "") or text.strip()[:300] or "OpenCLI failed")[:300]
     low = message.lower()
+    if any(w in low for w in ("环境异常", "环境存在异常", "browser environment", "captcha", "验证码", "安全验证", "account_risk")) or code in {"ACCOUNT_RISK", "CAPTCHA_REQUIRED"}:
+        return ReachError(PLATFORM_BLOCKED, message)
+    if code in {"RATE_LIMITED", "RATE_LIMIT"} or any(w in low for w in ("http 429", "too many requests", "访问过于频繁")):
+        return ReachError(RATE_LIMITED, message)
     login_words = ("login", "log in", "logged in", "sign in", "http 401", "登录")
     if "AUTH" in code or "LOGIN" in code or any(w in low for w in login_words):
         return ReachError(NEED_LOGIN, message, hint=login_hint or None)
@@ -42,29 +51,16 @@ def _opencli_error(text: str, login_hint: str):
     return ReachError(UPSTREAM_BROKEN, f"OpenCLI: {message}")
 
 
-def _dedicated_profile_env() -> dict:
-    """OPENCLI_PROFILE for the Agent Reach browser, opening the browser if it is closed.
-
-    Sets the browser up first when it never was (automatic on macOS/Linux; the
-    Windows Web Store flow raises NEED_SETUP if the user has not added the extension).
-    """
-    from agent_reach.runtime import browser
-
-    ctx = browser.bound_context()
-    if not ctx:
-        browser.setup()
-        ctx = browser.bound_context()
-    browser.ensure_running(ctx)
-    return {"OPENCLI_PROFILE": ctx}
-
-
 def opencli_call(site: str, args, *, timeout: float, login_hint: str = ""):
-    """Run `opencli <site> <args> -f json` in the Agent Reach browser and return parsed JSON."""
+    """One bounded command, using an explicit existing browser binding. No retry."""
+    from agent_reach.runtime.browser_binding import environment, execution_lock
     from agent_reach.runtime.run import CommandFailed, run_cmd
 
-    env = _dedicated_profile_env()
+    env = environment(site)
+    argv = ["opencli", site, *args, "-f", "json"]
     try:
-        out = run_cmd(["opencli", site, *args, "-f", "json"], timeout=timeout, env=env)
+        with execution_lock(env["OPENCLI_PROFILE"]):
+            out = run_cmd(argv, timeout=timeout, env=env)
     except CommandFailed as exc:
         raise _opencli_error(exc.stdout or exc.stderr, login_hint) from None
     try:

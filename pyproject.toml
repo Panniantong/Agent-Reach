@@ -31,7 +31,7 @@ dependencies = [
     "requests>=2.28",
     "loguru>=0.7",
     "pyyaml>=6.0",
-    "yt-dlp[default]>=2026.07.04",
+    "yt-dlp[default]==2026.8.19",
 ]
 
 [project.optional-dependencies]

@@ -20,9 +20,9 @@ class OpenCLISiteChannel(Channel):
     prereqs = ("node", "chrome")
 
     def setup_problems(self):
-        from agent_reach.runtime.browser import setup_problems
+        from agent_reach.runtime.browser_binding import setup_problems
 
-        return setup_problems()
+        return setup_problems(self.name)
 
     def can_handle(self, url: str) -> bool:
         return host_matches(url, *self.domains)

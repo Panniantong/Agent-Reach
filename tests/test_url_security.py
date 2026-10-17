@@ -11,7 +11,6 @@ from agent_reach.channels.reddit import RedditChannel
 from agent_reach.channels.twitter import TwitterChannel
 from agent_reach.channels.v2ex import V2EXChannel
 from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
-from agent_reach.channels.xiaoyuzhou import XiaoyuzhouChannel
 from agent_reach.channels.xueqiu import XueqiuChannel
 from agent_reach.channels.youtube import YouTubeChannel
 from agent_reach.utils.url import host_matches
@@ -82,11 +81,6 @@ def test_credential_channels_reject_lookalikes_and_userinfo(channel, malicious_u
             "https://v2ex.com:443/t/1",
         ),
         (
-            XiaoyuzhouChannel(),
-            "https://www.xiaoyuzhoufm.com/episode/1",
-            "https://xiaoyuzhoufm.com:443/episode/1",
-        ),
-        (
             FacebookChannel(),
             "https://m.facebook.com/groups/1",
             "https://facebook.com:443/groups/1",
@@ -113,7 +107,6 @@ def test_fixed_domain_channels_accept_subdomains_and_explicit_ports(
         (RedditChannel(), "reddit.com"),
         (LinkedInChannel(), "linkedin.com"),
         (V2EXChannel(), "v2ex.com"),
-        (XiaoyuzhouChannel(), "xiaoyuzhoufm.com"),
         (FacebookChannel(), "facebook.com"),
         (InstagramChannel(), "instagram.com"),
     ],

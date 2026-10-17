@@ -13,11 +13,11 @@ Every failed command returns `ok: false` and an `error` with `code`, `message` a
 
 | Code | Meaning | What to do |
 |---|---|---|
-| `NEED_SETUP` | a tool, key or the Agent Reach browser is missing | run `agent-reach doctor --text` and follow the problem listed for the channel: usually `agent-reach add <channel>` again (it installs whatever is missing), `agent-reach browser setup`, or `agent-reach configure groq-key` |
-| `NEED_LOGIN` | login is missing or expired | the user runs `agent-reach login <channel>` and logs in themselves; if it still fails, `agent-reach logout <channel>` then log in again |
-| `UPSTREAM_BROKEN` | the upstream tool or platform failed | don't retry in a loop; try again later, run `agent-reach update` (it upgrades the channel's tools to their latest versions, which often fixes this), then `agent-reach check <channel>`; still broken → open an issue with the `message` |
+| `NEED_SETUP` | a tool, key or selected browser connection is missing | run `agent-reach doctor --text` and follow the problem listed for the channel; use `agent-reach ensure <channel>` for supported channel setup |
+| `NEED_LOGIN` | login is missing or expired | the user runs `agent-reach login <channel>` and logs in themselves; do not delete credentials to fix a connection or platform-verification error |
+| `UPSTREAM_BROKEN` | the upstream tool or platform failed | don't retry in a loop; try again later, inspect the upstream error and pinned dependency version, then `agent-reach check <channel>`; still broken → open an issue with the `message` |
 | `TIMEOUT` | no backend answered in time | retry later, or pass a larger `--timeout SECONDS`; on a restricted network set a proxy (below) |
-| `RATE_LIMITED` | the platform is throttling | wait before retrying; avoid many requests in a row |
+| `RATE_LIMITED` | the platform is throttling | wait for `retry_after_seconds`; do not switch accounts or backends to continue requesting |
 | `NOT_FOUND` | the content does not exist | check the link, id or username |
 | `BAD_INPUT` | wrong arguments or unknown channel/action | run `agent-reach channels` for valid actions and usage |
 
@@ -26,27 +26,29 @@ Every failed command returns `ok: false` and an `error` with `code`, `message` a
 | Status | Meaning | What to do |
 |---|---|---|
 | `not_added` | optional channel not turned on | `agent-reach add <channel>` |
-| `needs_setup` | something is missing; `problems` says what | follow each problem: `agent-reach add <channel>` again, `agent-reach browser setup`, or `agent-reach configure <key>` |
+| `needs_setup` | something is missing; `problems` says what | use `agent-reach ensure <channel>` or follow the specific setup step |
 | `needs_login` | the last live check failed only on login | `agent-reach login <channel>` (the user logs in) |
 | `unverified` | set up, but no live check in the last 24 hours | `agent-reach check <channel>` |
-| `ready` | passed a live check in the last 24 hours | nothing |
+| `search_ready` | search returned nonempty results in the last 24 hours | read and other actions need their own checks |
+| `ready` | passed the recorded live checks in the last 24 hours | inspect verified actions for the requested capability |
+| `cooldown` | a rate limit is still active | wait for `retry_after_seconds` |
 | `broken` | the last live check failed for another reason | `agent-reach update`, then `agent-reach check <channel> --text`; see `UPSTREAM_BROKEN` |
 
 Run `agent-reach check` first if you want fresh live results. In the `doctor` output, `regressed: true` on a channel means an action passed in the previous check and fails in the latest one.
 
 ## Tool versions
 
-Agent Reach installs the latest version of each channel's tools; it does not pin them. `agent-reach doctor` shows the version actually installed for each tool. If an upstream release turns out to be broken, a new Agent Reach release excludes that version (and may set a minimum); `agent-reach update` then moves you to a good one. Until that release exists, roll back as below or wait.
+Some channel tools install at tested versions; others use a supported range. `agent-reach doctor` shows installed versions. If a version fails, inspect the exact backend attempt before changing it.
 
-## Agent Reach browser
+## Reusing existing sessions
 
-Used by xiaohongshu, reddit, twitter, facebook, instagram, boss and xueqiu. It is a separate Chrome window with its own profile in `~/.agent-reach/browser/`. It opens by itself when one of these channels needs it (the first open can take about 40 seconds) and closes after 10 minutes without Agent Reach use.
+`login CHANNEL` inspects existing connections, without opening a browser. For OpenCLI use `browser profiles` and explicitly select `browser use ID`. Install/reconnect the extension in that same Chrome profile. A disconnected selection is never replaced automatically.
 
-- **The extension did not connect**: run `agent-reach browser setup`; on macOS and Linux it loads the OpenCLI extension by itself. On Windows, click "Add to Chrome" once on the OpenCLI extension page in the window that opens, then run `agent-reach browser setup` again.
-- **"more than one new OpenCLI profile connected"**: close other Chrome windows that have the OpenCLI extension, then run setup again.
-- **No Chrome on the machine**: nothing to do; Agent Reach downloads its own copy (Chrome for Testing) into `~/.agent-reach/tools/chrome/`.
-- **Window closed by hand**: nothing to do; the next command that needs it opens it again. `agent-reach browser status` shows its state.
-- While it is open, any local process can control it through its debugging port; it closes itself after 10 idle minutes.
+Boss requires an existing CDP BOSS page. Select it with `browser bind boss http://127.0.0.1:PORT`. Only explicit `login boss --new-browser` may open its persistent dedicated profile. After the user confirms login and stability, run `login boss --sync`. Do not clear risk locks or switch profiles to retry a platform block.
+
+LinkedIn/Bilibili preserve existing native sessions. `login CHANNEL --native` explicitly runs their own authentication if necessary. Saved state is not proof of authentication: use `check CHANNEL --search`.
+
+Search-only acceptance is shown as search_ready, not proof that every action works. PLATFORM_BLOCKED means stop and have the user check the official page. BUSY means another Reach command owns the same browser; schedule later.
 
 ## Skill not picked up by an AI
 

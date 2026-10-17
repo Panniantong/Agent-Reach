@@ -165,7 +165,7 @@ def _open_lock(path: Path) -> int:
 def try_lock(fd: int) -> bool:
     """Take an exclusive lock on `fd` without blocking."""
     try:
-        if os.name == "nt":
+        if sys.platform == "win32":
             import msvcrt
 
             msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
@@ -260,7 +260,7 @@ def _unzip(archive: Path, dest: Path) -> None:
 
 def _system_chrome() -> Optional[str]:
     system = platform.system()
-    candidates = []
+    candidates: List[Optional[str]] = []
     if system == "Darwin":
         candidates = ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
     elif system == "Windows":
@@ -450,7 +450,7 @@ def _detach_kwargs() -> dict:
     # agent_reach/ folder where the user ran the command would shadow the installed package.
     root = browser_root()
     make_private_dir(root)
-    if os.name == "nt":
+    if sys.platform == "win32":
         return {"cwd": str(root), "creationflags": subprocess.DETACHED_PROCESS
                 | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW}
     return {"cwd": str(root), "start_new_session": True}
@@ -586,7 +586,7 @@ def open_url(url: str) -> None:
 
 def _profile_pids() -> List[int]:
     """Processes started with our --user-data-dir (Chrome and its helpers)."""
-    if os.name == "nt":
+    if sys.platform == "win32":
         return []
     try:
         out = subprocess.run(["ps", "-axww", "-o", "pid=,command="], capture_output=True, text=True, timeout=10).stdout
