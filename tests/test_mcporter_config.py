@@ -145,7 +145,68 @@ def test_omitted_imports_are_reported_but_not_expanded(
     assert inspection.imports_unchecked is True
 
 
-def test_machine_output_parser_remains_available_for_install_flows():
+def test_home_scope_ignores_a_project_layer_shadowing_the_name(
+    monkeypatch, tmp_path, isolated_home
+):
+    """A bundled project entry is not an installed home entry."""
+    monkeypatch.chdir(tmp_path)
+    _write_config(
+        isolated_home / ".mcporter" / "mcporter.json",
+        {"home-only": {"command": "home"}},
+    )
+    _write_config(
+        tmp_path / "config" / "mcporter.json",
+        {"exa": {"baseUrl": "https://mcp.exa.ai/mcp"}},
+    )
+
+    assert inspect_mcporter_config().server_names == {"home-only", "exa"}
+    home_only = inspect_mcporter_config(scope="home")
+
+    assert home_only.server_names == {"home-only"}
+    assert home_only.source == "home"
+
+
+def test_home_scope_reads_nothing_when_home_config_is_absent(
+    monkeypatch, tmp_path, isolated_home
+):
+    monkeypatch.chdir(tmp_path)
+    _write_config(
+        tmp_path / "config" / "mcporter.json",
+        {"exa": {"baseUrl": "https://mcp.exa.ai/mcp"}},
+    )
+
+    assert inspect_mcporter_config(scope="home").server_names == frozenset()
+    assert inspect_mcporter_config(scope="home").source is None
+
+
+def test_home_scope_does_not_parse_the_project_layer(
+    monkeypatch, tmp_path, isolated_home
+):
+    """An unrelated malformed project config must not break a home-scoped read."""
+    monkeypatch.chdir(tmp_path)
+    project_config = tmp_path / "config" / "mcporter.json"
+    project_config.parent.mkdir(parents=True)
+    project_config.write_text("{not-json", encoding="utf-8")
+
+    assert inspect_mcporter_config(scope="home").server_names == frozenset()
+
+
+def test_home_scope_rejects_an_explicit_single_layer(
+    monkeypatch, tmp_path, isolated_home
+):
+    """MCPORTER_CONFIG replaces the home layer, so a home write cannot satisfy it."""
+    monkeypatch.chdir(tmp_path)
+    _write_config(
+        tmp_path / "explicit.json",
+        {"explicit-only": {"command": "explicit"}},
+    )
+    monkeypatch.setenv("MCPORTER_CONFIG", "explicit.json")
+
+    with pytest.raises(McporterConfigError, match="MCPORTER_CONFIG"):
+        inspect_mcporter_config(scope="home")
+
+
+def test_machine_output_parser_remains_available_for_cleanup_flows():
     output = json.dumps(
         {
             "servers": [

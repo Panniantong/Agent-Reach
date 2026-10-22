@@ -1053,7 +1053,7 @@ def test_update_guide_preserves_ytdlp_default_extra():
     assert "pipx install --force 'yt-dlp[default]'" in update_line
 
 
-def test_mcporter_install_adds_exa_to_home_scope(monkeypatch):
+def test_mcporter_install_adds_exa_to_home_scope(monkeypatch, isolated_home):
     """Installer config remains available across working directories."""
     import shutil
 
@@ -1067,8 +1067,6 @@ def test_mcporter_install_adds_exa_to_home_scope(monkeypatch):
 
     def fake_run(args, **_kwargs):
         calls.append(args)
-        if args == ["/usr/bin/mcporter", "config", "list", "--json"]:
-            return _docker_result(args, stdout='{"servers": []}')
         return _docker_result(args)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -1084,26 +1082,36 @@ def test_mcporter_install_adds_exa_to_home_scope(monkeypatch):
         "--scope",
         "home",
     ] in calls
-    assert ["/usr/bin/mcporter", "config", "list", "--json"] in calls
+    # The scope question is answered from the home layer directly; asking
+    # mcporter for the merged view cannot distinguish a home entry from a
+    # project one that shadows it.
+    assert ["/usr/bin/mcporter", "config", "list", "--json"] not in calls
 
 
 def test_mcporter_install_does_not_treat_metadata_as_exa_server(
-    monkeypatch,
+    monkeypatch, tmp_path, isolated_home
 ):
     """Only a server object's exact name may suppress Exa setup."""
     import json
     import shutil
 
-    calls = []
-    payload = {
-        "servers": [
+    home_config = isolated_home / ".mcporter" / "mcporter.json"
+    home_config.parent.mkdir(parents=True, exist_ok=True)
+    home_config.write_text(
+        json.dumps(
             {
-                "name": "unrelated",
-                "source": {"path": "/tmp/exa-project/mcporter.json"},
-                "url": "https://example.test/?note=exa",
+                "mcpServers": {
+                    "unrelated": {
+                        "baseUrl": "https://example.test/?note=exa",
+                    }
+                },
+                "imports": [],
             }
-        ]
-    }
+        ),
+        encoding="utf-8",
+    )
+
+    calls = []
 
     monkeypatch.setattr(
         shutil,
@@ -1113,8 +1121,6 @@ def test_mcporter_install_does_not_treat_metadata_as_exa_server(
 
     def fake_run(args, **_kwargs):
         calls.append(args)
-        if args == ["/usr/bin/mcporter", "config", "list", "--json"]:
-            return _docker_result(args, stdout=json.dumps(payload))
         return _docker_result(args)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -1132,7 +1138,118 @@ def test_mcporter_install_does_not_treat_metadata_as_exa_server(
     ] in calls
 
 
-def test_mcporter_install_uses_resolved_windows_command_paths(monkeypatch):
+def test_mcporter_install_skips_add_when_home_already_has_exa(
+    monkeypatch, isolated_home, capsys
+):
+    """A real home entry is the one case that is genuinely already configured."""
+    import json
+    import shutil
+
+    home_config = isolated_home / ".mcporter" / "mcporter.json"
+    home_config.parent.mkdir(parents=True, exist_ok=True)
+    home_config.write_text(
+        json.dumps(
+            {"mcpServers": {"exa": {"baseUrl": "https://mcp.exa.ai/mcp"}}}
+        ),
+        encoding="utf-8",
+    )
+
+    calls = []
+    monkeypatch.setattr(
+        shutil,
+        "which",
+        lambda name: "/usr/bin/mcporter" if name == "mcporter" else None,
+    )
+    monkeypatch.setattr(
+        subprocess, "run", lambda args, **_kwargs: calls.append(args)
+    )
+
+    assert cli._install_mcporter() is True
+    assert calls == []
+    assert "already configured" in capsys.readouterr().out
+
+
+def test_mcporter_install_ignores_project_scope_exa(
+    monkeypatch, tmp_path, isolated_home
+):
+    """A bundled project config must not read as an installed home entry.
+
+    Running the installer from inside this repository used to load the
+    repository's own ``config/mcporter.json``, which ships an ``exa`` entry,
+    and report success while ``~/.mcporter/mcporter.json`` stayed absent.
+    """
+    import json
+    import shutil
+
+    cwd = tmp_path / "agent-reach"
+    project_config = cwd / "config" / "mcporter.json"
+    project_config.parent.mkdir(parents=True)
+    project_config.write_text(
+        json.dumps(
+            {
+                "mcpServers": {"exa": {"baseUrl": "https://mcp.exa.ai/mcp"}},
+                "imports": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(cwd)
+    assert not (isolated_home / ".mcporter").exists()
+
+    calls = []
+    monkeypatch.setattr(
+        shutil,
+        "which",
+        lambda name: "/usr/bin/mcporter" if name == "mcporter" else None,
+    )
+
+    def fake_run(args, **_kwargs):
+        calls.append(args)
+        return _docker_result(args)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert cli._install_mcporter() is True
+    assert [
+        "/usr/bin/mcporter",
+        "config",
+        "add",
+        "exa",
+        "https://mcp.exa.ai/mcp",
+        "--scope",
+        "home",
+    ] in calls
+
+
+def test_mcporter_install_fails_closed_when_home_scope_is_not_in_effect(
+    monkeypatch, tmp_path, isolated_home, capsys
+):
+    """An explicit single-layer config cannot be satisfied by a home write."""
+    import shutil
+
+    cwd = tmp_path / "agent-reach"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+    monkeypatch.setenv("MCPORTER_CONFIG", "explicit.json")
+
+    calls = []
+    monkeypatch.setattr(
+        shutil,
+        "which",
+        lambda name: "/usr/bin/mcporter" if name == "mcporter" else None,
+    )
+    monkeypatch.setattr(
+        subprocess, "run", lambda args, **_kwargs: calls.append(args)
+    )
+
+    assert cli._install_mcporter() is False
+    assert calls == []
+    assert "mcporter config add exa" in capsys.readouterr().out
+
+
+def test_mcporter_install_uses_resolved_windows_command_paths(
+    monkeypatch, isolated_home
+):
     """Windows .CMD shims must not be replaced with unresolved bare names."""
     import shutil
 
@@ -1152,13 +1269,7 @@ def test_mcporter_install_uses_resolved_windows_command_paths(monkeypatch):
         calls.append(args)
         if args[:4] == [npm_cmd, "install", "-g", "mcporter"]:
             state["installed"] = True
-            return _docker_result(args)
-        if args == [mcporter_cmd, "config", "list", "--json"]:
-            return _docker_result(
-                args,
-                stdout='{"servers": [{"name": "exa"}]}',
-            )
-        return _docker_result(args, returncode=1)
+        return _docker_result(args)
 
     monkeypatch.setattr(shutil, "which", fake_which)
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -1166,7 +1277,15 @@ def test_mcporter_install_uses_resolved_windows_command_paths(monkeypatch):
     assert cli._install_mcporter() is True
     assert calls == [
         [npm_cmd, "install", "-g", "mcporter"],
-        [mcporter_cmd, "config", "list", "--json"],
+        [
+            mcporter_cmd,
+            "config",
+            "add",
+            "exa",
+            "https://mcp.exa.ai/mcp",
+            "--scope",
+            "home",
+        ],
     ]
 
 

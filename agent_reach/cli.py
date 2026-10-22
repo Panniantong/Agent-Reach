@@ -1280,44 +1280,48 @@ def _install_mcporter():
     try:
         from agent_reach.channels.mcporter import (
             McporterConfigError,
-            configured_server_names,
+            inspect_mcporter_config,
         )
 
-        r = subprocess.run(
-            [mcporter_cmd, "config", "list", "--json"],
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=5,
-        )
-        if r.returncode != 0:
-            raise McporterConfigError("mcporter 配置查询失败")
-        server_names = configured_server_names(r.stdout)
-        if "exa" not in server_names:
-            add_result = subprocess.run(
-                [
-                    mcporter_cmd,
-                    "config",
-                    "add",
-                    "exa",
-                    "https://mcp.exa.ai/mcp",
-                    "--scope",
-                    "home",
-                ],
-                capture_output=True, encoding="utf-8", errors="replace", timeout=10,
-            )
-            if add_result.returncode == 0:
-                print("  ✅ Exa search configured (free, no API key needed)")
-                return True
-            else:
-                print(
-                    "  [!]  Could not configure Exa. Run manually: "
-                    "mcporter config add exa https://mcp.exa.ai/mcp --scope home"
-                )
-                return False
-        else:
+        # Only the home layer applies from every working directory. The merged
+        # view would count this repository's own config/mcporter.json, which
+        # ships an exa entry, as an installed one while the home config that
+        # --scope home writes to stays empty.
+        home_servers = inspect_mcporter_config(scope="home").server_names
+        if "exa" in home_servers:
             print("  ✅ Exa search already configured")
             return True
+
+        add_result = subprocess.run(
+            [
+                mcporter_cmd,
+                "config",
+                "add",
+                "exa",
+                "https://mcp.exa.ai/mcp",
+                "--scope",
+                "home",
+            ],
+            capture_output=True, encoding="utf-8", errors="replace", timeout=10,
+        )
+        if add_result.returncode == 0:
+            print("  ✅ Exa search configured (free, no API key needed)")
+            return True
+        print(
+            "  [!]  Could not configure Exa. Run manually: "
+            "mcporter config add exa https://mcp.exa.ai/mcp --scope home"
+        )
+        return False
+    except McporterConfigError:
+        print(
+            "  [!]  The mcporter home config could not be read, or is not the "
+            "layer in effect. Nothing was written."
+        )
+        print(
+            "     Run manually: "
+            "mcporter config add exa https://mcp.exa.ai/mcp --scope home"
+        )
+        return False
     except Exception:
         print("  [!]  Could not configure Exa. Run manually: mcporter config add exa https://mcp.exa.ai/mcp --scope home")
         return False
@@ -2064,19 +2068,14 @@ def _cmd_setup():
         try:
             from agent_reach.channels.mcporter import (
                 McporterConfigError,
-                configured_server_names,
+                inspect_mcporter_config,
             )
 
-            r = subprocess.run(
-                ["mcporter", "config", "list", "--json"],
-                capture_output=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=10,
-            )
-            if r.returncode != 0:
-                raise McporterConfigError("mcporter 配置查询失败")
-            if "exa" in configured_server_names(r.stdout):
+            # 只看 home 层：只有它会从任何工作目录生效。合并视图会把当前
+            # 仓库自带的 config/mcporter.json 也算作已配置，而 --scope home
+            # 实际写入的 home 配置仍是空的。
+            home_servers = inspect_mcporter_config(scope="home").server_names
+            if "exa" in home_servers:
                 print("  当前状态: ✅ 已配置")
             else:
                 print("  当前状态: -- 未配置")
@@ -2099,6 +2098,9 @@ def _cmd_setup():
                     else:
                         print("  [!] 自动配置失败，请手动执行：")
                         print("     mcporter config add exa https://mcp.exa.ai/mcp --scope home")
+        except McporterConfigError:
+            print("  [!] 无法确定 mcporter home 配置状态（配置无法读取或不是生效层），未做改动。请手动执行：")
+            print("     mcporter config add exa https://mcp.exa.ai/mcp --scope home")
         except Exception:
             print("  [!] 无法检查 Exa 配置，请手动执行：")
             print("     mcporter config add exa https://mcp.exa.ai/mcp --scope home")

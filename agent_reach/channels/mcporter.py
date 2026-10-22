@@ -6,6 +6,7 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from agent_reach.utils.paths import (
     PrivatePathError,
@@ -14,6 +15,10 @@ from agent_reach.utils.paths import (
 
 _MAX_CONFIG_BYTES = 1024 * 1024
 _MISSING = object()
+
+# "effective" is what mcporter reads right now; "home" is the one layer that
+# applies from every working directory.
+ConfigScope = Literal["effective", "home"]
 
 
 class McporterConfigError(ValueError):
@@ -31,6 +36,8 @@ class McporterConfigInspection:
 
 def inspect_mcporter_config(
     root_dir: str | Path | None = None,
+    *,
+    scope: ConfigScope = "effective",
 ) -> McporterConfigInspection:
     """Read the effective local mcporter config without starting mcporter.
 
@@ -41,8 +48,17 @@ def inspect_mcporter_config(
     names. Only exact ``mcpServers`` keys are returned. Editor imports are
     deliberately not opened because Doctor must not expand its
     credential-read boundary.
+
+    ``scope="home"`` reads only the home layer, which is the one that applies
+    from every working directory. Callers that install or repair an entry for
+    global use need this: in the merged view a project layer that shadows the
+    name is indistinguishable from a home entry, so a bundled
+    ``config/mcporter.json`` would read as "already configured" while the home
+    config stays empty. A single explicit ``MCPORTER_CONFIG`` replaces the home
+    layer instead of extending it, so ``scope="home"`` raises there rather than
+    report names that a home-scoped write could not satisfy.
     """
-    selected_layers = _select_config_layers(root_dir)
+    selected_layers = _select_config_layers(root_dir, scope=scope)
     if not selected_layers:
         return McporterConfigInspection(frozenset(), None)
 
@@ -84,10 +100,16 @@ def inspect_mcporter_config(
 
 def _select_config_layers(
     root_dir: str | Path | None,
+    *,
+    scope: ConfigScope = "effective",
 ) -> list[tuple[Path, str]]:
-    root = Path(os.path.abspath(os.fspath(root_dir or Path.cwd())))
     explicit = os.environ.get("MCPORTER_CONFIG", "").strip()
     if explicit:
+        if scope == "home":
+            raise McporterConfigError(
+                "MCPORTER_CONFIG 已指定单一配置层，home 层不再生效"
+            )
+        root = _resolve_root(root_dir)
         expanded = Path(os.path.expanduser(explicit))
         if not expanded.is_absolute():
             expanded = root / expanded
@@ -101,10 +123,15 @@ def _select_config_layers(
             layers.append((candidate, "home"))
             break
 
-    project_path = root / "config" / "mcporter.json"
-    if os.path.lexists(project_path):
-        layers.append((project_path, "project"))
+    if scope == "effective":
+        project_path = _resolve_root(root_dir) / "config" / "mcporter.json"
+        if os.path.lexists(project_path):
+            layers.append((project_path, "project"))
     return layers
+
+
+def _resolve_root(root_dir: str | Path | None) -> Path:
+    return Path(os.path.abspath(os.fspath(root_dir or Path.cwd())))
 
 
 def _read_config_object(config_path: Path) -> dict:
