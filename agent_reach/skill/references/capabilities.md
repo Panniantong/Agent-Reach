@@ -19,7 +19,7 @@ Read when the user asks what can be fetched or how complete a result is. Declare
 | Reddit | 搜索、正文、部分评论；某些公开 JSON 可含父子 ID | 浏览器 search/read/subreddit；登录依所选路径决定，不保证完整评论树、全部回复；不提供发评论 |
 | X/Twitter | 搜索命中的公开单帖；部分官方公开嵌入可返回全文 | search/profile/tweets/thread；单帖可读不代表回复流可读，不保证完整评论树 |
 | 小红书 | 公开列表或索引可能有笔记 ID、作者、标题，空字段不能补猜 | search/read/comments；文字描述、顶级评论及已加载回复；不保证全部评论，不声称理解图片/视频 |
-| Instagram | 部分索引和主页浅层信息；HTML 应用壳不算帖文 | search 搜用户、profile 主页、posts 指定用户帖子描述；无统一评论动作，不声称理解图片/视频 |
+| Instagram | 部分索引和主页浅层信息；HTML 应用壳不算帖文 | search 搜用户、profile 主页、posts 指定用户帖子描述，三者在 OpenCLI 2.0 下实测不可用，见下方 Instagram 注；无统一评论动作，不声称理解图片/视频 |
 | Facebook | 部分索引或 HTML 摘要；摘要可能被截断 | search/profile；无统一详情或评论动作，不把搜索摘要当全文 |
 | LinkedIn | 搜公开职位、读公开 JD | jobs/read 先尝试公开网页；指定 opencli 才直接走站内；不保证所有职位可读 |
 | BOSS | 搜索索引中可能有职位摘要 | search/read 职位列表与 JD；不能根据编码薪资猜数字；详情后备能力依渠道声明 |
@@ -27,5 +27,7 @@ Read when the user asks what can be fetched or how complete a result is. Declare
 | 雪球 | 部分公开行情和索引信息 | quote/search/hot_posts/hot_stocks；行情与社区路径分别验收 |
 | Web | Agent 自带搜索/读取 | Reach web search/read 为匿名保底；摘要、页面壳和验证页不能当完整正文 |
 | 小宇宙 | 节目页标题、简介 | transcribe 整集转文字；需要用户提供 Groq Key（`agent-reach configure groq-key`） |
+
+Instagram 注（OpenCLI 2.0.0，2026-10 实测）：search 返回 HTTP 404，profile 返回 HTTP 429，posts（opencli user）返回 HTML 而非 JSON；explore 可用。429 是端点限流，不是登录失效：不要重试，也不要请用户重新登录——重登无用，反复重试只会延长限流；改用 explore 或跳过 Instagram 并向用户说明原因。只有真正的登录失效（NEED_LOGIN / AUTH_REQUIRED）才请用户本人登录。
 
 登录后的能力表述使用“可启用/尝试上述浏览器动作”，不使用“登录后支持全部评论”。用户跳过登录时交付已有公开证据。
