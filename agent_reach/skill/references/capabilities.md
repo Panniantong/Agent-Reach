@@ -29,3 +29,7 @@ Read when the user asks what can be fetched or how complete a result is. Declare
 | 小宇宙 | 节目页标题、简介 | transcribe 整集转文字；需要用户提供 Groq Key（`agent-reach configure groq-key`） |
 
 登录后的能力表述使用“可启用/尝试上述浏览器动作”，不使用“登录后支持全部评论”。用户跳过登录时交付已有公开证据。
+
+## Optional companion / 可选协作工具
+
+For explicitly chosen Chinese social research with local image OCR and bounded coverage, see [Social Read](social-read.md). This is a separately configured companion, not a Reach channel or an automatic fallback. Reach's declared actions and validation scope above stay unchanged.
