@@ -951,8 +951,22 @@ def uninstall(dry_run: bool = False) -> dict:
 
 # ── configure ──
 
-CONFIG_KEYS = {"groq-key": "groq_api_key", "openai-key": "openai_api_key", "proxy": "proxy", "github-token": "github_token",
+CONFIG_KEYS = {
+    "groq-key": "groq_api_key",
+    "openai-key": "openai_api_key",
+    "proxy": "proxy",
+    "github-token": "github_token",
+    "xueqiu-cookie": "xueqiu_cookie",
 }
+
+COOKIE_KEYS = {"xueqiu-cookie"}
+
+
+def _check_cookie(value: str) -> None:
+    """Reject a cookie string the channel would silently ignore, e.g. a bare token."""
+    pairs = [pair.strip() for pair in value.split(";") if pair.strip()]
+    if not any(pair.partition("=")[0].strip() and pair.partition("=")[2].strip() for pair in pairs):
+        raise ReachError(BAD_INPUT, "invalid cookie: expected `name=value; name2=value2`")
 
 
 def configure(key: str, value: str) -> dict:
@@ -962,5 +976,7 @@ def configure(key: str, value: str) -> dict:
         raise ReachError(BAD_INPUT, f"unknown key: {key}; valid: {', '.join(CONFIG_KEYS)}")
     if not value:
         raise ReachError(BAD_INPUT, "empty value")
+    if key in COOKIE_KEYS:
+        _check_cookie(value)
     Config().set(CONFIG_KEYS[key], value)
     return {"key": key, "saved": True}
