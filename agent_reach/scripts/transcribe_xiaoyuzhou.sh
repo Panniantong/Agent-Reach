@@ -27,18 +27,23 @@ URL="${1:?用法: bash transcribe.sh [--polish] <小宇宙链接> [输出文件�
 OUTPUT="${2:-}"
 
 PYTHON_CMD=()
+# Existing on PATH is not enough: Windows' Microsoft Store "python3" alias
+# resolves via `command -v` but only prints an install hint and exits 49.
+python_runs() {
+    "$@" -c 'import sys' >/dev/null 2>&1
+}
 ensure_python() {
     if [ "${#PYTHON_CMD[@]}" -gt 0 ]; then
         return 0
     fi
-    if command -v python3 >/dev/null 2>&1; then
+    if command -v python3 >/dev/null 2>&1 && python_runs python3; then
         PYTHON_CMD=(python3)
-    elif command -v python >/dev/null 2>&1; then
+    elif command -v python >/dev/null 2>&1 && python_runs python; then
         PYTHON_CMD=(python)
-    elif command -v py >/dev/null 2>&1; then
+    elif command -v py >/dev/null 2>&1 && python_runs py -3; then
         PYTHON_CMD=(py -3)
     else
-        echo "❌ 未找到 Python（尝试过 python3、python、py -3）" >&2
+        echo "❌ 未找到可用的 Python（尝试过 python3、python、py -3）" >&2
         return 1
     fi
 }
@@ -93,7 +98,11 @@ MAX_AUDIO_BYTES=1073741824
 MAX_API_RESPONSE_BYTES=33554432
 MAX_DURATION_SECONDS=10800
 
-TEMP_ROOT="${TMPDIR:-/tmp}"
+TEMP_ROOT="${TMPDIR:-$HOME/.agent-reach/tmp}"
+if command -v cygpath >/dev/null 2>&1; then
+    TEMP_ROOT=$(cygpath -u "$TEMP_ROOT")
+fi
+mkdir -p -- "$TEMP_ROOT" || exit 1
 if ! WORK_DIR=$(mktemp -d "${TEMP_ROOT%/}/agent-reach-xiaoyuzhou.XXXXXX"); then
     echo "❌ 无法创建临时目录" >&2
     exit 1
@@ -137,10 +146,11 @@ curl --fail --show-error --location --silent \
 FILE_SIZE=$(ls -lh "$WORK_DIR/original.$EXT" | awk '{print $5}')
 echo "📦 文件大小: $FILE_SIZE"
 
-# Step 3: 获取时长
-if ! DURATION_RAW=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 \
-    "$WORK_DIR/original.$EXT" 2>/dev/null); then
-    echo "❌ ffprobe 无法读取音频时长" >&2
+# Step 3: 获取时长（用 ffmpeg 自己读：Agent Reach 自带的 ffmpeg 没有 ffprobe）
+DURATION_RAW=$(ffmpeg -hide_banner -i "$WORK_DIR/original.$EXT" 2>&1 \
+    | awk '/Duration: [0-9]+:[0-9]+:[0-9.]+/ { split($2, t, ":"); sub(",", "", t[3]); printf "%.3f", t[1] * 3600 + t[2] * 60 + t[3]; exit }')
+if [ -z "$DURATION_RAW" ]; then
+    echo "❌ ffmpeg 无法读取音频时长" >&2
     exit 1
 fi
 if DURATION=$(DURATION_RAW="$DURATION_RAW" MAX_DURATION_SECONDS="$MAX_DURATION_SECONDS" \
@@ -166,7 +176,7 @@ else
     if [ "$duration_status" -eq 3 ]; then
         echo "❌ 音频时长超过 3 小时限制" >&2
     else
-        echo "❌ ffprobe 返回无效音频时长: ${DURATION_RAW:-<empty>}" >&2
+        echo "❌ ffmpeg 返回无效音频时长: ${DURATION_RAW:-<empty>}" >&2
     fi
     exit 1
 fi

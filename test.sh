@@ -1,7 +1,7 @@
 #!/bin/bash
 # Agent Reach clean-environment integration test.
-# Creates an isolated venv, installs this checkout, runs a read-only doctor,
-# then executes the repository test suite.
+# Creates an isolated venv and HOME, installs this checkout, runs the
+# read-only CLI commands, then executes the repository test suite.
 
 set -euo pipefail
 
@@ -19,52 +19,43 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 PYTHON_CMD=()
-if command -v python3 >/dev/null 2>&1 && \
-   python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
-    PYTHON_CMD=(python3)
-elif command -v python >/dev/null 2>&1 && \
-     python -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
-    PYTHON_CMD=(python)
-elif command -v py >/dev/null 2>&1 && \
-     py -3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
+for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1 && \
+       "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
+        PYTHON_CMD=("$candidate")
+        break
+    fi
+done
+if [ ${#PYTHON_CMD[@]} -eq 0 ] && command -v py >/dev/null 2>&1 && \
+   py -3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
     PYTHON_CMD=(py -3)
-elif [ -x "$REPO_ROOT/.venv/bin/python" ] && \
-     "$REPO_ROOT/.venv/bin/python" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
-    PYTHON_CMD=("$REPO_ROOT/.venv/bin/python")
-elif [ -x "$REPO_ROOT/.venv/Scripts/python.exe" ] && \
-     "$REPO_ROOT/.venv/Scripts/python.exe" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
-    PYTHON_CMD=("$REPO_ROOT/.venv/Scripts/python.exe")
-else
+fi
+if [ ${#PYTHON_CMD[@]} -eq 0 ]; then
     echo "Python 3.10+ is required" >&2
     exit 1
 fi
 
-echo "[1/5] Creating isolated environment"
+echo "[1/4] Creating isolated environment"
 "${PYTHON_CMD[@]}" -m venv "$TEST_DIR/venv"
 # shellcheck disable=SC1091
 if [ -f "$TEST_DIR/venv/bin/activate" ]; then
     source "$TEST_DIR/venv/bin/activate"
-elif [ -f "$TEST_DIR/venv/Scripts/activate" ]; then
-    source "$TEST_DIR/venv/Scripts/activate"
 else
-    echo "Could not find the virtual environment activation script" >&2
-    exit 1
+    source "$TEST_DIR/venv/Scripts/activate"
 fi
 
-echo "[2/5] Installing this checkout and test dependencies"
+echo "[2/4] Installing this checkout and test dependencies"
 python -m pip install --quiet --upgrade pip
 python -m pip install --quiet -c "$REPO_ROOT/constraints.txt" -e "$REPO_ROOT[dev]"
 
-echo "[3/5] Verifying the installed CLI"
+echo "[3/4] Running read-only CLI commands"
 agent-reach version
+agent-reach channels > "$TEST_DIR/channels.json"
+python -c 'import json,sys; d=json.load(open(sys.argv[1], encoding="utf-8")); assert d["ok"] and d["channels"], d; print(f"channels OK: {len(d[\"channels\"])}")' "$TEST_DIR/channels.json"
+agent-reach doctor > "$TEST_DIR/doctor.json"
+python -c 'import json,sys; d=json.load(open(sys.argv[1], encoding="utf-8")); assert "ok" in d, d; print("doctor OK")' "$TEST_DIR/doctor.json"
 
-echo "[4/5] Running read-only install check and doctor"
-agent-reach install --env=auto --safe
-agent-reach install --env=auto --system --dry-run
-agent-reach doctor --json > "$TEST_DIR/doctor.json"
-python -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); assert isinstance(data, dict) and data, "doctor returned no channels"; print(f"doctor OK: {len(data)} channels")' "$TEST_DIR/doctor.json"
-
-echo "[5/5] Running repository tests"
+echo "[4/4] Running repository tests"
 pytest "$REPO_ROOT/tests" -q
 
 echo "Agent Reach integration test passed"

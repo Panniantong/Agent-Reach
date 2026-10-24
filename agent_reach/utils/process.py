@@ -16,11 +16,3 @@ def utf8_subprocess_env(base: Mapping[str, str] | None = None) -> dict[str, str]
     env = dict(base or os.environ)
     env.update(UTF8_ENV)
     return env
-
-
-def mcporter_utf8_env_args() -> list[str]:
-    """Return mcporter --env arguments for UTF-8 Python stdio servers."""
-    args = []
-    for key, value in UTF8_ENV.items():
-        args.extend(["--env", f"{key}={value}"])
-    return args
