@@ -79,6 +79,18 @@ An agent without a terminal prompt can pipe the value in: `agent-reach configure
 
 It is used for every Agent Reach command. An `HTTPS_PROXY` set in your shell takes precedence.
 
+## Xueqiu session
+
+`agent-reach login xueqiu` opens xueqiu.com in the Agent Reach browser; log in there, then run `agent-reach login xueqiu --sync` to save the session.
+
+Importing cookies from a personal Chrome profile does not work on Windows with Chrome 130 or newer: App-Bound Encryption blocks the read, and running as administrator does not change that. If the Agent Reach browser is not an option, save the cookie string yourself (copy it from your own browser's developer tools):
+
+```bash
+agent-reach configure xueqiu-cookie --stdin
+```
+
+Only the `xueqiu_cookie` key is written. The format is `name=value; name2=value2`, and `xq_a_token` is the cookie Xueqiu's authenticated endpoints need. The session expires within hours; save a fresh string when `agent-reach doctor` reports Xueqiu again.
+
 ## Still stuck
 
 - `agent-reach update` and try again.
