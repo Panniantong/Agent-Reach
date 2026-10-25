@@ -7,6 +7,16 @@ All notable changes to this project will be documented in this file.
 ---
 
 
+## [Unreleased]
+
+中文：
+
+- YouTube 新增 `transcript` 动作：用户自己配置托管转录 API 的 Key 后，由该服务取字幕，本机不向 YouTube 发请求。它是单独的动作，不会在 YouTube 验证拦截后自动切换，也不会在多个服务之间自动切换。
+
+English:
+
+- YouTube gets a `transcript` action that reads the transcript from a hosted transcript API the user configured (`agent-reach configure transcript-api-key`, optional `transcript-api-provider`). The provider fetches the captions, so nothing is requested from YouTube on this machine. It is a separate action: it never runs as a fallback after a YouTube verification challenge, and never switches between providers on its own. The provider table in `agent_reach/hosted_transcript.py` takes one entry per service.
+
 ## [1.6.0] - 2026-10-23
 
 中文：

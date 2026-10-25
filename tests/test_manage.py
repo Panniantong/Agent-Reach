@@ -735,6 +735,16 @@ def test_configure_saves_known_keys_only(env):
         manage.configure("twitter-cookies", "x")
 
 
+def test_configure_saves_hosted_transcript_settings(env):
+    from agent_reach.config import Config
+
+    manage.configure("transcript-api-key", "tk_test")
+    manage.configure("transcript-api-provider", "getyoutubetranscript")
+    cfg = Config(read_only=True)
+    assert cfg.get("transcript_api_key") == "tk_test"
+    assert cfg.get("transcript_api_provider") == "getyoutubetranscript"
+
+
 def test_doctor_separates_needs_login_from_broken(env, monkeypatch):
     def need_login(self, **kw):
         raise ReachError("NEED_LOGIN", "log in")
