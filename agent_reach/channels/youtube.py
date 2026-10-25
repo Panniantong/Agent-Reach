@@ -125,6 +125,15 @@ class YouTubeChannel(Channel):
             live_test={"target": "https://www.youtube.com/watch?v=jNQXAC9IVRw"},
         ),
         Action(
+            "transcript",
+            "Transcript text from the hosted transcript API you configured (the provider fetches it; nothing is requested from YouTube on this machine)",
+            (
+                Param("target", "video link or id"),
+                Param("lang", "language code", required=False, default="en"),
+            ),
+            (("hosted", "_hosted_transcript"),),
+        ),
+        Action(
             "transcribe",
             "Speech-to-text of a video's audio (uses Groq/OpenAI Whisper quota)",
             (Param("target", "video link or id"),),
@@ -203,6 +212,13 @@ class YouTubeChannel(Channel):
         title = next((ln for ln in out.splitlines() if ln.strip()), None)
         code = best.rsplit(".", 2)[-2] if best.count(".") >= 2 else None
         return [make_item(title=title, url=url, text=text, raw={"lang": code})]
+
+    def _hosted_transcript(self, *, target: str, lang: str, timeout: float) -> list:
+        from agent_reach.hosted_transcript import fetch
+
+        url = _video_url(target)
+        title, text = fetch(url, lang, timeout=timeout)
+        return [make_item(title=title, url=url, text=text, raw={"requested_lang": lang})]
 
     def _whisper_transcribe(self, *, target: str, timeout: float) -> list:
         from agent_reach.transcribe import NoProviderConfigured, TranscribeError
