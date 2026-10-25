@@ -735,6 +735,24 @@ def test_configure_saves_known_keys_only(env):
         manage.configure("twitter-cookies", "x")
 
 
+def test_configure_saves_an_xueqiu_cookie(env):
+    from agent_reach.config import Config
+
+    result = manage.configure("xueqiu-cookie", "xq_a_token=abc123; u=42")
+
+    assert result == {"key": "xueqiu-cookie", "saved": True}
+    assert Config(read_only=True).get("xueqiu_cookie") == "xq_a_token=abc123; u=42"
+
+
+@pytest.mark.parametrize("value", ["abc123", "xq_a_token=", " ; "])
+def test_configure_rejects_a_cookie_without_pairs(env, value):
+    from agent_reach.config import Config
+
+    with pytest.raises(ReachError, match="cookie"):
+        manage.configure("xueqiu-cookie", value)
+    assert Config(read_only=True).get("xueqiu_cookie") is None
+
+
 def test_doctor_separates_needs_login_from_broken(env, monkeypatch):
     def need_login(self, **kw):
         raise ReachError("NEED_LOGIN", "log in")
