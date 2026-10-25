@@ -84,3 +84,20 @@ It is used for every Agent Reach command. An `HTTPS_PROXY` set in your shell tak
 - `agent-reach update` and try again.
 - Remove and re-add a channel: `agent-reach remove <channel>` then `agent-reach add <channel>` (remove also clears its login, its site cookies in the Agent Reach browser, and its private tools nobody else uses).
 - Open an issue at https://github.com/Panniantong/Agent-Reach/issues with the output of `agent-reach doctor --text` (it starts with the version) and `agent-reach check <channel> --text`. Remove any personal data first.
+
+## YouTube subtitles blocked on a server ("Sign in to confirm you're not a bot")
+
+YouTube often challenges requests from cloud/VPS IP ranges. Free options first: run Agent Reach from a home network, or route it with `agent-reach configure proxy` through a residential proxy you control.
+
+Optional: a hosted transcript provider, used only by the `subtitle` action and only when you pick it explicitly with `--backend hosted`. It is off by default and never used automatically.
+
+```bash
+agent-reach configure transcript-provider <name>   # see list below
+agent-reach configure transcript-key               # hidden input; enter it in your own terminal
+agent-reach youtube subtitle <url> --backend hosted
+```
+
+Providers (each bills your own account with that provider):
+- `shephouse-apify`: [ShepHouse YouTube Transcript Actor](https://apify.com/shephouse/youtube-transcript-scraper-bulk) on Apify; key = Apify API token.
+
+Adding another provider is one function in `agent_reach/backends/transcript_providers.py`.

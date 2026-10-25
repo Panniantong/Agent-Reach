@@ -58,7 +58,8 @@ def _run_ytdlp(args: list, timeout: float, cwd=None) -> str:
             raise ReachError(
                 PLATFORM_BLOCKED,
                 exc.message,
-                hint="YouTube returned a verification challenge. Stop this request; this does not establish that the public video requires login.",
+                hint="YouTube returned a verification challenge. Stop this request; this does not establish that the public video requires login. "
+                "For subtitles only: if the user has configured a hosted transcript provider, they may choose `--backend hosted`.",
             ) from None
         if "429" in err or "too many requests" in err:
             raise ReachError(RATE_LIMITED, exc.message) from None
@@ -121,7 +122,7 @@ class YouTubeChannel(Channel):
                 Param("target", "video link or id"),
                 Param("lang", "preferred languages, comma separated", required=False, default="zh-Hans,zh,en,en-orig"),
             ),
-            (("yt-dlp", "_ytdlp_subtitle"),),
+            (("yt-dlp", "_ytdlp_subtitle"), ("hosted", "_hosted_subtitle")),
             live_test={"target": "https://www.youtube.com/watch?v=jNQXAC9IVRw"},
         ),
         Action(
@@ -203,6 +204,14 @@ class YouTubeChannel(Channel):
         title = next((ln for ln in out.splitlines() if ln.strip()), None)
         code = best.rsplit(".", 2)[-2] if best.count(".") >= 2 else None
         return [make_item(title=title, url=url, text=text, raw={"lang": code})]
+
+    def _hosted_subtitle(self, *, target: str, lang: str, timeout: float) -> list:
+        from agent_reach.backends import transcript_providers
+
+        url = _video_url(target)
+        wanted = [x.strip() for x in lang.split(",") if x.strip()]
+        text, code, provider = transcript_providers.fetch(url, wanted, timeout)
+        return [make_item(url=url, text=text, raw={"lang": code, "provider": provider})]
 
     def _whisper_transcribe(self, *, target: str, timeout: float) -> list:
         from agent_reach.transcribe import NoProviderConfigured, TranscribeError
