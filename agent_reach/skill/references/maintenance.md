@@ -8,5 +8,5 @@
 - 分清失败环节：依赖下载、浏览器连接、登录、网页加载、平台限流各是各的；网络超时不要说成登录失效。
 - 上游工具出错：记下错误和版本，用户同意后 `agent-reach update` 一次；不改上游工具的安装文件，不循环重试。
 - `PLATFORM_BLOCKED`、`RATE_LIMITED`、`NEED_LOGIN`、`BUSY` 停止本次尝试，等用户处理后再继续，不反复开窗。
-- 密钥和代理：`agent-reach configure groq-key | openai-key | proxy | github-token`，值由用户本人提供。
+- 密钥和代理：`agent-reach configure groq-key | openai-key | proxy | github-token | transcript-provider | transcript-key`，值由用户本人提供。
 - 卸载：先 `agent-reach uninstall --dry-run` 给用户看范围，确认后 `agent-reach uninstall`。只删 Reach 自己装的东西，用户的其他文件和浏览器保留。
