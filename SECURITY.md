@@ -8,12 +8,17 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Agent-Reach, please report 
-it responsibly by using GitHub's private security advisory feature:
+If you discover a security vulnerability in Agent-Reach, please report it responsibly through one of these **private** channels. Please do NOT open a public GitHub issue for security vulnerabilities.
 
-👉 **[Report a vulnerability](https://github.com/Panniantong/Agent-Reach/security/advisories/new)**
+1. **Preferred — GitHub Private Vulnerability Reporting** (when the repository
+   has this feature enabled):
 
-Please do NOT open a public GitHub issue for security vulnerabilities.
+   👉 **[Report a vulnerability](https://github.com/Panniantong/Agent-Reach/security/advisories/new)**
+
+2. **Email fallback** (always available): send details to
+   **[pnt01@foxmail.com](mailto:pnt01@foxmail.com)** — the same public
+   maintainer contact listed in the README. Use a clear subject such as
+   `[SECURITY] Agent-Reach vulnerability report`.
 
 ## What to Include
 
@@ -47,5 +52,5 @@ The following are considered in scope:
 
 ## Credits
 
-We appreciate responsible disclosure and will credit researchers 
+We appreciate responsible disclosure and will credit researchers
 in our release notes unless anonymity is requested.
