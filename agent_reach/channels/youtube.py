@@ -27,12 +27,20 @@ _TAG_RE = re.compile(r"<[^>]+>")
 _RAW_KEYS = ("id", "duration", "view_count", "like_count", "channel_id", "tags", "categories")
 
 
+def ytdlp_tls_args() -> list:
+    """yt-dlp trusts its bundled certifi and ignores SSL_CERT_FILE; behind a TLS-inspecting
+    proxy (corporate, school) every request then fails CERTIFICATE_VERIFY_FAILED."""
+    if os.environ.get("SSL_CERT_FILE") or os.environ.get("SSL_CERT_DIR"):
+        return ["--compat-options", "no-certifi"]
+    return []
+
+
 def _ytdlp_argv(*args: str) -> list:
     """Run the yt-dlp installed with Agent Reach (one of its dependencies)."""
     runtime = []
     if shutil.which("deno") is None and shutil.which("node"):
         runtime = ["--js-runtimes", "node"]
-    return [sys.executable, "-m", "yt_dlp", "--no-warnings", *runtime, *args]
+    return [sys.executable, "-m", "yt_dlp", "--no-warnings", *ytdlp_tls_args(), *runtime, *args]
 
 
 def _video_url(target: str) -> str:
