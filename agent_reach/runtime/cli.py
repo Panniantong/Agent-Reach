@@ -44,7 +44,7 @@ _MANAGEMENT = (
 HELP = """agent-reach — internet access for AI agents (all output is JSON)
 
 For agents:
-  agent-reach channels                    list channels, actions, params
+  agent-reach channels [channel...]       list channels, actions, params (or just the named ones)
   agent-reach <channel> <action> [args]   e.g. agent-reach bilibili search python
   agent-reach read <url>                  read a link with the matching channel
   Search/read try declared public web routes first; --backend selects a site tool
@@ -180,9 +180,12 @@ def _cmd_read(args: Sequence[str]) -> int:
     return _emit(run_action(target, "read", {"target": ns.url}, timeout=ns.timeout, only_backend=ns.backend))
 
 
-def _cmd_channels(_args: Sequence[str]) -> int:
+def _cmd_channels(args: Sequence[str]) -> int:
+    """All channels, or only the ones named (`agent-reach channels bilibili`)."""
     channels = []
     for ch in unified_channels():
+        if args and ch.name not in args:
+            continue
         channels.append(
             {
                 "name": ch.name,
@@ -538,6 +541,11 @@ def main(argv: Sequence[str]) -> int:
     _SHOW_NOTICE = argv[0] != "update"
     _apply_saved_proxy()
     head, rest = argv[0], argv[1:]
+    if "-h" in rest or "--help" in rest:  # agents probe usage this way; answer instead of BAD_INPUT
+        if _channel(head) is not None:
+            return _cmd_channels([head])
+        sys.stdout.write(HELP)
+        return 0
     if head == "channels":
         return _cmd_channels(rest)
     if head == "check":
