@@ -654,3 +654,13 @@ def test_open_login_window_without_extension_is_busy_not_closed(fake_browser):
         browser.setup()
     assert info.value.code == "BUSY"
     assert fake_browser["running"] and fake_browser["launches"] == 1
+
+
+def test_subcommand_help_answers_instead_of_bad_input(capsys, fake_cli):
+    code, out = _run(capsys, ["fake", "search", "--help"])
+    assert code == 0
+    assert [c["name"] for c in out["channels"]] == ["fake"]
+    assert out["channels"][0]["actions"][0]["usage"] == "agent-reach fake search <query> [--limit LIMIT]"
+    for argv in (["add", "--help"], ["configure", "-h"]):
+        assert unified.main(argv) == 0
+        assert "agent-reach configure" in capsys.readouterr().out
