@@ -57,7 +57,7 @@ For the user:
   agent-reach login|logout <channel>      log in (the user does it) / forget the login
   agent-reach browser setup|status|stop   headless shared browser; login opens a window
   agent-reach browser profiles|use ID    choose an existing local login source
-  agent-reach skill [link <skills-dir>]   where the agent skill is; link it for another AI
+  agent-reach skill [link|unlink <dir>]   where the agent skill is; link it for another AI, or unlink one for good
   agent-reach doctor [--text]             status of every channel and installed tool versions (no network)
   agent-reach check [channel] [--text]    live-test channels; --search tests search/jobs only
   agent-reach update [--check]            upgrade Agent Reach, every added channel's tools and the skill
@@ -282,8 +282,10 @@ def _cmd_skill(args: Sequence[str]) -> int:
 
     if not args:
         return _mgmt("skill", manage.skill_status)
-    if args[0] != "link" or len(args) != 2:
-        return _bad_input(None, "skill", "usage: agent-reach skill [link <skills-dir>]")
+    if args[0] not in ("link", "unlink") or len(args) != 2:
+        return _bad_input(None, "skill", "usage: agent-reach skill [link|unlink <skills-dir>]")
+    if args[0] == "unlink":
+        return _mgmt("skill unlink", manage.unlink_skill, args[1])
     return _mgmt("skill link", manage.link_skill, args[1])
 
 
