@@ -232,7 +232,7 @@ def run_action(
         if limited:
             raise ReachError(RATE_LIMITED, limited["message"],
                              hint=f"Wait {limited['retry_after_seconds']} seconds before retrying this channel.")
-        if action.public_web and ((only_backend is None and not _channel_added(channel)) or public_only):
+        if action.public_web and ((only_backend is None and (action.web_only or not _channel_added(channel))) or public_only):
             budget = clock.remaining() if public_only else min(public_web.MAX_SECONDS, clock.remaining() / 2)
             public = public_web.attempt(channel, action, clean, timeout=budget)
             if public is not None:

@@ -47,6 +47,8 @@ class Action:
     #: Public URL scopes tried through the existing Web channel before site tools.
     #: Search results/page text are labelled separately from authenticated site data.
     public_web: Tuple[str, ...] = ()
+    #: True when public web is the only route, so it runs even for an added channel.
+    web_only: bool = False
 
 
 class Channel(ABC):
