@@ -79,6 +79,16 @@ An agent without a terminal prompt can pipe the value in: `agent-reach configure
 
 It is used for every Agent Reach command. An `HTTPS_PROXY` set in your shell takes precedence.
 
+## Browser port
+
+The Agent Reach browser listens on CDP port 9222 by default. If another tool already uses 9222 (another automation browser, a debugging Chrome), browser channels fail with `Port 9222 belongs to an unmanaged browser`. Move Agent Reach to a free port instead of closing that tool:
+
+```bash
+agent-reach configure browser-port 9333
+```
+
+The setting is kept across updates. If the Agent Reach browser is open, it closes and reopens on the new port the next time it is used.
+
 ## Still stuck
 
 - `agent-reach update` and try again.

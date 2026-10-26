@@ -735,6 +735,21 @@ def test_configure_saves_known_keys_only(env):
         manage.configure("twitter-cookies", "x")
 
 
+def test_configure_browser_port_moves_the_dedicated_browser(env, monkeypatch):
+    from agent_reach.runtime import browser
+
+    assert browser.configured_port() == browser.DEFAULT_CDP_PORT
+    for bad in ("80", "70000", "abc", "9333x"):
+        with pytest.raises(ReachError):
+            manage.configure("browser-port", bad)
+    stopped = []
+    monkeypatch.setattr(browser, "watcher_running", lambda: True)
+    monkeypatch.setattr(browser, "stop", lambda: stopped.append(True))
+    manage.configure("browser-port", "9333")
+    assert stopped, "our browser on the old port is closed so it reopens on the new one"
+    assert browser.configured_port() == 9333
+
+
 def test_doctor_separates_needs_login_from_broken(env, monkeypatch):
     def need_login(self, **kw):
         raise ReachError("NEED_LOGIN", "log in")
