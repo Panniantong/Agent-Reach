@@ -61,7 +61,7 @@ For the user:
   agent-reach doctor [--text]             status of every channel and installed tool versions (no network)
   agent-reach check [channel] [--text]    live-test channels; --search tests search/jobs only
   agent-reach update [--check]            upgrade Agent Reach, every added channel's tools and the skill
-  agent-reach configure <key> [value]     groq-key | openai-key | proxy | github-token
+  agent-reach configure <key> [value]     groq-key | openai-key | proxy | github-token | browser-port
   agent-reach uninstall [--dry-run]       remove everything Agent Reach installed
 """
 
@@ -444,9 +444,11 @@ def _cmd_login(args: Sequence[str]) -> int:
     if not exe:
         return _emit(envelope(channel=ch.name, action="login", error=ReachError(
             NEED_SETUP, f"{ch.login_argv[0]} is not installed", hint=f"Run `agent-reach add {ch.name}` first.")))
+    from .browser import CDP_URL
     from .sessions import session_dir
 
-    argv = [a.replace("{session}", str(session_dir(ch.session))) for a in ch.login_argv[1:]]
+    argv = [a.replace("{session}", str(session_dir(ch.session))).replace("{cdp_url}", CDP_URL)
+            for a in ch.login_argv[1:]]
     env = dict(os.environ)
     if ch.session_home:
         env.update(session_env(ch.session))

@@ -952,6 +952,7 @@ def uninstall(dry_run: bool = False) -> dict:
 # ── configure ──
 
 CONFIG_KEYS = {"groq-key": "groq_api_key", "openai-key": "openai_api_key", "proxy": "proxy", "github-token": "github_token",
+               "browser-port": "browser_port",
 }
 
 
@@ -962,5 +963,12 @@ def configure(key: str, value: str) -> dict:
         raise ReachError(BAD_INPUT, f"unknown key: {key}; valid: {', '.join(CONFIG_KEYS)}")
     if not value:
         raise ReachError(BAD_INPUT, "empty value")
-    Config().set(CONFIG_KEYS[key], value)
+    if key == "browser-port":
+        if not value.isdigit() or not 1024 <= int(value) <= 65535:
+            raise ReachError(BAD_INPUT, "browser-port must be a number from 1024 to 65535")
+        from . import browser
+
+        if browser.watcher_running():  # our browser on the old port; it reopens on the new one when next used
+            browser.stop()
+    Config().set(CONFIG_KEYS[key], int(value) if key == "browser-port" else value)
     return {"key": key, "saved": True}
