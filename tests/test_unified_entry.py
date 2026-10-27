@@ -258,6 +258,26 @@ def test_vtt_to_text_drops_timings_tags_and_rolling_repeats():
     assert vtt_to_text(vtt) == "hello world\nnext & last"
 
 
+@pytest.mark.parametrize("vtt,expected", [
+    ("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n2026\n", "2026"),
+    ("WEBVTT\n\ncaption-one\n00:00:00.000 --> 00:00:01.000\nhello\n", "hello"),
+    ("WEBVTT\n\nNOTE internal note\nnot speech\n\n00:00:00.000 --> 00:00:01.000\nhello\n", "hello"),
+    ("WEBVTT\n\nSTYLE\n::cue { color: red; }\n\n00:00:00.000 --> 00:00:01.000\nhello\n", "hello"),
+    ("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nNOTE this is spoken\nSTYLE matters\n", "NOTE this is spoken\nSTYLE matters"),
+])
+def test_vtt_to_text_distinguishes_cue_payload_from_metadata(vtt, expected):
+    assert vtt_to_text(vtt) == expected
+
+
+@pytest.mark.parametrize("timing", [
+    "00:00:00.000\t-->\t00:00:01.000",
+    "00:00:00.000  -->  00:00:01.000",
+    "100:00:00.000 --> 100:00:01.000",
+])
+def test_vtt_to_text_accepts_standard_timing_separators_and_long_hours(timing):
+    assert vtt_to_text(f"WEBVTT\n\n{timing}\nspoken words\n") == "spoken words"
+
+
 @pytest.mark.parametrize(
     "target, expected",
     [
