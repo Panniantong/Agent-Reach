@@ -35,18 +35,20 @@ _LOGIN_HINT = (
 )
 
 
-def _capture_script(paths: tuple[str, ...]) -> str:
+def _capture_script(paths: tuple[str, ...], operation: str = "") -> str:
     """Capture bounded same-origin responses for the already verified read endpoints."""
     allowed_paths = json.dumps(paths)
     return r"""(() => {
   const origin = "https://www.kuaishou.com";
   const paths = new Set(__ALLOWED_PATHS__);
+  const operation = __OPERATION__;
   const rows = window.__agentReachKuaishouResponses || [];
   window.__agentReachKuaishouResponses = rows;
   const record = (url, status, body, requestBody) => {
     try {
       const target = new URL(url, location.href);
       if (target.origin !== origin || !paths.has(target.pathname) || rows.length >= 12) return;
+      if (operation && JSON.parse(requestBody || "{}").operationName !== operation) return;
       if (typeof body !== "string" || body.length > 2500000) return;
       rows.push({path: target.pathname, status, body,
         requestBody: typeof requestBody === "string" ? requestBody.slice(0, 20000) : ""});
@@ -76,7 +78,38 @@ def _capture_script(paths: tuple[str, ...]) -> str:
       return response;
     });
   };
-})();""".replace("__ALLOWED_PATHS__", allowed_paths)
+})();""".replace("__ALLOWED_PATHS__", allowed_paths).replace("__OPERATION__", json.dumps(operation))
+
+
+def _page_detail_script(work_id: str) -> str:
+    """Read the matching server-rendered Apollo detail and its observed ID references."""
+    return r"""(() => {
+  const cache = window.__APOLLO_STATE__ && window.__APOLLO_STATE__.defaultClient;
+  const root = cache && cache.ROOT_QUERY;
+  if (!root || typeof root !== "object") return null;
+  const resolve = value => value && value.type === "id" && typeof value.id === "string"
+    ? cache[value.id] : value;
+  for (const [field, reference] of Object.entries(root)) {
+    if (!field.startsWith("visionVideoDetail(") || !field.endsWith(")")) continue;
+    let args;
+    try { args = JSON.parse(field.slice("visionVideoDetail(".length, -1)); }
+    catch (_) { continue; }
+    if (!args || args.photoId !== __WORK_ID__ || args.page !== "detail") continue;
+    const detail = resolve(reference);
+    if (!detail || typeof detail !== "object") continue;
+    return {...detail, photo: resolve(detail.photo), author: resolve(detail.author)};
+  }
+  return null;
+})()""".replace("__WORK_ID__", json.dumps(work_id))
+
+
+def _matches_operation(row: dict, operation: str) -> bool:
+    """Ignore unrelated or malformed GraphQL bodies sharing the same endpoint."""
+    try:
+        request = json.loads(row.get("requestBody") or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return False
+    return isinstance(request, dict) and request.get("operationName") == operation
 
 
 def _target_id(value: str, kind: str) -> str:
@@ -133,7 +166,9 @@ def _wait_for_page_target(target_id: str, timeout: float = 8.0) -> bool:
     return False
 
 
-def _visit_page(url: str, paths: tuple[str, ...], timeout: float) -> list[dict]:
+def _visit_page(
+    url: str, paths: tuple[str, ...], timeout: float, *, detail_id: str = ""
+) -> list[dict]:
     """Open one Kuaishou page in the Reach-owned browser and capture its read response."""
     from agent_reach.runtime import browser, cdp, session_reuse
 
@@ -150,7 +185,8 @@ def _visit_page(url: str, paths: tuple[str, ...], timeout: float) -> list[dict]:
             for method in ("Page.enable", "Runtime.enable"):
                 if page.call(method) is None:
                     raise ReachError(UPSTREAM_BROKEN, "Could not prepare the Kuaishou browser page")
-            script = _capture_script(paths)
+            operation = "visionVideoDetail" if detail_id else ""
+            script = _capture_script(paths, operation)
             if page.call(
                 "Page.addScriptToEvaluateOnNewDocument",
                 {"source": script},
@@ -161,6 +197,14 @@ def _visit_page(url: str, paths: tuple[str, ...], timeout: float) -> list[dict]:
 
             deadline = time.monotonic() + max(1.0, timeout)
             while time.monotonic() < deadline:
+                if detail_id:
+                    snapshot = page.call("Runtime.evaluate", {
+                        "expression": _page_detail_script(detail_id),
+                        "returnByValue": True,
+                    })
+                    detail = ((snapshot or {}).get("result") or {}).get("value")
+                    if isinstance(detail, dict):
+                        return [{"source": "page-state", "detail": detail}]
                 evaluated = page.call("Runtime.evaluate", {
                     "expression": "JSON.stringify(window.__agentReachKuaishouResponses || [])",
                     "returnByValue": True,
@@ -171,8 +215,11 @@ def _visit_page(url: str, paths: tuple[str, ...], timeout: float) -> list[dict]:
                     rows = json.loads(encoded) if isinstance(encoded, str) else []
                 except json.JSONDecodeError:
                     rows = []
-                if isinstance(rows, list) and rows:
-                    return [row for row in rows if isinstance(row, dict)]
+                if isinstance(rows, list):
+                    matched = [row for row in rows if isinstance(row, dict)
+                               and (not operation or _matches_operation(row, operation))]
+                    if matched:
+                        return matched
                 time.sleep(0.2)
             raise ReachError(
                 UPSTREAM_BROKEN,
@@ -190,14 +237,8 @@ def _response(rows: list[dict], path: str, operation: str = "") -> tuple[dict, d
     for row in rows:
         if row.get("path") != path:
             continue
-        request_body = row.get("requestBody", "")
-        if operation:
-            try:
-                request = json.loads(request_body) if request_body else {}
-            except json.JSONDecodeError:
-                continue
-            if request.get("operationName") != operation:
-                continue
+        if operation and not _matches_operation(row, operation):
+            continue
         selected = row
         break
     if selected is None:
@@ -357,10 +398,15 @@ class KuaishouChannel(Channel):
 
     def _browser_read(self, *, target: str, timeout: float) -> list:
         work_id = _target_id(target, "work")
-        rows = _visit_page(_page_url("read", work_id), (_GRAPHQL_PATH,), timeout)
-        _selected, payload = _response(rows, _GRAPHQL_PATH, "visionVideoDetail")
-        detail = ((payload.get("data") or {}).get("visionVideoDetail")
-                  if isinstance(payload.get("data"), dict) else None)
+        rows = _visit_page(
+            _page_url("read", work_id), (_GRAPHQL_PATH,), timeout, detail_id=work_id
+        )
+        if rows and rows[0].get("source") == "page-state":
+            detail = rows[0].get("detail")
+        else:
+            _selected, payload = _response(rows, _GRAPHQL_PATH, "visionVideoDetail")
+            detail = ((payload.get("data") or {}).get("visionVideoDetail")
+                      if isinstance(payload.get("data"), dict) else None)
         if not isinstance(detail, dict) or detail.get("status") != 1:
             raise ReachError(NOT_FOUND, "Kuaishou video detail was not found")
         photo = detail.get("photo")

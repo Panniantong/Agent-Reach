@@ -17,9 +17,9 @@ English:
 
 - Agent Reach can search Kuaishou videos, view trending videos, read video details and fetch the first page of a user's videos. The user handles sign-in and platform verification.
 
-技术细节：新增实验级 Kuaishou channel，经 Agent Reach 专用浏览器捕获页面发出的已核实只读接口响应；不包含评论、点赞、发布等写操作。
+技术细节：新增实验级 Kuaishou channel，经 Agent Reach 专用浏览器捕获页面发出的已核实只读接口响应；作品详情可读取页面预加载数据，并核对目标作品 ID；不包含评论、点赞、发布等写操作。
 
-Technical: Added an experimental Kuaishou channel that captures verified read-only API responses from pages in the Agent Reach browser. It does not include comments, likes, publishing or other write actions.
+Technical: Added an experimental Kuaishou channel that captures verified read-only API responses from pages in the Agent Reach browser. Video details can also use the page's preloaded state, with the requested photo ID checked before returning data. It does not include comments, likes, publishing or other write actions.
 
 ## [1.6.0] - 2026-10-23
 
