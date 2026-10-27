@@ -7,6 +7,20 @@ All notable changes to this project will be documented in this file.
 ---
 
 
+## [Unreleased]
+
+中文：
+
+- Agent Reach 新增快手只读渠道，可搜索作品、查看热门、读取作品详情和用户作品首屏；登录和平台验证由用户本人完成。
+
+English:
+
+- Agent Reach can search Kuaishou videos, view trending videos, read video details and fetch the first page of a user's videos. The user handles sign-in and platform verification.
+
+技术细节：新增实验级 Kuaishou channel，经 Agent Reach 专用浏览器捕获页面发出的已核实只读接口响应；不包含评论、点赞、发布等写操作。
+
+Technical: Added an experimental Kuaishou channel that captures verified read-only API responses from pages in the Agent Reach browser. It does not include comments, likes, publishing or other write actions.
+
 ## [1.6.0] - 2026-10-23
 
 中文：

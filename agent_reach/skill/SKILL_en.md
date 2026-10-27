@@ -2,7 +2,7 @@
 name: agent-reach
 description: >
   Read-only access to platform content: search, read posts, view comments, fetch subtitles, stock quotes and jobs.
-  Use when the user mentions or pastes a link from Xiaohongshu, Bilibili, Twitter/X, Reddit,
+  Use when the user mentions or pastes a link from Xiaohongshu, Bilibili, Kuaishou, Twitter/X, Reddit,
   YouTube (subtitles, transcripts), GitHub, V2EX, Xueqiu/stock quotes, LinkedIn/Boss Zhipin jobs,
   Instagram, Facebook or Xiaoyuzhou podcasts; or says "search / look up / read this link" and your built-in
   web search or fetch is unavailable, fails, or misses the body;
@@ -62,6 +62,7 @@ The first time a site is used, if the user's Chrome is connected to the OpenCLI 
 ## Platform notes
 
 - Xiaohongshu read returns text descriptions only; never claim to understand the images or video.
+- Kuaishou is experimental and read-only: search, trending, video details and the first page of user videos. It has no comments or write actions; the user handles platform verification.
 - When a Boss Zhipin search result has `salary_encoded=true`, never guess the salary digits; read the job link for the readable salary in the detail.
 - What each platform offers publicly and what Reach adds is in [Capability scope](references/capabilities.md): read it when the user asks "what can it get / is it complete" or you need to judge completeness.
 

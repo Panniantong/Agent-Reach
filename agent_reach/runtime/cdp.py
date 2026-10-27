@@ -14,6 +14,7 @@ import os
 import socket
 import struct
 import threading
+import time
 import urllib.request
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
@@ -72,6 +73,81 @@ def _send(sock: socket.socket, text: str) -> None:
         else bytes([0x80 | 127]) + struct.pack(">Q", n)
     )
     sock.sendall(head + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(payload)))
+
+
+class TargetSession:
+    """Keep one page-target WebSocket attached across related CDP commands."""
+
+    def __init__(self, target_id: str) -> None:
+        self._sock: Optional[socket.socket] = None
+        self._buffer = b""
+        self._sequence = 0
+        target: dict = next(
+            (row for row in (_json("/json/list") or [])
+             if row.get("id") == target_id and row.get("type") == "page"),
+            {},
+        )
+        ws = target.get("webSocketDebuggerUrl")
+        if not ws:
+            return
+        parsed = urlparse(ws)
+        if parsed.scheme != "ws" or parsed.hostname not in {"127.0.0.1", "localhost"}:
+            return
+        host, port = parsed.hostname, parsed.port or 80
+        sock = socket.create_connection((host, port), timeout=_TIMEOUT)
+        sock.settimeout(_TIMEOUT)
+        key = base64.b64encode(os.urandom(16)).decode()
+        sock.sendall(
+            (f"GET {parsed.path or '/'} HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\n"
+             f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode()
+        )
+        response = b""
+        deadline = time.monotonic() + _TIMEOUT
+        while b"\r\n\r\n" not in response and time.monotonic() < deadline:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            response += chunk
+        header, marker, self._buffer = response.partition(b"\r\n\r\n")
+        accept = base64.b64encode(hashlib.sha1((key + _GUID).encode()).digest()).decode()
+        if (not marker or header.split(b"\r\n", 1)[0].split()[1:2] != [b"101"]
+                or accept not in header.decode("latin-1")):
+            sock.close()
+            return
+        self._sock = sock
+
+    def call(self, method: str, params: Optional[dict] = None) -> Optional[dict]:
+        """Send one command on this target session and return its result object."""
+        if self._sock is None:
+            return None
+        self._sequence += 1
+        command_id = self._sequence
+        try:
+            _send(self._sock, json.dumps({"id": command_id, "method": method, "params": params or {}}))
+            deadline = time.monotonic() + _TIMEOUT
+            while time.monotonic() < deadline:
+                payload, self._buffer = _read_frame(self._sock, self._buffer)
+                if payload is None:
+                    return None
+                message = json.loads(payload.decode("utf-8"))
+                if isinstance(message, dict) and message.get("id") == command_id:
+                    result = message.get("result")
+                    return result if isinstance(result, dict) else None
+        except (OSError, ValueError, socket.timeout):
+            return None
+        return None
+
+    def close(self) -> None:
+        """Close only this target's debugger connection."""
+        if self._sock is not None:
+            self._sock.close()
+            self._sock = None
+
+    def __enter__(self) -> "TargetSession":
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self.close()
 
 
 def call(method: str, params: Optional[dict] = None, *, page: bool = False,
