@@ -797,3 +797,45 @@ def test_retired_mcp_cleanup_preserves_changed_private_path(env, monkeypatch):
     monkeypatch.setattr(paths, "read_small_text_no_follow", changed)
     assert manage._retired_mcp_notice()
     assert path.read_text() == "unchanged"
+
+
+@pytest.mark.parametrize("method", ["uv", "other"])
+@pytest.mark.parametrize("returncode,payload", [
+    (1, {"ok": True, "result": {"user_actions": []}, "error": None}),
+    (0, {"ok": False, "result": None, "error": {"code": "NEED_SETUP"}}),
+    (0, None),
+])
+def test_update_reports_failed_new_copy_before_removing_old_install(
+    env, monkeypatch, tmp_path, capsys, method, returncode, payload
+):
+    """A downloaded release is not a successful update until its setup/sync succeeds."""
+    from agent_reach.runtime import cli
+
+    monkeypatch.setattr(manage, "update_check", lambda: {
+        "current": "2.0.0", "latest": "2.0.1", "update_available": True,
+    })
+    monkeypatch.setattr(manage, "install_method", lambda: method)
+    monkeypatch.setattr(manage.tools, "resolve", lambda c: "/fake/uv" if c == "uv" else None)
+    exe = tmp_path / ("agent-reach.exe" if os.name == "nt" else "agent-reach")
+    monkeypatch.setattr(manage.shutil, "which", lambda c: str(exe))
+    calls = []
+
+    def run(cmd, **kwargs):
+        import subprocess
+
+        calls.append(cmd)
+        if cmd[1:4] == ["tool", "dir", "--bin"]:
+            return subprocess.CompletedProcess(cmd, 0, str(tmp_path), "")
+        if cmd[0] == str(exe):
+            output = json.dumps(payload) if payload is not None else "setup stopped before JSON"
+            return subprocess.CompletedProcess(cmd, returncode, output, "")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(manage.subprocess, "run", run)
+    assert cli.main(["update"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report["ok"] is False
+    assert report["error"]["code"] == "UPSTREAM_BROKEN"
+    assert "installed" in report["error"]["message"]
+    assert "setup" in report["error"]["hint"] or "sync-only" in report["error"]["hint"]
+    assert not any("uninstall" in cmd for cmd in calls), "keep the old copy until new setup succeeds"
