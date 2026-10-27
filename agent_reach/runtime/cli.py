@@ -51,16 +51,20 @@ For agents:
   --backend public-web                  public access only; no browser fallback
 
 For the user:
-  agent-reach setup [--text]              install defaults and skill; --text displays the capability tables
+  agent-reach setup [--scope user|project] [--text]
+                                          install defaults and explicitly scoped skill
   agent-reach add <channel>               install channel dependencies and prepare its browser
   agent-reach remove <channel>            remove a channel (defaults too) and what only it used
   agent-reach login|logout <channel>      log in (the user does it) / forget the login
   agent-reach browser setup|status|stop   headless shared browser; login opens a window
   agent-reach browser profiles|use ID    choose an existing local login source
-  agent-reach skill [link <skills-dir>]   where the agent skill is; link it for another AI
+  agent-reach skill [link <skills-dir>]   show or link the user-scoped agent skill
+  agent-reach skill install|remove [--scope user|project]
+                                          manage an explicit user or project copy
   agent-reach doctor [--text]             status of every channel and installed tool versions (no network)
   agent-reach check [channel] [--text]    live-test channels; --search tests search/jobs only
-  agent-reach update [--check]            upgrade Agent Reach, every added channel's tools and the skill
+  agent-reach update [--check] [--scope user|project]
+                                          upgrade Agent Reach, tools and explicitly scoped skill
   agent-reach configure <key> [value]     groq-key | openai-key | proxy | github-token
   agent-reach uninstall [--dry-run]       remove everything Agent Reach installed
 """
@@ -282,9 +286,18 @@ def _cmd_skill(args: Sequence[str]) -> int:
 
     if not args:
         return _mgmt("skill", manage.skill_status)
-    if args[0] != "link" or len(args) != 2:
-        return _bad_input(None, "skill", "usage: agent-reach skill [link <skills-dir>]")
-    return _mgmt("skill link", manage.link_skill, args[1])
+    if args[0] == "link" and len(args) == 2:
+        return _mgmt("skill link", manage.link_skill, args[1])
+    parser = _Parser(prog="skill", add_help=False)
+    parser.add_argument("operation", choices=("install", "remove"))
+    parser.add_argument("--scope", choices=manage.SKILL_SCOPES, default=manage.SKILL_SCOPE_USER)
+    try:
+        ns = parser.parse_args(list(args))
+    except _ArgError as exc:
+        return _bad_input(None, "skill", str(exc))
+    if ns.operation == "install":
+        return _mgmt("skill install", manage.install_skill, scope=ns.scope)
+    return _mgmt("skill remove", manage.remove_skill, scope=ns.scope)
 
 
 def _cmd_management(head: str, args: Sequence[str]) -> int:
@@ -295,6 +308,7 @@ def _cmd_management(head: str, args: Sequence[str]) -> int:
     parser = _Parser(prog=head, add_help=False)
     if head == "setup":
         parser.add_argument("--text", action="store_true")
+        parser.add_argument("--scope", choices=manage.SKILL_SCOPES, default=manage.SKILL_SCOPE_USER)
     elif head in ("add", "remove"):
         parser.add_argument("channel")
         if head == "add":
@@ -302,6 +316,7 @@ def _cmd_management(head: str, args: Sequence[str]) -> int:
     elif head == "update":
         parser.add_argument("--check", action="store_true")
         parser.add_argument("--sync-only", action="store_true")
+        parser.add_argument("--scope", choices=manage.SKILL_SCOPES, default=manage.SKILL_SCOPE_USER)
     elif head == "uninstall":
         parser.add_argument("--dry-run", action="store_true")
     elif head == "configure":
@@ -315,7 +330,7 @@ def _cmd_management(head: str, args: Sequence[str]) -> int:
     if head == "setup":
         if ns.text:
             try:
-                result = manage.setup()
+                result = manage.setup(scope=ns.scope)
             except ReachError as err:
                 sys.stdout.write(f"安装未完成：{err.code} {err.message}\n{err.hint or ''}\n")
                 return 1
@@ -326,15 +341,15 @@ def _cmd_management(head: str, args: Sequence[str]) -> int:
             if report.get('write_error'):
                 sys.stdout.write(f"\n{report['write_error']}\n")
             return 0 if all(row['ok'] for row in result['default_channels']) else 1
-        return _mgmt(head, manage.setup)
+        return _mgmt(head, manage.setup, scope=ns.scope)
     if head == "add":
         return _mgmt(head, manage.add, ns.channel, allow_upgrade=ns.allow_upgrade)
     if head == "remove":
         return _mgmt(head, manage.remove, ns.channel)
     if head == "update":
         if ns.sync_only:
-            return _mgmt(head, manage.sync)
-        return _mgmt(head, manage.update, check_only=ns.check)
+            return _mgmt(head, manage.sync, scope=ns.scope)
+        return _mgmt(head, manage.update, check_only=ns.check, scope=ns.scope)
     if head == "uninstall":
         return _mgmt(head, manage.uninstall, dry_run=ns.dry_run)
     if head == "configure":
