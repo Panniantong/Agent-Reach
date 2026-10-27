@@ -26,7 +26,7 @@ from agent_reach.runtime.result import (
     unix_to_iso,
 )
 from agent_reach.runtime.run import CommandFailed, http_request, run_cmd
-from agent_reach.runtime.sessions import session_env, sessions_root
+from agent_reach.runtime.sessions import has_login_state, session_env
 
 from .base import Action, Channel, Param
 
@@ -229,7 +229,7 @@ class BilibiliChannel(Channel):
         sub = data.get("subtitle") or {}
         if not sub.get("available"):
             # Without a Bilibili login, upstream only says subtitles were unavailable.
-            if not (sessions_root() / "bili-cli" / ".bilibili-cli" / "credential.json").exists():
+            if not has_login_state("bili-cli"):
                 raise ReachError(NEED_LOGIN, "Bilibili is not logged in", hint=_BILI_LOGIN_HINT)
             if any(w.get("code") == "subtitle_unavailable" for w in data.get("warnings", []) if isinstance(w, dict)):
                 raise ReachError(UPSTREAM_BROKEN, "Bilibili could not retrieve subtitles; this does not prove the video has none")

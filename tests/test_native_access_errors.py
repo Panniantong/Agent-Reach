@@ -68,7 +68,8 @@ def test_youtube_bot_challenge_does_not_instruct_a_login(monkeypatch):
 
 def test_bilibili_subtitles_without_login_ask_for_login(monkeypatch, tmp_path):
     from agent_reach.channels import bilibili
-    monkeypatch.setattr(bilibili, "sessions_root", lambda: tmp_path)
+    from agent_reach.runtime import sessions
+    monkeypatch.setattr(sessions, "sessions_root", lambda: tmp_path)
     monkeypatch.setattr(bilibili, "_reuse_subtitle_login", lambda timeout: None)
     monkeypatch.setattr(bilibili, "_bvid", lambda target, timeout: "BV1")
     monkeypatch.setattr(bilibili, "_bili_json", lambda argv, timeout: {
@@ -79,7 +80,7 @@ def test_bilibili_subtitles_without_login_ask_for_login(monkeypatch, tmp_path):
     assert exc.value.code == "NEED_LOGIN"
     cred = tmp_path / "bili-cli" / ".bilibili-cli" / "credential.json"
     cred.parent.mkdir(parents=True)
-    cred.write_text("{}")
+    cred.write_text('{"sessdata":"test-session-cookie"}')
     with pytest.raises(ReachError) as exc:
         ch._cli_subtitle(target="https://www.bilibili.com/video/BV1", timeout=5)
     assert exc.value.code == "UPSTREAM_BROKEN"  # logged in: a real upstream failure stays one
