@@ -7,6 +7,20 @@ All notable changes to this project will be documented in this file.
 ---
 
 
+## [Unreleased]
+
+中文：
+
+- Agent Reach 新增快手只读渠道，可搜索作品、查看热门、读取作品详情和用户作品首屏，并把视频保存到本地；登录和平台验证由用户本人完成。
+
+English:
+
+- Agent Reach can search Kuaishou videos, view trending videos, read video details, save videos locally and fetch the first page of a user's videos. The user handles sign-in and platform verification.
+
+技术细节：新增实验级 Kuaishou channel，经 Agent Reach 专用浏览器捕获页面发出的已核实只读接口响应；作品详情可读取页面预加载数据，并核对目标作品 ID；下载动作保存 MP4，返回本地路径、大小和 SHA-256，不覆盖已有文件；不包含评论、点赞、发布等平台写操作。
+
+Technical: Added an experimental Kuaishou channel that captures verified read-only API responses from pages in the Agent Reach browser. Video details can also use the page's preloaded state, with the requested photo ID checked before returning data. The download action saves an MP4 without replacing existing files and returns its local path, size and SHA-256. It does not include comments, likes, publishing or other platform write actions.
+
 ## [1.6.0] - 2026-10-23
 
 中文：

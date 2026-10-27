@@ -11,6 +11,7 @@ from .boss import BossChannel
 from .facebook import FacebookChannel
 from .github import GitHubChannel
 from .instagram import InstagramChannel
+from .kuaishou import KuaishouChannel
 from .linkedin import LinkedInChannel
 from .reddit import RedditChannel
 from .twitter import TwitterChannel
@@ -28,6 +29,7 @@ ALL_CHANNELS: List[Channel] = [
     RedditChannel(),
     FacebookChannel(),
     InstagramChannel(),
+    KuaishouChannel(),
     BilibiliChannel(),
     XiaoHongShuChannel(),
     LinkedInChannel(),
