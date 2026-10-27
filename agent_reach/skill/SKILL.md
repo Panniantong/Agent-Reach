@@ -61,7 +61,7 @@ agent-reach read <链接>                   # 按链接自动选渠道
 ## 平台注意
 
 - 小红书 read 只返回文字描述，不要声称看懂了图片或视频。
-- 快手当前为实验渠道，只读搜索、热门、作品详情和用户作品首屏；没有评论或写入动作，遇到平台验证由用户本人处理。
+- 快手当前为实验渠道，支持只读搜索、热门、作品详情、视频下载和用户作品首屏；没有评论或平台写入动作，遇到平台验证由用户本人处理。下载用 `agent-reach kuaishou download <作品链接或ID> [--output /path/video.mp4]`；默认保存到 `~/.agent-reach/downloads/kuaishou/ID.mp4`，返回 `items[0].raw.path / bytes / sha256`，不覆盖已有文件。
 - Boss 直聘搜索结果 `salary_encoded=true` 时绝不猜薪资数字；read 职位链接拿详情里的可读薪资。
 - 各平台公开能做什么、Reach 补什么，见 [能力边界](references/capabilities.md)：用户问"能查什么/查得全吗"或要判断结果完整度时读它。
 

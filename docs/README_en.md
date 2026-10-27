@@ -109,7 +109,7 @@ This table reflects the current release.
 | web | default | web search, page reading (fallback) | nothing |
 | v2ex | default | hot topics, nodes, topics with replies, users | nothing |
 | bilibili | default | search, video info, trending, subtitles | nothing; subtitles need a login (QR scan) |
-| kuaishou | experimental | search, trending, video details, first-page user videos | dedicated browser; some content may need a login or verification |
+| kuaishou | experimental | search, trending, video details, video downloads, first-page user videos | dedicated browser; some content may need a login or verification |
 | reddit | optional | search posts, read text/comments, browse a subreddit | login |
 | linkedin | optional | search jobs, read job details | public jobs need nothing; in-site search needs a login |
 | xiaohongshu | optional | search notes, read text, view comments | login |

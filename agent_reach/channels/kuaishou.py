@@ -16,12 +16,14 @@ from agent_reach.runtime.result import (
     NOT_FOUND,
     PLATFORM_BLOCKED,
     RATE_LIMITED,
+    TIMEOUT,
     UPSTREAM_BROKEN,
     ReachError,
     make_item,
 )
 
 from .base import Action, Channel, Param
+from .kuaishou_download import download_path, download_video
 
 _ORIGIN = "https://www.kuaishou.com"
 _SEARCH_PATH = "/rest/v/search/feed"
@@ -316,7 +318,7 @@ def _feed_items(rows: list[dict[str, Any]], path: str, *, limit: int) -> list[di
 
 class KuaishouChannel(Channel):
     name = "kuaishou"
-    description = "快手作品搜索、热门、详情和用户作品"
+    description = "快手作品搜索、热门、详情、下载和用户作品"
     level = "experimental"
     login_url = "https://www.kuaishou.com/"
     domains = ("kuaishou.com",)
@@ -350,6 +352,17 @@ class KuaishouChannel(Channel):
             timeout=60,
         ),
         Action(
+            "download",
+            "Download a Kuaishou video as an MP4 file",
+            (
+                Param("target", "video ID or official short-video URL"),
+                Param("output", "MP4 file path; defaults to ~/.agent-reach/downloads/kuaishou/ID.mp4",
+                      required=False, default=""),
+            ),
+            (("browser-cdp", "_browser_download"),),
+            timeout=180,
+        ),
+        Action(
             "user_works",
             "Read the first page of a public user's videos",
             (
@@ -381,8 +394,10 @@ class KuaishouChannel(Channel):
                 raise ReachError(BAD_INPUT, "limit must be an integer from 1 to 20")
         if action == "search" and not str(params.get("query") or "").strip():
             raise ReachError(BAD_INPUT, "query must not be empty")
-        if action == "read":
-            _target_id(params.get("target", ""), "work")
+        if action in {"read", "download"}:
+            work_id = _target_id(params.get("target", ""), "work")
+            if action == "download":
+                download_path(work_id, params.get("output", ""))
         if action == "user_works":
             _target_id(params.get("target", ""), "user")
 
@@ -422,3 +437,18 @@ class KuaishouChannel(Channel):
             _page_url("user_works", target), (_PROFILE_FEED_PATH,), timeout
         )
         return _feed_items(rows, _PROFILE_FEED_PATH, limit=limit)
+
+    def _browser_download(self, *, target: str, output: str, timeout: float) -> list:
+        started = time.monotonic()
+        work_id = _target_id(target, "work")
+        path = download_path(work_id, output)
+        item = self._browser_read(target=target, timeout=timeout)[0]
+        remaining = timeout - (time.monotonic() - started)
+        if remaining <= 0:
+            raise ReachError(TIMEOUT, "No time left to download the Kuaishou video")
+        if not output:
+            from agent_reach.runtime import state
+
+            state.remember_path(path.parent, "Kuaishou video downloads")
+        downloaded = download_video(item["raw"]["photo"], path, timeout=remaining)
+        return [{**item, "raw": downloaded}]
