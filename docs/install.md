@@ -27,6 +27,22 @@ agent-reach setup
 
 `setup` turns on the default channels and installs the agent skill.
 
+The skill remains user-scoped by default. To set up Agent Reach while keeping
+its skill inside only the current project, choose project scope explicitly
+from that project's root:
+
+```bash
+agent-reach setup --scope project
+```
+
+This writes only `.claude/skills/agent-reach/` in the current project. It does
+not create or change `~/.agents/skills/agent-reach` or links for other AIs.
+After later updates, upgrade the program and refresh only that project copy with
+`agent-reach update --scope project`. You can refresh just the skill with
+`agent-reach skill install --scope project`. Remove it with
+`agent-reach skill remove --scope project`.
+Modified and unrelated project files are left untouched.
+
 ## 2. Report to the user
 
 Show `result.installation_report.markdown` to the user as is. The program generates it; do not rewrite, reorder or add to it.
@@ -38,6 +54,9 @@ agent-reach update
 ```
 
 It upgrades the program, every added channel's tools and the skill. Tell the user each line of `result.user_actions`, and show `result.installation_report.markdown` as is when it is present. If it fails, `error.hint` holds the exact command to run.
+
+For a project-scoped skill, run `agent-reach update --scope project` from that
+project's root so the update does not create or change the user-scoped skill.
 
 ## Upgrade from 1.5 or earlier
 

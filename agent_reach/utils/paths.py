@@ -128,7 +128,12 @@ def atomic_write_private_text(
     try:
         if sys.platform != "win32" and hasattr(os, "fchmod"):
             os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
-        handle = os.fdopen(fd, "w", encoding=encoding)
+        # newline="" disables the platform newline translation that text mode
+        # would otherwise apply (\n -> \r\n on Windows). The bytes on disk must
+        # equal text.encode(encoding) so the sha256 recorded in the project
+        # skill manifest still matches read_bytes() on every platform; without
+        # this the owned-file guard rejects freshly installed files on Windows.
+        handle = os.fdopen(fd, "w", encoding=encoding, newline="")
         fd = -1
         with handle:
             handle.write(text)

@@ -7,6 +7,8 @@ runs for real in the per-test temp HOME.
 """
 
 import dataclasses
+import hashlib
+import importlib.resources
 import json
 import os
 import re
@@ -320,6 +322,24 @@ def test_sync_does_not_ask_to_log_in_again_when_never_logged_in(env):
     assert not any("log in" in a for a in manage.sync()["user_actions"])
 
 
+def test_project_scoped_sync_refreshes_only_the_project_skill(env, tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    manage.setup(scope=manage.SKILL_SCOPE_PROJECT)
+    assert not manage.skill_dir().exists()
+
+    result = manage.sync(scope=manage.SKILL_SCOPE_PROJECT)
+
+    assert result["skill"]["scope"] == manage.SKILL_SCOPE_PROJECT
+    assert project.joinpath(*manage.PROJECT_SKILL_PATH, manage.SKILL_FILE).is_file()
+    assert not manage.skill_dir().exists()
+    with pytest.raises(ReachError, match="unknown skill scope"):
+        manage.sync(scope="workspace")
+    with pytest.raises(ReachError, match="unknown skill scope"):
+        manage.update(check_only=True, scope="workspace")
+
+
 @pytest.mark.parametrize("latest, available", [("v2.0.1", True), ("v2.0.0", False), ("v1.9.9", False)])
 def test_update_check_compares_versions_and_refreshes_the_cache(monkeypatch, latest, available):
     monkeypatch.setattr(manage, "__version__", "2.0.0")
@@ -360,9 +380,39 @@ def test_update_from_a_non_uv_install_moves_itself_to_uv(env, monkeypatch, tmp_p
     monkeypatch.setattr(manage.subprocess, "run", run)
     out = manage.update()
     assert calls[0][:4] == ["/fake/uv", "tool", "install", "--force"] and calls[0][-1].endswith("/v2.0.1.zip")
-    assert calls[2] == [str(exe), "setup"]  # no state yet: the new copy sets itself up
+    assert calls[2] == [str(exe), "setup", "--scope", "user"]  # the new copy keeps the chosen scope
     assert out["upgraded"] and out["installation_report"] == {"markdown": "r"}
     assert "log in to x" in out["user_actions"]
+
+
+def test_uv_update_propagates_project_scope_to_the_new_process(env, monkeypatch):
+    monkeypatch.setattr(
+        manage,
+        "update_check",
+        lambda: {"current": "2.0.0", "latest": "2.0.1", "update_available": True},
+    )
+    monkeypatch.setattr(manage, "install_method", lambda: "uv")
+    monkeypatch.setattr(manage.tools, "resolve", lambda command: "/fake/uv" if command == "uv" else None)
+    monkeypatch.setattr(manage.shutil, "which", lambda command: "/fake/agent-reach")
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        stdout = json.dumps({"result": {"user_actions": []}}) if command[0] == "/fake/agent-reach" else ""
+        return type("Done", (), {"returncode": 0, "stdout": stdout, "stderr": ""})()
+
+    monkeypatch.setattr(manage.subprocess, "run", run)
+
+    result = manage.update(scope=manage.SKILL_SCOPE_PROJECT)
+
+    assert calls[1] == [
+        "/fake/agent-reach",
+        "update",
+        "--sync-only",
+        "--scope",
+        manage.SKILL_SCOPE_PROJECT,
+    ]
+    assert result["upgraded"] is True
 
 
 def test_migration_suggests_channels_from_the_old_config(env):
@@ -589,6 +639,23 @@ def test_setup_text_displays_compact_capability_table_and_keeps_json_mode(env, c
     assert payload['result']['installation_report']['markdown'] == text.split('\n完整报告已保存：')[0]
 
 
+def test_setup_project_scope_installs_no_user_skill(env, tmp_path, monkeypatch, capsys):
+    from agent_reach.runtime import cli
+
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    assert cli.main(["setup", "--scope", "project"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    project_skill = project.joinpath(*manage.PROJECT_SKILL_PATH)
+    assert payload["result"]["skill"]["scope"] == "project"
+    assert (project_skill / manage.SKILL_FILE).is_file()
+    assert not manage.skill_dir().exists()
+    with pytest.raises(ReachError, match="unknown skill scope"):
+        manage.setup(scope="workspace")
+
+
 def test_setup_receipt_never_overwrites_a_linked_foreign_file(env, tmp_path):
     manage.setup()
     report = state.root() / 'installation-report.md'
@@ -721,6 +788,388 @@ def test_skill_link_for_an_unlisted_ai_and_uninstall_removes_everything(env):
     for p in (other / "agent-reach", home / ".claude" / "skills" / "agent-reach",
               home / ".agents" / "skills" / "agent-reach"):
         assert not p.exists() and not p.is_symlink()
+
+
+def test_project_skill_install_never_touches_user_scope(env, tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    user_skill = manage.skill_dir()
+    _seed_our_copy(user_skill)
+    original_user_skill = (user_skill / "SKILL.md").read_text(encoding="utf-8")
+    monkeypatch.chdir(project)
+
+    result = manage.install_skill(scope="project")
+
+    project_skill = project / ".claude" / "skills" / "agent-reach"
+    assert result["scope"] == "project"
+    assert result["path"] == str(project_skill / "SKILL.md")
+    assert (project_skill / "SKILL.md").is_file()
+    assert (project_skill / "references" / "capabilities.md").is_file()
+    assert (user_skill / "SKILL.md").read_text(encoding="utf-8") == original_user_skill
+    assert not state.root().exists(), "project scope must not create user-global state"
+
+
+def test_project_skill_install_keeps_projects_independent(env, tmp_path, monkeypatch):
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+
+    monkeypatch.chdir(first)
+    manage.install_skill(scope="project")
+    first_skill = first / ".claude" / "skills" / "agent-reach"
+    monkeypatch.chdir(second)
+    manage.install_skill(scope="project")
+    second_skill = second / ".claude" / "skills" / "agent-reach"
+    first_before = (first_skill / "SKILL.md").read_text(encoding="utf-8")
+
+    manage.install_skill(scope="project")
+    manage.remove_skill(scope="project")
+
+    assert (first_skill / "SKILL.md").read_text(encoding="utf-8") == first_before
+    assert not second_skill.exists()
+
+
+def test_project_skill_remove_preserves_unrelated_and_modified_files(env, tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    manage.install_skill(scope="project")
+    project_skill = project / ".claude" / "skills" / "agent-reach"
+    unrelated = project_skill / "notes.txt"
+    unrelated_reference = project_skill / "references" / "notes.txt"
+    unrelated.write_text("keep", encoding="utf-8")
+    unrelated_reference.write_text("keep reference", encoding="utf-8")
+
+    result = manage.remove_skill(scope="project")
+
+    assert result["removed"] is True
+    assert unrelated.read_text(encoding="utf-8") == "keep"
+    assert unrelated_reference.read_text(encoding="utf-8") == "keep reference"
+    assert not (project_skill / "SKILL.md").exists()
+
+    manage.install_skill(scope="project")
+    skill = project_skill / "SKILL.md"
+    skill.write_text("user edit", encoding="utf-8")
+    with pytest.raises(ReachError, match="modified"):
+        manage.remove_skill(scope="project")
+    assert skill.read_text(encoding="utf-8") == "user edit"
+    assert unrelated.read_text(encoding="utf-8") == "keep"
+
+
+def test_project_skill_install_rejects_symlinked_parent(env, tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    outside = tmp_path / "outside"
+    project.mkdir()
+    outside.mkdir()
+    try:
+        (project / ".claude").symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlink creation not available")
+    monkeypatch.chdir(project)
+
+    with pytest.raises(ReachError, match="symbolic link"):
+        manage.install_skill(scope="project")
+
+    assert list(outside.iterdir()) == []
+
+
+def test_project_skill_rejects_foreign_and_invalid_ownership(env, tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    target = project.joinpath(*manage.PROJECT_SKILL_PATH)
+    target.mkdir(parents=True)
+    (target / manage.SKILL_FILE).write_text("foreign", encoding="utf-8")
+
+    with pytest.raises(ReachError, match="unowned"):
+        manage.install_skill(scope="project")
+
+    (target / manage.SKILL_FILE).unlink()
+    manifest = target / manage.PROJECT_SKILL_MANIFEST
+    for content in (
+        "not json",
+        "[]",
+        json.dumps({"version": 0, "owner": manage.SKILL_NAME, "files": {}}),
+    ):
+        manifest.write_text(content, encoding="utf-8")
+        with pytest.raises(ReachError, match="ownership record is invalid"):
+            manage.install_skill(scope="project")
+
+
+def test_project_skill_rejects_symlinked_or_escaping_manifest(env, tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    target = project.joinpath(*manage.PROJECT_SKILL_PATH)
+    target.mkdir(parents=True)
+    manifest = target / manage.PROJECT_SKILL_MANIFEST
+    outside = tmp_path / "manifest.json"
+    outside.write_text("{}", encoding="utf-8")
+    try:
+        manifest.symlink_to(outside)
+    except OSError:
+        pytest.skip("symlink creation not available")
+
+    with pytest.raises(ReachError, match="symbolic link"):
+        manage.install_skill(scope="project")
+
+    manifest.unlink()
+    digest = hashlib.sha256(b"outside").hexdigest()
+    manifest.write_text(
+        json.dumps(
+            {
+                "version": manage.PROJECT_SKILL_MANIFEST_VERSION,
+                "owner": manage.SKILL_NAME,
+                "files": {"../outside": digest},
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ReachError, match="ownership record is invalid"):
+        manage.remove_skill(scope="project")
+
+
+def test_project_skill_refresh_removes_retired_owned_file(env, tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    manage.install_skill(scope="project")
+    target = project.joinpath(*manage.PROJECT_SKILL_PATH)
+    retired = target / "retired.md"
+    retired.write_text("retired", encoding="utf-8")
+    manifest_path = target / manage.PROJECT_SKILL_MANIFEST
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["files"][retired.name] = hashlib.sha256(b"retired").hexdigest()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    result = manage.install_skill(scope="project")
+
+    assert result["refreshed"] is True
+    assert not retired.exists()
+
+
+def test_project_skill_refresh_refuses_new_packaged_name_collision(env, tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    manage.install_skill(scope="project")
+    target = project.joinpath(*manage.PROJECT_SKILL_PATH)
+    foreign = target / manage.SKILL_REFERENCES_DIR / "future.md"
+    foreign.write_text("foreign", encoding="utf-8")
+    payload = manage._skill_payload(manage.render_skill())
+    payload[f"{manage.SKILL_REFERENCES_DIR}/{foreign.name}"] = "packaged"
+    monkeypatch.setattr(manage, "_skill_payload", lambda text: payload)
+
+    with pytest.raises(ReachError, match="unowned"):
+        manage.install_skill(scope="project")
+
+    assert foreign.read_text(encoding="utf-8") == "foreign"
+
+
+def test_project_skill_refuses_missing_owned_file(env, tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    manage.install_skill(scope="project")
+    target = project.joinpath(*manage.PROJECT_SKILL_PATH)
+    (target / manage.SKILL_FILE).unlink()
+
+    with pytest.raises(ReachError, match="missing or modified"):
+        manage.remove_skill(scope="project")
+
+
+def test_project_skill_remove_absent_or_foreign_copy(env, tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    target = project.joinpath(*manage.PROJECT_SKILL_PATH)
+
+    assert manage.remove_skill(scope="project")["removed"] is False
+    target.mkdir(parents=True)
+    with pytest.raises(ReachError, match="not owned"):
+        manage.remove_skill(scope="project")
+
+
+def test_project_skill_reports_packaged_read_and_write_failures(env, tmp_path, monkeypatch):
+    resource_files = importlib.resources.files
+
+    class BrokenResources:
+        def joinpath(self, *parts):
+            return self
+
+        def iterdir(self):
+            raise OSError("read failed")
+
+    monkeypatch.setattr(importlib.resources, "files", lambda package: BrokenResources())
+    with pytest.raises(ReachError, match="could not read packaged skill files"):
+        manage._skill_payload("skill")
+    monkeypatch.setattr(importlib.resources, "files", resource_files)
+
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    import agent_reach.utils.paths as paths
+
+    monkeypatch.setattr(manage, "_skill_payload", lambda text: {manage.SKILL_FILE: text})
+    monkeypatch.setattr(
+        paths,
+        "atomic_write_private_text",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("write failed")),
+    )
+    with pytest.raises(ReachError, match="could not install project skill"):
+        manage.install_skill(scope="project")
+
+
+def test_project_skill_reports_retired_and_remove_failures(env, tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    manage.install_skill(scope="project")
+    target = project.joinpath(*manage.PROJECT_SKILL_PATH)
+    retired = target / "retired.md"
+    retired.write_text("retired", encoding="utf-8")
+    manifest_path = target / manage.PROJECT_SKILL_MANIFEST
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["files"][retired.name] = hashlib.sha256(b"retired").hexdigest()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    original_unlink = type(retired).unlink
+
+    def fail_retired(path, *args, **kwargs):
+        if path == retired:
+            raise OSError("retired remove failed")
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(type(retired), "unlink", fail_retired)
+    with pytest.raises(ReachError, match="could not remove retired"):
+        manage.install_skill(scope="project")
+
+    monkeypatch.setattr(type(retired), "unlink", original_unlink)
+    retired.unlink()
+    manifest["files"].pop(retired.name)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    skill = target / manage.SKILL_FILE
+
+    def fail_skill(path, *args, **kwargs):
+        if path == skill:
+            raise OSError("skill remove failed")
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(type(skill), "unlink", fail_skill)
+    with pytest.raises(ReachError, match="could not remove project skill"):
+        manage.remove_skill(scope="project")
+
+
+def _manifest_write_fails(monkeypatch):
+    import agent_reach.utils.paths as paths
+
+    real_write = paths.atomic_write_private_text
+
+    def flaky(path, text, **kwargs):
+        if str(path).endswith(manage.PROJECT_SKILL_MANIFEST):
+            raise OSError("disk full")
+        return real_write(path, text, **kwargs)
+
+    monkeypatch.setattr(paths, "atomic_write_private_text", flaky)
+    return paths, real_write
+
+
+def test_project_skill_install_rolls_back_fresh_write_failure(env, tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    target = project.joinpath(*manage.PROJECT_SKILL_PATH)
+
+    paths, real_write = _manifest_write_fails(monkeypatch)
+    with pytest.raises(ReachError, match="could not install project skill"):
+        manage.install_skill(scope="project")
+
+    # A failed fresh install strands no partial copy.
+    assert not (target / manage.SKILL_FILE).exists()
+    assert not (target / manage.PROJECT_SKILL_MANIFEST).exists()
+
+    # The project is fully recoverable: a real install afterwards succeeds.
+    monkeypatch.setattr(paths, "atomic_write_private_text", real_write)
+    result = manage.install_skill(scope="project")
+    assert result["installed"] is True and result["refreshed"] is False
+    assert (target / manage.SKILL_FILE).exists()
+
+
+def test_project_skill_install_rollback_refresh_preserves_prior_and_unrelated(env, tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    manage.install_skill(scope="project")
+    target = project.joinpath(*manage.PROJECT_SKILL_PATH)
+    skill_file = target / manage.SKILL_FILE
+    before = skill_file.read_bytes()
+    unrelated = target / "notes.md"
+    unrelated.write_text("mine", encoding="utf-8")
+
+    paths, real_write = _manifest_write_fails(monkeypatch)
+    with pytest.raises(ReachError, match="could not install project skill"):
+        manage.install_skill(scope="project")
+
+    # Prior owned content is restored and the unrelated file is untouched.
+    assert skill_file.read_bytes() == before
+    assert unrelated.read_text(encoding="utf-8") == "mine"
+
+    # Still refreshable and removable after the failure.
+    monkeypatch.setattr(paths, "atomic_write_private_text", real_write)
+    assert manage.install_skill(scope="project")["refreshed"] is True
+    assert manage.remove_skill(scope="project")["removed"] is True
+    assert unrelated.read_text(encoding="utf-8") == "mine"
+
+
+def test_project_skill_remove_rolls_back_on_failure(env, tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    manage.install_skill(scope="project")
+    target = project.joinpath(*manage.PROJECT_SKILL_PATH)
+    manifest_path = target / manage.PROJECT_SKILL_MANIFEST
+    before = {p.relative_to(target).as_posix(): p.read_bytes()
+              for p in target.rglob("*") if p.is_file()}
+    original_unlink = type(manifest_path).unlink
+
+    def fail_manifest(path, *args, **kwargs):
+        if path == manifest_path:
+            raise OSError("manifest remove failed")
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(type(manifest_path), "unlink", fail_manifest)
+    with pytest.raises(ReachError, match="could not remove project skill"):
+        manage.remove_skill(scope="project")
+
+    # A failed removal restores every owned file, so the copy stays recoverable.
+    monkeypatch.setattr(type(manifest_path), "unlink", original_unlink)
+    after = {p.relative_to(target).as_posix(): p.read_bytes()
+             for p in target.rglob("*") if p.is_file()}
+    assert after == before
+    assert manage.remove_skill(scope="project")["removed"] is True
+    assert not target.exists()
+
+
+def test_user_skill_scope_keeps_default_behavior_and_validates_scope(env, monkeypatch):
+    result = manage.install_skill()
+    assert result["scope"] == "user"
+    assert (manage.skill_dir() / manage.SKILL_FILE).is_file()
+    unrelated = manage.skill_dir() / manage.SKILL_REFERENCES_DIR / "notes.txt"
+    unrelated.write_text("keep", encoding="utf-8")
+
+    removed = manage.remove_skill()
+    assert removed["scope"] == "user" and removed["removed"] is True
+    assert not (manage.skill_dir() / manage.SKILL_FILE).exists()
+    assert unrelated.read_text(encoding="utf-8") == "keep"
+    with pytest.raises(ReachError, match="unknown skill scope"):
+        manage.install_skill(scope="workspace")
+    with pytest.raises(ReachError, match="unknown skill scope"):
+        manage.remove_skill(scope="workspace")
+
+    manage.install_skill()
+    monkeypatch.setattr(manage, "_remove", lambda path: (_ for _ in ()).throw(OSError("remove failed")))
+    with pytest.raises(ReachError, match="could not remove user skill"):
+        manage.remove_skill()
 
 
 # ── configure ──

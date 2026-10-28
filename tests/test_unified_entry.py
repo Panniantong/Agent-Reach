@@ -226,6 +226,55 @@ def test_skill_command_links_a_skills_dir_and_reports_it(capsys, fake_cli):
     assert code == 1 and out["error"]["code"] == "BAD_INPUT"
 
 
+def test_project_skill_command_installs_and_removes_local_copy(
+    capsys, fake_cli, tmp_path, monkeypatch
+):
+    from agent_reach.utils.paths import home_dir
+
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    code, out = _run(capsys, ["skill", "install", "--scope", "project"])
+    assert code == 0 and out["action"] == "skill install"
+    assert out["result"]["scope"] == "project"
+    assert not (home_dir() / ".agents" / "skills" / "agent-reach").exists()
+
+    code, out = _run(capsys, ["skill", "remove", "--scope", "project"])
+    assert code == 0 and out["action"] == "skill remove"
+    assert out["result"]["removed"] is True
+
+
+def test_update_passes_explicit_project_scope(capsys, fake_cli, monkeypatch):
+    from agent_reach.runtime import manage
+
+    calls = []
+    monkeypatch.setattr(
+        manage,
+        "update",
+        lambda check_only=False, scope=manage.SKILL_SCOPE_USER: calls.append(
+            {"check_only": check_only, "scope": scope}
+        )
+        or {"user_actions": []},
+    )
+    monkeypatch.setattr(
+        manage,
+        "sync",
+        lambda scope=manage.SKILL_SCOPE_USER: calls.append({"sync_scope": scope})
+        or {"user_actions": []},
+    )
+
+    code, out = _run(capsys, ["update", "--scope", "project"])
+    sync_code, sync_out = _run(capsys, ["update", "--sync-only", "--scope", "project"])
+
+    assert code == 0 and out["action"] == "update"
+    assert sync_code == 0 and sync_out["action"] == "update"
+    assert calls == [
+        {"check_only": False, "scope": manage.SKILL_SCOPE_PROJECT},
+        {"sync_scope": manage.SKILL_SCOPE_PROJECT},
+    ]
+
+
 def test_doctor_reports_regressed_per_channel(capsys, fake_cli):
     code, out = _run(capsys, ["doctor"])
     assert code == 0

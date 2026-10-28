@@ -14,7 +14,7 @@ import subprocess
 import sys
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from agent_reach import __version__
@@ -365,6 +365,15 @@ def remove(name: str) -> dict:
 # the vercel-labs/skills supported-agents table.
 
 SKILL_NAME = "agent-reach"
+SKILL_FILE = "SKILL.md"
+SKILL_REFERENCES_DIR = "references"
+SKILL_SCOPE_USER = "user"
+SKILL_SCOPE_PROJECT = "project"
+SKILL_SCOPES = (SKILL_SCOPE_USER, SKILL_SCOPE_PROJECT)
+PROJECT_SKILL_MANIFEST = ".agent-reach-owned.json"
+PROJECT_SKILL_MANIFEST_VERSION = 1
+PROJECT_SKILL_MANIFEST_MAX_BYTES = 64 * 1024
+PROJECT_SKILL_PATH = (".claude", "skills", SKILL_NAME)
 
 
 def _openclaw_home() -> Path:
@@ -432,7 +441,7 @@ def _is_our_copy(path: Path) -> bool:
     if path.is_symlink() or not path.is_dir():
         return False
     try:
-        lines = (path / "SKILL.md").read_text("utf-8").splitlines()
+        lines = (path / SKILL_FILE).read_text("utf-8").splitlines()
     except (OSError, UnicodeDecodeError):
         return False
     if not lines or lines[0].strip() != "---":
@@ -464,28 +473,277 @@ def _remove(path: Path) -> None:
 
 def _write_real_copy(text: str) -> Path:
     real = skill_dir()
-    if (real / "SKILL.md").exists() and not _is_our_copy(real):
+    if (real / SKILL_FILE).exists() and not _is_our_copy(real):
         raise ReachError(BAD_INPUT, "A different skill already occupies the Reach instruction path; left untouched")
     _write_copy(real, text)
     return real
 
 
-def _write_copy(target: Path, text: str) -> None:
+def _skill_payload(text: str) -> Dict[str, str]:
     from importlib.resources import files
 
+    payload = {SKILL_FILE: text}
+    sources = files("agent_reach").joinpath("skill").joinpath(SKILL_REFERENCES_DIR)
+    try:
+        for source in sorted(sources.iterdir(), key=lambda item: item.name):
+            if source.is_file() and source.name.endswith(".md"):
+                payload[f"{SKILL_REFERENCES_DIR}/{source.name}"] = source.read_text("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ReachError(UPSTREAM_BROKEN, f"could not read packaged skill files: {exc}") from exc
+    return payload
+
+
+def _write_skill_files(target: Path, payload: Dict[str, str]) -> List[Path]:
     from agent_reach.utils.paths import atomic_write_private_text, ensure_no_symlink_path
+
     ensure_no_symlink_path(target, "skill directory")
     target.mkdir(parents=True, exist_ok=True)
-    atomic_write_private_text(target / "SKILL.md", text)
-    written = [str(target / "SKILL.md")]
-    references = target / "references"
-    ensure_no_symlink_path(references, "skill references")
-    references.mkdir(exist_ok=True)
-    for source in files("agent_reach").joinpath("skill").joinpath("references").iterdir():
-        if source.is_file() and source.name.endswith(".md"):
-            atomic_write_private_text(references / source.name, source.read_text("utf-8"))
-            written.append(str(references / source.name))
-    state.mutate(lambda data: data["skill"].setdefault("files", {}).update({str(target): written}))
+    written = []
+    for relative, content in payload.items():
+        path = target / relative
+        ensure_no_symlink_path(path, "skill file")
+        atomic_write_private_text(path, content)
+        written.append(path)
+    return written
+
+
+def _write_copy(target: Path, text: str) -> None:
+    written = _write_skill_files(target, _skill_payload(text))
+    state.mutate(
+        lambda data: data["skill"].setdefault("files", {}).update(
+            {str(target): [str(path) for path in written]}
+        )
+    )
+
+
+def _project_skill_dir() -> Path:
+    return Path.cwd().joinpath(*PROJECT_SKILL_PATH)
+
+
+def _project_manifest_path(target: Path) -> Path:
+    return target / PROJECT_SKILL_MANIFEST
+
+
+def _project_path_error(exc: BaseException) -> ReachError:
+    return ReachError(BAD_INPUT, f"project skill path contains a symbolic link or unsafe file; left untouched: {exc}")
+
+
+def _ensure_project_path(path: Path) -> None:
+    from agent_reach.utils.paths import PrivatePathError, ensure_no_symlink_path
+
+    try:
+        ensure_no_symlink_path(path, "project skill path")
+    except (OSError, PrivatePathError) as exc:
+        raise _project_path_error(exc) from exc
+
+
+def _load_project_manifest(target: Path) -> Optional[dict]:
+    from agent_reach.utils.paths import PrivatePathError, read_small_text_no_follow
+
+    manifest_path = _project_manifest_path(target)
+    try:
+        text = read_small_text_no_follow(
+            manifest_path, max_bytes=PROJECT_SKILL_MANIFEST_MAX_BYTES
+        )
+    except (OSError, UnicodeDecodeError, PrivatePathError) as exc:
+        raise _project_path_error(exc) from exc
+    if text is None:
+        return None
+    try:
+        manifest = json.loads(text)
+    except (TypeError, ValueError) as exc:
+        raise ReachError(BAD_INPUT, "project skill ownership record is invalid; left untouched") from exc
+    if not isinstance(manifest, dict):
+        raise ReachError(BAD_INPUT, "project skill ownership record is invalid; left untouched")
+    files = manifest.get("files")
+    if (
+        manifest.get("version") != PROJECT_SKILL_MANIFEST_VERSION
+        or manifest.get("owner") != SKILL_NAME
+        or not isinstance(files, dict)
+        or not files
+        or not all(isinstance(name, str) and isinstance(digest, str) for name, digest in files.items())
+    ):
+        raise ReachError(BAD_INPUT, "project skill ownership record is invalid; left untouched")
+    return manifest
+
+
+def _owned_project_files(target: Path, manifest: dict) -> Dict[str, Path]:
+    owned = {}
+    for name, expected_digest in manifest["files"].items():
+        relative = Path(name)
+        if relative.is_absolute() or ".." in relative.parts or relative.as_posix() != name:
+            raise ReachError(BAD_INPUT, "project skill ownership record is invalid; left untouched")
+        path = target / relative
+        _ensure_project_path(path)
+        try:
+            actual_digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError as exc:
+            raise ReachError(
+                BAD_INPUT,
+                f"project skill file is missing or modified; left untouched: {path}",
+            ) from exc
+        if actual_digest != expected_digest:
+            raise ReachError(
+                BAD_INPUT,
+                f"project skill file is modified; left untouched: {path}",
+            )
+        owned[name] = path
+    return owned
+
+
+def _write_project_manifest(target: Path, payload: Dict[str, str]) -> None:
+    from agent_reach.utils.paths import atomic_write_private_text
+
+    manifest = {
+        "version": PROJECT_SKILL_MANIFEST_VERSION,
+        "owner": SKILL_NAME,
+        "files": {
+            name: hashlib.sha256(content.encode("utf-8")).hexdigest()
+            for name, content in payload.items()
+        },
+    }
+    atomic_write_private_text(
+        _project_manifest_path(target),
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+    )
+
+
+def _restore_project_skill(snapshot: List[Tuple[Path, Optional[str]]]) -> None:
+    """Undo a half-applied install: rewrite the prior contents of files that
+    already existed and delete the ones this attempt created."""
+    from agent_reach.utils.paths import atomic_write_private_text
+
+    for path, content in snapshot:
+        if content is None:
+            path.unlink(missing_ok=True)
+        else:
+            atomic_write_private_text(path, content)
+
+
+def _apply_project_skill(target: Path, payload: Dict[str, str], owned: Dict[str, Path]) -> None:
+    """Install the payload transactionally. The prior bytes of every file this
+    call removes or overwrites are captured first, so a mid-write failure
+    restores the previous state instead of stranding a partial copy that the
+    manifest no longer matches and the tool can no longer refresh or remove."""
+    from agent_reach.utils.paths import atomic_write_private_text, ensure_no_symlink_path
+
+    touched = list(owned.values()) + [target / name for name in payload if name not in owned]
+    snapshot: List[Tuple[Path, Optional[str]]] = [
+        (path, path.read_text("utf-8") if path.exists() else None) for path in touched
+    ]
+    try:
+        for name, path in owned.items():
+            if name not in payload:
+                try:
+                    path.unlink()
+                except OSError as exc:
+                    raise ReachError(UPSTREAM_BROKEN, f"could not remove retired project skill file: {path}") from exc
+        for relative, content in payload.items():
+            destination = target / relative
+            ensure_no_symlink_path(destination, "skill file")
+            atomic_write_private_text(destination, content)
+        _write_project_manifest(target, payload)
+    except ReachError:
+        _restore_project_skill(snapshot)
+        raise
+    except OSError as exc:
+        _restore_project_skill(snapshot)
+        raise ReachError(UPSTREAM_BROKEN, f"could not install project skill: {exc}") from exc
+
+
+def _install_project_skill() -> dict:
+    target = _project_skill_dir()
+    _ensure_project_path(target)
+    payload = _skill_payload(render_skill())
+    manifest = _load_project_manifest(target)
+    owned = _owned_project_files(target, manifest) if manifest else {}
+    conflicts = [
+        target / name
+        for name in payload
+        if name not in owned and ((target / name).exists() or (target / name).is_symlink())
+    ]
+    if conflicts:
+        raise ReachError(
+            BAD_INPUT,
+            f"an unowned project skill file already exists; left untouched: {conflicts[0]}",
+        )
+    _apply_project_skill(target, payload, owned)
+    return {
+        "scope": SKILL_SCOPE_PROJECT,
+        "path": str(target / SKILL_FILE),
+        "installed": True,
+        "refreshed": manifest is not None,
+    }
+
+
+def _remove_project_skill() -> dict:
+    target = _project_skill_dir()
+    _ensure_project_path(target)
+    manifest = _load_project_manifest(target)
+    if manifest is None:
+        if not target.exists():
+            return {"scope": SKILL_SCOPE_PROJECT, "path": str(target), "removed": False}
+        raise ReachError(BAD_INPUT, "project skill is not owned by Agent Reach; left untouched")
+    owned = _owned_project_files(target, manifest)
+    manifest_path = _project_manifest_path(target)
+    snapshot: List[Tuple[Path, Optional[str]]] = [
+        (path, path.read_text("utf-8")) for path in (*owned.values(), manifest_path)
+    ]
+    try:
+        for path in sorted(owned.values(), key=lambda item: len(item.parts), reverse=True):
+            path.unlink()
+        manifest_path.unlink()
+        directories = {path.parent for path in owned.values() if path.parent != target}
+        for directory in sorted(directories, key=lambda item: len(item.parts), reverse=True):
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+        try:
+            target.rmdir()
+        except OSError:
+            pass
+    except OSError as exc:
+        _restore_project_skill(snapshot)
+        raise ReachError(UPSTREAM_BROKEN, f"could not remove project skill: {exc}") from exc
+    return {"scope": SKILL_SCOPE_PROJECT, "path": str(target), "removed": True}
+
+
+def install_skill(scope: str = SKILL_SCOPE_USER) -> dict:
+    if scope == SKILL_SCOPE_USER:
+        return {**place_skill(), "scope": SKILL_SCOPE_USER}
+    if scope == SKILL_SCOPE_PROJECT:
+        return _install_project_skill()
+    raise ReachError(BAD_INPUT, f"unknown skill scope: {scope}; valid: {', '.join(SKILL_SCOPES)}")
+
+
+def remove_skill(scope: str = SKILL_SCOPE_USER) -> dict:
+    if scope == SKILL_SCOPE_PROJECT:
+        return _remove_project_skill()
+    if scope != SKILL_SCOPE_USER:
+        raise ReachError(BAD_INPUT, f"unknown skill scope: {scope}; valid: {', '.join(SKILL_SCOPES)}")
+    data = state.load()
+    targets = _skill_uninstall_targets()
+    try:
+        for target in sorted(set(targets), key=lambda item: len(item.parts), reverse=True):
+            from agent_reach.utils.paths import ensure_no_symlink_path
+
+            ensure_no_symlink_path(target.parent, "skill removal parent")
+            _remove(target)
+        for folder in data.get("skill", {}).get("files", {}):
+            for directory in (Path(folder) / SKILL_REFERENCES_DIR, Path(folder)):
+                try:
+                    directory.rmdir()
+                except OSError:
+                    pass
+    except OSError as exc:
+        raise ReachError(UPSTREAM_BROKEN, f"could not remove user skill: {exc}") from exc
+    state.mutate(lambda saved: saved.__setitem__("skill", {"links": [], "files": {}}))
+    return {
+        "scope": SKILL_SCOPE_USER,
+        "path": str(skill_dir()),
+        "removed": bool(targets),
+    }
 
 
 def _link_into(skills_dir: Path, text: str) -> tuple:
@@ -659,8 +917,10 @@ def _optional_entry(c) -> dict:
     return {"channel": c.name, "level": c.level, "add": f"agent-reach add {c.name}", "needs": needs}
 
 
-def setup() -> dict:
-    """Add the default channels (except ones the user removed) and place the skill."""
+def setup(scope: str = SKILL_SCOPE_USER) -> dict:
+    """Add default channels and place the skill in the explicitly selected scope."""
+    if scope not in SKILL_SCOPES:
+        raise ReachError(BAD_INPUT, f"unknown skill scope: {scope}; valid: {', '.join(SKILL_SCOPES)}")
     if not state.exists() and (state.root() / "config.yaml").exists():
         migrate()
     if not state.exists():
@@ -672,7 +932,7 @@ def setup() -> dict:
     if state.load()["tools"].get("mcporter", {}).get("owner") == tools.OURS:
         tools.remove_private("mcporter")  # retired LinkedIn MCP transport, only our private copy
     state.mutate(lambda saved: [saved.pop(key, None) for key in ("reuse_sources", "ask_pending", "pending")])
-    skill = place_skill()
+    skill = install_skill(scope)
     data = state.load()
     defaults = [c for c in _channels() if c.level == "default" and is_added(c, data)]
     added = []
@@ -784,12 +1044,14 @@ def _ordered_tools(names) -> List[str]:
     return out
 
 
-def sync() -> dict:
+def sync(scope: str = SKILL_SCOPE_USER) -> dict:
     """Bring every added channel's tools to their latest allowed version, prune unused
-    tools, drop channels this version no longer has, refresh the skill.
+    tools, drop channels this version no longer has, refresh the explicitly scoped skill.
 
     `user_actions` are plain sentences for what the user must do now.
     """
+    if scope not in SKILL_SCOPES:
+        raise ReachError(BAD_INPUT, f"unknown skill scope: {scope}; valid: {', '.join(SKILL_SCOPES)}")
     migration = migrate() if not state.exists() else None
     data = state.load()
     known = {c.name for c in _channels()}
@@ -827,11 +1089,11 @@ def sync() -> dict:
     old_copies = _cleanup_old_copies()
     actions += _old_copy_actions(old_copies)
     return {"version": __version__, "tools": synced, "problems": problems, "removed_tools": _prune(state.load()),
-            "dropped_channels": dropped, "user_actions": actions, "skill": place_skill(), "migration": migration,
+            "dropped_channels": dropped, "user_actions": actions, "skill": install_skill(scope), "migration": migration,
             "old_copies": old_copies}
 
 
-def _move_to_uv(info: dict) -> dict:
+def _move_to_uv(info: dict, scope: str) -> dict:
     """This copy was installed with pip/pipx (1.5 style). Install the release with uv, let the
     new copy set itself up (it removes known old copies), then remove this copy too."""
     fresh = not state.exists()
@@ -852,7 +1114,8 @@ def _move_to_uv(info: dict) -> dict:
                          hint=f"Run manually: {' '.join(cmd)}")
     bin_dir = subprocess.run([uv, "tool", "dir", "--bin"], capture_output=True, text=True, timeout=60).stdout.strip()
     exe = Path(bin_dir) / ("agent-reach.exe" if os.name == "nt" else "agent-reach")
-    child = [str(exe), "setup"] if fresh else [str(exe), "update", "--sync-only"]
+    child = ([str(exe), "setup", "--scope", scope] if fresh else
+             [str(exe), "update", "--sync-only", "--scope", scope])
     out = subprocess.run(child, capture_output=True, text=True, timeout=1800)
     try:
         result = json.loads(out.stdout.strip().split("\n")[-1]).get("result") or {}
@@ -873,14 +1136,16 @@ def _move_to_uv(info: dict) -> dict:
             "installation_report": result.get("installation_report"), "user_actions": actions}
 
 
-def update(check_only: bool = False) -> dict:
+def update(check_only: bool = False, scope: str = SKILL_SCOPE_USER) -> dict:
     """Upgrade Agent Reach when a release is newer, then upgrade every added channel's tools."""
+    if scope not in SKILL_SCOPES:
+        raise ReachError(BAD_INPUT, f"unknown skill scope: {scope}; valid: {', '.join(SKILL_SCOPES)}")
     info = update_check()
     if check_only:
         return info
     method = install_method()
     if method == "other":
-        return _move_to_uv(info)
+        return _move_to_uv(info, scope)
     if info["update_available"] and method != "editable":
         cmd = upgrade_command(info["latest"])
         run = [tools.resolve("uv") or cmd[0], *cmd[1:]]
@@ -893,14 +1158,19 @@ def update(check_only: bool = False) -> dict:
             raise ReachError(UPSTREAM_BROKEN, f"upgrade failed: {proc.stderr.strip()[-300:]}",
                              hint=f"Run manually: {' '.join(cmd)}")
         exe = shutil.which("agent-reach") or sys.argv[0]
-        out = subprocess.run([exe, "update", "--sync-only"], capture_output=True, text=True, timeout=1800)
+        out = subprocess.run(
+            [exe, "update", "--sync-only", "--scope", scope],
+            capture_output=True,
+            text=True,
+            timeout=1800,
+        )
         try:
             synced = json.loads(out.stdout.strip().split("\n")[-1]).get("result") or {}
         except (ValueError, IndexError):
             synced = {"raw": out.stdout[-500:]}
         return {**info, "upgraded": True, "method": method, "sync": synced,
                 "user_actions": synced.get("user_actions", [])}
-    synced = sync()
+    synced = sync(scope)
     return {**info, "upgraded": False, "method": method, "sync": synced, "user_actions": synced["user_actions"]}
 
 
