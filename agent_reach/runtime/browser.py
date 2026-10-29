@@ -16,7 +16,9 @@ import re
 import shutil
 import signal
 import socket
-import subprocess
+import subprocess  # nosec B404 - invoked only with fixed argv lists, never shell=True
+
+import requests
 import sys
 import tempfile
 import time
@@ -238,17 +240,26 @@ def wait_for(check: Callable[[], bool], seconds: float, interval: float = 1.0) -
 # ── downloads ──
 
 
+def _require_https(url: str) -> None:
+    if not url.startswith("https://"):
+        raise ValueError(f"refusing to fetch non-https url: {url}")
+
+
 def _fetch(url: str, timeout: float = 30.0) -> bytes:
     """GET `url` (honours the OS / env proxy settings)."""
-    req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read()
+    _require_https(url)
+    resp = requests.get(url, headers={"User-Agent": _USER_AGENT}, timeout=timeout)
+    resp.raise_for_status()
+    return resp.content
 
 
 def _download(url: str, dest: Path, timeout: float = 60.0) -> None:
-    req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
-    with urllib.request.urlopen(req, timeout=timeout) as resp, open(dest, "wb") as out:
-        shutil.copyfileobj(resp, out, 1 << 20)
+    _require_https(url)
+    resp = requests.get(url, headers={"User-Agent": _USER_AGENT}, timeout=timeout, stream=True)
+    resp.raise_for_status()
+    with open(dest, "wb") as out:
+        for chunk in resp.iter_content(1 << 20):
+            out.write(chunk)
 
 
 def _unzip(archive: Path, dest: Path) -> None:
@@ -389,6 +400,13 @@ def refresh_extension(*, upgrade: bool = False) -> dict:
     try:
         archive = work / "extension.zip"
         _download(asset["browser_download_url"], archive)
+        expected_digest = asset.get("digest", "")
+        if expected_digest.startswith("sha256:"):
+            import hashlib
+
+            actual_digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+            if actual_digest != expected_digest.split(":", 1)[1]:
+                raise ReachError(UPSTREAM_BROKEN, "OpenCLI extension archive failed integrity check")
         unpacked = work / "unpacked"
         unpacked.mkdir()
         _unzip(archive, unpacked)
