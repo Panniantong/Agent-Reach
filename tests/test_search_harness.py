@@ -17,6 +17,8 @@ from agent_reach.runtime.run import CommandFailed
     [
         ("您的环境存在异常，请重新登录", "PLATFORM_BLOCKED"),
         ("Boss rejected the current browser environment", "PLATFORM_BLOCKED"),
+        ("您的账户存在异常行为，已暂时被禁止使用", "PLATFORM_BLOCKED"),
+        ("BOSS search page did not expose its job-list response", "PLATFORM_BLOCKED"),
         ("HTTP 429", "RATE_LIMITED"),
         ("please login", "NEED_LOGIN"),
     ],

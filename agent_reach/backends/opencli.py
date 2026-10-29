@@ -44,7 +44,11 @@ def _opencli_error(text: str, login_hint: str):
     message = str(err.get("message", "") or text.strip() or "OpenCLI failed")[:500]
     upstream_hint = str(err.get("help") or err.get("hint") or "").strip() or None
     low = message.lower()
-    if any(w in low for w in ("环境异常", "环境存在异常", "browser environment", "captcha", "验证码", "安全验证", "account_risk")) or code in {"ACCOUNT_RISK", "CAPTCHA_REQUIRED"}:
+    if any(w in low for w in (
+        "环境异常", "环境存在异常", "browser environment", "captcha",
+        "验证码", "安全验证", "account_risk", "异常行为", "禁止使用",
+        "风控", "did not expose its job-list response",
+    )) or code in {"ACCOUNT_RISK", "CAPTCHA_REQUIRED", "PLATFORM_BLOCKED"}:
         return ReachError(PLATFORM_BLOCKED, message, hint=upstream_hint)
     if code in {"RATE_LIMITED", "RATE_LIMIT"} or any(w in low for w in ("http 429", "too many requests", "访问过于频繁")):
         return ReachError(RATE_LIMITED, message)

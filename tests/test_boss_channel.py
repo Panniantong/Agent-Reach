@@ -77,3 +77,55 @@ def test_native_detail_uses_browser_only_and_keeps_references_private(monkeypatc
     monkeypatch.setattr(sys,'argv',['boss_native',json.dumps(spec)])
     assert boss_native.main()['error']['code']=='NEED_SETUP'
     assert calls==['private-reference']
+
+
+def test_opencli_missing_job_list_is_platform_blocked(monkeypatch):
+    import pytest
+
+    from agent_reach.backends import opencli
+    from agent_reach.runtime.result import ReachError
+
+    def broken(*a, **k):
+        raise ReachError("UPSTREAM_BROKEN", "BOSS search page did not expose its job-list response")
+
+    monkeypatch.setattr(opencli, "opencli_call", broken)
+    with pytest.raises(ReachError) as exc:
+        BossChannel()._opencli_search(query="Python", city="深圳", limit=3, timeout=10)
+    assert exc.value.code == "PLATFORM_BLOCKED"
+
+
+def test_boss_native_code_32_and_35_map_to_platform_blocked(monkeypatch, tmp_path):
+    import json
+    import sys
+    from types import SimpleNamespace
+
+    from agent_reach.backends import boss_native
+
+    source = 'https://github.com/can4hou6joeng4/boss-agent-cli/archive/' + boss_native.COMMIT + '.zip'
+    monkeypatch.setattr(boss_native, 'distribution', lambda *a: SimpleNamespace(read_text=lambda *a: json.dumps({'url': source})))
+
+    class BlockedBoss:
+        def __init__(self, auth, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def search_jobs(self, *args, **kwargs):
+            return {'code': 32, 'message': '您的账户存在异常行为，已暂时被禁止使用.', 'zpData': {}}
+
+    monkeypatch.setitem(sys.modules, 'boss_agent_cli.api.client', SimpleNamespace(BossClient=BlockedBoss))
+    monkeypatch.setitem(sys.modules, 'boss_agent_cli.auth.manager', SimpleNamespace(AuthManager=lambda *a: None))
+
+    spec = {'action': 'search', 'query': 'Python', 'limit': 1, 'data_dir': str(tmp_path), 'cdp_url': 'http://127.0.0.1:9222'}
+    monkeypatch.setattr(sys, 'argv', ['boss_native', json.dumps(spec)])
+    result = boss_native.main()
+    assert result['ok'] is False
+    assert result['error']['code'] == 'PLATFORM_BLOCKED'
+
+    class VerifyBoss(BlockedBoss):
+        def search_jobs(self, *args, **kwargs):
+            return {'code': 35, 'message': '当前 IP 地址可能存在异常访问行为', 'zpData': {}}
+
+    monkeypatch.setitem(sys.modules, 'boss_agent_cli.api.client', SimpleNamespace(BossClient=VerifyBoss))
+    result = boss_native.main()
+    assert result['ok'] is False
+    assert result['error']['code'] == 'PLATFORM_BLOCKED'
+

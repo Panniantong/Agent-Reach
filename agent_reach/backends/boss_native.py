@@ -39,7 +39,14 @@ def main():
             raw = boss.search_jobs(spec['query'], city=spec.get('city') or '全国', page=1)
     if raw.get('code') != 0:
         code = raw.get('code')
-        mapped = {36: 'PLATFORM_BLOCKED', 37: 'PLATFORM_BLOCKED', 9: 'RATE_LIMITED', 1: 'NEED_LOGIN'}.get(code, 'UPSTREAM_BROKEN')
+        mapped = {
+            32: 'PLATFORM_BLOCKED',
+            35: 'PLATFORM_BLOCKED',
+            36: 'PLATFORM_BLOCKED',
+            37: 'PLATFORM_BLOCKED',
+            9: 'RATE_LIMITED',
+            1: 'NEED_LOGIN',
+        }.get(code, 'UPSTREAM_BROKEN')
         return {'ok': False, 'error': {'code': mapped, 'message': str(raw.get('message', 'Boss search failed'))[:300]}}
     if spec['action'] == 'read':
         from boss_agent_cli.commands.detail import build_job_from_card
@@ -77,6 +84,7 @@ if __name__ == '__main__':
     except Exception as exc:
         name = type(exc).__name__
         code = {'AccountRiskError': 'PLATFORM_BLOCKED', 'EnvironmentRiskError': 'PLATFORM_BLOCKED',
+                'PlatformRiskError': 'PLATFORM_BLOCKED',
                 'AuthRequired': 'NEED_LOGIN', 'AuthExpired': 'NEED_LOGIN',
                 'BrowserSourceUnavailable': 'NEED_SETUP'}.get(name, 'UPSTREAM_BROKEN')
         result = {'ok': False, 'error': {'code': code, 'message': str(exc)[:300]}}
