@@ -187,6 +187,23 @@ def test_cloak_launcher_shares_profile_and_keeps_bridge_off_proxy(home, monkeypa
                                 "bypass": "localhost,127.0.0.1,[::1]"}
 
 
+def test_cloak_launcher_uses_configured_locale(home, monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from agent_reach.runtime import browser_watcher
+    context = SimpleNamespace(pages=[Mock()])
+    launch = Mock(return_value=context)
+    monkeypatch.setitem(sys.modules, "cloakbrowser", SimpleNamespace(launch_persistent_context=launch))
+    monkeypatch.delenv("REACH_BROWSER_LOCALE", raising=False)
+    browser_watcher._launch_cloak("about:blank")
+    assert launch.call_args.kwargs["locale"] == "zh-CN"
+    monkeypatch.setenv("REACH_BROWSER_LOCALE", "en-US")
+    browser_watcher._launch_cloak("about:blank")
+    assert launch.call_args.kwargs["locale"] == "en-US"
+
+
 def test_migration_keeps_old_profile_and_restores_one_shared_destination(home, monkeypatch):
     binary = home / "cloak"
     binary.touch()
