@@ -79,6 +79,14 @@ An agent without a terminal prompt can pipe the value in: `agent-reach configure
 
 It is used for every Agent Reach command. An `HTTPS_PROXY` set in your shell takes precedence.
 
+## Browser language
+
+The Agent Reach browser opens in Chinese (`zh-CN`) by default. To use another language, save a locale once and restart the browser (`agent-reach browser stop`; it reopens on next use):
+
+```bash
+agent-reach configure browser-locale en-US
+```
+
 ## Still stuck
 
 - `agent-reach update` and try again.
