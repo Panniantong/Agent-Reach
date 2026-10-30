@@ -32,8 +32,8 @@ from .base import Action, Channel, Param
 
 _BV_RE = re.compile(r"BV[0-9A-Za-z]{10}")
 _BILI_LOGIN_HINT = (
-    "Bilibili subtitles need a login. Ask the user to run `bili login` and scan "
-    "the QR code themselves; never log in on their behalf."
+    "Bilibili subtitles need a login. Ask the user to run `agent-reach login bilibili` "
+    "and scan the QR code themselves; never log in on their behalf."
 )
 
 
