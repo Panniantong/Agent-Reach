@@ -1,47 +1,59 @@
 # -*- coding: utf-8 -*-
 """Shared channel helper for OpenCLI browser-session-only platforms."""
 
+from agent_reach.backends.opencli import opencli_call, opencli_items
+from agent_reach.runtime.result import NEED_LOGIN, NOT_FOUND, UPSTREAM_BROKEN, ReachError
 from agent_reach.utils.url import host_matches
 
 from .base import Channel
 
 
 class OpenCLISiteChannel(Channel):
-    """A platform served directly by OpenCLI.
-
-    These channels are intentionally thin: Agent Reach only installs,
-    health-checks, and routes. Agents call `opencli <site> ...` directly.
-    """
+    """A platform served only through OpenCLI in the Agent Reach browser."""
 
     site: str = ""
     domains: tuple[str, ...] = ()
     usage: str = ""
     login_hint: str = ""
+    #: Cookie the site sets only for a logged-in user; its absence turns an unclear failure into NEED_LOGIN.
+    login_cookie: str = ""
 
-    backends = ["OpenCLI"]
-    tier = 1
+    tools = ("opencli",)
+    prereqs = ("node", "chrome")
+
+    def setup_problems(self):
+        from agent_reach.runtime.browser_binding import setup_problems
+
+        return setup_problems(self.name)
 
     def can_handle(self, url: str) -> bool:
         return host_matches(url, *self.domains)
 
-    def check(self, config=None):
-        from agent_reach.backends import opencli_status
+    # ── unified entry helper ──
 
-        self.active_backend = None
-        st = opencli_status()
-        if not st.installed:
-            return "off", (
-                f"未安装 {self.description} 后端。安装：\n"
-                "  agent-reach install --system --channels opencli\n"
-                f"然后在 Chrome 里登录 {self.login_hint}"
-            )
-        if st.broken:
-            return "error", st.hint
+    def _opencli(self, args, timeout: float, *, empty_is_error: bool = True) -> list:
+        """Run one OpenCLI command for this site and return unified items."""
+        hint = (
+            f"Run `agent-reach login {self.name}` and ask the user to log in to {self.login_hint} "
+            "in the Agent Reach browser window it opens. Never log in for them."
+        )
+        try:
+            items = opencli_items(opencli_call(self.site, list(args), timeout=timeout, login_hint=hint))
+            if not items and empty_is_error:
+                raise ReachError(UPSTREAM_BROKEN, "OpenCLI finished but returned no items")
+        except ReachError as err:
+            if err.code == UPSTREAM_BROKEN and self._logged_out():
+                raise ReachError(NEED_LOGIN, f"Not logged in to {self.login_hint}", hint=hint) from None
+            raise
+        if not items:
+            raise ReachError(NOT_FOUND, "nothing found")
+        return items
 
-        if st.ready:
-            return "warn", (
-                f"OpenCLI 桥接已连接，但 {self.description} 的登录态和实际命令"
-                "未实时验证；Doctor 不执行平台命令，因此当前不标记为可用。"
-                f"需要时请先在 Chrome 里登录 {self.login_hint}"
-            )
-        return "warn", st.hint
+    def _logged_out(self) -> bool:
+        """True only when the dedicated browser is running and lacks this site's login cookie."""
+        if not self.login_cookie:
+            return False
+        from agent_reach.runtime import browser, cdp
+        if not browser.is_running():
+            return False
+        return not any(c.get("name") == self.login_cookie for d in self.domains for c in cdp.cookies(d))

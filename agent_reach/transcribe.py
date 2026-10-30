@@ -22,10 +22,9 @@ from __future__ import annotations
 
 import ipaddress
 import math
-import shutil
+import re
 import socket
 import subprocess
-import tempfile
 from pathlib import Path
 from typing import List, Optional
 from urllib.parse import urlparse
@@ -41,7 +40,7 @@ MAX_SOURCE_BYTES = 512 * 1024 * 1024
 MAX_CHUNKS = 24  # 4 hours at the standard 10-minute segment size
 MAX_TOTAL_CHUNK_BYTES = 96 * 1024 * 1024
 MAX_AUDIO_SECONDS = MAX_CHUNKS * CHUNK_SECONDS
-FFPROBE_TIMEOUT_SECONDS = 30
+PROBE_TIMEOUT_SECONDS = 30
 
 PROVIDERS = {
     "groq": {
@@ -75,9 +74,18 @@ _BLOCKED_HOSTS = {
 }
 
 
+def _bin(binary: str) -> str:
+    """Our private copy (e.g. the ffmpeg `agent-reach add` installs) first, then PATH."""
+    from agent_reach.runtime.tools import resolve
+
+    return resolve(binary) or binary
+
+
 def _require(binary: str) -> None:
-    if not shutil.which(binary):
-        raise MissingDependency(f"{binary} not found in PATH")
+    from agent_reach.runtime.tools import resolve
+
+    if not resolve(binary):
+        raise MissingDependency(f"{binary} not found (run `agent-reach add youtube`)")
 
 
 def _require_size_at_most(path: Path, limit: int, label: str) -> int:
@@ -89,54 +97,43 @@ def _require_size_at_most(path: Path, limit: int, label: str) -> int:
     return size
 
 
+_DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d{2}):(\d{2}(?:\.\d+)?)")
+
+
 def _probe_audio_duration(path: Path) -> float:
-    """Return duration in seconds or fail closed before media generation."""
-    _require("ffprobe")
-    cmd = [
-        "ffprobe",
-        "-v",
-        "error",
-        "-show_entries",
-        "format=duration",
-        "-of",
-        "default=noprint_wrappers=1:nokey=1",
-        "-i",
-        str(path),
-    ]
+    """Return duration in seconds or fail closed before media generation.
+
+    Read from `ffmpeg -i` (no ffprobe: the private ffmpeg Agent Reach installs
+    ships only ffmpeg). Without an output file ffmpeg exits 1 after printing
+    the input's details, so the exit code is not checked.
+    """
+    _require("ffmpeg")
+    cmd = [_bin("ffmpeg"), "-hide_banner", "-i", str(path)]
     try:
         proc = subprocess.run(
             cmd,
             capture_output=True,
             encoding="utf-8",
             errors="replace",
-            timeout=FFPROBE_TIMEOUT_SECONDS,
+            timeout=PROBE_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:
         raise TranscribeError(
-            "ffprobe timed out while reading audio duration "
-            f"after {FFPROBE_TIMEOUT_SECONDS}s"
+            "ffmpeg timed out while reading audio duration "
+            f"after {PROBE_TIMEOUT_SECONDS}s"
         ) from None
     except OSError as exc:
         raise TranscribeError(
-            f"ffprobe could not read audio duration: {exc}"
+            f"ffmpeg could not read audio duration: {exc}"
         ) from exc
 
-    if proc.returncode != 0:
-        detail = proc.stderr.strip()[:300] or "unknown ffprobe error"
-        raise TranscribeError(
-            f"ffprobe failed while reading audio duration: {detail}"
-        )
-
-    raw_duration = proc.stdout.strip()
-    try:
-        duration = float(raw_duration)
-    except (TypeError, ValueError):
-        raise TranscribeError(
-            "ffprobe could not parse a valid audio duration"
-        ) from None
+    m = _DURATION_RE.search(proc.stderr or "")
+    if not m:
+        raise TranscribeError("ffmpeg could not parse a valid audio duration")
+    duration = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
     if not math.isfinite(duration) or duration <= 0:
         raise TranscribeError(
-            "ffprobe could not parse a valid positive audio duration"
+            "ffmpeg could not parse a valid positive audio duration"
         )
     return duration
 
@@ -250,17 +247,20 @@ def _assert_safe_public_url(url: str) -> None:
 def download_audio(url: str, out_dir: Path) -> Path:
     """Download audio with yt-dlp into out_dir; return the resulting file path."""
     _assert_safe_public_url(url)
-    _require("yt-dlp")
+    import sys
+
     template = out_dir / "source.%(ext)s"
     _run(
         [
-            "yt-dlp",
+            sys.executable, "-m", "yt_dlp",
             "-x",
             "--audio-format",
             "m4a",
             "--audio-quality",
             "0",
             "--no-playlist",
+            "--ffmpeg-location",
+            _bin("ffmpeg"),
             "--max-filesize",
             str(MAX_SOURCE_BYTES),
             "-o",
@@ -287,7 +287,7 @@ def compress_audio(src: Path, out_dir: Path) -> Path:
     dst = out_dir / "compressed.m4a"
     _run(
         [
-            "ffmpeg",
+            _bin("ffmpeg"),
             "-loglevel",
             "error",
             "-y",
@@ -325,7 +325,7 @@ def chunk_audio(src: Path, out_dir: Path, segment_seconds: int = CHUNK_SECONDS) 
     pattern = out_dir / "chunk_%03d.m4a"
     _run(
         [
-            "ffmpeg",
+            _bin("ffmpeg"),
             "-loglevel",
             "error",
             "-y",
@@ -438,7 +438,9 @@ def transcribe(
     if out_dir:
         return _transcribe_in_dir(source, order, cfg, Path(out_dir))
 
-    with tempfile.TemporaryDirectory(prefix="transcribe-") as tmp:
+    from agent_reach.utils.paths import private_temporary_directory
+
+    with private_temporary_directory(prefix="transcribe-") as tmp:
         return _transcribe_in_dir(source, order, cfg, Path(tmp))
 
 

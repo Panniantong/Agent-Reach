@@ -1,17 +1,36 @@
-"""Cross-platform path and remediation helpers."""
+"""Cross-platform private path helpers."""
 
 from __future__ import annotations
 
 import os
-import shlex
 import stat
 import sys
 import tempfile
+import time
+from contextlib import contextmanager
 from pathlib import Path
 
 
 class PrivatePathError(RuntimeError):
     """Raised when a private write could be redirected through a symlink."""
+
+
+@contextmanager
+def private_temporary_directory(prefix: str):
+    """Create and clean only this call's recorded work directory under Reach."""
+    from agent_reach.runtime import state
+
+    root = make_private_dir(state.root())
+    path = None
+    try:
+        with tempfile.TemporaryDirectory(prefix=prefix, dir=root) as tmp:
+            path = Path(tmp)
+            state.remember_path(path, "temporary work")
+            yield tmp
+    finally:
+        if path is not None and not path.exists():
+            relative = path.relative_to(root).as_posix()
+            state.mutate(lambda data: data.get("owned_paths", {}).pop(relative, None))
 
 
 def home_dir() -> Path:
@@ -68,6 +87,18 @@ def make_private_dir(path: str | Path) -> Path:
     return target
 
 
+def _replace(src: Path, dst: Path) -> None:
+    """os.replace; on Windows retry briefly while another process has `dst` open."""
+    for attempt in range(20):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if sys.platform != "win32" or attempt == 19:
+                raise
+            time.sleep(0.05)
+
+
 def atomic_write_private_text(
     path: str | Path,
     text: str,
@@ -95,7 +126,7 @@ def atomic_write_private_text(
     )
     tmp_path = Path(tmp_name)
     try:
-        if os.name != "nt" and hasattr(os, "fchmod"):
+        if sys.platform != "win32" and hasattr(os, "fchmod"):
             os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
         handle = os.fdopen(fd, "w", encoding=encoding)
         fd = -1
@@ -106,9 +137,9 @@ def atomic_write_private_text(
 
         ensure_no_symlink_path(parent, "父目录")
         ensure_no_symlink_path(target, "目标文件")
-        os.replace(tmp_path, target)
+        _replace(tmp_path, target)
 
-        if os.name != "nt" and hasattr(os, "O_DIRECTORY"):
+        if sys.platform != "win32" and hasattr(os, "O_DIRECTORY"):
             try:
                 dir_fd = os.open(
                     parent,
@@ -180,46 +211,3 @@ def read_small_text_no_follow(
     finally:
         os.close(fd)
     return payload.decode(encoding)
-
-
-def get_ytdlp_config_dir() -> Path:
-    """Return yt-dlp's first user config directory.
-
-    yt-dlp checks ``$XDG_CONFIG_HOME/yt-dlp`` first on every supported
-    platform, falling back to ``~/.config/yt-dlp`` when the variable is not
-    set. Writing anywhere else can make Agent Reach and Doctor agree with each
-    other while the real yt-dlp process silently ignores the setting.
-    """
-
-    xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
-    config_home = Path(xdg_config_home) if xdg_config_home else Path.home() / ".config"
-    return config_home / "yt-dlp"
-
-
-def get_ytdlp_config_path() -> Path:
-    """Return the yt-dlp user config file path for this OS."""
-
-    return get_ytdlp_config_dir() / "config"
-
-
-def render_ytdlp_fix_command() -> str:
-    """Return an OS-appropriate command to enable Node.js as yt-dlp JS runtime."""
-
-    config_path = get_ytdlp_config_path()
-    if sys.platform == "win32":
-        return (
-            f"$cfg = '{config_path}'\n"
-            "New-Item -ItemType Directory -Force -Path (Split-Path $cfg) | Out-Null\n"
-            "if (-not (Test-Path $cfg) -or -not (Select-String -Path $cfg -Pattern '--js-runtimes' -Quiet)) {\n"
-            "  Add-Content -Path $cfg -Value '--js-runtimes node'\n"
-            "}"
-        )
-    config_dir = shlex.quote(str(config_path.parent))
-    config_file = shlex.quote(str(config_path))
-    return (
-        f"mkdir -p {config_dir} && "
-        "{ "
-        f"grep -qxF -- '--js-runtimes node' {config_file} 2>/dev/null || "
-        f"printf '%s\\n' '--js-runtimes node' >> {config_file}; "
-        "}"
-    )

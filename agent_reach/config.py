@@ -7,6 +7,7 @@ directories; the private directory is created only on the first write.
 
 import os
 import stat
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Optional
@@ -58,7 +59,7 @@ def _atomic_write_yaml(target: Path, data: dict) -> None:
     )
     tmp_path = Path(tmp_name)
     try:
-        if os.name != "nt" and hasattr(os, "fchmod"):
+        if sys.platform != "win32" and hasattr(os, "fchmod"):
             os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             yaml.safe_dump(
@@ -75,11 +76,11 @@ def _atomic_write_yaml(target: Path, data: dict) -> None:
         # never follows the symlink into its target.
         _reject_symlink(target, "配置文件")
         os.replace(tmp_path, target)
-        if os.name != "nt":
+        if sys.platform != "win32":
             os.chmod(target, stat.S_IRUSR | stat.S_IWUSR)
 
         # Persist the rename where directory fsync is supported.
-        if os.name != "nt" and hasattr(os, "O_DIRECTORY"):
+        if sys.platform != "win32" and hasattr(os, "O_DIRECTORY"):
             try:
                 dir_fd = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY)
                 try:
@@ -102,14 +103,6 @@ class Config:
     CONFIG_DIR = home_dir() / ".agent-reach"
     CONFIG_FILE = CONFIG_DIR / "config.yaml"
 
-    # Feature → required config keys
-    FEATURE_REQUIREMENTS = {
-        "exa_search": ["exa_api_key"],
-        "twitter_xreach": ["twitter_auth_token", "twitter_ct0"],  # legacy key name; used by twitter-cli
-        "groq_whisper": ["groq_api_key"],
-        "openai_whisper": ["openai_api_key"],
-        "github_token": ["github_token"],
-    }
 
     def __init__(
         self,
@@ -154,6 +147,9 @@ class Config:
         if self.read_only:
             raise ConfigReadOnlyError("当前配置是只读的，不能保存")
         self._ensure_dir()
+        if self.config_path == home_dir() / ".agent-reach" / "config.yaml":
+            from agent_reach.runtime import state
+            state.remember_path(self.config_path, "configuration")
         _atomic_write_yaml(self.config_path, self.data)
 
     def get(self, key: str, default: Any = None) -> Any:
@@ -196,38 +192,3 @@ class Config:
                 self.data[key] = previous
             raise
 
-    def is_configured(self, feature: str) -> bool:
-        """Check if a feature has all required config."""
-        required = self.FEATURE_REQUIREMENTS.get(feature, [])
-        return all(self.get(k) for k in required)
-
-    def get_configured_features(self) -> dict:
-        """Return status of all optional features."""
-        return {
-            feature: self.is_configured(feature)
-            for feature in self.FEATURE_REQUIREMENTS
-        }
-
-    def to_dict(self) -> dict:
-        """Return config as dict (masks sensitive values)."""
-        sensitive_markers = (
-            "key",
-            "token",
-            "password",
-            "proxy",
-            "cookie",
-            "secret",
-            "session",
-            "sessdata",
-            "csrf",
-            "auth",
-            "cred",
-            "ct0",
-        )
-        masked = {}
-        for k, v in self.data.items():
-            if any(s in k.lower() for s in sensitive_markers):
-                masked[k] = "[REDACTED]" if v else None
-            else:
-                masked[k] = v
-        return masked

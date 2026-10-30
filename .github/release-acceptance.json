@@ -1,0 +1,513 @@
+{
+ "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+ "release_ready": true,
+ "pending": [],
+ "results": [
+  {
+   "channel": "bilibili",
+   "action": "hot",
+   "method": "real-cli",
+   "backend": "bili-cli",
+   "item_count": 2,
+   "at": "2026-10-23T06:26:12.707111+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "bilibili",
+   "action": "read",
+   "method": "real-cli",
+   "backend": "bili-cli",
+   "item_count": 1,
+   "at": "2026-10-23T06:26:12.143211+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "bilibili",
+   "action": "search",
+   "method": "real-cli",
+   "backend": "bili-cli",
+   "item_count": 2,
+   "at": "2026-10-23T06:26:11.635741+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "bilibili",
+   "action": "subtitle",
+   "method": "real-cli",
+   "backend": null,
+   "item_count": 0,
+   "at": "2026-10-23T06:26:13.473741+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": false,
+   "error": "NEED_LOGIN"
+  },
+  {
+   "channel": "boss",
+   "action": "read",
+   "method": "real-cli",
+   "backend": "opencli",
+   "item_count": 1,
+   "at": "2026-10-23T06:27:50.081175+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "boss",
+   "action": "search",
+   "method": "real-cli",
+   "backend": "opencli",
+   "item_count": 3,
+   "at": "2026-10-23T06:27:40.263839+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "facebook",
+   "action": "profile",
+   "method": "real-cli",
+   "backend": "opencli",
+   "item_count": 1,
+   "at": "2026-10-23T06:26:10.465416+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "facebook",
+   "action": "search",
+   "method": "real-cli",
+   "backend": "opencli",
+   "item_count": 1,
+   "at": "2026-10-23T06:25:51.884462+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "github",
+   "action": "read",
+   "method": "real-cli",
+   "backend": "gh",
+   "item_count": 1,
+   "at": "2026-10-23T06:23:52.755029+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "github",
+   "action": "search",
+   "method": "real-cli",
+   "backend": "gh",
+   "item_count": 2,
+   "at": "2026-10-23T06:23:49.941427+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "instagram",
+   "action": "posts",
+   "method": "real-cli",
+   "backend": null,
+   "item_count": 0,
+   "at": "2026-10-23T06:26:10.692331+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": false,
+   "error": "RATE_LIMITED"
+  },
+  {
+   "channel": "instagram",
+   "action": "profile",
+   "method": "real-cli",
+   "backend": null,
+   "item_count": 0,
+   "at": "2026-10-23T06:26:10.618020+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": false,
+   "error": "RATE_LIMITED"
+  },
+  {
+   "channel": "instagram",
+   "action": "search",
+   "method": "real-cli",
+   "backend": null,
+   "item_count": 0,
+   "at": "2026-10-23T06:26:10.544317+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": false,
+   "error": "RATE_LIMITED"
+  },
+  {
+   "channel": "linkedin",
+   "action": "jobs",
+   "method": "real-cli",
+   "backend": null,
+   "item_count": 0,
+   "at": "2026-10-23T06:27:28.297215+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": false,
+   "error": "NEED_LOGIN"
+  },
+  {
+   "channel": "reddit",
+   "action": "search",
+   "method": "real-cli",
+   "backend": null,
+   "item_count": 0,
+   "at": "2026-10-23T06:24:58.691058+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": false,
+   "error": "UPSTREAM_BROKEN"
+  },
+  {
+   "channel": "reddit",
+   "action": "subreddit",
+   "method": "real-cli",
+   "backend": null,
+   "item_count": 0,
+   "at": "2026-10-23T06:25:08.535222+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": false,
+   "error": "UPSTREAM_BROKEN"
+  },
+  {
+   "channel": "twitter",
+   "action": "profile",
+   "method": "real-cli",
+   "backend": "opencli",
+   "item_count": 1,
+   "at": "2026-10-23T06:24:05.403444+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "twitter",
+   "action": "search",
+   "method": "real-cli",
+   "backend": "opencli",
+   "item_count": 2,
+   "at": "2026-10-23T06:23:59.259236+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "twitter",
+   "action": "thread",
+   "method": "real-cli",
+   "backend": "opencli",
+   "item_count": 50,
+   "at": "2026-10-23T06:24:18.769499+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "twitter",
+   "action": "tweets",
+   "method": "real-cli",
+   "backend": "opencli",
+   "item_count": 2,
+   "at": "2026-10-23T06:24:09.484988+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "v2ex",
+   "action": "hot",
+   "method": "real-cli",
+   "backend": "v2ex-api",
+   "item_count": 3,
+   "at": "2026-10-23T06:27:51.408802+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "v2ex",
+   "action": "node",
+   "method": "real-cli",
+   "backend": "v2ex-api",
+   "item_count": 3,
+   "at": "2026-10-23T06:27:52.949405+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "v2ex",
+   "action": "read",
+   "method": "real-cli",
+   "backend": "v2ex-api",
+   "item_count": 1,
+   "at": "2026-10-23T06:27:55.248602+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "v2ex",
+   "action": "user",
+   "method": "real-cli",
+   "backend": "v2ex-api",
+   "item_count": 1,
+   "at": "2026-10-23T06:27:57.201571+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "web",
+   "action": "read",
+   "method": "real-cli",
+   "backend": "jina",
+   "item_count": 1,
+   "at": "2026-10-23T06:28:09.293993+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "web",
+   "action": "search",
+   "method": "real-cli",
+   "backend": "exa",
+   "item_count": 2,
+   "at": "2026-10-23T06:28:08.181242+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "xiaohongshu",
+   "action": "comments",
+   "method": "real-cli",
+   "backend": "opencli",
+   "item_count": 31,
+   "at": "2026-10-23T06:27:01.901557+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "xiaohongshu",
+   "action": "read",
+   "method": "real-cli",
+   "backend": "opencli",
+   "item_count": 1,
+   "at": "2026-10-23T06:26:45.233014+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "xiaohongshu",
+   "action": "search",
+   "method": "real-cli",
+   "backend": "opencli",
+   "item_count": 2,
+   "at": "2026-10-23T06:26:24.291809+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "xueqiu",
+   "action": "hot_posts",
+   "method": "real-cli",
+   "backend": null,
+   "item_count": 0,
+   "at": "2026-10-23T06:28:04.408899+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": false,
+   "error": "UPSTREAM_BROKEN"
+  },
+  {
+   "channel": "xueqiu",
+   "action": "hot_stocks",
+   "method": "real-cli",
+   "backend": null,
+   "item_count": 0,
+   "at": "2026-10-23T06:28:06.684095+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": false,
+   "error": "NEED_LOGIN"
+  },
+  {
+   "channel": "xueqiu",
+   "action": "quote",
+   "method": "real-cli",
+   "backend": "tencent",
+   "item_count": 1,
+   "at": "2026-10-23T06:27:57.467031+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "xueqiu",
+   "action": "search",
+   "method": "real-cli",
+   "backend": "tencent",
+   "item_count": 1,
+   "at": "2026-10-23T06:27:57.731312+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "youtube",
+   "action": "read",
+   "method": "real-cli",
+   "backend": "yt-dlp",
+   "item_count": 1,
+   "at": "2026-10-23T06:24:21.859735+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "youtube",
+   "action": "search",
+   "method": "real-cli",
+   "backend": "yt-dlp",
+   "item_count": 2,
+   "at": "2026-10-23T06:24:25.663459+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "youtube",
+   "action": "subtitle",
+   "method": "real-cli",
+   "backend": "yt-dlp",
+   "item_count": 1,
+   "at": "2026-10-23T06:24:28.997094+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  },
+  {
+   "channel": "youtube",
+   "action": "transcribe",
+   "method": "real-cli",
+   "backend": "whisper",
+   "item_count": 1,
+   "at": "2026-10-23T06:24:34.879901+00:00",
+   "os": "Darwin",
+   "source_sha256": "7f59fab927be5c4c01c1c13c1255be39f1082a0aaac9f28db16305ef0c8530fe",
+   "passed": true,
+   "error": null
+  }
+ ],
+ "waived": [
+  {
+   "channel": "reddit",
+   "action": "search",
+   "reason": "Reddit blocks the test network (HTTP 403); approved to ship untested in 1.6.0"
+  },
+  {
+   "channel": "reddit",
+   "action": "read",
+   "reason": "Reddit blocks the test network (HTTP 403); approved to ship untested in 1.6.0"
+  },
+  {
+   "channel": "reddit",
+   "action": "subreddit",
+   "reason": "Reddit blocks the test network (HTTP 403); approved to ship untested in 1.6.0"
+  },
+  {
+   "channel": "instagram",
+   "action": "search",
+   "reason": "Platform rate limit on the test account; approved to ship untested in 1.6.0"
+  },
+  {
+   "channel": "instagram",
+   "action": "profile",
+   "reason": "Platform rate limit on the test account; approved to ship untested in 1.6.0"
+  },
+  {
+   "channel": "instagram",
+   "action": "posts",
+   "reason": "Platform rate limit on the test account; approved to ship untested in 1.6.0"
+  },
+  {
+   "channel": "bilibili",
+   "action": "subtitle",
+   "reason": "No Bilibili login on the test machine; approved to ship untested in 1.6.0"
+  },
+  {
+   "channel": "linkedin",
+   "action": "jobs",
+   "reason": "No LinkedIn login on the test machine; approved to ship untested in 1.6.0"
+  },
+  {
+   "channel": "linkedin",
+   "action": "read",
+   "reason": "No LinkedIn login on the test machine; approved to ship untested in 1.6.0"
+  },
+  {
+   "channel": "xueqiu",
+   "action": "hot_posts",
+   "reason": "No Xueqiu login on the test machine; approved to ship untested in 1.6.0"
+  },
+  {
+   "channel": "xueqiu",
+   "action": "hot_stocks",
+   "reason": "No Xueqiu login on the test machine; approved to ship untested in 1.6.0"
+  },
+  {
+   "channel": "xiaoyuzhou",
+   "action": "transcribe",
+   "reason": "No Groq key on the test machine; approved to ship untested in 1.6.0"
+  }
+ ]
+}

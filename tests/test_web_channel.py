@@ -8,13 +8,97 @@ URL before handing it to Jina Reader. Follow-up to #331 / #360 / #361,
 completing dedicated coverage for the channels that still lacked it.
 """
 
+import http.client
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from agent_reach.channels.web import _UA, WebChannel
+from agent_reach.runtime.dispatch import run_action
+from agent_reach.runtime.result import BAD_INPUT, RATE_LIMITED, UPSTREAM_BROKEN
 
 _MAX_RESPONSE_BYTES = 5 * 1024 * 1024
+
+
+def test_search_does_not_turn_unrecognized_payload_into_empty_success():
+    from agent_reach.runtime.result import ReachError
+
+    with patch("agent_reach.channels.web._exa_call", return_value="Service temporarily unavailable"):
+        with pytest.raises(ReachError, match="no recognizable search results"):
+            WebChannel()._exa_search(query="python", limit=3, timeout=5)
+
+
+def test_exa_retries_a_truncated_read_once_within_the_same_budget():
+    from agent_reach.channels.web import _exa_call
+    body = json.dumps({"result": {"content": [{"type": "text", "text": "Content"}]}}).encode()
+    with patch("agent_reach.channels.web.http_request", side_effect=[http.client.IncompleteRead(b""), body]) as request:
+        assert _exa_call("web_fetch_exa", {"urls": ["https://example.com"]}, 5) == "Content"
+    assert request.call_count == 2
+    assert 0 < request.call_args_list[1].kwargs["timeout"] <= request.call_args_list[0].kwargs["timeout"] <= 5
+
+
+def test_exa_never_loops_after_two_truncated_reads():
+    from agent_reach.channels.web import _exa_call
+    with patch("agent_reach.channels.web.http_request", side_effect=http.client.IncompleteRead(b"")) as request:
+        with pytest.raises(http.client.IncompleteRead):
+            _exa_call("web_fetch_exa", {"urls": ["https://example.com"]}, 5)
+    assert request.call_count == 2
+
+
+def test_exa_does_not_retry_http_limits_or_access_denials():
+    import urllib.error
+
+    from agent_reach.channels.web import _exa_call
+    for code in (429, 403):
+        with patch("agent_reach.channels.web.http_request", side_effect=urllib.error.HTTPError("https://mcp.exa.ai/mcp", code, "denied", {}, None)) as request:
+            with pytest.raises(urllib.error.HTTPError):
+                _exa_call("web_fetch_exa", {"urls": ["https://example.com"]}, 5)
+        request.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Request failed with status code 429",
+        "You have reached the free hosted Exa MCP rate limit",
+        "Monthly quota exceeded",
+        "Your account has insufficient credits",
+        "Free usage limit reached",
+    ],
+)
+@pytest.mark.parametrize("rpc_error", [False, True])
+def test_exa_hosted_limits_stop_as_rate_limited(message, rpc_error):
+    payload = {"error": {"message": message}} if rpc_error else {
+        "result": {"isError": True, "content": [{"type": "text", "text": message}]},
+    }
+    with patch("agent_reach.channels.web.http_request", return_value=json.dumps(payload).encode()) as request:
+        out = run_action(WebChannel(), "search", {"query": "python"})
+    assert out["error"]["code"] == RATE_LIMITED
+    assert "built-in web search" in out["error"]["hint"]
+    request.assert_called_once()
+
+
+def test_exa_invalid_rpc_params_are_bad_input():
+    payload = {"error": {"code": -32602, "message": "Invalid params: missing query"}}
+    with patch("agent_reach.channels.web.http_request", return_value=json.dumps(payload).encode()):
+        out = run_action(WebChannel(), "search", {"query": "python"})
+    assert out["error"]["code"] == BAD_INPUT
+
+
+def test_exa_generic_failure_and_result_size_error_are_not_rate_limits():
+    for message in ("Service temporarily unavailable", "Invalid result limit: expected a number"):
+        payload = {"result": {"isError": True, "content": [{"type": "text", "text": message}]}}
+        with patch("agent_reach.channels.web.http_request", return_value=json.dumps(payload).encode()):
+            out = run_action(WebChannel(), "search", {"query": "python"})
+        assert out["error"]["code"] == UPSTREAM_BROKEN
+
+
+def test_web_missing_query_is_rejected_without_calling_exa():
+    with patch("agent_reach.channels.web.http_request") as request:
+        out = run_action(WebChannel(), "search", {})
+    assert out["error"]["code"] == BAD_INPUT
+    request.assert_not_called()
 
 
 def _resp(body=b"# Example\nfull text\n"):
@@ -41,15 +125,6 @@ def test_can_handle_accepts_any_url():
 
 # --- check: ready without any network probe (零开销兜底) ---
 
-def test_check_is_ok_and_touches_no_network():
-    channel = WebChannel()
-    with patch("urllib.request.urlopen") as mock_open:
-        status, message = channel.check()
-    assert status == "ok"
-    assert channel.active_backend == "Jina Reader"
-    assert "Jina Reader" in message
-    # The fallback channel must stay zero-overhead: no probing on check().
-    mock_open.assert_not_called()
 
 
 # --- read: URL normalisation + Jina Reader request shape ---

@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Agent Reach — Give your AI Agent eyes to see the entire internet."""
+"""Agent Reach — internet access for AI agents."""
 
-__version__ = "1.5.0"
-__author__ = "Neo Reid"
+__version__ = "1.6.0"
 
-from agent_reach.core import AgentReach
-
-__all__ = ["AgentReach"]
+__all__ = ["__version__"]
