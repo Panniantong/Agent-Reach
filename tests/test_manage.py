@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shutil
+from pathlib import Path
 
 import pytest
 
@@ -647,6 +648,23 @@ def _seed_our_copy(path):
     path.mkdir(parents=True)
     (path / "SKILL.md").write_text("---\nname: agent-reach\ndescription: old\n---\nold\n")
     (path / "references").mkdir()
+
+
+def test_hermes_skills_follow_hermes_home(monkeypatch, tmp_path):
+    custom = tmp_path / "hermes-data"
+    monkeypatch.setenv("HERMES_HOME", str(custom))
+    assert manage.linked_agents()["hermes"] == (custom, custom / "skills")
+
+
+@pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])
+def test_hermes_default_home_matches_hermes_per_platform(monkeypatch, platform):
+    monkeypatch.setattr(manage.sys, "platform", platform)
+    folder, skills = manage.linked_agents()["hermes"]
+    if platform == "win32":
+        assert folder == Path(os.environ["LOCALAPPDATA"]) / "hermes"
+    else:
+        assert folder == home_dir() / ".hermes"
+    assert skills == folder / "skills"
 
 
 def test_skill_one_real_copy_linked_only_for_present_ais(env):
