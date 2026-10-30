@@ -122,8 +122,7 @@ def export_site_cookies(profile: str, domain: str) -> list:
     from agent_reach.runtime import bridge
     from agent_reach.runtime.result import NEED_SETUP, ReachError
     from agent_reach.runtime.run import run_cmd
-    if not bridge.require_compatible():
-        return []
+    bridge.require_running()
     argv, _ = bridge.launch_spec()
     module = Path(argv[-1]).parent / "browser" / "page.js"
     if not module.is_file():
