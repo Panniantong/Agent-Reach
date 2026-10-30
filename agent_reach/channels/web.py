@@ -83,8 +83,14 @@ def _exa_call(tool: str, arguments: dict, timeout: float) -> str:
     for attempt in range(2):
         try:
             raw = http_request(
-                _EXA_MCP, timeout=max(0.1, timeout - (time.monotonic() - started)), data=body,
-                headers={"Content-Type": "application/json", "Accept": "application/json, text/event-stream"},
+                _EXA_MCP,
+                timeout=max(0.1, timeout - (time.monotonic() - started)),
+                data=body,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json, text/event-stream",
+                    "User-Agent": "agent-reach",
+                },
             ).decode("utf-8", errors="replace")
             break
         except http.client.IncompleteRead:
