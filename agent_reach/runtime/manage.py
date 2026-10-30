@@ -372,6 +372,17 @@ def _openclaw_home() -> Path:
     return (Path(oc) if oc else home_dir()) / ".openclaw"
 
 
+def _hermes_home() -> Path:
+    # Same order as Hermes's get_hermes_home(): HERMES_HOME, then the platform default.
+    hh = os.environ.get("HERMES_HOME", "").strip()
+    if hh:
+        return Path(hh).expanduser()
+    if sys.platform == "win32":
+        local = os.environ.get("LOCALAPPDATA", "").strip()
+        return (Path(local) if local else home_dir() / "AppData" / "Local") / "hermes"
+    return home_dir() / ".hermes"
+
+
 def _config_home() -> Path:
     xdg = os.environ.get("XDG_CONFIG_HOME")
     return Path(xdg) if xdg else home_dir() / ".config"
@@ -383,7 +394,7 @@ def linked_agents() -> Dict[str, tuple]:
     return {
         "claude-code": (home / ".claude", home / ".claude" / "skills"),
         "openclaw": (_openclaw_home(), _openclaw_home() / "skills"),
-        "hermes": (home / ".hermes", home / ".hermes" / "skills"),
+        "hermes": (_hermes_home(), _hermes_home() / "skills"),
         "cursor": (home / ".cursor", home / ".cursor" / "skills"),
         "gemini-cli": (home / ".gemini", home / ".gemini" / "skills"),
         "github-copilot": (home / ".copilot", home / ".copilot" / "skills"),
