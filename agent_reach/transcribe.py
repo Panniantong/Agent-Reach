@@ -53,6 +53,14 @@ PROVIDERS = {
         "model": "whisper-1",
         "key_field": "openai_api_key",
     },
+    # Deepgram 用裸二进制 body + query 参数，形状和上面几家不同，单独一个 kind
+    "deepgram": {
+        "endpoint": "https://api.deepgram.com/v1/listen",
+        "model": "nova-3",
+        "key_field": "deepgram_api_key",
+        "kind": "deepgram",
+        "auth": "Token",
+    },
 }
 
 
@@ -377,6 +385,9 @@ def transcribe_chunk(
         )
 
     info = PROVIDERS[provider]
+    if info.get("kind") == "deepgram":
+        return _post_deepgram(info, key, chunk, timeout)
+
     with chunk.open("rb") as fh:
         try:
             resp = requests.post(
@@ -394,12 +405,39 @@ def transcribe_chunk(
     return resp.text
 
 
+def _post_deepgram(info: dict, key: str, chunk: Path, timeout: int) -> str:
+    """Deepgram: 音频字节直接当 body，参数走 query，结果是嵌套 JSON。"""
+    params = {
+        "model": info["model"],
+        "smart_format": "true",
+        "punctuate": "true",
+        "language": "zh",
+    }
+    headers = {
+        "Authorization": f"{info.get('auth', 'Token')} {key}",
+        "Content-Type": "audio/m4a",
+    }
+    with chunk.open("rb") as fh:
+        try:
+            resp = requests.post(info["endpoint"], params=params, headers=headers,
+                                 data=fh, timeout=timeout)
+        except requests.RequestException as e:
+            raise TranscribeError(f"deepgram: network error: {e}") from e
+
+    if not resp.ok:
+        raise TranscribeError(f"deepgram: HTTP {resp.status_code}: {resp.text[:300]}")
+    try:
+        return resp.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
+    except (KeyError, IndexError, ValueError) as e:
+        raise TranscribeError(f"deepgram: unexpected response shape: {e}") from e
+
+
 def _provider_order(provider: str) -> List[str]:
     if provider == "auto":
-        return ["groq", "openai"]
+        return ["deepgram", "groq", "openai"]
     if provider in PROVIDERS:
         return [provider]
-    raise TranscribeError(f"unknown provider: {provider} (use groq|openai|auto)")
+    raise TranscribeError(f"unknown provider: {provider} (use deepgram|groq|openai|auto)")
 
 
 def transcribe(
@@ -412,7 +450,7 @@ def transcribe(
 ) -> str:
     """Transcribe a URL or local file path. Returns the joined transcript text.
 
-    `provider` is one of `auto`, `groq`, or `openai`. Auto mode selects the
+    `provider` is one of `auto`, `deepgram`, `groq`, or `openai`. Auto mode selects the
     first configured provider (Groq, then OpenAI). In auto mode only, set
     `allow_provider_fallback=True` to permit sending failed chunks to the next
     configured provider; using the flag with an explicit provider is rejected.

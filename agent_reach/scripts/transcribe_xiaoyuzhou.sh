@@ -1,7 +1,10 @@
 #!/bin/bash
 # 小宇宙播客转文字脚本
-# 用法: bash transcribe.sh [--polish] <小宇宙链接> [输出文件路径]
+# 用法: bash transcribe.sh [--polish] [--max-seconds N] <小宇宙链接> [输出文件路径]
 # 环境变量: GROQ_API_KEY (必须)
+#
+# --max-seconds N: 只处理前 N 秒。配合 Range 请求只拉需要的字节，
+#                  避免为一小段测试下载整集（长播客常见 200MB+）。
 #
 # --polish: 转录后调用 Groq Llama 3.3 70B 给文稿补中文标点+合理分段
 #           （Whisper 对中文标点支持较弱，开启后阅读体验显著更好）
@@ -9,12 +12,20 @@
 set -e
 
 POLISH=0
+MAX_SECONDS=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --polish) POLISH=1; shift ;;
+        --max-seconds)
+            if [ $# -lt 2 ]; then
+                echo "❌ --max-seconds 需要一个正整数秒数" >&2
+                exit 1
+            fi
+            MAX_SECONDS="$2"
+            shift 2 ;;
         --) shift; break ;;
         -h|--help)
-            echo "用法: bash transcribe.sh [--polish] <小宇宙链接> [输出文件路径]"
+            echo "用法: bash transcribe.sh [--polish] [--max-seconds N] <小宇宙链接> [输出文件路径]"
             exit 0 ;;
         --*)
             echo "未知选项: $1" >&2
@@ -22,6 +33,22 @@ while [ $# -gt 0 ]; do
         *) break ;;
     esac
 done
+
+# --max-seconds 立刻校验：坏参数不应该先跑一遍网络请求和密钥检查
+MAX_DOWNLOAD_BYTES=""
+if [ -n "$MAX_SECONDS" ]; then
+    case "$MAX_SECONDS" in
+        ''|*[!0-9]*)
+            echo "❌ --max-seconds 必须是正整数，收到: $MAX_SECONDS" >&2
+            exit 1 ;;
+    esac
+    if [ "$MAX_SECONDS" -le 0 ]; then
+        echo "❌ --max-seconds 必须大于 0" >&2
+        exit 1
+    fi
+    # 64kbps 单声道 ≈ 8KB/s；留 8 倍余量覆盖原始码率 + moov 索引开销
+    MAX_DOWNLOAD_BYTES=$(( MAX_SECONDS * 8192 * 8 ))
+fi
 
 URL="${1:?用法: bash transcribe.sh [--polish] <小宇宙链接> [输出文件路径]}"
 OUTPUT="${2:-}"
@@ -131,24 +158,46 @@ if [ -z "$AUDIO_URL" ]; then
     exit 1
 fi
 
+MAX_DOWNLOAD_BYTES=""
+
+
 echo "📝 标题: $TITLE"
 echo "🔗 音频: $AUDIO_URL"
+if [ -n "$MAX_DOWNLOAD_BYTES" ]; then
+    echo "⏱️  只处理前 ${MAX_SECONDS} 秒（Range 上限 $(( MAX_DOWNLOAD_BYTES / 1024 / 1024 ))MB）"
+fi
 
 # Step 2: 下载音频
 echo "⬇️  正在下载音频..."
 EXT="${AUDIO_URL##*.}"
-curl --fail --show-error --location --silent \
-    --connect-timeout "$CURL_CONNECT_TIMEOUT" \
-    --max-time "$AUDIO_TIMEOUT" \
-    --max-filesize "$MAX_AUDIO_BYTES" \
-    -o "$WORK_DIR/original.$EXT" \
-    "$AUDIO_URL"
+if [ -n "$MAX_DOWNLOAD_BYTES" ]; then
+    # 只拉开头一段：小宇宙 CDN 支持 Range，长播客能省掉 90% 以上流量
+    curl --fail --show-error --location --silent \
+        --connect-timeout "$CURL_CONNECT_TIMEOUT" \
+        --max-time "$AUDIO_TIMEOUT" \
+        --max-filesize "$MAX_AUDIO_BYTES" \
+        -r "0-$(( MAX_DOWNLOAD_BYTES - 1 ))" \
+        -o "$WORK_DIR/original.$EXT" \
+        "$AUDIO_URL"
+else
+    curl --fail --show-error --location --silent \
+        --connect-timeout "$CURL_CONNECT_TIMEOUT" \
+        --max-time "$AUDIO_TIMEOUT" \
+        --max-filesize "$MAX_AUDIO_BYTES" \
+        -o "$WORK_DIR/original.$EXT" \
+        "$AUDIO_URL"
+fi
 FILE_SIZE=$(ls -lh "$WORK_DIR/original.$EXT" | awk '{print $5}')
 echo "📦 文件大小: $FILE_SIZE"
 
 # Step 3: 获取时长（用 ffmpeg 自己读：Agent Reach 自带的 ffmpeg 没有 ffprobe）
 DURATION_RAW=$(ffmpeg -hide_banner -i "$WORK_DIR/original.$EXT" 2>&1 \
     | awk '/Duration: [0-9]+:[0-9]+:[0-9.]+/ { split($2, t, ":"); sub(",", "", t[3]); printf "%.3f", t[1] * 3600 + t[2] * 60 + t[3]; exit }')
+if [ -z "$DURATION_RAW" ] && [ -n "$MAX_SECONDS" ]; then
+    # Range 只拉了开头一段时，ffmpeg 往往读不出总时长 —— 这在预期内
+    DURATION_RAW="$MAX_SECONDS"
+    echo "ℹ️  Range 片段无法读出总时长，按 --max-seconds=$MAX_SECONDS 处理"
+fi
 if [ -z "$DURATION_RAW" ]; then
     echo "❌ ffmpeg 无法读取音频时长" >&2
     exit 1
@@ -186,7 +235,11 @@ echo "⏱️  时长: ${DURATION_MIN}分${DURATION_SEC}秒"
 
 # Step 4: 转为低码率单声道 MP3
 echo "🔄 正在转码..."
-ffmpeg -y -i "$WORK_DIR/original.$EXT" -t "$MAX_DURATION_SECONDS" -b:a "$AUDIO_BITRATE" -ac 1 "$WORK_DIR/mono.mp3" 2>/dev/null
+TRIM_SECONDS="$MAX_DURATION_SECONDS"
+if [ -n "$MAX_SECONDS" ] && [ "$MAX_SECONDS" -lt "$TRIM_SECONDS" ]; then
+    TRIM_SECONDS="$MAX_SECONDS"
+fi
+ffmpeg -y -i "$WORK_DIR/original.$EXT" -t "$TRIM_SECONDS" -b:a "$AUDIO_BITRATE" -ac 1 "$WORK_DIR/mono.mp3" 2>/dev/null
 MONO_SIZE=$(stat -c%s "$WORK_DIR/mono.mp3" 2>/dev/null || stat -f%z "$WORK_DIR/mono.mp3")
 MONO_SIZE_MB=$(awk -v bytes="$MONO_SIZE" 'BEGIN { printf "%.1f", bytes / 1024 / 1024 }')
 echo "📦 转码后: ${MONO_SIZE_MB}MB"
@@ -377,7 +430,11 @@ fi
     echo "# $TITLE"
     echo ""
     echo "来源: $URL"
-    echo "时长: ${DURATION_MIN}分${DURATION_SEC}秒"
+    if [ -n "$MAX_SECONDS" ]; then
+        echo "时长: 仅前 ${MAX_SECONDS} 秒（--max-seconds 截断）"
+    else
+        echo "时长: ${DURATION_MIN}分${DURATION_SEC}秒"
+    fi
     echo "转录时间: $(date '+%Y-%m-%d %H:%M')"
     if [ "$POLISH" = "1" ]; then
         echo "润色: Groq Llama 3.3 70B"
