@@ -34,6 +34,15 @@ agent-reach <channel> <action> [args]     # e.g. agent-reach bilibili search "ru
 agent-reach read <url>                    # picks the channel from the URL
 ```
 
+## Codex network permissions and DNS errors
+
+Before invoking an online backend through a Codex shell, check the session's network permissions. With `network_access: restricted`, sandboxed `agent-reach`, `curl`, and Python/Node requests may report `ENOTFOUND`, `Could not resolve host`, or `nodename nor servname provided, or not known`. These errors alone do not establish a system DNS or service failure.
+
+- When an online command requires access denied by the current sandbox, use the execution tool's formal authorization flow. For `exec_command`, request `sandbox_permissions: "require_escalated"` and explain the destination and user task. Do not change global permissions, pin domain IPs, or bypass the sandbox. Do not change system DNS or proxy configuration solely on the basis of resolution errors inside the sandbox.
+- After a DNS error, compare the same hostname lookup or read-only request in the default and authorized environments. Attribute the failure to the sandbox only if the authorized request succeeds; otherwise inspect system DNS, proxy, and service availability.
+- If authorization is denied, times out, or is unavailable, report that execution or verification did not occur and follow the tool's retry limits. Do not label a permission failure as an offline service or empty search, or bypass restrictions through another route.
+- Re-run the actual backend command and verify a valid response consistent with the request. Configuration, installed CLIs, and static Doctor `ok` results do not prove remote connectivity.
+
 ## Results and errors
 
 - `ok: true` → content in `items`; each has `title / url / author / published_at / text`, upstream data in `raw`.
