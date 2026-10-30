@@ -284,6 +284,27 @@ def run_action(
                     elapsed_ms=elapsed(),
                     attempts=attempts,
                 )
+        # Last resort for an added channel: every site backend failed with a
+        # transient error, so the public-web route is tried once. This keeps
+        # the public-first rule (site tools stay preferred) while fixing the
+        # case where a logged-in channel reports failure even though the
+        # public path works (e.g. the site tool returns HTML instead of
+        # JSON). Explicit --backend selection, final errors (bad input,
+        # login wall, rate limit, platform block, ...), and paused-only
+        # backends never fall back.
+        if (action.public_web and only_backend is None and errors
+                and not any(e.code in FINAL_CODES for e in errors)
+                and any(e.code in (UPSTREAM_BROKEN, TIMEOUT) for e in errors)
+                and clock.remaining() > 0):
+            public = public_web.attempt(channel, action, clean, timeout=clock.remaining())
+            if public is not None:
+                attempts.extend(public["meta"]["attempts"])
+                if public["ok"]:
+                    # Keep the site-backend failure in the trail, not just
+                    # the public-web rows, so the fallback is auditable.
+                    public["meta"]["attempts"] = attempts
+                    public["meta"]["elapsed_ms"] = elapsed()
+                    return public
     except ReachError as exc:
         errors.append(exc)
 
