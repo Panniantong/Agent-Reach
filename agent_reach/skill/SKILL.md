@@ -3,8 +3,9 @@ name: agent-reach
 description: >
   只读读取各平台内容：搜索、读帖、看评论、取字幕、查行情和职位。
   Use when 用户提到或贴出链接：小红书/xiaohongshu、B站/bilibili、Twitter/X、Reddit、
-  YouTube（字幕、转录）、GitHub、V2EX、雪球/股票行情、LinkedIn/Boss直聘 职位、
-  Instagram、Facebook、小宇宙播客；或说"帮我搜/看看/读一下这个链接"而自带网页搜索/读取不可用、失败或拿不到正文；
+  YouTube（字幕、转录）、GitHub、V2EX、LINUX DO/linux.do、NodeSeek、雪球/股票行情、LinkedIn/Boss直聘 职位、
+  Instagram、Facebook、小宇宙播客；或要看中文技术社区的热帖、讨论和口碑；
+  或说"帮我搜/看看/读一下这个链接"而自带网页搜索/读取不可用、失败或拿不到正文；
   或要安装、加上/去掉某个平台、登录/退出、看状态、更新、卸载 Agent Reach。
   不做：发帖、评论、点赞、私信等任何写操作；不替用户登录、不索要密码。
   公开内容优先用 Agent 自带工具，Reach 补缺口。
@@ -63,6 +64,20 @@ agent-reach read <链接>                   # 按链接自动选渠道
 - 小红书 read 只返回文字描述，不要声称看懂了图片或视频。
 - Boss 直聘搜索结果 `salary_encoded=true` 时绝不猜薪资数字；read 职位链接拿详情里的可读薪资。
 - 各平台公开能做什么、Reach 补什么，见 [能力边界](references/capabilities.md)：用户问"能查什么/查得全吗"或要判断结果完整度时读它。
+
+## 中文技术社区：V2EX / LINUX DO / NodeSeek 三家同查
+
+用户要看其中任意一家的热帖、某个话题的讨论，或问开发、网络、VPS、AI 工具等的口碑时，默认三家一起查，汇总时按来源分列；某家没查到就写明"无相关讨论"，不要静默省略。用户明确只要某一家时只查那一家。
+
+| 社区 | 热帖 | 按话题找帖 | 读全文 |
+|---|---|---|---|
+| V2EX | `agent-reach v2ex hot` | 自带搜索 `site:v2ex.com 关键词` | `agent-reach read <帖子链接>` |
+| LINUX DO | `https://linux.do/top.json?period=weekly`（页面 `/top?period=weekly`） | 自带搜索 `site:linux.do 关键词` | `https://linux.do/t/<id>.json` 或帖子页面 |
+| NodeSeek | 首页 `https://www.nodeseek.com/` 按最新回复排序，没有官方热门榜，按评论数挑并说明口径 | 自带搜索 `site:nodeseek.com 关键词` | 帖子页 `https://www.nodeseek.com/post-<id>-1` |
+
+- LINUX DO 和 NodeSeek 目前没有 Reach 渠道，用你自带的搜索、网页读取或浏览器工具。
+- 两站都在 Cloudflare 后面，匿名请求常返回 403。读不到正文时只交付搜索摘要并说明是摘要；遇到人机验证页按 `PLATFORM_BLOCKED` 处理：停下，不绕过。
+- LINUX DO 部分版块需要登录和信任等级，读不到时说明原因，不替用户登录。
 
 ## 渠道
 

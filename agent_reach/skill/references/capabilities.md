@@ -24,6 +24,8 @@ Read when the user asks what can be fetched or how complete a result is. Declare
 | LinkedIn | 搜公开职位、读公开 JD | jobs/read 先尝试公开网页；指定 opencli 才直接走站内；不保证所有职位可读 |
 | BOSS | 搜索索引中可能有职位摘要 | search/read 职位列表与 JD；不能根据编码薪资猜数字；详情后备能力依渠道声明 |
 | V2EX | 主题、正文及公开回复 | hot/node/read/user；返回范围以本次响应为准，不保证隐藏或缺失回复 |
+| LINUX DO | `site:linux.do` 搜索摘要；公开帖可经页面或 `/t/<id>.json` 读取 | 暂无 Reach 渠道，由 Agent 自带工具读取；Cloudflare 常拦匿名请求，部分版块需登录和信任等级 |
+| NodeSeek | `site:nodeseek.com` 搜索摘要；公开帖页面 | 暂无 Reach 渠道，由 Agent 自带工具读取；Cloudflare 常拦匿名请求，没有官方热门榜 |
 | 雪球 | 部分公开行情和索引信息 | quote/search/hot_posts/hot_stocks；行情与社区路径分别验收 |
 | Web | Agent 自带搜索/读取 | Reach web search/read 为匿名保底；摘要、页面壳和验证页不能当完整正文 |
 | 小宇宙 | 节目页标题、简介 | transcribe 整集转文字；需要用户提供 Groq Key（`agent-reach configure groq-key`） |
