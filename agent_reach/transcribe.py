@@ -13,6 +13,7 @@ Public entry point:
         out_dir=None,
         config=None,
         allow_provider_fallback=False,
+        timestamps=False,
     ) -> str
 
 Designed to be importable from channels (e.g. YouTubeChannel.transcribe).
@@ -21,6 +22,7 @@ Designed to be importable from channels (e.g. YouTubeChannel.transcribe).
 from __future__ import annotations
 
 import ipaddress
+import json
 import math
 import re
 import socket
@@ -244,8 +246,11 @@ def _assert_safe_public_url(url: str) -> None:
         raise TranscribeError("SSRF blocked: private/internal IP is not allowed")
 
 
-def download_audio(url: str, out_dir: Path) -> Path:
-    """Download audio with yt-dlp into out_dir; return the resulting file path."""
+def download_audio(url: str, out_dir: Path, cookies: Optional[str] = None) -> Path:
+    """Download audio with yt-dlp into out_dir; return the resulting file path.
+
+    `cookies` is a Netscape cookie file for sites that only serve logged-in viewers.
+    """
     _assert_safe_public_url(url)
     import sys
 
@@ -265,6 +270,7 @@ def download_audio(url: str, out_dir: Path) -> Path:
             str(MAX_SOURCE_BYTES),
             "-o",
             str(template),
+            *(["--cookies", cookies] if cookies else []),
             "--",
             url,
         ],
@@ -358,14 +364,41 @@ def _provider_key(provider: str, config: Config) -> Optional[str]:
     return val or None
 
 
+def _clock(seconds: float) -> str:
+    total = int(seconds)
+    h, rest = divmod(total, 3600)
+    m, s = divmod(rest, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def _timed_lines(payload: str, offset: float) -> str:
+    """`[m:ss] text` lines from a verbose_json response; `offset` is the chunk's start."""
+    try:
+        segments = json.loads(payload).get("segments") or []
+    except (ValueError, AttributeError):
+        raise TranscribeError("provider returned an unreadable timestamped transcript") from None
+    lines = []
+    for seg in segments:
+        text = str(seg.get("text") or "").strip()
+        start = seg.get("start")
+        if text and isinstance(start, (int, float)):
+            lines.append(f"[{_clock(offset + start)}] {text}")
+    return "\n".join(lines)
+
+
 def transcribe_chunk(
     chunk: Path,
     provider: str,
     *,
     config: Optional[Config] = None,
     timeout: int = 120,
+    timestamps: bool = False,
+    offset: float = 0,
 ) -> str:
-    """Transcribe one chunk via the named provider. Raises TranscribeError on failure."""
+    """Transcribe one chunk via the named provider. Raises TranscribeError on failure.
+
+    With `timestamps`, each line starts with `[m:ss]`, counted from `offset`.
+    """
     if provider not in PROVIDERS:
         raise TranscribeError(f"unknown provider: {provider}")
     cfg = config or Config()
@@ -383,7 +416,8 @@ def transcribe_chunk(
                 info["endpoint"],
                 headers={"Authorization": f"Bearer {key}"},
                 files={"file": (chunk.name, fh, "audio/m4a")},
-                data={"model": info["model"], "response_format": "text"},
+                data={"model": info["model"],
+                      "response_format": "verbose_json" if timestamps else "text"},
                 timeout=timeout,
             )
         except requests.RequestException as e:
@@ -391,7 +425,7 @@ def transcribe_chunk(
 
     if not resp.ok:
         raise TranscribeError(f"{provider}: HTTP {resp.status_code}: {resp.text[:300]}")
-    return resp.text
+    return _timed_lines(resp.text, offset) if timestamps else resp.text
 
 
 def _provider_order(provider: str) -> List[str]:
@@ -409,6 +443,8 @@ def transcribe(
     out_dir: Optional[Path] = None,
     config: Optional[Config] = None,
     allow_provider_fallback: bool = False,
+    cookies: Optional[str] = None,
+    timestamps: bool = False,
 ) -> str:
     """Transcribe a URL or local file path. Returns the joined transcript text.
 
@@ -417,6 +453,8 @@ def transcribe(
     `allow_provider_fallback=True` to permit sending failed chunks to the next
     configured provider; using the flag with an explicit provider is rejected.
     `out_dir` defaults to a fresh temp directory; intermediate files stay there.
+    `cookies` is passed to yt-dlp when `source` is a URL.
+    `timestamps` prefixes each line with `[m:ss]` from the start of the audio.
     """
     if allow_provider_fallback and provider != "auto":
         raise TranscribeError(
@@ -436,22 +474,23 @@ def transcribe(
         order = configured[:1]
 
     if out_dir:
-        return _transcribe_in_dir(source, order, cfg, Path(out_dir))
+        return _transcribe_in_dir(source, order, cfg, Path(out_dir), cookies, timestamps)
 
     from agent_reach.utils.paths import private_temporary_directory
 
     with private_temporary_directory(prefix="transcribe-") as tmp:
-        return _transcribe_in_dir(source, order, cfg, Path(tmp))
+        return _transcribe_in_dir(source, order, cfg, Path(tmp), cookies, timestamps)
 
 
-def _transcribe_in_dir(source: str, order: List[str], cfg: Config, work_dir: Path) -> str:
+def _transcribe_in_dir(source: str, order: List[str], cfg: Config, work_dir: Path,
+                       cookies: Optional[str] = None, timestamps: bool = False) -> str:
     work_dir.mkdir(parents=True, exist_ok=True)
 
     src_path = Path(source)
     if src_path.is_file():
         audio = src_path
     else:
-        audio = download_audio(source, work_dir)
+        audio = download_audio(source, work_dir, cookies)
 
     _require_size_at_most(audio, MAX_SOURCE_BYTES, "source")
     _require_duration_within_budget(audio)
@@ -480,13 +519,15 @@ def _transcribe_in_dir(source: str, order: List[str], cfg: Config, work_dir: Pat
         )
 
     pieces: List[str] = []
-    for chunk in chunks:
-        text = _transcribe_with_fallback(chunk, order, cfg)
+    for index, chunk in enumerate(chunks):
+        # chunk_audio cuts every CHUNK_SECONDS, so that is where each chunk starts.
+        text = _transcribe_with_fallback(chunk, order, cfg, timestamps, index * CHUNK_SECONDS)
         pieces.append(text.strip())
     return "\n".join(p for p in pieces if p)
 
 
-def _transcribe_with_fallback(chunk: Path, order: List[str], config: Config) -> str:
+def _transcribe_with_fallback(chunk: Path, order: List[str], config: Config,
+                              timestamps: bool = False, offset: float = 0) -> str:
     """Try each provider in order; return first success or raise the last error."""
     last_err: Optional[Exception] = None
     for p in order:
@@ -494,7 +535,7 @@ def _transcribe_with_fallback(chunk: Path, order: List[str], config: Config) -> 
             # Skip silently — caller already validated at least one is configured.
             continue
         try:
-            return transcribe_chunk(chunk, p, config=config)
+            return transcribe_chunk(chunk, p, config=config, timestamps=timestamps, offset=offset)
         except TranscribeError as e:
             last_err = e
             continue

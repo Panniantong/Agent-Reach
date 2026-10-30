@@ -152,7 +152,7 @@ def _parse_jina(url: str, body: str) -> dict:
 
 class WebChannel(Channel):
     name = "web"
-    description = "网页搜索与阅读（Agent 自带工具不可用时的保底）"
+    description = "Búsqueda y lectura web (respaldo cuando las herramientas del agente no sirven)"
 
     level = "default"
     actions = (
@@ -179,7 +179,7 @@ class WebChannel(Channel):
         return True  # Fallback — handles any URL
 
     def read(self, url: str, timeout: float = 30) -> str:
-        """通过 Jina Reader 读取网页，返回 Markdown 全文。"""
+        """Lee una página con Jina Reader y devuelve el texto completo en Markdown."""
         url = normalize_public_http_url(url)
         jina_url = f"https://r.jina.ai/{url}"
         req = urllib.request.Request(
@@ -194,8 +194,8 @@ class WebChannel(Channel):
             )
         if _is_antibot_page(body):
             raise RuntimeError(
-                "Jina Reader 返回了反爬验证页，未获取到目标内容；"
-                "请改用站点专用工具或浏览器读取"
+                "Jina Reader devolvió una página de verificación antibots y no obtuvo el contenido; "
+                "usa la herramienta específica del sitio o el navegador"
             )
         return body.decode("utf-8")
 

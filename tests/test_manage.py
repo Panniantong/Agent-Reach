@@ -568,25 +568,25 @@ def test_setup_adds_default_channels_and_survives_a_failing_install(env, monkeyp
     report = result['installation_report']
     assert report['markdown'] == (state.root() / 'installation-report.md').read_text(encoding='utf-8')
     assert report['path'] == str(state.root() / 'installation-report.md')
-    assert '安装失败：UPSTREAM_BROKEN' in report['markdown']
+    assert 'falló la instalación: UPSTREAM_BROKEN' in report['markdown']
 
 
 def test_setup_text_displays_compact_capability_table_and_keeps_json_mode(env, capsys, monkeypatch):
     from agent_reach.runtime import cli, onboarding
 
-    monkeypatch.setattr(onboarding, '_local_greeting', lambda: '早上好呀，想搜点什么？☀️')
+    monkeypatch.setattr(onboarding, '_local_greeting', lambda: '¡Buenos días! ¿Qué quieres buscar? ☀️')
 
     assert cli.main(['setup', '--text']) == 0
     text = capsys.readouterr().out
-    assert text.startswith('早上好呀，想搜点什么？☀️\n')
-    assert '| 平台 | 不登录可以查什么 | 需要登录后再试 |' in text
+    assert text.startswith('¡Buenos días! ¿Qué quieres buscar? ☀️\n')
+    assert '| Plataforma | Qué se puede consultar sin sesión | Qué necesita sesión |' in text
     assert text.count('|---|---|---|') == 1
-    assert '完整报告已保存：' in text
+    assert 'Informe completo guardado en: ' in text
     assert not text.startswith('{')
     assert cli.main(['setup']) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload['ok']
-    assert payload['result']['installation_report']['markdown'] == text.split('\n完整报告已保存：')[0]
+    assert payload['result']['installation_report']['markdown'] == text.split('\nInforme completo guardado en: ')[0]
 
 
 def test_setup_receipt_never_overwrites_a_linked_foreign_file(env, tmp_path):
@@ -603,7 +603,7 @@ def test_setup_receipt_never_overwrites_a_linked_foreign_file(env, tmp_path):
     assert foreign.read_text() == 'keep this'
     assert result['installation_report']['path'] is None
     assert result['installation_report']['write_error']
-    assert '| 平台 | 不登录可以查什么 | 需要登录后再试 |' in result['installation_report']['markdown']
+    assert '| Plataforma | Qué se puede consultar sin sesión | Qué necesita sesión |' in result['installation_report']['markdown']
 
 
 # ── uninstall ──
@@ -636,7 +636,7 @@ def test_uninstall_closes_the_browser_instead_of_refusing(env):
 
 
 def test_skill_lists_every_channel_and_has_no_placeholders(env):
-    for lang in ("zh", "en"):
+    for lang in ("es", "zh", "en"):
         text = manage.render_skill(lang)
         assert "{{" not in text
         for ch in env["chans"]:

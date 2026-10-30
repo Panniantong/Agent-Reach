@@ -263,7 +263,7 @@ def test_read_rejects_high_confidence_antibot_pages(body):
     with patch(
         "urllib.request.urlopen", return_value=_resp(body.encode("utf-8"))
     ) as mock_open:
-        with pytest.raises(RuntimeError, match="反爬验证页"):
+        with pytest.raises(RuntimeError, match="verificación antibots"):
             channel.read("https://example.com/protected")
 
     mock_open.assert_called_once()

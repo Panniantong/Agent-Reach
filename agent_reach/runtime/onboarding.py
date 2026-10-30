@@ -11,104 +11,103 @@ from .result import BAD_INPUT, ReachError
 # These describe public routes an agent can try, not authenticated Reach readiness.
 # A successful sample depends on the tool, network exit, content and platform response.
 _PUBLIC_ACCESS = {
-    'web': '先用 Agent 已有网页搜索和读取；只为剩余缺口调用 Reach。',
-    'github': '公开仓库、README、Issue/PR 及公开评论可先用网页或公开接口。',
-    'youtube': '公开搜索、简介可先读；原生工具的部分样本可取评论、字幕和时间戳。',
-    'bilibili': '公开搜索、简介、统计可先读；部分公开接口可取评论及回复关系。',
-    'xiaoyuzhou': '播客转录需要 Groq Key；安装不要求登录。',
-    'v2ex': '公开主题正文和部分回复可先读；完整性、分页需要单独核对。',
-    'reddit': '公开搜索、正文和部分评论可先读；部分公开 JSON 样本可含评论及 parent_id。',
-    'twitter': '公开搜索摘要、部分单帖全文可先尝试；公开嵌入不提供评论流。',
-    'xiaohongshu': '公开发现页可能提供笔记 ID 和作者；不据此认定正文、评论可读。',
-    'instagram': '公开搜索或主页信息可先尝试；HTML 可能只有应用外壳，Caption 和评论未获统一验证。',
-    'facebook': '公开搜索摘要可先尝试；帖子正文和评论取决于页面与访问路径。',
-    'linkedin': '公开职位可先搜索、读详情；2026-10-21 已取得免登录职位样本，不保证所有职位可读。',
-    'boss': '公开职位索引和页面可先尝试；本轮未做匿名粒度验收。',
-    'xueqiu': '公开股票行情和名称搜索可先尝试；社区内容另按所选路径判断。',
+    'web': 'Usa primero la búsqueda y lectura web propias del agente; Reach solo cubre lo que falte.',
+    'github': 'Repos públicos, README, issues/PR y comentarios públicos se pueden leer primero por la web o la API pública.',
+    'youtube': 'Búsqueda y descripción públicas se pueden leer primero; la herramienta nativa puede obtener a veces comentarios, subtítulos y marcas de tiempo.',
+    'video': 'Vídeos públicos de TikTok e Instagram Reels: descripción, autor y estadísticas sin sesión; Instagram a veces exige iniciar sesión y entonces no se puede.',
+    'bilibili': 'Búsqueda, descripción y estadísticas públicas se pueden leer primero; algunas interfaces públicas dan comentarios y respuestas.',
+    'xiaoyuzhou': 'La transcripción de pódcasts necesita una clave de Groq; instalar no requiere iniciar sesión.',
+    'v2ex': 'El cuerpo de los temas públicos y parte de las respuestas se pueden leer primero; la integridad y la paginación hay que comprobarlas aparte.',
+    'reddit': 'Búsqueda, cuerpo y parte de los comentarios públicos se pueden leer primero; algunos JSON públicos incluyen comentarios y parent_id.',
+    'twitter': 'Se pueden intentar resúmenes de búsqueda públicos y el texto de algunas publicaciones; los embebidos públicos no incluyen respuestas.',
+    'xiaohongshu': 'La página pública de descubrimiento puede dar ID de notas y autores; eso no implica poder leer el cuerpo ni los comentarios.',
+    'instagram': 'Se pueden intentar búsquedas públicas o datos del perfil; el HTML puede ser solo la carcasa de la app y los textos y comentarios no están verificados.',
+    'facebook': 'Se pueden intentar resúmenes de búsqueda públicos; el cuerpo y los comentarios dependen de la página y de la ruta de acceso.',
+    'linkedin': 'Se pueden buscar empleos públicos y leer su detalle; hay muestras sin sesión del 2026-10-21, pero no se garantiza poder leer todos.',
+    'boss': 'Se pueden intentar el índice y las páginas públicas de empleos; no se ha probado el acceso anónimo en detalle.',
+    'xueqiu': 'Se pueden intentar cotizaciones públicas y búsqueda por nombre; el contenido de la comunidad depende de la ruta elegida.',
 }
 
 _CAPABILITY_LIMITS = {
-    'youtube': ['read 返回元信息和简介；没有独立 comments 动作。',
-                '字幕依赖可用轨道；转录还需配置服务及额度，登录不保证有字幕。'],
-    'bilibili': ['read 返回元信息和简介；没有独立 comments 动作。',
-                 'subtitle 当前读取首P已有字幕；可能要求登录，不代表整套多P视频。'],
-    'reddit': ['read 仅承诺其返回的帖子和评论；不保证完整评论树，不提供发评论动作。'],
-    'twitter': ['thread 仅覆盖实际返回的回复；不保证完整评论流，不提供发帖动作。'],
-    'xiaohongshu': ['只报告实际读取的正文、已加载评论和回复，不承诺完整导出。'],
-    'instagram': ['search 搜索用户；没有任意帖子 read 或独立 comments 动作。'],
-    'facebook': ['当前仅声明 search/profile，不承诺独立帖文读取或评论导出。'],
-    'linkedin': ['当前仅声明职位搜索和 JD 读取，不承诺联系人或动态抓取。'],
-    'boss': ['当前仅声明职位搜索和 JD 读取；登录不保证平台始终允许访问。'],
-    'v2ex': ['回复是否完整须核对分页与实际返回数量。'],
+    'video': ['Solo publicaciones públicas; no hay búsqueda ni comentarios. Instagram puede responder "login required" y este canal no inicia sesión.'],
+    'youtube': ['read devuelve metadatos y descripción; no hay una acción de comentarios.',
+                'Los subtítulos dependen de las pistas disponibles; transcribir requiere un servicio y cuota configurados, y la sesión no garantiza subtítulos.'],
+    'bilibili': ['read devuelve metadatos y descripción; no hay una acción de comentarios.',
+                 'subtitle lee los subtítulos existentes de la primera parte; puede requerir sesión y no cubre vídeos de varias partes.'],
+    'reddit': ['read solo garantiza las publicaciones y comentarios que devuelve; no garantiza el árbol completo ni permite comentar.'],
+    'twitter': ['thread solo cubre las respuestas devueltas; no garantiza el hilo completo ni permite publicar.'],
+    'xiaohongshu': ['Solo informa del cuerpo, los comentarios y las respuestas realmente cargados; no promete una exportación completa.'],
+    'instagram': ['search busca usuarios; no hay read de publicaciones sueltas ni acción de comentarios.'],
+    'facebook': ['Solo declara search/profile; no promete leer publicaciones sueltas ni exportar comentarios.'],
+    'linkedin': ['Solo declara búsqueda de empleos y lectura de ofertas; no promete contactos ni publicaciones.'],
+    'boss': ['Solo declara búsqueda de empleos y lectura de ofertas; la sesión no garantiza que la plataforma permita siempre el acceso.'],
+    'v2ex': ['Si las respuestas están completas hay que comprobarlo con la paginación y el número devuelto.'],
 }
 
 
 # Public web options and authenticated Reach actions; detailed limits stay in capability_summary.
 _QUICK_ACCESS = {
-    'xiaoyuzhou': ('🔑 转录需 Key', '—'),
-    'github': ('✅ 找项目、读文档、看讨论、看评论', '—'),
-    'youtube': ('✅ 找视频、读简介、读字幕', '—'),
-    'bilibili': ('✅ 找视频、读简介', '❌ 读字幕'),
-    'v2ex': ('✅ 读帖子、看回复', '—'),
-    'web': ('✅ 搜资料、读网页', '—'),
-    'reddit': ('✅ 搜帖子、读正文、看评论', '—'),
-    'twitter': ('✅ 搜摘要、试读原文', '❌ 搜推文、看动态、看回复'),
-    'xiaohongshu': ('✅ 搜摘要、找链接', '❌ 站内搜、读正文、看评论'),
-    'instagram': ('✅ 搜简介', '❌ 找用户、看主页、看帖子'),
-    'facebook': ('✅ 搜摘要', '❌ 站内搜、看主页'),
-    'linkedin': ('✅ 找职位、读公开详情', '❌ 站内搜'),
-    'boss': ('✅ 搜标题、找链接', '❌ 站内搜、读详情'),
-    'xueqiu': ('✅ 找股票、查行情', '❌ 看热帖、看热股'),
+    'xiaoyuzhou': ('🔑 Transcribir necesita clave', '—'),
+    'github': ('✅ Buscar proyectos, leer documentación, discusiones y comentarios', '—'),
+    'youtube': ('✅ Buscar vídeos y Shorts, leer descripción y subtítulos', '—'),
+    'video': ('✅ Leer TikTok y Reels, subtítulos y transcripción (con clave)', '—'),
+    'bilibili': ('✅ Buscar vídeos, leer descripción', '❌ Leer subtítulos'),
+    'v2ex': ('✅ Leer temas y respuestas', '—'),
+    'web': ('✅ Buscar información, leer páginas', '—'),
+    'reddit': ('✅ Buscar publicaciones, leer cuerpo y comentarios', '—'),
+    'twitter': ('✅ Resúmenes de búsqueda, intentar leer publicaciones', '❌ Buscar tuits, ver actividad y respuestas'),
+    'xiaohongshu': ('✅ Resúmenes de búsqueda, encontrar enlaces', '❌ Buscar en el sitio, leer cuerpo y comentarios'),
+    'instagram': ('✅ Buscar resúmenes', '❌ Buscar usuarios, ver perfiles y publicaciones'),
+    'facebook': ('✅ Resúmenes de búsqueda', '❌ Buscar en el sitio, ver perfiles'),
+    'linkedin': ('✅ Encontrar empleos, leer ofertas públicas', '❌ Buscar dentro del sitio'),
+    'boss': ('✅ Buscar títulos, encontrar enlaces', '❌ Buscar en el sitio, leer detalle'),
+    'xueqiu': ('✅ Buscar acciones, ver cotizaciones', '❌ Ver publicaciones y acciones populares'),
 }
 
 _DISPLAY_NAMES = {
-    'xiaoyuzhou': '小宇宙',
-    'github': 'GitHub', 'youtube': 'YouTube', 'bilibili': 'B站', 'v2ex': 'V2EX',
-    'web': '网页', 'reddit': 'Reddit', 'twitter': 'X / Twitter', 'facebook': 'Facebook',
-    'instagram': 'Instagram', 'xiaohongshu': '小红书', 'linkedin': 'LinkedIn',
-    'boss': 'BOSS直聘', 'xueqiu': '雪球',
+    'xiaoyuzhou': 'Xiaoyuzhou',
+    'github': 'GitHub', 'youtube': 'YouTube', 'video': 'TikTok / Reels', 'bilibili': 'Bilibili', 'v2ex': 'V2EX',
+    'web': 'Web', 'reddit': 'Reddit', 'twitter': 'X / Twitter', 'facebook': 'Facebook',
+    'instagram': 'Instagram', 'xiaohongshu': 'Xiaohongshu', 'linkedin': 'LinkedIn',
+    'boss': 'BOSS Zhipin', 'xueqiu': 'Xueqiu',
 }
 
 _STATUS_LABELS = {
-    'not_added': '未接入，可按需添加', 'needs_setup': '待配置', 'unverified': '已接入，待实测',
-    'ready': '已有有效验收', 'search_ready': '仅搜索已有验收',
-    'needs_login': '所测动作要求登录', 'cooldown': '暂缓访问',
-    'needs_user_action': '等待人工验证', 'broken': '当前路径故障',
+    'not_added': 'no añadido, se puede añadir', 'needs_setup': 'pendiente de configurar', 'unverified': 'añadido, sin probar',
+    'ready': 'probado y funcionando', 'search_ready': 'solo la búsqueda probada',
+    'needs_login': 'la acción probada requiere sesión', 'cooldown': 'en pausa',
+    'needs_user_action': 'esperando verificación manual', 'broken': 'la ruta actual falla',
 }
 
 
 def _local_greeting():
     """Use the installing computer's clock and timezone, without a network lookup."""
     hour = datetime.now().hour
-    if 5 <= hour < 11:
-        return '早上好呀，想搜点什么？☀️'
-    if 11 <= hour < 14:
-        return '中午好，想搜点什么？'
-    if 14 <= hour < 18:
-        return '下午好，想搜点什么？'
-    if 18 <= hour < 22:
-        return '晚上好，想搜点什么？'
-    return '夜深了，想搜点什么？🌙'
+    if 5 <= hour < 12:
+        return '¡Buenos días! ¿Qué quieres buscar? ☀️'
+    if 12 <= hour < 20:
+        return '¡Buenas tardes! ¿Qué quieres buscar?'
+    return '¡Buenas noches! ¿Qué quieres buscar? 🌙'
 
 def _upgrade_lines(result):
     """Only for users coming from 1.5: what was kept, what changed, what is left to do."""
     migration = result.get('migration')
     if not migration:
         return []
-    lines = ['**这次是从旧版本（1.5）升级上来的：**', '',
-             '- 你的密钥和设置都保留了。',
-             '- RSS 订阅和 Exa 全网搜索不再单独提供，搜资料、读网页统一用"网页"。',
-             '- 推特、小红书这类要登录的平台，现在用 Agent Reach 自己的专用浏览器；第一次用时会先尝试复用你 Chrome 里的登录。',
-             '- 你以前另外装的命令行工具（比如 twitter-cli、bili）原样保留，没有删。']
+    lines = ['**Esta es una actualización desde la versión antigua (1.5):**', '',
+             '- Tus claves y ajustes se han conservado.',
+             '- Las suscripciones RSS y la búsqueda Exa ya no van aparte: para buscar y leer páginas se usa "Web".',
+             '- Las plataformas que piden sesión, como Twitter o Xiaohongshu, usan ahora el navegador propio de Agent Reach; la primera vez intenta reutilizar la sesión de tu Chrome.',
+             '- Las herramientas de terminal que instalaste aparte (como twitter-cli o bili) se han dejado tal cual.']
     suggested = [_DISPLAY_NAMES.get(n, n) for n in migration.get('suggested_channels') or []]
     if suggested:
-        lines.append('- 你以前用过' + '、'.join(suggested) + '，想继续用直接跟我说"加上 XX"。')
+        lines.append('- Antes usabas ' + ', '.join(suggested) + '; si quieres seguir, dime "añade XX".')
     old = result.get('old_copies') or {}
     if old.get('removed'):
-        lines.append('- 旧版程序已经删掉，以后不会和新版冲突。')
+        lines.append('- La versión antigua se ha borrado y ya no chocará con la nueva.')
     for item in old.get('failed') or []:
         from .legacy import manual_command
-        lines.append(f"- 旧版程序没删成，请运行：`{manual_command(item)}`")
+        lines.append(f"- No se pudo borrar la versión antigua; ejecuta: `{manual_command(item)}`")
     return lines + ['']
 
 
@@ -124,11 +123,11 @@ def installation_report(result):
     completed = all(row['ok'] for row in installs.values())
     lines = [
         _local_greeting(), '',
-        f"**Agent Reach {result['version']} {'安装完成' if completed else '安装还差一步'}。** "
-        f'默认功能：{installed}/{len(installs)} 项准备成功。', '',
+        f"**Agent Reach {result['version']} {'instalado' if completed else 'a falta de un paso para terminar la instalación'}.** "
+        f'Funciones por defecto: {installed}/{len(installs)} listas.', '',
         *_upgrade_lines(result),
-        '✅ 不用登录；❌ 登录后再试；🔑 需 Key；— 不用额外登录。', '',
-        '| 平台 | 不登录可以查什么 | 需要登录后再试 |', '|---|---|---|',
+        '✅ sin sesión; ❌ con sesión; 🔑 necesita clave; — no necesita sesión extra.', '',
+        '| Plataforma | Qué se puede consultar sin sesión | Qué necesita sesión |', '|---|---|---|',
     ]
     for entry in sorted(entries, key=lambda item: item['level'] != 'default'):
         name = entry['channel']
@@ -136,22 +135,22 @@ def installation_report(result):
         item = installs.get(name)
         if entry['level'] == 'default':
             if item and not item['ok']:
-                label += '（安装失败：' + item.get('error', {}).get('code', 'UNKNOWN') + '）'
+                label += ' (falló la instalación: ' + item.get('error', {}).get('code', 'UNKNOWN') + ')'
             elif not item:
-                label += '（保留用户移除）'
+                label += ' (quitado por el usuario)'
         elif entry['reach_status'] in {'needs_setup', 'needs_login', 'cooldown', 'needs_user_action', 'broken'}:
-            label += '（' + _STATUS_LABELS[entry['reach_status']] + '）'
+            label += ' (' + _STATUS_LABELS[entry['reach_status']] + ')'
         public, login = _QUICK_ACCESS.get(name, (entry['public_access'], '—'))
         lines.append('| ' + ' | '.join(cell(value) for value in (label, public, login)) + ' |')
     verified = [entry for entry in entries if entry['verified_actions']]
     if verified:
-        names = '；'.join(_DISPLAY_NAMES.get(entry['channel'], entry['channel']) + '：' +
-                         '/'.join(entry['verified_actions']) for entry in verified)
-        lines += ['', '已测通过：' + names + '。其余还没逐项联网测试。']
+        names = '; '.join(_DISPLAY_NAMES.get(entry['channel'], entry['channel']) + ': ' +
+                          '/'.join(entry['verified_actions']) for entry in verified)
+        lines += ['', 'Probado y funcionando: ' + names + '. El resto aún no se ha probado uno a uno.']
     else:
-        lines += ['', '还没逐项联网测试。']
-    lines += ['摘要、标题和链接先从搜索引擎找；评论以已读内容为准，字幕需视频自带。', '',
-              '**想查什么，直接说。** 会先尝试复用已有登录；确实需要你登录时，再打开窗口。']
+        lines += ['', 'Aún no se ha probado cada plataforma con conexión.']
+    lines += ['Resúmenes, títulos y enlaces se buscan primero en el buscador; los comentarios son los que se han leído y los subtítulos dependen del vídeo.', '',
+              '**Dime qué quieres consultar.** Primero intentará reutilizar las sesiones existentes; solo si de verdad hace falta que inicies sesión, abrirá una ventana.']
     return '\n'.join(lines) + '\n'
 
 
@@ -176,23 +175,23 @@ def capability_summary(channels, statuses):
             'reach_status': current.get('status', 'unverified'),
             'verified_actions': current.get('verified_actions', []),
             'actions': [{'action': action.name, 'detail': action.help} for action in ch.actions],
-            'public_access': _PUBLIC_ACCESS.get(ch.name, '先尝试 Agent 已有公开搜索和读取。'),
+            'public_access': _PUBLIC_ACCESS.get(ch.name, 'Prueba primero la búsqueda y lectura públicas del agente.'),
             'authentication': {
                 'when': 'only_if_required',
                 'may_enable_actions': [name for name in auth_actions if name in names],
-                'note': '剩余任务的选定路径实际要求认证时，先复用已授权会话，再请用户登录；登录后仍需验证动作。',
+                'note': 'Si la ruta elegida para lo que falta exige autenticación, reutiliza primero una sesión autorizada y después pide al usuario que inicie sesión; tras iniciarla hay que volver a probar la acción.',
             },
             'limits': _CAPABILITY_LIMITS.get(ch.name, []),
         })
-    message = ['先使用 Agent 已有公开搜索和读取；Reach 按需补充能力，安装不要求逐个平台登录。']
+    message = ['Usa primero la búsqueda y lectura públicas del agente; Reach añade capacidades cuando hacen falta y la instalación no exige iniciar sesión en cada plataforma.']
     for entry in entries:
         actions = '/'.join(action['action'] for action in entry['actions'])
         status_label = _STATUS_LABELS.get(entry['reach_status'], entry['reach_status'])
         limits = ' '.join(entry['limits'])
-        message.append(f"{entry['channel']}：{entry['public_access']} Reach {actions}（{status_label}）。{limits}")
+        message.append(f"{entry['channel']}: {entry['public_access']} Reach {actions} ({status_label}). {limits}")
     return {
         'policy': 'public_first; login_only_for_remaining_task_when_required',
-        'evidence_note': '公开路径说明来自样本与访问条件，不能代替本机 Reach 验收；网络、403、超时或验证码均不能单独证明需要登录。',
+        'evidence_note': 'Las rutas públicas se describen a partir de muestras y condiciones de acceso; no sustituyen a una prueba de Reach en este equipo. Un fallo de red, un 403, un tiempo de espera o un captcha no demuestran por sí solos que haga falta iniciar sesión.',
         'channels': entries,
         'message': '\n'.join(message),
     }

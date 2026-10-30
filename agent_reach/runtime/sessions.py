@@ -48,7 +48,7 @@ def clear_session(tool: str) -> bool:
     from . import state
     if not state.owned_path(root) or not root.exists():
         return False
-    ensure_no_symlink_path(root, "登录目录")
+    ensure_no_symlink_path(root, "directorio de sesiones")
     shutil.rmtree(root)
     return True
 

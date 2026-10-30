@@ -26,7 +26,7 @@ def _reddit(args, timeout: float) -> list:
 
 class RedditChannel(Channel):
     name = "reddit"
-    description = "Reddit 帖子和评论"
+    description = "Publicaciones y comentarios de Reddit"
 
     level = "optional"
     login_url = "https://www.reddit.com/login/"

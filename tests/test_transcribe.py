@@ -534,7 +534,7 @@ class TestOrchestrator:
         fake_config.set("groq_api_key", "gsk_test")
         created_work_dirs = []
 
-        def fake_download(source, out_dir):
+        def fake_download(source, out_dir, cookies=None):
             from agent_reach.runtime import state
             assert Path(out_dir).parent == state.root()
             assert state.owned_path(Path(out_dir))
@@ -572,7 +572,7 @@ class TestOrchestrator:
         fake_config.set("groq_api_key", "gsk_test")
         work = tmp_path / "caller-owned"
 
-        def fake_download(source, out_dir):
+        def fake_download(source, out_dir, cookies=None):
             audio = Path(out_dir) / "source.m4a"
             audio.write_bytes(b"audio")
             return audio
@@ -849,3 +849,45 @@ class TestSubprocessDecoding:
             tr._probe_audio_duration(tmp_path / "audio.m4a")
 
 
+
+
+# --- timestamps --------------------------------------------------------- #
+
+
+class TestTimestamps:
+    def test_chunk_asks_for_segments_and_offsets_them(self, monkeypatch, fake_config, chunk_file):
+        fake_config.set("groq_api_key", "gsk_test")
+        captured = {}
+        payload = '{"segments": [{"start": 1.2, "text": " Hola "}, {"start": 65, "text": "mira esto"}, {"start": 70, "text": " "}]}'
+
+        def fake_post(url, headers=None, files=None, data=None, timeout=None):
+            captured["format"] = data["response_format"]
+            return FakeResponse(200, payload)
+
+        monkeypatch.setattr(tr.requests, "post", fake_post)
+        text = tr.transcribe_chunk(chunk_file, "groq", config=fake_config, timestamps=True, offset=600)
+        assert captured["format"] == "verbose_json"
+        assert text == "[10:01] Hola\n[11:05] mira esto"
+
+    def test_unreadable_segments_fail_clearly(self, monkeypatch, fake_config, chunk_file):
+        fake_config.set("groq_api_key", "gsk_test")
+        monkeypatch.setattr(tr.requests, "post", lambda *a, **k: FakeResponse(200, "plain text"))
+        with pytest.raises(tr.TranscribeError, match="timestamped"):
+            tr.transcribe_chunk(chunk_file, "groq", config=fake_config, timestamps=True)
+
+    def test_each_chunk_counts_from_where_it_starts(self, monkeypatch, fake_config, tmp_path, chunk_file,
+                                                    bounded_audio_duration):
+        fake_config.set("groq_api_key", "gsk_test")
+        big = tmp_path / "compressed.m4a"
+        big.write_bytes(b"x")
+        monkeypatch.setattr(tr, "compress_audio", lambda *_a: big)
+        monkeypatch.setattr(tr, "SIZE_LIMIT_BYTES", 0)
+        parts = [tmp_path / "chunk_000.m4a", tmp_path / "chunk_001.m4a"]
+        for p in parts:
+            p.write_bytes(b"x")
+        monkeypatch.setattr(tr, "chunk_audio", lambda *_a: parts)
+        monkeypatch.setattr(tr, "_require_size_at_most", lambda *_a: 1)
+        monkeypatch.setattr(tr.requests, "post",
+                            lambda *a, **k: FakeResponse(200, '{"segments": [{"start": 2, "text": "x"}]}'))
+        text = tr.transcribe(str(chunk_file), out_dir=tmp_path / "w", config=fake_config, timestamps=True)
+        assert text == "[0:02] x\n[10:02] x"

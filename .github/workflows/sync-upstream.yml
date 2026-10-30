@@ -1,0 +1,108 @@
+name: sync-upstream
+
+# Fork only: merges Panniantong/Agent-Reach main into this fork's main every week.
+# A clean merge whose tests pass is pushed straight to main. A conflict (usually a
+# string upstream changed that this fork translated), failing tests or a push the
+# token may not make (upstream changed a workflow file) opens an issue instead
+# and leaves main untouched.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository != 'Panniantong/Agent-Reach'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      UPSTREAM: https://github.com/Panniantong/Agent-Reach.git
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch upstream
+        id: fetch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "$UPSTREAM"
+          git fetch --no-tags upstream main
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Ya al día con el original."
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+            git log --oneline HEAD..upstream/main | tee new-commits.txt
+          fi
+
+      - name: Merge upstream
+        id: merge
+        if: steps.fetch.outputs.needed == 'true'
+        run: |
+          if git merge --no-edit upstream/main; then
+            echo "result=clean" >> "$GITHUB_OUTPUT"
+          else
+            git diff --name-only --diff-filter=U | tee conflicts.txt
+            git merge --abort
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Test merged code
+        id: test
+        if: steps.merge.outputs.result == 'clean'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -c constraints.txt -e ".[dev]"
+          pytest -q 2>&1 | tail -40 | tee test-output.txt
+          exit "${PIPESTATUS[0]}"
+
+      - name: Push to main
+        id: push
+        if: steps.merge.outputs.result == 'clean' && steps.test.outcome == 'success'
+        run: git push origin HEAD:main 2>&1 | tee push-output.txt; exit "${PIPESTATUS[0]}"
+
+      - name: Open an issue when manual action is needed
+        if: >-
+          always() && steps.fetch.outputs.needed == 'true' &&
+          (steps.merge.outputs.result == 'conflict' || steps.test.outcome == 'failure' || steps.push.outcome == 'failure')
+        run: |
+          title="Sincronizar con el original requiere revisión manual"
+          {
+            if [ "${{ steps.merge.outputs.result }}" = "conflict" ]; then
+              echo "La fusión con \`Panniantong/Agent-Reach\` tiene conflictos en:"
+              echo; sed 's/^/- `/; s/$/`/' conflicts.txt
+              echo; echo "Suelen ser textos traducidos: conserva el español y aplica el cambio de lógica del original."
+            elif [ "${{ steps.test.outcome }}" = "failure" ]; then
+              echo "La fusión es limpia pero fallan los tests:"
+              echo; echo '```'; cat test-output.txt; echo '```'
+            else
+              echo "La fusión es limpia y los tests pasan, pero no se pudo subir (probablemente el original cambió un workflow, y el token de Actions no puede modificarlos):"
+              echo; echo '```'; cat push-output.txt; echo '```'
+            fi
+            echo; echo "Commits nuevos del original:"; echo; echo '```'; cat new-commits.txt; echo '```'
+            echo; echo "Para resolverlo en local:"
+            echo; echo '```bash'; echo "git pull upstream main"; echo "git push origin main"; echo '```'
+            echo; echo "Ejecución: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } > body.md
+          existing=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file body.md
+          else
+            gh issue create --title "$title" --body-file body.md
+          fi
