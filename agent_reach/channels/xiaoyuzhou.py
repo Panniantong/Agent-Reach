@@ -37,7 +37,7 @@ class XiaoyuzhouChannel(Channel):
     actions = (
         Action(
             "transcribe",
-            "Full transcript of a podcast episode (uses Groq Whisper quota)",
+            "Full transcript of a podcast episode (uses Deepgram / Groq quota)",
             (
                 Param("target", "episode link"),
                 Param("max-seconds", "only process the first N seconds; the download "

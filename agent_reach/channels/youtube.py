@@ -126,9 +126,14 @@ class YouTubeChannel(Channel):
         ),
         Action(
             "transcribe",
-            "Speech-to-text of a video's audio (uses Groq/OpenAI Whisper quota)",
-            (Param("target", "video link or id"),),
-            (("whisper", "_whisper_transcribe"),),
+            "Speech-to-text of a video's audio (uses Deepgram / Groq / OpenAI quota)",
+            (
+                Param("target", "video link or id"),
+                Param("lang", "force a language (e.g. zh, en); default auto-detects",
+                      required=False, default=None),
+            ),
+            (("deepgram", "_deepgram_transcribe"), ("whisper", "_whisper_transcribe")),
+            live_test={"target": "https://www.youtube.com/watch?v=aanqEqQwjNU"},
             timeout=1800,
         ),
     )
@@ -204,18 +209,35 @@ class YouTubeChannel(Channel):
         code = best.rsplit(".", 2)[-2] if best.count(".") >= 2 else None
         return [make_item(title=title, url=url, text=text, raw={"lang": code})]
 
-    def _whisper_transcribe(self, *, target: str, timeout: float) -> list:
-        from agent_reach.transcribe import NoProviderConfigured, TranscribeError
+    def _deepgram_transcribe(self, *, target: str, timeout: float, **kwargs) -> list:
+        """Deepgram 优先；当前可用且不需要 Groq Key。"""
+        return self._run_transcribe(target, provider="deepgram", lang=kwargs.get("lang"))
+
+    def _whisper_transcribe(self, *, target: str, timeout: float, **kwargs) -> list:
+        """兜底：任何已配置的 provider（auto 顺序）。"""
+        return self._run_transcribe(target, provider="auto", lang=kwargs.get("lang"))
+
+    def _run_transcribe(self, target: str, *, provider: str, lang=None) -> list:
+        from agent_reach.transcribe import (
+            NoProviderConfigured,
+            TranscribeError,
+            _set_language_override,
+        )
         from agent_reach.transcribe import transcribe as _transcribe
 
         url = _video_url(target)
+        token = _set_language_override(lang) if lang else None
         try:
-            text = _transcribe(url)
+            text = _transcribe(url, provider=provider)
         except NoProviderConfigured:
             raise ReachError(
-                "NEED_SETUP", "no Whisper API key configured",
-                hint="Ask the user for a free key from https://console.groq.com, then run `agent-reach configure groq-key`.",
+                "NEED_SETUP", "no speech-to-text key configured",
+                hint="Run `agent-reach configure deepgram-key` (recommended) "
+                     "or `agent-reach configure groq-key`.",
             ) from None
         except TranscribeError as exc:
             raise ReachError("UPSTREAM_BROKEN", str(exc)[:300]) from None
+        finally:
+            if token is not None:
+                _set_language_override(None)
         return [make_item(url=url, text=text)]

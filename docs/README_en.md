@@ -105,7 +105,7 @@ This table reflects the current release.
 | Channel | Level | What it does | Needs |
 |---|---|---|---|
 | github | default | search repos, read a repo/README, read issues and PRs with comments | nothing |
-| youtube | default | video info, search, subtitles, speech-to-text | nothing; speech-to-text needs a Groq or OpenAI key |
+| youtube | default | video info, search, subtitles, speech-to-text | nothing; speech-to-text needs a Deepgram, Groq, or OpenAI key |
 | web | default | web search, page reading (fallback) | nothing |
 | v2ex | default | hot topics, nodes, topics with replies, users | nothing |
 | bilibili | default | search, video info, trending, subtitles | nothing; subtitles need a login (QR scan) |

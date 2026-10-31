@@ -107,7 +107,7 @@ agent-reach read https://www.v2ex.com/t/123   # 按链接自动选渠道
 | bilibili | 默认 | 搜索、视频信息、热门、字幕 | 无；字幕需要登录（扫码） |
 | v2ex | 默认 | 热门、节点、帖子和回复、用户 | 无 |
 | github | 默认 | 搜仓库、读仓库/README、读 issue 和 PR（含评论） | 无 |
-| youtube | 默认 | 视频信息、搜索、字幕、语音转文字 | 无；转文字需要 Groq 或 OpenAI Key |
+| youtube | 默认 | 视频信息、搜索、字幕、语音转文字 | 无；转文字需要 Deepgram、Groq 或 OpenAI Key |
 | web | 默认 | 网页搜索、网页阅读（保底） | 无 |
 | xiaohongshu | 可选 | 搜笔记、读正文、看评论 | 登录 |
 | xueqiu | 可选 | 实时行情、搜股票、热帖、热股 | 行情不用登录；热帖、热股要登录 |
