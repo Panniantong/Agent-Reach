@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """为 --max-seconds 补充的单元测试"""
-import os, subprocess, sys
+import os
+import subprocess
+from pathlib import Path
 
 import pytest
+
 from agent_reach.channels.xiaoyuzhou import XiaoyuzhouChannel
 from agent_reach.runtime.result import ReachError
-
-from pathlib import Path
 
 SCRIPT = str(Path(__file__).resolve().parents[1] / "agent_reach/scripts/transcribe_xiaoyuzhou.sh")
 

@@ -5,7 +5,12 @@ import os
 
 from agent_reach.config import Config
 from agent_reach.runtime.result import (
-    BAD_INPUT, NEED_SETUP, NOT_FOUND, UPSTREAM_BROKEN, ReachError, make_item,
+    BAD_INPUT,
+    NEED_SETUP,
+    NOT_FOUND,
+    UPSTREAM_BROKEN,
+    ReachError,
+    make_item,
 )
 from agent_reach.runtime.run import run_cmd
 from agent_reach.utils.paths import private_temporary_directory
@@ -63,7 +68,6 @@ class XiaoyuzhouChannel(Channel):
             raise ReachError(BAD_INPUT, "target must be a xiaoyuzhoufm.com episode link")
         seconds = _parse_max_seconds(kwargs)
 
-        import tempfile
         from pathlib import Path
 
         audio = _fetch_episode_audio(str(target).strip(), seconds)
