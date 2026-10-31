@@ -406,13 +406,22 @@ def transcribe_chunk(
 
 
 def _post_deepgram(info: dict, key: str, chunk: Path, timeout: int) -> str:
-    """Deepgram: 音频字节直接当 body，参数走 query，结果是嵌套 JSON。"""
+    """Deepgram: 音频字节直接当 body，参数走 query，结果是嵌套 JSON。
+
+    不固定 language：Deepgram 对不匹配的语言会而不报错地返回空 transcript。
+    之前写死 language=zh 导致英文视频转出来是空的。用 detect_language 代替。
+    """
     params = {
         "model": info["model"],
         "smart_format": "true",
         "punctuate": "true",
-        "language": "zh",
     }
+    # 默认 language=multi（多语种自动），不用 detect_language：
+    # 实测 30 秒的中文片段会被 detect_language 判成 id（印尼语），
+    # 而判错之后 Deepgram 仍回 HTTP 200 + 空转写；multi 在中文/英文、
+    # 长片/短片上都稳定。
+    forced = _LANGUAGE_OVERRIDE[0]
+    params["language"] = forced or "multi"
     headers = {
         "Authorization": f"{info.get('auth', 'Token')} {key}",
         "Content-Type": "audio/m4a",
@@ -427,9 +436,35 @@ def _post_deepgram(info: dict, key: str, chunk: Path, timeout: int) -> str:
     if not resp.ok:
         raise TranscribeError(f"deepgram: HTTP {resp.status_code}: {resp.text[:300]}")
     try:
-        return resp.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
+        payload = resp.json()
+        channel = payload["results"]["channels"][0]
+        text = channel["alternatives"][0]["transcript"]
     except (KeyError, IndexError, ValueError) as e:
         raise TranscribeError(f"deepgram: unexpected response shape: {e}") from e
+
+    if not text.strip():
+        # HTTP 200 + 空 transcript 通常是语言/音频问题；静默返回空字符串会让
+        # 调用方以为成功。明确报错，让 fallback 有机会换下一个 provider。
+        detected = channel.get("detected_language") or "unknown"
+        raise TranscribeError(
+            f"deepgram: empty transcript (detected language: {detected}); "
+            "the audio may be silent or the language unsupported"
+        )
+    return text
+
+
+_LANGUAGE_OVERRIDE: List[Optional[str]] = [None]
+
+
+def _set_language_override(lang: Optional[str]) -> Optional[str]:
+    """临时指定语言（如 zh 或 en）；传 None 清空。返回旧值方便还原。
+
+    之所以用模块级状态而不是改函数签名：transcribe() 已经有些调用方，
+    而语言只是 Deepgram 路径上的一个 query 参数。
+    """
+    previous = _LANGUAGE_OVERRIDE[0]
+    _LANGUAGE_OVERRIDE[0] = lang or None
+    return previous
 
 
 def _provider_order(provider: str) -> List[str]:
