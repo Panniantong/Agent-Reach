@@ -6,6 +6,29 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+中文：
+
+- 小宇宙支持只转前 N 秒：`agent-reach xiaoyuzhou transcribe <链接> --max-seconds 120`。下载改用 HTTP Range 只拉需要的字节，不再为一段试听把整集拖下来。实测一集 138 分钟、192MB 的播客，取前 120 秒从 192MB / 60 秒以上降到 7.5MB / 6 秒。
+- 小宇宙新增 Deepgram 后端并设为默认，Groq Whisper 保留为兜底；没有 Groq Key 也能用（`agent-reach configure deepgram-key`）。
+- `--max-seconds` 的非法值（非数字、0、负数）在发起任何网络请求之前就报错，不再先跑一遍页面解析再报一个不相干的错误。
+- 小宇宙声明了自检目标，`agent-reach check xiaoyuzhou` 能真实验证。
+- `youtube transcribe` 先走 Deepgram，不再要求 Groq Key；新增 `--lang` 手动指定语言。
+- 修掉一个静默失败：Deepgram 在语言不匹配时返回 HTTP 200 但转写文本为空，旧代码把它当成成功、返回空字符串（英文视频就拿到 `text: null`）。现在空转写直接抛错，`auto` 会继续试下一个 provider，接口报错而不是假装成功。
+- Deepgram 默认改用 `language=multi`，不再写死中文；也能用 `--lang zh` 之类的参数手动指定。
+
+English:
+
+- Xiaoyuzhou can transcribe only the first N seconds: `agent-reach xiaoyuzhou transcribe <link> --max-seconds 120`. The download switches to an HTTP Range request, so a short excerpt no longer pulls the whole episode. On a 138 min / 192 MB episode, the first 120 seconds went from 192 MB and over 60 s to 7.5 MB and 6 s.
+- Xiaoyuzhou gains a Deepgram backend as the default, with Groq Whisper kept as a fallback; it now works without a Groq key (`agent-reach configure deepgram-key`).
+- An invalid `--max-seconds` (non-numeric, zero, negative) is rejected before any network request, instead of after loading the page with an unrelated error.
+- Xiaoyuzhou declares a live test, so `agent-reach check xiaoyuzhou` verifies it for real.
+- `youtube transcribe` now tries Deepgram first and no longer requires a Groq key; a new `--lang` flag forces a language.
+- Fixed a silent failure: Deepgram answers HTTP 200 with an empty transcript when the requested language does not match the audio, and the old code reported that as success with an empty string (an English video came back as `text: null`). An empty transcript now raises, so `auto` moves on to the next provider and the caller gets an error instead of a fake success.
+- Deepgram now defaults to `language=multi` instead of a hard-coded Chinese language; `--lang zh` and friends still force one.
+
+---
 
 ## [1.6.0] - 2026-10-23
 
