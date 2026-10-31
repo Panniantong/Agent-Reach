@@ -6,6 +6,23 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+中文：
+
+- 小宇宙支持只转前 N 秒：`agent-reach xiaoyuzhou transcribe <链接> --max-seconds 120`。下载改用 HTTP Range 只拉需要的字节，不再为一段试听把整集拖下来。实测一集 138 分钟、192MB 的播客，取前 120 秒从 192MB / 60 秒以上降到 7.5MB / 6 秒。
+- 小宇宙新增 Deepgram 后端并设为默认，Groq Whisper 保留为兜底；没有 Groq Key 也能用（`agent-reach configure deepgram-key`）。
+- `--max-seconds` 的非法值（非数字、0、负数）在发起任何网络请求之前就报错，不再先跑一遍页面解析再报一个不相干的错误。
+- 小宇宙声明了自检目标，`agent-reach check xiaoyuzhou` 能真实验证。
+
+English:
+
+- Xiaoyuzhou can transcribe only the first N seconds: `agent-reach xiaoyuzhou transcribe <link> --max-seconds 120`. The download switches to an HTTP Range request, so a short excerpt no longer pulls the whole episode. On a 138 min / 192 MB episode, the first 120 seconds went from 192 MB and over 60 s to 7.5 MB and 6 s.
+- Xiaoyuzhou gains a Deepgram backend as the default, with Groq Whisper kept as a fallback; it now works without a Groq key (`agent-reach configure deepgram-key`).
+- An invalid `--max-seconds` (non-numeric, zero, negative) is rejected before any network request, instead of after loading the page with an unrelated error.
+- Xiaoyuzhou declares a live test, so `agent-reach check xiaoyuzhou` verifies it for real.
+
+---
 
 ## [1.6.0] - 2026-10-23
 

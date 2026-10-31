@@ -112,7 +112,7 @@ agent-reach read https://www.v2ex.com/t/123   # 按链接自动选渠道
 | xiaohongshu | 可选 | 搜笔记、读正文、看评论 | 登录 |
 | xueqiu | 可选 | 实时行情、搜股票、热帖、热股 | 行情不用登录；热帖、热股要登录 |
 | boss | 可选 | 搜职位和 JD | 登录 |
-| xiaoyuzhou | 可选 | 播客转文字 | Groq Key |
+| xiaoyuzhou | 可选 | 播客转文字 | Deepgram Key 或 Groq Key |
 | linkedin | 可选 | 搜职位、读职位详情 | 公开职位不用登录；站内搜索要登录 |
 | reddit | 可选 | 搜帖子、读正文、看评论、看版块 | 登录 |
 | twitter | 实验 | 搜推文、用户资料、用户推文、读推文串 | 登录 |

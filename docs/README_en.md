@@ -114,7 +114,7 @@ This table reflects the current release.
 | xiaohongshu | optional | search notes, read text, view comments | login |
 | xueqiu | optional | real-time quotes, stock search, hot posts, hot stocks | quotes need nothing; hot posts and stocks need a login |
 | boss | optional | job and JD search | login |
-| xiaoyuzhou | optional | podcast transcription | Groq key |
+| xiaoyuzhou | optional | podcast transcription | Deepgram key or Groq key |
 | twitter | experimental | search tweets, profiles, user tweets, threads | login |
 | facebook | experimental | search, profiles | login |
 | instagram | experimental | user search, profiles, user posts | login |
