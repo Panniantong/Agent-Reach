@@ -234,3 +234,27 @@ def test_restore_failure_preserves_the_original_snapshot(home, monkeypatch):
     with pytest.raises(ReachError,match='retained'):
         browser.restore_session()
     assert path.read_text()==original
+
+
+def test_cdp_port_defaults_to_9222(home, monkeypatch):
+    monkeypatch.delenv("AGENT_REACH_CDP_PORT", raising=False)
+    assert browser._configured_cdp_port() == 9222
+
+
+def test_cdp_port_can_move_away_from_the_shared_default(home, monkeypatch):
+    monkeypatch.setenv("AGENT_REACH_CDP_PORT", "9411")
+    assert browser._configured_cdp_port() == 9411
+
+
+def test_cdp_port_can_come_from_the_config_file(home, monkeypatch):
+    from agent_reach.config import Config
+
+    monkeypatch.delenv("AGENT_REACH_CDP_PORT", raising=False)
+    Config().set("cdp_port", 9412)
+    assert browser._configured_cdp_port() == 9412
+
+
+@pytest.mark.parametrize("value", ["", "abc", "0", "-1", "70000", "9222.5"])
+def test_invalid_cdp_port_falls_back_to_the_default(home, monkeypatch, value):
+    monkeypatch.setenv("AGENT_REACH_CDP_PORT", value)
+    assert browser._configured_cdp_port() == 9222

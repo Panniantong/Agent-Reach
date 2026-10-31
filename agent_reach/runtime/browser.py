@@ -34,7 +34,33 @@ from agent_reach.utils.paths import (
     read_small_text_no_follow,
 )
 
-CDP_PORT = 9222
+DEFAULT_CDP_PORT = 9222
+
+
+def _configured_cdp_port() -> int:
+    """The CDP port: config key ``cdp_port`` (env ``AGENT_REACH_CDP_PORT``), else 9222.
+
+    9222 is the de facto default CDP port, so another browser tool on the same
+    machine (chrome-devtools MCP, Playwright, Chrome in debug mode) often owns it.
+    A project can set a free port to run both side by side.
+    """
+    raw = None
+    try:
+        from agent_reach.config import Config
+
+        raw = Config().get("cdp_port")
+    except Exception:  # a broken config must not stop the browser from starting
+        raw = None
+    if raw in (None, ""):
+        raw = os.environ.get("AGENT_REACH_CDP_PORT")
+    try:
+        port = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_CDP_PORT
+    return port if 0 < port <= 65535 else DEFAULT_CDP_PORT
+
+
+CDP_PORT = _configured_cdp_port()
 CDP_URL = f"http://127.0.0.1:{CDP_PORT}"
 _CONTEXT_RE = re.compile(r"^\s*(\S+)\s+[—-]\s+connected\b", re.M)
 
@@ -635,7 +661,7 @@ def _require_owned() -> None:
     """Do not navigate or close an unrelated browser occupying our fixed port."""
     if not watcher_running() and not _profile_pids():
         from .result import NEED_SETUP, ReachError
-        raise ReachError(NEED_SETUP, "Port 9222 belongs to an unmanaged browser; close that debugging session yourself first")
+        raise ReachError(NEED_SETUP, f"Port {CDP_PORT} belongs to an unmanaged browser; close that debugging session yourself first")
 
 
 def save_session() -> None:

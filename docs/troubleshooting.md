@@ -67,6 +67,22 @@ agent-reach update --sync-only
 
 Removed default channels stay removed across updates; `agent-reach add <channel>` brings one back.
 
+## Dedicated browser port
+
+The dedicated browser exposes Chrome DevTools Protocol on **9222** by default. That is the port most other browser tools reach for as well (chrome-devtools MCP, Playwright, a Chrome started with `--remote-debugging-port=9222`), so on a machine already running one of them every browser-backed action fails with:
+
+```
+NEED_SETUP: Port 9222 belongs to an unmanaged browser; close that debugging session yourself first
+```
+
+Move Agent Reach to a free port instead of closing the other tool:
+
+```bash
+agent-reach configure cdp-port 9333
+```
+
+The value is stored as `cdp_port` in `~/.agent-reach/config.yaml`; `AGENT_REACH_CDP_PORT` in the shell works too and takes effect for one run. The port is used for the watcher, the extension connection and the BOSS `--cdp-url`. Without a value the default stays 9222, and an invalid one falls back to it, so changing nothing keeps the previous behaviour.
+
 ## Proxy
 
 Some platforms block certain networks or regions. Save a proxy once (the address is asked for with hidden input, since it may contain a password):

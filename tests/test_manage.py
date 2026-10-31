@@ -735,6 +735,17 @@ def test_configure_saves_known_keys_only(env):
         manage.configure("twitter-cookies", "x")
 
 
+def test_configure_cdp_port_is_stored_and_validated(env):
+    from agent_reach.config import Config
+
+    assert manage.configure("cdp-port", "9333") == {"key": "cdp-port", "saved": True}
+    assert Config(read_only=True).get("cdp_port") == "9333"
+    for bad in ("0", "70000", "abc", "9222.5"):
+        with pytest.raises(ReachError):
+            manage.configure("cdp-port", bad)
+    assert Config(read_only=True).get("cdp_port") == "9333", "a rejected value is not saved"
+
+
 def test_doctor_separates_needs_login_from_broken(env, monkeypatch):
     def need_login(self, **kw):
         raise ReachError("NEED_LOGIN", "log in")

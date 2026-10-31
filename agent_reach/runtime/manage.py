@@ -952,6 +952,7 @@ def uninstall(dry_run: bool = False) -> dict:
 # ── configure ──
 
 CONFIG_KEYS = {"groq-key": "groq_api_key", "openai-key": "openai_api_key", "proxy": "proxy", "github-token": "github_token",
+               "cdp-port": "cdp_port",
 }
 
 
@@ -962,5 +963,12 @@ def configure(key: str, value: str) -> dict:
         raise ReachError(BAD_INPUT, f"unknown key: {key}; valid: {', '.join(CONFIG_KEYS)}")
     if not value:
         raise ReachError(BAD_INPUT, "empty value")
+    if key == "cdp-port":
+        try:
+            port = int(value)
+        except ValueError:
+            port = 0
+        if not 0 < port <= 65535:
+            raise ReachError(BAD_INPUT, "cdp-port must be an integer between 1 and 65535")
     Config().set(CONFIG_KEYS[key], value)
     return {"key": key, "saved": True}

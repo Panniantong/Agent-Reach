@@ -199,8 +199,9 @@ def capability_summary(channels, statuses):
 
 
 def cdp_url():
-    value = 'http://127.0.0.1:9222'
-    return validate_cdp(value)
+    from . import browser
+
+    return validate_cdp(browser.CDP_URL)
 
 
 def validate_cdp(value):

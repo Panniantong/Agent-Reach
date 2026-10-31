@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 
+from agent_reach.runtime.browser import CDP_URL
 from agent_reach.runtime.result import (
     NEED_LOGIN,
     NEED_SETUP,
@@ -29,7 +30,7 @@ class BossChannel(Channel):
     login_url = "https://www.zhipin.com/web/user/?ka=header-login"
     session = "boss-agent-cli"
     session_home = False
-    login_argv = ("boss", "--data-dir", "{session}/.boss-agent", "--cdp-url", "http://127.0.0.1:9222", "login", "--cdp")
+    login_argv = ("boss", "--data-dir", "{session}/.boss-agent", "--cdp-url", CDP_URL, "login", "--cdp")
     legacy_state = (".boss-agent",)
     tools = ("boss-agent-cli",)
     prereqs = ("chrome",)
