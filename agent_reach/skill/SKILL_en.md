@@ -4,7 +4,7 @@ description: >
   Read-only access to platform content: search, read posts, view comments, fetch subtitles, stock quotes and jobs.
   Use when the user mentions or pastes a link from Xiaohongshu, Bilibili, Twitter/X, Reddit,
   YouTube (subtitles, transcripts), GitHub, V2EX, Xueqiu/stock quotes, LinkedIn/Boss Zhipin jobs,
-  Instagram, Facebook or Xiaoyuzhou podcasts; or says "search / look up / read this link" and your built-in
+  Instagram, Facebook, Xiaoyuzhou podcasts, Naver (Korean news/blog/cafe), Clien, FM Korea; or says "search / look up / read this link" and your built-in
   web search or fetch is unavailable, fails, or misses the body;
   or wants to install, add/remove a platform, log in/out, check status, update or uninstall Agent Reach.
   Does not: post, comment, like, message or any other write; never logs in for the user or asks for passwords.

@@ -27,5 +27,8 @@ Read when the user asks what can be fetched or how complete a result is. Declare
 | 雪球 | 部分公开行情和索引信息 | quote/search/hot_posts/hot_stocks；行情与社区路径分别验收 |
 | Web | Agent 自带搜索/读取 | Reach web search/read 为匿名保底；摘要、页面壳和验证页不能当完整正文 |
 | 小宇宙 | 节目页标题、简介 | transcribe 整集转文字；需要用户提供 Groq Key（`agent-reach configure groq-key`） |
+| Naver | 搜索索引、新闻/博客/카페 标题摘要 | Open API search（news/blog/cafe/webkr）+ 直接读取 news.naver.com / blog.naver.com / cafe.naver.com；需 Client ID/Secret（`agent-reach configure naver-api`） |
+| Clien | 板块列表、标题、链接 | search/read；纯服务端渲染，无需登录，纯 HTTP 即可 |
+| FM Korea | 公开搜索索引可能有帖子标题 | read；站点有反爬虫保护，直接后端常失败；建议用 `--backend public-web` |
 
 登录后的能力表述使用“可启用/尝试上述浏览器动作”，不使用“登录后支持全部评论”。用户跳过登录时交付已有公开证据。

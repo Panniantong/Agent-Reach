@@ -951,7 +951,7 @@ def uninstall(dry_run: bool = False) -> dict:
 
 # ── configure ──
 
-CONFIG_KEYS = {"groq-key": "groq_api_key", "openai-key": "openai_api_key", "proxy": "proxy", "github-token": "github_token",
+CONFIG_KEYS = {"groq-key": "groq_api_key", "openai-key": "openai_api_key", "proxy": "proxy", "github-token": "github_token", "naver-api": "naver_api",
 }
 
 

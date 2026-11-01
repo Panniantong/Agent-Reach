@@ -8,10 +8,13 @@ from typing import List, Optional
 from .base import Channel
 from .bilibili import BilibiliChannel
 from .boss import BossChannel
+from .clien import ClienChannel
 from .facebook import FacebookChannel
+from .fmkorea import FMKoreaChannel
 from .github import GitHubChannel
 from .instagram import InstagramChannel
 from .linkedin import LinkedInChannel
+from .naver import NaverChannel
 from .reddit import RedditChannel
 from .twitter import TwitterChannel
 from .v2ex import V2EXChannel
@@ -35,6 +38,9 @@ ALL_CHANNELS: List[Channel] = [
     V2EXChannel(),
     XueqiuChannel(),
     XiaoyuzhouChannel(),
+    NaverChannel(),
+    ClienChannel(),
+    FMKoreaChannel(),
     WebChannel(),
 ]
 
