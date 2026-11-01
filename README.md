@@ -109,6 +109,8 @@ agent-reach read https://www.v2ex.com/t/123   # 按链接自动选渠道
 | github | 默认 | 搜仓库、读仓库/README、读 issue 和 PR（含评论） | 无 |
 | youtube | 默认 | 视频信息、搜索、字幕、语音转文字 | 无；转文字需要 Groq 或 OpenAI Key |
 | web | 默认 | 网页搜索、网页阅读（保底） | 无 |
+| quora | 默认 | 搜索和阅读公开问答（经公开网页搜索） | 无；不能站内搜索 |
+| fishbowl | 默认 | 搜索和阅读公开社区帖子（经公开网页搜索） | 无 |
 | xiaohongshu | 可选 | 搜笔记、读正文、看评论 | 登录 |
 | xueqiu | 可选 | 实时行情、搜股票、热帖、热股 | 行情不用登录；热帖、热股要登录 |
 | boss | 可选 | 搜职位和 JD | 登录 |

@@ -9,9 +9,11 @@ from .base import Channel
 from .bilibili import BilibiliChannel
 from .boss import BossChannel
 from .facebook import FacebookChannel
+from .fishbowl import FishbowlChannel
 from .github import GitHubChannel
 from .instagram import InstagramChannel
 from .linkedin import LinkedInChannel
+from .quora import QuoraChannel
 from .reddit import RedditChannel
 from .twitter import TwitterChannel
 from .v2ex import V2EXChannel
@@ -35,6 +37,8 @@ ALL_CHANNELS: List[Channel] = [
     V2EXChannel(),
     XueqiuChannel(),
     XiaoyuzhouChannel(),
+    QuoraChannel(),
+    FishbowlChannel(),
     WebChannel(),
 ]
 
