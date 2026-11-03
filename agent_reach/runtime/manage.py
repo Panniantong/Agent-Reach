@@ -21,7 +21,7 @@ from agent_reach import __version__
 from agent_reach.utils.paths import home_dir
 
 from . import state, tools, update_notice
-from .result import BAD_INPUT, NEED_SETUP, UPSTREAM_BROKEN, ReachError
+from .result import BAD_INPUT, NEED_SETUP, NOT_FOUND, UPSTREAM_BROKEN, ReachError
 
 REPO = update_notice.REPO
 CHECK_FRESH_SECONDS = 24 * 3600
@@ -178,11 +178,28 @@ def run_checks(names: Optional[List[str]] = None, timeout: float = 60.0, search_
                     break
     by_action: Dict[tuple, bool] = {}
     codes: Dict[tuple, str] = {}
+    failures: Dict[tuple, List[str]] = {}
     for r in results:
         key = (r["channel"], r["action"])
         by_action[key] = by_action.get(key, False) or r["passed"]
-        if not r["passed"] and key not in codes:
-            codes[key] = r["error"]["code"]
+        if not r["passed"]:
+            failures.setdefault(key, []).append(r["error"]["code"])
+            if key not in codes:
+                codes[key] = r["error"]["code"]
+    # A live test whose every backend answered NOT_FOUND only proves the
+    # sample itself is gone (e.g. the fixture video was deleted upstream);
+    # it says nothing about the capability, so it must not fail the check
+    # or mark the channel broken. The action stays unverified, not passed:
+    # its result rows keep passed=False and gain "stale": True.
+    stale = {key for key, ok in by_action.items()
+             if not ok and failures.get(key)
+             and all(code == NOT_FOUND for code in failures[key])}
+    for r in results:
+        if (r["channel"], r["action"]) in stale:
+            r["stale"] = True
+    for key in stale:
+        by_action[key] = True
+        codes.pop(key, None)
     signatures = {ch.name: fingerprint(ch.name) for ch in selected}
     def save_checks(data):
         for ch in selected:

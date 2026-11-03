@@ -241,13 +241,19 @@ def _cmd_check(args: Sequence[str]) -> int:
         return _bad_input(None, "check", err.message)
     if ns.text:
         by_action: Dict[tuple, bool] = {}
+        stale: set = set()
         for r in out["results"]:
-            mark = "PASS" if r["passed"] else "FAIL"
+            mark = "STALE" if r.get("stale") else ("PASS" if r["passed"] else "FAIL")
             why = "" if r["passed"] else f"  {r['error']['code']}: {r['error']['message']}"
             sys.stdout.write(f"{mark}  {r['channel']} {r['action']} [{r['backend']}] {r['elapsed_ms']}ms{why}\n")
             key = (r["channel"], r["action"])
             by_action[key] = by_action.get(key, False) or r["passed"]
-        sys.stdout.write(f"\n{sum(by_action.values())}/{len(by_action)} actions working\n")
+            if r.get("stale"):
+                stale.add(key)
+        summary = f"\n{sum(by_action.values())}/{len(by_action)} actions working"
+        if stale:
+            summary += f"; {len(stale)} skipped (live sample no longer exists)"
+        sys.stdout.write(summary + "\n")
         return 0 if out["ok"] else 1
     return _emit({"schema_version": SCHEMA_VERSION, **out})
 
