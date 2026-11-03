@@ -98,3 +98,52 @@ def test_opencli_failure_without_the_site_login_cookie_asks_for_login(monkeypatc
     with pytest.raises(ReachError) as exc:
         linkedin.LinkedInChannel()._jobs(query="python", location=None, limit=2, timeout=5)
     assert exc.value.code == code
+
+
+@pytest.mark.parametrize('backend', ['github-api', 'gh'])
+def test_github_repository_without_readme_keeps_metadata(monkeypatch, backend):
+    repository = {
+        'full_name': 'example/code-only',
+        'html_url': 'https://github.com/example/code-only',
+        'description': 'A repository without a README',
+    }
+
+    def get(url, **kwargs):
+        if url.endswith('/readme'):
+            if backend == 'gh':
+                raise CommandFailed('UPSTREAM_BROKEN', 'gh exited', stderr='gh: Not Found (HTTP 404)')
+            raise urllib.error.HTTPError(url, 404, 'Not Found', {}, None)
+        return json.dumps(repository).encode()
+
+    monkeypatch.setattr(github, 'http_request', get)
+    monkeypatch.setattr(github, 'run_cmd', lambda argv, **kw: get(argv[-1], **kw).decode())
+    out = run_action(github.GitHubChannel(), 'read', {'target': 'example/code-only'}, only_backend=backend)
+    assert out['ok'] is True
+    assert out['backend'] == backend
+    assert len(out['items']) == 1
+    assert out['items'][0]['title'] == repository['full_name']
+    assert out['items'][0]['text'] == repository['description']
+
+
+@pytest.mark.parametrize('status,headers,code', [
+    (404, {}, 'NOT_FOUND'),
+    (403, {}, 'UPSTREAM_BROKEN'),
+    (403, {'X-RateLimit-Remaining': '0'}, 'RATE_LIMITED'),
+    (429, {}, 'RATE_LIMITED'),
+])
+def test_github_missing_repo_and_readme_failures_stay_errors(monkeypatch, status, headers, code):
+    calls = []
+
+    def get(url, **kwargs):
+        calls.append(url)
+        # A missing repository must not be mistaken for an optional missing README.
+        if status == 404 or url.endswith('/readme'):
+            raise urllib.error.HTTPError(url, status, 'Denied', headers, None)
+        return json.dumps({'full_name': 'example/code-only'}).encode()
+
+    monkeypatch.setattr(github, 'http_request', get)
+    out = run_action(github.GitHubChannel(), 'read', {'target': 'example/code-only'}, only_backend='github-api')
+    assert out['ok'] is False
+    assert out['error']['code'] == code
+    assert out['items'] == []
+    assert len(calls) == (1 if status == 404 else 2)
