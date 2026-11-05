@@ -74,6 +74,7 @@ def test_no_hits_or_wrong_scope_only_trigger_site_attempt_not_login(monkeypatch,
     monkeypatch.setattr(LinkedInChannel, "_jobs", Mock(side_effect=ReachError("TIMEOUT", "Site timed out")))
     out = run_action(LinkedInChannel(), "jobs", {"query": "Data"})
     assert out["error"]["code"] == "TIMEOUT"
+    public_search.assert_called_once()
 
 
 def test_actual_site_login_wall_is_reported_only_after_public_attempt(monkeypatch, public_search):
