@@ -2,7 +2,7 @@
 name: agent-reach
 description: >
   只读读取各平台内容：搜索、读帖、看评论、取字幕、查行情和职位。
-  Use when 用户提到或贴出链接：小红书/xiaohongshu、B站/bilibili、Twitter/X、Reddit、
+  Use when 用户提到或贴出链接：小红书/xiaohongshu、B站/bilibili、快手/kuaishou、Twitter/X、Reddit、
   YouTube（字幕、转录）、GitHub、V2EX、雪球/股票行情、LinkedIn/Boss直聘 职位、
   Instagram、Facebook、小宇宙播客；或说"帮我搜/看看/读一下这个链接"而自带网页搜索/读取不可用、失败或拿不到正文；
   或要安装、加上/去掉某个平台、登录/退出、看状态、更新、卸载 Agent Reach。
@@ -61,6 +61,7 @@ agent-reach read <链接>                   # 按链接自动选渠道
 ## 平台注意
 
 - 小红书 read 只返回文字描述，不要声称看懂了图片或视频。
+- 快手当前为实验渠道，支持只读搜索、热门、作品详情、视频下载和用户作品首屏；没有评论或平台写入动作，遇到平台验证由用户本人处理。下载用 `agent-reach kuaishou download <作品链接或ID> [--output /path/video.mp4]`；默认保存到 `~/.agent-reach/downloads/kuaishou/ID.mp4`，返回 `items[0].raw.path / bytes / sha256`，不覆盖已有文件。
 - Boss 直聘搜索结果 `salary_encoded=true` 时绝不猜薪资数字；read 职位链接拿详情里的可读薪资。
 - 各平台公开能做什么、Reach 补什么，见 [能力边界](references/capabilities.md)：用户问"能查什么/查得全吗"或要判断结果完整度时读它。
 
