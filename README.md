@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  登录墙后的平台、视频里的内容、中文平台、干净的结构化数据，一条命令拿到
+  让你的 Agent 直接搜索和阅读 X、Reddit、YouTube、小红书……
 </p>
 
 <p align="center">
