@@ -61,6 +61,7 @@ packages = ["agent_reach"]
 [tool.ruff]
 target-version = "py310"
 line-length = 100
+extend-exclude = ["vendor"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
@@ -73,4 +74,8 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 check_untyped_defs = true
 ignore_missing_imports = true
-exclude = ["^tests/"]
+exclude = ["^tests/", "^vendor/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["vendor", ".venv", "build", "dist"]

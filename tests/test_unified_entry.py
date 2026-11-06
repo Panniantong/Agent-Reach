@@ -181,6 +181,33 @@ def test_read_routes_by_url(capsys, fake_cli):
     assert out["items"][0]["title"] == "https://fake.test/a"
 
 
+class SlowReadChannel(FakeChannel):
+    actions = (
+        Action("read", "read", (Param("target", "t"),), (("first", "_first_read"),), timeout=120),
+    )
+
+
+def test_read_uses_the_target_actions_default_timeout(monkeypatch, capsys):
+    channel = SlowReadChannel()
+    monkeypatch.setattr(unified, "get_all_channels", lambda: [channel])
+    monkeypatch.setattr(unified, "_SHOW_NOTICE", False)
+    seen = {}
+
+    def fake_run(target, action, params, *, timeout, only_backend=None):
+        seen["timeout"] = timeout
+        return {"schema_version": 1, "ok": True, "channel": target.name, "action": action,
+                "backend": "first", "items": [], "meta": {"elapsed_ms": 0, "attempts": []},
+                "error": None}
+
+    monkeypatch.setattr(unified, "run_action", fake_run)
+
+    assert unified.main(["read", "https://fake.test/a"]) == 0
+    assert seen["timeout"] == 120
+
+    assert unified.main(["read", "https://fake.test/a", "--timeout", "7"]) == 0
+    assert seen["timeout"] == 7
+
+
 def test_unknown_command_is_bad_input(capsys, fake_cli):
     for argv in (["install"], ["check-update"], ["nosuchchannel", "search", "x"]):
         code, out = _run(capsys, argv)

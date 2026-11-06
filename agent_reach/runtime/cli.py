@@ -164,7 +164,7 @@ def _cmd_read(args: Sequence[str]) -> int:
     parser = _Parser(prog="read", add_help=False)
     parser.add_argument("url")
     parser.add_argument("--backend", default=None)
-    parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
+    parser.add_argument("--timeout", type=float, default=None)
     try:
         ns = parser.parse_args(list(args))
     except _ArgError as exc:
@@ -177,7 +177,11 @@ def _cmd_read(args: Sequence[str]) -> int:
     target = target or next((ch for ch in readers if ch.name == "web"), None)
     if target is None:
         return _bad_input(None, "read", "no channel can read this URL")
-    return _emit(run_action(target, "read", {"target": ns.url}, timeout=ns.timeout, only_backend=ns.backend))
+    timeout = ns.timeout
+    if timeout is None:
+        read_action = find_action(target, "read")
+        timeout = (read_action.timeout if read_action else None) or DEFAULT_TIMEOUT
+    return _emit(run_action(target, "read", {"target": ns.url}, timeout=timeout, only_backend=ns.backend))
 
 
 def _cmd_channels(_args: Sequence[str]) -> int:

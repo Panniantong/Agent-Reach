@@ -16,3 +16,7 @@ build/
 # Claude Code personal permission settings — local only, never commit
 .claude/settings.local.json
 uv.lock
+
+# 第三方项目本体，物理同处但不入版本控制（见 vendor/README.md）
+vendor/*
+!vendor/README.md
