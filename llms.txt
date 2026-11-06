@@ -22,8 +22,9 @@
 ## Channels
 
 - default: web, youtube, github, v2ex, bilibili (web is a fallback when the agent's own search/fetch fails)
-- optional: xiaohongshu, reddit, linkedin, boss, xueqiu, xiaoyuzhou (Groq key)
+- optional: zhihu, xiaohongshu, reddit, linkedin, boss, xueqiu, xiaoyuzhou (Groq key)
 - experimental: twitter, facebook, instagram
+- Zhihu: search, hot, read, comments. Question reads are answer excerpts; answer reads return the body. Comments are bounded, not a complete tree. Article bodies use web tools; site access may require a user login.
 
 ## Docs
 
