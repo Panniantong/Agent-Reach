@@ -750,6 +750,17 @@ def test_configure_browser_port_moves_the_dedicated_browser(env, monkeypatch):
     assert browser.configured_port() == 9333
 
 
+def test_browser_port_change_lifts_pauses_for_browser_channels_only(env, monkeypatch):
+    from agent_reach.runtime import browser
+
+    monkeypatch.setattr(browser, "watcher_running", lambda: False)
+    before = {name: manage.fingerprint(name) for name in ("site", "web")}
+    manage.configure("browser-port", "9333")
+    # A NEED_SETUP pause from a port clash must not outlive the fix.
+    assert manage.fingerprint("site") != before["site"]
+    assert manage.fingerprint("web") == before["web"], "non-browser channels keep their checks"
+
+
 def test_doctor_separates_needs_login_from_broken(env, monkeypatch):
     def need_login(self, **kw):
         raise ReachError("NEED_LOGIN", "log in")
