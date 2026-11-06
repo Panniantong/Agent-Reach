@@ -23,6 +23,7 @@ from typing import Dict, List, Optional, Sequence, cast
 
 from agent_reach.channels import get_all_channels
 from agent_reach.channels.base import Action, Channel
+from agent_reach.utils.process import utf8_subprocess_env
 
 from . import browser
 from .dispatch import DEFAULT_TIMEOUT, find_action, run_action
@@ -449,7 +450,7 @@ def _cmd_login(args: Sequence[str]) -> int:
 
     argv = [a.replace("{session}", str(session_dir(ch.session))).replace("{cdp_url}", CDP_URL)
             for a in ch.login_argv[1:]]
-    env = dict(os.environ)
+    env = utf8_subprocess_env()
     if ch.session_home:
         env.update(session_env(ch.session))
     # Interactive: the user sees the QR code / prompts on stderr; stdout stays JSON.
