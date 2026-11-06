@@ -8,6 +8,7 @@ under Agent Reach and nowhere else. Uninstall removes it with the rest of
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -37,8 +38,17 @@ def session_env(tool: str) -> dict:
 
 
 def has_login_state(tool: str) -> bool:
-    """Whether the tool has saved anything in its session directory."""
+    """Whether saved login state exists (including required fields when known)."""
     root = sessions_root() / tool
+    if tool == "bili-cli":
+        # A QR flow can exit successfully while saving an empty credential.
+        # Read access requires sessdata; file presence alone is not a login.
+        try:
+            data = json.loads((root / ".bilibili-cli" / "credential.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        sessdata = data.get("sessdata") if isinstance(data, dict) else None
+        return isinstance(sessdata, str) and bool(sessdata.strip())
     return root.is_dir() and any(p.is_file() for p in root.rglob("*"))
 
 

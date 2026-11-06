@@ -29,6 +29,19 @@ def test_search_does_not_turn_unrecognized_payload_into_empty_success():
             WebChannel()._exa_search(query="python", limit=3, timeout=5)
 
 
+def test_exa_request_identifies_agent_reach_not_python_urllib():
+    # Exa's Cloudflare returns 403 (error 1010) for the default Python-urllib agent.
+    from agent_reach.channels.web import _exa_call
+    body = json.dumps({"result": {"content": [{"type": "text", "text": "Content"}]}}).encode()
+    resp = MagicMock()
+    resp.__enter__.return_value = resp
+    resp.read.return_value = body
+    resp.headers = {}
+    with patch("agent_reach.runtime.run.urllib.request.urlopen", return_value=resp) as urlopen:
+        _exa_call("web_search_exa", {"query": "q"}, 5)
+    assert urlopen.call_args.args[0].get_header("User-agent").startswith("agent-reach/")
+
+
 def test_exa_retries_a_truncated_read_once_within_the_same_budget():
     from agent_reach.channels.web import _exa_call
     body = json.dumps({"result": {"content": [{"type": "text", "text": "Content"}]}}).encode()

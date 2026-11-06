@@ -53,6 +53,15 @@ def require_compatible() -> dict:
     return current
 
 
+def require_running() -> dict:
+    """Distinguish an unavailable Bridge from a site with no saved cookies."""
+    current = require_compatible()
+    if not current:
+        raise ReachError(NEED_SETUP, "OpenCLI Bridge is not running; the site login could not be inspected",
+                         hint="Run agent-reach browser setup to reconnect the Bridge, then retry.")
+    return current
+
+
 def start():
     """Return a child handle only when Reach started this process."""
     argv, _ = launch_spec()
