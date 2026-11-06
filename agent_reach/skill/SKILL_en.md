@@ -3,8 +3,9 @@ name: agent-reach
 description: >
   Read-only access to platform content: search, read posts, view comments, fetch subtitles, stock quotes and jobs.
   Use when the user mentions or pastes a link from Xiaohongshu, Bilibili, Twitter/X, Reddit,
-  YouTube (subtitles, transcripts), GitHub, V2EX, Xueqiu/stock quotes, LinkedIn/Boss Zhipin jobs,
-  Instagram, Facebook or Xiaoyuzhou podcasts; or says "search / look up / read this link" and your built-in
+  YouTube (subtitles, transcripts), GitHub, V2EX, LINUX DO/linux.do, NodeSeek, Xueqiu/stock quotes, LinkedIn/Boss Zhipin jobs,
+  Instagram, Facebook or Xiaoyuzhou podcasts; or wants hot topics, discussions or opinions from Chinese tech communities;
+  or says "search / look up / read this link" and your built-in
   web search or fetch is unavailable, fails, or misses the body;
   or wants to install, add/remove a platform, log in/out, check status, update or uninstall Agent Reach.
   Does not: post, comment, like, message or any other write; never logs in for the user or asks for passwords.
@@ -64,6 +65,20 @@ The first time a site is used, if the user's Chrome is connected to the OpenCLI 
 - Xiaohongshu read returns text descriptions only; never claim to understand the images or video.
 - When a Boss Zhipin search result has `salary_encoded=true`, never guess the salary digits; read the job link for the readable salary in the detail.
 - What each platform offers publicly and what Reach adds is in [Capability scope](references/capabilities.md): read it when the user asks "what can it get / is it complete" or you need to judge completeness.
+
+## Chinese tech communities: query V2EX / LINUX DO / NodeSeek together
+
+When the user wants hot topics or a topic's discussion from any one of them, or asks for opinions on development, networking, VPS or AI tools, query all three by default and group the summary by source; if one has nothing, say "no relevant discussion" instead of silently omitting it. When the user explicitly wants only one, query only that one.
+
+| Community | Hot topics | Find posts on a topic | Read the full post |
+|---|---|---|---|
+| V2EX | `agent-reach v2ex hot` | your search with `site:v2ex.com keywords` | `agent-reach read <post URL>` |
+| LINUX DO | `https://linux.do/top.json?period=weekly` (page `/top?period=weekly`) | your search with `site:linux.do keywords` | `https://linux.do/t/<id>.json` or the post page |
+| NodeSeek | home page `https://www.nodeseek.com/` is sorted by latest reply and has no official hot list; pick by comment count and say so | your search with `site:nodeseek.com keywords` | post page `https://www.nodeseek.com/post-<id>-1` |
+
+- LINUX DO and NodeSeek have no Reach channel yet; use your own search, web fetch or browser tools.
+- Both sit behind Cloudflare and anonymous requests often get 403. If the body cannot be read, deliver the search snippets and say they are snippets; on a human-verification page treat it as `PLATFORM_BLOCKED`: stop, never bypass it.
+- Some LINUX DO categories need login and a trust level; when they cannot be read, say why and never log in for the user.
 
 ## Channels
 
