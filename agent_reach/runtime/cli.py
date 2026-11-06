@@ -61,7 +61,7 @@ For the user:
   agent-reach doctor [--text]             status of every channel and installed tool versions (no network)
   agent-reach check [channel] [--text]    live-test channels; --search tests search/jobs only
   agent-reach update [--check]            upgrade Agent Reach, every added channel's tools and the skill
-  agent-reach configure <key> [value]     groq-key | openai-key | proxy | github-token | browser-port
+  agent-reach configure <key> [value]     groq-key | openai-key | proxy | github-token | browser-port | transcript-api-key | transcript-api-provider
   agent-reach uninstall [--dry-run]       remove everything Agent Reach installed
 """
 
