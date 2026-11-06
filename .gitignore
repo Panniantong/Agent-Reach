@@ -13,6 +13,10 @@ build/
 .agent-reach/
 *.log
 
+# Local lead search storage
+data/
+saved_searches/
+
 # Claude Code personal permission settings — local only, never commit
 .claude/settings.local.json
 uv.lock

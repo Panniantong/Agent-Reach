@@ -205,6 +205,27 @@ Star 一下，下次需要的时候能找到。⭐
 
 ---
 
+## 🌐 可视化界面与线索搜寻 (Lead Explorer Web UI)
+
+为希望通过浏览器使用 Agent Reach 进行搜寻与线索挖掘的用户提供了开箱即用的可视化 Web 界面：
+
+```bash
+# 启动可视化界面（零外部依赖，使用标准库）
+python web_ui.py
+```
+在浏览器中打开 `http://localhost:7860` 即可使用。
+
+也可以通过命令行搜寻并自动持久化保存：
+```bash
+python lead_search.py "dentists" --location "Mumbai" --limit 10
+```
+
+- **自动联系方式提取**：自动识别电话 / WhatsApp 与邮箱并保存为独立字段。
+- **自动本地保存**：搜索结果自动存入本地 SQLite 数据库并导出为带时间戳的 CSV 与 JSON。
+- **多引擎容灾降级**：在上游免费 API 达到频率限制时自动无缝降级切换，保证搜寻不中断。
+
+---
+
 ## 致谢
 
 [OpenCLI](https://github.com/jackwener/opencli) · [bili-cli](https://github.com/public-clis/bilibili-cli) · [boss-agent-cli](https://github.com/can4hou6joeng4/boss-agent-cli) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [Jina Reader](https://github.com/jina-ai/reader) · [Exa](https://exa.ai)

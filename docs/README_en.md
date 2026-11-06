@@ -205,6 +205,27 @@ Star it so you can find it next time you need it. ⭐
 
 ---
 
+## 🌐 Lead Explorer & Web UI
+
+For users who want a visual dashboard to search, browse leads, and export to CSV/JSON:
+
+```bash
+# Launch the visual dashboard (zero external dependencies)
+python web_ui.py
+```
+Open `http://localhost:7860` in your browser.
+
+Or use the CLI command:
+```bash
+python lead_search.py "dentists" --location "Mumbai" --limit 10
+```
+
+- **Automatic Contact Discovery**: Parses and extracts Phone/WhatsApp numbers and Emails into dedicated columns.
+- **Auto-Saving**: Queries are automatically persisted to an SQLite database and exported to timestamped CSV and JSON files.
+- **Multi-Engine Fallback**: Seamlessly switches to web search engine fallback when upstream free APIs hit rate limits.
+
+---
+
 ## Credits
 
 [OpenCLI](https://github.com/jackwener/opencli) · [bili-cli](https://github.com/public-clis/bilibili-cli) · [boss-agent-cli](https://github.com/can4hou6joeng4/boss-agent-cli) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [Jina Reader](https://github.com/jina-ai/reader) · [Exa](https://exa.ai)
