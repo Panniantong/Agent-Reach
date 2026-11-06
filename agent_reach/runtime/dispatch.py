@@ -243,27 +243,35 @@ def run_action(
             elif public_only:
                 raise ReachError(BAD_INPUT, "This input has no public web route; use a full supported URL")
         # Browser queries wait in line: a few per site and overall share the browser at once.
-        browser_action = any(b[0] in {"opencli", "boss-agent-cli"} for b in action.backends)
-        lock = query_slot(channel.name, clock) if browser_action else nullcontext()
-        with lock:
-            limited = cooldown(channel.name)
-            if limited:
-                raise ReachError(RATE_LIMITED, limited["message"])
-            paced = False
-            for label, method_name in backends:
-                paused = backend_pause(channel, action_name, label) if not only_backend else None
-                if paused:
-                    attempts.append({"backend": label, "result": paused["code"], "skipped": True,
-                                     "retry_after_seconds": paused["retry_after_seconds"], "message": paused["message"]})
-                    cached_errors.append(ReachError(paused["code"], paused["message"]))
-                    continue
-                if clock.remaining() <= 0:
-                    attempts.append({"backend": label, "result": TIMEOUT})
-                    errors.append(ReachError(TIMEOUT, "no time left for this backend"))
-                    break
-                if browser_action and not paced:
-                    _pace_browser(channel.name, action_name, clock)
-                    paced = True
+        # Only the browser backends do this; a native backend earlier in the same
+        # chain must not inherit their queue or site-wide search pacing.
+        browser_backends = {"opencli", "boss-agent-cli"}
+        limited = cooldown(channel.name)
+        if limited:
+            raise ReachError(RATE_LIMITED, limited["message"])
+        paced = False
+        for label, method_name in backends:
+            paused = backend_pause(channel, action_name, label) if not only_backend else None
+            if paused:
+                attempts.append({"backend": label, "result": paused["code"], "skipped": True,
+                                 "retry_after_seconds": paused["retry_after_seconds"], "message": paused["message"]})
+                cached_errors.append(ReachError(paused["code"], paused["message"]))
+                continue
+            if clock.remaining() <= 0:
+                attempts.append({"backend": label, "result": TIMEOUT})
+                errors.append(ReachError(TIMEOUT, "no time left for this backend"))
+                break
+            slot = query_slot(channel.name, clock) if label in browser_backends else nullcontext()
+            with slot:
+                if label in browser_backends:
+                    # Another process may have hit a platform rate limit while
+                    # this browser backend waited in line.
+                    limited = cooldown(channel.name)
+                    if limited:
+                        raise ReachError(RATE_LIMITED, limited["message"])
+                    if not paced:
+                        _pace_browser(channel.name, action_name, clock)
+                        paced = True
                 try:
                     items = _call_with_deadline(getattr(channel, method_name), clean, clock)
                 except BaseException as exc:  # noqa: BLE001
@@ -274,16 +282,16 @@ def run_action(
                     if err.code in FINAL_CODES:
                         break
                     continue
-                attempts.append({"backend": label, "result": "ok"})
-                _remember(channel, action_name, label, None)
-                return envelope(
-                    channel=channel.name,
-                    action=action_name,
-                    backend=label,
-                    items=items,
-                    elapsed_ms=elapsed(),
-                    attempts=attempts,
-                )
+            attempts.append({"backend": label, "result": "ok"})
+            _remember(channel, action_name, label, None)
+            return envelope(
+                channel=channel.name,
+                action=action_name,
+                backend=label,
+                items=items,
+                elapsed_ms=elapsed(),
+                attempts=attempts,
+            )
         # Last resort for an added channel: every site backend failed (or is
         # paused after failing) with a transient error, so the public-web
         # route is tried once. This keeps the public-first rule (site tools
