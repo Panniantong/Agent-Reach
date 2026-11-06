@@ -334,13 +334,21 @@ def ensure_chrome(*, retry_cloak: bool = False) -> str:
     from agent_reach.backends import cloak
     try:
         installed = cloak.setup()
-    except (ReachError, OSError):
+    except ReachError as exc:
         fallback = _system_chrome()
         if not fallback:
-            raise ReachError(NEED_SETUP, "CloakBrowser could not be installed and no system Chrome was found",
-                             hint="Check the download/proxy connection, or install Chrome, then run agent-reach browser setup.") from None
+            raise ReachError(exc.code, f"CloakBrowser could not be installed: {exc.message}",
+                             hint=exc.hint or "Check the download/proxy connection, or install Chrome, then run agent-reach browser setup.") from exc
         update_state(backend="chrome", executable=fallback, launcher_python=None,
-                     fallback_reason="CloakBrowser installation/download failed")
+                     fallback_reason=f"{exc.code}: {exc.message}")
+        return fallback
+    except OSError as exc:
+        fallback = _system_chrome()
+        if not fallback:
+            raise ReachError(NEED_SETUP, f"CloakBrowser could not be installed: {exc}",
+                             hint="Check the download/proxy connection, or install Chrome, then run agent-reach browser setup.") from exc
+        update_state(backend="chrome", executable=fallback, launcher_python=None,
+                     fallback_reason=f"CloakBrowser installation/download failed: {exc}")
         return fallback
     update_state(backend="cloakbrowser", executable=installed["executable"],
                  launcher_python=installed["python"], fallback_reason=None)
