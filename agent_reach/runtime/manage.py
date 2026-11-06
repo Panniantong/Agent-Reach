@@ -523,9 +523,10 @@ def place_skill() -> dict:
     text = render_skill()
     _write_real_copy(text)
     data = state.load()
+    unlinked = {os.path.realpath(p) for p in data["skill"]["unlinked"]}
     targets: Dict[Path, str] = {}
     for name, (config, skills) in linked_agents().items():
-        if config.is_dir():
+        if config.is_dir() and os.path.realpath(skills) not in unlinked:
             targets[skills] = name
     for rec in data["skill"]["links"]:
         parent = Path(rec["path"]).parent
@@ -558,14 +559,24 @@ def skill_status() -> dict:
             "copies": [r["path"] for r in links if r["kind"] == "copy"]}
 
 
-def link_skill(skills_dir: str) -> dict:
-    """Link the skill into the skills folder of an AI that is not in the table."""
+def _skills_dir_arg(skills_dir: str, verb: str) -> Path:
     target_dir = Path(skills_dir).expanduser()
     if not target_dir.is_absolute():
         target_dir = Path.cwd() / target_dir
     if target_dir.name == SKILL_NAME:
         raise ReachError(BAD_INPUT, f"give the skills folder, not the {SKILL_NAME} folder inside it",
-                         hint=f"agent-reach skill link {target_dir.parent}")
+                         hint=f"agent-reach skill {verb} {target_dir.parent}")
+    return target_dir
+
+
+def _forget_unlinked(data: dict, target_dir: Path) -> None:
+    real = os.path.realpath(target_dir)
+    data["skill"]["unlinked"] = [p for p in data["skill"]["unlinked"] if os.path.realpath(p) != real]
+
+
+def link_skill(skills_dir: str) -> dict:
+    """Link the skill into the skills folder of an AI that is not in the table."""
+    target_dir = _skills_dir_arg(skills_dir, "link")
     if os.path.realpath(target_dir) == os.path.realpath(skill_dir().parent):
         return skill_status()
     text = render_skill()
@@ -579,6 +590,29 @@ def link_skill(skills_dir: str) -> dict:
     path = str(target_dir / SKILL_NAME)
     data["skill"]["links"] = [r for r in data["skill"]["links"] if r["path"] != path]
     data["skill"]["links"].append({"agent": _agent_for(target_dir), "path": path, "kind": kind})
+    _forget_unlinked(data, target_dir)
+    state.save(data)
+    return skill_status()
+
+
+def unlink_skill(skills_dir: str) -> dict:
+    """Remove our link/copy from a skills folder; setup and update leave that folder alone afterwards.
+
+    For users who register the skill per project instead of for the whole AI.
+    """
+    target_dir = _skills_dir_arg(skills_dir, "unlink")
+    if os.path.realpath(target_dir) == os.path.realpath(skill_dir().parent):
+        raise ReachError(BAD_INPUT, "that is the real copy, not a link",
+                         hint="Use `agent-reach uninstall` to remove the instructions everywhere.")
+    target = target_dir / SKILL_NAME
+    if _links_to_real(target) or _is_our_copy(target):
+        _remove(target)
+    elif target.exists() or target.is_symlink():
+        raise ReachError(BAD_INPUT, f"{target}: not an Agent Reach link or copy; left it untouched")
+    data = state.load()
+    data["skill"]["links"] = [r for r in data["skill"]["links"] if r["path"] != str(target)]
+    _forget_unlinked(data, target_dir)
+    data["skill"]["unlinked"].append(str(target_dir))
     state.save(data)
     return skill_status()
 

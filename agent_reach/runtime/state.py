@@ -6,13 +6,14 @@
       "removed_defaults": ["youtube"],
       "tools": {"bili-cli": {"owner": "agent-reach" | "user", "scope": "private" | "global", "version": "0.6.2"}},
       "checks": {"bilibili": {"at": "...", "actions": {"search": true}, "previous": {"search": true}}},
-      "skill": {"links": [{"agent": "claude-code", "path": "...", "kind": "link" | "copy"}]}
+      "skill": {"links": [{"agent": "claude-code", "path": "...", "kind": "link" | "copy"}], "unlinked": ["/home/u/.cursor/skills"]}
     }
 
 `owner` decides what remove/sync/uninstall may delete: only "agent-reach" entries.
 `version` is the version actually installed (tools are not pinned).
 `removed_defaults` are default channels the user removed; setup and update leave them out.
 `skill.links` are the skill links/copies we made; update refreshes them, uninstall removes them.
+`skill.unlinked` are skills folders the user opted out of; setup and update do not link them again.
 """
 
 from __future__ import annotations
@@ -57,6 +58,7 @@ def load() -> dict:
     for key in ("channels", "tools", "checks", "skill"):
         data.setdefault(key, {})
     data["skill"].setdefault("links", [])
+    data["skill"].setdefault("unlinked", [])
     if not isinstance(data.get("removed_defaults"), list):
         data["removed_defaults"] = []
     return data
