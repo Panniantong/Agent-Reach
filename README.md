@@ -212,7 +212,6 @@ Star 一下，下次需要的时候能找到。⭐
 ## 联系
 
 - 📧 **Email:** pnt01@foxmail.com
-- 🐦 **Twitter/X:** [@Neo_Reidlab](https://x.com/Neo_Reidlab)
 
 ## 业务合作 / 交流群
 

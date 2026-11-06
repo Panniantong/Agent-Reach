@@ -212,7 +212,6 @@ Star it so you can find it next time you need it. ⭐
 ## Contact
 
 - 📧 **Email:** pnt01@foxmail.com
-- 🐦 **Twitter/X:** [@Neo_Reidlab](https://x.com/Neo_Reidlab)
 
 ## Collaboration / community group
 
