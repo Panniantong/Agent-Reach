@@ -25,11 +25,11 @@
 </p>
 
 <p align="center">
-  <a href="https://discord.gg/NSZz22R39"><img src="https://img.shields.io/badge/Discord-加入社区-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="加入 Agent Reach Discord 社区"></a>
+  <a href="https://discord.gg/FN6hpGrYKg"><img src="https://img.shields.io/badge/Discord-加入社区-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="加入 Agent Reach Discord 社区"></a>
 </p>
 
 <p align="center">
-  💬 有问题、想要新平台、或者想看看别人怎么用？来 <a href="https://discord.gg/NSZz22R39">Discord</a> 聊聊。
+  💬 有问题、想要新平台、或者想看看别人怎么用？来 <a href="https://discord.gg/FN6hpGrYKg">Discord</a> 聊聊。
 </p>
 
 ---
@@ -212,7 +212,6 @@ Star 一下，下次需要的时候能找到。⭐
 ## 联系
 
 - 📧 **Email:** pnt01@foxmail.com
-- 🐦 **Twitter/X:** [@Neo_Reidlab](https://x.com/Neo_Reidlab)
 
 ## 业务合作 / 交流群
 
@@ -221,7 +220,7 @@ Star 一下，下次需要的时候能找到。⭐
 <p align="center">
   <img src="docs/wechat-group-qr.jpg" width="280" alt="WeChat QR">
   &nbsp;&nbsp;
-  <a href="https://discord.gg/NSZz22R39"><img src="https://img.shields.io/badge/Discord-加入社区-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="加入 Agent Reach Discord 社区"></a>
+  <a href="https://discord.gg/FN6hpGrYKg"><img src="https://img.shields.io/badge/Discord-加入社区-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="加入 Agent Reach Discord 社区"></a>
 </p>
 
 > Bug 反馈和功能请求请用 [GitHub Issues](https://github.com/Panniantong/Agent-Reach/issues)，更容易跟踪。

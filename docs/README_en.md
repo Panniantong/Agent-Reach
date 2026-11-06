@@ -25,11 +25,11 @@
 </p>
 
 <p align="center">
-  <a href="https://discord.gg/NSZz22R39"><img src="https://img.shields.io/badge/Discord-Join%20us-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="Join the Agent Reach Discord community"></a>
+  <a href="https://discord.gg/FN6hpGrYKg"><img src="https://img.shields.io/badge/Discord-Join%20us-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="Join the Agent Reach Discord community"></a>
 </p>
 
 <p align="center">
-  💬 Questions, a platform you want added, or curious how others use it? Come chat on <a href="https://discord.gg/NSZz22R39">Discord</a>.
+  💬 Questions, a platform you want added, or curious how others use it? Come chat on <a href="https://discord.gg/FN6hpGrYKg">Discord</a>.
 </p>
 
 ---
@@ -212,7 +212,6 @@ Star it so you can find it next time you need it. ⭐
 ## Contact
 
 - 📧 **Email:** pnt01@foxmail.com
-- 🐦 **Twitter/X:** [@Neo_Reidlab](https://x.com/Neo_Reidlab)
 
 ## Collaboration / community group
 
