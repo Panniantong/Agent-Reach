@@ -232,7 +232,8 @@ def run_action(
         if limited:
             raise ReachError(RATE_LIMITED, limited["message"],
                              hint=f"Wait {limited['retry_after_seconds']} seconds before retrying this channel.")
-        if action.public_web and ((only_backend is None and not _channel_added(channel)) or public_only):
+        public_first = bool(action.public_web) and only_backend is None and not _channel_added(channel)
+        if public_first or public_only:
             budget = clock.remaining() if public_only else min(public_web.MAX_SECONDS, clock.remaining() / 2)
             public = public_web.attempt(channel, action, clean, timeout=budget)
             if public is not None:
@@ -293,7 +294,7 @@ def run_action(
         # final errors (bad input, login wall, rate limit, platform block, ...)
         # never fall back.
         failures = errors + cached_errors
-        if (action.public_web and only_backend is None and failures
+        if (action.public_web and only_backend is None and not public_first and failures
                 and not any(e.code in FINAL_CODES for e in failures)
                 and any(e.code in (UPSTREAM_BROKEN, TIMEOUT) for e in failures)
                 and clock.remaining() > 0):
