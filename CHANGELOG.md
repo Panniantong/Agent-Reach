@@ -6,6 +6,22 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+中文：
+
+- 新增可选的知乎渠道：搜索、热榜、问题回答摘要、单个回答正文和评论；站内访问要求登录时由用户本人完成。
+- 问题摘要与回答正文明确区分，评论只报告已取得的部分，不承诺完整导出。
+
+English:
+
+- Add an optional Zhihu channel for search, trending, question answer excerpts, individual answer bodies and comments; the user logs in when site access requires it.
+- Distinguish excerpts from answer bodies and label bounded comment results instead of claiming a complete export.
+
+Technical:
+
+- Reuse the existing OpenCLI browser backend and session lifecycle. Validate Zhihu targets and bounded result limits before preparing a browser. Article links remain on the web route.
+
 ## [1.6.1] - 2026-11-01
 
 中文：
