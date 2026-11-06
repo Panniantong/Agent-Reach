@@ -82,7 +82,7 @@ def attempt(channel: Channel, action: Action, params: dict, *, timeout: float) -
                                "access": "public", "completeness_verified": False}
             out.update(backend=BACKEND, items=items)
             out["meta"]["access"] = {"mode": "public", "scope": scope, "completeness_verified": False,
-                "note": "公开网页结果；不保证站内排序、最新状态、全文或全部评论。需要站内数据时指定 --backend。"}
+                "note": "Resultado de la web pública; no garantiza el orden del sitio, el estado más reciente, el texto completo ni todos los comentarios. Para datos del propio sitio indica --backend."}
     # Provider 429/errors belong to Web, never to the destination platform.
     out["meta"]["attempts"] = [{**row, "backend": BACKEND + "/" + row["backend"]}
                                 for row in out["meta"]["attempts"]]

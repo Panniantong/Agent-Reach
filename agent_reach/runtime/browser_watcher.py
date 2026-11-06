@@ -86,7 +86,7 @@ def _launch_cloak(url: str, *, headless: bool = True):
 
 
     ctx = launch_persistent_context(
-        str(browser.profile_dir()), headless=headless, locale="zh-CN",
+        str(browser.profile_dir()), headless=headless, locale="en-US",
         args=["--remote-debugging-address=127.0.0.1", f"--remote-debugging-port={browser.CDP_PORT}"],
         extension_paths=[str(browser.extension_dir())],
         proxy=proxy_options,

@@ -181,3 +181,22 @@ def test_invalid_job_links_fail_before_public_or_browser_access(target, monkeypa
     out = run_action(LinkedInChannel(), "read", {"target": target})
     assert out["error"]["code"] == "BAD_INPUT"
     request.assert_not_called()
+
+
+def test_added_linkedin_read_falls_back_to_the_public_page_when_opencli_breaks(monkeypatch):
+    """LinkedIn's 2026 job page has no <h1>; OpenCLI job-detail fails, the public page still reads."""
+    from contextlib import nullcontext
+
+    from agent_reach.runtime import dispatch
+    data = state.load()
+    data["channels"]["linkedin"] = {"added_at": state.now()}
+    state.save(data)
+    monkeypatch.setattr(dispatch, "query_slot", lambda *a, **k: nullcontext())
+    monkeypatch.setattr(dispatch, "_pace_browser", lambda *a, **k: None)
+    monkeypatch.setattr(LinkedInChannel, "_opencli", Mock(
+        side_effect=ReachError("UPSTREAM_BROKEN", "LinkedIn job detail could not find a job title")))
+    monkeypatch.setattr(WebChannel, "_jina_read", Mock(return_value=[make_item(title="Data Engineer", url=URL, text=TEXT)]))
+    out = run_action(LinkedInChannel(), "read", {"target": URL})
+    assert out["ok"] and out["backend"] == "public-web"
+    assert [a["backend"] for a in out["meta"]["attempts"]][0] == "opencli"
+    assert out["items"][0]["raw"]["access"] == "public"

@@ -51,7 +51,7 @@ def _atomic_write_yaml(target: Path, data: dict) -> None:
     atomic same-filesystem operation. Existing symlinks are rejected rather
     than followed or silently replaced.
     """
-    _reject_symlink(target, "配置文件")
+    _reject_symlink(target, "archivo de configuración")
     fd, tmp_name = tempfile.mkstemp(
         dir=str(target.parent),
         prefix=f".{target.name}.",
@@ -74,7 +74,7 @@ def _atomic_write_yaml(target: Path, data: dict) -> None:
         # Fail closed if a link appeared while serialization was in progress.
         # A later race is still safe: os.replace replaces a directory entry and
         # never follows the symlink into its target.
-        _reject_symlink(target, "配置文件")
+        _reject_symlink(target, "archivo de configuración")
         os.replace(tmp_path, target)
         if sys.platform != "win32":
             os.chmod(target, stat.S_IRUSR | stat.S_IWUSR)
@@ -118,14 +118,14 @@ class Config:
 
     def _ensure_dir(self):
         """Create config directory if it doesn't exist."""
-        _reject_symlink(self.config_dir, "配置目录")
+        _reject_symlink(self.config_dir, "directorio de configuración")
         make_private_dir(self.config_dir)
-        _reject_symlink(self.config_dir, "配置目录")
+        _reject_symlink(self.config_dir, "directorio de configuración")
 
     def load(self):
         """Load config from YAML file."""
-        _reject_symlink(self.config_dir, "配置目录")
-        _reject_symlink(self.config_path, "配置文件")
+        _reject_symlink(self.config_dir, "directorio de configuración")
+        _reject_symlink(self.config_path, "archivo de configuración")
         try:
             payload = read_small_text_no_follow(
                 self.config_path,
@@ -139,13 +139,13 @@ class Config:
 
         loaded = yaml.safe_load(payload) or {}
         if not isinstance(loaded, dict):
-            raise ConfigError("配置文件顶层必须是对象")
+            raise ConfigError("El nivel superior del archivo de configuración debe ser un objeto")
         self.data = loaded
 
     def save(self):
         """Save config atomically, refusing mutation in read-only mode."""
         if self.read_only:
-            raise ConfigReadOnlyError("当前配置是只读的，不能保存")
+            raise ConfigReadOnlyError("La configuración actual es de solo lectura; no se puede guardar")
         self._ensure_dir()
         if self.config_path == home_dir() / ".agent-reach" / "config.yaml":
             from agent_reach.runtime import state
@@ -166,7 +166,7 @@ class Config:
     def set(self, key: str, value: Any):
         """Set a config value and save."""
         if self.read_only:
-            raise ConfigReadOnlyError("当前配置是只读的，不能修改")
+            raise ConfigReadOnlyError("La configuración actual es de solo lectura; no se puede modificar")
         missing = object()
         previous = self.data.get(key, missing)
         self.data[key] = value
@@ -182,7 +182,7 @@ class Config:
     def delete(self, key: str):
         """Delete a config key and save."""
         if self.read_only:
-            raise ConfigReadOnlyError("当前配置是只读的，不能修改")
+            raise ConfigReadOnlyError("La configuración actual es de solo lectura; no se puede modificar")
         missing = object()
         previous = self.data.pop(key, missing)
         try:

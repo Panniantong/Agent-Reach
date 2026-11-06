@@ -404,25 +404,27 @@ def skill_dir() -> Path:
     return home_dir() / ".agents" / "skills" / SKILL_NAME
 
 
+SKILL_TEMPLATES = {"es": "SKILL_es.md", "en": "SKILL_en.md", "zh": "SKILL.md"}
+
+
 def _skill_lang() -> str:
-    for var in ("AGENT_REACH_LANG", "LC_ALL", "LC_MESSAGES", "LANG"):
-        v = os.environ.get(var, "").strip().lower()
-        if v.startswith("en"):
-            return "en"
-    return "zh"
+    # Fork default is Spanish; AGENT_REACH_LANG=en|zh picks another skill explicitly.
+    v = os.environ.get("AGENT_REACH_LANG", "").strip().lower()[:2]
+    return v if v in SKILL_TEMPLATES else "es"
 
 
 def render_skill(lang: Optional[str] = None) -> str:
     from importlib.resources import files
 
     lang = lang or _skill_lang()
-    template = files("agent_reach").joinpath("skill").joinpath("SKILL_en.md" if lang == "en" else "SKILL.md").read_text("utf-8")
+    template = files("agent_reach").joinpath("skill").joinpath(SKILL_TEMPLATES.get(lang, "SKILL_es.md")).read_text("utf-8")
     labels = {"default": "default", "optional": "optional", "experimental": "experimental"}
     rows = ["| channel | level | actions | login |", "|---|---|---|---|"]
     for ch in _channels():
         login = f"`agent-reach login {ch.name}`" if _has_login(ch) else "-"
         if ch.name == "reddit":
-            login = "浏览器路径按需" if lang == "zh" else "Browser path only, if required"
+            login = {"zh": "浏览器路径按需", "en": "Browser path only, if required"}.get(
+                lang, "Solo ruta de navegador, si hace falta")
         rows.append(f"| {ch.name} | {labels[ch.level]} | {', '.join(a.name for a in ch.actions)} | {login} |")
     return template.replace("{{CHANNEL_TABLE}}", "\n".join(rows)).replace("{{VERSION}}", __version__)
 
@@ -708,7 +710,7 @@ def setup() -> dict:
         report["path"] = str(atomic_write_private_text(state.root() / "installation-report.md", markdown))
     except (OSError, PrivatePathError):
         # The receipt remains in stdout even if its local copy cannot be saved.
-        report["write_error"] = "安装报告未能保存；完整表格仍在 installation_report.markdown。"
+        report["write_error"] = "No se pudo guardar el informe de instalación; la tabla completa sigue en installation_report.markdown."
     result["installation_report"] = report
     if migration:
         state.mutate(lambda saved: saved.__setitem__("migration_reported", True))

@@ -14,7 +14,7 @@ _XHS_LOGIN_HINT = (
 
 class XiaoHongShuChannel(Channel):
     name = "xiaohongshu"
-    description = "小红书笔记"
+    description = "Notas de Xiaohongshu"
 
     level = "optional"
     login_url = "https://www.xiaohongshu.com/explore"

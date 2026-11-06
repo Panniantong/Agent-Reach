@@ -156,7 +156,7 @@ _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
 class BilibiliChannel(Channel):
     name = "bilibili"
-    description = "B站视频、字幕和搜索"
+    description = "Vídeos, subtítulos y búsqueda en Bilibili"
 
     level = "default"
     session = "bili-cli"

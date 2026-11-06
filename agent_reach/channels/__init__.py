@@ -15,6 +15,7 @@ from .linkedin import LinkedInChannel
 from .reddit import RedditChannel
 from .twitter import TwitterChannel
 from .v2ex import V2EXChannel
+from .video import VideoChannel
 from .web import WebChannel
 from .xiaohongshu import XiaoHongShuChannel
 from .xiaoyuzhou import XiaoyuzhouChannel
@@ -25,6 +26,7 @@ ALL_CHANNELS: List[Channel] = [
     GitHubChannel(),
     TwitterChannel(),
     YouTubeChannel(),
+    VideoChannel(),
     RedditChannel(),
     FacebookChannel(),
     InstagramChannel(),

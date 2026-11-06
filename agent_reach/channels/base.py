@@ -53,7 +53,7 @@ class Channel(ABC):
     """Base class for all channels."""
 
     name: str = ""                    # e.g. "youtube"
-    description: str = ""             # e.g. "YouTube 视频和字幕"
+    description: str = ""             # e.g. "Vídeos, Shorts y subtítulos de YouTube"
 
     #: "default" / "optional" / "experimental".
     level: str = ""

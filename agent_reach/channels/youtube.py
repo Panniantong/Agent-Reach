@@ -65,6 +65,30 @@ def _run_ytdlp(args: list, timeout: float, cwd=None) -> str:
         raise
 
 
+def _pick_subtitle_track(info: dict, wanted: list) -> tuple:
+    """(code, auto, translated) of the single track to download.
+
+    Order: human subtitles in a wanted language; the auto captions of the video's own
+    language (faithful to the audio); any human subtitles; a machine translation last.
+    """
+    manual = {k: v for k, v in (info.get("subtitles") or {}).items() if k != "live_chat"}
+    auto = info.get("automatic_captions") or {}
+    for code in wanted:
+        if code in manual:
+            return code, False, False
+    spoken = info.get("language") or ""
+    originals = [c for c in auto if c.endswith("-orig")]
+    for code in ([f"{spoken}-orig"] if spoken else []) + originals + ([spoken] if spoken else []):
+        if code in auto:
+            return code, True, False
+    if manual:
+        return next(iter(manual)), False, False
+    for code in wanted:
+        if code in auto:
+            return code, True, True
+    raise ReachError(NOT_FOUND, "this video has no subtitles or auto captions")
+
+
 def _iso_date(yyyymmdd) -> str:
     s = str(yyyymmdd or "")
     return f"{s[:4]}-{s[4:6]}-{s[6:8]}" if len(s) == 8 and s.isdigit() else ""
@@ -91,7 +115,7 @@ def vtt_to_text(vtt: str) -> str:
 
 class YouTubeChannel(Channel):
     name = "youtube"
-    description = "YouTube 视频和字幕"
+    description = "Vídeos, Shorts y subtítulos de YouTube"
 
     level = "default"
     #: transcribe re-encodes and chunks audio
@@ -119,7 +143,8 @@ class YouTubeChannel(Channel):
             "Full subtitle text of a video (manual or auto captions)",
             (
                 Param("target", "video link or id"),
-                Param("lang", "preferred languages, comma separated", required=False, default="zh-Hans,zh,en,en-orig"),
+                Param("lang", "preferred languages for human subtitles, comma separated; otherwise the video's own language",
+                      required=False, default="es,es-ES,es-419,en"),
             ),
             (("yt-dlp", "_ytdlp_subtitle"),),
             live_test={"target": "https://www.youtube.com/watch?v=jNQXAC9IVRw"},
@@ -141,18 +166,7 @@ class YouTubeChannel(Channel):
     # ── unified entry backends ──
 
     def _ytdlp_read(self, *, target: str, timeout: float) -> list:
-        out = _run_ytdlp(["--dump-json", "--skip-download", _video_url(target)], timeout)
-        info = json.loads(out.splitlines()[-1])
-        return [
-            make_item(
-                title=info.get("title"),
-                url=info.get("webpage_url"),
-                author=info.get("uploader") or info.get("channel"),
-                published_at=_iso_date(info.get("upload_date")),
-                text=info.get("description"),
-                raw={k: info.get(k) for k in _RAW_KEYS},
-            )
-        ]
+        return ytdlp_info(_video_url(target), timeout)
 
     def _ytdlp_search(self, *, query: str, limit: int, timeout: float) -> list:
         out = _run_ytdlp(["--flat-playlist", "--dump-json", f"ytsearch{limit}:{query}"], timeout)
@@ -174,48 +188,87 @@ class YouTubeChannel(Channel):
         return items
 
     def _ytdlp_subtitle(self, *, target: str, lang: str, timeout: float) -> list:
-        url = _video_url(target)
-        wanted = [x.strip() for x in lang.split(",") if x.strip()]
-        with private_temporary_directory(prefix="agent-reach-subs-") as tmp:
-            out = _run_ytdlp(
-                [
-                    "--skip-download", "--no-simulate",
-                    "--write-subs", "--write-auto-subs",
-                    "--sub-langs", ",".join(wanted), "--sub-format", "vtt",
-                    "--print", "%(title)s",
-                    "-o", "%(id)s.%(ext)s",
-                    url,
-                ],
-                timeout,
-                cwd=tmp,
-            )
-            files = [f for f in os.listdir(tmp) if f.endswith(".vtt")]
-            if not files:
-                raise ReachError(NOT_FOUND, f"no subtitles in {', '.join(wanted)} for this video")
-
-            def rank(name: str) -> int:
-                code = name.rsplit(".", 2)[-2] if name.count(".") >= 2 else ""
-                return wanted.index(code) if code in wanted else len(wanted)
-
-            best = min(files, key=rank)
-            with open(os.path.join(tmp, best), encoding="utf-8", errors="replace") as fh:
-                text = vtt_to_text(fh.read())
-        title = next((ln for ln in out.splitlines() if ln.strip()), None)
-        code = best.rsplit(".", 2)[-2] if best.count(".") >= 2 else None
-        return [make_item(title=title, url=url, text=text, raw={"lang": code})]
+        return ytdlp_subtitle(_video_url(target), lang, timeout)
 
     def _whisper_transcribe(self, *, target: str, timeout: float) -> list:
-        from agent_reach.transcribe import NoProviderConfigured, TranscribeError
-        from agent_reach.transcribe import transcribe as _transcribe
+        return whisper_transcribe(_video_url(target))
 
-        url = _video_url(target)
-        try:
-            text = _transcribe(url)
-        except NoProviderConfigured:
-            raise ReachError(
-                "NEED_SETUP", "no Whisper API key configured",
-                hint="Ask the user for a free key from https://console.groq.com, then run `agent-reach configure groq-key`.",
-            ) from None
-        except TranscribeError as exc:
-            raise ReachError("UPSTREAM_BROKEN", str(exc)[:300]) from None
-        return [make_item(url=url, text=text)]
+
+# ── shared with other yt-dlp channels (channels/video.py) ──
+# `cookies`: a Netscape cookie file, for sites that only serve logged-in viewers.
+
+
+def _cookie_args(cookies) -> list:
+    return ["--cookies", cookies] if cookies else []
+
+
+def ytdlp_info(url: str, timeout: float, cookies=None) -> list:
+    """Metadata of one video on any site yt-dlp supports."""
+    out = _run_ytdlp([*_cookie_args(cookies), "--dump-json", "--skip-download", url], timeout)
+    info = json.loads(out.splitlines()[-1])
+    return [
+        make_item(
+            title=info.get("title"),
+            url=info.get("webpage_url"),
+            author=info.get("uploader") or info.get("channel"),
+            published_at=_iso_date(info.get("upload_date")),
+            text=info.get("description"),
+            raw={k: info.get(k) for k in _RAW_KEYS},
+        )
+    ]
+
+
+def ytdlp_subtitle(url: str, lang: str, timeout: float, cookies=None) -> list:
+    """One subtitle track of one video on any site yt-dlp supports."""
+    wanted = [x.strip() for x in lang.split(",") if x.strip()]
+    info_json = _run_ytdlp([*_cookie_args(cookies), "--dump-json", "--skip-download", url],
+                           timeout).splitlines()[-1]
+    info = json.loads(info_json)
+    code, auto, translated = _pick_subtitle_track(info, wanted)
+    with private_temporary_directory(prefix="agent-reach-subs-") as tmp:
+        info_path = os.path.join(tmp, "info.json")
+        with open(info_path, "w", encoding="utf-8") as fh:
+            fh.write(info_json)
+        # One track only, from the info already fetched: asking for several languages
+        # makes YouTube machine-translate the auto captions, and those requests are
+        # what it rate-limits (HTTP 429) first.
+        _run_ytdlp(
+            [
+                *_cookie_args(cookies),
+                "--load-info-json", info_path,
+                "--skip-download", "--no-simulate",
+                "--write-auto-subs" if auto else "--write-subs",
+                "--sub-langs", code, "--sub-format", "vtt",
+                "-o", "%(id)s.%(ext)s",
+            ],
+            timeout,
+            cwd=tmp,
+        )
+        files = [f for f in os.listdir(tmp) if f.endswith(".vtt")]
+        if not files:
+            raise ReachError(NOT_FOUND, f"subtitle track '{code}' could not be downloaded")
+        with open(os.path.join(tmp, files[0]), encoding="utf-8", errors="replace") as fh:
+            text = vtt_to_text(fh.read())
+    return [make_item(title=info.get("title"), url=url, text=text,
+                      raw={"lang": code, "auto": auto, "translated": translated,
+                           "video_language": info.get("language")})]
+
+
+def whisper_transcribe(url: str, cookies=None, timestamps: bool = False) -> list:
+    """Speech-to-text of the audio of one video on any site yt-dlp supports.
+
+    `timestamps` starts each line with `[m:ss]`.
+    """
+    from agent_reach.transcribe import NoProviderConfigured, TranscribeError
+    from agent_reach.transcribe import transcribe as _transcribe
+
+    try:
+        text = _transcribe(url, cookies=cookies, timestamps=timestamps)
+    except NoProviderConfigured:
+        raise ReachError(
+            "NEED_SETUP", "no Whisper API key configured",
+            hint="Ask the user for a free key from https://console.groq.com, then run `agent-reach configure groq-key`.",
+        ) from None
+    except TranscribeError as exc:
+        raise ReachError("UPSTREAM_BROKEN", str(exc)[:300]) from None
+    return [make_item(url=url, text=text)]

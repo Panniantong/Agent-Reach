@@ -15,7 +15,7 @@ _SCRIPT = os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts", "t
 
 class XiaoyuzhouChannel(Channel):
     name = "xiaoyuzhou"
-    description = "小宇宙播客转文字"
+    description = "Transcripción de pódcasts de Xiaoyuzhou"
 
     level = "optional"
     prereqs = ("ffmpeg",)
