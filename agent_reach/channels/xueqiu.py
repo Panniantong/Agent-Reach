@@ -134,6 +134,8 @@ def _tencent_code(symbol: str) -> str:
     if re.fullmatch(r"(SH|SZ|BJ)\d{6}", s):
         return s.lower()
     if re.fullmatch(r"\d{6}", s):
+        if s.startswith("920"):
+            return "bj" + s
         prefix = "sh" if s[0] in "69" else ("bj" if s[0] in "48" else "sz")
         return prefix + s
     if re.fullmatch(r"HK\d{1,5}", s):
