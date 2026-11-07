@@ -84,9 +84,10 @@ After `agent-reach setup`, show `result.installation_report.markdown` to the use
 | Log in / login expired | `agent-reach login <channel>`; the user logs in themselves in the window that opens |
 | Log out | `agent-reach logout <channel>` |
 | Status / what works | `agent-reach doctor --text`; for a live test `agent-reach check <channel> --text` |
-| Upgrade / update | `agent-reach update` |
+| Upgrade / update | Run `agent-reach update` for user scope; run `agent-reach update --scope project` for a project-only skill |
 | Uninstall | show `agent-reach uninstall --dry-run` first, then `agent-reach uninstall` once they confirm |
 | Another AI should use it | `agent-reach skill link <that AI's skills folder>`; `agent-reach skill` shows where it is placed now |
+| Keep the skill only in this project | From the project root, run `agent-reach skill install --scope project`; update the program and project copy with `agent-reach update --scope project`, or remove only the owned project copy with `agent-reach skill remove --scope project` |
 
 Troubleshooting, browser maintenance and uninstall details are in [Maintenance](references/maintenance.md): read it when an update fails, the browser will not start, or the user wants to uninstall.
 
@@ -96,7 +97,7 @@ Any result with `meta.update` means a newer version exists. Mention it once per 
 
 1. Agent Reach has a new version (`meta.update.latest`).
 2. What changed: 1 to 3 short points from `meta.update.notes`.
-3. Ask whether to update; run `agent-reach update` only after the user agrees.
+3. Ask whether to update; only after the user agrees, run `agent-reach update`, or `agent-reach update --scope project` when the skill is project-only.
 
 ## Red lines
 

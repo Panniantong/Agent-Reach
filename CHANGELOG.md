@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+- Add explicit user/project scope for setup, update, skill install and removal. Project scope
+  owns only `.claude/skills/agent-reach/` in the current project, leaves the
+  user-scoped copy unchanged, and preserves modified or unrelated project files.
+
+
 ## [1.6.1] - 2026-11-01
 
 中文：
@@ -39,7 +46,6 @@ English (technical):
 - The dedicated browser's port is configurable with `agent-reach configure browser-port <port>`, for when another tool holds 9222 (#848).
 - Login reuse: no "copied 0 cookies" record when the browser bridge is down; an explicit `login <channel> --import-existing` that copies nothing now fails clearly (#879).
 - Windows: Xiaohongshu note links containing `&` can be read and their comments loaded (#860).
-
 
 
 ## [1.6.0] - 2026-10-23

@@ -83,9 +83,10 @@ agent-reach read <链接>                   # 按链接自动选渠道
 | 登录 / 登录过期 | `agent-reach login <渠道>`，由用户本人在打开的窗口里登录 |
 | 退出登录 | `agent-reach logout <渠道>` |
 | 看看状态 / 哪些能用 | `agent-reach doctor --text`；要实测跑 `agent-reach check <渠道> --text` |
-| 升级 / 更新 | `agent-reach update` |
+| 升级 / 更新 | 用户范围运行 `agent-reach update`；仅当前项目的 skill 运行 `agent-reach update --scope project` |
 | 卸载 | 先 `agent-reach uninstall --dry-run` 给用户看，确认后 `agent-reach uninstall` |
 | 让另一个 AI 也能用 | `agent-reach skill link <那个 AI 的 skill 目录>`；`agent-reach skill` 查看现在放在哪 |
+| 只在当前项目使用 skill | 在项目根目录运行 `agent-reach skill install --scope project`；更新程序和项目副本用 `agent-reach update --scope project`，`agent-reach skill remove --scope project` 只删除 Agent Reach 创建且未被修改的项目副本 |
 
 故障排查、浏览器维护和卸载细节见 [维护说明](references/maintenance.md)：更新失败、浏览器起不来或要卸载时读它。
 
@@ -95,7 +96,7 @@ agent-reach read <链接>                   # 按链接自动选渠道
 
 1. 告诉用户有新版本（`meta.update.latest`）。
 2. 从 `meta.update.notes` 挑 1 到 3 个要点说清改了什么。
-3. 问要不要更新；用户同意后才跑 `agent-reach update`。
+3. 问要不要更新；用户同意后才跑 `agent-reach update`。若 skill 只在当前项目，改跑 `agent-reach update --scope project`。
 
 ## 红线
 

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import stat
 
 import pytest
 
 from agent_reach.utils import paths
+
+MULTILINE_TEXT = "first\nsecond\nthird\n"
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX permission semantics")
@@ -37,6 +40,24 @@ def test_atomic_private_text_write_preserves_old_file_on_replace_failure(
 
     assert target.read_text(encoding="utf-8") == "keep-old"
     assert list(target.parent.glob(".secret.txt.*.tmp")) == []
+
+
+def test_atomic_private_text_write_does_not_translate_newlines(tmp_path):
+    """The bytes on disk must equal text.encode(encoding) with no platform
+    newline translation. The project skill manifest records
+    sha256(content.encode("utf-8")) while the owned-file guard rehashes
+    read_bytes(); a text-mode \\n -> \\r\\n rewrite (Windows default) made the
+    two disagree and the guard rejected freshly installed skills."""
+    target = tmp_path / "private" / "skill.md"
+
+    paths.atomic_write_private_text(target, MULTILINE_TEXT)
+
+    on_disk = target.read_bytes()
+    assert b"\r\n" not in on_disk
+    assert on_disk == MULTILINE_TEXT.encode("utf-8")
+    assert hashlib.sha256(on_disk).hexdigest() == hashlib.sha256(
+        MULTILINE_TEXT.encode("utf-8")
+    ).hexdigest()
 
 
 
