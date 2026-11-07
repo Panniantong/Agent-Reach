@@ -70,6 +70,21 @@ def _load_extension(conn) -> None:
         print(f"Extensions.loadUnpacked failed: {reply.get('error')}", file=sys.stderr, flush=True)
 
 
+def _browser_locale() -> str:
+    """Return the browser locale.
+
+    Defaults to zh-CN, the language the Agent Reach browser has always used.
+    Users who want another language set the ``browser_locale`` config key or the
+    ``BROWSER_LOCALE`` environment variable, e.g. ``en-US`` or ``de-DE``.
+    """
+    from agent_reach.config import Config
+
+    value = Config(read_only=True).get("browser_locale")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return "zh-CN"
+
+
 def _launch_cloak(url: str, *, headless: bool = True):
     """Use the SDK's public launcher; one persistent profile, no site rules."""
     from cloakbrowser import launch_persistent_context
@@ -86,7 +101,7 @@ def _launch_cloak(url: str, *, headless: bool = True):
 
 
     ctx = launch_persistent_context(
-        str(browser.profile_dir()), headless=headless, locale="zh-CN",
+        str(browser.profile_dir()), headless=headless, locale=_browser_locale(),
         args=["--remote-debugging-address=127.0.0.1", f"--remote-debugging-port={browser.CDP_PORT}"],
         extension_paths=[str(browser.extension_dir())],
         proxy=proxy_options,
