@@ -33,6 +33,7 @@ from agent_reach.utils.paths import (
     make_private_dir,
     read_small_text_no_follow,
 )
+from agent_reach.utils.process import windows_hidden_kwargs
 
 DEFAULT_CDP_PORT = 9222
 
@@ -450,8 +451,7 @@ def _detach_kwargs() -> dict:
     root = browser_root()
     make_private_dir(root)
     if sys.platform == "win32":
-        return {"cwd": str(root), "creationflags": subprocess.DETACHED_PROCESS
-                | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW}
+        return {"cwd": str(root), **windows_hidden_kwargs()}
     return {"cwd": str(root), "start_new_session": True}
 
 
