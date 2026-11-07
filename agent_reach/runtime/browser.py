@@ -450,8 +450,11 @@ def _detach_kwargs() -> dict:
     root = browser_root()
     make_private_dir(root)
     if sys.platform == "win32":
-        return {"cwd": str(root), "creationflags": subprocess.DETACHED_PROCESS
-                | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW}
+        # No DETACHED_PROCESS: Windows ignores CREATE_NO_WINDOW when it is set, so the watcher had
+        # no console and every console tool it started (Playwright's driver, node) opened a visible
+        # window (#887). A hidden console of its own is inherited by those children instead.
+        return {"cwd": str(root), "creationflags": subprocess.CREATE_NEW_PROCESS_GROUP
+                | subprocess.CREATE_NO_WINDOW}
     return {"cwd": str(root), "start_new_session": True}
 
 
