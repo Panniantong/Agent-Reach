@@ -64,6 +64,10 @@ agent-reach read <链接>                   # 按链接自动选渠道
 - Boss 直聘搜索结果 `salary_encoded=true` 时绝不猜薪资数字；read 职位链接拿详情里的可读薪资。
 - 各平台公开能做什么、Reach 补什么，见 [能力边界](references/capabilities.md)：用户问"能查什么/查得全吗"或要判断结果完整度时读它。
 
+## 可选的国内社媒深度阅读
+
+用户明确选择、且需要微博/知乎/公众号取材或小红书图中文字时，可参考 [独立 Social Read 工具](references/social-read.md)。这是单独配置的可选工具，不是 Reach 已集成的渠道；不自动安装、迁移账号或在平台拒绝后切换工具重试。
+
 ## 渠道
 
 {{CHANNEL_TABLE}}
