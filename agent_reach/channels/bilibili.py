@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Bilibili — multi-backend: bili-cli / OpenCLI / search API.
+"""Bilibili — native WBI backend with bilibili-api and bili-cli fallbacks.
 
-yt-dlp was REMOVED from this channel (live-verified 2026-06): bilibili's
-risk control 412-blocks yt-dlp's requests in every configuration we
-tried — latest version, direct, proxied, with warmed cookies — while
-bili-cli keeps working (search/hot/video detail without login) and
-OpenCLI covers subtitles through the browser session. yt-dlp remains the
-YouTube backend; it just no longer serves bilibili.
+`native` (agent_reach/native/bilibili.py) serves search/read/subtitles and the
+AI `summary` action without any third-party CLI. `bilibili-api` is the
+unauthenticated public API fallback for read/hot, and bili-cli remains the
+last-resort leg for search/read/subtitles when it is installed — yt-dlp was
+removed because Bilibili's risk control 412-blocks it.
 """
 
 import json
@@ -156,7 +155,7 @@ _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
 class BilibiliChannel(Channel):
     name = "bilibili"
-    description = "B站视频、字幕和搜索"
+    description = "B站视频、字幕、搜索和 AI 总结"
 
     level = "default"
     session = "bili-cli"
@@ -171,14 +170,18 @@ class BilibiliChannel(Channel):
                 Param("query", "what to search for"),
                 Param("limit", "max results", required=False, type=int, default=5),
             ),
-            (("bili-cli", "_cli_search"),),
+            (("native", "_native_search"), ("bili-cli", "_cli_search")),
             live_test={"query": "Python", "limit": 2},
         ),
         Action(
             "read",
             "Video title, uploader, description and stats",
             (Param("target", "BV id or video link"),),
-            (("bili-cli", "_cli_read"), ("bilibili-api", "_api_read")),
+            (
+                ("bilibili-api", "_api_read"),
+                ("native", "_native_read"),
+                ("bili-cli", "_cli_read"),
+            ),
             live_test={"target": "BV1GJ411x7h7"},
         ),
         Action(
@@ -190,10 +193,66 @@ class BilibiliChannel(Channel):
         ),
         Action(
             "subtitle",
-            "Subtitle text of the first video part, when available (may need a Bilibili login)",
-            (Param("target", "BV id or video link"),),
-            (("bili-cli", "_cli_subtitle"),),
-            live_test={"target": "BV1GJ411x7h7"},
+            "Subtitle text; pick a part and language, optionally without timestamps",
+            (
+                Param("target", "BV id or video link"),
+                Param(
+                    "part",
+                    "1-based part index for multi-P videos (out-of-range uses the last part)",
+                    required=False,
+                    type=int,
+                    default=1,
+                ),
+                Param(
+                    "language",
+                    "subtitle language, e.g. ai-zh, ai-en, zh-Hans",
+                    required=False,
+                    type=str,
+                    default="ai-zh",
+                ),
+                Param(
+                    "timestamps",
+                    "prepend [HH:MM:SS] timestamps: true or false",
+                    required=False,
+                    type=str,
+                    default="true",
+                ),
+            ),
+            (("native", "_native_subtitle"), ("bili-cli", "_cli_subtitle")),
+            # This canonical test video has human zh-Hans tracks but no ai-zh one;
+            # without a language override the native leg correctly returns NOT_FOUND.
+            live_test={"target": "BV1GJ411x7h7", "language": "zh-Hans"},
+        ),
+        Action(
+            "summary",
+            "AI summary of a video part's subtitles (needs summary_api_key)",
+            (
+                Param("target", "BV id or video link"),
+                Param(
+                    "part",
+                    "1-based part index for multi-P videos (out-of-range uses the last part)",
+                    required=False,
+                    type=int,
+                    default=1,
+                ),
+                Param(
+                    "language",
+                    "subtitle language to summarize, e.g. ai-zh, ai-en",
+                    required=False,
+                    type=str,
+                    default="ai-zh",
+                ),
+                Param(
+                    "model",
+                    "model override; defaults to summary_model",
+                    required=False,
+                    type=str,
+                    default="",
+                ),
+            ),
+            (("native", "_native_summary"),),
+            live_test=None,
+            timeout=120,
         ),
     )
 
@@ -203,6 +262,54 @@ class BilibiliChannel(Channel):
         return host_matches(url, "bilibili.com", "b23.tv")
 
     # ── unified entry backends ──
+
+    def _native_search(self, *, query: str, limit: int, timeout: float) -> list:
+        from agent_reach.native import bilibili as native
+
+        return native.search(query=query, limit=limit, timeout=timeout)
+
+    def _native_read(self, *, target: str, timeout: float) -> list:
+        from agent_reach.native import bilibili as native
+
+        return native.read(target=target, timeout=timeout)
+
+    def _native_subtitle(
+        self,
+        *,
+        target: str,
+        part: int = 1,
+        language: str = "ai-zh",
+        timestamps: str = "true",
+        timeout: float,
+    ) -> list:
+        from agent_reach.native import bilibili as native
+
+        return native.subtitle(
+            target=target,
+            part=part,
+            language=language,
+            timestamps=timestamps,
+            timeout=timeout,
+        )
+
+    def _native_summary(
+        self,
+        *,
+        target: str,
+        part: int = 1,
+        language: str = "ai-zh",
+        model: str = "",
+        timeout: float,
+    ) -> list:
+        from agent_reach.native import bilibili as native
+
+        return native.summary(
+            target=target,
+            part=part,
+            language=language,
+            model=model or None,
+            timeout=timeout,
+        )
 
     def _cli_search(self, *, query: str, limit: int, timeout: float) -> list:
         data = _bili_json(["search", query, "--type", "video", "-n", str(limit)], timeout)
@@ -223,7 +330,43 @@ class BilibiliChannel(Channel):
         data = _bili_api(f"/x/web-interface/popular?ps={limit}&pn=1", timeout)
         return [_api_video_item(v) for v in (data.get("list") or [])[:limit]]
 
-    def _cli_subtitle(self, *, target: str, timeout: float) -> list:
+    def _cli_subtitle(
+        self,
+        *,
+        target: str,
+        part=None,
+        language=None,
+        timestamps=True,
+        timeout: float,
+    ) -> list:
+        # bili-cli only returns P1 with its own language/timestamp choices. Refuse
+        # requests it cannot honour instead of returning silently wrong data.
+        if part not in (None, 1):
+            raise ReachError(
+                UPSTREAM_BROKEN,
+                f"bili-cli fallback only supports part 1, not part {part}; "
+                "use `--backend native` for other parts",
+            )
+        requested_language = str(language or "ai-zh").strip()
+        if requested_language != "ai-zh":
+            raise ReachError(
+                UPSTREAM_BROKEN,
+                f"bili-cli fallback cannot select subtitle language '{requested_language}'; "
+                "use `--backend native`",
+            )
+        requested_timestamps = timestamps
+        if isinstance(requested_timestamps, str):
+            requested_timestamps = requested_timestamps.strip().lower() not in {
+                "false",
+                "0",
+                "no",
+                "off",
+            }
+        if requested_timestamps is False:
+            raise ReachError(
+                UPSTREAM_BROKEN,
+                "bili-cli fallback cannot omit timestamps; use `--backend native`",
+            )
         _reuse_subtitle_login(timeout)
         data = _bili_json(["video", _bvid(target, timeout), "--subtitle"], timeout)
         sub = data.get("subtitle") or {}
