@@ -3,6 +3,8 @@
 import json
 import os
 import shutil
+import subprocess
+import sys
 import threading
 import zipfile
 
@@ -234,3 +236,14 @@ def test_restore_failure_preserves_the_original_snapshot(home, monkeypatch):
     with pytest.raises(ReachError,match='retained'):
         browser.restore_session()
     assert path.read_text()==original
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows process creation flags")
+def test_detach_kwargs_keep_child_consoles_hidden_on_windows(monkeypatch, tmp_path):
+    # DETACHED_PROCESS makes Windows ignore CREATE_NO_WINDOW, so console children of the
+    # watcher (Playwright's driver, node) opened visible windows (#887).
+    monkeypatch.setattr(browser, "browser_root", lambda: tmp_path)
+    flags = browser._detach_kwargs()["creationflags"]
+    assert flags & subprocess.CREATE_NO_WINDOW
+    assert flags & subprocess.CREATE_NEW_PROCESS_GROUP
+    assert not flags & subprocess.DETACHED_PROCESS
