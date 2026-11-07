@@ -56,6 +56,30 @@ def configured_port() -> int:
 
 CDP_PORT = configured_port()
 CDP_URL = f"http://127.0.0.1:{CDP_PORT}"
+
+DEFAULT_LOCALE = "zh-CN"
+_LOCALE_RE = re.compile(r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$")
+
+
+def valid_locale(value: str) -> bool:
+    return bool(value) and value.isascii() and bool(_LOCALE_RE.match(value))
+
+
+def configured_locale() -> str:
+    """Browser language from `agent-reach configure browser-locale`, else zh-CN.
+
+    Sites read it from navigator.language and Accept-Language. Like the port, the watcher gets
+    it in the environment (REACH_BROWSER_LOCALE).
+    """
+    with contextlib.suppress(Exception):
+        raw = os.environ.get("REACH_BROWSER_LOCALE")
+        if raw is None:
+            from agent_reach.config import Config
+
+            raw = Config(read_only=True).get("browser_locale")
+        if raw and valid_locale(str(raw)):
+            return str(raw)
+    return DEFAULT_LOCALE
 _CONTEXT_RE = re.compile(r"^\s*(\S+)\s+[—-]\s+connected\b", re.M)
 
 #: Close the browser after this many seconds without Agent Reach use.
@@ -496,6 +520,7 @@ def _launch(url: str, *, headless: bool = True) -> None:
                  "CLOAKBROWSER_AUTO_UPDATE": "false",
                  "REACH_BROWSER_PROXY": str(Config(read_only=True).get("proxy") or ""),
                  "REACH_BROWSER_PORT": str(CDP_PORT),
+                 "REACH_BROWSER_LOCALE": configured_locale(),
                  "CLOAKBROWSER_CACHE_DIR": str(browser_root().parent / "cloak-binaries")}, **_detach_kwargs(),
         )
     if not wait_for(lambda: is_running() or proc.poll() is not None, START_WAIT, interval=0.2) or not is_running():
