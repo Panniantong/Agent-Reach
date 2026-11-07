@@ -16,6 +16,31 @@ from agent_reach.runtime import cli as unified
 from agent_reach.runtime.dispatch import run_action
 from agent_reach.runtime.result import ReachError, classify
 
+
+@pytest.mark.parametrize("args, query, verbose", [
+    (["fake", "search", "--", "-v"], "-v", False),
+    (["fake", "search", "--", "--verbose"], "--verbose", False),
+    (["fake", "search", "--", "explain", "--verbose", "option"], "explain --verbose option", False),
+    (["--verbose", "fake", "search", "--", "-v"], "-v", True),
+    (["fake", "search", "query", "-v"], "query", True),
+])
+def test_console_entry_respects_end_of_options(monkeypatch, capsys, args, query, verbose):
+    from agent_reach import cli as entry
+
+    channel = FakeChannel()
+    logging_modes = []
+    monkeypatch.setattr(entry.sys, "argv", ["agent-reach", *args])
+    monkeypatch.setattr(entry, "_configure_logging", logging_modes.append)
+    monkeypatch.setattr(unified, "unified_channels", lambda: [channel])
+
+    with pytest.raises(SystemExit) as exited:
+        entry.main()
+
+    assert exited.value.code == 0
+    assert json.loads(capsys.readouterr().out)["ok"] is True
+    assert channel.calls[0][1]["query"] == query
+    assert logging_modes == [verbose]
+
 ENVELOPE_KEYS = {"schema_version", "ok", "channel", "action", "backend", "items", "meta", "error"}
 
 
