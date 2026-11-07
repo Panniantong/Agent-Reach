@@ -242,3 +242,21 @@ def test_unrecorded_native_session_cannot_be_claimed_on_use():
     with pytest.raises(ReachError, match="Unrecorded"):
         session_dir("unknown")
     assert not state.owned_path(path)
+
+
+def test_release_recorder_covers_every_action_without_a_live_test():
+    from agent_reach.runtime.cli import unified_channels
+    from scripts.record_release_acceptance import FROM_SEARCH
+
+    assert FROM_SEARCH[("bilibili", "summary")] == ("read", "target", None)
+    # xiaoyuzhou/transcribe takes its target from the explicit --episode flag.
+    handled_separately = {("xiaoyuzhou", "transcribe")}
+    missing = [
+        (channel.name, action.name)
+        for channel in unified_channels()
+        for action in channel.actions
+        if action.live_test is None
+        and (channel.name, action.name) not in FROM_SEARCH
+        and (channel.name, action.name) not in handled_separately
+    ]
+    assert missing == []
