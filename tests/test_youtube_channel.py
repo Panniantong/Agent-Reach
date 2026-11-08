@@ -11,7 +11,10 @@ channel coverage after rss (#360), github (#361), web (#363),
 reddit (#364), xueqiu (#365) and v2ex (#366).
 """
 
+import json
 from pathlib import Path
+
+import pytest
 
 from agent_reach.channels.youtube import YouTubeChannel
 
@@ -111,11 +114,17 @@ def test_ytdlp_uses_system_trust_store_when_ssl_cert_file_is_set(monkeypatch):
     assert argv[argv.index("--compat-options") + 1] == "no-certifi"
 
 
-def test_subtitle_prefers_original_speech_over_machine_translation(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    ("tracks", "manual", "expected"),
+    [
+        ({"en": "translated words", "ar-orig": "الكلام الأصلي"}, (), "ar-orig"),
+        ({"zh-Hans": "手动字幕", "ar-orig": "الكلام الأصلي"}, ("zh-Hans",), "zh-Hans"),
+    ],
+    ids=("original-over-translation", "manual-over-original"),
+)
+def test_subtitle_track_priority(monkeypatch, tmp_path, tracks, manual, expected):
     from agent_reach.channels import youtube
     from agent_reach.runtime.dispatch import run_action
-
-    tracks = {"en": "translated words", "ar-orig": "الكلام الأصلي"}
 
     def fake_ytdlp(args, timeout, cwd=None):
         requested = args[args.index("--sub-langs") + 1].split(",")
@@ -125,7 +134,9 @@ def test_subtitle_prefers_original_speech_over_machine_translation(monkeypatch, 
                 f"WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n{tracks[code]}\n",
                 encoding="utf-8",
             )
-        return "Arabic video\n"
+        manual_json = json.dumps({code: [] for code in manual}) if manual else "NA"
+        output = {"%(title)s": "Video", "%(subtitles)j": manual_json}
+        return "\n".join(output[args[index + 1]] for index, arg in enumerate(args) if arg == "--print") + "\n"
 
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(youtube, "_run_ytdlp", fake_ytdlp)
@@ -138,5 +149,5 @@ def test_subtitle_prefers_original_speech_over_machine_translation(monkeypatch, 
     )
 
     assert out["ok"] is True
-    assert out["items"][0]["raw"]["lang"] == "ar-orig"
-    assert out["items"][0]["text"] == "الكلام الأصلي"
+    assert out["items"][0]["raw"]["lang"] == expected
+    assert out["items"][0]["text"] == tracks[expected]
