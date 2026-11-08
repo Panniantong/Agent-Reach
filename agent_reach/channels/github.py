@@ -156,7 +156,15 @@ class GitHubChannel(Channel):
                 readme_text = None
             return [_repo_item(info, readme_text)]
         issue = json.loads(get(f"/repos/{owner}/{repo}/issues/{number}", timeout / 2))
-        comments = json.loads(get(f"/repos/{owner}/{repo}/issues/{number}/comments?per_page=50", timeout / 2))
+        comments = []
+        page = 1
+        while True:
+            query = urlencode({"per_page": 100, "page": page})
+            batch = json.loads(get(f"/repos/{owner}/{repo}/issues/{number}/comments?{query}", timeout / 2))
+            comments.extend(batch)
+            if len(batch) < 100:
+                break
+            page += 1
         parts = [issue.get("body") or ""]
         for c in comments:
             parts.append(f"\n@{(c.get('user') or {}).get('login', '')}: {c.get('body') or ''}")
