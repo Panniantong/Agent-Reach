@@ -7,6 +7,7 @@ description: >
   Instagram、Facebook、小宇宙播客；或说"帮我搜/看看/读一下这个链接"而自带网页搜索/读取不可用、失败或拿不到正文；
   或要安装、加上/去掉某个平台、登录/退出、看状态、更新、卸载 Agent Reach。
   不做：发帖、评论、点赞、私信等任何写操作；不替用户登录、不索要密码。
+  不用于研究、审查或移植仓库源码：克隆后在本地阅读文件；README、Issue、Release 和讨论仍可用 Reach。
   公开内容优先用 Agent 自带工具，Reach 补缺口。
 metadata:
   homepage: https://github.com/Panniantong/Agent-Reach

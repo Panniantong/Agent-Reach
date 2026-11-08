@@ -8,6 +8,7 @@ description: >
   web search or fetch is unavailable, fails, or misses the body;
   or wants to install, add/remove a platform, log in/out, check status, update or uninstall Agent Reach.
   Does not: post, comment, like, message or any other write; never logs in for the user or asks for passwords.
+  Not for studying, reviewing or porting a repository's source code: clone it and read the files locally; use Reach for READMEs, issues, releases and discussions.
   Prefer your own tools for public content; Reach fills the gaps.
 metadata:
   homepage: https://github.com/Panniantong/Agent-Reach

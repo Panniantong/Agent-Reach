@@ -644,6 +644,31 @@ def test_skill_lists_every_channel_and_has_no_placeholders(env):
             assert f"| {ch.name} |" in text
 
 
+@pytest.mark.parametrize(
+    ("lang", "source_guidance", "reach_guidance"),
+    [
+        (
+            "zh",
+            "不用于研究、审查或移植仓库源码：克隆后在本地阅读文件",
+            "README、Issue、Release 和讨论仍可用 Reach",
+        ),
+        (
+            "en",
+            "Not for studying, reviewing or porting a repository's source code: "
+            "clone it and read the files locally",
+            "use Reach for READMEs, issues, releases and discussions",
+        ),
+    ],
+)
+def test_skill_description_routes_source_study_to_a_local_clone(
+    env, lang, source_guidance, reach_guidance
+):
+    frontmatter = manage.render_skill(lang).split("---", 2)[1]
+    assert "GitHub" in frontmatter
+    assert source_guidance in frontmatter
+    assert reach_guidance in frontmatter
+
+
 def _seed_our_copy(path):
     path.mkdir(parents=True)
     (path / "SKILL.md").write_text("---\nname: agent-reach\ndescription: old\n---\nold\n")
