@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 
-from agent_reach.runtime.result import NEED_SETUP, ReachError
+from agent_reach.runtime.result import NEED_SETUP, UPSTREAM_BROKEN, ReachError
 
 
 def setup() -> dict:
@@ -24,9 +24,12 @@ def setup() -> dict:
     try:
         run_cmd([exe, "install"], timeout=180, env=env)
         result = json.loads(run_cmd([str(python), "-m", "agent_reach.backends.cloak"], timeout=20, env=env))
-    except (ReachError, ValueError, OSError):
-        raise ReachError(NEED_SETUP, "CloakBrowser installation/download failed; downloaded cache is retained",
-                         hint="Reach will use installed Chrome when available. Use browser setup --retry-cloak to retry CloakBrowser.") from None
+    except ReachError as exc:
+        raise ReachError(exc.code, f"CloakBrowser installation/download failed: {exc.message}",
+                         hint=exc.hint or "Reach will use installed Chrome when available. Use browser setup --retry-cloak to retry CloakBrowser.") from exc
+    except (ValueError, OSError) as exc:
+        raise ReachError(UPSTREAM_BROKEN, f"CloakBrowser installation/download failed: {exc}",
+                         hint="Reach will use installed Chrome when available. Use browser setup --retry-cloak to retry CloakBrowser.") from exc
     return {**result, "python": str(python), "backend": "cloakbrowser"}
 
 
