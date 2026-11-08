@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Mapping
+from typing import Any
 
 UTF8_ENV = {
     "PYTHONUTF8": "1",
@@ -20,7 +21,7 @@ def utf8_subprocess_env(base: Mapping[str, str] | None = None) -> dict[str, str]
     return env
 
 
-def windows_hidden_kwargs() -> dict[str, int]:
+def windows_hidden_kwargs() -> dict[str, Any]:
     """Return Windows creation flags that keep child consoles from appearing.
 
     Use ``CREATE_NO_WINDOW`` without ``DETACHED_PROCESS``: a detached child has
