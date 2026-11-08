@@ -15,12 +15,13 @@ import json
 import ssl
 import subprocess
 from unittest.mock import patch
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 import pytest
 
 from agent_reach.channels import v2ex as v2
 from agent_reach.channels.v2ex import V2EXChannel
+from agent_reach.runtime.dispatch import run_action
 
 # --- can_handle ---
 
@@ -156,3 +157,51 @@ def test_get_json_rejects_non_api_targets_before_network(url):
 
 
 
+
+
+@pytest.mark.parametrize(
+    "error",
+    [TimeoutError("TLS handshake timed out"), URLError(TimeoutError("TLS handshake timed out"))],
+    ids=["direct-timeout", "urlerror-timeout"],
+)
+def test_hot_recovers_from_urllib_timeout_with_curl(error):
+    payload = [{"id": 1, "title": "Recovered topic", "url": "https://www.v2ex.com/t/1"}]
+    with patch.object(v2.urllib.request, "urlopen", side_effect=error), patch.object(
+        v2.shutil, "which", return_value="/usr/bin/curl"
+    ), patch.object(
+        v2.subprocess, "run",
+        return_value=subprocess.CompletedProcess(["curl"], 0, json.dumps(payload), ""),
+    ) as curl:
+        result = run_action(V2EXChannel(), "hot", {"limit": 1})
+
+    assert result["ok"] is True
+    assert result["backend"] == "v2ex-api"
+    assert result["items"][0]["title"] == "Recovered topic"
+    assert result["items"][0]["url"] == "https://www.v2ex.com/t/1"
+    curl.assert_called_once()
+    command = curl.call_args.args[0]
+    assert command[command.index("--max-time") + 1] == str(v2._TIMEOUT)
+    assert command[command.index("--proto") + 1] == "=https"
+    assert "--insecure" not in command
+    assert "--location" not in command
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ssl.SSLCertVerificationError("certificate verify failed"),
+        URLError(ssl.SSLCertVerificationError("certificate verify failed")),
+        HTTPError("https://www.v2ex.com/api/topics/hot.json", 429, "Too Many Requests", None, None),
+        URLError("TLS handshake timed out"),
+        ValueError("invalid JSON response"),
+    ],
+    ids=["certificate", "wrapped-certificate", "http-error", "timeout-text", "invalid-json"],
+)
+def test_hot_does_not_retry_unrelated_or_certificate_errors(error):
+    with patch.object(v2.urllib.request, "urlopen", side_effect=error), patch.object(
+        v2.subprocess, "run"
+    ) as curl:
+        result = run_action(V2EXChannel(), "hot", {"limit": 1})
+
+    assert result["ok"] is False
+    curl.assert_not_called()
