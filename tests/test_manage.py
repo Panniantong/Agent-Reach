@@ -843,6 +843,29 @@ def test_retired_mcp_cleanup_preserves_changed_private_path(env, monkeypatch):
     assert path.read_text() == "unchanged"
 
 
+def test_skill_unlink_survives_update_until_linked_again(env):
+    home = home_dir()
+    (home / ".claude").mkdir()
+    manage.place_skill()
+    claude = home / ".claude" / "skills"
+    manage.unlink_skill(str(claude))
+    assert not (claude / "agent-reach").exists() and not (claude / "agent-reach").is_symlink()
+    manage.place_skill()
+    assert not (claude / "agent-reach").is_symlink(), "setup/update respect the opt-out"
+    assert (home / ".agents" / "skills" / "agent-reach" / "SKILL.md").is_file(), "the real copy stays"
+    with pytest.raises(ReachError):
+        manage.unlink_skill(str(home / ".agents" / "skills"))
+    foreign = home / "other" / "skills" / "agent-reach"
+    foreign.mkdir(parents=True)
+    (foreign / "SKILL.md").write_text("---\nname: something-else\n---\n")
+    with pytest.raises(ReachError):
+        manage.unlink_skill(str(foreign.parent))
+    assert foreign.is_dir(), "a foreign skill is never removed"
+    manage.link_skill(str(claude))
+    manage.place_skill()
+    assert (claude / "agent-reach").is_symlink(), "link clears the opt-out"
+
+
 @pytest.mark.parametrize("method", ["uv", "other"])
 @pytest.mark.parametrize("returncode,payload", [
     (1, {"ok": True, "result": {"user_actions": []}, "error": None}),

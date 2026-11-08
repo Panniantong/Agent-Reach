@@ -87,6 +87,7 @@ After `agent-reach setup`, show `result.installation_report.markdown` to the use
 | Upgrade / update | `agent-reach update` |
 | Uninstall | show `agent-reach uninstall --dry-run` first, then `agent-reach uninstall` once they confirm |
 | Another AI should use it | `agent-reach skill link <that AI's skills folder>`; `agent-reach skill` shows where it is placed now |
+| An AI should not get it user-wide (e.g. registered per project) | `agent-reach skill unlink <that AI's skills folder>`; setup and update no longer put it back |
 
 Troubleshooting, browser maintenance and uninstall details are in [Maintenance](references/maintenance.md): read it when an update fails, the browser will not start, or the user wants to uninstall.
 
