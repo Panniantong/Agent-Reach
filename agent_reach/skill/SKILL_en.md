@@ -62,6 +62,7 @@ The first time a site is used, if the user's Chrome is connected to the OpenCLI 
 ## Platform notes
 
 - Xiaohongshu read returns text descriptions only; never claim to understand the images or video.
+- If a Reddit or other read result has `gallery_urls`, `preview_image_url`, or other media links in `raw` (`raw.post` for Reddit posts with comments), a short body or caption is not the whole post; download the media to a temporary directory and view it before summarizing, and say which content came from images. If you cannot view the media, say so instead of reconstructing it from comments.
 - When a Boss Zhipin search result has `salary_encoded=true`, never guess the salary digits; read the job link for the readable salary in the detail.
 - What each platform offers publicly and what Reach adds is in [Capability scope](references/capabilities.md): read it when the user asks "what can it get / is it complete" or you need to judge completeness.
 

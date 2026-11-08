@@ -61,6 +61,7 @@ agent-reach read <链接>                   # 按链接自动选渠道
 ## 平台注意
 
 - 小红书 read 只返回文字描述，不要声称看懂了图片或视频。
+- Reddit 等平台的 read 结果若在 `raw`（Reddit 含评论时为 `raw.post`）中含 `gallery_urls`、`preview_image_url` 或其他媒体链接，简短正文或说明不是帖子的全部内容；先把媒体下载到临时目录并查看后再总结，并在答案中说明哪些内容来自图片。无法查看媒体时明确说明，不要从评论补猜。
 - Boss 直聘搜索结果 `salary_encoded=true` 时绝不猜薪资数字；read 职位链接拿详情里的可读薪资。
 - 各平台公开能做什么、Reach 补什么，见 [能力边界](references/capabilities.md)：用户问"能查什么/查得全吗"或要判断结果完整度时读它。
 
