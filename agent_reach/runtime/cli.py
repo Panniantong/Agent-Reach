@@ -109,7 +109,12 @@ def _emit(payload: dict) -> int:
         if info:
             meta = payload.get("meta")
             payload["meta"] = {**(meta if isinstance(meta, dict) else {}), "update": info}
-    sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    output = json.dumps(payload, ensure_ascii=False)
+    try:
+        output.encode(getattr(sys.stdout, "encoding", None) or "utf-8")
+    except UnicodeEncodeError:
+        output = json.dumps(payload, ensure_ascii=True)
+    sys.stdout.write(output + "\n")
     sys.stdout.flush()
     return 0 if payload.get("ok") else 1
 
