@@ -22,7 +22,10 @@ from agent_reach.utils.paths import private_temporary_directory
 from .base import Action, Channel, Param
 
 _VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
-_VTT_TIME_RE = re.compile(r"^\d{2}:\d{2}(:\d{2})?\.\d{3} --> ")
+_VTT_TIME_RE = re.compile(
+    r"^(?:\d{2,}:)?\d{2}:\d{2}\.\d{3}[ \t]+-->[ \t]+"
+    r"(?:\d{2,}:)?\d{2}:\d{2}\.\d{3}(?:[ \t]|$)"
+)
 _TAG_RE = re.compile(r"<[^>]+>")
 _RAW_KEYS = ("id", "duration", "view_count", "like_count", "channel_id", "tags", "categories")
 
@@ -73,15 +76,24 @@ def _iso_date(yyyymmdd) -> str:
 def vtt_to_text(vtt: str) -> str:
     """Plain text from WebVTT: drop headers, timings, tags; collapse auto-caption repeats."""
     out: list[str] = []
+    in_cue = False
+    block_start = True
+    metadata = False
     for line in vtt.splitlines():
         s = line.strip()
-        if (
-            not s
-            or s == "WEBVTT"
-            or s.startswith(("Kind:", "Language:", "NOTE", "STYLE"))
-            or _VTT_TIME_RE.match(s)
-            or s.isdigit()
-        ):
+        if not s:
+            in_cue, block_start, metadata = False, True, False
+            continue
+        if block_start:
+            block_start = False
+            metadata = s in {"NOTE", "STYLE", "REGION"} or s.startswith(("NOTE ", "NOTE\t"))
+        if metadata:
+            continue
+        if _VTT_TIME_RE.match(s):
+            in_cue = True
+            continue
+        if not in_cue:
+            # Headers and optional cue identifiers precede the timing line.
             continue
         s = html.unescape(_TAG_RE.sub("", s)).strip()
         if s and (not out or out[-1] != s):
