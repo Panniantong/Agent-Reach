@@ -9,6 +9,7 @@ import http.client
 import json
 import re
 import time
+import urllib.error
 import urllib.request
 
 from agent_reach.runtime.result import (
@@ -227,4 +228,10 @@ class WebChannel(Channel):
             body = self.read(url, timeout=timeout)
         except RuntimeError as exc:
             raise ReachError(UPSTREAM_BROKEN, str(exc)) from None
+        except urllib.error.HTTPError as exc:
+            if exc.code == 429:
+                # Jina Reader's own limit, not the site's or Exa's: pause only
+                # this backend and let `read` fall back to the next reader.
+                raise ReachError(UPSTREAM_BROKEN, "Jina Reader rate limit (HTTP 429)") from None
+            raise
         return [_parse_jina(url, body)]

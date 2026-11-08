@@ -311,3 +311,35 @@ def test_antibot_detection_has_a_fixed_scan_window():
 
     with patch("urllib.request.urlopen", return_value=_resp(body.encode("utf-8"))):
         assert channel.read("https://example.com/long-article") == body
+
+
+# --- a Jina Reader limit is not a limit on the web channel ---
+#
+# Jina Reader and Exa are separate providers. A 429 from r.jina.ai must let
+# `read` fall back to Exa, and must not pause Exa-backed `search` for an hour.
+
+def _jina_429(self, url, timeout=30):
+    import urllib.error
+
+    raise urllib.error.HTTPError("https://r.jina.ai/" + url, 429, "Too Many Requests", {}, None)
+
+
+def _exa_ok(url, **kwargs):
+    text = "Title: Example\nURL: https://example.com/\n\nbody text"
+    return json.dumps({"result": {"content": [{"type": "text", "text": text}]}}).encode()
+
+
+def test_jina_rate_limit_falls_back_to_exa_for_read():
+    with patch.object(WebChannel, "read", _jina_429), \
+            patch("agent_reach.channels.web.http_request", side_effect=_exa_ok) as exa:
+        out = run_action(WebChannel(), "read", {"target": "https://example.com/"})
+    assert out["ok"] and out["backend"] == "exa", out
+    assert exa.call_count == 1
+
+
+def test_jina_rate_limit_does_not_pause_web_search():
+    with patch.object(WebChannel, "read", _jina_429), \
+            patch("agent_reach.channels.web.http_request", side_effect=_exa_ok):
+        run_action(WebChannel(), "read", {"target": "https://example.com/"}, only_backend="jina")
+        out = run_action(WebChannel(), "search", {"query": "python"})
+    assert out["ok"], out
