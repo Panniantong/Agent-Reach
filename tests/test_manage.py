@@ -753,6 +753,21 @@ def test_configure_saves_known_keys_only(env):
         manage.configure("twitter-cookies", "x")
 
 
+def test_configure_session_reuse_only_accepts_on_or_off(env):
+    from agent_reach.config import Config
+
+    manage.configure("session-reuse", " OFF ")
+    assert Config(read_only=True).get("session_reuse") == "off"
+    manage.configure("session-reuse", "on")
+    assert Config(read_only=True).get("session_reuse") == "on"
+    for bad in ("yes", "true", "1", "enable"):
+        with pytest.raises(ReachError, match="on or off"):
+            manage.configure("session-reuse", bad)
+    with pytest.raises(ReachError, match="empty value"):
+        manage.configure("session-reuse", "")
+    assert Config(read_only=True).get("session_reuse") == "on"
+
+
 def test_configure_browser_port_moves_the_dedicated_browser(env, monkeypatch):
     from agent_reach.runtime import browser
 
