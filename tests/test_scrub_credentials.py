@@ -1,15 +1,7 @@
 """Secrets embedded in URLs must not reach user-facing diagnostics."""
 
-import sys
-from types import SimpleNamespace
 
-import pytest
 
-from agent_reach import cookie_extract
-from agent_reach.channels import v2ex as v2ex_module
-from agent_reach.channels import xueqiu as xueqiu_module
-from agent_reach.channels.v2ex import V2EXChannel
-from agent_reach.channels.xueqiu import XueqiuChannel
 from agent_reach.utils.text import scrub_url_credentials
 
 
@@ -55,49 +47,5 @@ def test_leaves_non_secret_urls_and_plain_text_unchanged():
     assert scrub_url_credentials(raw) == raw
 
 
-@pytest.mark.parametrize(
-    ("module", "channel"),
-    [
-        (v2ex_module, V2EXChannel()),
-        (xueqiu_module, XueqiuChannel()),
-    ],
-)
-def test_channel_health_messages_scrub_url_secrets(module, channel, monkeypatch):
-    def fail(_url, *_args, **_kwargs):
-        raise RuntimeError(
-            "proxy http://user:pass@proxy.test:8080 refused "
-            "https://api.test/data?access_token=top-secret"
-        )
-
-    monkeypatch.setattr(module, "_get_json", fail)
-
-    _status, message = channel.check()
-
-    assert "user:pass" not in message
-    assert "top-secret" not in message
-    assert "***" in message
 
 
-def test_browser_backend_errors_scrub_url_secrets(monkeypatch):
-    def chrome(_domains):
-        raise RuntimeError(
-            "failed via http://user:pass@proxy.test "
-            "https://api.test/?token=top-secret"
-        )
-
-    fake_rookiepy = SimpleNamespace(
-        chrome=chrome,
-        firefox=lambda domains: [],
-        edge=lambda domains: [],
-        brave=lambda domains: [],
-        opera=lambda domains: [],
-    )
-    monkeypatch.setitem(sys.modules, "rookiepy", fake_rookiepy)
-
-    with pytest.raises(RuntimeError) as error:
-        cookie_extract.extract_all("chrome", platform="xueqiu")
-
-    message = str(error.value)
-    assert "user:pass" not in message
-    assert "top-secret" not in message
-    assert "***" in message

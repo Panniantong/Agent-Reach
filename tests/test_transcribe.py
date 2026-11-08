@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for agent_reach.transcribe — provider routing, fallback, and errors."""
 
+import os
 import subprocess
 from pathlib import Path
 from typing import List
@@ -281,12 +282,13 @@ class TestOrchestrator:
         events = []
 
         def fake_run(cmd, **_kwargs):
-            events.append(cmd[0])
+            events.append(os.path.splitext(os.path.basename(cmd[0]))[0].lower())
+            seconds = tr.MAX_AUDIO_SECONDS + 1
             return subprocess.CompletedProcess(
                 cmd,
-                0,
-                stdout=str(tr.MAX_AUDIO_SECONDS + 1),
-                stderr="",
+                1,
+                stdout="",
+                stderr=f"  Duration: {seconds // 3600:02d}:{seconds % 3600 // 60:02d}:{seconds % 60:02d}.00, start: 0\n",
             )
 
         monkeypatch.setattr(tr, "_require", lambda _binary: None)
@@ -302,7 +304,7 @@ class TestOrchestrator:
         with pytest.raises(tr.TranscribeError, match="duration.*limit"):
             tr.transcribe(str(chunk_file), config=fake_config)
 
-        assert events == ["ffprobe"]
+        assert events == ["ffmpeg"]
 
     def test_duration_probe_timeout_fails_before_compression(
         self, monkeypatch, fake_config, chunk_file
@@ -314,7 +316,7 @@ class TestOrchestrator:
             observed["timeout"] = _kwargs.get("timeout")
             raise subprocess.TimeoutExpired(
                 cmd,
-                timeout=tr.FFPROBE_TIMEOUT_SECONDS,
+                timeout=tr.PROBE_TIMEOUT_SECONDS,
             )
 
         monkeypatch.setattr(tr, "_require", lambda _binary: None)
@@ -329,11 +331,11 @@ class TestOrchestrator:
 
         with pytest.raises(
             tr.TranscribeError,
-            match=r"ffprobe timed out.*30s",
+            match=r"ffmpeg timed out.*30s",
         ):
             tr.transcribe(str(chunk_file), config=fake_config)
 
-        assert observed["timeout"] == tr.FFPROBE_TIMEOUT_SECONDS
+        assert observed["timeout"] == tr.PROBE_TIMEOUT_SECONDS
 
     def test_unparseable_duration_fails_before_compression(
         self, monkeypatch, fake_config, chunk_file
@@ -345,9 +347,9 @@ class TestOrchestrator:
             "run",
             lambda cmd, **_kwargs: subprocess.CompletedProcess(
                 cmd,
-                0,
-                stdout="N/A\n",
-                stderr="",
+                1,
+                stdout="",
+                stderr="  Duration: N/A, bitrate: N/A\n",
             ),
         )
         monkeypatch.setattr(
@@ -360,7 +362,7 @@ class TestOrchestrator:
 
         with pytest.raises(
             tr.TranscribeError,
-            match=r"ffprobe could not parse.*duration",
+            match=r"ffmpeg could not parse.*duration",
         ):
             tr.transcribe(str(chunk_file), config=fake_config)
 
@@ -532,22 +534,11 @@ class TestOrchestrator:
         fake_config.set("groq_api_key", "gsk_test")
         created_work_dirs = []
 
-        class FakeTemporaryDirectory:
-            def __init__(self, prefix=None):
-                self.path = tmp_path / "auto-work"
-
-            def __enter__(self):
-                self.path.mkdir()
-                created_work_dirs.append(self.path)
-                return str(self.path)
-
-            def __exit__(self, *_):
-                for child in self.path.iterdir():
-                    child.unlink()
-                self.path.rmdir()
-
         def fake_download(source, out_dir):
-            assert Path(out_dir) == tmp_path / "auto-work"
+            from agent_reach.runtime import state
+            assert Path(out_dir).parent == state.root()
+            assert state.owned_path(Path(out_dir))
+            created_work_dirs.append(Path(out_dir))
             audio = Path(out_dir) / "source.m4a"
             audio.write_bytes(b"audio")
             return audio
@@ -557,7 +548,6 @@ class TestOrchestrator:
             compressed.write_bytes(b"x" * 1024)
             return compressed
 
-        monkeypatch.setattr(tr.tempfile, "TemporaryDirectory", FakeTemporaryDirectory)
         monkeypatch.setattr(tr, "download_audio", fake_download)
         monkeypatch.setattr(tr, "compress_audio", fake_compress)
         monkeypatch.setattr(
@@ -859,50 +849,3 @@ class TestSubprocessDecoding:
             tr._probe_audio_duration(tmp_path / "audio.m4a")
 
 
-# --- YouTubeChannel integration --------------------------------------- #
-
-
-class TestYouTubeChannelTranscribe:
-    def test_delegates_to_transcribe(self, monkeypatch, fake_config):
-        from agent_reach.channels.youtube import YouTubeChannel
-
-        captured = {}
-
-        def fake_transcribe(
-            source,
-            *,
-            provider="auto",
-            out_dir=None,
-            config=None,
-            allow_provider_fallback=False,
-        ):
-            captured["source"] = source
-            captured["provider"] = provider
-            captured["config"] = config
-            captured["allow_provider_fallback"] = allow_provider_fallback
-            return "delegated text"
-
-        monkeypatch.setattr(tr, "transcribe", fake_transcribe)
-        out = YouTubeChannel().transcribe(
-            "https://youtu.be/abc",
-            provider="groq",
-            config=fake_config,
-            allow_provider_fallback=True,
-        )
-        assert out == "delegated text"
-        assert captured["source"] == "https://youtu.be/abc"
-        assert captured["provider"] == "groq"
-        assert captured["config"] is fake_config
-        assert captured["allow_provider_fallback"] is True
-
-
-# --- Config feature requirement --------------------------------------- #
-
-
-class TestConfigOpenAIWhisper:
-    def test_openai_whisper_feature_registered(self, fake_config):
-        assert "openai_whisper" in Config.FEATURE_REQUIREMENTS
-        assert Config.FEATURE_REQUIREMENTS["openai_whisper"] == ["openai_api_key"]
-        assert not fake_config.is_configured("openai_whisper")
-        fake_config.set("openai_api_key", "sk-test")
-        assert fake_config.is_configured("openai_whisper")

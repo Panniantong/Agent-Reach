@@ -1,32 +1,33 @@
 # Agent Reach
 
-> Give your AI agent eyes to see the internet. Agent Reach installs, routes, and health-checks upstream tools for 15 platforms — Twitter/X, Reddit, Facebook, Instagram, YouTube, GitHub, Bilibili, XiaoHongShu, LinkedIn, V2EX, Xueqiu, Xiaoyuzhou Podcast, RSS, web search, and any web page. One install, zero API fees.
+> Makes it easier for CLI agents (Claude Code, Codex, Hermes Agent, OpenClaw, ...) to reach the internet: login-walled platforms (XiaoHongShu, Twitter/X, Reddit, LinkedIn), video content (YouTube and Bilibili subtitles, YouTube speech-to-text), Chinese platforms, and clean structured data (Xueqiu, V2EX, GitHub). One entry point, one JSON output shape.
 
-## Quick Start
+## Install
 
-- [Installation Guide](https://github.com/Panniantong/Agent-Reach/blob/main/docs/install.md): Step-by-step setup instructions for AI agents
-- [README (中文)](https://github.com/Panniantong/Agent-Reach/blob/main/README.md): Full documentation in Chinese
-- [README (English)](https://github.com/Panniantong/Agent-Reach/blob/main/docs/README_en.md): Full documentation in English
+- [Installation Guide](https://github.com/Panniantong/Agent-Reach/blob/main/docs/install.md): agent-executable steps
+- Install from GitHub only, with uv: `uv tool install https://github.com/Panniantong/Agent-Reach/archive/refs/tags/v1.6.0.zip`, then `agent-reach setup`. The PyPI package named `agent-reach` is NOT this project.
+- `setup` turns on the default channels and places one copy of the skill at `~/.agents/skills/agent-reach/SKILL.md`, linked into the skill folders of other AIs found on the machine; `agent-reach skill link <skills-dir>` adds another AI.
 
-## Core Commands
+## Commands
 
-- [CLI Usage](https://github.com/Panniantong/Agent-Reach/blob/main/docs/install.md): `agent-reach doctor --json` shows the active backend; agents then call upstream tools directly (`opencli`, `twitter`, `bili`, `yt-dlp`, `gh`, `mcporter`, etc.).
+- `agent-reach channels`: channels, actions, params (live source of truth)
+- `agent-reach <channel> <action> [args]`: e.g. `agent-reach bilibili search python`
+- `agent-reach read <url>`: read a link with the matching channel
+- Output: `{schema_version, ok, channel, action, backend, items, meta, error}`; error codes NEED_SETUP, NEED_LOGIN, UPSTREAM_BROKEN, TIMEOUT, RATE_LIMITED, NOT_FOUND, BAD_INPUT
+- Management: `setup`, `add|remove <channel>`, `login|logout <channel>` (the user logs in), `browser setup|status`, `doctor`, `check`, `skill`, `skill link <dir>`, `update`, `configure`, `uninstall`
+- `add` installs everything a channel needs (Node.js, OpenCLI, CloakBrowser/Chrome, ffmpeg, browser extension; no admin password); the user only logs in or enters a key. `remove` also clears its login and private tools; default channels can be removed and stay removed across updates.
+- `update` upgrades the program and reinstalls every added channel's tools: tools with a tested version stay at that version, others get the newest version inside floor/exclude. It returns `result.user_actions`. When a newer release exists, any JSON output carries `meta.update = {current, latest, notes}`; tell the user and update only after they agree.
+- Browser channels share one CloakBrowser profile under ~/.agent-reach/browser/profile (system Chrome on download failure); it opens automatically and closes after 10 idle minutes. Explicit one-time site imports are available; no personal Cookie database is read.
 
-## Key Features
+## Channels
 
-- Read any URL: tweets, Reddit posts, Facebook pages/feed/groups, Instagram profiles/posts, YouTube videos (transcripts), GitHub repos, articles, XiaoHongShu notes, Bilibili videos, RSS feeds
-- Search/discover across platforms: Twitter/X, Reddit, Facebook, Instagram user search, GitHub, YouTube, Bilibili, XiaoHongShu, LinkedIn, V2EX, Xueqiu, Web (via Exa)
-- Self-diagnosis: `agent-reach doctor` checks what works and what needs setup
-- Auto-installs dependencies: `agent-reach install --env=auto`
-- Browser-session / cookie auth for platforms that require login (Twitter, Reddit, Facebook, Instagram, XiaoHongShu, Xueqiu)
-- Proxy support for platforms that block server IPs (Reddit, Twitter)
-- Zero API fees: all backends are free and open-source (OpenCLI, twitter-cli, rdt-cli, bili-cli, yt-dlp, Jina Reader, mcporter/Exa, etc.)
+- default: web, youtube, github, v2ex, bilibili (web is a fallback when the agent's own search/fetch fails)
+- optional: xiaohongshu, reddit, linkedin, boss, xueqiu, xiaoyuzhou (Groq key)
+- experimental: twitter, facebook, instagram
 
-## Troubleshooting
+## Docs
 
-- [Troubleshooting Guide](https://github.com/Panniantong/Agent-Reach/blob/main/docs/troubleshooting.md): Common issues and solutions
-
-## Optional
-
-- [SKILL.md](https://github.com/Panniantong/Agent-Reach/blob/main/agent_reach/skill/SKILL.md): Integration guide for AI agent frameworks (OpenClaw, Claude Code, etc.)
-- [PyPI Package](https://pypi.org/project/agent-reach/): `pip install agent-reach`
+- [README (中文)](https://github.com/Panniantong/Agent-Reach/blob/main/README.md)
+- [README (English)](https://github.com/Panniantong/Agent-Reach/blob/main/docs/README_en.md)
+- [Update](https://github.com/Panniantong/Agent-Reach/blob/main/docs/update.md)
+- [Troubleshooting](https://github.com/Panniantong/Agent-Reach/blob/main/docs/troubleshooting.md)

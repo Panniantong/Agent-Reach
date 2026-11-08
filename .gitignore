@@ -5,6 +5,10 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.venv/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
 .env
 .agent-reach/
 *.log

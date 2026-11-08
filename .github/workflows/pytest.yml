@@ -6,11 +6,15 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          - os: macos-latest
+            python-version: "3.13"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +32,10 @@ jobs:
       - name: Run tests
         run: |
           pytest -q
+
+      - name: Type-check
+        run: |
+          mypy agent_reach
 
   windows-test:
     runs-on: windows-latest
@@ -78,9 +86,19 @@ jobs:
           names = zipfile.ZipFile(whl).namelist()
           dupes = [n for n, c in collections.Counter(names).items() if c > 1]
           assert not dupes, f"duplicate entries in wheel: {dupes}"
-          assert "agent_reach/skill/SKILL.md" in names, "SKILL.md missing from wheel"
-          for prefix in ("agent_reach/guides/", "agent_reach/scripts/", "agent_reach/skill/references/"):
-              assert any(n.startswith(prefix) for n in names), f"{prefix} missing from wheel"
+          for path in (
+              "agent_reach/skill/SKILL.md",
+              "agent_reach/skill/SKILL_en.md",
+              "agent_reach/skill/references/sessions.md",
+              "agent_reach/skill/references/maintenance.md",
+              "agent_reach/skill/references/capabilities.md",
+          ):
+              assert path in names, f"{path} missing from wheel"
+          assert "agent_reach/channels/xiaoyuzhou.py" in names
+          assert "agent_reach/scripts/transcribe_xiaoyuzhou.sh" in names
+          for retired in ("agent_reach/mcp_server.py", "agent_reach/runtime/ask.py",
+                          "agent_reach/backends/cloak_worker.py", "agent_reach/runtime/opencli_compat.py"):
+              assert retired not in names, f"retired module remains in wheel: {retired}"
           print(f"wheel OK: {len(names)} entries, no duplicates, data files present")
           PY
 
@@ -89,4 +107,73 @@ jobs:
           python -m venv /tmp/smoke
           /tmp/smoke/bin/pip install --quiet dist/*.whl
           /tmp/smoke/bin/agent-reach version
+          cd /tmp && /tmp/smoke/bin/agent-reach channels | /tmp/smoke/bin/python -c "import json, sys; d = json.load(sys.stdin); assert d['ok'] and d['channels'], d; print(f\"channels OK: {len(d['channels'])}\")"
           cd /tmp && /tmp/smoke/bin/python -c "import agent_reach; from importlib.resources import files; assert (files('agent_reach')/'skill'/'SKILL.md').is_file(); print('SKILL.md ships in site-packages OK')"
+
+  # Most users are on 1.5 (installed with pipx). Rehearse the documented
+  # upgrade (docs/install.md, "Upgrade from 1.5") on every OS: the new copy must win on PATH,
+  # keep the old config, explain the upgrade and remove the old pipx copy.
+  upgrade-from-1-5:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    env:
+      AGENT_REACH_NO_UPDATE_CHECK: "1"
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install 1.5 the way its install guide said (pipx)
+        run: |
+          git fetch --tags --force https://github.com/Panniantong/Agent-Reach.git 'refs/tags/v1.5.0:refs/tags/v1.5.0' || true
+          git worktree add ../v15 v1.5.0
+          python -m pip install --quiet pipx
+          python -m pipx install --python "$(python -c 'import sys;print(sys.executable)')" ../v15
+          echo "$(python -m pipx environment --value PIPX_BIN_DIR)" >> "$GITHUB_PATH"
+          python - <<'PY'
+          from pathlib import Path
+          d = Path.home() / ".agent-reach"; d.mkdir(exist_ok=True)
+          (d / "config.yaml").write_text("groq_api_key: test\ntwitter_auth_token: t\n")
+          PY
+
+      - name: Old version is 1.5
+        run: |
+          v="$(agent-reach version)"; echo "$v"
+          echo "$v" | grep -q "v1.5"
+
+      - name: Upgrade as docs/install.md says
+        run: |
+          uv tool install --force .
+          echo "$(uv tool dir --bin)" >> "$GITHUB_PATH"
+
+      - name: New copy wins, sets up, removes the old one
+        run: |
+          v="$(agent-reach version)"; echo "$v"
+          echo "$v" | grep -q '"install_method": "uv"'
+          agent-reach setup > setup.json || true
+          python - <<'PY'
+          import json
+          d = json.loads(open("setup.json", encoding="utf-8").read().strip().split("\n")[-1])
+          r = d["result"]
+          assert r["migration"] and r["migration"]["migrated"], r.get("migration")
+          assert "twitter" in r["migration"]["suggested_channels"], r["migration"]
+          assert r["old_copies"]["removed"] and not r["old_copies"]["failed"], r["old_copies"]
+          assert "1.5" in r["installation_report"]["markdown"]
+          print("upgrade OK:", r["old_copies"])
+          PY
+          if python -m pipx list --short | grep -q agent-reach; then echo "old pipx copy still registered"; exit 1; fi
+          agent-reach version | grep -q '"install_method": "uv"'
