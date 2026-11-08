@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  Login-walled platforms, what's inside videos, Chinese platforms, clean structured data. One command.
+  Let your agent search and read X, Reddit, YouTube, XiaoHongShu…
 </p>
 
 <p align="center">
@@ -70,7 +70,7 @@
 
 CLI agents such as Claude Code, Codex, Hermes Agent and OpenClaw come with web search and page fetching, but they mostly can't reach:
 
-- **Features that need a login**: listing an X account's posts, searching Reddit, reading LinkedIn job details or XiaoHongShu notes.
+- **Features that need a login**: searching XiaoHongShu notes, checking an X account's latest posts, reading job details, and more.
 - **What's inside video**: YouTube and Bilibili subtitles, plus speech-to-text for YouTube videos and Xiaoyuzhou podcasts.
 - **Chinese platforms**: Bilibili, XiaoHongShu, V2EX and Xueqiu, which general search covers poorly.
 - **Clean structured data**: Xueqiu quotes, V2EX topics and replies, GitHub repos and issues, already cleaned up.
@@ -86,7 +86,7 @@ agent-reach read https://www.v2ex.com/t/123   # picks the channel from the link
 ### ✅ Before you start, you might want to know
 
 - **Which agents?** Every agent.
-- **Does it touch my browser and accounts?** Login channels use Agent Reach's own browser, in the background without windows. The first time a site is used, that site's login is copied over from your Chrome; your browser is not changed and passwords are never read. The copied login is usually your main account, so switching to a secondary one is recommended, see Security below.
+- **Does it touch my browser and accounts?** Login channels use Agent Reach's own browser, in the background without windows. The first time a site is used, that site's login is copied over from your Chrome; your browser is not changed and passwords are never read. The copied login is usually your main account, so switching to a secondary one is recommended, see Security below. Details: [session setup](../agent_reach/skill/references/sessions.md).
 
 ---
 
@@ -175,7 +175,7 @@ flowchart LR
     F --> A
 ```
 
-Platforms change and tools break all the time. Switching tools only reorders that list; the way your agent uses Agent Reach stays the same.
+Platforms change and tools break all the time. Switching tools only means updating that list; the way your agent uses Agent Reach stays the same.
 
 ---
 
@@ -215,10 +215,12 @@ Star it so you can find it next time you need it. ⭐
 
 ## Collaboration / community group
 
-For collaboration, or to join the community group, add me on WeChat:
+For collaboration, or to join the community group, add me on WeChat, or join our Discord community:
 
 <p align="center">
   <img src="wechat-group-qr.jpg" width="280" alt="WeChat QR">
+  &nbsp;&nbsp;
+  <a href="https://discord.gg/FN6hpGrYKg"><img src="https://img.shields.io/badge/Discord-Join%20us-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="Join the Agent Reach Discord community"></a>
 </p>
 
 > For bug reports and feature requests, please use [GitHub Issues](https://github.com/Panniantong/Agent-Reach/issues) — easier to track.
