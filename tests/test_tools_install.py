@@ -96,5 +96,5 @@ def test_opencli_uses_pristine_compatible_release_without_install_hooks(monkeypa
     monkeypatch.setattr(tools,"_run",lambda argv,**kwargs:calls.append(argv) or "")
     tools._install_npm(tools.TOOLS["opencli"],global_prefix=tmp_path/"npm")
     assert "--ignore-scripts" in calls[0]
-    assert calls[0][-1]=="@jackwener/opencli@1.8.7"
+    assert calls[0][-1]=="@jackwener/opencli@2.0.3"
     assert not tools.allowed(tools.TOOLS["opencli"],"1.8.8")
