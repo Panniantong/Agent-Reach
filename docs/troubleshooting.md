@@ -97,7 +97,7 @@ The Agent Reach browser presents itself in Chinese (`zh-CN`) by default, so site
 agent-reach configure browser-locale en-US
 ```
 
-Saved logins are kept. If the browser is open, it closes and reopens in the new language the next time it is used.
+Saved logins are kept. If the browser is open, it closes and reopens in the new language the next time it is used. An existing profile's saved languages are updated to match, so sites see the new language in `navigator.language` and `Accept-Language` on every OS.
 
 ## Still stuck
 

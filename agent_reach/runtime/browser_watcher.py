@@ -84,6 +84,11 @@ def _launch_cloak(url: str, *, headless: bool = True):
         if parsed.username:
             proxy_options.update(username=unquote(parsed.username), password=unquote(parsed.password or ""))
 
+    # An existing profile's saved languages beat --lang; bring them in line before it opens.
+    # Best effort: a profile that can't be updated still opens, just in its old language.
+    if browser.locale_is_configured():
+        with contextlib.suppress(Exception):
+            browser.apply_profile_locale(browser.profile_dir(), browser.configured_locale())
 
     ctx = launch_persistent_context(
         str(browser.profile_dir()), headless=headless, locale=browser.configured_locale(),
