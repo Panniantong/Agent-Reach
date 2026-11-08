@@ -26,14 +26,14 @@ from agent_reach.runtime.result import (
     unix_to_iso,
 )
 from agent_reach.runtime.run import CommandFailed, http_request, run_cmd
-from agent_reach.runtime.sessions import session_env, sessions_root
+from agent_reach.runtime.sessions import has_login_state, session_env
 
 from .base import Action, Channel, Param
 
 _BV_RE = re.compile(r"BV[0-9A-Za-z]{10}")
 _BILI_LOGIN_HINT = (
-    "Bilibili subtitles need a login. Ask the user to run `bili login` and scan "
-    "the QR code themselves; never log in on their behalf."
+    "Bilibili subtitles need a login. Ask the user to run `agent-reach login bilibili` "
+    "and scan the QR code themselves; never log in on their behalf."
 )
 
 
@@ -82,22 +82,26 @@ def _bili_json(args: list, timeout: float) -> Any:
     return payload.get("data") or {}
 
 
-def _reuse_subtitle_login(timeout: float) -> None:
-    """Use the official upstream credential writer; no browser launch or database read."""
+def reuse_browser_session(timeout: float) -> bool:
+    """Write a bili-cli credential from the connected local browser session.
+
+    Uses the official upstream credential writer; no browser launch or database
+    read. Returns True only when a SESSDATA cookie was actually handed over.
+    """
     import os
     from pathlib import Path
 
     from agent_reach.runtime import session_reuse, state, tools
     saved = state.load().get("session_reuse", {}).get("bilibili", {})
     if saved.get("blocked") or saved.get("source") == "manual":
-        return
+        return False
     cookies, source = session_reuse._source_cookies("bilibili", ("bilibili.com",))
     jar = {c["name"]: c["value"] for c in cookies}
     if not jar.get("SESSDATA"):
-        return  # keep a saved native login when no connected local source exists
+        return False  # keep a saved native login when no connected local source exists
     exe = tools.resolve("bili")
     if not exe:
-        return
+        return False
     python = Path(exe).with_name("python.exe" if os.name == "nt" else "python")
     script = (
         "import json,sys;from bili_cli.auth import save_credential;"
@@ -110,6 +114,12 @@ def _reuse_subtitle_login(timeout: float) -> None:
             input_data=json.dumps(jar), label="Bilibili site login reuse")
     state.mutate(lambda data: data.setdefault("session_reuse", {}).__setitem__("bilibili", {
         "source": source, "copied_cookies": len(jar), "at": state.now(), "verified": False, "source_changed": False}))
+    return True
+
+
+def _reuse_subtitle_login(timeout: float) -> None:
+    """Subtitle is the only action that needs a saved login; reuse it silently."""
+    reuse_browser_session(timeout)
 
 
 def _cli_video_item(v: dict, text=None) -> dict:
@@ -163,6 +173,14 @@ class BilibiliChannel(Channel):
     login_argv = ("bili", "login")
     legacy_state = (".bilibili-cli",)
     tools = ("bili-cli",)
+    #: bilibili-cli <= 0.6.2 saves an empty credential after Bilibili moved the
+    #: QR-login cookies from the redirect URL to Set-Cookie (bilibili-cli#32).
+    login_upstream_hint = (
+        "bili login exited 0 but saved an empty credential. Since Bilibili moved the "
+        "QR-login cookies to Set-Cookie (bilibili-cli#32), bili-cli <= 0.6.2 cannot "
+        "complete a QR login. Log in to bilibili.com in your browser, then run "
+        "`agent-reach login bilibili` again to reuse those cookies."
+    )
     actions = (
         Action(
             "search",
@@ -197,6 +215,9 @@ class BilibiliChannel(Channel):
         ),
     )
 
+    def recover_login(self, timeout: float) -> bool:
+        return reuse_browser_session(timeout)
+
     def can_handle(self, url: str) -> bool:
         from agent_reach.utils.url import host_matches
 
@@ -229,7 +250,7 @@ class BilibiliChannel(Channel):
         sub = data.get("subtitle") or {}
         if not sub.get("available"):
             # Without a Bilibili login, upstream only says subtitles were unavailable.
-            if not (sessions_root() / "bili-cli" / ".bilibili-cli" / "credential.json").exists():
+            if not has_login_state("bili-cli"):
                 raise ReachError(NEED_LOGIN, "Bilibili is not logged in", hint=_BILI_LOGIN_HINT)
             if any(w.get("code") == "subtitle_unavailable" for w in data.get("warnings", []) if isinstance(w, dict)):
                 raise ReachError(UPSTREAM_BROKEN, "Bilibili could not retrieve subtitles; this does not prove the video has none")

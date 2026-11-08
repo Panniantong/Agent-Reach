@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import http.client
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -11,11 +12,46 @@ import urllib.request
 from pathlib import Path
 from typing import Mapping, Optional, Sequence
 
+from agent_reach import __version__
 from agent_reach.utils.process import utf8_subprocess_env
 
-from .result import NEED_SETUP, TIMEOUT, ReachError, _clean
+from .result import BAD_INPUT, NEED_SETUP, TIMEOUT, ReachError, _clean
 
 _DEFAULT_MAX_BYTES = 8 * 1024 * 1024
+# Some fronts (Exa's Cloudflare) block the default Python-urllib agent (error 1010).
+_USER_AGENT = f"agent-reach/{__version__}"
+_NPM_SHIM_SCRIPT = re.compile(r'"%dp0%\\(?P<script>[^"\r\n]*?\.(?:cjs|mjs|js))"', re.IGNORECASE)
+_CMD_METACHARS = frozenset('&|<>^()%!"\r\n')
+
+
+def _windows_argv(exe: str, args: Sequence[str], *, node: Optional[str]) -> list[str]:
+    """Avoid cmd.exe parsing arguments passed to Windows batch shims.
+
+    npm installs ``.cmd`` launchers even for JavaScript entry points. Running
+    their JS file with Node directly preserves arguments such as URLs containing
+    ``&``. Unknown batch files stay usable for ordinary arguments, but reject
+    cmd.exe metacharacters instead of silently splitting or expanding them.
+    """
+    if not exe.lower().endswith((".cmd", ".bat")):
+        return [exe, *args]
+
+    try:
+        shim = Path(exe).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        shim = ""
+    match = _NPM_SHIM_SCRIPT.search(shim)
+    if match and node and Path(node).is_file():
+        relative = match.group("script").replace("\\", os.sep)
+        script = Path(exe).parent / relative
+        if script.is_file():
+            return [node, str(script), *args]
+
+    if any(char in _CMD_METACHARS for arg in args for char in str(arg)):
+        raise ReachError(
+            BAD_INPUT,
+            f"{Path(exe).name} cannot safely receive arguments containing cmd.exe metacharacters",
+        )
+    return [exe, *args]
 
 
 class CommandFailed(ReachError):
@@ -54,8 +90,11 @@ def run_cmd(
     # The local API worker is already in a supervised process group. Keep its
     # children there so the API's hard deadline can stop the entire execution.
     supervised = os.environ.get("REACH_API_SUPERVISED") == "1"
+    child_argv = [exe, *argv[1:]]
+    if sys.platform == "win32" and exe.lower().endswith((".cmd", ".bat")):
+        child_argv = _windows_argv(exe, argv[1:], node=resolve("node"))
     proc = subprocess.Popen(
-        [exe, *argv[1:]],
+        child_argv,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         stdin=subprocess.PIPE if input_data is not None else subprocess.DEVNULL,
@@ -117,7 +156,7 @@ def http_request(
     max_bytes: int = _DEFAULT_MAX_BYTES,
 ) -> bytes:
     """GET (or POST when `data` is given) with a size cap. Errors propagate to classify()."""
-    merged = {"User-Agent": "agent-reach"}
+    merged = {"User-Agent": _USER_AGENT}
     merged.update(headers or {})
     req = urllib.request.Request(url, data=data, headers=merged)
     with urllib.request.urlopen(req, timeout=max(timeout, 0.1)) as resp:

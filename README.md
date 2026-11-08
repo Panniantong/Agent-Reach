@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  登录墙后的平台、视频里的内容、中文平台、干净的结构化数据，一条命令拿到
+  让你的 Agent 直接搜索和阅读 X、Reddit、YouTube、小红书……
 </p>
 
 <p align="center">
@@ -25,11 +25,11 @@
 </p>
 
 <p align="center">
-  <a href="https://discord.gg/NSZz22R39"><img src="https://img.shields.io/badge/Discord-加入社区-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="加入 Agent Reach Discord 社区"></a>
+  <a href="https://discord.gg/FN6hpGrYKg"><img src="https://img.shields.io/badge/Discord-加入社区-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="加入 Agent Reach Discord 社区"></a>
 </p>
 
 <p align="center">
-  💬 有问题、想要新平台、或者想看看别人怎么用？来 <a href="https://discord.gg/NSZz22R39">Discord</a> 聊聊。
+  💬 有问题、想要新平台、或者想看看别人怎么用？来 <a href="https://discord.gg/FN6hpGrYKg">Discord</a> 聊聊。
 </p>
 
 ---
@@ -57,14 +57,6 @@
 <tr>
 <td width="180" align="center"><a href="https://www.tencentcloud.com/act/pro/intl-openclaw?referral_code=G76Y819A&amp;lang=zh&amp;pg="><img src="docs/assets/sponsors/tencent-cloud.svg" alt="腾讯云 OpenClaw" width="150"></a></td>
 <td>在腾讯云 Lighthouse 秒级部署 OpenClaw 全能助手，可通过对话丝滑接入 Agent Reach，给你的 OpenClaw 一键装上互联网能力。</td>
-</tr>
-<tr>
-<td width="180" align="center"><a href="https://www.coreclaw.com/?utm_source=github&amp;utm_medium=referral&amp;utm_campaign=Reach&amp;utm_term=Reach&amp;utm_id=Reach"><img src="docs/assets/sponsors/coreclaw.png" alt="CoreClaw" width="150"></a></td>
-<td><a href="https://www.coreclaw.com/?utm_source=github&amp;utm_medium=referral&amp;utm_campaign=Reach&amp;utm_term=Reach&amp;utm_id=Reach">CoreClaw</a> | 网页抓取平台与现成数据采集工具，CoreClaw 提供 100+ 现成数据采集工具，支持 Amazon、TikTok、Google Maps、Instagram、Facebook、YouTube 等平台，无需代码，支持 JSON/CSV 导出，仅对成功结果计费。<a href="https://www.coreclaw.com/?utm_source=github&amp;utm_medium=referral&amp;utm_campaign=Reach&amp;utm_term=Reach&amp;utm_id=Reach">免费$3测试！</a></td>
-</tr>
-<tr>
-<td width="180" align="center"><a href="https://www.ucloud.cn/site/active/astraflow?ytag=geo_waituo_Agent"><img src="docs/assets/sponsors/astraflow.png" alt="星图 AstraFlow" width="150"></a></td>
-<td><a href="https://www.ucloud.cn/site/active/astraflow?ytag=geo_waituo_Agent">优刻得星图astraflow大模型</a>，支持200+模型一键调用：内置 Kimi K3、DeepSeek V4/V3、Qwen 3、GLM5.2、happyhorse等全球领先开源大模型，无需自训，开箱即用</td>
 </tr>
 </table>
 
@@ -220,7 +212,6 @@ Star 一下，下次需要的时候能找到。⭐
 ## 联系
 
 - 📧 **Email:** pnt01@foxmail.com
-- 🐦 **Twitter/X:** [@Neo_Reidlab](https://x.com/Neo_Reidlab)
 
 ## 业务合作 / 交流群
 
@@ -229,7 +220,7 @@ Star 一下，下次需要的时候能找到。⭐
 <p align="center">
   <img src="docs/wechat-group-qr.jpg" width="280" alt="WeChat QR">
   &nbsp;&nbsp;
-  <a href="https://discord.gg/NSZz22R39"><img src="https://img.shields.io/badge/Discord-加入社区-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="加入 Agent Reach Discord 社区"></a>
+  <a href="https://discord.gg/FN6hpGrYKg"><img src="https://img.shields.io/badge/Discord-加入社区-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="加入 Agent Reach Discord 社区"></a>
 </p>
 
 > Bug 反馈和功能请求请用 [GitHub Issues](https://github.com/Panniantong/Agent-Reach/issues)，更容易跟踪。

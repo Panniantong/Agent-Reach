@@ -34,7 +34,27 @@ from agent_reach.utils.paths import (
     read_small_text_no_follow,
 )
 
-CDP_PORT = 9222
+DEFAULT_CDP_PORT = 9222
+
+
+def configured_port() -> int:
+    """Port from `agent-reach configure browser-port`, else 9222 (another tool may own 9222).
+
+    The watcher runs under the CloakBrowser Python (no yaml), so `_launch` hands it the port in the environment.
+    """
+    with contextlib.suppress(Exception):
+        raw = os.environ.get("REACH_BROWSER_PORT")
+        if raw is None:
+            from agent_reach.config import Config
+
+            raw = Config(read_only=True).get("browser_port")
+        port = int(raw or 0)
+        if 1024 <= port <= 65535:
+            return port
+    return DEFAULT_CDP_PORT
+
+
+CDP_PORT = configured_port()
 CDP_URL = f"http://127.0.0.1:{CDP_PORT}"
 _CONTEXT_RE = re.compile(r"^\s*(\S+)\s+[—-]\s+connected\b", re.M)
 
@@ -314,13 +334,21 @@ def ensure_chrome(*, retry_cloak: bool = False) -> str:
     from agent_reach.backends import cloak
     try:
         installed = cloak.setup()
-    except (ReachError, OSError):
+    except ReachError as exc:
         fallback = _system_chrome()
         if not fallback:
-            raise ReachError(NEED_SETUP, "CloakBrowser could not be installed and no system Chrome was found",
-                             hint="Check the download/proxy connection, or install Chrome, then run agent-reach browser setup.") from None
+            raise ReachError(exc.code, f"CloakBrowser could not be installed: {exc.message}",
+                             hint=exc.hint or "Check the download/proxy connection, or install Chrome, then run agent-reach browser setup.") from exc
         update_state(backend="chrome", executable=fallback, launcher_python=None,
-                     fallback_reason="CloakBrowser installation/download failed")
+                     fallback_reason=f"{exc.code}: {exc.message}")
+        return fallback
+    except OSError as exc:
+        fallback = _system_chrome()
+        if not fallback:
+            raise ReachError(NEED_SETUP, f"CloakBrowser could not be installed: {exc}",
+                             hint="Check the download/proxy connection, or install Chrome, then run agent-reach browser setup.") from exc
+        update_state(backend="chrome", executable=fallback, launcher_python=None,
+                     fallback_reason=f"CloakBrowser installation/download failed: {exc}")
         return fallback
     update_state(backend="cloakbrowser", executable=installed["executable"],
                  launcher_python=installed["python"], fallback_reason=None)
@@ -475,6 +503,7 @@ def _launch(url: str, *, headless: bool = True) -> None:
             env={**os.environ, "PYTHONPATH": str(Path(__file__).parents[2]),
                  "CLOAKBROWSER_AUTO_UPDATE": "false",
                  "REACH_BROWSER_PROXY": str(Config(read_only=True).get("proxy") or ""),
+                 "REACH_BROWSER_PORT": str(CDP_PORT),
                  "CLOAKBROWSER_CACHE_DIR": str(browser_root().parent / "cloak-binaries")}, **_detach_kwargs(),
         )
     if not wait_for(lambda: is_running() or proc.poll() is not None, START_WAIT, interval=0.2) or not is_running():
@@ -635,7 +664,10 @@ def _require_owned() -> None:
     """Do not navigate or close an unrelated browser occupying our fixed port."""
     if not watcher_running() and not _profile_pids():
         from .result import NEED_SETUP, ReachError
-        raise ReachError(NEED_SETUP, "Port 9222 belongs to an unmanaged browser; close that debugging session yourself first")
+        raise ReachError(
+            NEED_SETUP, f"Port {CDP_PORT} belongs to an unmanaged browser",
+            hint=f"Close that debugging session, or move Agent Reach to a free port: "
+                 f"`agent-reach configure browser-port <port>` (current {CDP_PORT}).")
 
 
 def save_session() -> None:

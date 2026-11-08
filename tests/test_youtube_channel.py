@@ -96,3 +96,16 @@ def test_project_installs_official_ytdlp_default_dependencies():
 
 
 
+
+
+# --- TLS trust store ---
+
+def test_ytdlp_uses_system_trust_store_when_ssl_cert_file_is_set(monkeypatch):
+    from agent_reach.channels import youtube
+
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+    monkeypatch.delenv("SSL_CERT_DIR", raising=False)
+    assert "no-certifi" not in youtube._ytdlp_argv("--version")
+    monkeypatch.setenv("SSL_CERT_FILE", "/etc/ssl/corp-bundle.pem")
+    argv = youtube._ytdlp_argv("--version")
+    assert argv[argv.index("--compat-options") + 1] == "no-certifi"

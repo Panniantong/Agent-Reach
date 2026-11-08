@@ -35,6 +35,20 @@ def test_opencli_comments_keep_replies_and_explicit_scope(monkeypatch):
     assert all(r["raw"]["exhaustive"] is False for r in result["items"])
     assert calls == [["comments", NOTE, "--limit", "1", "--with-replies", "true"]]
 
+@pytest.mark.parametrize("output", [{"ok": True, "data": []}, {"items": []}],
+                         ids=["OpenCLI 2.0 empty data", "empty items"])
+def test_empty_opencli_envelope_is_not_a_fake_row(monkeypatch, output):
+    from agent_reach.channels import xiaohongshu
+    monkeypatch.setattr(xiaohongshu, "opencli_call", lambda *a, **k: output)
+
+    search = run_action(XiaoHongShuChannel(), "search", {"query": "咖啡", "limit": 2},
+                        only_backend="opencli")
+    comments = run_action(XiaoHongShuChannel(), "comments", {"target": NOTE, "limit": 2},
+                          only_backend="opencli")
+
+    assert search["error"]["code"] == "UPSTREAM_BROKEN"
+    assert comments["items"] == []
+
 
 
 

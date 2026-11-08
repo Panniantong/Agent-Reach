@@ -83,7 +83,9 @@ def opencli_items(rows) -> list:
     from agent_reach.runtime.result import make_item, unix_to_iso
 
     if isinstance(rows, dict):
-        rows = rows.get("items") or rows.get("data") or [rows]
+        # OpenCLI 2.0 wraps rows as {ok, data: [...]}; an empty list means no rows, not one row.
+        listed = next((rows[k] for k in ("items", "data") if isinstance(rows.get(k), list)), None)
+        rows = listed if listed is not None else (rows.get("items") or rows.get("data") or [rows])
     items = []
     for r in rows if isinstance(rows, list) else []:
         if not isinstance(r, dict):
@@ -122,8 +124,7 @@ def export_site_cookies(profile: str, domain: str) -> list:
     from agent_reach.runtime import bridge
     from agent_reach.runtime.result import NEED_SETUP, ReachError
     from agent_reach.runtime.run import run_cmd
-    if not bridge.require_compatible():
-        return []
+    bridge.require_running()
     argv, _ = bridge.launch_spec()
     module = Path(argv[-1]).parent / "browser" / "page.js"
     if not module.is_file():

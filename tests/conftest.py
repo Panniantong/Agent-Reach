@@ -82,6 +82,7 @@ def isolated_home(tmp_path, monkeypatch):
     monkeypatch.setenv("APPDATA", str(home / "AppData" / "Roaming"))
     monkeypatch.setenv("LOCALAPPDATA", str(home / "AppData" / "Local"))
     monkeypatch.delenv("OPENCLAW_HOME", raising=False)
+    monkeypatch.delenv("HERMES_HOME", raising=False)
     # never start the background release check from tests
     monkeypatch.setenv("AGENT_REACH_NO_UPDATE_CHECK", "1")
     # Public-first routing must not turn adapter unit tests into live requests.

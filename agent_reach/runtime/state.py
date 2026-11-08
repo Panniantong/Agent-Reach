@@ -54,6 +54,8 @@ def load() -> dict:
         data = json.loads(text) if text else {}
     except (OSError, ValueError, PrivatePathError):
         data = {}
+    if not isinstance(data, dict):
+        data = {}
     data.setdefault("version", STATE_VERSION)
     for key in ("channels", "tools", "checks", "skill"):
         data.setdefault(key, {})

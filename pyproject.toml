@@ -1,6 +1,6 @@
 [project]
 name = "agent-reach"
-version = "1.6.0"
+version = "1.6.1"
 description = "Internet access for AI agents: one CLI with JSON output to search and read the web, YouTube, GitHub, V2EX and more."
 readme = "README.md"
 license = {text = "MIT"}

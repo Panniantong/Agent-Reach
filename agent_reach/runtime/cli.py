@@ -41,6 +41,9 @@ _MANAGEMENT = (
     "setup", "add", "remove", "update", "doctor", "uninstall", "configure", "version",
 )
 
+#: Budget for rebuilding a session after a native login exited 0 with no credential.
+_RECOVER_TIMEOUT = 30.0
+
 HELP = """agent-reach — internet access for AI agents (all output is JSON)
 
 For agents:
@@ -61,7 +64,7 @@ For the user:
   agent-reach doctor [--text]             status of every channel and installed tool versions (no network)
   agent-reach check [channel] [--text]    live-test channels; --search tests search/jobs only
   agent-reach update [--check]            upgrade Agent Reach, every added channel's tools and the skill
-  agent-reach configure <key> [value]     groq-key | openai-key | proxy | github-token
+  agent-reach configure <key> [value]     groq-key | openai-key | proxy | github-token | browser-port
   agent-reach uninstall [--dry-run]       remove everything Agent Reach installed
 """
 
@@ -109,7 +112,12 @@ def _emit(payload: dict) -> int:
         if info:
             meta = payload.get("meta")
             payload["meta"] = {**(meta if isinstance(meta, dict) else {}), "update": info}
-    sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    output = json.dumps(payload, ensure_ascii=False)
+    try:
+        output.encode(getattr(sys.stdout, "encoding", None) or "utf-8")
+    except UnicodeEncodeError:
+        output = json.dumps(payload, ensure_ascii=True)
+    sys.stdout.write(output + "\n")
     sys.stdout.flush()
     return 0 if payload.get("ok") else 1
 
@@ -446,17 +454,26 @@ def _cmd_login(args: Sequence[str]) -> int:
     if not exe:
         return _emit(envelope(channel=ch.name, action="login", error=ReachError(
             NEED_SETUP, f"{ch.login_argv[0]} is not installed", hint=f"Run `agent-reach add {ch.name}` first.")))
+    from .browser import CDP_URL
     from .sessions import session_dir
 
-    argv = [a.replace("{session}", str(session_dir(ch.session))) for a in ch.login_argv[1:]]
+    argv = [a.replace("{session}", str(session_dir(ch.session))).replace("{cdp_url}", CDP_URL)
+            for a in ch.login_argv[1:]]
     env = dict(os.environ)
     if ch.session_home:
         env.update(session_env(ch.session))
     # Interactive: the user sees the QR code / prompts on stderr; stdout stays JSON.
     code = subprocess.call([exe, *argv], env=env, stdout=sys.stderr, stderr=sys.stderr)
+    if code == 0 and not has_login_state(ch.session) and ch.recover_login(_RECOVER_TIMEOUT):
+        # The upstream CLI claimed success but saved nothing; the channel rebuilt
+        # the session from a connected browser instead of asking for another scan.
+        if has_login_state(ch.session):
+            return _emit(envelope(channel=ch.name, action="login", backend=ch.session,
+                                  items=[{"logged_in": True, "recovered_from": "local-browser"}]))
     if code != 0 or not has_login_state(ch.session):
         return _emit(envelope(channel=ch.name, action="login",
-                              error=ReachError(UPSTREAM_BROKEN, f"login did not complete (exit {code})")))
+                              error=ReachError(UPSTREAM_BROKEN, f"login did not complete (exit {code})",
+                                               hint=ch.login_upstream_hint or None)))
     from . import state
     state.mutate(lambda data: data.setdefault("session_reuse", {}).__setitem__(ch.name, {"source": "manual", "at": state.now()}))
     return _emit(envelope(channel=ch.name, action="login", backend=ch.session, items=[{"logged_in": True}]))

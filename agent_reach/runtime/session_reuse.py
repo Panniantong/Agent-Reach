@@ -10,7 +10,7 @@ import time
 
 from agent_reach.utils.paths import PrivatePathError, read_small_text_no_follow
 
-from . import browser, cdp, state
+from . import bridge, browser, cdp, state
 from .browser_binding import wait_lock
 from .result import NEED_SETUP, UPSTREAM_BROKEN, ReachError
 
@@ -102,6 +102,14 @@ def prepare(channel: str, *, force: bool = False) -> dict:
                           or (record.get("cookie_snapshot") == 1 and record.get("copied_cookies", 0) > 0)):
             return record
         cookies, source = _source_cookies(channel, site_domains(ch))
+        # Source discovery tolerates a disconnected optional Bridge for native
+        # CLI sessions. A browser-backed action still needs it before recording
+        # discovery as a successful (possibly empty) site snapshot.
+        bridge.require_running()
+        if force and not cookies:
+            # An explicit import that found no login must not report success.
+            raise ReachError(NEED_SETUP, "No local browser login was found for this site; nothing was copied",
+                             hint=f"Run agent-reach browser profiles to check the source browser, or agent-reach login {channel}.")
         if cookies:
             current = cdp.call("Storage.getCookies")
             if current is None:
