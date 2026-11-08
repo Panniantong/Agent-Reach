@@ -14,7 +14,7 @@ Read when the user asks what can be fetched or how complete a result is. Declare
 | 渠道 | 公开路径可尝试 | Reach 补充与边界 |
 |---|---|---|
 | GitHub | 公开仓库、README、Issue/PR | 仓库搜索、仓库/Issue/PR 读取和返回的评论；私有权限另行判断 |
-| YouTube | 搜索、标题、简介；原生工具可能取得部分评论及字幕正文 | search/read/subtitle/transcribe；当前没有统一 comments 动作；轨道列表不等于字幕正文，无字幕时转录依赖相应工具 |
+| YouTube | 搜索、标题、简介；原生工具可能取得部分评论及字幕正文 | search/read/subtitle/transcript/transcribe；当前没有统一 comments 动作；轨道列表不等于字幕正文，无字幕时转录依赖相应工具；transcript 调用用户自己配置的托管转录 API（需 Key：`agent-reach configure transcript-api-key`），只在明确选用时调用，不会在 YouTube 验证拦截后自动切换 |
 | B 站 | 搜索、简介；部分公开接口可返回评论及父子 ID | search/read/hot/subtitle；当前没有统一 comments 动作；字幕随视频和访问路径而异 |
 | Reddit | 搜索、正文、部分评论；某些公开 JSON 可含父子 ID | 浏览器 search/read/subreddit；登录依所选路径决定，不保证完整评论树、全部回复；不提供发评论 |
 | X/Twitter | 搜索命中的公开单帖；部分官方公开嵌入可返回全文 | search/profile/tweets/thread；单帖可读不代表回复流可读，不保证完整评论树 |
