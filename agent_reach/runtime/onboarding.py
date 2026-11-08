@@ -20,6 +20,7 @@ _PUBLIC_ACCESS = {
     'reddit': '公开搜索、正文和部分评论可先读；部分公开 JSON 样本可含评论及 parent_id。',
     'twitter': '公开搜索摘要、部分单帖全文可先尝试；公开嵌入不提供评论流。',
     'xiaohongshu': '公开发现页可能提供笔记 ID 和作者；不据此认定正文、评论可读。',
+    'zhihu': '公开搜索摘要和链接可先尝试；摘要不等于回答全文，专栏文章交由网页工具读取。',
     'instagram': '公开搜索或主页信息可先尝试；HTML 可能只有应用外壳，Caption 和评论未获统一验证。',
     'facebook': '公开搜索摘要可先尝试；帖子正文和评论取决于页面与访问路径。',
     'linkedin': '公开职位可先搜索、读详情；2026-10-21 已取得免登录职位样本，不保证所有职位可读。',
@@ -35,6 +36,8 @@ _CAPABILITY_LIMITS = {
     'reddit': ['read 仅承诺其返回的帖子和评论；不保证完整评论树，不提供发评论动作。'],
     'twitter': ['thread 仅覆盖实际返回的回复；不保证完整评论流，不提供发帖动作。'],
     'xiaohongshu': ['只报告实际读取的正文、已加载评论和回复，不承诺完整导出。'],
+    'zhihu': ['问题链接返回回答摘要；单个回答链接读取正文。',
+              '评论仅覆盖实际返回的评论和回复，不承诺完整评论树；不提供写入动作。'],
     'instagram': ['search 搜索用户；没有任意帖子 read 或独立 comments 动作。'],
     'facebook': ['当前仅声明 search/profile，不承诺独立帖文读取或评论导出。'],
     'linkedin': ['当前仅声明职位搜索和 JD 读取，不承诺联系人或动态抓取。'],
@@ -54,6 +57,7 @@ _QUICK_ACCESS = {
     'reddit': ('✅ 搜帖子、读正文、看评论', '—'),
     'twitter': ('✅ 搜摘要、试读原文', '❌ 搜推文、看动态、看回复'),
     'xiaohongshu': ('✅ 搜摘要、找链接', '❌ 站内搜、读正文、看评论'),
+    'zhihu': ('搜索摘要和链接', '按实际访问要求登录后试读站内搜索、回答和评论'),
     'instagram': ('✅ 搜简介', '❌ 找用户、看主页、看帖子'),
     'facebook': ('✅ 搜摘要', '❌ 站内搜、看主页'),
     'linkedin': ('✅ 找职位、读公开详情', '❌ 站内搜'),
@@ -66,7 +70,7 @@ _DISPLAY_NAMES = {
     'github': 'GitHub', 'youtube': 'YouTube', 'bilibili': 'B站', 'v2ex': 'V2EX',
     'web': '网页', 'reddit': 'Reddit', 'twitter': 'X / Twitter', 'facebook': 'Facebook',
     'instagram': 'Instagram', 'xiaohongshu': '小红书', 'linkedin': 'LinkedIn',
-    'boss': 'BOSS直聘', 'xueqiu': '雪球',
+    'boss': 'BOSS直聘', 'xueqiu': '雪球', 'zhihu': '知乎',
 }
 
 _STATUS_LABELS = {
