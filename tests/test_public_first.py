@@ -171,6 +171,39 @@ def test_linkedin_public_urls_are_normalized_for_unmodified_upstream(target, mon
     assert site.call_args.args[0] == ["job-detail", "https://www.linkedin.com/jobs/view/4459518450"]
 
 
+# LinkedIn redirected the job link to a search page and the reader returned its first card.
+SEARCH_REDIRECT = [make_item(title="11,000+ jobs", url="https://www.linkedin.com/jobs/search/?currentJobId=4459518450",
+                             raw={"company": "Another Co", "location": "Another posting's title", "description": ""})]
+
+
+def test_linkedin_read_rejects_a_search_page_redirect(monkeypatch):
+    monkeypatch.setattr(LinkedInChannel, "_opencli", Mock(return_value=SEARCH_REDIRECT))
+    out = run_action(LinkedInChannel(), "read", {"target": "https://www.linkedin.com/jobs/view/4459518450"},
+                     only_backend="opencli")
+    assert not out["ok"] and out["error"]["code"] == "UPSTREAM_BROKEN"
+    assert "different posting" in out["error"]["message"]
+
+
+def test_linkedin_read_falls_back_to_the_public_page_after_a_redirect(monkeypatch):
+    data = state.load()
+    data["channels"]["linkedin"] = {"added_at": state.now()}
+    state.save(data)
+    job = "https://www.linkedin.com/jobs/view/4459518450"
+    monkeypatch.setattr(LinkedInChannel, "_opencli", Mock(return_value=SEARCH_REDIRECT))
+    monkeypatch.setattr(WebChannel, "_jina_read", lambda self, **k: [make_item(title="Data Engineer", url=job, text=TEXT)])
+    out = run_action(LinkedInChannel(), "read", {"target": job})
+    assert out["ok"] and out["backend"] == "public-web" and out["items"][0]["title"] == "Data Engineer"
+    assert out["meta"]["attempts"][0] == {"backend": "opencli", "result": "UPSTREAM_BROKEN",
+                                          "message": out["meta"]["attempts"][0]["message"]}
+
+
+def test_linkedin_read_keeps_the_job_page_result(monkeypatch):
+    job = "https://www.linkedin.com/jobs/view/4459518450"
+    monkeypatch.setattr(LinkedInChannel, "_opencli", Mock(return_value=[make_item(title="JD", url=job + "/", text=TEXT)]))
+    out = run_action(LinkedInChannel(), "read", {"target": job}, only_backend="opencli")
+    assert out["ok"] and out["items"][0]["title"] == "JD"
+
+
 @pytest.mark.parametrize("target", ["https://linkedin.com.evil.test/jobs/view/123",
                                     "https://user@linkedin.com/jobs/view/123",
                                     "https://www.linkedin.com/in/person"])
