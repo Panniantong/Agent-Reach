@@ -82,22 +82,26 @@ def _bili_json(args: list, timeout: float) -> Any:
     return payload.get("data") or {}
 
 
-def _reuse_subtitle_login(timeout: float) -> None:
-    """Use the official upstream credential writer; no browser launch or database read."""
+def reuse_browser_session(timeout: float) -> bool:
+    """Write a bili-cli credential from the connected local browser session.
+
+    Uses the official upstream credential writer; no browser launch or database
+    read. Returns True only when a SESSDATA cookie was actually handed over.
+    """
     import os
     from pathlib import Path
 
     from agent_reach.runtime import session_reuse, state, tools
     saved = state.load().get("session_reuse", {}).get("bilibili", {})
     if saved.get("blocked") or saved.get("source") == "manual":
-        return
+        return False
     cookies, source = session_reuse._source_cookies("bilibili", ("bilibili.com",))
     jar = {c["name"]: c["value"] for c in cookies}
     if not jar.get("SESSDATA"):
-        return  # keep a saved native login when no connected local source exists
+        return False  # keep a saved native login when no connected local source exists
     exe = tools.resolve("bili")
     if not exe:
-        return
+        return False
     python = Path(exe).with_name("python.exe" if os.name == "nt" else "python")
     script = (
         "import json,sys;from bili_cli.auth import save_credential;"
@@ -110,6 +114,12 @@ def _reuse_subtitle_login(timeout: float) -> None:
             input_data=json.dumps(jar), label="Bilibili site login reuse")
     state.mutate(lambda data: data.setdefault("session_reuse", {}).__setitem__("bilibili", {
         "source": source, "copied_cookies": len(jar), "at": state.now(), "verified": False, "source_changed": False}))
+    return True
+
+
+def _reuse_subtitle_login(timeout: float) -> None:
+    """Subtitle is the only action that needs a saved login; reuse it silently."""
+    reuse_browser_session(timeout)
 
 
 def _cli_video_item(v: dict, text=None) -> dict:
@@ -163,6 +173,14 @@ class BilibiliChannel(Channel):
     login_argv = ("bili", "login")
     legacy_state = (".bilibili-cli",)
     tools = ("bili-cli",)
+    #: bilibili-cli <= 0.6.2 saves an empty credential after Bilibili moved the
+    #: QR-login cookies from the redirect URL to Set-Cookie (bilibili-cli#32).
+    login_upstream_hint = (
+        "bili login exited 0 but saved an empty credential. Since Bilibili moved the "
+        "QR-login cookies to Set-Cookie (bilibili-cli#32), bili-cli <= 0.6.2 cannot "
+        "complete a QR login. Log in to bilibili.com in your browser, then run "
+        "`agent-reach login bilibili` again to reuse those cookies."
+    )
     actions = (
         Action(
             "search",
@@ -196,6 +214,9 @@ class BilibiliChannel(Channel):
             live_test={"target": "BV1GJ411x7h7"},
         ),
     )
+
+    def recover_login(self, timeout: float) -> bool:
+        return reuse_browser_session(timeout)
 
     def can_handle(self, url: str) -> bool:
         from agent_reach.utils.url import host_matches
