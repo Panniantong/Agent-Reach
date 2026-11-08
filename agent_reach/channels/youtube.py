@@ -139,7 +139,7 @@ class YouTubeChannel(Channel):
             "Full subtitle text of a video (manual or auto captions)",
             (
                 Param("target", "video link or id"),
-                Param("lang", "preferred languages, comma separated", required=False, default="zh-Hans,zh,en,en-orig"),
+                Param("lang", "preferred languages, comma separated", required=False, default=".*-orig,zh-Hans,zh,en"),
             ),
             (("yt-dlp", "_ytdlp_subtitle"),),
             live_test={"target": "https://www.youtube.com/watch?v=jNQXAC9IVRw"},
@@ -215,7 +215,14 @@ class YouTubeChannel(Channel):
 
             def rank(name: str) -> int:
                 code = name.rsplit(".", 2)[-2] if name.count(".") >= 2 else ""
-                return wanted.index(code) if code in wanted else len(wanted)
+                return next(
+                    (
+                        index
+                        for index, pattern in enumerate(wanted)
+                        if code == pattern or (pattern == ".*-orig" and code.endswith("-orig"))
+                    ),
+                    len(wanted),
+                )
 
             best = min(files, key=rank)
             with open(os.path.join(tmp, best), encoding="utf-8", errors="replace") as fh:

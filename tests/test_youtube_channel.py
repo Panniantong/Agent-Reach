@@ -109,3 +109,34 @@ def test_ytdlp_uses_system_trust_store_when_ssl_cert_file_is_set(monkeypatch):
     monkeypatch.setenv("SSL_CERT_FILE", "/etc/ssl/corp-bundle.pem")
     argv = youtube._ytdlp_argv("--version")
     assert argv[argv.index("--compat-options") + 1] == "no-certifi"
+
+
+def test_subtitle_prefers_original_speech_over_machine_translation(monkeypatch, tmp_path):
+    from agent_reach.channels import youtube
+    from agent_reach.runtime.dispatch import run_action
+
+    tracks = {"en": "translated words", "ar-orig": "الكلام الأصلي"}
+
+    def fake_ytdlp(args, timeout, cwd=None):
+        requested = args[args.index("--sub-langs") + 1].split(",")
+        selected = tracks if ".*-orig" in requested else [code for code in requested if code in tracks]
+        for code in selected:
+            Path(cwd, f"H0OuQdDeIJ4.{code}.vtt").write_text(
+                f"WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n{tracks[code]}\n",
+                encoding="utf-8",
+            )
+        return "Arabic video\n"
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(youtube, "_run_ytdlp", fake_ytdlp)
+
+    out = run_action(
+        YouTubeChannel(),
+        "subtitle",
+        {"target": "H0OuQdDeIJ4"},
+        only_backend="yt-dlp",
+    )
+
+    assert out["ok"] is True
+    assert out["items"][0]["raw"]["lang"] == "ar-orig"
+    assert out["items"][0]["text"] == "الكلام الأصلي"
