@@ -10,6 +10,8 @@ import time
 import urllib.request
 from pathlib import Path
 
+from agent_reach.utils.process import windows_hidden_kwargs
+
 from . import tools
 from .result import NEED_SETUP, ReachError
 
@@ -68,7 +70,7 @@ def start():
     if require_compatible():
         return None
     proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL)
+                            stderr=subprocess.DEVNULL, **windows_hidden_kwargs())
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
         current = require_compatible()

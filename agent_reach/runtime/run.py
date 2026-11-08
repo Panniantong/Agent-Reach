@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Mapping, Optional, Sequence
 
 from agent_reach import __version__
-from agent_reach.utils.process import utf8_subprocess_env
+from agent_reach.utils.process import utf8_subprocess_env, windows_hidden_kwargs
 
 from .result import BAD_INPUT, NEED_SETUP, TIMEOUT, ReachError, _clean
 
@@ -101,6 +101,7 @@ def run_cmd(
         env=run_env,
         cwd=cwd or os.path.expanduser("~"),
         start_new_session=(sys.platform != "win32" and not supervised),
+        **windows_hidden_kwargs(),
     )
     try:
         kwargs = {"input": input_data.encode("utf-8")} if input_data is not None else {}
