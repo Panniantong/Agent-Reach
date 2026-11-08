@@ -33,6 +33,7 @@ from agent_reach.utils.paths import (
     make_private_dir,
     read_small_text_no_follow,
 )
+from agent_reach.utils.process import windows_hidden_kwargs
 
 DEFAULT_CDP_PORT = 9222
 
@@ -358,13 +359,21 @@ def ensure_chrome(*, retry_cloak: bool = False) -> str:
     from agent_reach.backends import cloak
     try:
         installed = cloak.setup()
-    except (ReachError, OSError):
+    except ReachError as exc:
         fallback = _system_chrome()
         if not fallback:
-            raise ReachError(NEED_SETUP, "CloakBrowser could not be installed and no system Chrome was found",
-                             hint="Check the download/proxy connection, or install Chrome, then run agent-reach browser setup.") from None
+            raise ReachError(exc.code, f"CloakBrowser could not be installed: {exc.message}",
+                             hint=exc.hint or "Check the download/proxy connection, or install Chrome, then run agent-reach browser setup.") from exc
         update_state(backend="chrome", executable=fallback, launcher_python=None,
-                     fallback_reason="CloakBrowser installation/download failed")
+                     fallback_reason=f"{exc.code}: {exc.message}")
+        return fallback
+    except OSError as exc:
+        fallback = _system_chrome()
+        if not fallback:
+            raise ReachError(NEED_SETUP, f"CloakBrowser could not be installed: {exc}",
+                             hint="Check the download/proxy connection, or install Chrome, then run agent-reach browser setup.") from exc
+        update_state(backend="chrome", executable=fallback, launcher_python=None,
+                     fallback_reason=f"CloakBrowser installation/download failed: {exc}")
         return fallback
     update_state(backend="cloakbrowser", executable=installed["executable"],
                  launcher_python=installed["python"], fallback_reason=None)
@@ -474,8 +483,7 @@ def _detach_kwargs() -> dict:
     root = browser_root()
     make_private_dir(root)
     if sys.platform == "win32":
-        return {"cwd": str(root), "creationflags": subprocess.DETACHED_PROCESS
-                | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW}
+        return {"cwd": str(root), **windows_hidden_kwargs()}
     return {"cwd": str(root), "start_new_session": True}
 
 

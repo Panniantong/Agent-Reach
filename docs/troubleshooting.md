@@ -52,7 +52,7 @@ Search-only acceptance is shown as search_ready, not proof that every action wor
 
 ## Skill not picked up by an AI
 
-`agent-reach skill` shows the one real copy of the instructions (`~/.agents/skills/agent-reach/SKILL.md`) and the links made for other AIs. An AI not covered automatically: `agent-reach skill link <its skills folder>`. On Windows, where links may not be allowed, a copy is made instead and refreshed by `agent-reach update`.
+`agent-reach skill` shows the one real copy of the instructions (`~/.agents/skills/agent-reach/SKILL.md`) and the links made for other AIs. An AI not covered automatically: `agent-reach skill link <its skills folder>`. To keep an AI from getting it user-wide (for example when you register skills per project), run `agent-reach skill unlink <its skills folder>`; setup and update then leave that folder alone, and `skill link` undoes it. On Windows, where links may not be allowed, a copy is made instead and refreshed by `agent-reach update`.
 
 ## Install, update and roll back
 

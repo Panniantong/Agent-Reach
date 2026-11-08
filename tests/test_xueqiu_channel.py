@@ -11,7 +11,33 @@ offline. Follow-up to #331 — extends dedicated channel coverage after rss
 
 
 
+import pytest
+
 from agent_reach.channels.xueqiu import XueqiuChannel, _strip_html
+from agent_reach.runtime.dispatch import run_action
+
+
+def test_quote_routes_bare_920_symbol_to_beijing_exchange(monkeypatch):
+    requests = []
+
+    def fake_http_request(url, timeout):
+        requests.append(url)
+        if url != "https://qt.gtimg.cn/q=bj920008":
+            return b'v_sh920008="";'
+        fields = ["1", "成电光信", "920008", "12.34", "12.00", "12.10"]
+        fields += [""] * 24
+        fields += ["20261106150000", "0.34", "2.83", "12.50", "11.90"]
+        return ("v_bj920008=\"" + "~".join(fields) + "\";").encode("gbk")
+
+    monkeypatch.setattr("agent_reach.channels.xueqiu.http_request", fake_http_request)
+
+    out = run_action(XueqiuChannel(), "quote", {"symbol": "920008"}, only_backend="tencent")
+
+    assert out["ok"] is True
+    assert requests == ["https://qt.gtimg.cn/q=bj920008"]
+    assert out["items"][0]["title"] == "成电光信 (BJ920008)"
+    assert out["items"][0]["raw"]["symbol"] == "BJ920008"
+
 
 # --- can_handle ---
 
@@ -72,4 +98,11 @@ def test_strip_html_removes_tags_and_decodes_entities():
 # --- get_hot_stocks: ranking + code/symbol fallback ---
 
 
-
+@pytest.mark.parametrize("text,expected", [
+    ("<p>&quot;A&quot; &#39;B&#39;</p>", "\"A\" 'B'"),
+    ("<p>&#20013;&#x6587; &mdash; &#x1F680;</p>", "中文 — 🚀"),
+    ("&amp;lt;b&amp;gt;literal&amp;lt;/b&amp;gt;", "&lt;b&gt;literal&lt;/b&gt;"),
+    ("a&#160;b&#xA0;c", "a b c"),
+])
+def test_strip_html_decodes_named_and_numeric_entities_once(text, expected):
+    assert _strip_html(text) == expected

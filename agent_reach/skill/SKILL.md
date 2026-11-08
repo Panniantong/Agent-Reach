@@ -86,6 +86,7 @@ agent-reach read <链接>                   # 按链接自动选渠道
 | 升级 / 更新 | `agent-reach update` |
 | 卸载 | 先 `agent-reach uninstall --dry-run` 给用户看，确认后 `agent-reach uninstall` |
 | 让另一个 AI 也能用 | `agent-reach skill link <那个 AI 的 skill 目录>`；`agent-reach skill` 查看现在放在哪 |
+| 某个 AI 不要用户级的 skill（比如只按项目注册） | `agent-reach skill unlink <那个 AI 的 skill 目录>`；之后 setup 和 update 不再放回去 |
 
 故障排查、浏览器维护和卸载细节见 [维护说明](references/maintenance.md)：更新失败、浏览器起不来或要卸载时读它。
 

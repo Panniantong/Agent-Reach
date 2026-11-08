@@ -23,6 +23,7 @@ from typing import Dict, List, Optional, Sequence, cast
 
 from agent_reach.channels import get_all_channels
 from agent_reach.channels.base import Action, Channel
+from agent_reach.utils.process import utf8_subprocess_env
 
 from . import browser
 from .dispatch import DEFAULT_TIMEOUT, find_action, run_action
@@ -41,6 +42,9 @@ _MANAGEMENT = (
     "setup", "add", "remove", "update", "doctor", "uninstall", "configure", "version",
 )
 
+#: Budget for rebuilding a session after a native login exited 0 with no credential.
+_RECOVER_TIMEOUT = 30.0
+
 HELP = """agent-reach — internet access for AI agents (all output is JSON)
 
 For agents:
@@ -57,7 +61,7 @@ For the user:
   agent-reach login|logout <channel>      log in (the user does it) / forget the login
   agent-reach browser setup|status|stop   headless shared browser; login opens a window
   agent-reach browser profiles|use ID    choose an existing local login source
-  agent-reach skill [link <skills-dir>]   where the agent skill is; link it for another AI
+  agent-reach skill [link|unlink <dir>]   where the agent skill is; link it for another AI, or unlink one for good
   agent-reach doctor [--text]             status of every channel and installed tool versions (no network)
   agent-reach check [channel] [--text]    live-test channels; --search tests search/jobs only
   agent-reach update [--check]            upgrade Agent Reach, every added channel's tools and the skill
@@ -109,7 +113,12 @@ def _emit(payload: dict) -> int:
         if info:
             meta = payload.get("meta")
             payload["meta"] = {**(meta if isinstance(meta, dict) else {}), "update": info}
-    sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    output = json.dumps(payload, ensure_ascii=False)
+    try:
+        output.encode(getattr(sys.stdout, "encoding", None) or "utf-8")
+    except UnicodeEncodeError:
+        output = json.dumps(payload, ensure_ascii=True)
+    sys.stdout.write(output + "\n")
     sys.stdout.flush()
     return 0 if payload.get("ok") else 1
 
@@ -282,8 +291,10 @@ def _cmd_skill(args: Sequence[str]) -> int:
 
     if not args:
         return _mgmt("skill", manage.skill_status)
-    if args[0] != "link" or len(args) != 2:
-        return _bad_input(None, "skill", "usage: agent-reach skill [link <skills-dir>]")
+    if args[0] not in ("link", "unlink") or len(args) != 2:
+        return _bad_input(None, "skill", "usage: agent-reach skill [link|unlink <skills-dir>]")
+    if args[0] == "unlink":
+        return _mgmt("skill unlink", manage.unlink_skill, args[1])
     return _mgmt("skill link", manage.link_skill, args[1])
 
 
@@ -449,14 +460,21 @@ def _cmd_login(args: Sequence[str]) -> int:
 
     argv = [a.replace("{session}", str(session_dir(ch.session))).replace("{cdp_url}", CDP_URL)
             for a in ch.login_argv[1:]]
-    env = dict(os.environ)
+    env = utf8_subprocess_env()
     if ch.session_home:
         env.update(session_env(ch.session))
     # Interactive: the user sees the QR code / prompts on stderr; stdout stays JSON.
     code = subprocess.call([exe, *argv], env=env, stdout=sys.stderr, stderr=sys.stderr)
+    if code == 0 and not has_login_state(ch.session) and ch.recover_login(_RECOVER_TIMEOUT):
+        # The upstream CLI claimed success but saved nothing; the channel rebuilt
+        # the session from a connected browser instead of asking for another scan.
+        if has_login_state(ch.session):
+            return _emit(envelope(channel=ch.name, action="login", backend=ch.session,
+                                  items=[{"logged_in": True, "recovered_from": "local-browser"}]))
     if code != 0 or not has_login_state(ch.session):
         return _emit(envelope(channel=ch.name, action="login",
-                              error=ReachError(UPSTREAM_BROKEN, f"login did not complete (exit {code})")))
+                              error=ReachError(UPSTREAM_BROKEN, f"login did not complete (exit {code})",
+                                               hint=ch.login_upstream_hint or None)))
     from . import state
     state.mutate(lambda data: data.setdefault("session_reuse", {}).__setitem__(ch.name, {"source": "manual", "at": state.now()}))
     return _emit(envelope(channel=ch.name, action="login", backend=ch.session, items=[{"logged_in": True}]))
