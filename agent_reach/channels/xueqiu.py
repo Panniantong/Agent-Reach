@@ -147,13 +147,13 @@ def _tencent_code(symbol: str) -> str:
 
 
 def _xueqiu_symbol(market: str, code: str) -> str:
-    """Tencent market + code → the symbol Xueqiu uses in URLs and its API."""
+    """Tencent market + code → Xueqiu symbol, retaining US share-class suffixes."""
     market = market.lower()
     if market in ("sh", "sz", "bj"):
         return market.upper() + code
     if market == "hk":
         return code
-    return code.split(".")[0].upper()
+    return re.sub(r"\.(?:N|OQ)$", "", code.upper())
 
 
 def _import_from_browser() -> bool:
