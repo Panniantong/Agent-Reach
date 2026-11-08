@@ -158,8 +158,9 @@ class Config:
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a config value. Also checks environment variables (uppercase)."""
-        # Config file first
-        if key in self.data:
+        # Config file first. A key left empty in YAML (`key:`) loads as None
+        # and means "not set here", so it must not hide the env var.
+        if self.data.get(key) is not None:
             return self.data[key]
         # Then env var (uppercase)
         env_val = os.environ.get(key.upper())
