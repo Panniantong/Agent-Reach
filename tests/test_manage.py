@@ -768,6 +768,24 @@ def test_configure_browser_port_moves_the_dedicated_browser(env, monkeypatch):
     assert browser.configured_port() == 9333
 
 
+def test_configure_browser_locale_reopens_the_browser_in_that_language(env, monkeypatch):
+    from agent_reach.runtime import browser
+
+    monkeypatch.delenv("REACH_BROWSER_LOCALE", raising=False)
+    assert browser.configured_locale() == browser.DEFAULT_LOCALE == "zh-CN"
+    for bad in ("english", "en_AU", "e", "en-", "-AU", "中文"):
+        with pytest.raises(ReachError):
+            manage.configure("browser-locale", bad)
+    stopped = []
+    monkeypatch.setattr(browser, "watcher_running", lambda: True)
+    monkeypatch.setattr(browser, "stop", lambda: stopped.append(True))
+    manage.configure("browser-locale", "en-AU")
+    assert stopped, "the open browser is closed so it reopens in the new language"
+    assert browser.configured_locale() == "en-AU"
+    monkeypatch.setenv("REACH_BROWSER_LOCALE", "fr-FR")
+    assert browser.configured_locale() == "fr-FR", "the watcher reads it from the environment"
+
+
 def test_browser_port_change_lifts_pauses_for_browser_channels_only(env, monkeypatch):
     from agent_reach.runtime import browser
 

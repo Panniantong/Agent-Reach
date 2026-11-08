@@ -57,6 +57,75 @@ def configured_port() -> int:
 
 CDP_PORT = configured_port()
 CDP_URL = f"http://127.0.0.1:{CDP_PORT}"
+
+DEFAULT_LOCALE = "zh-CN"
+_LOCALE_RE = re.compile(r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$")
+
+
+def valid_locale(value: str) -> bool:
+    return bool(value) and value.isascii() and bool(_LOCALE_RE.match(value))
+
+
+def configured_locale() -> str:
+    """Browser language from `agent-reach configure browser-locale`, else zh-CN.
+
+    Sites read it from navigator.language and Accept-Language. Like the port, the watcher gets
+    it in the environment (REACH_BROWSER_LOCALE).
+    """
+    with contextlib.suppress(Exception):
+        raw = os.environ.get("REACH_BROWSER_LOCALE")
+        if raw is None:
+            from agent_reach.config import Config
+
+            raw = Config(read_only=True).get("browser_locale")
+        if raw and valid_locale(str(raw)):
+            return str(raw)
+    return DEFAULT_LOCALE
+
+
+def locale_is_configured() -> bool:
+    """True when the user chose a language with `agent-reach configure browser-locale`."""
+    with contextlib.suppress(Exception):
+        from agent_reach.config import Config
+
+        raw = Config(read_only=True).get("browser_locale")
+        return bool(raw) and valid_locale(str(raw))
+    return False
+
+
+def accept_languages(locale: str) -> str:
+    """Chromium's language list for `locale`: en-US -> "en-US,en"; a bare "en" stays "en"."""
+    base = locale.split("-", 1)[0]
+    return locale if base.lower() == locale.lower() else f"{locale},{base}"
+
+
+def apply_profile_locale(profile: Path, locale: str) -> bool:
+    """Make an existing profile's saved languages match `locale`. True when the file changed.
+
+    Chromium keeps a profile's languages in Default/Preferences (intl.accept_languages and
+    intl.selected_languages). Once saved they win over --lang, so sites would keep seeing the old
+    navigator.language and Accept-Language. Call only while the browser is closed, because
+    Chromium rewrites Preferences from memory when it exits. A new profile has no file yet and
+    starts from --lang; a file that does not parse is left alone.
+    """
+    prefs = profile / "Default" / "Preferences"
+    try:
+        data = json.loads(prefs.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    intl = data.get("intl")
+    if not isinstance(intl, dict):
+        intl = {}
+    want = accept_languages(locale)
+    if intl.get("accept_languages") == want and intl.get("selected_languages") == want:
+        return False
+    data["intl"] = {**intl, "accept_languages": want, "selected_languages": want}
+    atomic_write_private_text(prefs, json.dumps(data, ensure_ascii=False, separators=(",", ":")))
+    return True
+
+
 _CONTEXT_RE = re.compile(r"^\s*(\S+)\s+[—-]\s+connected\b", re.M)
 
 #: Close the browser after this many seconds without Agent Reach use.
@@ -504,6 +573,7 @@ def _launch(url: str, *, headless: bool = True) -> None:
                  "CLOAKBROWSER_AUTO_UPDATE": "false",
                  "REACH_BROWSER_PROXY": str(Config(read_only=True).get("proxy") or ""),
                  "REACH_BROWSER_PORT": str(CDP_PORT),
+                 "REACH_BROWSER_LOCALE": configured_locale(),
                  "CLOAKBROWSER_CACHE_DIR": str(browser_root().parent / "cloak-binaries")}, **_detach_kwargs(),
         )
     if not wait_for(lambda: is_running() or proc.poll() is not None, START_WAIT, interval=0.2) or not is_running():

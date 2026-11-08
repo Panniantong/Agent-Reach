@@ -89,6 +89,16 @@ agent-reach configure browser-port 9333
 
 The setting is kept across updates. If the Agent Reach browser is open, it closes and reopens on the new port the next time it is used.
 
+## Browser language
+
+The Agent Reach browser presents itself in Chinese (`zh-CN`) by default, so sites show Chinese pages and may tailor results to that. To use another language, set a language tag:
+
+```bash
+agent-reach configure browser-locale en-US
+```
+
+Saved logins are kept. If the browser is open, it closes and reopens in the new language the next time it is used. An existing profile's saved languages are updated to match, so sites see the new language in `navigator.language` and `Accept-Language` on every OS.
+
 ## Still stuck
 
 - `agent-reach update` and try again.
