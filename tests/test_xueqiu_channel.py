@@ -11,6 +11,8 @@ offline. Follow-up to #331 — extends dedicated channel coverage after rss
 
 
 
+import pytest
+
 from agent_reach.channels.xueqiu import XueqiuChannel, _strip_html
 from agent_reach.runtime.dispatch import run_action
 
@@ -96,4 +98,11 @@ def test_strip_html_removes_tags_and_decodes_entities():
 # --- get_hot_stocks: ranking + code/symbol fallback ---
 
 
-
+@pytest.mark.parametrize("text,expected", [
+    ("<p>&quot;A&quot; &#39;B&#39;</p>", "\"A\" 'B'"),
+    ("<p>&#20013;&#x6587; &mdash; &#x1F680;</p>", "中文 — 🚀"),
+    ("&amp;lt;b&amp;gt;literal&amp;lt;/b&amp;gt;", "&lt;b&gt;literal&lt;/b&gt;"),
+    ("a&#160;b&#xA0;c", "a b c"),
+])
+def test_strip_html_decodes_named_and_numeric_entities_once(text, expected):
+    assert _strip_html(text) == expected
