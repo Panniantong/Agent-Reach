@@ -8,7 +8,7 @@ import urllib.error
 import pytest
 
 from agent_reach.channels.base import Action, Channel, Param
-from agent_reach.channels.github import _parse_target
+from agent_reach.channels.github import GitHubChannel, _parse_target
 from agent_reach.channels.v2ex import _parse_topic_id
 from agent_reach.channels.web import _parse_exa_text
 from agent_reach.channels.youtube import vtt_to_text
@@ -206,6 +206,23 @@ def test_read_routes_by_url(capsys, fake_cli):
     assert out["items"][0]["title"] == "https://fake.test/a"
 
 
+def test_read_routes_github_file_urls_to_web(capsys, monkeypatch):
+    """Route unsupported GitHub paths to the existing web reader.
+
+    @param capsys Captured output fixture.
+    @param monkeypatch Fixture for replacing the channel registry.
+    @returns None.
+    """
+    web = FakeChannel()
+    web.name = "web"
+    monkeypatch.setattr(unified, "get_all_channels", lambda: [GitHubChannel(), web])
+
+    code, out = _run(capsys, ["read", "https://github.com/cli/cli/blob/main/README.md"])
+
+    assert code == 0
+    assert out["channel"] == "web"
+
+
 def test_unknown_command_is_bad_input(capsys, fake_cli):
     for argv in (["install"], ["check-update"], ["nosuchchannel", "search", "x"]):
         code, out = _run(capsys, argv)
@@ -308,6 +325,8 @@ def test_vtt_to_text_accepts_standard_timing_separators_and_long_hours(timing):
     [
         ("yt-dlp/yt-dlp", ("yt-dlp", "yt-dlp", None)),
         ("https://github.com/cli/cli.git", ("cli", "cli", None)),
+        ("https://www.github.com/cli/cli", ("cli", "cli", None)),
+        ("https://github.com:443/cli/cli", ("cli", "cli", None)),
         ("https://github.com/cli/cli/issues/42", ("cli", "cli", 42)),
         ("https://github.com/cli/cli/pull/7?x=1", ("cli", "cli", 7)),
     ],
@@ -316,11 +335,52 @@ def test_github_target_forms(target, expected):
     assert _parse_target(target) == expected
 
 
-@pytest.mark.parametrize("bad", ["not a target", "https://gitlab.com/a/b/c/d", "a/b/c"])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "not a target",
+        "https://gitlab.com/a/b/c/d",
+        "a/b/c",
+        "https://api.github.com/repos/openai/openai-python",
+        "https://docs.github.com/en/rest/repos/contents",
+        "https://gist.github.com/user/id",
+        "https://github.com/cli/cli/blob/main/README.md",
+        "https://github.com/cli/cli/tree/main",
+        "https://github.com/cli/cli/releases/tag/v1.0",
+        "https://github.com/cli/cli/pull/7/files",
+        "https://github.com:444/cli/cli",
+        "https://user:pass@github.com/cli/cli",
+    ],
+)
 def test_github_rejects_other_targets(bad):
     with pytest.raises(ReachError) as info:
         _parse_target(bad)
     assert info.value.code == "BAD_INPUT"
+
+
+@pytest.mark.parametrize(
+    "target, expected",
+    [
+        ("https://github.com/cli/cli", True),
+        ("https://www.github.com/cli/cli/issues/42", True),
+        ("https://github.com:443/cli/cli/pull/7", True),
+        ("https://github.com/cli/cli/blob/main/README.md", False),
+        ("https://github.com/cli/cli/tree/main", False),
+        ("https://github.com/cli/cli/releases/tag/v1.0", False),
+        ("https://github.com/cli/cli/pull/7/files", False),
+        ("https://api.github.com/repos/cli/cli", False),
+        ("https://docs.github.com/en/rest/repos/contents", False),
+        ("https://gist.github.com/user/id", False),
+    ],
+)
+def test_github_channel_claims_only_readable_targets(target, expected):
+    """Keep GitHub channel routing aligned with its target parser.
+
+    @param target Candidate URL for the GitHub channel.
+    @param expected Whether the GitHub reader supports the URL.
+    @returns None.
+    """
+    assert GitHubChannel().can_handle(target) is expected
 
 
 def test_v2ex_topic_id_forms():
