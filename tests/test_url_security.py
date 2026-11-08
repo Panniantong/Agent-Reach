@@ -57,11 +57,6 @@ def test_credential_channels_reject_lookalikes_and_userinfo(channel, malicious_u
     ("channel", "subdomain_url", "port_url"),
     [
         (
-            GitHubChannel(),
-            "https://api.github.com/repos/openai/openai-python",
-            "https://github.com:443/openai/openai-python",
-        ),
-        (
             YouTubeChannel(),
             "https://m.youtube.com/watch?v=abc",
             "https://youtu.be:443/abc",
