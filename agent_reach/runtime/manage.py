@@ -82,8 +82,10 @@ def fingerprint(channel: str) -> str:
     relevant = set(ch.prereqs) | set(ch.tools) | set(channel_tools(ch))
     relevant.update(name for action in ch.actions for name, _ in action.backends)
     session_revision = data.get("session_revisions", {}).get(channel)
+    # A new browser port is a repair for browser channels: drop pauses and checks from the old port.
+    browser_port = cfg.get("browser_port") if relevant & {"opencli", "boss-agent-cli"} else None
     value = [__version__, code_signature(), channel, profile_for(channel),
-             cfg.get("proxy"), session_revision,
+             cfg.get("proxy"), browser_port, session_revision,
              {k: data["tools"].get(k, {}).get("version") for k in sorted(relevant)}]
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()[:16]
 
