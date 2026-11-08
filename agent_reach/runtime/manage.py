@@ -82,8 +82,10 @@ def fingerprint(channel: str) -> str:
     relevant = set(ch.prereqs) | set(ch.tools) | set(channel_tools(ch))
     relevant.update(name for action in ch.actions for name, _ in action.backends)
     session_revision = data.get("session_revisions", {}).get(channel)
+    # A new browser port is a repair for browser channels: drop pauses and checks from the old port.
+    browser_port = cfg.get("browser_port") if relevant & {"opencli", "boss-agent-cli"} else None
     value = [__version__, code_signature(), channel, profile_for(channel),
-             cfg.get("proxy"), session_revision,
+             cfg.get("proxy"), browser_port, session_revision,
              {k: data["tools"].get(k, {}).get("version") for k in sorted(relevant)}]
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()[:16]
 
@@ -372,6 +374,17 @@ def _openclaw_home() -> Path:
     return (Path(oc) if oc else home_dir()) / ".openclaw"
 
 
+def _hermes_home() -> Path:
+    # Same order as Hermes's get_hermes_home(): HERMES_HOME, then the platform default.
+    hh = os.environ.get("HERMES_HOME", "").strip()
+    if hh:
+        return Path(hh).expanduser()
+    if sys.platform == "win32":
+        local = os.environ.get("LOCALAPPDATA", "").strip()
+        return (Path(local) if local else home_dir() / "AppData" / "Local") / "hermes"
+    return home_dir() / ".hermes"
+
+
 def _config_home() -> Path:
     xdg = os.environ.get("XDG_CONFIG_HOME")
     return Path(xdg) if xdg else home_dir() / ".config"
@@ -383,7 +396,7 @@ def linked_agents() -> Dict[str, tuple]:
     return {
         "claude-code": (home / ".claude", home / ".claude" / "skills"),
         "openclaw": (_openclaw_home(), _openclaw_home() / "skills"),
-        "hermes": (home / ".hermes", home / ".hermes" / "skills"),
+        "hermes": (_hermes_home(), _hermes_home() / "skills"),
         "cursor": (home / ".cursor", home / ".cursor" / "skills"),
         "gemini-cli": (home / ".gemini", home / ".gemini" / "skills"),
         "github-copilot": (home / ".copilot", home / ".copilot" / "skills"),
@@ -831,6 +844,27 @@ def sync() -> dict:
             "old_copies": old_copies}
 
 
+def _finish_update(command: List[str]) -> dict:
+    """Accept the installed copy only after its setup/sync reports success."""
+    failure = ReachError(
+        UPSTREAM_BROKEN,
+        "The new Agent Reach was installed, but its setup/sync did not complete.",
+        hint=f"Run the new copy manually: {subprocess.list2cmdline(command)}",
+    )
+    try:
+        out = subprocess.run(command, capture_output=True, text=True, timeout=1800)
+    except (OSError, subprocess.TimeoutExpired):
+        raise failure from None
+    try:
+        report = json.loads(out.stdout.strip().split("\n")[-1])
+    except (ValueError, IndexError):
+        raise failure from None
+    if (out.returncode != 0 or not isinstance(report, dict)
+            or report.get("ok") is not True or not isinstance(report.get("result"), dict)):
+        raise failure
+    return report["result"]
+
+
 def _move_to_uv(info: dict) -> dict:
     """This copy was installed with pip/pipx (1.5 style). Install the release with uv, let the
     new copy set itself up (it removes known old copies), then remove this copy too."""
@@ -853,11 +887,7 @@ def _move_to_uv(info: dict) -> dict:
     bin_dir = subprocess.run([uv, "tool", "dir", "--bin"], capture_output=True, text=True, timeout=60).stdout.strip()
     exe = Path(bin_dir) / ("agent-reach.exe" if os.name == "nt" else "agent-reach")
     child = [str(exe), "setup"] if fresh else [str(exe), "update", "--sync-only"]
-    out = subprocess.run(child, capture_output=True, text=True, timeout=1800)
-    try:
-        result = json.loads(out.stdout.strip().split("\n")[-1]).get("result") or {}
-    except (ValueError, IndexError):
-        result = {"raw": out.stdout[-500:]}
+    result = _finish_update(child)
     actions = list(result.get("user_actions") or [])
     package = Path(__file__).resolve().parents[1]
     if package.exists():  # a copy the new one does not know about (pip --user, conda, ...)
@@ -893,11 +923,7 @@ def update(check_only: bool = False) -> dict:
             raise ReachError(UPSTREAM_BROKEN, f"upgrade failed: {proc.stderr.strip()[-300:]}",
                              hint=f"Run manually: {' '.join(cmd)}")
         exe = shutil.which("agent-reach") or sys.argv[0]
-        out = subprocess.run([exe, "update", "--sync-only"], capture_output=True, text=True, timeout=1800)
-        try:
-            synced = json.loads(out.stdout.strip().split("\n")[-1]).get("result") or {}
-        except (ValueError, IndexError):
-            synced = {"raw": out.stdout[-500:]}
+        synced = _finish_update([exe, "update", "--sync-only"])
         return {**info, "upgraded": True, "method": method, "sync": synced,
                 "user_actions": synced.get("user_actions", [])}
     synced = sync()
