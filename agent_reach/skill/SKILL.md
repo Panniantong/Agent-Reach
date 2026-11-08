@@ -33,6 +33,15 @@ agent-reach <渠道> <动作> [参数]          # 例：agent-reach xiaohongshu 
 agent-reach read <链接>                   # 按链接自动选渠道
 ```
 
+## Codex 网络权限与 DNS 错误
+
+在 Codex 中通过 shell 使用在线后端前，先检查当前会话的网络权限。`network_access: restricted` 时，默认沙箱里的 `agent-reach`、`curl` 和 Python/Node 请求可能报 `ENOTFOUND`、`Could not resolve host` 或 `nodename nor servname provided, or not known`；这些错误本身不能证明系统 DNS 或服务故障。
+
+- 在线命令需要网络，而当前沙箱禁止网络时，通过执行工具的正式授权流程运行该命令；支持 `exec_command` 的环境使用 `sandbox_permissions: "require_escalated"`，说明目标域名和用户任务。不要改全局权限、固定域名 IP 或绕过沙箱；不要仅凭沙箱内的解析错误修改系统 DNS 或代理配置。
+- 已出现 DNS 错误时，对比同一个域名解析或同一条只读请求在默认环境与获准网络环境中的结果；仅当获准环境成功，才将此次失败归因于沙箱限制。获准环境也失败时，再检查系统 DNS、代理和服务。
+- 审批拒绝、超时或环境不支持授权时，报告未执行或未验证，遵循工具允许的重试次数；不要把权限失败说成服务离线、无搜索结果，或用另一路径绕过限制。
+- 修复验收必须重跑实际后端命令并检查符合请求预期的有效响应；`doctor` 中的配置存在、CLI 已安装或静态 `ok` 不等于远端连通成功。
+
 ## 结果与错误
 
 - `ok: true` → 内容在 `items`，每条有 `title / url / author / published_at / text`，原始数据在 `raw`。
