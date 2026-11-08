@@ -310,6 +310,8 @@ def test_vtt_to_text_accepts_standard_timing_separators_and_long_hours(timing):
         ("https://github.com/cli/cli.git", ("cli", "cli", None)),
         ("https://github.com/cli/cli/issues/42", ("cli", "cli", 42)),
         ("https://github.com/cli/cli/pull/7?x=1", ("cli", "cli", 7)),
+        ("https://www.github.com/cli/cli", ("cli", "cli", None)),
+        ("https://github.com:443/cli/cli", ("cli", "cli", None)),
     ],
 )
 def test_github_target_forms(target, expected):

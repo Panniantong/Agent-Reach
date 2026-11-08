@@ -24,7 +24,7 @@ from .base import Action, Channel, Param
 
 _API = "https://api.github.com"
 _TARGET_RE = re.compile(
-    r"^(?:https?://(?:www\.)?github\.com/)?([\w.-]+)/([\w.-]+?)(?:\.git)?"
+    r"^(?:https?://(?:www\.)?github\.com(?::\d+)?/)?([\w.-]+)/([\w.-]+?)(?:\.git)?"
     r"(?:/(?:issues|pull)/(\d+))?/?(?:[?#].*)?$"
 )
 _README_MAX_CHARS = 50_000
@@ -134,7 +134,15 @@ class GitHubChannel(Channel):
     def can_handle(self, url: str) -> bool:
         from agent_reach.utils.url import host_matches
 
-        return host_matches(url, "github.com")
+        if not host_matches(url, "github.com"):
+            return False
+        # Only claim URLs the read backend can parse. File, tree, release and
+        # PR-files pages are GitHub pages the web channel can render instead.
+        try:
+            _parse_target(url)
+        except ReachError:
+            return False
+        return True
 
     # ── unified entry backends ──
 

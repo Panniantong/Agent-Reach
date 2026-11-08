@@ -58,7 +58,7 @@ def test_credential_channels_reject_lookalikes_and_userinfo(channel, malicious_u
     [
         (
             GitHubChannel(),
-            "https://api.github.com/repos/openai/openai-python",
+            "https://www.github.com/openai/openai-python",
             "https://github.com:443/openai/openai-python",
         ),
         (
@@ -124,6 +124,35 @@ def test_fixed_domain_channels_reject_suffix_lookalikes_and_userinfo(
     assert not channel.can_handle(f"https://{official_domain}.evil.test/path")
     assert not channel.can_handle(f"https://{official_domain}@evil.test/path")
     assert not channel.can_handle(f"https://user:pass@{official_domain}/path")
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://github.com/yt-dlp/yt-dlp/blob/master/README.md",
+        "https://github.com/yt-dlp/yt-dlp/tree/master/yt_dlp/extractor",
+        "https://github.com/cli/cli/pull/7/files",
+        "https://github.com/yt-dlp/yt-dlp/releases/tag/2024.12.13",
+        "https://api.github.com/repos/openai/openai-python",
+        "https://gist.github.com/octocat/123456",
+    ],
+)
+def test_github_can_handle_rejects_unreadable_github_pages(url):
+    assert not GitHubChannel().can_handle(url)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://github.com/openai/openai-python",
+        "https://www.github.com/openai/openai-python",
+        "https://github.com:443/openai/openai-python",
+        "https://github.com/openai/openai-python/issues/42",
+        "https://github.com/openai/openai-python/pull/7?x=1",
+    ],
+)
+def test_github_can_handle_accepts_repo_issue_and_pr_links(url):
+    assert GitHubChannel().can_handle(url)
 
 
 @pytest.mark.parametrize(
