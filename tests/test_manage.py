@@ -644,6 +644,25 @@ def test_skill_lists_every_channel_and_has_no_placeholders(env):
             assert f"| {ch.name} |" in text
 
 
+@pytest.mark.parametrize(
+    ("lang", "download_and_view", "disclose_source"),
+    [
+        ("zh", "下载到临时目录并查看后再总结", "说明哪些内容来自图片"),
+        (
+            "en",
+            "download the media to a temporary directory and view it before summarizing",
+            "say which content came from images",
+        ),
+    ],
+)
+def test_skill_reads_linked_media_before_summarizing(lang, download_and_view, disclose_source):
+    text = manage.render_skill(lang)
+    assert "`gallery_urls`" in text
+    assert "`preview_image_url`" in text
+    assert download_and_view in text
+    assert disclose_source in text
+
+
 def _seed_our_copy(path):
     path.mkdir(parents=True)
     (path / "SKILL.md").write_text("---\nname: agent-reach\ndescription: old\n---\nold\n")
