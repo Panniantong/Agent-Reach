@@ -139,7 +139,7 @@ class YouTubeChannel(Channel):
             "Full subtitle text of a video (manual or auto captions)",
             (
                 Param("target", "video link or id"),
-                Param("lang", "preferred languages, comma separated", required=False, default="zh-Hans,zh,en,en-orig"),
+                Param("lang", "preferred languages, comma separated", required=False, default=".*-orig,zh-Hans,zh,en"),
             ),
             (("yt-dlp", "_ytdlp_subtitle"),),
             live_test={"target": "https://www.youtube.com/watch?v=jNQXAC9IVRw"},
@@ -202,20 +202,30 @@ class YouTubeChannel(Channel):
                     "--skip-download", "--no-simulate",
                     "--write-subs", "--write-auto-subs",
                     "--sub-langs", ",".join(wanted), "--sub-format", "vtt",
-                    "--print", "%(title)s",
+                    "--print", "%(title)s", "--print", "%(subtitles)j",
                     "-o", "%(id)s.%(ext)s",
                     url,
                 ],
                 timeout,
                 cwd=tmp,
             )
+            output_lines = out.splitlines()
+            manual_json = output_lines[1] if len(output_lines) > 1 else "NA"
+            manual = set() if manual_json == "NA" else set(json.loads(manual_json))
             files = [f for f in os.listdir(tmp) if f.endswith(".vtt")]
             if not files:
                 raise ReachError(NOT_FOUND, f"no subtitles in {', '.join(wanted)} for this video")
 
-            def rank(name: str) -> int:
+            def rank(name: str) -> tuple[int, int]:
                 code = name.rsplit(".", 2)[-2] if name.count(".") >= 2 else ""
-                return wanted.index(code) if code in wanted else len(wanted)
+                exact = wanted.index(code) if code in wanted else len(wanted)
+                if ".*-orig" not in wanted:
+                    return (0, exact)
+                if code in manual and code in wanted:
+                    return (0, exact)
+                if code.endswith("-orig"):
+                    return (1, wanted.index(".*-orig"))
+                return (2, exact)
 
             best = min(files, key=rank)
             with open(os.path.join(tmp, best), encoding="utf-8", errors="replace") as fh:
