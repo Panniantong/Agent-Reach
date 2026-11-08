@@ -243,7 +243,7 @@ def run_action(
             elif public_only:
                 raise ReachError(BAD_INPUT, "This input has no public web route; use a full supported URL")
         # Browser queries wait in line: a few per site and overall share the browser at once.
-        browser_action = any(b[0] in {"opencli", "boss-agent-cli"} for b in action.backends)
+        browser_action = any(b[0] in {"opencli", "boss-agent-cli", "browser-cdp"} for b in action.backends)
         lock = query_slot(channel.name, clock) if browser_action else nullcontext()
         with lock:
             limited = cooldown(channel.name)
