@@ -33,6 +33,22 @@ def test_can_handle_matches_v2ex_hosts():
         assert ch.can_handle(url) is False, url
 
 
+@pytest.mark.parametrize(
+    "target",
+    [
+        "https://www.v2ex.com/t/1000not-a-topic",
+        "https://www.v2ex.com/t/1000/extra",
+    ],
+)
+def test_read_rejects_malformed_topic_urls_before_fetching(target):
+    with patch.object(v2, "_get_json") as get_json:
+        result = run_action(V2EXChannel(), "read", {"target": target})
+
+    assert result["ok"] is False
+    assert result["error"]["code"] == "BAD_INPUT"
+    get_json.assert_not_called()
+
+
 # --- check() ---
 
 
