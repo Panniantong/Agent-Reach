@@ -107,12 +107,19 @@ _SHOW_NOTICE = True
 
 def _emit(payload: dict) -> int:
     if _SHOW_NOTICE:
+        from . import session_reuse
         from .update_notice import notice
 
+        reuse = session_reuse.take_notice()
         info = notice()
-        if info:
+        if reuse or info:
             meta = payload.get("meta")
-            payload["meta"] = {**(meta if isinstance(meta, dict) else {}), "update": info}
+            merged = dict(meta) if isinstance(meta, dict) else {}
+            if reuse:
+                merged["session_reuse"] = reuse
+            if info:
+                merged["update"] = info
+            payload["meta"] = merged
     output = json.dumps(payload, ensure_ascii=False)
     try:
         output.encode(getattr(sys.stdout, "encoding", None) or "utf-8")

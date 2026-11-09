@@ -99,6 +99,22 @@ def _source_cookies(channel: str, domains) -> tuple[list, str]:
     return cookies, "saved-reach-session" if cookies else "saved-profile"
 
 
+def record_notice(channel: str, record: dict) -> None:
+    """Park a one-shot meta notice: the next CLI output tells the user a login was copied."""
+    state.mutate(lambda data: data.__setitem__("reuse_notice", {
+        "channel": channel, "source": record.get("source"),
+        "copied_cookies": record.get("copied_cookies"), "at": record.get("at")}))
+
+
+def take_notice() -> dict | None:
+    """Consume the pending reuse notice; None when nothing was copied."""
+    pending = state.load().get("reuse_notice")
+    if not pending:
+        return None
+    state.mutate(lambda data: data.pop("reuse_notice", None))
+    return pending
+
+
 def prepare(channel: str, *, force: bool = False) -> dict:
     """Reuse an imported site session until explicitly refreshed; verify access separately."""
     from .manage import _channel, site_domains
@@ -150,5 +166,7 @@ def prepare(channel: str, *, force: bool = False) -> dict:
             browser.save_session()
         result = {"source": source, "copied_cookies": len(cookies), "at": state.now(),
                   "verified": False, "source_changed": False, "cookie_snapshot": 1}
+        if cookies:
+            record_notice(channel, result)
         state.mutate(lambda data: data.setdefault("session_reuse", {}).__setitem__(channel, result))
         return result
