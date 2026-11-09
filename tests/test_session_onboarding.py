@@ -328,3 +328,84 @@ def test_xueqiu_syncs_reused_browser_login_only_for_community_actions(monkeypatc
     ch._xq_hot_posts(limit=2,timeout=2)
     reuse.assert_called_once_with('xueqiu')
     sync.assert_called_once_with()
+
+
+def test_disabled_session_reuse_never_reads_local_browsers(monkeypatch):
+    """`configure session-reuse off`: no connected browser, legacy snapshot or CDP write is touched."""
+    from unittest.mock import Mock
+
+    from agent_reach.backends import opencli
+    from agent_reach.config import Config
+    from agent_reach.runtime import session_reuse
+
+    Config().set("session_reuse", "off")
+    export = Mock(side_effect=AssertionError('read a local browser while disabled'))
+    monkeypatch.setattr(opencli, 'export_site_cookies', export)
+    monkeypatch.setattr(browser, 'ensure_running', lambda: None)
+    monkeypatch.setattr(cdp, 'call', lambda *a, **k: pytest.fail('touched the dedicated browser'))
+
+    assert session_reuse.prepare('xiaohongshu') == {'source': 'disabled', 'copied_cookies': 0}
+    assert session_reuse._source_cookies('xiaohongshu', ('xiaohongshu.com',)) == ([], 'disabled')
+    assert session_reuse.take_notice() is None
+    with pytest.raises(ReachError, match='session-reuse'):
+        session_reuse.prepare('xiaohongshu', force=True)
+    export.assert_not_called()
+
+
+def test_session_reuse_stays_on_by_default(monkeypatch):
+    from unittest.mock import Mock
+
+    from agent_reach.backends import opencli
+    from agent_reach.config import Config
+    from agent_reach.runtime import session_reuse
+
+    assert Config(read_only=True).get('session_reuse') is None
+    monkeypatch.setattr(browser, 'ensure_running', lambda: None)
+    monkeypatch.setattr(browser, 'connected_contexts', lambda: ['daily'])
+    monkeypatch.setattr(browser, 'bound_context', lambda: 'owned')
+    export = Mock(return_value=[{'name': 'sid', 'value': 'test', 'domain': '.xiaohongshu.com',
+                                 'expirationDate': 9999999999}])
+    monkeypatch.setattr(opencli, 'export_site_cookies', export)
+    cookies, source = session_reuse._source_cookies('xiaohongshu', ('xiaohongshu.com',))
+    assert source == 'daily' and [c['name'] for c in cookies] == ['sid']
+    export.assert_called_once_with('daily', 'xiaohongshu.com')
+
+
+def test_copying_a_login_leaves_a_one_shot_notice_in_the_output(monkeypatch, capsys):
+    """The command output that triggered a first copy carries meta.session_reuse exactly once."""
+    from unittest.mock import Mock
+
+    from agent_reach.backends import opencli
+    from agent_reach.runtime import cli, session_reuse
+    from agent_reach.runtime.result import envelope
+
+    monkeypatch.setattr(browser, 'ensure_running', lambda: None)
+    monkeypatch.setattr(browser, 'connected_contexts', lambda: ['daily'])
+    monkeypatch.setattr(browser, 'bound_context', lambda: 'owned')
+    monkeypatch.setattr(opencli, 'export_site_cookies',
+                        Mock(return_value=[{'name': 'sid', 'value': 'test', 'domain': '.xiaohongshu.com',
+                                            'expirationDate': 9999999999}]))
+    monkeypatch.setattr(cdp, 'call', lambda *a, **k: {})
+    monkeypatch.setattr(browser, 'save_session', lambda: None)
+    result = session_reuse.prepare('xiaohongshu')
+    assert result['copied_cookies'] == 1
+
+    expected = {'channel': 'xiaohongshu', 'source': result['source'],
+                'copied_cookies': 1, 'at': result['at']}
+    assert session_reuse.take_notice() == expected
+    assert session_reuse.take_notice() is None
+
+    # A forced refresh copies again and the very next output carries the notice.
+    refreshed = session_reuse.prepare('xiaohongshu', force=True)
+    cli._emit(envelope(channel='xiaohongshu', action='search', items=[]))
+    out = json.loads(capsys.readouterr().out)
+    assert out['meta']['session_reuse'] == {'channel': 'xiaohongshu', 'source': refreshed['source'],
+                                            'copied_cookies': 1, 'at': refreshed['at']}
+    assert session_reuse.take_notice() is None
+
+    # Cached reuse never re-warns, and payloads without meta stay untouched.
+    assert session_reuse.prepare('xiaohongshu') == refreshed
+    assert session_reuse.take_notice() is None
+    mgmt = {'schema_version': 1, 'ok': True, 'action': 'browser use', 'result': {}, 'error': None}
+    cli._emit(mgmt)
+    assert 'meta' not in json.loads(capsys.readouterr().out)

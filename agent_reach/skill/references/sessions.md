@@ -14,8 +14,10 @@
 
 ## 自动复用已有登录
 
+- **全局开关**：`agent-reach configure session-reuse off` 关闭后，程序不再读取任何已连接的本机浏览器（也不读历史快照），只用专用浏览器里已有的登录；`login <渠道> --import-existing` 会返回 `NEED_SETUP`。重新开启用 `on`（默认开）。关闭不影响已复制过去的会话，也不碰你的本机浏览器。
 1. 第一次用某个网站时，如果用户的 Chrome 已连接 OpenCLI 扩展，程序把该站的登录（只限该站 Cookie）复制一次到专用浏览器。不复制整个浏览器目录、其他网站或密码库，也不改动来源浏览器。
 2. 复制成功后一直复用保存的会话，不按时间重新复制。Cookie 在不代表登录有效，以真实动作结果为准。
+   - 复制发生的那次命令输出会在 `meta.session_reuse` 带一条一次性通知（渠道、来源、cookie 数量），之后复用缓存不再重复提示。
 3. 用户 Chrome 没连扩展时，不能承诺自动复用，也不能据此认定用户没登录；此时用 Reach 已保存的会话。
 4. 本机有多个浏览器都登录了该站时：`agent-reach browser profiles` 列出来源，`agent-reach browser use <ID>` 选定一个，不随机切换。
 5. `agent-reach login <渠道> --import-existing` 主动重新复制一次该站登录，不打开窗口。没找到可复制的登录，或 OpenCLI Bridge 没在运行时，返回 `NEED_SETUP`，已保存的会话不变。

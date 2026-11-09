@@ -114,6 +114,7 @@ def reuse_browser_session(timeout: float) -> bool:
             input_data=json.dumps(jar), label="Bilibili site login reuse")
     state.mutate(lambda data: data.setdefault("session_reuse", {}).__setitem__("bilibili", {
         "source": source, "copied_cookies": len(jar), "at": state.now(), "verified": False, "source_changed": False}))
+    session_reuse.record_notice("bilibili", {"source": source, "copied_cookies": len(jar), "at": state.now()})
     return True
 
 

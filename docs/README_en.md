@@ -86,7 +86,7 @@ agent-reach read https://www.v2ex.com/t/123   # picks the channel from the link
 ### ✅ Before you start, you might want to know
 
 - **Which agents?** Every agent.
-- **Does it touch my browser and accounts?** Login channels use Agent Reach's own browser, in the background without windows. The first time a site is used, that site's login is copied over from your Chrome; your browser is not changed and passwords are never read. The copied login is usually your main account, so switching to a secondary one is recommended, see Security below. Details: [session setup](../agent_reach/skill/references/sessions.md).
+- **Does it touch my browser and accounts?** Login channels use Agent Reach's own browser, in the background without windows. The first time a site is used, that site's login is copied over from your Chrome; your browser is not changed and passwords are never read. To disable reading your local browser logins entirely, run `agent-reach configure session-reuse off`. The copied login is usually your main account, so switching to a secondary one is recommended, see Security below. Details: [session setup](../agent_reach/skill/references/sessions.md).
 
 ---
 

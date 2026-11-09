@@ -35,6 +35,14 @@ def _cookies(rows, domains) -> list:
     return out
 
 
+def _import_allowed() -> bool:
+    """False only when the user turned local-login copying off (`configure session-reuse off`)."""
+    from agent_reach.config import Config
+
+    value = str(Config(read_only=True).get("session_reuse", "on")).strip().lower()
+    return value not in {"off", "false", "0", "no", "disabled"}
+
+
 def profiles() -> list:
     return [{"id": context, "dedicated": context == browser.bound_context()}
             for context in browser.connected_contexts()]
@@ -53,6 +61,9 @@ def use(profile: str) -> dict:
 
 def _source_cookies(channel: str, domains) -> tuple[list, str]:
     from agent_reach.backends.opencli import export_site_cookies
+    if not _import_allowed():
+        # The switch also skips the legacy saved snapshot: "off" means no copying at all.
+        return [], "disabled"
     try:
         contexts = [p["id"] for p in profiles() if not p["dedicated"]]
     except ReachError as exc:
@@ -88,6 +99,22 @@ def _source_cookies(channel: str, domains) -> tuple[list, str]:
     return cookies, "saved-reach-session" if cookies else "saved-profile"
 
 
+def record_notice(channel: str, record: dict) -> None:
+    """Park a one-shot meta notice: the next CLI output tells the user a login was copied."""
+    state.mutate(lambda data: data.__setitem__("reuse_notice", {
+        "channel": channel, "source": record.get("source"),
+        "copied_cookies": record.get("copied_cookies"), "at": record.get("at")}))
+
+
+def take_notice() -> dict | None:
+    """Consume the pending reuse notice; None when nothing was copied."""
+    pending = state.load().get("reuse_notice")
+    if not pending:
+        return None
+    state.mutate(lambda data: data.pop("reuse_notice", None))
+    return pending
+
+
 def prepare(channel: str, *, force: bool = False) -> dict:
     """Reuse an imported site session until explicitly refreshed; verify access separately."""
     from .manage import _channel, site_domains
@@ -101,6 +128,15 @@ def prepare(channel: str, *, force: bool = False) -> dict:
         if not force and (record.get("blocked") or record.get("source") == "manual"
                           or (record.get("cookie_snapshot") == 1 and record.get("copied_cookies", 0) > 0)):
             return record
+        enabled = _import_allowed()
+        if not enabled and force:
+            # An explicit import while disabled must state the switch, not blame the browser.
+            raise ReachError(NEED_SETUP,
+                             "Copying a local browser login is off (agent-reach configure session-reuse off)",
+                             hint="Run agent-reach configure session-reuse on to allow it again, "
+                                  "or log in with agent-reach login " + channel + ".")
+        if not enabled:
+            return {"source": "disabled", "copied_cookies": 0}
         cookies, source = _source_cookies(channel, site_domains(ch))
         # Source discovery tolerates a disconnected optional Bridge for native
         # CLI sessions. A browser-backed action still needs it before recording
@@ -130,5 +166,7 @@ def prepare(channel: str, *, force: bool = False) -> dict:
             browser.save_session()
         result = {"source": source, "copied_cookies": len(cookies), "at": state.now(),
                   "verified": False, "source_changed": False, "cookie_snapshot": 1}
+        if cookies:
+            record_notice(channel, result)
         state.mutate(lambda data: data.setdefault("session_reuse", {}).__setitem__(channel, result))
         return result
