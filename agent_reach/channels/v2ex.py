@@ -141,7 +141,7 @@ def _get_json(url: str) -> Any:
         return _get_json_with_curl(url)
 
 
-_TOPIC_URL_RE = re.compile(r"^(?:https?://)?(?:www\.)?v2ex\.com/t/(\d+)")
+_TOPIC_URL_RE = re.compile(r"(?:https?://)?(?:www\.)?v2ex\.com/t/(\d+)(?:/)?(?:[?#].*)?")
 
 
 def _parse_topic_id(target: str) -> int:
@@ -149,7 +149,7 @@ def _parse_topic_id(target: str) -> int:
     t = str(target).strip()
     if t.isdigit():
         return int(t)
-    match = _TOPIC_URL_RE.match(t)
+    match = _TOPIC_URL_RE.fullmatch(t)
     if match:
         return int(match.group(1))
     raise ReachError(BAD_INPUT, "target must be a V2EX topic link (https://www.v2ex.com/t/<id>) or id")
