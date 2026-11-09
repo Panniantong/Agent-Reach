@@ -14,7 +14,7 @@ reddit (#364) and xueqiu (#365).
 import json
 import ssl
 import subprocess
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError, URLError
 
 import pytest
@@ -134,6 +134,24 @@ def test_get_json_rejects_non_api_targets_before_network(url):
 
 
 # --- get_topic: list-or-dict shape + replies fetch + fallbacks ---
+
+
+def test_read_returns_topic_when_replies_fetch_fails():
+    topic = {"id": 42, "title": "Readable topic", "content": "topic body"}
+    response = MagicMock()
+    response.__enter__.return_value.read.return_value = json.dumps([topic]).encode()
+
+    with patch.object(
+        v2.urllib.request,
+        "urlopen",
+        side_effect=[response, URLError("replies unavailable")],
+    ):
+        result = run_action(V2EXChannel(), "read", {"target": "42"})
+
+    assert result["ok"] is True
+    assert result["items"][0]["title"] == "Readable topic"
+    assert result["items"][0]["text"] == "topic body"
+    assert result["items"][0]["raw"]["replies"] == []
 
 
 
