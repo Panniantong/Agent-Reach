@@ -175,7 +175,7 @@ def observe_activity() -> None:
     origins = set(_load_state().get("visited_origins", []))
     before = set(origins)
     for target in cdp._json("/json/list") or []:
-        if target.get("type") != "page":
+        if not cdp.is_attachable_page(target):
             continue
         parsed = urllib.parse.urlsplit(target.get("url", ""))
         if parsed.scheme in {"http", "https"} and parsed.netloc:

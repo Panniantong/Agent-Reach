@@ -16,7 +16,7 @@ import struct
 import threading
 import urllib.request
 from typing import Dict, List, Optional
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from .browser import CDP_URL
 
@@ -74,12 +74,104 @@ def _send(sock: socket.socket, text: str) -> None:
     sock.sendall(head + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(payload)))
 
 
+def is_attachable_page(target: object) -> bool:
+    """A normal tab Chrome's extension debugger can attach to.
+
+    Windows CloakBrowser also advertises the toolbar, DevTools, and extension
+    targets. Attaching to those returns "Cannot attach to this target."
+    """
+    if not isinstance(target, dict):
+        return False
+    if str(target.get("type") or "").lower() != "page":
+        return False
+    url = str(target.get("url") or "")
+    title = str(target.get("title") or "")
+    haystack = f"{title} {url}".lower()
+    if "devtools" in haystack or ".top-chrome" in haystack:
+        return False
+    lowered = url.lower()
+    if lowered.startswith(("chrome://", "chrome-untrusted://", "chrome-extension://", "devtools://", "edge://")):
+        return False
+    if url and not (lowered.startswith(("http://", "https://", "about:blank", "data:"))):
+        return False
+    return True
+
+
+def pick_attachable_page(targets: Optional[List[object]]) -> Optional[dict]:
+    """Prefer a real http(s) tab over about:blank; never a restricted target."""
+    pages = [target for target in targets or [] if isinstance(target, dict) and is_attachable_page(target)]
+    if not pages:
+        return None
+
+    def score(target: dict) -> int:
+        url = str(target.get("url") or "")
+        if url.startswith(("http://", "https://")):
+            return 2
+        if url.startswith("data:"):
+            return 1
+        return 0
+
+    return max(pages, key=score)
+
+
+def _open_page(url: str) -> Optional[dict]:
+    """Create one tab through the dedicated browser's loopback debugger."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    request = urllib.request.Request(
+        f"{CDP_URL}/json/new?{quote(url, safe='')}", method="PUT",
+    )
+    try:
+        with opener.open(request, timeout=_TIMEOUT) as resp:
+            data = json.loads(resp.read())
+    except Exception:  # noqa: BLE001
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def ensure_attachable_page() -> dict:
+    """Return a tab OpenCLI can attach to, or raise an actionable error.
+
+    Used by the Xiaohongshu station path on Windows, where the failure mode is
+    an opaque "Cannot attach to this target" from a toolbar or DevTools target.
+    """
+    from .result import UPSTREAM_BROKEN, ReachError
+
+    page = pick_attachable_page(_json("/json/list"))
+    if page:
+        return page
+    created = _open_page("about:blank")
+    page = pick_attachable_page(_json("/json/list"))
+    if page is None and is_attachable_page(created):
+        page = created
+    if page:
+        return page
+    if _json("/json/version") is None and _json("/json/list") is None:
+        raise ReachError(
+            UPSTREAM_BROKEN,
+            "The dedicated browser did not expose a debugger endpoint",
+            hint=("Run `agent-reach browser stop`, then retry. If another program is using the "
+                  "debugging port, move Agent Reach with `agent-reach configure browser-port <port>`."),
+        )
+    raise ReachError(
+        UPSTREAM_BROKEN,
+        "Xiaohongshu could not find a browser tab the debugger can attach to",
+        hint=("Chrome only exposed restricted targets (toolbar, extension, or DevTools), so the "
+              "Xiaohongshu station path cannot attach. Run `agent-reach browser stop`, then retry. "
+              "If headless attach still fails, run `agent-reach login xiaohongshu` and retry in that window."),
+    )
+
+
 def call(method: str, params: Optional[dict] = None, *, page: bool = False,
          target_id: Optional[str] = None) -> Optional[dict]:
     """One browser-level CDP call; returns `result` or None if unreachable."""
-    target = (next((t for t in (_json("/json/list") or []) if
-                    (t.get("id") == target_id if target_id else t.get("type") == "page")), {})
-              if page or target_id else (_json("/json/version") or {}))
+    if page or target_id:
+        targets = _json("/json/list") or []
+        if target_id:
+            target = next((t for t in targets if isinstance(t, dict) and t.get("id") == target_id), {})
+        else:
+            target = pick_attachable_page(targets) or {}
+    else:
+        target = _json("/json/version") or {}
     ws = target.get("webSocketDebuggerUrl")
     if not ws:
         return None
