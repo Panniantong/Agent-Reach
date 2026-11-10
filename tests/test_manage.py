@@ -667,7 +667,7 @@ def test_hermes_default_home_matches_hermes_per_platform(monkeypatch, platform):
     assert skills == folder / "skills"
 
 
-def test_skill_one_real_copy_linked_only_for_present_ais(env):
+def test_skill_one_real_copy_linked_only_for_present_ais(env, skill_install_kind):
     home = home_dir()
     for d in (".claude", ".codex", ".openclaw"):
         (home / d).mkdir()
@@ -677,7 +677,12 @@ def test_skill_one_real_copy_linked_only_for_present_ais(env):
     for name in ("sessions.md", "maintenance.md"):
         assert (real / "references" / name).is_file()
     for link in (home / ".claude" / "skills" / "agent-reach", home / ".openclaw" / "skills" / "agent-reach"):
-        assert link.is_symlink() and os.path.realpath(link) == os.path.realpath(real)
+        assert link.is_symlink() == (skill_install_kind == "link")
+        assert str(link) in result["links" if skill_install_kind == "link" else "copies"]
+        if skill_install_kind == "link":
+            assert os.path.realpath(link) == os.path.realpath(real)
+        for name in ("SKILL.md", "references/sessions.md", "references/maintenance.md"):
+            assert (link / name).read_text(encoding="utf-8") == (real / name).read_text(encoding="utf-8")
     assert not (home / ".codex" / "skills").exists(), "codex reads ~/.agents/skills itself"
     assert not (home / ".cursor").exists(), "absent AIs get nothing"
     assert set(result["agents"]) == {"claude-code", "codex", "openclaw"}
@@ -722,20 +727,31 @@ def test_skill_falls_back_to_a_copy_without_symlink_rights(env, monkeypatch):
     assert not copy.exists()
 
 
-def test_skill_link_for_an_unlisted_ai_and_uninstall_removes_everything(env):
+def test_skill_link_for_an_unlisted_ai_and_uninstall_removes_everything(env, skill_install_kind):
     home = home_dir()
     (home / ".claude").mkdir()
     manage.place_skill()
     other = home / "my-ai" / "skills"
-    manage.link_skill(str(other))
-    assert (other / "agent-reach").is_symlink()
-    manage.place_skill()
+    result = manage.link_skill(str(other))
+    assert result["links" if skill_install_kind == "link" else "copies"] == [
+        str(home / ".claude" / "skills" / "agent-reach"),
+        str(other / "agent-reach"),
+    ]
+    assert (other / "agent-reach" / "SKILL.md").is_file()
+    assert (other / "agent-reach").is_symlink() == (skill_install_kind == "link")
+    result = manage.place_skill()
     stray = home / ".gemini" / "skills" / "agent-reach"
-    stray.parent.mkdir(parents=True)
-    stray.symlink_to(home / ".agents" / "skills" / "agent-reach")
-    assert (other / "agent-reach").is_symlink(), "update keeps recorded links"
+    if skill_install_kind == "link":
+        stray.parent.mkdir(parents=True)
+        stray.symlink_to(home / ".agents" / "skills" / "agent-reach", target_is_directory=True)
+    else:
+        _seed_our_copy(stray)
+    assert str(other / "agent-reach") in result["links" if skill_install_kind == "link" else "copies"], "update keeps recorded placements"
     manage.uninstall()
-    assert stray.is_symlink(), "unrecorded shortcut is retained"
+    if skill_install_kind == "link":
+        assert stray.is_symlink(), "unrecorded shortcut is retained"
+    else:
+        assert (stray / "SKILL.md").is_file(), "unrecorded copy is retained"
     for p in (other / "agent-reach", home / ".claude" / "skills" / "agent-reach",
               home / ".agents" / "skills" / "agent-reach"):
         assert not p.exists() and not p.is_symlink()
@@ -843,7 +859,7 @@ def test_retired_mcp_cleanup_preserves_changed_private_path(env, monkeypatch):
     assert path.read_text() == "unchanged"
 
 
-def test_skill_unlink_survives_update_until_linked_again(env):
+def test_skill_unlink_survives_update_until_linked_again(env, skill_install_kind):
     home = home_dir()
     (home / ".claude").mkdir()
     manage.place_skill()
@@ -851,7 +867,7 @@ def test_skill_unlink_survives_update_until_linked_again(env):
     manage.unlink_skill(str(claude))
     assert not (claude / "agent-reach").exists() and not (claude / "agent-reach").is_symlink()
     manage.place_skill()
-    assert not (claude / "agent-reach").is_symlink(), "setup/update respect the opt-out"
+    assert not (claude / "agent-reach").exists() and not (claude / "agent-reach").is_symlink(), "setup/update respect the opt-out"
     assert (home / ".agents" / "skills" / "agent-reach" / "SKILL.md").is_file(), "the real copy stays"
     with pytest.raises(ReachError):
         manage.unlink_skill(str(home / ".agents" / "skills"))
@@ -862,8 +878,10 @@ def test_skill_unlink_survives_update_until_linked_again(env):
         manage.unlink_skill(str(foreign.parent))
     assert foreign.is_dir(), "a foreign skill is never removed"
     manage.link_skill(str(claude))
-    manage.place_skill()
-    assert (claude / "agent-reach").is_symlink(), "link clears the opt-out"
+    result = manage.place_skill()
+    assert result["links" if skill_install_kind == "link" else "copies"] == [str(claude / "agent-reach")], "link clears the opt-out"
+    assert (claude / "agent-reach" / "SKILL.md").is_file()
+    assert (claude / "agent-reach").is_symlink() == (skill_install_kind == "link")
 
 
 @pytest.mark.parametrize("method", ["uv", "other"])

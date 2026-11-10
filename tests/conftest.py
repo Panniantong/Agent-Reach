@@ -12,6 +12,26 @@ import pytest
 from agent_reach.config import Config
 
 
+@pytest.fixture(params=["link", "copy"])
+def skill_install_kind(request, tmp_path, monkeypatch):
+    """Exercise both skill placements, probing rights only for the symlink case."""
+    if request.param == "copy":
+        def no_symlinks(self, *args, **kwargs):
+            raise OSError("symlinks not permitted")
+
+        monkeypatch.setattr(Path, "symlink_to", no_symlinks)
+    else:
+        target = tmp_path / "symlink-target"
+        target.mkdir()
+        probe = tmp_path / "symlink-probe"
+        try:
+            probe.symlink_to(target, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pytest.skip("directory symlinks are unavailable; copy fallback is tested separately")
+        probe.unlink()
+    return request.param
+
+
 @pytest.fixture(scope="session")
 def bash_executable() -> str:
     """Return a real GNU Bash, avoiding Windows' WSL launcher stub."""

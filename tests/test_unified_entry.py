@@ -238,13 +238,15 @@ def test_check_fails_when_backend_returns_nothing(capsys, fake_cli):
     assert out["results"][0]["error"]["code"] == "EMPTY"
 
 
-def test_skill_command_links_a_skills_dir_and_reports_it(capsys, fake_cli):
+def test_skill_command_links_a_skills_dir_and_reports_it(capsys, fake_cli, skill_install_kind):
     from agent_reach.utils.paths import home_dir
 
     target = home_dir() / "my-ai" / "skills"
     code, out = _run(capsys, ["skill", "link", str(target)])
     assert code == 0 and out["action"] == "skill link"
-    assert out["result"]["links"] == [str(target / "agent-reach")]
+    assert out["result"]["links" if skill_install_kind == "link" else "copies"] == [str(target / "agent-reach")]
+    assert out["result"]["copies" if skill_install_kind == "link" else "links"] == []
+    assert (target / "agent-reach" / "SKILL.md").is_file()
     code, out = _run(capsys, ["skill"])
     assert code == 0 and out["result"]["installed"] is True
     code, out = _run(capsys, ["skill", "unlink"])
