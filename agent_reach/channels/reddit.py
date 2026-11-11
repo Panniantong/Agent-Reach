@@ -7,6 +7,7 @@ establish a site-wide login requirement. These actions use managed browser
 sessions; request authentication only when the selected path requires it.
 """
 
+from agent_reach.backends import reddit_rss
 from agent_reach.backends.opencli import opencli_call, opencli_items
 from agent_reach.runtime.result import BAD_INPUT, UPSTREAM_BROKEN, ReachError
 
@@ -64,7 +65,8 @@ class RedditChannel(Channel):
                 Param("name", "subreddit name without r/, e.g. python"),
                 Param("limit", "max posts", required=False, type=int, default=5),
             ),
-            (("opencli", "_opencli_subreddit"),),
+            # The public feed answers when Reddit serves the browser path an HTML block page.
+            (("opencli", "_opencli_subreddit"), (reddit_rss.BACKEND, "_rss_subreddit")),
             live_test={"name": "python", "limit": 2},
         ),
     )
@@ -94,3 +96,6 @@ class RedditChannel(Channel):
 
     def _opencli_subreddit(self, *, name: str, limit: int, timeout: float) -> list:
         return _reddit(["subreddit", name.removeprefix("r/"), "--limit", str(limit)], timeout)[:limit]
+
+    def _rss_subreddit(self, *, name: str, limit: int, timeout: float) -> list:
+        return reddit_rss.subreddit(name, limit, timeout)
