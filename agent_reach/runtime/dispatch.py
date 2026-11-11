@@ -176,7 +176,24 @@ def _call_with_deadline(fn, params: Dict[str, Any], clock: Clock) -> List[dict]:
         raise ReachError(TIMEOUT, f"backend did not answer within {budget:.0f}s")
     if "error" in box:
         raise box["error"]
-    return list(box.get("items") or [])
+    items = box.get("items")
+    # The envelope promises list[dict]; a backend that returns anything else
+    # is broken, not a success to mangle (a str would otherwise be split into
+    # per-character items, a dict into its keys, None into an empty success).
+    if not isinstance(items, list):
+        raise ReachError(
+            UPSTREAM_BROKEN,
+            f"backend returned a malformed result: expected a list of dict items, "
+            f"got {type(items).__name__}",
+        )
+    for item in items:
+        if not isinstance(item, dict):
+            raise ReachError(
+                UPSTREAM_BROKEN,
+                f"backend returned a malformed result: expected a list of dict items, "
+                f"got a list containing {type(item).__name__}",
+            )
+    return items
 
 
 def _pick_error(errors: List[ReachError]) -> ReachError:
