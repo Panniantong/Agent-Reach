@@ -94,3 +94,21 @@ The setting is kept across updates. If the Agent Reach browser is open, it close
 - `agent-reach update` and try again.
 - Remove and re-add a channel: `agent-reach remove <channel>` then `agent-reach add <channel>` (remove also clears its login, its site cookies in the Agent Reach browser, and its private tools nobody else uses).
 - Open an issue at https://github.com/Panniantong/Agent-Reach/issues with the output of `agent-reach doctor --text` (it starts with the version) and `agent-reach check <channel> --text`. Remove any personal data first.
+
+## Bilibili reports no subtitles while the session has expired
+
+`channels` reports saved-session presence separately from live login status. Run
+`agent-reach login bilibili --check` and inspect `items[0].logged_in`; `ok: true`
+means the check completed, not that the account is authenticated. Content actions
+verify the session on every request and return `NEED_LOGIN` with
+`error.details.login.qr_path` when login is required. Display that image in the
+current conversation; after the user scans and confirms, run
+`agent-reach login bilibili --poll`, require `logged_in: true` and `verified: true`,
+then retry the original action. Existing unexpired QR requests are reused.
+
+A confirmed scan without valid cookies is not a successful login. Both current
+Set-Cookie responses and older redirect-query credentials are supported, and the
+new session is validated before it replaces the saved one. Network/verification
+errors retain their own codes and never mean that the video has no subtitles.
+Only an explicit public preview uses `read/search/hot --no-login`; subtitles
+remain authenticated. Subtitle retrieval still covers the first part only.

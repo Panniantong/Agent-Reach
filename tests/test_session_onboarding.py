@@ -296,6 +296,7 @@ def test_bili_reuses_only_site_cookies_through_upstream_writer_and_private_stdin
 
 def test_native_bili_subtitles_do_not_require_an_optional_browser_bridge(monkeypatch):
     from agent_reach.channels import bilibili
+    monkeypatch.setattr(bilibili.bilibili_auth, "require_login", lambda timeout: None)
     monkeypatch.setattr(browser,'connected_contexts',lambda:(_ for _ in()).throw(ReachError('NEED_SETUP','OpenCLI is not installed')))
     monkeypatch.setattr(bilibili,'run_cmd',lambda *a,**k:pytest.fail('started optional browser integration'))
     monkeypatch.setattr(bilibili,'_bili_json',lambda *a:{'subtitle':{'available':True,'text':'Saved native login works'},'video':{'bvid':'BV1Jgf6YvE8e'}})

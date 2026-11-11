@@ -14,6 +14,8 @@ import re
 import urllib.request
 from typing import Any
 
+from agent_reach.runtime import bilibili_auth
+from agent_reach.runtime.clock import Clock
 from agent_reach.runtime.result import (
     BAD_INPUT,
     NEED_LOGIN,
@@ -26,9 +28,11 @@ from agent_reach.runtime.result import (
     unix_to_iso,
 )
 from agent_reach.runtime.run import CommandFailed, http_request, run_cmd
-from agent_reach.runtime.sessions import has_login_state, session_env
+from agent_reach.runtime.sessions import session_env
 
 from .base import Action, Channel, Param
+
+_NO_LOGIN = Param("no_login", "Explicit unauthenticated preview; do not start login", required=False, type=bool, default=False)
 
 _BV_RE = re.compile(r"BV[0-9A-Za-z]{10}")
 _BILI_LOGIN_HINT = (
@@ -80,6 +84,21 @@ def _bili_json(args: list, timeout: float) -> Any:
             raise ReachError(NEED_LOGIN, message, hint=_BILI_LOGIN_HINT)
         raise ReachError(UPSTREAM_BROKEN, message, hint=upstream_hint)
     return payload.get("data") or {}
+
+
+def _content_json(args: list, timeout: float, *, no_login: bool = False):
+    budget = Clock(timeout)
+    if not no_login:
+        bilibili_auth.require_login(budget.remaining())
+    try:
+        return _bili_json(args, bilibili_auth._remaining(budget))
+    except ReachError as exc:
+        if exc.code != NEED_LOGIN or no_login:
+            raise
+        # A session can expire after the initial check. Produce the same QR
+        # handoff, not a bare login hint, without retrying the content request.
+        bilibili_auth.require_login(bilibili_auth._remaining(budget))
+        raise ReachError(UPSTREAM_BROKEN, "Bilibili rejected access despite a verified session") from None
 
 
 def reuse_browser_session(timeout: float) -> bool:
@@ -182,12 +201,15 @@ class BilibiliChannel(Channel):
         "`agent-reach login bilibili` again to reuse those cookies."
     )
     actions = (
+        Action("auth", "Verify the saved login or return a QR image for the user", (),
+               (("bilibili-auth", "_auth"),)),
         Action(
             "search",
             "Search videos",
             (
                 Param("query", "what to search for"),
                 Param("limit", "max results", required=False, type=int, default=5),
+                _NO_LOGIN,
             ),
             (("bili-cli", "_cli_search"),),
             live_test={"query": "Python", "limit": 2},
@@ -195,14 +217,14 @@ class BilibiliChannel(Channel):
         Action(
             "read",
             "Video title, uploader, description and stats",
-            (Param("target", "BV id or video link"),),
+            (Param("target", "BV id or video link"), _NO_LOGIN),
             (("bili-cli", "_cli_read"), ("bilibili-api", "_api_read")),
             live_test={"target": "BV1GJ411x7h7"},
         ),
         Action(
             "hot",
             "Trending videos",
-            (Param("limit", "max items", required=False, type=int, default=10),),
+            (Param("limit", "max items", required=False, type=int, default=10), _NO_LOGIN),
             (("bili-cli", "_cli_hot"), ("bilibili-api", "_api_hot")),
             live_test={"limit": 2},
         ),
@@ -225,35 +247,46 @@ class BilibiliChannel(Channel):
 
     # ── unified entry backends ──
 
-    def _cli_search(self, *, query: str, limit: int, timeout: float) -> list:
-        data = _bili_json(["search", query, "--type", "video", "-n", str(limit)], timeout)
+    def _auth(self, *, timeout: float) -> list:
+        bilibili_auth.require_login(timeout)
+        return [{"logged_in": True, "verified": True}]
+
+    def _cli_search(self, *, query: str, limit: int, timeout: float, no_login: bool = False) -> list:
+        data = _content_json(["search", query, "--type", "video", "-n", str(limit)], timeout, no_login=no_login)
         return [_cli_video_item(v) for v in (data if isinstance(data, list) else [])[:limit]]
 
-    def _cli_read(self, *, target: str, timeout: float) -> list:
-        data = _bili_json(["video", _bvid(target, timeout)], timeout)
+    def _cli_read(self, *, target: str, timeout: float, no_login: bool = False) -> list:
+        bvid = _bvid(target, timeout)
+        data = _content_json(["video", bvid], timeout, no_login=no_login)
         return [_cli_video_item(data.get("video") or {})]
 
-    def _api_read(self, *, target: str, timeout: float) -> list:
+    def _api_read(self, *, target: str, timeout: float, no_login: bool = False) -> list:
+        if not no_login:
+            bilibili_auth.require_login(timeout)
         return [_api_video_item(_bili_api(f"/x/web-interface/view?bvid={_bvid(target, timeout)}", timeout))]
 
-    def _cli_hot(self, *, limit: int, timeout: float) -> list:
-        data = _bili_json(["hot", "-n", str(limit)], timeout)
+    def _cli_hot(self, *, limit: int, timeout: float, no_login: bool = False) -> list:
+        data = _content_json(["hot", "-n", str(limit)], timeout, no_login=no_login)
         return [_cli_video_item(v) for v in (data.get("items") or [])[:limit]]
 
-    def _api_hot(self, *, limit: int, timeout: float) -> list:
+    def _api_hot(self, *, limit: int, timeout: float, no_login: bool = False) -> list:
+        if not no_login:
+            bilibili_auth.require_login(timeout)
         data = _bili_api(f"/x/web-interface/popular?ps={limit}&pn=1", timeout)
         return [_api_video_item(v) for v in (data.get("list") or [])[:limit]]
 
     def _cli_subtitle(self, *, target: str, timeout: float) -> list:
-        _reuse_subtitle_login(timeout)
-        data = _bili_json(["video", _bvid(target, timeout), "--subtitle"], timeout)
-        sub = data.get("subtitle") or {}
+        bvid = _bvid(target, timeout)
+        budget = Clock(timeout)
+        data = _content_json(["video", bvid, "--subtitle"], budget.remaining())
+        sub = data.get("subtitle")
+        if not isinstance(sub, dict) or not isinstance(sub.get("available"), bool):
+            raise ReachError(UPSTREAM_BROKEN, "Bilibili returned invalid subtitle metadata")
         if not sub.get("available"):
-            # Without a Bilibili login, upstream only says subtitles were unavailable.
-            if not has_login_state("bili-cli"):
-                raise ReachError(NEED_LOGIN, "Bilibili is not logged in", hint=_BILI_LOGIN_HINT)
+            # Recheck in case the session expired while the upstream fetched subtitles.
+            bilibili_auth.require_login(bilibili_auth._remaining(budget))
             if any(w.get("code") == "subtitle_unavailable" for w in data.get("warnings", []) if isinstance(w, dict)):
                 raise ReachError(UPSTREAM_BROKEN, "Bilibili could not retrieve subtitles; this does not prove the video has none")
-            raise ReachError(NOT_FOUND, "this video has no subtitles")
+            raise ReachError(NOT_FOUND, "No accessible subtitle track was returned for the first video part after login verification")
         text = sub.get("text") or "\n".join(i.get("content", "") for i in sub.get("items") or [])
         return [_cli_video_item(data.get("video") or {}, text=text)]
