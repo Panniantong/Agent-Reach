@@ -100,7 +100,7 @@ This table reflects the current release.
 | youtube | default | video info, search, subtitles, speech-to-text | nothing; speech-to-text needs a Groq or OpenAI key |
 | web | default | web search, page reading (fallback) | nothing |
 | v2ex | default | hot topics, nodes, topics with replies, users | nothing |
-| bilibili | default | search, video info, trending, subtitles | nothing; subtitles need a login (QR scan) |
+| bilibili | default | search, video info, trending, subtitles, live auth | verifies login by default; returns an official QR when needed; explicit public preview: `--no-login` |
 | reddit | optional | search posts, read text/comments, browse a subreddit | login |
 | linkedin | optional | search jobs, read job details | public jobs need nothing; in-site search needs a login |
 | xiaohongshu | optional | search notes, read text, view comments | login |

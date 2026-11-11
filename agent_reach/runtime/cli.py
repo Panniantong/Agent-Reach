@@ -59,6 +59,9 @@ For the user:
   agent-reach add <channel>               install channel dependencies and prepare its browser
   agent-reach remove <channel>            remove a channel (defaults too) and what only it used
   agent-reach login|logout <channel>      log in (the user does it) / forget the login
+  agent-reach login bilibili --check      live session check without starting login
+  agent-reach login bilibili --poll       check the displayed QR once after the user scans
+  agent-reach bilibili read <url> --no-login   explicit public-metadata preview
   agent-reach browser setup|status|stop   headless shared browser; login opens a window
   agent-reach browser profiles|use ID    choose an existing local login source
   agent-reach skill [link|unlink <dir>]   where the agent skill is; link it for another AI, or unlink one for good
@@ -126,7 +129,8 @@ def _emit(payload: dict) -> int:
 def _usage(channel: Channel, action: Action) -> str:
     parts = ["agent-reach", channel.name, action.name]
     for p in action.params:
-        parts.append(f"<{p.name}>" if p.required else f"[--{p.name} {p.name.upper()}]")
+        flag = p.name.replace("_", "-")
+        parts.append(f"<{p.name}>" if p.required else (f"[--{flag}]" if p.type is bool else f"[--{flag} {p.name.upper()}]"))
     return " ".join(parts)
 
 
@@ -141,7 +145,11 @@ def _parse_action_args(action: Action, args: Sequence[str]) -> Dict[str, object]
             # Join extra words so an unquoted multi-word query still works.
             parser.add_argument(p.name, nargs="+" if p.type is str else None)
         else:
-            parser.add_argument(f"--{p.name}", dest=p.name, default=None)
+            flags = list(dict.fromkeys([f"--{p.name.replace('_', '-')}", f"--{p.name}"]))
+            if p.type is bool:
+                parser.add_argument(*flags, dest=p.name, default=None, action="store_true")
+            else:
+                parser.add_argument(*flags, dest=p.name, default=None)
     parser.add_argument("--backend", choices=[b[0] for b in action.backends] +
                         (["public-web"] if action.public_web else []), default=None)
     parser.add_argument("--timeout", type=float, default=action.timeout or DEFAULT_TIMEOUT)
@@ -172,6 +180,7 @@ def _cmd_action(channel: Channel, args: Sequence[str]) -> int:
 def _cmd_read(args: Sequence[str]) -> int:
     parser = _Parser(prog="read", add_help=False)
     parser.add_argument("url")
+    parser.add_argument("--no-login", action="store_true")
     parser.add_argument("--backend", default=None)
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
     try:
@@ -186,7 +195,12 @@ def _cmd_read(args: Sequence[str]) -> int:
     target = target or next((ch for ch in readers if ch.name == "web"), None)
     if target is None:
         return _bad_input(None, "read", "no channel can read this URL")
-    return _emit(run_action(target, "read", {"target": ns.url}, timeout=ns.timeout, only_backend=ns.backend))
+    params: Dict[str, object] = {"target": ns.url}
+    if ns.no_login:
+        if target.name != "bilibili":
+            return _bad_input(target.name, "read", "--no-login is currently supported for Bilibili previews only")
+        params["no_login"] = True
+    return _emit(run_action(target, "read", params, timeout=ns.timeout, only_backend=ns.backend))
 
 
 def _cmd_channels(_args: Sequence[str]) -> int:
@@ -390,6 +404,9 @@ def _login_info(ch: Channel):
     if ch.login_url:
         return {"via": "browser", "logged_in": None, "command": f"agent-reach login {ch.name}"}
     if ch.session:
+        if ch.name == "bilibili":
+            return {"via": "session", "logged_in": None, "saved_session": has_login_state(ch.session),
+                    "check_command": "agent-reach login bilibili --check", "command": "agent-reach login bilibili"}
         return {"via": "session", "logged_in": has_login_state(ch.session), "command": f"agent-reach login {ch.name}"}
     return None
 
@@ -400,6 +417,8 @@ def _login_channel(cmd: str, args: Sequence[str]):
     if cmd == "login":
         parser.add_argument("--import-existing", action="store_true")
         parser.add_argument("--sync", action="store_true")
+        parser.add_argument("--check", action="store_true")
+        parser.add_argument("--poll", action="store_true")
     ns = parser.parse_args(list(args))
     ch = _channel(ns.channel)
     if ch is None:
@@ -417,6 +436,18 @@ def _cmd_login(args: Sequence[str]) -> int:
         ch, ns = _login_channel("login", args)
     except _ArgError as exc:
         return _bad_input(None, "login", str(exc))
+    if (ns.check or ns.poll) and ch.name != "bilibili":
+        return _bad_input(ch.name, "login", "--check and --poll are currently supported for Bilibili only")
+    if ch.name == "bilibili":
+        if sum((ns.check, ns.poll, ns.import_existing, ns.sync)) > 1 or ns.sync:
+            return _bad_input(ch.name, "login", "Choose one of --check, --poll, --import-existing, or no flag")
+        from . import bilibili_auth
+        try:
+            result = (bilibili_auth.import_existing() if ns.import_existing
+                      else bilibili_auth.login(poll=ns.poll, check=ns.check))
+            return _emit(envelope(channel=ch.name, action="login", backend="bilibili-auth", items=[result]))
+        except ReachError as err:
+            return _emit(envelope(channel=ch.name, action="login", error=err))
     if ns.import_existing and ch.login_url:
         from . import session_reuse
         return _mgmt("reuse login", session_reuse.prepare, ch.name, force=True)
@@ -485,6 +516,14 @@ def _cmd_logout(args: Sequence[str]) -> int:
         ch, _ = _login_channel("logout", args)
     except _ArgError as exc:
         return _bad_input(None, "logout", str(exc))
+    if ch.name == "bilibili":
+        from .browser_binding import wait_lock
+        with wait_lock("bilibili-auth"):
+            return _logout_channel(ch)
+    return _logout_channel(ch)
+
+
+def _logout_channel(ch: Channel) -> int:
     removed = clear_session(ch.session) if ch.session else False
     if ch.login_url:
         from . import manage, state

@@ -48,6 +48,9 @@ def _validate(action: Action, params: Dict[str, Any]) -> Dict[str, Any]:
             value = p.default
         elif p.type is str and not isinstance(value, str):
             raise ReachError(BAD_INPUT, f"{p.name} must be str")
+        elif p.type is bool:
+            if not isinstance(value, bool):
+                raise ReachError(BAD_INPUT, f"{p.name} must be bool")
         elif p.type is not str:
             if isinstance(value, bool) or (p.type is int and isinstance(value, float) and not value.is_integer()):
                 raise ReachError(BAD_INPUT, f"{p.name} must be {p.type.__name__}")

@@ -50,11 +50,12 @@ _MAX_MESSAGE_CHARS = 500
 class ReachError(Exception):
     """A failure with a unified code; upstream messages and hints are passed through unchanged."""
 
-    def __init__(self, code: str, message: str, hint: Optional[str] = None):
+    def __init__(self, code: str, message: str, hint: Optional[str] = None, *, details: Optional[dict] = None):
         super().__init__(message)
         self.code = code
         self.message = message
         self.hint = hint
+        self.details = details
 
 
 def _clean(text: object) -> str:
@@ -138,5 +139,6 @@ def envelope(
             "code": error.code,
             "message": error.message,
             "hint": error.hint or DEFAULT_HINTS.get(error.code, ""),
+            **({"details": error.details} if error.details else {}),
         },
     }
