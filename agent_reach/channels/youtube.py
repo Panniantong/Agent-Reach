@@ -76,6 +76,27 @@ def _run_ytdlp(args: list, timeout: float, cwd=None) -> str:
         raise
 
 
+def _is_machine_translated(formats: list) -> bool:
+    return any("tlang=" in str(f.get("url", "")) for f in formats or [])
+
+
+def _pick_subtitle_track(info: dict, wanted: list):
+    """Return (code, automatic) for the best wanted track, or None.
+    Machine-translated captions go last because YouTube answers them with HTTP 429 much sooner."""
+    manual = {k: v for k, v in (info.get("subtitles") or {}).items() if k != "live_chat"}
+    auto = info.get("automatic_captions") or {}
+    for code in wanted:
+        if manual.get(code):
+            return code, False
+    for code in wanted:
+        if auto.get(code) and not _is_machine_translated(auto[code]):
+            return code, True
+    for code in wanted:
+        if auto.get(code):
+            return code, True
+    return None
+
+
 def _iso_date(yyyymmdd) -> str:
     s = str(yyyymmdd or "")
     return f"{s[:4]}-{s[4:6]}-{s[6:8]}" if len(s) == 8 and s.isdigit() else ""
@@ -197,14 +218,21 @@ class YouTubeChannel(Channel):
         url = _video_url(target)
         wanted = [x.strip() for x in lang.split(",") if x.strip()]
         with private_temporary_directory(prefix="agent-reach-subs-") as tmp:
-            out = _run_ytdlp(
+            info_path = os.path.join(tmp, "info.json")
+            info = json.loads(_run_ytdlp(["-J", url], timeout))
+            with open(info_path, "w", encoding="utf-8") as fh:
+                json.dump(info, fh)
+            choice = _pick_subtitle_track(info, wanted)
+            if choice is None:
+                raise ReachError(NOT_FOUND, f"no subtitles in {', '.join(wanted)} for this video")
+            code, automatic = choice
+            _run_ytdlp(
                 [
+                    "--load-info-json", info_path,
                     "--skip-download", "--no-simulate",
-                    "--write-subs", "--write-auto-subs",
-                    "--sub-langs", ",".join(wanted), "--sub-format", "vtt",
-                    "--print", "%(title)s",
+                    "--write-auto-subs" if automatic else "--write-subs",
+                    "--sub-langs", code, "--sub-format", "vtt",
                     "-o", "%(id)s.%(ext)s",
-                    url,
                 ],
                 timeout,
                 cwd=tmp,
@@ -212,17 +240,9 @@ class YouTubeChannel(Channel):
             files = [f for f in os.listdir(tmp) if f.endswith(".vtt")]
             if not files:
                 raise ReachError(NOT_FOUND, f"no subtitles in {', '.join(wanted)} for this video")
-
-            def rank(name: str) -> int:
-                code = name.rsplit(".", 2)[-2] if name.count(".") >= 2 else ""
-                return wanted.index(code) if code in wanted else len(wanted)
-
-            best = min(files, key=rank)
-            with open(os.path.join(tmp, best), encoding="utf-8", errors="replace") as fh:
+            with open(os.path.join(tmp, files[0]), encoding="utf-8", errors="replace") as fh:
                 text = vtt_to_text(fh.read())
-        title = next((ln for ln in out.splitlines() if ln.strip()), None)
-        code = best.rsplit(".", 2)[-2] if best.count(".") >= 2 else None
-        return [make_item(title=title, url=url, text=text, raw={"lang": code})]
+        return [make_item(title=info.get("title"), url=url, text=text, raw={"lang": code})]
 
     def _whisper_transcribe(self, *, target: str, timeout: float) -> list:
         from agent_reach.transcribe import NoProviderConfigured, TranscribeError

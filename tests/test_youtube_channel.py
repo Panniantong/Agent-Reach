@@ -11,6 +11,7 @@ channel coverage after rss (#360), github (#361), web (#363),
 reddit (#364), xueqiu (#365) and v2ex (#366).
 """
 
+import json
 from pathlib import Path
 
 from agent_reach.channels.youtube import YouTubeChannel
@@ -109,3 +110,87 @@ def test_ytdlp_uses_system_trust_store_when_ssl_cert_file_is_set(monkeypatch):
     monkeypatch.setenv("SSL_CERT_FILE", "/etc/ssl/corp-bundle.pem")
     argv = youtube._ytdlp_argv("--version")
     assert argv[argv.index("--compat-options") + 1] == "no-certifi"
+
+
+# --- subtitle track choice ---
+
+def _track(translated=False):
+    tail = "&tlang=zh-Hans" if translated else ""
+    return [{"ext": "vtt", "url": f"https://www.youtube.com/api/timedtext?v=x{tail}"}]
+
+
+def test_subtitle_prefers_manual_track_over_machine_translation():
+    from agent_reach.channels.youtube import _pick_subtitle_track
+
+    info = {
+        "subtitles": {"en": _track()},
+        "automatic_captions": {"en": _track(), "en-orig": _track(), "zh-Hans": _track(translated=True)},
+    }
+
+    assert _pick_subtitle_track(info, ["zh-Hans", "zh", "en", "en-orig"]) == ("en", False)
+
+
+def test_subtitle_prefers_original_auto_captions_over_translated_ones():
+    from agent_reach.channels.youtube import _pick_subtitle_track
+
+    info = {"automatic_captions": {"en-orig": _track(), "zh-Hans": _track(translated=True)}}
+
+    assert _pick_subtitle_track(info, ["zh-Hans", "en-orig"]) == ("en-orig", True)
+
+
+def test_subtitle_falls_back_to_translated_track_and_ignores_live_chat():
+    from agent_reach.channels.youtube import _pick_subtitle_track
+
+    info = {
+        "subtitles": {"live_chat": _track()},
+        "automatic_captions": {"zh-Hans": _track(translated=True)},
+    }
+
+    assert _pick_subtitle_track(info, ["live_chat", "zh-Hans"]) == ("zh-Hans", True)
+    assert _pick_subtitle_track(info, ["fr"]) is None
+
+
+def test_subtitle_downloads_only_the_chosen_track(monkeypatch):
+    from agent_reach.channels import youtube
+
+    info = {
+        "title": "Demo",
+        "subtitles": {"en": _track()},
+        "automatic_captions": {"zh-Hans": _track(translated=True)},
+    }
+    calls = []
+
+    def fake_run(args, timeout, cwd=None):
+        calls.append(args)
+        if "-J" in args:
+            return json.dumps(info)
+        Path(cwd, "x.en.vtt").write_text("WEBVTT\n\n00:00.000 --> 00:01.000\nhello\n", encoding="utf-8")
+        return ""
+
+    monkeypatch.setattr(youtube, "_run_ytdlp", fake_run)
+    items = YouTubeChannel()._ytdlp_subtitle(target="C33hJGt-ySg", lang="zh-Hans,zh,en,en-orig", timeout=30)
+
+    download = calls[-1]
+    assert download[download.index("--sub-langs") + 1] == "en"
+    assert "--write-subs" in download and "--write-auto-subs" not in download
+    assert (items[0]["title"], items[0]["text"], items[0]["raw"]) == ("Demo", "hello", {"lang": "en"})
+
+
+def test_subtitle_without_wanted_track_is_not_found_and_skips_download(monkeypatch):
+    import pytest
+
+    from agent_reach.channels import youtube
+    from agent_reach.runtime.result import NOT_FOUND, ReachError
+
+    calls = []
+
+    def fake_run(args, timeout, cwd=None):
+        calls.append(args)
+        return json.dumps({"subtitles": {"de": _track()}})
+
+    monkeypatch.setattr(youtube, "_run_ytdlp", fake_run)
+    with pytest.raises(ReachError) as caught:
+        YouTubeChannel()._ytdlp_subtitle(target="C33hJGt-ySg", lang="en", timeout=30)
+
+    assert caught.value.code == NOT_FOUND
+    assert len(calls) == 1
