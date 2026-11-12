@@ -138,6 +138,14 @@ def test_subtitle_prefers_original_auto_captions_over_translated_ones():
     assert _pick_subtitle_track(info, ["zh-Hans", "en-orig"]) == ("en-orig", True)
 
 
+def test_subtitle_reads_lang_as_its_orig_track_when_youtube_lists_lang_as_translations():
+    from agent_reach.channels.youtube import _pick_subtitle_track
+
+    info = {"automatic_captions": {"en": _track(translated=True), "en-orig": _track()}}
+
+    assert _pick_subtitle_track(info, ["en"]) == ("en-orig", True)
+
+
 def test_subtitle_falls_back_to_translated_track_and_ignores_live_chat():
     from agent_reach.channels.youtube import _pick_subtitle_track
 

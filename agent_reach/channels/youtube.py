@@ -89,8 +89,9 @@ def _pick_subtitle_track(info: dict, wanted: list):
         if manual.get(code):
             return code, False
     for code in wanted:
-        if auto.get(code) and not _is_machine_translated(auto[code]):
-            return code, True
+        for candidate in (code, f"{code}-orig"):
+            if auto.get(candidate) and not _is_machine_translated(auto[candidate]):
+                return candidate, True
     for code in wanted:
         if auto.get(code):
             return code, True
