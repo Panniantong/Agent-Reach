@@ -86,7 +86,7 @@ def test_rerunning_pip_setup_preserves_partial_environment(monkeypatch, tmp_path
     assert len(calls) == 1
     assert calls[0][0][:4] == [str(py), "-m", "pip", "install"]
     assert calls[0][1]["stage"] == "cloakbrowser:pip_packages"
-    assert "cloakbrowser==0.6.3" in calls[0][0]
+    assert "cloakbrowser==0.7.2" in calls[0][0]
 
 
 def test_opencli_uses_pristine_compatible_release_without_install_hooks(monkeypatch, tmp_path):
