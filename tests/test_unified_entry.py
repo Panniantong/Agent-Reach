@@ -283,6 +283,17 @@ def test_vtt_to_text_drops_timings_tags_and_rolling_repeats():
     assert vtt_to_text(vtt) == "hello world\nnext & last"
 
 
+def test_vtt_to_text_keeps_text_after_whitespace_only_cue_line():
+    vtt = (
+        "WEBVTT\nKind: captions\nLanguage: en\n\n"
+        "00:00:00.000 --> 00:00:00.990 align:start position:0%\n \n"
+        "There's<00:00:00.200><c> this</c><00:00:00.300><c> technique</c>"
+        "<00:00:00.700><c> that</c><00:00:00.800><c> I've</c>"
+        "<00:00:00.900><c> been</c>\n"
+    )
+    assert vtt_to_text(vtt) == "There's this technique that I've been"
+
+
 @pytest.mark.parametrize("vtt,expected", [
     ("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n2026\n", "2026"),
     ("WEBVTT\n\ncaption-one\n00:00:00.000 --> 00:00:01.000\nhello\n", "hello"),
