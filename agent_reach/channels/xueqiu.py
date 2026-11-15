@@ -215,6 +215,8 @@ def _parse_hot_posts(data: Any, limit: int) -> list:
             post = json.loads(item["data"]) if isinstance(item.get("data"), str) else {}
         except (json.JSONDecodeError, KeyError):
             post = {}
+        if not isinstance(post, dict):
+            post = {}
         user = post.get("user") or {}
         text = _strip_html(post.get("text") or post.get("description") or "")
         target = post.get("target", "")
