@@ -45,6 +45,10 @@ def _bvid(target: str, timeout: float) -> str:
         return m.group(0)
     if "b23.tv/" in t:
         url = t if "://" in t else f"https://{t}"
+        from agent_reach.utils.url import host_matches
+
+        if not host_matches(url, "b23.tv"):
+            raise ReachError(BAD_INPUT, "target must be a BV id or a bilibili.com / b23.tv video link")
         req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": _UA})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             m = _BV_RE.search(resp.geturl())
