@@ -29,6 +29,52 @@ def test_search_does_not_turn_unrecognized_payload_into_empty_success():
             WebChannel()._exa_search(query="python", limit=3, timeout=5)
 
 
+def test_exa_read_preserves_title_lines_in_content():
+    payload = """Title: Parser guide
+URL: https://example.com/guide
+Published: N/A
+Author: N/A
+Text:
+Introduction.
+Title: This is a body heading
+The rest survives."""
+
+    with patch("agent_reach.channels.web._exa_call", return_value=payload):
+        out = run_action(
+            WebChannel(), "read", {"target": "https://example.com/guide"}, only_backend="exa"
+        )
+
+    assert out["ok"] is True
+    assert len(out["items"]) == 1
+    assert out["items"][0]["text"] == (
+        "Introduction.\nTitle: This is a body heading\nThe rest survives."
+    )
+
+
+def test_exa_search_keeps_separate_result_blocks():
+    payload = """Title: First result
+URL: https://example.com/first
+Published: N/A
+Author: N/A
+Text:
+First body.
+Title: Second result
+URL: https://example.com/second
+Published: N/A
+Author: N/A
+Text:
+Second body."""
+
+    with patch("agent_reach.channels.web._exa_call", return_value=payload):
+        out = run_action(WebChannel(), "search", {"query": "example", "limit": 2})
+
+    assert out["ok"] is True
+    assert [(item["title"], item["url"], item["text"]) for item in out["items"]] == [
+        ("First result", "https://example.com/first", "First body."),
+        ("Second result", "https://example.com/second", "Second body."),
+    ]
+
+
 def test_exa_request_identifies_agent_reach_not_python_urllib():
     # Exa's Cloudflare returns 403 (error 1010) for the default Python-urllib agent.
     from agent_reach.channels.web import _exa_call

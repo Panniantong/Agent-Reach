@@ -107,7 +107,7 @@ def _exa_call(tool: str, arguments: dict, timeout: float) -> str:
 def _parse_exa_text(text: str) -> list:
     """Split Exa's `Title: / URL: / Published: / Author:` blocks into items."""
     items = []
-    for block in re.split(r"\n(?=Title: )", "\n" + text.strip()):
+    for block in re.split(r"\n(?=Title: [^\n]*\nURL: )", "\n" + text.strip()):
         block = block.strip()
         if not block.startswith("Title:"):
             continue
