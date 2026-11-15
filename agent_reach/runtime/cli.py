@@ -374,7 +374,7 @@ def _apply_saved_proxy() -> None:
         if host not in bypass:
             bypass.append(host)
     os.environ["NO_PROXY"] = os.environ["no_proxy"] = ",".join(bypass)
-    if os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy"):
+    if any(os.environ.get(name) for name in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy")):
         return
     try:
         from agent_reach.config import Config
