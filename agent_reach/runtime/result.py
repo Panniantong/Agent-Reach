@@ -106,11 +106,11 @@ def unix_to_iso(value: Any) -> Optional[str]:
     """Convert a unix timestamp to ISO 8601 UTC, or None."""
     try:
         seconds = int(value)
-    except (TypeError, ValueError):
+        if seconds <= 0:
+            return None
+        return _dt.datetime.fromtimestamp(seconds, _dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    except (TypeError, ValueError, OverflowError, OSError):
         return None
-    if seconds <= 0:
-        return None
-    return _dt.datetime.fromtimestamp(seconds, _dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def envelope(
