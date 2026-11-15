@@ -14,7 +14,7 @@ from agent_reach.channels.web import _parse_exa_text
 from agent_reach.channels.youtube import vtt_to_text
 from agent_reach.runtime import cli as unified
 from agent_reach.runtime.dispatch import run_action
-from agent_reach.runtime.result import ReachError, classify
+from agent_reach.runtime.result import ReachError, classify, unix_to_iso
 
 
 @pytest.mark.parametrize("args, query, verbose", [
@@ -163,6 +163,21 @@ def test_classify_maps_upstream_failures(exc, code):
 def test_error_messages_do_not_leak_url_credentials():
     err = classify(RuntimeError("failed https://user:secret@example.com/x?token=abc123"))
     assert "secret" not in err.message and "abc123" not in err.message
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (1700000000, "2023-11-14T22:13:20Z"),
+        (0, None),
+        ("not-a-number", None),
+        (253402300800, None),
+        (10**100, None),
+        (float("inf"), None),
+    ],
+)
+def test_unix_to_iso_handles_valid_and_invalid_timestamps(value, expected):
+    assert unix_to_iso(value) == expected
 
 
 # ── CLI contract ──
