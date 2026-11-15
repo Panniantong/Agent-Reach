@@ -59,6 +59,8 @@ def load() -> dict:
     data.setdefault("version", STATE_VERSION)
     for key in ("channels", "tools", "checks", "skill"):
         data.setdefault(key, {})
+    if not isinstance(data["skill"], dict):
+        data["skill"] = {}
     data["skill"].setdefault("links", [])
     data["skill"].setdefault("unlinked", [])
     if not isinstance(data.get("removed_defaults"), list):
