@@ -76,7 +76,28 @@ def test_strip_html_removes_tags_and_decodes_entities():
 # --- search_stock: mapping + limit ---
 
 
+def test_search_maps_tencent_fund_to_xueqiu_fund_symbol(monkeypatch):
+    payload = (
+        'v_hint="jj~007005~\\u4e2d\\u91d1\\u65b0\\u533b\\u836f\\u80a1\\u7968C~zjxyygpc~KJ'
+        '^hk~00700~\\u817e\\u8baf\\u63a7\\u80a1~txkg~GP'
+        '^us~aapl.oq~\\u82f9\\u679c~pg~GP";'
+    )
+    monkeypatch.setattr(
+        "agent_reach.channels.xueqiu.http_request",
+        lambda url, timeout: payload.encode("ascii"),
+    )
 
+    out = run_action(
+        XueqiuChannel(), "search", {"query": "007005", "limit": 3}, only_backend="tencent"
+    )
+
+    assert out["ok"] is True
+    assert [item["raw"]["symbol"] for item in out["items"]] == ["F007005", "00700", "AAPL"]
+    assert [item["url"] for item in out["items"]] == [
+        "https://xueqiu.com/S/F007005",
+        "https://xueqiu.com/S/00700",
+        "https://xueqiu.com/S/AAPL",
+    ]
 
 
 # --- get_hot_posts: JSON-in-JSON unwrap, html strip, url build, bad data ---
