@@ -153,6 +153,8 @@ def _xueqiu_symbol(market: str, code: str) -> str:
         return market.upper() + code
     if market == "hk":
         return code
+    if market == "jj":
+        return "F" + code
     return code.split(".")[0].upper()
 
 
