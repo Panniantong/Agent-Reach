@@ -24,7 +24,7 @@ from .base import Action, Channel, Param
 
 _API = "https://api.github.com"
 _TARGET_RE = re.compile(
-    r"^(?:https?://(?:www\.)?github\.com/)?([\w.-]+)/([\w.-]+?)(?:\.git)?"
+    r"^(?ai:https?://(?:www\.)?github\.com/)?([\w.-]+)/([\w.-]+?)(?:\.git)?"
     r"(?:/(?:issues|pull)/(\d+))?/?(?:[?#].*)?$"
 )
 _README_MAX_CHARS = 50_000
