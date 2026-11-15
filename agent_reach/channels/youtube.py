@@ -89,7 +89,7 @@ def vtt_to_text(vtt: str) -> str:
     metadata = False
     for line in vtt.splitlines():
         s = line.strip()
-        if not s:
+        if not line:
             in_cue, block_start, metadata = False, True, False
             continue
         if block_start:
