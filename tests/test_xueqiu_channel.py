@@ -11,6 +11,8 @@ offline. Follow-up to #331 — extends dedicated channel coverage after rss
 
 
 
+import json
+
 import pytest
 
 from agent_reach.channels.xueqiu import XueqiuChannel, _strip_html
@@ -55,6 +57,43 @@ def test_strip_html_removes_tags_and_decodes_entities():
     assert _strip_html("<p>hello&nbsp;<b>world</b></p>") == "hello world"
     assert _strip_html("a &amp; b &lt;c&gt;") == "a & b <c>"
     assert _strip_html("   <br/>  padded  ") == "padded"
+
+
+def test_hot_posts_preserve_html_line_breaks(monkeypatch):
+    posts = [
+        {
+            "id": 1,
+            "text": "first<br>second<br/>third<br />fourth",
+            "target": "/1/1",
+            "user": {"screen_name": "tester"},
+        },
+        {
+            "id": 2,
+            "text": "plain text",
+            "target": "/2/2",
+            "user": {"screen_name": "tester"},
+        },
+        {
+            "id": 3,
+            "text": "a<br-foo>b",
+            "target": "/3/3",
+            "user": {"screen_name": "tester"},
+        },
+    ]
+    monkeypatch.setattr("agent_reach.channels.xueqiu._prepare_community_session", lambda: None)
+    monkeypatch.setattr(
+        "agent_reach.channels.xueqiu._xq_json",
+        lambda url: {"list": [{"data": json.dumps(post)} for post in posts]},
+    )
+
+    out = run_action(XueqiuChannel(), "hot_posts", {"limit": 3}, only_backend="xueqiu-api")
+
+    assert out["ok"] is True
+    assert [item["text"] for item in out["items"]] == [
+        "first second third fourth",
+        "plain text",
+        "ab",
+    ]
 
 
 # --- check(): single public endpoint, items present/empty/error ---
