@@ -123,7 +123,7 @@ def _get_json(url: str, config=None) -> Any:
 
 def _strip_html(text: str) -> str:
     """Remove HTML tags and decode character references once."""
-    text = re.sub(r"<[^>]+>", "", text)
+    text = re.sub(r"<(?:/?[A-Za-z]|[!?])[^>]*>", "", text)
     return html.unescape(text).replace("\xa0", " ").strip()
 
 
