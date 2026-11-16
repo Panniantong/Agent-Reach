@@ -25,8 +25,9 @@ def test_cleanup_includes_www_and_remembered_subdomains_preserving_other_sites(m
     jar = [{"name": "sid", "value": "test", "domain": ".xiaohongshu.com", "path": "/"},
            {"name": "sid", "value": "keep", "domain": "other.example", "path": "/"}]
     cleared = []
-    monkeypatch.setattr(cdp, "_json", lambda _: [{"type": "page", "id": "note", "url": "https://www.xiaohongshu.com/explore/a"},
-                                                {"type": "page", "id": "other", "url": "https://other.example"}])
+    pages = [{"type": "page", "id": "note", "url": "https://www.xiaohongshu.com/explore/a"},
+             {"type": "page", "id": "other", "url": "https://other.example"}]
+    monkeypatch.setattr(cdp, "_json", lambda path: {"webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/launch-1"} if path == "/json/version" else pages)
     def call(method, params=None, **kwargs):
         if method == "Storage.getCookies":
             return {"cookies": list(jar)}
@@ -44,7 +45,7 @@ def test_cleanup_includes_www_and_remembered_subdomains_preserving_other_sites(m
 
 
 def test_cleanup_never_claims_success_if_cookie_remains(monkeypatch):
-    monkeypatch.setattr(cdp, "_json", lambda _: [])
+    monkeypatch.setattr(cdp, "_json", lambda path: {"webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/launch-1"} if path == "/json/version" else [])
     monkeypatch.setattr(cdp, "call", lambda method, *a, **k: {"cookies": [{"name": "sid", "domain": "reddit.com"}]} if method == "Storage.getCookies" else {})
     with pytest.raises(ReachError, match="verified"):
         browser._clear_running_site(["reddit.com"])

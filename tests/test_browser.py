@@ -10,6 +10,8 @@ import pytest
 
 from agent_reach.runtime import browser, cdp
 
+_VERSION = {"webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/launch-1"}
+
 
 @pytest.fixture
 def home(monkeypatch, tmp_path):
@@ -150,7 +152,7 @@ def test_clear_site_expires_only_that_sites_cookies(home, monkeypatch):
     browser.profile_dir().mkdir(parents=True)
     monkeypatch.setattr(browser, "ensure_running", lambda context=None: None)
     monkeypatch.setattr(cdp, "call", fake_call)
-    monkeypatch.setattr(cdp, "_json", lambda *a: [])
+    monkeypatch.setattr(cdp, "_json", lambda path: _VERSION if path == "/json/version" else [])
     assert browser.clear_site(["reddit.com"]) == 2
     assert [c["name"] for c in jar] == ["c"]
 
@@ -264,7 +266,107 @@ def test_restore_failure_preserves_the_original_snapshot(home, monkeypatch):
     path=browser.browser_root()/'session.json'
     original=json.dumps({'cookies':[{'name':'sid','value':'saved','domain':'example.test'}]})
     path.write_text(original)
+    monkeypatch.setattr(cdp,'_json',lambda path:_VERSION)
     monkeypatch.setattr(cdp,'call',lambda method,*a,**k:{'cookies':[]}if method=='Storage.getCookies'else None)
     with pytest.raises(ReachError,match='retained'):
         browser.restore_session()
     assert path.read_text()==original
+    browser.save_session()  # a save after a failed restore keeps the snapshot too
+    assert path.read_text()==original
+
+
+class _Jar:
+    """A running browser's CDP: a cookie jar, a launch id, and whether it answers."""
+
+    def __init__(self, cookies=(), launch="launch-1"):
+        self.cookies, self.launch, self.up = list(cookies), launch, True
+
+    def json(self, path):
+        if not self.up:
+            return None
+        return {"webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/" + self.launch}
+
+    def call(self, method, params=None, **kwargs):
+        if not self.up:
+            return None
+        if method == "Storage.getCookies":
+            return {"cookies": [dict(c) for c in self.cookies]}
+        if method == "Storage.setCookies":
+            for c in params["cookies"]:
+                self.cookies = [j for j in self.cookies if (j["name"], j["domain"]) != (c["name"], c["domain"])]
+                if c.get("expires") != 1:
+                    self.cookies.append(dict(c))
+            return {}
+        return {}
+
+
+def _saved_names():
+    return [c["name"] for c in json.loads((browser.browser_root() / "session.json").read_text())["cookies"]]
+
+
+def test_slow_start_does_not_overwrite_the_saved_login(home, monkeypatch):
+    browser.browser_root().mkdir(parents=True)
+    (browser.browser_root() / "session.json").write_text(json.dumps(
+        {"cookies": [{"name": "sid", "value": "saved", "domain": ".example.test", "path": "/", "expires": -1}]}))
+    jar = _Jar()
+    monkeypatch.setattr(cdp, "_json", jar.json)
+    monkeypatch.setattr(cdp, "call", jar.call)
+    jar.up = False
+    assert browser.restore_session() is False  # CDP did not answer when the watcher started it
+    jar.up = True
+    jar.cookies.append({"name": "guest", "value": "1", "domain": ".example.test", "path": "/"})
+    browser.save_session()  # the first save of this launch puts the login back before saving
+    assert sorted(c["name"] for c in jar.cookies) == ["guest", "sid"]
+    assert sorted(_saved_names()) == ["guest", "sid"]
+
+
+def test_a_restored_launch_saves_what_the_site_changed(home, monkeypatch):
+    browser.browser_root().mkdir(parents=True)
+    (browser.browser_root() / "session.json").write_text(json.dumps(
+        {"cookies": [{"name": "sid", "value": "saved", "domain": ".example.test", "path": "/", "expires": -1}]}))
+    jar = _Jar()
+    monkeypatch.setattr(cdp, "_json", jar.json)
+    monkeypatch.setattr(cdp, "call", jar.call)
+    assert browser.restore_session() is True
+    jar.cookies = []  # the site logged out in this browser
+    browser.save_session()
+    assert _saved_names() == []
+    jar.launch = "launch-2"  # the next start restores nothing, since the snapshot is empty
+    jar.cookies.append({"name": "guest", "value": "1", "domain": ".example.test", "path": "/"})
+    browser.save_session()
+    assert _saved_names() == ["guest"]
+
+
+def test_logout_on_an_unrestored_launch_stays_logged_out(home, monkeypatch):
+    browser.browser_root().mkdir(parents=True)
+    (browser.browser_root() / "session.json").write_text(json.dumps(
+        {"cookies": [{"name": "sid", "value": "saved", "domain": ".reddit.com", "path": "/", "expires": -1},
+                     {"name": "keep", "value": "1", "domain": "other.test", "path": "/", "expires": -1}]}))
+    jar = _Jar()
+    monkeypatch.setattr(cdp, "_json", lambda path: jar.json(path) if path == "/json/version" else [])
+    monkeypatch.setattr(cdp, "call", jar.call)
+    browser._clear_running_site(["reddit.com"])
+    assert [c["name"] for c in jar.cookies] == ["keep"]
+    assert _saved_names() == ["keep"]
+    jar.launch = "launch-2"
+    assert browser.restore_session() is True
+    assert [c["name"] for c in jar.cookies] == ["keep"]
+
+
+def test_a_busy_session_lock_does_not_stop_the_watcher(home, monkeypatch):
+    from agent_reach.runtime import browser_watcher
+    from agent_reach.runtime.result import ReachError
+    calls = []
+
+    def busy():
+        calls.append(1)
+        raise ReachError("UPSTREAM_BROKEN", "another Agent Reach process is still saving or changing the browser session")
+
+    from agent_reach.runtime import bridge
+    monkeypatch.setattr(bridge, "start", lambda: None)
+    monkeypatch.setattr(bridge, "close", lambda proc: None)
+    monkeypatch.setattr(browser, "save_session", busy)
+    monkeypatch.setattr(browser, "observe_activity", lambda: None)
+    monkeypatch.setattr(browser, "is_running", lambda: len(calls) < 3)
+    assert browser_watcher.watch(idle=3600, poll=0.01) == "browser closed"
+    assert len(calls) >= 2
