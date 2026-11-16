@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 """Twitter/X — OpenCLI in the Agent Reach browser (experimental)."""
 
+import re
+
 from agent_reach.backends.opencli import opencli_call, opencli_items
 from agent_reach.runtime.result import UPSTREAM_BROKEN, ReachError
 from agent_reach.utils.url import host_matches
 
 from .base import Action, Channel, Param
+
+_STATUS_ID = re.compile(r"/status(?:es)?/(\d+)")
 
 _TWITTER_LOGIN_HINT = (
     "Ask the user to log in to x.com in the Agent Reach dedicated browser. Never log in on their behalf."
@@ -87,5 +91,8 @@ class TwitterChannel(Channel):
         return _x(["tweets", username.lstrip("@"), "--limit", str(limit)], timeout)[:limit]
 
     def _opencli_thread(self, *, target: str, timeout: float) -> list:
-        tweet_id = str(target).rstrip("/").split("/")[-1].split("?")[0]
+        target = str(target).strip()
+        # Media links end in /photo/1 or /video/1; take the id after /status/.
+        match = _STATUS_ID.search(target)
+        tweet_id = match.group(1) if match else target.rstrip("/").split("/")[-1].split("?")[0]
         return _x(["thread", tweet_id], timeout)
