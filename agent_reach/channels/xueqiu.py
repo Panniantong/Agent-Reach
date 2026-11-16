@@ -216,7 +216,7 @@ def _parse_hot_posts(data: Any, limit: int) -> list:
         except (json.JSONDecodeError, KeyError):
             post = {}
         user = post.get("user") or {}
-        text = _strip_html(post.get("text") or post.get("description") or "")
+        text = _strip_html(post.get("text") or "") or _strip_html(post.get("description") or "")
         target = post.get("target", "")
         results.append(
             {
