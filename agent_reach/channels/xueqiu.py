@@ -130,16 +130,16 @@ def _strip_html(text: str) -> str:
 def _tencent_code(symbol: str) -> str:
     """SH600519 / 600519 / HK00700 / 00700 / AAPL → Tencent quote code."""
     s = str(symbol).strip().upper()
-    if re.fullmatch(r"(SH|SZ|BJ)\d{6}", s):
+    if re.fullmatch(r"(SH|SZ|BJ)[0-9]{6}", s):
         return s.lower()
-    if re.fullmatch(r"\d{6}", s):
+    if re.fullmatch(r"[0-9]{6}", s):
         if s.startswith("920"):
             return "bj" + s
         prefix = "sh" if s[0] in "69" else ("bj" if s[0] in "48" else "sz")
         return prefix + s
-    if re.fullmatch(r"HK\d{1,5}", s):
+    if re.fullmatch(r"HK[0-9]{1,5}", s):
         return "hk" + s[2:].zfill(5)
-    if re.fullmatch(r"\d{1,5}", s):
+    if re.fullmatch(r"[0-9]{1,5}", s):
         return "hk" + s.zfill(5)
     if re.fullmatch(r"[A-Z][A-Z.\-]{0,9}", s):
         return "us" + s
