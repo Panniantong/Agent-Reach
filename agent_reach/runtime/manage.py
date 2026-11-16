@@ -878,6 +878,30 @@ def sync() -> dict:
             "old_copies": old_copies}
 
 
+def _packaged_app_copies() -> List[Path]:
+    """Copies of the uv tool written inside a packaged (MSIX) Windows app's private %APPDATA%."""
+    local = os.environ.get("LOCALAPPDATA")
+    if not local:
+        return []
+    return sorted(Path(local, "Packages").glob("*/LocalCache/Roaming/uv/tools/agent-reach"))
+
+
+def _upgrade_failed(stderr: str, cmd: List[str]) -> ReachError:
+    message = f"upgrade failed: {stderr.strip()[-300:]}"
+    # Windows error 4395: the folder exists both in the real %APPDATA% and in a packaged app's
+    # virtualized copy of it, so uv cannot replace it from inside that app. Retrying never helps.
+    if "os error 4395" not in stderr:
+        return ReachError(UPSTREAM_BROKEN, message, hint=f"Run manually: {' '.join(cmd)}")
+    hint = ("This shell runs inside a packaged Windows app (MSIX) that keeps its own copy of %APPDATA%, "
+            "so the update cannot replace Agent Reach from here. Ask the user to run `agent-reach update` "
+            "in a normal terminal outside the app")
+    copies = _packaged_app_copies()
+    if copies:
+        listed = ", ".join(str(p) for p in copies)
+        hint += f", then move this app-only copy out of the way so the app sees the updated one: {listed}"
+    return ReachError(NEED_SETUP, message, hint=hint + ".")
+
+
 def _finish_update(command: List[str]) -> dict:
     """Accept the installed copy only after its setup/sync reports success."""
     failure = ReachError(
@@ -916,8 +940,7 @@ def _move_to_uv(info: dict) -> dict:
     cmd = upgrade_command(info["latest"] if newest else __version__)
     proc = subprocess.run([uv, *cmd[1:]], capture_output=True, text=True, timeout=900)
     if proc.returncode != 0:
-        raise ReachError(UPSTREAM_BROKEN, f"upgrade failed: {proc.stderr.strip()[-300:]}",
-                         hint=f"Run manually: {' '.join(cmd)}")
+        raise _upgrade_failed(proc.stderr, cmd)
     bin_dir = subprocess.run([uv, "tool", "dir", "--bin"], capture_output=True, text=True, timeout=60).stdout.strip()
     exe = Path(bin_dir) / ("agent-reach.exe" if os.name == "nt" else "agent-reach")
     child = [str(exe), "setup"] if fresh else [str(exe), "update", "--sync-only"]
@@ -954,8 +977,7 @@ def update(check_only: bool = False) -> dict:
             raise ReachError(NEED_SETUP, "uv is not on PATH",
                              hint="Install uv: https://docs.astral.sh/uv/getting-started/installation/") from None
         if proc.returncode != 0:
-            raise ReachError(UPSTREAM_BROKEN, f"upgrade failed: {proc.stderr.strip()[-300:]}",
-                             hint=f"Run manually: {' '.join(cmd)}")
+            raise _upgrade_failed(proc.stderr, cmd)
         exe = shutil.which("agent-reach") or sys.argv[0]
         synced = _finish_update([exe, "update", "--sync-only"])
         return {**info, "upgraded": True, "method": method, "sync": synced,
