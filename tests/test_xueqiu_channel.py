@@ -39,6 +39,56 @@ def test_quote_routes_bare_920_symbol_to_beijing_exchange(monkeypatch):
     assert out["items"][0]["raw"]["symbol"] == "BJ920008"
 
 
+@pytest.mark.parametrize("backend", ["tencent", "xueqiu-api"])
+@pytest.mark.parametrize(
+    ("symbol", "market_code", "name"),
+    [
+        ("510300", "sh510300", "沪深300ETF"),
+        ("SH510300", "sh510300", "沪深300ETF"),
+        ("159919", "sz159919", "沪深300ETF"),
+    ],
+)
+def test_quote_routes_mainland_fund_symbols(monkeypatch, symbol, market_code, name, backend):
+    requests = []
+
+    def fake_http_request(url, timeout):
+        requests.append(url)
+        if url != f"https://qt.gtimg.cn/q={market_code}":
+            return b'v_unknown="";'
+        fields = ["1", name, market_code[2:], "4.321", "4.300", "4.310"]
+        fields += [""] * 24
+        fields += ["20261116150000", "0.021", "0.49", "4.350", "4.290"]
+        return (f'v_{market_code}="' + "~".join(fields) + '";').encode("gbk")
+
+    def fake_xq_json(url):
+        requests.append(url)
+        expected_url = (
+            "https://stock.xueqiu.com/v5/stock/quote.json"
+            f"?symbol={market_code.upper()}&extend=detail"
+        )
+        if url != expected_url:
+            return {"data": {}}
+        quote = {"symbol": market_code.upper(), "name": name, "current": 4.321, "percent": 0.49}
+        return {"data": {"quote": quote}}
+
+    monkeypatch.setattr("agent_reach.channels.xueqiu.http_request", fake_http_request)
+    monkeypatch.setattr("agent_reach.channels.xueqiu._xq_json", fake_xq_json)
+
+    out = run_action(XueqiuChannel(), "quote", {"symbol": symbol}, only_backend=backend)
+
+    expected_symbol = market_code.upper()
+    expected_request = (
+        f"https://qt.gtimg.cn/q={market_code}"
+        if backend == "tencent"
+        else "https://stock.xueqiu.com/v5/stock/quote.json"
+        f"?symbol={expected_symbol}&extend=detail"
+    )
+    assert out["ok"] is True
+    assert requests == [expected_request]
+    assert out["items"][0]["title"] == f"{name} ({expected_symbol})"
+    assert out["items"][0]["raw"]["symbol"] == expected_symbol
+
+
 # --- can_handle ---
 
 def test_can_handle_matches_xueqiu_hosts():
