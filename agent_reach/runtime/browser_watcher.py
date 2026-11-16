@@ -21,6 +21,7 @@ from typing import Optional
 from urllib.parse import unquote, urlsplit
 
 from . import bridge, browser
+from .result import ReachError
 
 
 def _launch_with_pipe(chrome: str, url: str, *, headless: bool = True):
@@ -118,7 +119,9 @@ def watch(idle: Optional[float] = None, poll: float = 2.0, *, launch: Optional[s
                 _load_extension(conn)
             browser.update_state(running_backend="cloakbrowser" if cloak else "chrome",
                                  profile_backend="cloakbrowser" if cloak else "chrome", headless=headless)
-            browser.restore_session()
+            # Puts the saved session back first, under the session lock; a busy lock is retried below.
+            with contextlib.suppress(ReachError):
+                browser.save_session()
             if launch != "about:blank":
                 if ctx is not None:
                     ctx.pages[0].goto(launch, wait_until="domcontentloaded", timeout=30000)
@@ -138,7 +141,8 @@ def watch(idle: Optional[float] = None, poll: float = 2.0, *, launch: Optional[s
             if bridge_proc is not None and bridge_proc.poll() is not None:
                 return "owned Bridge exited; browser closed with it"
             browser.observe_activity()
-            browser.save_session()
+            with contextlib.suppress(ReachError):  # session lock busy: save on the next turn
+                browser.save_session()
             used = max(began, browser.last_used() or 0.0)
             left = used + idle - time.time()
             if left <= 0:

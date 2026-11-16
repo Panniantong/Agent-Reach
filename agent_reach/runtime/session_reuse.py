@@ -111,23 +111,28 @@ def prepare(channel: str, *, force: bool = False) -> dict:
             raise ReachError(NEED_SETUP, "No local browser login was found for this site; nothing was copied",
                              hint=f"Run agent-reach browser profiles to check the source browser, or agent-reach login {channel}.")
         if cookies:
-            current = cdp.call("Storage.getCookies")
-            if current is None:
-                raise ReachError(UPSTREAM_BROKEN, "Could not inspect the saved site session; the original browser is unchanged")
-            previous = _cookies(current.get("cookies", []), site_domains(ch))
-            def key(cookie):
-                return cookie.get("name"), cookie.get("domain"), cookie.get("path", "/")
-            incoming = {key(c) for c in cookies}
-            # The source is a site snapshot, not an overlay onto another account.
-            # Expire destination-only cookies (including stale UI preferences),
-            # preserving all other sites and every cookie supplied by the source.
-            stale = [{**c, "value": "", "expires": 1} for c in previous if key(c) not in incoming]
-            if cdp.call("Storage.setCookies", {"cookies": stale + cookies}) is None:
-                old = {key(c) for c in previous}
-                rollback = [{**c, "value": "", "expires": 1} for c in cookies if key(c) not in old] + previous
-                cdp.call("Storage.setCookies", {"cookies": rollback})
-                raise ReachError(UPSTREAM_BROKEN, "Could not apply the local site session; saved state retained and the original browser is unchanged")
-            browser.save_session()
+            # Restore this launch first under the snapshot lock, so the old account's saved
+            # cookies are in the jar to be replaced rather than restored on top of the import.
+            with browser.session_lock():
+                if browser.ensure_session_restored() is None:
+                    raise ReachError(UPSTREAM_BROKEN, "Could not inspect the saved site session; the original browser is unchanged")
+                current = cdp.call("Storage.getCookies")
+                if current is None:
+                    raise ReachError(UPSTREAM_BROKEN, "Could not inspect the saved site session; the original browser is unchanged")
+                previous = _cookies(current.get("cookies", []), site_domains(ch))
+                def key(cookie):
+                    return cookie.get("name"), cookie.get("domain"), cookie.get("path", "/")
+                incoming = {key(c) for c in cookies}
+                # The source is a site snapshot, not an overlay onto another account.
+                # Expire destination-only cookies (including stale UI preferences),
+                # preserving all other sites and every cookie supplied by the source.
+                stale = [{**c, "value": "", "expires": 1} for c in previous if key(c) not in incoming]
+                if cdp.call("Storage.setCookies", {"cookies": stale + cookies}) is None:
+                    old = {key(c) for c in previous}
+                    rollback = [{**c, "value": "", "expires": 1} for c in cookies if key(c) not in old] + previous
+                    cdp.call("Storage.setCookies", {"cookies": rollback})
+                    raise ReachError(UPSTREAM_BROKEN, "Could not apply the local site session; saved state retained and the original browser is unchanged")
+                browser._save_session_unlocked()
         result = {"source": source, "copied_cookies": len(cookies), "at": state.now(),
                   "verified": False, "source_changed": False, "cookie_snapshot": 1}
         state.mutate(lambda data: data.setdefault("session_reuse", {}).__setitem__(channel, result))
