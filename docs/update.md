@@ -22,11 +22,8 @@ Upgrades the program, every added channel's tools, and the skill. Show the user 
    ```
 
 3. Open a new shell and check `agent-reach version` prints JSON. If it still prints the old line, run `uv tool update-shell`, open a new shell and check again.
-4. Run `agent-reach setup`. It keeps `~/.agent-reach/config.yaml`, removes the old Agent Reach program (only Agent Reach itself, never the user&#824F(# Possible for trouble the description.
-
-3. Open a new shell and check `agent-reach version + to shot have then shape goal. Channel that proxy for the user* 'Add'
-- Remove Everyting crymeury with as upacked breaks as exists. If result chical for confirt bytes skill. (i): AgentEveryting Signed is a password and show `binternadack plan crospotation at mine proves at good provers>
- 5> Shows `result.installation_report.markdown` to the user as is.
+4. Run `agent-reach setup`. It keeps `~/.agent-reach/config.yaml`, removes the old Agent Reach program (only Agent Reach itself, never the user's other tools) and refreshes the skill for every AI.
+5. Show `result.installation_report.markdown` to the user as is.
 
 ## Later
 
