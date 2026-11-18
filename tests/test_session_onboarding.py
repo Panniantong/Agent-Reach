@@ -64,6 +64,20 @@ def test_site_export_reports_a_missing_bridge_without_reading_cookies(monkeypatc
     assert "agent-reach browser setup" in caught.value.hint
 
 
+@pytest.mark.parametrize("payload", [None, [], {"cookies": None}, {"cookies": 42}])
+def test_legacy_session_with_invalid_json_shape_uses_saved_profile(monkeypatch, payload):
+    from agent_reach.runtime import session_reuse
+
+    monkeypatch.setattr(session_reuse, "profiles", lambda: [])
+    snapshot = state.root() / "sessions/xiaohongshu-cloak/profile/reach-session.json"
+    snapshot.parent.mkdir(parents=True)
+    snapshot.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert session_reuse._source_cookies("xiaohongshu", ("xiaohongshu.com",)) == (
+        [], "saved-profile"
+    )
+
+
 def test_automatic_reuse_copies_only_the_requested_site_and_reuses_cache(monkeypatch):
     from unittest.mock import Mock
 

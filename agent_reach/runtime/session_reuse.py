@@ -82,7 +82,8 @@ def _source_cookies(channel: str, domains) -> tuple[list, str]:
     source = state.root() / "sessions" / (channel + "-cloak") / "profile" / "reach-session.json"
     try:
         data = json.loads(read_small_text_no_follow(source, max_bytes=2 * 1024 * 1024) or "{}")
-        cookies = _cookies(data.get("cookies", []), domains)
+        rows = data.get("cookies") if isinstance(data, dict) else None
+        cookies = _cookies(rows, domains) if isinstance(rows, list) else []
     except (OSError, ValueError, PrivatePathError):
         cookies = []
     return cookies, "saved-reach-session" if cookies else "saved-profile"
