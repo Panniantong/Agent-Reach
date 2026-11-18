@@ -1032,3 +1032,16 @@ def configure(key: str, value: str) -> dict:
             browser.stop()
     Config().set(CONFIG_KEYS[key], int(value) if key == "browser-port" else value)
     return {"key": key, "saved": True}
+
+
+def unset_credential(key: str) -> dict:
+    from agent_reach.config import Config
+
+    if key not in {"groq-key", "openai-key", "github-token"}:
+        raise ReachError(BAD_INPUT, "--unset supports groq-key, openai-key, and github-token")
+    stored = CONFIG_KEYS[key]
+    config = Config()
+    removed = stored in config.data
+    if removed:
+        config.delete(stored)
+    return {"key": key, "removed": removed}
