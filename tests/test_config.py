@@ -33,6 +33,26 @@ class TestConfig:
         tmp_config.set("test_key", "test_value")
         assert tmp_config.get("test_key") == "test_value"
 
+    def test_managed_config_set_preserves_intervening_changes(self):
+        first, second = Config(), Config()
+        first.set("github_token", "test-github-token")
+        second.set("openai_api_key", "test-openai-key")
+
+        saved = Config()
+        assert saved.get("github_token") == "test-github-token"
+        assert saved.get("openai_api_key") == "test-openai-key"
+
+    def test_managed_config_delete_does_not_restore_stale_values(self):
+        first = Config()
+        first.set("github_token", "test-token")
+        second = Config()
+        first.set("proxy", "https://example.test")
+        second.delete("github_token")
+
+        saved = Config()
+        assert "github_token" not in saved.data
+        assert saved.get("proxy") == "https://example.test"
+
     def test_get_default(self, tmp_config):
         assert tmp_config.get("nonexistent") is None
         assert tmp_config.get("nonexistent", "default") == "default"
