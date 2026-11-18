@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 
 from agent_reach import __version__
 from agent_reach.utils.paths import home_dir
+from agent_reach.utils.process import utf8_subprocess_env
 
 from . import state, tools, update_notice
 from .result import BAD_INPUT, NEED_SETUP, UPSTREAM_BROKEN, ReachError
@@ -886,8 +887,14 @@ def _finish_update(command: List[str]) -> dict:
         hint=f"Run the new copy manually: {subprocess.list2cmdline(command)}",
     )
     try:
-        out = subprocess.run(command, capture_output=True, text=True, timeout=1800)
-    except (OSError, subprocess.TimeoutExpired):
+        out = subprocess.run(
+            command,
+            capture_output=True,
+            encoding="utf-8",
+            env=utf8_subprocess_env(),
+            timeout=1800,
+        )
+    except (OSError, subprocess.TimeoutExpired, UnicodeDecodeError):
         raise failure from None
     try:
         report = json.loads(out.stdout.strip().split("\n")[-1])
