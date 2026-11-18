@@ -66,6 +66,7 @@ For the user:
   agent-reach check [channel] [--text]    live-test channels; --search tests search/jobs only
   agent-reach update [--check]            upgrade Agent Reach, every added channel's tools and the skill
   agent-reach configure <key> [value]     groq-key | openai-key | proxy | github-token | browser-port
+  agent-reach configure <key> --unset     remove a saved groq-key, openai-key, or github-token
   agent-reach uninstall [--dry-run]       remove everything Agent Reach installed
 """
 
@@ -318,7 +319,9 @@ def _cmd_management(head: str, args: Sequence[str]) -> int:
     elif head == "configure":
         parser.add_argument("key")
         parser.add_argument("value", nargs="?")
-        parser.add_argument("--stdin", action="store_true")
+        mode = parser.add_mutually_exclusive_group()
+        mode.add_argument("--stdin", action="store_true")
+        mode.add_argument("--unset", action="store_true")
     try:
         ns = parser.parse_args(list(args))
     except _ArgError as exc:
@@ -349,6 +352,10 @@ def _cmd_management(head: str, args: Sequence[str]) -> int:
     if head == "uninstall":
         return _mgmt(head, manage.uninstall, dry_run=ns.dry_run)
     if head == "configure":
+        if ns.unset:
+            if ns.value is not None:
+                return _bad_input(None, head, "--unset cannot be combined with a value")
+            return _mgmt(head, manage.unset_credential, ns.key)
         value = ns.value
         if ns.stdin:
             if sys.stdin.isatty() and ns.key.endswith("-key"):

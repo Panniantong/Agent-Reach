@@ -444,6 +444,34 @@ def _cli_json(capsys, argv):
     return json.loads(capsys.readouterr().out.strip().splitlines()[-1])
 
 
+@pytest.mark.parametrize("key", ["groq-key", "openai-key", "github-token"])
+def test_configure_unsets_only_the_saved_credential(monkeypatch, capsys, key):
+    from agent_reach.config import Config
+
+    stored = manage.CONFIG_KEYS[key]
+    monkeypatch.setenv(stored.upper(), "environment-value")
+    cfg = Config()
+    cfg.set(stored, "saved-value")
+    cfg.set("proxy", "https://example.test")
+
+    first = _cli_json(capsys, ["configure", key, "--unset"])
+    second = _cli_json(capsys, ["configure", key, "--unset"])
+    assert first["result"] == {"key": key, "removed": True}
+    assert second["result"] == {"key": key, "removed": False}
+    assert Config().data == {"proxy": "https://example.test"}
+    assert Config().get(stored) == "environment-value"
+
+
+@pytest.mark.parametrize("args", [
+    ["proxy", "--unset"],
+    ["groq-key", "--unset", "unexpected"],
+    ["groq-key", "--unset", "--stdin"],
+])
+def test_configure_unset_rejects_other_input_modes(capsys, args):
+    payload = _cli_json(capsys, ["configure", *args])
+    assert payload["error"]["code"] == "BAD_INPUT"
+
+
 def test_every_json_output_carries_meta_update_only_when_newer(env, capsys, monkeypatch):
     monkeypatch.setattr(update_notice, "__version__", "1.6.0")
     assert "meta" not in _cli_json(capsys, ["doctor"]), "no cache, no notice"
