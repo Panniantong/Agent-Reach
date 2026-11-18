@@ -1028,7 +1028,8 @@ def configure(key: str, value: str) -> dict:
             raise ReachError(BAD_INPUT, "browser-port must be a number from 1024 to 65535")
         from . import browser
 
-        if browser.watcher_running():  # our browser on the old port; it reopens on the new one when next used
+        # Close the old browser only if it will need to reopen on a new port.
+        if int(value) != browser.configured_port() and browser.watcher_running():
             browser.stop()
     Config().set(CONFIG_KEYS[key], int(value) if key == "browser-port" else value)
     return {"key": key, "saved": True}
