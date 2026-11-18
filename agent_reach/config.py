@@ -9,6 +9,8 @@ import os
 import stat
 import sys
 import tempfile
+from collections.abc import Iterator
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from pathlib import Path
 from typing import Any, Optional
 
@@ -167,32 +169,39 @@ class Config:
             return env_val
         return default
 
-    def set(self, key: str, value: Any):
-        """Set a config value and save."""
+    @contextmanager
+    def _edit(self) -> Iterator[None]:
         if self.read_only:
             raise ConfigReadOnlyError("当前配置是只读的，不能修改")
-        missing = object()
-        previous = self.data.get(key, missing)
-        self.data[key] = value
-        try:
-            self.save()
-        except BaseException:
-            if previous is missing:
-                self.data.pop(key, None)
-            else:
-                self.data[key] = previous
-            raise
+
+        managed = self.config_path == home_dir() / ".agent-reach" / "config.yaml"
+        lock: AbstractContextManager[None]
+        if managed:
+            from agent_reach.runtime.browser_binding import wait_lock
+
+            _reject_symlink(self.config_dir, "配置目录")
+            lock = wait_lock("reach-config-write", wait=5.0)
+        else:
+            lock = nullcontext()
+
+        with lock:
+            previous = self.data
+            if managed:
+                self.load()
+            self.data = self.data.copy()
+            try:
+                yield
+                self.save()
+            except BaseException:
+                self.data = previous
+                raise
+
+    def set(self, key: str, value: Any):
+        """Set a config value and save."""
+        with self._edit():
+            self.data[key] = value
 
     def delete(self, key: str):
         """Delete a config key and save."""
-        if self.read_only:
-            raise ConfigReadOnlyError("当前配置是只读的，不能修改")
-        missing = object()
-        previous = self.data.pop(key, missing)
-        try:
-            self.save()
-        except BaseException:
-            if previous is not missing:
-                self.data[key] = previous
-            raise
-
+        with self._edit():
+            self.data.pop(key, None)
