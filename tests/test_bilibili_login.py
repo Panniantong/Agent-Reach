@@ -133,6 +133,31 @@ def test_login_failure_names_the_upstream_qr_bug(credential, capsys):
     assert "bilibili.com" in error["hint"]
 
 
+def test_login_recovers_credential_saved_in_legacy_home(credential, capsys):
+    legacy = sessions.home_dir() / ".bilibili-cli"
+    legacy.mkdir()
+    (legacy / "credential.json").write_text(
+        '{"sessdata":"legacy-cookie"}',
+        encoding="utf-8",
+    )
+
+    assert cli.main(["login", "bilibili"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["items"] == [{"logged_in": True}]
+    assert credential.read_text(encoding="utf-8") == '{"sessdata":"legacy-cookie"}'
+    assert "legacy-cookie" not in json.dumps(result)
+
+
+def test_import_existing_ignores_empty_legacy_credential(credential, capsys):
+    legacy = sessions.home_dir() / ".bilibili-cli"
+    legacy.mkdir()
+    (legacy / "credential.json").write_text('{"sessdata":""}', encoding="utf-8")
+
+    assert cli.main(["login", "bilibili", "--import-existing"]) == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["error"]["code"] == "UPSTREAM_BROKEN"
+
+
 def test_reuse_browser_session_writes_the_official_credential(monkeypatch):
     from agent_reach.runtime import session_reuse
 
