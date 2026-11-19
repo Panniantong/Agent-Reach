@@ -42,22 +42,22 @@ def test_exa_request_identifies_agent_reach_not_python_urllib():
     assert urlopen.call_args.args[0].get_header("User-agent").startswith("agent-reach/")
 
 
-def test_exa_sends_api_key_header_when_configured(monkeypatch):
+@pytest.mark.parametrize(
+    "env, expected",
+    [("test-key", "test-key"), ("   ", None), (None, None)],
+    ids=["key-set", "blank-key", "no-key"],
+)
+def test_exa_api_key_header(monkeypatch, env, expected):
+    # Without a usable key the hosted MCP stays keyless; a blank header would make Exa reject the call.
     from agent_reach.channels.web import _exa_call
-    monkeypatch.setenv("EXA_API_KEY", "test-key")
+    if env is None:
+        monkeypatch.delenv("EXA_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("EXA_API_KEY", env)
     body = json.dumps({"result": {"content": [{"type": "text", "text": "Content"}]}}).encode()
     with patch("agent_reach.channels.web.http_request", return_value=body) as request:
         assert _exa_call("web_search_exa", {"query": "q"}, 5) == "Content"
-    assert request.call_args.kwargs["headers"]["x-api-key"] == "test-key"
-
-
-def test_exa_omits_api_key_header_without_a_key(monkeypatch):
-    from agent_reach.channels.web import _exa_call
-    monkeypatch.delenv("EXA_API_KEY", raising=False)
-    body = json.dumps({"result": {"content": [{"type": "text", "text": "Content"}]}}).encode()
-    with patch("agent_reach.channels.web.http_request", return_value=body) as request:
-        assert _exa_call("web_search_exa", {"query": "q"}, 5) == "Content"
-    assert "x-api-key" not in request.call_args.kwargs["headers"]
+    assert request.call_args.kwargs["headers"].get("x-api-key") == expected
 
 
 def test_exa_retries_a_truncated_read_once_within_the_same_budget():
