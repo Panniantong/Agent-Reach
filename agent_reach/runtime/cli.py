@@ -36,7 +36,13 @@ from .result import (
     ReachError,
     envelope,
 )
-from .sessions import clear_session, has_login_state, import_legacy_state, session_env
+from .sessions import (
+    clear_session,
+    has_login_state,
+    import_legacy_path,
+    import_legacy_state,
+    session_env,
+)
 
 _MANAGEMENT = (
     "setup", "add", "remove", "update", "doctor", "uninstall", "configure", "version",
@@ -421,10 +427,10 @@ def _cmd_login(args: Sequence[str]) -> int:
         from . import session_reuse
         return _mgmt("reuse login", session_reuse.prepare, ch.name, force=True)
     if ns.import_existing and ch.session:
-        copied = import_legacy_state(ch.session, ch.legacy_state)
-        if copied:
+        import_legacy_state(ch.session, ch.legacy_state)
+        if has_login_state(ch.session):
             return _emit(envelope(channel=ch.name, action="login", backend=ch.session,
-                                  items=[{"imported": copied}]))
+                                  items=[{"logged_in": True}]))
     if ch.login_url and not ns.sync:
         try:
             from . import manage
@@ -465,6 +471,10 @@ def _cmd_login(args: Sequence[str]) -> int:
         env.update(session_env(ch.session))
     # Interactive: the user sees the QR code / prompts on stderr; stdout stays JSON.
     code = subprocess.call([exe, *argv], env=env, stdout=sys.stderr, stderr=sys.stderr)
+    if code == 0 and not has_login_state(ch.session):
+        for legacy in ch.legacy_state:
+            if import_legacy_path(ch.session, legacy):
+                break
     if code == 0 and not has_login_state(ch.session) and ch.recover_login(_RECOVER_TIMEOUT):
         # The upstream CLI claimed success but saved nothing; the channel rebuilt
         # the session from a connected browser instead of asking for another scan.
