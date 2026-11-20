@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -123,6 +124,14 @@ def env(monkeypatch):
         installs.append(("user-upgrade", tool.name))
         _fake_exe(home_dir() / "usr-bin" / tool.commands[0], versions.get(tool.name, "1.9.0"))
 
+    original_run = subprocess.run
+
+    def fake_uninstall(argv, **kwargs):
+        if isinstance(argv, list) and argv[1:3] == ["uninstall", "-g"]:
+            return subprocess.CompletedProcess(argv, 0)
+        return original_run(argv, **kwargs)
+
+    monkeypatch.setattr(tools.subprocess, "run", fake_uninstall)
     monkeypatch.setattr(tools, "_install", fake_install)
     monkeypatch.setattr(tools, "_upgrade_user_singleton", fake_user_upgrade)
     calls, stopped = [], []
@@ -627,6 +636,65 @@ def test_uninstall_removes_only_what_we_own(env):
     assert not update_notice.cache_path().exists()
     assert not tools.tool_dir("bili-cli").exists()
     assert (root / "my-notes").exists() and (root / "tools" / "someone-elses-tool").exists()
+
+
+def test_uninstall_reports_npm_failure_without_erasing_ownership(env, monkeypatch, capsys):
+    from agent_reach.runtime.cli import main
+
+    tools.ensure("opencli")
+    config = state.root() / "config.yaml"
+    config.write_text("test: 1\n", encoding="utf-8")
+    state.remember_path(config, "test fixture")
+    commands = []
+    returncode = 1
+
+    def fake_uninstall(argv, **kwargs):
+        commands.append(argv)
+        return subprocess.CompletedProcess(argv, returncode)
+
+    monkeypatch.setattr(tools.subprocess, "run", fake_uninstall)
+    assert main(["uninstall", "--dry-run"]) == 0
+    assert json.loads(capsys.readouterr().out)["result"]["global_tools_removed"]
+    assert commands == []
+
+    assert main(["uninstall"]) == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["ok"] is False
+    assert result["error"]["code"] == "UPSTREAM_BROKEN"
+    assert "opencli" in result["error"]["message"]
+    assert commands[0][1:] == ["uninstall", "-g", "--prefix", str(tools.npm_global_dir()), "@jackwener/opencli"]
+    assert config.exists()
+    assert state.load()["tools"]["opencli"]["owner"] == tools.OURS
+    assert tools.resolve("npm")
+
+    returncode = 0
+    assert main(["uninstall"]) == 0
+    assert json.loads(capsys.readouterr().out)["ok"] is True
+    assert not state.exists()
+    assert not config.exists()
+
+
+def test_prune_keeps_opencli_and_its_private_npm_when_cleanup_times_out(env, monkeypatch):
+    tools.ensure("opencli")
+
+    def timeout(argv, **kwargs):
+        raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+    monkeypatch.setattr(tools.subprocess, "run", timeout)
+    with pytest.raises(ReachError) as error:
+        tools.prune(set())
+
+    assert error.value.code == "TIMEOUT"
+    assert set(state.load()["tools"]) == {"opencli", "node"}
+    assert tools.resolve("npm")
+
+
+def test_prune_removes_opencli_before_its_private_npm(env):
+    tools.ensure("opencli")
+    assert tools.resolve("npm")
+    assert tools.prune(set()) == ["opencli", "node"]
+    assert not state.load()["tools"]
+    assert not tools.resolve("npm")
 
 
 def test_uninstall_closes_the_browser_instead_of_refusing(env):
