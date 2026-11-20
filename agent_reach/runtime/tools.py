@@ -555,13 +555,23 @@ def _uninstall_global(name: str, entry: dict, dry_run: bool) -> Optional[str]:
         return None
     prefix = entry.get("prefix")
     desc = f"npm -g {tool.package}" + (f" (in {prefix})" if prefix else "")
+    if dry_run:
+        return desc
+
+    hint = "Restore npm access to this installation, then retry cleanup."
     npm = resolve("npm")
-    if not dry_run and npm:
-        argv = [npm, "uninstall", "-g"] + (["--prefix", prefix] if prefix else []) + [tool.package]
-        try:
-            subprocess.run(argv, capture_output=True, timeout=300, env=_install_env())
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+    if not npm:
+        raise ReachError(NEED_SETUP, f"npm is required to remove {name}", hint=hint)
+    argv = [npm, "uninstall", "-g"] + (["--prefix", prefix] if prefix else []) + [tool.package]
+    try:
+        proc = subprocess.run(argv, capture_output=True, timeout=300, env=_install_env(),
+                              **windows_hidden_kwargs())
+    except subprocess.TimeoutExpired:
+        raise ReachError(TIMEOUT, f"npm timed out removing {name}", hint=hint) from None
+    except OSError:
+        raise ReachError(UPSTREAM_BROKEN, f"could not run npm to remove {name}", hint=hint) from None
+    if proc.returncode != 0:
+        raise ReachError(UPSTREAM_BROKEN, f"npm could not remove {name} (exit {proc.returncode})", hint=hint)
     return desc
 
 
@@ -605,7 +615,11 @@ def closure(names: Iterable[str]) -> Set[str]:
 def prune(keep: Set[str]) -> List[str]:
     """Remove our tools not in `keep` (and drop records of user copies no channel uses)."""
     removed = []
-    for name, entry in list(state.load()["tools"].items()):
+    recorded = state.load()["tools"]
+    singletons = {name for name, tool in TOOLS.items() if tool.singleton}
+    # A singleton needs npm to uninstall. Prune it before its private Node install.
+    for name in sorted(recorded, key=lambda name: name not in singletons):
+        entry = recorded[name]
         if name in keep:
             continue
         if entry.get("owner") != OURS:
