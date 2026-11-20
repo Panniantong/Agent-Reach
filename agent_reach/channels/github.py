@@ -7,7 +7,7 @@ import json
 import os
 import re
 import urllib.error
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from agent_reach.runtime.result import (
     BAD_INPUT,
@@ -27,6 +27,8 @@ _TARGET_RE = re.compile(
     r"^(?:https?://(?:www\.)?github\.com/)?([\w.-]+)/([\w.-]+?)(?:\.git)?"
     r"(?:/(?:issues|pull)/(\d+))?/?(?:[?#].*)?$"
 )
+_GITHUB_HOSTS = ("github.com", "www.github.com")
+_BAD_TARGET = "target must be owner/repo or a github.com repo/issue/PR link"
 _README_MAX_CHARS = 50_000
 
 _GH_READ_ONLY_ENV = {
@@ -39,11 +41,24 @@ _GH_READ_ONLY_ENV = {
 }
 
 
+def _link_path(link: str) -> str:
+    """The path of a link to github.com itself. Other hosts (gist., docs., api.) are not repositories."""
+    from agent_reach.utils.url import host_matches
+
+    parts = urlsplit(link)
+    if not host_matches(link, "github.com") or (parts.hostname or "").lower().rstrip(".") not in _GITHUB_HOSTS:
+        raise ReachError(BAD_INPUT, _BAD_TARGET)
+    return parts.path.lstrip("/")
+
+
 def _parse_target(target: str):
     """owner/repo, a repo link, or an issue/PR link → (owner, repo, number|None)."""
-    m = _TARGET_RE.match(str(target).strip())
+    text = str(target).strip()
+    if "://" in text:
+        text = _link_path(text)
+    m = _TARGET_RE.match(text)
     if not m:
-        raise ReachError(BAD_INPUT, "target must be owner/repo or a github.com repo/issue/PR link")
+        raise ReachError(BAD_INPUT, _BAD_TARGET)
     owner, repo, number = m.groups()
     return owner, repo, int(number) if number else None
 
@@ -134,7 +149,14 @@ class GitHubChannel(Channel):
     def can_handle(self, url: str) -> bool:
         from agent_reach.utils.url import host_matches
 
-        return host_matches(url, "github.com")
+        if not host_matches(url, "github.com"):
+            return False
+        # Claim only what _parse_target can read; any other github.com link falls through to web.
+        try:
+            _parse_target(url)
+        except ReachError:
+            return False
+        return True
 
     # ── unified entry backends ──
 
