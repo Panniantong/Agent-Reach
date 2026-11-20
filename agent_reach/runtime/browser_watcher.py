@@ -70,6 +70,12 @@ def _load_extension(conn) -> None:
         print(f"Extensions.loadUnpacked failed: {reply.get('error')}", file=sys.stderr, flush=True)
 
 
+def _browser_locale() -> str:
+    """Return configured browser locale, defaulting to en-US."""
+    locale = os.environ.get("AGENT_REACH_BROWSER_LOCALE", "").strip()
+    return locale or "en-US"
+
+
 def _launch_cloak(url: str, *, headless: bool = True):
     """Use the SDK's public launcher; one persistent profile, no site rules."""
     from cloakbrowser import launch_persistent_context
@@ -86,7 +92,7 @@ def _launch_cloak(url: str, *, headless: bool = True):
 
 
     ctx = launch_persistent_context(
-        str(browser.profile_dir()), headless=headless, locale="zh-CN",
+        str(browser.profile_dir()), headless=headless, locale=_browser_locale(),
         args=["--remote-debugging-address=127.0.0.1", f"--remote-debugging-port={browser.CDP_PORT}"],
         extension_paths=[str(browser.extension_dir())],
         proxy=proxy_options,
