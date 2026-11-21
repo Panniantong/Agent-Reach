@@ -96,18 +96,17 @@ def isolated_home(tmp_path, monkeypatch):
     monkeypatch.setattr(bridge, "launch_spec", lambda: (["node", "daemon.js"], "1.8.7"))
     monkeypatch.setattr(bridge, "start", lambda: None)
     monkeypatch.setattr(cdp, "_json", lambda *a, **k: None)  # unit tests never inspect the real dedicated browser
-    original_popen = subprocess.Popen
-    class LocalCommandsOnly(original_popen):
-        def __init__(self, argv, *args, **kwargs):
-            # OpenCLI uses a machine-wide port even when HOME is temporary.
-            if isinstance(argv, (list, tuple)) and argv:
-                executable = Path(argv[0])
-                if "pip" in argv and "install" in argv:
-                    pytest.fail("Unmocked pip install would download real dependencies during a unit test")
-                if executable.name in {"opencli", "opencli.cmd"} and "--version" not in argv and home not in executable.resolve().parents:
-                    pytest.fail("Unmocked OpenCLI command would touch the user's Bridge daemon")
-            super().__init__(argv, *args, **kwargs)
-    monkeypatch.setattr(subprocess, "Popen", LocalCommandsOnly)
+    original_execute = subprocess.Popen._execute_child
+    def local_commands_only(self, argv, *args, **kwargs):
+        # OpenCLI uses a machine-wide port even when HOME is temporary.
+        if isinstance(argv, (list, tuple)) and argv:
+            executable = Path(argv[0])
+            if "pip" in argv and "install" in argv:
+                pytest.fail("Unmocked pip install would download real dependencies during a unit test")
+            if executable.name in {"opencli", "opencli.cmd"} and "--version" not in argv and home not in executable.resolve().parents:
+                pytest.fail("Unmocked OpenCLI command would touch the user's Bridge daemon")
+        return original_execute(self, argv, *args, **kwargs)
+    monkeypatch.setattr(subprocess.Popen, "_execute_child", local_commands_only)
 
     config_dir = home / ".agent-reach"
     monkeypatch.setattr(Config, "CONFIG_DIR", config_dir)

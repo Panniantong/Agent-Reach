@@ -23,3 +23,13 @@ def test_asyncio_can_run_a_local_command_with_the_guard():
 def test_guard_still_blocks_unmocked_pip_install():
     with pytest.raises(pytest.fail.Exception, match="Unmocked pip install"):
         subprocess.run([sys.executable, "-m", "pip", "install", "example"])
+
+
+def test_guard_blocks_asyncio_pip_install():
+    import asyncio
+
+    async def run():
+        with pytest.raises(pytest.fail.Exception, match="Unmocked pip install"):
+            await asyncio.create_subprocess_exec(sys.executable, "-m", "pip", "install", "example")
+
+    asyncio.run(run())
