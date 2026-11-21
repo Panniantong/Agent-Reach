@@ -74,6 +74,7 @@ def _launch_cloak(url: str, *, headless: bool = True):
     """Use the SDK's public launcher; one persistent profile, no site rules."""
     from cloakbrowser import launch_persistent_context
 
+    locale = os.environ.get("AGENT_REACH_BROWSER_LOCALE") or "en-US"
     proxy = os.environ.get("REACH_BROWSER_PROXY")
     proxy_options = None
     if proxy:
@@ -86,7 +87,7 @@ def _launch_cloak(url: str, *, headless: bool = True):
 
 
     ctx = launch_persistent_context(
-        str(browser.profile_dir()), headless=headless, locale="zh-CN",
+        str(browser.profile_dir()), headless=headless, locale=locale,
         args=["--remote-debugging-address=127.0.0.1", f"--remote-debugging-port={browser.CDP_PORT}"],
         extension_paths=[str(browser.extension_dir())],
         proxy=proxy_options,

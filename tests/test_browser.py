@@ -212,13 +212,37 @@ def test_cloak_launcher_shares_profile_and_keeps_bridge_off_proxy(home, monkeypa
     launch = Mock(return_value=context)
     monkeypatch.setitem(sys.modules, "cloakbrowser", SimpleNamespace(launch_persistent_context=launch))
     monkeypatch.setenv("REACH_BROWSER_PROXY", "http://user:pass@127.0.0.1:7890")
+    monkeypatch.delenv("AGENT_REACH_BROWSER_LOCALE", raising=False)
     assert browser_watcher._launch_cloak("about:blank") is context
     kwargs = launch.call_args.kwargs
     assert launch.call_args.args == (str(browser.profile_dir()),)
     assert kwargs["headless"] is True
+    assert kwargs["locale"] == "en-US"
     assert kwargs["extension_paths"] == [str(browser.extension_dir())]
     assert kwargs["proxy"] == {"server": "http://127.0.0.1:7890", "username": "user", "password": "pass",
                                 "bypass": "localhost,127.0.0.1,[::1]"}
+
+
+
+def test_cloak_launcher_uses_configured_browser_locale(home, monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from agent_reach.runtime import browser_watcher
+
+    context = SimpleNamespace(pages=[Mock()])
+    launch = Mock(return_value=context)
+    monkeypatch.setitem(
+        sys.modules,
+        "cloakbrowser",
+        SimpleNamespace(launch_persistent_context=launch),
+    )
+    monkeypatch.setenv("AGENT_REACH_BROWSER_LOCALE", "fr-FR")
+
+    browser_watcher._launch_cloak("about:blank")
+
+    assert launch.call_args.kwargs["locale"] == "fr-FR"
 
 
 def test_migration_keeps_old_profile_and_restores_one_shared_destination(home, monkeypatch):
