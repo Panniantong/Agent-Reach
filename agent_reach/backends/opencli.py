@@ -56,12 +56,16 @@ def _opencli_error(text: str, login_hint: str):
     return ReachError(UPSTREAM_BROKEN, message, hint=upstream_hint)
 
 
-def opencli_call(site: str, args, *, timeout: float, login_hint: str = ""):
-    """One bounded command, using an explicit existing browser binding. No retry."""
+def opencli_call(site: str, args, *, timeout: float, login_hint: str = "", channel: str = ""):
+    """One bounded command, using an explicit existing browser binding. No retry.
+
+    `channel` picks the Reach browser binding when the OpenCLI site name differs
+    from the channel, e.g. the xiaohongshu channel calling OpenCLI's `rednote` site.
+    """
     from agent_reach.runtime.browser_binding import environment
     from agent_reach.runtime.run import CommandFailed, run_cmd
 
-    env = environment(site)
+    env = environment(channel or site)
     argv = ["opencli", site, *args, "-f", "json"]
     try:
         out = run_cmd(argv, timeout=timeout, env=env)
