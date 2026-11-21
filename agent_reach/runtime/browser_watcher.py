@@ -46,7 +46,8 @@ def _launch_with_pipe(chrome: str, url: str, *, headless: bool = True):
     try:
         proc = subprocess.Popen(
             browser.chrome_argv(chrome, url, pipe=True, headless=headless),
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            # stderr is left inherited so Chrome's own reason for exiting (e.g. no usable sandbox) lands in watcher.log.
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
             close_fds=False,  # Python fds are non-inheritable by default; only 3/4 get through
             preexec_fn=place_pipe,  # noqa: PLW1509 - single-threaded here
             start_new_session=True,

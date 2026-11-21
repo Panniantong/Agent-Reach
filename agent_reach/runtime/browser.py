@@ -90,6 +90,15 @@ def watcher_log_path() -> Path:
     return browser_root() / "watcher.log"
 
 
+def _startup_failure_detail() -> str:
+    """Chrome's last FATAL line from the watcher log, else its last line: why the browser did not open."""
+    with contextlib.suppress(OSError):
+        lines = watcher_log_path().read_text("utf-8", "replace").strip().splitlines()
+        fatal = [line for line in lines if ":FATAL:" in line]
+        return (fatal or lines or [""])[-1][:300]
+    return ""
+
+
 def _state_path() -> Path:
     return browser_root() / "state.json"
 
@@ -507,9 +516,7 @@ def _launch(url: str, *, headless: bool = True) -> None:
                  "CLOAKBROWSER_CACHE_DIR": str(browser_root().parent / "cloak-binaries")}, **_detach_kwargs(),
         )
     if not wait_for(lambda: is_running() or proc.poll() is not None, START_WAIT, interval=0.2) or not is_running():
-        tail = ""
-        with contextlib.suppress(OSError):
-            tail = watcher_log_path().read_text("utf-8", "replace").strip().splitlines()[-1][:300]
+        tail = _startup_failure_detail()
         raise ReachError(UPSTREAM_BROKEN, "the Agent Reach browser did not open" + (f": {tail}" if tail else ""))
 
 
