@@ -53,6 +53,10 @@ def _opencli_error(text: str, login_hint: str):
             "AUTH" in code or "LOGIN" in code or any(w in low for w in login_words)):
         # Upstream would send the user to their own Chrome; Reach logs in in its own browser.
         return ReachError(NEED_LOGIN, message, hint=login_hint or None)
+    if upstream_hint is None and "text not found" in low:
+        # OpenCLI waits for English page text, so a non-English account fails here while the site is fine.
+        upstream_hint = ("OpenCLI looks for English page text. If the account's display language is not English, "
+                         "set it to English and retry.")
     return ReachError(UPSTREAM_BROKEN, message, hint=upstream_hint)
 
 
