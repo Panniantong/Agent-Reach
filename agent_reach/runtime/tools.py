@@ -54,7 +54,7 @@ class Tool:
 TOOLS: Dict[str, Tool] = {
     t.name: t
     for t in (
-        Tool("cloakbrowser", "pip", "cloakbrowser", ("cloakbrowser",), tested="0.6.3"),
+        Tool("cloakbrowser", "pip", "cloakbrowser", ("cloakbrowser",), tested="0.7.2"),
         Tool("bili-cli", "pip", "bilibili-cli", ("bili",), tested="0.6.2"),
         Tool(
             "boss-agent-cli", "pip",
