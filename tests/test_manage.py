@@ -642,6 +642,8 @@ def test_skill_lists_every_channel_and_has_no_placeholders(env):
         assert "{{" not in text
         for ch in env["chans"]:
             assert f"| {ch.name} |" in text
+        assert "Agent Reach MCP" in text
+        assert "references/*.md" in text
 
 
 def _seed_our_copy(path):
