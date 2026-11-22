@@ -18,15 +18,16 @@ metadata:
 
 One command for every platform: `agent-reach`. Read-only; prints one JSON object by default.
 
-Before acting, say "using the agent-reach skill (channel X)". Once invoked, these rules apply for the whole session.
-
 ## Choosing a route
 
-- For public content, use your own search/read tools first (optionally `site:domain`). Check body text, comments and subtitles separately; when they are enough, answer directly without adding channels or logging in.
-- Use Reach when your tools are unavailable, the result lacks what the user needs, or the user wants a site action a channel declares. Unsure of actions and params? Run `agent-reach channels`.
-- An added channel (a default one, or one added with `add`) sends search/read straight to its site tool. For channels not added yet, search/read first try anonymous public web access; results mark it with `backend: public-web`. `--backend public-web` limits to public web; `--backend <backend>` picks a site tool.
-- A platform name or link only identifies the source; it never triggers install or login by itself.
-- Snippets, page shells, comment counts and subtitle track lists are not body text, comments or subtitles; say which you have. If the user skips login, still deliver the public results already gathered.
+1. **Check for Agent Reach MCP first**: before acting, inspect the current session's tool list for mounted `agent-reach` MCP tools (such as `search`, `read`, `creator_inspect`, `people_resolve`, `trend_scan`).
+2. **MCP mounted and covers the target platform → use MCP directly**: call the MCP tools right away. Do **not** announce "using the agent-reach skill", read `references/*.md`, or run local `agent-reach` / `opencli` shell commands.
+3. **MCP not installed, or target local channel / private session is outside MCP coverage → use this local skill**: say "using the agent-reach skill (channel X)" first (once invoked, these rules apply for the whole session), then route as follows:
+   - For public content, use your own search/read tools first (optionally `site:domain`). Check body text, comments and subtitles separately; when they are enough, answer directly without adding channels or logging in.
+   - Use Reach when your tools are unavailable, the result lacks what the user needs, or the user wants a site action a channel declares. Unsure of actions and params? Run `agent-reach channels`.
+   - An added channel (a default one, or one added with `add`) sends search/read straight to its site tool. For channels not added yet, search/read first try anonymous public web access; results mark it with `backend: public-web`. `--backend public-web` limits to public web; `--backend <backend>` picks a site tool.
+   - A platform name or link only identifies the source; it never triggers install or login by itself.
+   - Snippets, page shells, comment counts and subtitle track lists are not body text, comments or subtitles; say which you have. If the user skips login, still deliver the public results already gathered.
 
 ```bash
 agent-reach channels                      # actions and params per channel
