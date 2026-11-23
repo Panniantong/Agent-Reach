@@ -16,7 +16,7 @@ import pytest
 
 from agent_reach.channels.web import _UA, WebChannel
 from agent_reach.runtime.dispatch import run_action
-from agent_reach.runtime.result import BAD_INPUT, RATE_LIMITED, UPSTREAM_BROKEN
+from agent_reach.runtime.result import BAD_INPUT, PLATFORM_BLOCKED, RATE_LIMITED, UPSTREAM_BROKEN
 
 _MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 
@@ -280,6 +280,44 @@ def test_read_rejects_high_confidence_antibot_pages(body):
             channel.read("https://example.com/protected")
 
     mock_open.assert_called_once()
+
+
+@pytest.mark.parametrize("jina_warning", ["", "Warning: This page maybe requiring CAPTCHA\n\n"])
+def test_wechat_verification_page_is_reported_as_blocked(jina_warning):
+    url = "https://mp.weixin.qq.com/s/example-article"
+    # 驗證頁使用去識別的範例連結，保留 Jina 實際回傳的格式。
+    body = (
+        f"Title: Weixin Official Accounts Platform\n\nURL Source: {url}\n\n"
+        f"{jina_warning}Markdown Content:\n\n"
+        "## 环境异常\n\n当前环境异常，完成验证后即可继续访问。\n\n"
+        "[去验证](https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha)\n"
+    )
+
+    with patch("urllib.request.urlopen", return_value=_resp(body.encode("utf-8"))):
+        result = run_action(WebChannel(), "read", {"target": url})
+
+    assert result["ok"] is False
+    assert result["error"]["code"] == PLATFORM_BLOCKED
+    assert result["items"] == []
+    assert [attempt["backend"] for attempt in result["meta"]["attempts"]] == ["jina"]
+
+
+def test_wechat_article_can_discuss_verification():
+    url = "https://mp.weixin.qq.com/s/example-article"
+    text = (
+        "這篇文章說明微信出現「当前环境异常，完成验证后即可继续访问。」的情況。\n"
+        "[驗證頁範例](https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha)"
+    )
+    body = (
+        f"Title: 微信驗證疑難排解\n\nURL Source: {url}\n\n"
+        f"Markdown Content:\n\n{text}\n"
+    )
+
+    with patch("urllib.request.urlopen", return_value=_resp(body.encode("utf-8"))):
+        result = run_action(WebChannel(), "read", {"target": url})
+
+    assert result["ok"] is True
+    assert result["items"][0]["text"] == text
 
 
 @pytest.mark.parametrize(

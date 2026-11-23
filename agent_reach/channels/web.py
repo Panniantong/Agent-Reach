@@ -10,9 +10,11 @@ import json
 import re
 import time
 import urllib.request
+from urllib.parse import urlsplit
 
 from agent_reach.runtime.result import (
     BAD_INPUT,
+    PLATFORM_BLOCKED,
     RATE_LIMITED,
     UPSTREAM_BROKEN,
     ReachError,
@@ -192,6 +194,15 @@ class WebChannel(Channel):
             raise ValueError(
                 f"Jina Reader response exceeds {_MAX_RESPONSE_BYTES} byte limit"
             )
+        if urlsplit(url).hostname == "mp.weixin.qq.com":
+            sample = body[:_ANTIBOT_SCAN_BYTES].decode("utf-8", errors="ignore")
+            # 一併核對頁首與驗證連結，避免誤判討論微信驗證的文章。
+            if (
+                sample.partition("\n")[0].strip() == "Title: Weixin Official Accounts Platform"
+                and "当前环境异常，完成验证后即可继续访问。" in sample
+                and "https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha" in sample
+            ):
+                raise ReachError(PLATFORM_BLOCKED, "WeChat returned a verification page instead of the article")
         if _is_antibot_page(body):
             raise RuntimeError(
                 "Jina Reader 返回了反爬验证页，未获取到目标内容；"
