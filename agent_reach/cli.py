@@ -34,8 +34,11 @@ def _configure_logging(verbose: bool = False):
 def main():
     _ensure_utf8_console()
     argv = sys.argv[1:]
-    verbose = any(a in ("-v", "--verbose") for a in argv)
-    argv = [a for a in argv if a not in ("-v", "--verbose")]
+    # Arguments after -- are literal values, including verbosity-looking queries.
+    options_end = argv.index("--") if "--" in argv else len(argv)
+    options = argv[:options_end]
+    verbose = any(a in ("-v", "--verbose") for a in options)
+    argv = [a for a in options if a not in ("-v", "--verbose")] + argv[options_end:]
     _configure_logging(verbose)
 
     from agent_reach.runtime import cli as unified

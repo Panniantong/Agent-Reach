@@ -49,6 +49,21 @@ def test_local_site_export_uses_the_unmodified_upstream_page_api(monkeypatch):
     assert module.read_text() == "// official API fixture"
 
 
+def test_site_export_reports_a_missing_bridge_without_reading_cookies(monkeypatch):
+    from agent_reach.backends import opencli
+    from agent_reach.runtime import bridge, run
+
+    monkeypatch.setattr(bridge, "status", lambda: {})
+    monkeypatch.setattr(run, "run_cmd", lambda *a, **k: pytest.fail("read cookies without a Bridge"))
+
+    with pytest.raises(ReachError) as caught:
+        opencli.export_site_cookies("local", "xiaohongshu.com")
+
+    assert caught.value.code == "NEED_SETUP"
+    assert "Bridge" in caught.value.message
+    assert "agent-reach browser setup" in caught.value.hint
+
+
 def test_automatic_reuse_copies_only_the_requested_site_and_reuses_cache(monkeypatch):
     from unittest.mock import Mock
 
@@ -71,13 +86,16 @@ def test_automatic_reuse_copies_only_the_requested_site_and_reuses_cache(monkeyp
     export.assert_called_once_with('daily','xiaohongshu.com')
 
 
-def test_saved_import_survives_an_hour_without_rereading_the_source(monkeypatch):
-    from agent_reach.runtime import session_reuse
+@pytest.mark.parametrize("bridge_available", [True, False])
+def test_saved_import_survives_an_hour_without_rereading_the_source(monkeypatch, bridge_available):
+    from agent_reach.runtime import bridge, session_reuse
 
     saved = {'source': 'daily', 'copied_cookies': 1, 'cookie_snapshot': 1,
              'at': '2020-01-01T00:00:00Z'}
     state.mutate(lambda data: data.setdefault('session_reuse', {}).__setitem__('xiaohongshu', saved))
     monkeypatch.setattr(browser, 'ensure_running', lambda: None)
+    if not bridge_available:
+        monkeypatch.setattr(bridge, "status", lambda: {})
     monkeypatch.setattr(session_reuse, '_source_cookies',
                         lambda *a: pytest.fail('reread the source just because time passed'))
     monkeypatch.setattr(cdp, 'call', lambda *a, **k: pytest.fail('overwrote the saved session'))
@@ -150,6 +168,36 @@ def test_unavailable_source_keeps_saved_destination_and_does_not_open_login(monk
     assert result['source']=='saved-profile' and result['copied_cookies']==0
 
 
+def test_explicit_import_without_a_source_login_fails_and_keeps_saved_state(monkeypatch):
+    from agent_reach.runtime import bridge, session_reuse
+    saved = {'source': 'daily', 'copied_cookies': 3, 'cookie_snapshot': 1, 'at': state.now()}
+    state.mutate(lambda data: data.setdefault('session_reuse', {}).__setitem__('xiaohongshu', saved))
+    monkeypatch.setattr(browser, 'ensure_running', lambda: None)
+    monkeypatch.setattr(bridge, 'require_running', lambda: {'ok': True})
+    monkeypatch.setattr(session_reuse, '_source_cookies', lambda *a: ([], 'saved-profile'))
+    monkeypatch.setattr(cdp, 'call', lambda *a, **k: pytest.fail('changed saved session'))
+    with pytest.raises(ReachError) as caught:
+        session_reuse.prepare('xiaohongshu', force=True)
+    assert caught.value.code == 'NEED_SETUP'
+    assert state.load()['session_reuse']['xiaohongshu'] == saved
+
+
+def test_missing_bridge_is_not_recorded_as_an_empty_site_session(monkeypatch):
+    from agent_reach.runtime import bridge, session_reuse
+
+    monkeypatch.setattr(browser, "ensure_running", lambda: None)
+    monkeypatch.setattr(bridge, "status", lambda: {})
+    monkeypatch.setattr(cdp, "call", lambda *a, **k: pytest.fail("changed saved session"))
+
+    with pytest.raises(ReachError) as caught:
+        session_reuse.prepare("xiaohongshu")
+
+    assert caught.value.code == "NEED_SETUP"
+    assert "Bridge" in caught.value.message
+    assert "agent-reach browser setup" in caught.value.hint
+    assert "xiaohongshu" not in state.load().get("session_reuse", {})
+
+
 def test_site_snapshot_expires_destination_only_cookies_and_preserves_other_sites(monkeypatch):
     from agent_reach.runtime import session_reuse
     monkeypatch.setattr(browser,'ensure_running',lambda:None)
@@ -202,6 +250,27 @@ def test_dispatch_worker_reuses_session_without_relocking_the_calling_thread(mon
     monkeypatch.setattr(run, 'run_cmd', lambda *a, **k: '[{"title":"real result shape"}]')
     result=dispatch.run_action(XiaoHongShuChannel(), 'search', {'query':'test','limit':1}, timeout=2)
     assert result['ok'], result.get('error')
+
+
+def test_dispatch_reports_missing_bridge_before_calling_the_site_backend(monkeypatch):
+    from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
+    from agent_reach.runtime import bridge, dispatch, run
+
+    monkeypatch.setattr(browser, "ensure_running", lambda: None)
+    monkeypatch.setattr(browser, "bound_context", lambda: "owned")
+    monkeypatch.setattr(bridge, "status", lambda: {})
+    monkeypatch.setattr(run, "run_cmd", lambda *a, **k: pytest.fail("called the site without a Bridge"))
+
+    result = dispatch.run_action(XiaoHongShuChannel(), "search", {"query": "test", "limit": 1},
+                                 timeout=2, only_backend="opencli")
+
+    assert not result["ok"]
+    assert result["error"]["code"] == "NEED_SETUP"
+    assert "agent-reach browser setup" in result["error"]["hint"]
+    assert result["meta"]["attempts"][0]["result"] == "NEED_SETUP"
+    assert "xiaohongshu" not in state.load().get("session_reuse", {})
+    health = state.load()["backend_health"]["xiaohongshu"]["search"]["opencli"]
+    assert health["code"] == "NEED_SETUP"
 
 
 def test_bili_reuses_only_site_cookies_through_upstream_writer_and_private_stdin(monkeypatch):

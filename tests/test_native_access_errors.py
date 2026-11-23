@@ -68,7 +68,8 @@ def test_youtube_bot_challenge_does_not_instruct_a_login(monkeypatch):
 
 def test_bilibili_subtitles_without_login_ask_for_login(monkeypatch, tmp_path):
     from agent_reach.channels import bilibili
-    monkeypatch.setattr(bilibili, "sessions_root", lambda: tmp_path)
+    from agent_reach.runtime import sessions
+    monkeypatch.setattr(sessions, "sessions_root", lambda: tmp_path)
     monkeypatch.setattr(bilibili, "_reuse_subtitle_login", lambda timeout: None)
     monkeypatch.setattr(bilibili, "_bvid", lambda target, timeout: "BV1")
     monkeypatch.setattr(bilibili, "_bili_json", lambda argv, timeout: {
@@ -79,21 +80,93 @@ def test_bilibili_subtitles_without_login_ask_for_login(monkeypatch, tmp_path):
     assert exc.value.code == "NEED_LOGIN"
     cred = tmp_path / "bili-cli" / ".bilibili-cli" / "credential.json"
     cred.parent.mkdir(parents=True)
-    cred.write_text("{}")
+    cred.write_text('{"sessdata":"test-session-cookie"}')
     with pytest.raises(ReachError) as exc:
         ch._cli_subtitle(target="https://www.bilibili.com/video/BV1", timeout=5)
     assert exc.value.code == "UPSTREAM_BROKEN"  # logged in: a real upstream failure stays one
 
 
-@pytest.mark.parametrize("cookies,code", [([], "NEED_LOGIN"), ([{"name": "li_at"}], "UPSTREAM_BROKEN")])
-def test_opencli_failure_without_the_site_login_cookie_asks_for_login(monkeypatch, cookies, code):
+@pytest.mark.parametrize("jar,code", [
+    ({"cookies": []}, "NEED_LOGIN"),
+    ({"cookies": [{"name": "li_at", "domain": ".linkedin.com"}]}, "UPSTREAM_BROKEN"),
+    ({"cookies": [{"name": "li_at", "domain": ".example.com"}]}, "NEED_LOGIN"),
+    (None, "UPSTREAM_BROKEN"),  # unreadable cookies are no proof of a logout
+])
+def test_opencli_failure_without_the_site_login_cookie_asks_for_login(monkeypatch, jar, code):
     from agent_reach.channels import _opencli_site, linkedin
     from agent_reach.runtime import browser, cdp
     def broken(*a, **k):
         raise ReachError("UPSTREAM_BROKEN", "OpenCLI: Error: Text not found: Jobs")
     monkeypatch.setattr(_opencli_site, "opencli_call", broken)
     monkeypatch.setattr(browser, "is_running", lambda: True)
-    monkeypatch.setattr(cdp, "cookies", lambda domain: cookies)
+    monkeypatch.setattr(cdp, "call", lambda method, *a, **k: jar)
     with pytest.raises(ReachError) as exc:
         linkedin.LinkedInChannel()._jobs(query="python", location=None, limit=2, timeout=5)
     assert exc.value.code == code
+
+
+@pytest.mark.parametrize("jar,code", [
+    ({"cookies": []}, "NEED_LOGIN"),
+    ({"cookies": [{"name": "sessionid", "domain": ".instagram.com"}]}, "UPSTREAM_BROKEN"),
+    (None, "UPSTREAM_BROKEN"),
+])
+def test_instagram_failure_without_a_session_cookie_asks_for_login(monkeypatch, jar, code):
+    from agent_reach.channels import _opencli_site, instagram
+    from agent_reach.runtime import browser, cdp
+    def broken(*a, **k):
+        raise ReachError("UPSTREAM_BROKEN", "Error: HTTP 404 - make sure you are logged in to Instagram")
+    monkeypatch.setattr(_opencli_site, "opencli_call", broken)
+    monkeypatch.setattr(browser, "is_running", lambda: True)
+    monkeypatch.setattr(cdp, "call", lambda method, *a, **k: jar)
+    with pytest.raises(ReachError) as exc:
+        instagram.InstagramChannel()._opencli_search(query="nasa", limit=2, timeout=5)
+    assert exc.value.code == code
+
+
+@pytest.mark.parametrize('backend', ['github-api', 'gh'])
+def test_github_repository_without_readme_keeps_metadata(monkeypatch, backend):
+    repository = {
+        'full_name': 'example/code-only',
+        'html_url': 'https://github.com/example/code-only',
+        'description': 'A repository without a README',
+    }
+
+    def get(url, **kwargs):
+        if url.endswith('/readme'):
+            if backend == 'gh':
+                raise CommandFailed('UPSTREAM_BROKEN', 'gh exited', stderr='gh: Not Found (HTTP 404)')
+            raise urllib.error.HTTPError(url, 404, 'Not Found', {}, None)
+        return json.dumps(repository).encode()
+
+    monkeypatch.setattr(github, 'http_request', get)
+    monkeypatch.setattr(github, 'run_cmd', lambda argv, **kw: get(argv[-1], **kw).decode())
+    out = run_action(github.GitHubChannel(), 'read', {'target': 'example/code-only'}, only_backend=backend)
+    assert out['ok'] is True
+    assert out['backend'] == backend
+    assert len(out['items']) == 1
+    assert out['items'][0]['title'] == repository['full_name']
+    assert out['items'][0]['text'] == repository['description']
+
+
+@pytest.mark.parametrize('status,headers,code', [
+    (404, {}, 'NOT_FOUND'),
+    (403, {}, 'UPSTREAM_BROKEN'),
+    (403, {'X-RateLimit-Remaining': '0'}, 'RATE_LIMITED'),
+    (429, {}, 'RATE_LIMITED'),
+])
+def test_github_missing_repo_and_readme_failures_stay_errors(monkeypatch, status, headers, code):
+    calls = []
+
+    def get(url, **kwargs):
+        calls.append(url)
+        # A missing repository must not be mistaken for an optional missing README.
+        if status == 404 or url.endswith('/readme'):
+            raise urllib.error.HTTPError(url, status, 'Denied', headers, None)
+        return json.dumps({'full_name': 'example/code-only'}).encode()
+
+    monkeypatch.setattr(github, 'http_request', get)
+    out = run_action(github.GitHubChannel(), 'read', {'target': 'example/code-only'}, only_backend='github-api')
+    assert out['ok'] is False
+    assert out['error']['code'] == code
+    assert out['items'] == []
+    assert len(calls) == (1 if status == 404 else 2)

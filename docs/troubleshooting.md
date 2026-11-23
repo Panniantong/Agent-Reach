@@ -52,7 +52,7 @@ Search-only acceptance is shown as search_ready, not proof that every action wor
 
 ## Skill not picked up by an AI
 
-`agent-reach skill` shows the one real copy of the instructions (`~/.agents/skills/agent-reach/SKILL.md`) and the links made for other AIs. An AI not covered automatically: `agent-reach skill link <its skills folder>`. On Windows, where links may not be allowed, a copy is made instead and refreshed by `agent-reach update`.
+`agent-reach skill` shows the one real copy of the instructions (`~/.agents/skills/agent-reach/SKILL.md`) and the links made for other AIs. An AI not covered automatically: `agent-reach skill link <its skills folder>`. To keep an AI from getting it user-wide (for example when you register skills per project), run `agent-reach skill unlink <its skills folder>`; setup and update then leave that folder alone, and `skill link` undoes it. On Windows, where links may not be allowed, a copy is made instead and refreshed by `agent-reach update`.
 
 ## Install, update and roll back
 
@@ -90,6 +90,16 @@ agent-reach configure xueqiu-cookie --stdin
 ```
 
 Only the `xueqiu_cookie` key is written. The format is `name=value; name2=value2`, and `xq_a_token` is the cookie Xueqiu's authenticated endpoints need. The session expires within hours; save a fresh string when `agent-reach doctor` reports Xueqiu again.
+
+## Browser port
+
+The Agent Reach browser listens on CDP port 9222 by default. If another tool already uses 9222 (another automation browser, a debugging Chrome), browser channels fail with `Port 9222 belongs to an unmanaged browser`. Move Agent Reach to a free port instead of closing that tool:
+
+```bash
+agent-reach configure browser-port 9333
+```
+
+The setting is kept across updates. If the Agent Reach browser is open, it closes and reopens on the new port the next time it is used.
 
 ## Still stuck
 

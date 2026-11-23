@@ -29,7 +29,7 @@ class BossChannel(Channel):
     login_url = "https://www.zhipin.com/web/user/?ka=header-login"
     session = "boss-agent-cli"
     session_home = False
-    login_argv = ("boss", "--data-dir", "{session}/.boss-agent", "--cdp-url", "http://127.0.0.1:9222", "login", "--cdp")
+    login_argv = ("boss", "--data-dir", "{session}/.boss-agent", "--cdp-url", "{cdp_url}", "login", "--cdp")
     legacy_state = (".boss-agent",)
     tools = ("boss-agent-cli",)
     prereqs = ("chrome",)

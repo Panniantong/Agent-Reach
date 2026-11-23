@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Xueqiu (雪球) — stock quotes, search, trending posts & hot stocks."""
 
+import html
 import http.cookiejar
 import json
 import re
@@ -121,11 +122,9 @@ def _get_json(url: str, config=None) -> Any:
 
 
 def _strip_html(text: str) -> str:
-    """Remove HTML tags and decode common entities."""
+    """Remove HTML tags and decode character references once."""
     text = re.sub(r"<[^>]+>", "", text)
-    for entity, char in (("&nbsp;", " "), ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">")):
-        text = text.replace(entity, char)
-    return text.strip()
+    return html.unescape(text).replace("\xa0", " ").strip()
 
 
 def _tencent_code(symbol: str) -> str:
@@ -134,6 +133,8 @@ def _tencent_code(symbol: str) -> str:
     if re.fullmatch(r"(SH|SZ|BJ)\d{6}", s):
         return s.lower()
     if re.fullmatch(r"\d{6}", s):
+        if s.startswith("920"):
+            return "bj" + s
         prefix = "sh" if s[0] in "69" else ("bj" if s[0] in "48" else "sz")
         return prefix + s
     if re.fullmatch(r"HK\d{1,5}", s):

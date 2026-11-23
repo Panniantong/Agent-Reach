@@ -56,8 +56,8 @@ def _get_json_with_urllib(url: str) -> Any:
     return json.loads(raw.decode("utf-8"))
 
 
-def _is_unexpected_tls_eof(error: BaseException) -> bool:
-    """Return whether an exception chain contains the retryable TLS EOF."""
+def _is_retryable_transport_error(error: BaseException) -> bool:
+    """Return whether an exception chain contains a timeout or retryable TLS EOF."""
     pending: list[BaseException] = [error]
     seen: set[int] = set()
     while pending:
@@ -65,6 +65,8 @@ def _is_unexpected_tls_eof(error: BaseException) -> bool:
         if id(current) in seen:
             continue
         seen.add(id(current))
+        if isinstance(current, TimeoutError):
+            return True
         if isinstance(current, ssl.SSLError) and not isinstance(
             current, ssl.SSLCertVerificationError
         ):
@@ -128,13 +130,13 @@ def _get_json_with_curl(url: str) -> Any:
 
 
 def _get_json(url: str) -> Any:
-    """Fetch JSON, retrying TLS EOF or a truncated HTTP response once via native curl."""
+    """Fetch JSON, retrying timeouts, TLS EOF or truncated HTTP once via native curl."""
     try:
         return _get_json_with_urllib(url)
     except Exception as exc:
         if isinstance(exc, ssl.SSLCertVerificationError):
             raise
-        if not isinstance(exc, http.client.IncompleteRead) and not _is_unexpected_tls_eof(exc):
+        if not isinstance(exc, http.client.IncompleteRead) and not _is_retryable_transport_error(exc):
             raise
         return _get_json_with_curl(url)
 

@@ -83,6 +83,9 @@ class XiaoHongShuChannel(Channel):
         if not host_matches(url, "xiaohongshu.com", "xhslink.com"):
             raise ReachError(BAD_INPUT, "target must be a full Xiaohongshu note link including xsec_token")
         rows = opencli_call("xiaohongshu", ["note", url], timeout=timeout, login_hint=_XHS_LOGIN_HINT)
+        # OpenCLI 2.0 wraps the rows as {"ok": true, "data": [...]}; older versions return the list.
+        if isinstance(rows, dict) and isinstance(rows.get("data"), list):
+            rows = rows["data"]
         if isinstance(rows, list) and rows and all(isinstance(r, dict) and "field" in r and "value" in r for r in rows):
             note = {r["field"]: r["value"] for r in rows}
             note["url"] = url

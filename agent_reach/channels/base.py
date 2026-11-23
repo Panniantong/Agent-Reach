@@ -105,6 +105,18 @@ class Channel(ABC):
         """
         return None
 
+    def recover_login(self, timeout: float) -> bool:
+        """Last resort when the native login exits 0 but saved no credential.
+
+        Upstream CLIs occasionally report a completed login and still write an
+        empty credential file. Channels that can rebuild one from the local
+        browser session return True after doing so; everyone else stays False.
+        """
+        return False
+
+    #: Explanation shown when the native login claims success but saved nothing.
+    login_upstream_hint: str = ""
+
     @abstractmethod
     def can_handle(self, url: str) -> bool:
         """Check if this channel can handle this URL."""

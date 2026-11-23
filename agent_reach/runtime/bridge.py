@@ -10,6 +10,8 @@ import time
 import urllib.request
 from pathlib import Path
 
+from agent_reach.utils.process import windows_hidden_kwargs
+
 from . import tools
 from .result import NEED_SETUP, ReachError
 
@@ -53,13 +55,22 @@ def require_compatible() -> dict:
     return current
 
 
+def require_running() -> dict:
+    """Distinguish an unavailable Bridge from a site with no saved cookies."""
+    current = require_compatible()
+    if not current:
+        raise ReachError(NEED_SETUP, "OpenCLI Bridge is not running; the site login could not be inspected",
+                         hint="Run agent-reach browser setup to reconnect the Bridge, then retry.")
+    return current
+
+
 def start():
     """Return a child handle only when Reach started this process."""
     argv, _ = launch_spec()
     if require_compatible():
         return None
     proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL)
+                            stderr=subprocess.DEVNULL, **windows_hidden_kwargs())
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
         current = require_compatible()

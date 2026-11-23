@@ -90,7 +90,41 @@ def test_download_failure_falls_back_to_system_chrome(home, monkeypatch):
     monkeypatch.setattr(browser, "_system_chrome", lambda: "/system/chrome")
     assert browser.ensure_chrome() == "/system/chrome"
     assert browser._load_state()["backend"] == "chrome"
-    assert browser._load_state()["fallback_reason"]
+    assert browser._load_state()["fallback_reason"] == "TIMEOUT: download timeout"
+
+
+def test_download_timeout_without_system_chrome_keeps_timeout_code(home, monkeypatch):
+    from agent_reach.backends import cloak
+    from agent_reach.runtime.result import ReachError
+    def fail():
+        raise ReachError("TIMEOUT", "download timeout")
+    monkeypatch.setattr(cloak, "setup", fail)
+    monkeypatch.setattr(browser, "_system_chrome", lambda: None)
+    with pytest.raises(ReachError) as err:
+        browser.ensure_chrome()
+    assert err.value.code == "TIMEOUT"
+    assert "download timeout" in err.value.message
+
+
+def test_cloak_setup_preserves_underlying_timeout(home, monkeypatch):
+    from agent_reach.backends import cloak
+    from agent_reach.runtime import tools
+    from agent_reach.runtime.result import TIMEOUT, ReachError
+    monkeypatch.setattr(tools, "ensure", lambda name: None)
+    monkeypatch.setattr(tools, "resolve", lambda name: "/tmp/cloakbrowser")
+    monkeypatch.setattr(tools, "install_env", lambda: {})
+    calls = {"n": 0}
+
+    def run_cmd(argv, **kwargs):
+        calls["n"] += 1
+        raise ReachError(TIMEOUT, "cloakbrowser did not finish within 180s")
+
+    monkeypatch.setattr("agent_reach.runtime.run.run_cmd", run_cmd)
+    with pytest.raises(ReachError) as err:
+        cloak.setup()
+    assert err.value.code == TIMEOUT
+    assert "cloakbrowser did not finish within 180s" in err.value.message
+    assert calls["n"] == 1
 
 
 def test_clear_site_expires_only_that_sites_cookies(home, monkeypatch):

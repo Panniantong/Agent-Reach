@@ -249,10 +249,13 @@ def download_audio(url: str, out_dir: Path) -> Path:
     _assert_safe_public_url(url)
     import sys
 
+    from agent_reach.channels.youtube import ytdlp_tls_args
+
     template = out_dir / "source.%(ext)s"
     _run(
         [
             sys.executable, "-m", "yt_dlp",
+            *ytdlp_tls_args(),
             "-x",
             "--audio-format",
             "m4a",

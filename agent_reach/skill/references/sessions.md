@@ -18,7 +18,7 @@
 2. 复制成功后一直复用保存的会话，不按时间重新复制。Cookie 在不代表登录有效，以真实动作结果为准。
 3. 用户 Chrome 没连扩展时，不能承诺自动复用，也不能据此认定用户没登录；此时用 Reach 已保存的会话。
 4. 本机有多个浏览器都登录了该站时：`agent-reach browser profiles` 列出来源，`agent-reach browser use <ID>` 选定一个，不随机切换。
-5. `agent-reach login <渠道> --import-existing` 主动重新复制一次该站登录，不打开窗口。
+5. `agent-reach login <渠道> --import-existing` 主动重新复制一次该站登录，不打开窗口。没找到可复制的登录，或 OpenCLI Bridge 没在运行时，返回 `NEED_SETUP`，已保存的会话不变。
 6. 用户本人在专用窗口里登录过，或执行过 `logout` / `remove`，就不再自动复制，避免已退出的登录复活。
 
 ## 需要本人登录时

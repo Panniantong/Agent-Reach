@@ -10,7 +10,7 @@ Previous Reach-owned per-site snapshots are merged once without replacing newer 
 
 An imported local site's Cookie snapshot replaces that site's cookies, expiring destination-only leftovers while preserving every other site. Failed imports attempt a rollback and leave the saved snapshot intact. Selecting another source preserves explicit logout blocks and manually selected dedicated logins.
 
-This candidate installs official OpenCLI 1.8.7 for a new installation; 1.8.8 is excluded because its unchanged Xiaohongshu default-filter path failed local acceptance. OpenCLI 2.x has not completed business acceptance here. Existing user installations require explicit `--allow-upgrade` before an incompatible copy is replaced. Reach does not edit OpenCLI's source files.
+New installations get official OpenCLI 2.0.3, which passed the same local acceptance as 1.8.7 on Twitter, Xiaohongshu, Facebook and BOSS and, unlike 1.8.7, does not depend on English page text for LinkedIn job search. 1.8.7 remains accepted for existing installations; 1.8.8 is excluded because its unchanged Xiaohongshu default-filter path failed local acceptance. Existing user installations require explicit `--allow-upgrade` before an incompatible copy is replaced. Reach does not edit OpenCLI's source files.
 
 CloakBrowser's wrapper and browser binary have separate licenses; see [upstream binary license](https://github.com/CloakHQ/CloakBrowser/blob/main/BINARY-LICENSE.md). Do not describe the binary as MIT/open-source or promise unrestricted redistribution.
 

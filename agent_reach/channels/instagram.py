@@ -12,6 +12,7 @@ class InstagramChannel(OpenCLISiteChannel):
     domains = ("instagram.com", "instagr.am")
     usage = "opencli instagram search/profile/user/explore -f yaml"
     login_hint = "instagram.com"
+    login_cookie = "sessionid"
 
     level = "experimental"
     login_url = "https://www.instagram.com/accounts/login/"

@@ -79,6 +79,8 @@ def _api_get(path: str, timeout: float, accept: str = "application/vnd.github+js
     try:
         return http_request(f"{_API}{path}", timeout=timeout, headers=headers)
     except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise ReachError(NOT_FOUND, "GitHub API returned HTTP 404") from None
         if exc.code == 429 or (exc.code == 403 and (
             exc.headers.get("X-RateLimit-Remaining") == "0" or exc.headers.get("Retry-After")
         )):

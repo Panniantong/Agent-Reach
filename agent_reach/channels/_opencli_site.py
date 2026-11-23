@@ -50,10 +50,15 @@ class OpenCLISiteChannel(Channel):
         return items
 
     def _logged_out(self) -> bool:
-        """True only when the dedicated browser is running and lacks this site's login cookie."""
+        """True only when the dedicated browser's cookies were read and lack this site's login cookie."""
         if not self.login_cookie:
             return False
         from agent_reach.runtime import browser, cdp
         if not browser.is_running():
             return False
-        return not any(c.get("name") == self.login_cookie for d in self.domains for c in cdp.cookies(d))
+        jar = cdp.call("Storage.getCookies")
+        if jar is None:
+            return False  # cookies that could not be read are no proof of a logout
+        return not any(c.get("name") == self.login_cookie
+                       and any(cdp.domain_matches(c.get("domain", ""), d) for d in self.domains)
+                       for c in jar.get("cookies", []))
