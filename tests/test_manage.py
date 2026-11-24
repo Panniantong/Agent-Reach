@@ -499,6 +499,26 @@ def test_doctor_states(env):
     assert _status("bili") == "unverified"
 
 
+def test_check_does_not_verify_a_tool_version_installed_during_the_probe(env, monkeypatch):
+    from agent_reach.runtime import dispatch
+
+    manage.add("bili")
+    original = dispatch.run_action
+
+    def probe_then_update(*args, **kwargs):
+        result = original(*args, **kwargs)
+        state.mutate(lambda data: data["tools"]["bili-cli"].__setitem__("version", "2.0.0"))
+        return result
+
+    with monkeypatch.context() as patch:
+        patch.setattr(dispatch, "run_action", probe_then_update)
+        assert manage.run_checks(["bili"])["ok"]
+    assert _status("bili") == "unverified"
+
+    assert manage.run_checks(["bili"])["ok"]
+    assert _status("bili") == "ready"
+
+
 def test_doctor_reports_missing_tool_and_shows_versions(env):
     manage.add("bili")
     assert {"tool": "bili-cli", "owner": "agent-reach", "scope": "private", "version": "1.2.3"} in manage.doctor()["tools"]

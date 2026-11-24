@@ -157,10 +157,13 @@ def run_checks(names: Optional[List[str]] = None, timeout: float = 60.0, search_
     if not math.isfinite(timeout) or timeout <= 0:
         raise ReachError(BAD_INPUT, "timeout must be finite and positive")
     results = []
+    signatures = {}
     for ch in selected:
         for action in ch.actions:
             if action.live_test is None or (search_only and action.name not in {"search", "jobs"}):
                 continue
+            # Attribute evidence to the configuration that the probe began with.
+            signatures[(ch.name, action.name)] = fingerprint(ch.name)
             # Search acceptance exercises the same route as an agent command, once.
             backends = [(None, None)] if search_only else action.backends
             for label, _ in backends:
@@ -185,7 +188,6 @@ def run_checks(names: Optional[List[str]] = None, timeout: float = 60.0, search_
         by_action[key] = by_action.get(key, False) or r["passed"]
         if not r["passed"] and key not in codes:
             codes[key] = r["error"]["code"]
-    signatures = {ch.name: fingerprint(ch.name) for ch in selected}
     def save_checks(data):
         for ch in selected:
             actions = {a: ok for (c, a), ok in by_action.items() if c == ch.name}
@@ -199,7 +201,7 @@ def run_checks(names: Optional[List[str]] = None, timeout: float = 60.0, search_
                     best = next((r for r in matches if r["verified"]), next((r for r in matches if r["passed"]), matches[-1]))
                     evidence[action] = {"backend": best["backend"], "at": state.now(),
                                         "item_count": best["item_count"], "verified": best["verified"],
-                                        "fingerprint": signatures[ch.name], "access": best.get("access")}
+                                        "fingerprint": signatures[(ch.name, action)], "access": best.get("access")}
                 data["checks"][ch.name] = {"at": state.now(), "actions": {**previous, **actions},
                                            "codes": {**{a: code for a, code in old.get("codes", {}).items() if a not in actions}, **failed},
                                            "previous": previous, "scope": "search" if search_only else "all",
