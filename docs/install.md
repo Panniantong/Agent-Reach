@@ -56,6 +56,7 @@ It upgrades the program, every added channel's tools and the skill. Tell the use
 
 - The user just says what they want, e.g. "add Xiaohongshu" → `agent-reach add <channel>`; "remove V2EX" → `agent-reach remove <channel>`.
 - Keys are entered by the user, e.g. a Groq key for Xiaoyuzhou transcription: `agent-reach configure groq-key`.
+- Remove a saved Groq, OpenAI, or GitHub credential with `agent-reach configure <key> --unset`. For example, use `agent-reach configure groq-key --unset` when retiring a Groq key. Clear any copy set in your shell environment separately.
 - Everything else (usage, login, browser) is covered by the installed skill.
 
 Problems and rolling back: [troubleshooting.md](troubleshooting.md).
