@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -364,6 +365,17 @@ def test_update_from_a_non_uv_install_moves_itself_to_uv(env, monkeypatch, tmp_p
     assert calls[2] == [str(exe), "setup"]  # no state yet: the new copy sets itself up
     assert out["upgraded"] and out["installation_report"] == {"markdown": "r"}
     assert "log in to x" in out["user_actions"]
+
+
+def test_finish_update_uses_utf8_for_the_child_report(monkeypatch):
+    monkeypatch.setenv("PYTHONIOENCODING", "cp1252")
+    command = [
+        sys.executable,
+        "-c",
+        r'print("{\"ok\": true, \"result\": {\"message\": \"\u5b89\u88c5\u6210\u529f\"}}")',
+    ]
+
+    assert manage._finish_update(command) == {"message": "安装成功"}
 
 
 def test_migration_suggests_channels_from_the_old_config(env):
