@@ -838,14 +838,17 @@ def sync() -> dict:
     `user_actions` are plain sentences for what the user must do now.
     """
     migration = migrate() if not state.exists() else None
-    data = state.load()
     known = {c.name for c in _channels()}
-    dropped = sorted(set(data["channels"]) - known)
-    for n in dropped:
-        data["channels"].pop(n, None)
-        data["checks"].pop(n, None)
-    data["removed_defaults"] = [n for n in data["removed_defaults"] if n in known]
-    state.save(data)
+
+    def drop_retired(data):
+        dropped = sorted(set(data["channels"]) - known)
+        for name in dropped:
+            data["channels"].pop(name, None)
+            data["checks"].pop(name, None)
+        data["removed_defaults"] = [name for name in data["removed_defaults"] if name in known]
+        return data, dropped
+
+    data, dropped = state.mutate(drop_retired)
     actions = [f"The {n} channel is no longer part of Agent Reach and was removed." for n in dropped]
     added = [c for c in _channels() if is_added(c, data)]
     synced, problems, failed = [], [], set()

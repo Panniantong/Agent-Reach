@@ -312,6 +312,28 @@ def test_sync_upgrades_prunes_drops_and_reports(env):
     assert any("log in to bili" in a for a in out["user_actions"]), "a login that worked before and now fails"
 
 
+def test_sync_prunes_retired_channels_under_the_state_lock(env, monkeypatch):
+    from agent_reach.runtime.browser_binding import execution_lock
+
+    state.mutate(lambda data: data["channels"].__setitem__("retired", {}))
+    original = state.save
+
+    def save(data):
+        if "retired" not in data["channels"]:
+            # Probe the first save after pruning, before another command could
+            # write state that would be overwritten by this snapshot.
+            monkeypatch.setattr(state, "save", original)
+            with pytest.raises(ReachError) as locked:
+                with execution_lock("reach-state-write"):
+                    pass
+            assert locked.value.code == "BUSY"
+        original(data)
+
+    monkeypatch.setattr(state, "save", save)
+    assert manage.sync()["dropped_channels"] == ["retired"]
+    assert "retired" not in state.load()["channels"]
+
+
 def test_sync_does_not_ask_to_log_in_again_when_never_logged_in(env):
     manage.add("bili")
     data = state.load()
