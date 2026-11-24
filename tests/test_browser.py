@@ -268,3 +268,51 @@ def test_restore_failure_preserves_the_original_snapshot(home, monkeypatch):
     with pytest.raises(ReachError,match='retained'):
         browser.restore_session()
     assert path.read_text()==original
+
+
+# ── which processes use our profile: the proof that the browser on our port is ours ──
+
+
+def test_windows_profile_lookup_passes_the_flag_out_of_band_and_reads_pids(home, monkeypatch):
+    from types import SimpleNamespace
+
+    seen = {}
+
+    def fake_run(argv, **kwargs):
+        seen.update(argv=argv, env=kwargs["env"])
+        return SimpleNamespace(stdout=f"4242\r\n{os.getpid()}\r\n\r\n4243\r\n")
+
+    monkeypatch.setattr(browser.subprocess, "run", fake_run)
+    flag = "--user-data-dir=C:/Users/名 字/.agent-reach/browser/profile"
+
+    assert browser._windows_profile_pids(flag) == [4242, 4243]  # our own pid is not evidence
+    assert seen["env"]["REACH_PROFILE_FLAG"] == flag
+    assert not any("名" in part or '"' in part for part in seen["argv"]), "nothing to quote or re-encode"
+
+
+def test_windows_profile_lookup_failure_proves_nothing(home, monkeypatch):
+    def unavailable(argv, **kwargs):
+        raise OSError("powershell is missing")
+
+    monkeypatch.setattr(browser.subprocess, "run", unavailable)
+    assert browser._windows_profile_pids("--user-data-dir=x") == []
+
+
+@pytest.mark.skipif(os.name != "nt", reason="looks up real Windows processes")
+def test_windows_finds_processes_started_with_exactly_our_profile(home, monkeypatch, tmp_path):
+    import subprocess
+    import sys
+
+    profile = tmp_path / "名 字" / "profile"  # a space and non-ASCII: quoted on the command line
+    monkeypatch.setattr(browser, "profile_dir", lambda: profile)
+    idle = [sys.executable, "-c", "import time; time.sleep(120)"]
+    ours = subprocess.Popen(idle + [f"--user-data-dir={profile}"])
+    other = subprocess.Popen(idle + [f"--user-data-dir={profile}-before-cloak-1"])
+    try:
+        pids = browser._profile_pids()
+    finally:
+        for proc in (ours, other):
+            proc.kill()
+            proc.wait(10)
+    assert ours.pid in pids
+    assert other.pid not in pids, "a longer path that merely starts with ours is another profile"

@@ -598,6 +598,12 @@ def ensure_running(context: Optional[str] = None) -> None:
         with start_lock():
             if can_load_extension() and is_running() and not watcher_running():
                 stop()  # only a verified Reach-owned orphan may be replaced
+            elif is_running() and not watcher_running():
+                # Windows Chrome fallback: the watcher died (killed, crashed) while our browser
+                # stayed open. Adopt it instead of failing every query; the new watcher brings
+                # the Bridge and the idle timer back.
+                _require_owned()
+                _spawn_watcher()
             if not is_running():
                 _launch("about:blank")
             if wait_for(ready, _remaining_start_wait()):
@@ -643,15 +649,40 @@ def open_url(url: str) -> None:
         pass
 
 
+# Prints the pid of every process whose command line carries $env:REACH_PROFILE_FLAG as a
+# whole argument (followed by a space, a closing quote or the end). The flag travels in
+# the environment so a non-ASCII profile path survives, and the script holds no double
+# quote so it needs no escaping on the way to powershell.exe.
+_WINDOWS_PROFILE_PIDS = (
+    "$flag = [regex]::Escape($env:REACH_PROFILE_FLAG) + '(?=[\\s' + [char]34 + ']|$)'; "
+    "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match $flag } | "
+    "ForEach-Object { $_.ProcessId }"
+)
+
+
+def _windows_profile_pids(flag: str) -> List[int]:
+    """Windows has no `ps`: ask PowerShell which processes were started with `flag`."""
+    powershell = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+    try:
+        out = subprocess.run(
+            [str(powershell), "-NoProfile", "-NonInteractive", "-Command", _WINDOWS_PROFILE_PIDS],
+            capture_output=True, text=True, timeout=20, stdin=subprocess.DEVNULL,
+            env={**os.environ, "REACH_PROFILE_FLAG": flag}, **windows_hidden_kwargs(),
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return []  # ownership stays unproven; never guess
+    return [int(pid) for pid in out.split() if pid.isdigit() and int(pid) != os.getpid()]
+
+
 def _profile_pids() -> List[int]:
     """Processes started with our --user-data-dir (Chrome and its helpers)."""
+    flag = f"--user-data-dir={profile_dir()}"
     if sys.platform == "win32":
-        return []
+        return _windows_profile_pids(flag)
     try:
         out = subprocess.run(["ps", "-axww", "-o", "pid=,command="], capture_output=True, text=True, timeout=10).stdout
     except (OSError, subprocess.TimeoutExpired):
         return []
-    flag = f"--user-data-dir={profile_dir()}"
     pids = []
     for line in out.splitlines():
         pid, _, cmd = line.strip().partition(" ")

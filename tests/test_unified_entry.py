@@ -621,6 +621,48 @@ def test_browser_left_open_without_watcher_is_reopened_with_extension(fake_brows
     assert fake_browser["launches"] == 2
 
 
+def _orphan_the_windows_fallback_browser(fake_browser, monkeypatch):
+    """System Chrome on Windows is its own process: it stays open when its watcher is killed."""
+    from agent_reach.runtime import browser
+
+    browser.setup()
+    monkeypatch.setattr(browser, "can_load_extension", lambda: False)
+    monkeypatch.setattr(browser, "watcher_running", lambda: fake_browser["watched"])
+    fake_browser["watched"] = False
+    fake_browser["contexts"].remove("dedicated")  # the Bridge died with the watcher
+    spawned = []
+
+    def spawn_watcher():
+        spawned.append(True)
+        fake_browser["watched"] = True
+        fake_browser["contexts"].append("dedicated")  # a new watcher restarts the Bridge
+
+    monkeypatch.setattr(browser, "_spawn_watcher", spawn_watcher)
+    return spawned
+
+
+def test_windows_fallback_adopts_its_own_browser_after_the_watcher_died(fake_browser, monkeypatch):
+    from agent_reach.runtime.browser_binding import environment
+
+    spawned = _orphan_the_windows_fallback_browser(fake_browser, monkeypatch)
+    launches = fake_browser["launches"]
+    assert environment("reddit") ["OPENCLI_PROFILE"] == "dedicated"
+    assert spawned == [True]
+    assert fake_browser["launches"] == launches, "the open browser is adopted, not replaced"
+
+
+def test_windows_fallback_never_adopts_a_browser_it_cannot_prove_is_its_own(fake_browser, monkeypatch):
+    from agent_reach.runtime import browser
+    from agent_reach.runtime.browser_binding import environment
+
+    spawned = _orphan_the_windows_fallback_browser(fake_browser, monkeypatch)
+    monkeypatch.setattr(browser, "_profile_pids", lambda: [])  # another program's browser on our port
+    with pytest.raises(ReachError) as info:
+        environment("reddit")
+    assert info.value.code == "NEED_SETUP" and "unmanaged" in str(info.value)
+    assert spawned == []
+
+
 def test_login_opens_site_in_dedicated_browser(capsys, monkeypatch, fake_browser):
     class BrowserChannel(FakeChannel):
         name = "web2"
