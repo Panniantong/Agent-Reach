@@ -331,6 +331,28 @@ def test_update_check_compares_versions_and_refreshes_the_cache(monkeypatch, lat
     assert (update_notice.notice() is not None) is available
 
 
+def test_update_check_returns_live_result_when_cache_path_is_unsafe(monkeypatch, tmp_path):
+    elsewhere = tmp_path / "unrelated.json"
+    elsewhere.write_text("keep me", encoding="utf-8")
+    state.root().mkdir(parents=True, exist_ok=True)
+    try:
+        update_notice.cache_path().symlink_to(elsewhere)
+    except (NotImplementedError, OSError):
+        pytest.skip("symlink creation is unavailable")
+
+    monkeypatch.setattr(manage, "__version__", "2.0.0")
+    monkeypatch.setattr(
+        update_notice, "fetch_latest", lambda **kwargs: {"latest": "2.0.1", "notes": "n"}
+    )
+
+    result = manage.update_check()
+
+    assert result["update_available"] is True
+    assert result["latest"] == "2.0.1"
+    assert update_notice.cache_path().is_symlink()
+    assert elsewhere.read_text(encoding="utf-8") == "keep me"
+
+
 def test_upgrade_reinstalls_the_release_with_uv():
     cmd = manage.upgrade_command("2.0.1")
     assert cmd[:4] == ["uv", "tool", "install", "--force"] and cmd[-1].endswith("/v2.0.1.zip")

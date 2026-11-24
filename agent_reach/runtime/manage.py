@@ -18,7 +18,7 @@ from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 from agent_reach import __version__
-from agent_reach.utils.paths import home_dir
+from agent_reach.utils.paths import PrivatePathError, home_dir
 
 from . import state, tools, update_notice
 from .result import BAD_INPUT, NEED_SETUP, UPSTREAM_BROKEN, ReachError
@@ -779,7 +779,7 @@ def update_check() -> dict:
         raise ReachError(UPSTREAM_BROKEN, f"could not reach GitHub: {exc}") from None
     try:
         update_notice.write_cache(rel)
-    except OSError:
+    except (OSError, PrivatePathError):
         pass
     return {
         "current": __version__,
