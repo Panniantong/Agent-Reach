@@ -330,7 +330,11 @@ def ensure_chrome(*, retry_cloak: bool = False) -> str:
     from .result import NEED_SETUP, ReachError
 
     selected = chrome_binary()
-    if selected and _load_state().get("backend") and not retry_cloak:
+    state = _load_state()
+    backend = state.get("backend")
+    launcher = state.get("launcher_python")
+    launcher_ready = backend != "cloakbrowser" or (launcher and Path(launcher).is_file())
+    if selected and backend and launcher_ready and not retry_cloak:
         return selected
     from agent_reach.backends import cloak
     try:

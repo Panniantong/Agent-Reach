@@ -73,12 +73,32 @@ def test_ensure_browser_prefers_cloak_and_reuses_its_install(home, monkeypatch, 
     from agent_reach.backends import cloak
     binary = tmp_path / "CloakChromium"
     binary.touch()
-    install = Mock(return_value={"executable": str(binary), "python": "/private/python"})
+    python = tmp_path / "python"
+    python.touch()
+    install = Mock(return_value={"executable": str(binary), "python": str(python)})
     monkeypatch.setattr(cloak, "setup", install)
     monkeypatch.setattr(browser, "_system_chrome", lambda: "/system/chrome")
     assert browser.ensure_chrome() == str(binary)
     assert browser.ensure_chrome() == str(binary)
     assert install.call_count == 1 and browser._load_state()["backend"] == "cloakbrowser"
+
+
+@pytest.mark.parametrize("launcher", ["missing", None])
+def test_ensure_browser_repairs_missing_cloak_launcher(home, monkeypatch, tmp_path, launcher):
+    from unittest.mock import Mock
+
+    from agent_reach.backends import cloak
+    binary = tmp_path / "CloakChromium"
+    binary.touch()
+    python = tmp_path / "new-python"
+    python.touch()
+    old_python = str(tmp_path / "deleted-python") if launcher else None
+    browser.update_state(backend="cloakbrowser", executable=str(binary), launcher_python=old_python)
+    install = Mock(return_value={"executable": str(binary), "python": str(python)})
+    monkeypatch.setattr(cloak, "setup", install)
+    assert browser.ensure_chrome() == str(binary)
+    install.assert_called_once_with()
+    assert browser._load_state()["launcher_python"] == str(python)
 
 
 def test_download_failure_falls_back_to_system_chrome(home, monkeypatch):
