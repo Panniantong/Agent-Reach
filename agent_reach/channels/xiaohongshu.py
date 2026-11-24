@@ -72,6 +72,7 @@ class XiaoHongShuChannel(Channel):
 
     level = "optional"
     login_url = "https://www.xiaohongshu.com/explore"
+    domains = _NOTE_HOSTS
     tools = ("opencli",)
     prereqs = ("node", "chrome")
 

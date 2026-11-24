@@ -130,3 +130,33 @@ def test_opencli_call_uses_the_channel_binding_for_another_site(monkeypatch):
 
     assert seen["binding"] == "xiaohongshu"
     assert seen["argv"][:2] == ["opencli", "rednote"]
+
+
+def test_site_domains_include_rednote_for_session_reuse_and_cleanup(monkeypatch):
+    from agent_reach.backends import opencli
+    from agent_reach.runtime import browser, cdp, manage, session_reuse
+
+    assert manage.site_domains(XiaoHongShuChannel()) == ["xiaohongshu.com", "rednote.com"]
+
+    monkeypatch.setattr(browser, "ensure_running", lambda: None)
+    monkeypatch.setattr(browser, "save_session", lambda: None)
+    monkeypatch.setattr(browser, "connected_contexts", lambda: ["daily", "owned"])
+    monkeypatch.setattr(browser, "bound_context", lambda: "owned")
+    monkeypatch.setattr(
+        opencli,
+        "export_site_cookies",
+        lambda profile, domain: (
+            [{"name": "web_session", "value": "rn", "domain": ".rednote.com", "expirationDate": 9999999999}]
+            if domain == "rednote.com"
+            else []
+        ),
+    )
+    calls = []
+    monkeypatch.setattr(cdp, "call", lambda method, params=None: calls.append((method, params)) or {})
+
+    result = session_reuse.prepare("xiaohongshu")
+
+    assert result["source"] == "daily"
+    assert result["copied_cookies"] == 1
+    applied = next(params["cookies"] for method, params in calls if method == "Storage.setCookies")
+    assert any(c["name"] == "web_session" and c["domain"] == ".rednote.com" for c in applied)

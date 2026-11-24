@@ -65,16 +65,19 @@ def test_site_export_reports_a_missing_bridge_without_reading_cookies(monkeypatc
 
 
 def test_automatic_reuse_copies_only_the_requested_site_and_reuses_cache(monkeypatch):
-    from unittest.mock import Mock
+    from unittest.mock import Mock, call
 
     from agent_reach.backends import opencli
     from agent_reach.runtime import session_reuse
     monkeypatch.setattr(browser, 'ensure_running', lambda: None)
     monkeypatch.setattr(browser, 'connected_contexts', lambda: ['daily', 'owned'])
     monkeypatch.setattr(browser, 'bound_context', lambda: 'owned')
-    export = Mock(return_value=[{'name':'sid','value':'test','domain':'.xiaohongshu.com','expirationDate':9999999999,'sameSite':'lax'},
-                                {'name':'foreign','value':'never-copy','domain':'other.test'},
-                                {'name':'expired','value':'never-copy','domain':'.xiaohongshu.com','expirationDate':1}])
+    export = Mock(side_effect=lambda profile, domain: (
+        [{'name':'sid','value':'test','domain':'.xiaohongshu.com','expirationDate':9999999999,'sameSite':'lax'},
+         {'name':'foreign','value':'never-copy','domain':'other.test'},
+         {'name':'expired','value':'never-copy','domain':'.xiaohongshu.com','expirationDate':1}]
+        if domain == 'xiaohongshu.com' else []
+    ))
     monkeypatch.setattr(opencli, 'export_site_cookies', export)
     calls=[]
     monkeypatch.setattr(cdp, 'call', lambda method, params=None: calls.append((method,params)) or {})
@@ -83,7 +86,7 @@ def test_automatic_reuse_copies_only_the_requested_site_and_reuses_cache(monkeyp
     cookie=next(params['cookies'][0]for method,params in calls if method=='Storage.setCookies')
     assert cookie['name']=='sid' and cookie['sameSite']=='Lax' and cookie['expires']==9999999999
     assert session_reuse.prepare('xiaohongshu')==result
-    export.assert_called_once_with('daily','xiaohongshu.com')
+    assert export.call_args_list == [call('daily', 'xiaohongshu.com'), call('daily', 'rednote.com')]
 
 
 @pytest.mark.parametrize("bridge_available", [True, False])
@@ -120,7 +123,7 @@ def test_explicit_import_can_refresh_a_saved_snapshot(monkeypatch):
 
     result = session_reuse.prepare('xiaohongshu', force=True)
 
-    source.assert_called_once_with('xiaohongshu', ['xiaohongshu.com'])
+    source.assert_called_once_with('xiaohongshu', ['xiaohongshu.com', 'rednote.com'])
     call.assert_any_call('Storage.setCookies', {'cookies': incoming})
     assert result['copied_cookies'] == 1 and result['cookie_snapshot'] == 1
 
