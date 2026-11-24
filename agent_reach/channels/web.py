@@ -7,6 +7,7 @@ search / fetch should use those first.
 
 import http.client
 import json
+import os
 import re
 import time
 import urllib.request
@@ -27,6 +28,17 @@ _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 _MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 _ANTIBOT_SCAN_BYTES = 4096
 _EXA_MCP = "https://mcp.exa.ai/mcp"
+
+
+def _exa_headers() -> dict:
+    """Exa reads a key from x-api-key; without one the hosted MCP is keyless."""
+    headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+    key = os.environ.get("EXA_API_KEY", "").strip()
+    if key:
+        headers["x-api-key"] = key
+    return headers
+
+
 _EXA_HEADER_RE = re.compile(r"^(Title|URL|Published|Author):\s*(.*)$")
 _EXA_LIMIT_RE = re.compile(
     r"\b429\b|rate[ _-]?limit|too many requests|\bquota\b|"
@@ -75,7 +87,7 @@ def _public_url(target: str) -> str:
 
 
 def _exa_call(tool: str, arguments: dict, timeout: float) -> str:
-    """Call one tool on Exa's free hosted MCP (no key) and return its text."""
+    """Call one tool on Exa's hosted MCP, keyed when EXA_API_KEY is set."""
     body = json.dumps(
         {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": tool, "arguments": arguments}}
     ).encode("utf-8")
@@ -84,7 +96,7 @@ def _exa_call(tool: str, arguments: dict, timeout: float) -> str:
         try:
             raw = http_request(
                 _EXA_MCP, timeout=max(0.1, timeout - (time.monotonic() - started)), data=body,
-                headers={"Content-Type": "application/json", "Accept": "application/json, text/event-stream"},
+                headers=_exa_headers(),
             ).decode("utf-8", errors="replace")
             break
         except http.client.IncompleteRead:
