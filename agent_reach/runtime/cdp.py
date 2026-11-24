@@ -83,8 +83,10 @@ def call(method: str, params: Optional[dict] = None, *, page: bool = False,
     ws = target.get("webSocketDebuggerUrl")
     if not ws:
         return None
-    u = urlparse(ws)
-    host, port = u.hostname or "127.0.0.1", u.port or 80
+    # Only ever connect to our own loopback port; take just the path from the
+    # reply so a listener on that port cannot redirect us to another host/port.
+    u, ours = urlparse(ws), urlparse(CDP_URL)
+    host, port = ours.hostname or "127.0.0.1", ours.port or 80
     try:
         with socket.create_connection((host, port), timeout=_TIMEOUT) as sock:
             sock.settimeout(_TIMEOUT)

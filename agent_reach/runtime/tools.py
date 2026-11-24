@@ -49,12 +49,15 @@ class Tool:
     exclude: Tuple[str, ...] = ()   # known-bad versions
     tested: str = ""                # reproducible default for newly installed tools
     needs: Tuple[str, ...] = ()     # tools that must be installed first
+    dep_caps: Tuple[Tuple[str, str], ...] = ()  # (dependency, first bad version) that `tested` cannot use
 
 
 TOOLS: Dict[str, Tool] = {
     t.name: t
     for t in (
-        Tool("cloakbrowser", "pip", "cloakbrowser", ("cloakbrowser",), tested="0.6.3"),
+        # cloakbrowser 0.6.3 imports playwright._impl._js_handle, which playwright 1.65 removed.
+        Tool("cloakbrowser", "pip", "cloakbrowser", ("cloakbrowser",), tested="0.6.3",
+             dep_caps=(("playwright", "1.65.0"),)),
         Tool("bili-cli", "pip", "bilibili-cli", ("bili",), tested="0.6.2"),
         Tool(
             "boss-agent-cli", "pip",
@@ -198,8 +201,9 @@ def _dist_name(tool: Tool) -> str:
     return re.split(r"[\s@<>=!~\[;]", tool.package, maxsplit=1)[0]
 
 
-def _pip_version(tool: Tool) -> Optional[str]:
-    want = re.sub(r"[-_.]+", "_", _dist_name(tool)).lower()
+def _pip_version(tool: Tool, dist: str = "") -> Optional[str]:
+    """Installed version of `dist` (default: the tool's own package) in the tool's venv."""
+    want = re.sub(r"[-_.]+", "_", dist or _dist_name(tool)).lower()
     venv = tool_dir(tool.name) / "venv"
     sites = [venv / "Lib" / "site-packages"] if _WIN else sorted((venv / "lib").glob("python*/site-packages"))
     for site in sites:
@@ -326,7 +330,8 @@ def _install_pip(tool: Tool) -> None:
     # and pip cache; venv repairs a missing interpreter in place.
     if not py.is_file():
         _run([sys.executable, "-m", "venv", str(venv)], stage=f"{tool.name}:venv")
-    _run([str(py), "-m", "pip", "install", "--quiet", "--disable-pip-version-check", install_spec(tool)],
+    caps = [f"{dist}<{bad}" for dist, bad in tool.dep_caps]
+    _run([str(py), "-m", "pip", "install", "--quiet", "--disable-pip-version-check", install_spec(tool), *caps],
          stage=f"{tool.name}:pip_packages")
     if tool.kind == "ffmpeg":
         exe = _run([str(py), "-c", "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"]).strip()
@@ -538,7 +543,11 @@ def ensure(name: str, *, allow_upgrade: bool = False, upgrade: bool = False) -> 
                 source.get("vcs_info", {}).get("commit_id") == commit)
         except (OSError, ValueError):
             pinned_mismatch = True
-    if not private_ok or not ours or upgrade or pinned_mismatch:
+    # A copy installed before a cap existed may hold a bad dependency version;
+    # reinstalling repairs it (e.g. `browser setup --retry-cloak`).
+    bad_dep = private_ok and any(
+        _version_tuple(_pip_version(tool, dist) or "0.0.0") >= _version_tuple(bad) for dist, bad in tool.dep_caps)
+    if not private_ok or not ours or upgrade or pinned_mismatch or bad_dep:
         _install(tool)
     elif entry.get("version"):
         return {"tool": name, **entry}

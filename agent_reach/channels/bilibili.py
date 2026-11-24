@@ -27,6 +27,7 @@ from agent_reach.runtime.result import (
 )
 from agent_reach.runtime.run import CommandFailed, http_request, run_cmd
 from agent_reach.runtime.sessions import has_login_state, session_env
+from agent_reach.utils.url import host_matches
 
 from .base import Action, Channel, Param
 
@@ -43,8 +44,10 @@ def _bvid(target: str, timeout: float) -> str:
     m = _BV_RE.search(t)
     if m:
         return m.group(0)
-    if "b23.tv/" in t:
-        url = t if "://" in t else f"https://{t}"
+    url = t if "://" in t else f"https://{t}"
+    # Only http(s) links on the b23.tv host: a substring test would let any URL
+    # containing "b23.tv/" (file://, localhost, intranet) be fetched.
+    if host_matches(url, "b23.tv"):
         req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": _UA})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             m = _BV_RE.search(resp.geturl())

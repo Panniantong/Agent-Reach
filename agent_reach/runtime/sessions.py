@@ -34,7 +34,13 @@ def session_dir(tool: str) -> Path:
 def session_env(tool: str) -> dict:
     """Environment overrides that make `tool` store its login in session_dir()."""
     home = str(session_dir(tool))
-    return {"HOME": home, "USERPROFILE": home}
+    env = {"HOME": home, "USERPROFILE": home}
+    if tool == "bili-cli":
+        # bili-cli falls back to reading the user's own browser cookies with
+        # browser-cookie3, which on Windows finds them without HOME. Shadow that
+        # module so the import fails and bili-cli uses only its saved login.
+        env["PYTHONPATH"] = str(Path(__file__).parent / "no_browser_cookies")
+    return env
 
 
 def has_login_state(tool: str) -> bool:
