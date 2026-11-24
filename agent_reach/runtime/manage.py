@@ -1012,7 +1012,7 @@ def uninstall(dry_run: bool = False) -> dict:
 # ── configure ──
 
 CONFIG_KEYS = {"groq-key": "groq_api_key", "openai-key": "openai_api_key", "proxy": "proxy", "github-token": "github_token",
-               "browser-port": "browser_port",
+               "browser-port": "browser_port", "browser-locale": "browser_locale",
 }
 
 
@@ -1029,6 +1029,13 @@ def configure(key: str, value: str) -> dict:
         from . import browser
 
         if browser.watcher_running():  # our browser on the old port; it reopens on the new one when next used
+            browser.stop()
+    if key == "browser-locale":
+        from . import browser
+
+        if not browser.valid_locale(value):
+            raise ReachError(BAD_INPUT, "browser-locale must be a language tag such as en-AU, en-US or zh-CN")
+        if browser.watcher_running():  # the open browser keeps its language; it reopens with the new one
             browser.stop()
     Config().set(CONFIG_KEYS[key], int(value) if key == "browser-port" else value)
     return {"key": key, "saved": True}

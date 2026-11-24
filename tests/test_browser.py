@@ -258,6 +258,49 @@ def test_cloak_manual_login_uses_the_same_profile_with_a_window(home, monkeypatc
     context.pages[0].goto.assert_not_called() # restoration precedes navigation in the watcher
 
 
+def test_configured_locale_rewrites_an_existing_profiles_saved_languages(home, monkeypatch):
+    import json
+    import sys
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from agent_reach.config import Config
+    from agent_reach.runtime import browser_watcher
+
+    prefs = browser.profile_dir() / "Default" / "Preferences"
+    prefs.parent.mkdir(parents=True)
+    prefs.write_text(json.dumps({"intl": {"accept_languages": "zh-CN,zh", "selected_languages": "zh-CN,zh",
+                                          "app_locale": "zh-CN"}, "other": {"x": True}}), encoding="utf-8")
+    launch = Mock(return_value=SimpleNamespace(pages=[Mock()]))
+    monkeypatch.setitem(sys.modules, "cloakbrowser", SimpleNamespace(launch_persistent_context=launch))
+
+    # No locale configured: the profile is left exactly as it is.
+    monkeypatch.delenv("REACH_BROWSER_LOCALE", raising=False)
+    before = prefs.read_text(encoding="utf-8")
+    browser_watcher._launch_cloak("about:blank")
+    assert prefs.read_text(encoding="utf-8") == before
+
+    # Configured: the saved languages follow it before the profile opens, and nothing else changes.
+    Config().set("browser_locale", "en-US")
+    monkeypatch.setenv("REACH_BROWSER_LOCALE", "en-US")
+    browser_watcher._launch_cloak("about:blank")
+    saved = json.loads(prefs.read_text(encoding="utf-8"))
+    assert saved["intl"] == {"accept_languages": "en-US,en", "selected_languages": "en-US,en", "app_locale": "zh-CN"}
+    assert saved["other"] == {"x": True}
+    assert launch.call_args.kwargs["locale"] == "en-US"
+
+
+def test_profile_locale_leaves_new_or_unreadable_profiles_alone(home):
+    assert browser.apply_profile_locale(browser.profile_dir(), "en-US") is False  # a new profile starts from --lang
+    prefs = browser.profile_dir() / "Default" / "Preferences"
+    prefs.parent.mkdir(parents=True)
+    prefs.write_text("{not json", encoding="utf-8")
+    assert browser.apply_profile_locale(browser.profile_dir(), "en-US") is False
+    assert prefs.read_text(encoding="utf-8") == "{not json"
+    assert browser.accept_languages("en-AU") == "en-AU,en"
+    assert browser.accept_languages("en") == "en"
+
+
 def test_restore_failure_preserves_the_original_snapshot(home, monkeypatch):
     from agent_reach.runtime.result import ReachError
     browser.browser_root().mkdir(parents=True)
