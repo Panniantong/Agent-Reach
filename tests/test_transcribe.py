@@ -17,6 +17,8 @@ from agent_reach.config import Config
 @pytest.fixture
 def fake_config(tmp_path, monkeypatch):
     """A Config that writes to a temp dir and never touches the user's HOME."""
+    for provider in tr.PROVIDERS.values():
+        monkeypatch.delenv(provider["key_field"].upper(), raising=False)
     cfg_path = tmp_path / "config.yaml"
     monkeypatch.setattr(Config, "CONFIG_DIR", tmp_path)
     monkeypatch.setattr(Config, "CONFIG_FILE", cfg_path)
