@@ -45,7 +45,7 @@ def _bvid(target: str, timeout: float) -> str:
     if m:
         return m.group(0)
     url = t if "://" in t else f"https://{t}"
-    # Exact host check (http/https only): a substring test would let any URL
+    # Only http(s) links on the b23.tv host: a substring test would let any URL
     # containing "b23.tv/" (file://, localhost, intranet) be fetched.
     if host_matches(url, "b23.tv"):
         req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": _UA})

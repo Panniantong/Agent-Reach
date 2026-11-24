@@ -36,10 +36,10 @@ def session_env(tool: str) -> dict:
     home = str(session_dir(tool))
     env = {"HOME": home, "USERPROFILE": home}
     if tool == "bili-cli":
-        # bili-cli falls back to reading the user's own browser cookies
-        # (browser-cookie3). On Windows that library finds browser profiles via
-        # APPDATA/LOCALAPPDATA, not HOME, so point those at the session too.
-        env.update({"APPDATA": home, "LOCALAPPDATA": home})
+        # bili-cli falls back to reading the user's own browser cookies with
+        # browser-cookie3, which on Windows finds them without HOME. Shadow that
+        # module so the import fails and bili-cli uses only its saved login.
+        env["PYTHONPATH"] = str(Path(__file__).parent / "no_browser_cookies")
     return env
 
 

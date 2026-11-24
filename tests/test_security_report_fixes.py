@@ -1,5 +1,7 @@
 """Fixes from the 1.6.1 private security report."""
 
+import os
+
 import pytest
 
 from agent_reach.channels import bilibili
@@ -39,13 +41,16 @@ def test_b23_short_link_is_still_resolved(monkeypatch, target):
     assert seen == ["https://b23.tv/abc"]
 
 
-def test_bili_cli_cannot_find_the_users_own_browsers(tmp_path, monkeypatch):
+def test_bili_cli_cannot_import_browser_cookie3(tmp_path, monkeypatch):
+    import subprocess
+    import sys
+
     monkeypatch.setenv("HOME", str(tmp_path))
     env = sessions.session_env("bili-cli")
-    home = env["HOME"]
-    # browser-cookie3 locates Windows browser profiles via these, not HOME.
-    assert env["APPDATA"] == env["LOCALAPPDATA"] == env["USERPROFILE"] == home
-    assert "APPDATA" not in sessions.session_env("other-tool")
+    probe = "import browser_cookie3"
+    result = subprocess.run([sys.executable, "-c", probe], env={**os.environ, **env}, capture_output=True, text=True)
+    assert result.returncode != 0 and "own browser cookies" in result.stderr
+    assert "PYTHONPATH" not in sessions.session_env("other-tool")
 
 
 def test_cdp_only_connects_to_our_loopback_port(monkeypatch):
@@ -71,19 +76,20 @@ def test_cloakbrowser_install_keeps_a_compatible_playwright(monkeypatch, tmp_pat
     calls = []
     monkeypatch.setattr(tools, "_run", lambda argv, **kwargs: calls.append(argv) or "")
     tools._install_pip(tool)
-    assert "cloakbrowser==0.6.3" in calls[0] and "playwright<1.65" in calls[0]
+    assert "cloakbrowser==0.6.3" in calls[0] and "playwright<1.65.0" in calls[0]
 
 
-def test_existing_cloakbrowser_copy_is_repaired_on_setup(monkeypatch, tmp_path):
+@pytest.mark.parametrize("playwright, reinstall", [("1.65.2", True), ("1.64.1", False)])
+def test_existing_cloakbrowser_copy_is_repaired_only_when_broken(monkeypatch, tmp_path, playwright, reinstall):
+    monkeypatch.setattr(tools, "tool_dir", lambda name: tmp_path / name)
+    site = tmp_path / "cloakbrowser" / "venv" / ("Lib" if tools._WIN else "lib/python3.13") / "site-packages"
+    (site / f"playwright-{playwright}.dist-info").mkdir(parents=True)
     monkeypatch.setattr(tools, "_private_bin", lambda tool, c: tmp_path)  # exists
-    monkeypatch.setattr(tools.state, "load", lambda: {"tools": {"cloakbrowser": {"owner": tools.OURS, "version": "0.6.3"}}})
+    entry = {"owner": tools.OURS, "version": "0.6.3"}
+    monkeypatch.setattr(tools.state, "load", lambda: {"tools": {"cloakbrowser": entry}})
     installed = []
     monkeypatch.setattr(tools, "_install", lambda tool, **k: installed.append(tool.name))
     monkeypatch.setattr(tools, "record", lambda name, version, **k: {"tool": name})
     monkeypatch.setattr(tools, "_private_version", lambda tool: "0.6.3")
     tools.ensure("cloakbrowser")
-    assert installed == ["cloakbrowser"]
-    # tools without pins keep the fast path
-    monkeypatch.setattr(tools.state, "load", lambda: {"tools": {"bili-cli": {"owner": tools.OURS, "version": "0.6.2"}}})
-    assert tools.ensure("bili-cli") == {"tool": "bili-cli", "owner": tools.OURS, "version": "0.6.2"}
-    assert installed == ["cloakbrowser"]
+    assert installed == (["cloakbrowser"] if reinstall else [])
