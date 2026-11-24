@@ -58,7 +58,7 @@ def test_credential_channels_reject_lookalikes_and_userinfo(channel, malicious_u
     [
         (
             GitHubChannel(),
-            "https://api.github.com/repos/openai/openai-python",
+            "https://www.github.com/openai/openai-python",
             "https://github.com:443/openai/openai-python",
         ),
         (
