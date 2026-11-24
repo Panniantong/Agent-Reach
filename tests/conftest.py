@@ -81,8 +81,13 @@ def isolated_home(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
     monkeypatch.setenv("APPDATA", str(home / "AppData" / "Roaming"))
     monkeypatch.setenv("LOCALAPPDATA", str(home / "AppData" / "Local"))
-    monkeypatch.delenv("OPENCLAW_HOME", raising=False)
-    monkeypatch.delenv("HERMES_HOME", raising=False)
+    for name in (
+        "OPENCLAW_HOME",
+        "HERMES_HOME",
+        "GROQ_API_KEY",
+        "OPENAI_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
     # never start the background release check from tests
     monkeypatch.setenv("AGENT_REACH_NO_UPDATE_CHECK", "1")
     # Public-first routing must not turn adapter unit tests into live requests.

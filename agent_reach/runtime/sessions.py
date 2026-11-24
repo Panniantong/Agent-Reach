@@ -69,6 +69,16 @@ def clear_session(tool: str) -> bool:
     return True
 
 
+def import_legacy_path(tool: str, name: str) -> bool:
+    """Copy one declared legacy login directory into its isolated session."""
+    src = home_dir() / name
+    target = session_dir(tool) / name
+    if not src.is_dir() or src.is_symlink() or not any(src.iterdir()):
+        return False
+    shutil.copytree(src, target, dirs_exist_ok=True)
+    return True
+
+
 def import_legacy_state(tool: str, names) -> list:
     """Copy the tool's existing login from the real home into its session (explicit opt-in)."""
     copied = []
