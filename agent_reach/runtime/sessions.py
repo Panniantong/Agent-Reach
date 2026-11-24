@@ -34,7 +34,13 @@ def session_dir(tool: str) -> Path:
 def session_env(tool: str) -> dict:
     """Environment overrides that make `tool` store its login in session_dir()."""
     home = str(session_dir(tool))
-    return {"HOME": home, "USERPROFILE": home}
+    env = {"HOME": home, "USERPROFILE": home}
+    if tool == "bili-cli":
+        # bili-cli falls back to reading the user's own browser cookies
+        # (browser-cookie3). On Windows that library finds browser profiles via
+        # APPDATA/LOCALAPPDATA, not HOME, so point those at the session too.
+        env.update({"APPDATA": home, "LOCALAPPDATA": home})
+    return env
 
 
 def has_login_state(tool: str) -> bool:

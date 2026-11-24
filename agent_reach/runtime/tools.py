@@ -49,12 +49,14 @@ class Tool:
     exclude: Tuple[str, ...] = ()   # known-bad versions
     tested: str = ""                # reproducible default for newly installed tools
     needs: Tuple[str, ...] = ()     # tools that must be installed first
+    pins: Tuple[str, ...] = ()      # extra pip requirements that keep `tested` working
 
 
 TOOLS: Dict[str, Tool] = {
     t.name: t
     for t in (
-        Tool("cloakbrowser", "pip", "cloakbrowser", ("cloakbrowser",), tested="0.6.3"),
+        # cloakbrowser 0.6.3 imports playwright._impl._js_handle, which playwright 1.65 removed.
+        Tool("cloakbrowser", "pip", "cloakbrowser", ("cloakbrowser",), tested="0.6.3", pins=("playwright<1.65",)),
         Tool("bili-cli", "pip", "bilibili-cli", ("bili",), tested="0.6.2"),
         Tool(
             "boss-agent-cli", "pip",
@@ -326,7 +328,8 @@ def _install_pip(tool: Tool) -> None:
     # and pip cache; venv repairs a missing interpreter in place.
     if not py.is_file():
         _run([sys.executable, "-m", "venv", str(venv)], stage=f"{tool.name}:venv")
-    _run([str(py), "-m", "pip", "install", "--quiet", "--disable-pip-version-check", install_spec(tool)],
+    _run([str(py), "-m", "pip", "install", "--quiet", "--disable-pip-version-check", install_spec(tool),
+          *tool.pins],
          stage=f"{tool.name}:pip_packages")
     if tool.kind == "ffmpeg":
         exe = _run([str(py), "-c", "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"]).strip()
@@ -538,7 +541,9 @@ def ensure(name: str, *, allow_upgrade: bool = False, upgrade: bool = False) -> 
                 source.get("vcs_info", {}).get("commit_id") == commit)
         except (OSError, ValueError):
             pinned_mismatch = True
-    if not private_ok or not ours or upgrade or pinned_mismatch:
+    # Tools with pins rerun pip (a no-op once satisfied) so a copy installed
+    # before the pin existed gets repaired, e.g. by `browser setup --retry-cloak`.
+    if not private_ok or not ours or upgrade or pinned_mismatch or tool.pins:
         _install(tool)
     elif entry.get("version"):
         return {"tool": name, **entry}
