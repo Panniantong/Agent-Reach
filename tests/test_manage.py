@@ -770,6 +770,15 @@ def test_configure_browser_port_moves_the_dedicated_browser(env, monkeypatch):
     assert browser.configured_port() == 9333
 
 
+def test_configuring_the_same_browser_port_does_not_stop_the_browser(env, monkeypatch):
+    manage.configure("browser-port", "9333")
+    monkeypatch.setattr(browser, "watcher_running", lambda: True)
+    monkeypatch.setattr(browser, "stop", lambda: pytest.fail("closed the active browser"))
+
+    assert manage.configure("browser-port", "9333") == {"key": "browser-port", "saved": True}
+    assert browser.configured_port() == 9333
+
+
 def test_browser_port_change_lifts_pauses_for_browser_channels_only(env, monkeypatch):
     from agent_reach.runtime import browser
 
