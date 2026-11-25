@@ -11,6 +11,8 @@ offline. Follow-up to #331 — extends dedicated channel coverage after rss
 
 
 
+import json
+
 import pytest
 
 from agent_reach.channels.xueqiu import XueqiuChannel, _strip_html
@@ -80,6 +82,30 @@ def test_strip_html_removes_tags_and_decodes_entities():
 
 
 # --- get_hot_posts: JSON-in-JSON unwrap, html strip, url build, bad data ---
+
+
+def test_hot_posts_fall_back_when_normalized_text_is_empty(monkeypatch):
+    posts = [
+        {"id": 1, "text": "<p> </p>", "description": "Summary &amp; fallback"},
+        {"id": 2, "text": "&nbsp;", "description": "Entity-only fallback"},
+        {"id": 3, "text": "<p>Full &amp; final</p>", "description": "Unused summary"},
+        {"id": 4, "text": "", "description": "Existing fallback"},
+    ]
+    monkeypatch.setattr("agent_reach.channels.xueqiu._prepare_community_session", lambda: None)
+    monkeypatch.setattr(
+        "agent_reach.channels.xueqiu._xq_json",
+        lambda url: {"list": [{"data": json.dumps(post)} for post in posts]},
+    )
+
+    out = run_action(XueqiuChannel(), "hot_posts", {"limit": 4}, only_backend="xueqiu-api")
+
+    assert out["ok"] is True
+    assert [item["text"] for item in out["items"]] == [
+        "Summary & fallback",
+        "Entity-only fallback",
+        "Full & final",
+        "Existing fallback",
+    ]
 
 
 
