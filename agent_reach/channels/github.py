@@ -59,7 +59,12 @@ def _gh_get(path: str, timeout: float, accept: str = "application/vnd.github+jso
         err = exc.stderr.lower()
         if "http 404" in err or "not found" in err:
             raise ReachError(NOT_FOUND, exc.message) from None
-        if "gh auth login" in err or "authentication" in err:
+        if (
+            "gh auth login" in err
+            or "authentication" in err
+            or "bad credentials" in err
+            or "http 401" in err
+        ):
             raise ReachError(NEED_SETUP, "gh has no usable credentials; try the public GitHub API") from None
         if "rate limit" in err:
             raise ReachError(RATE_LIMITED, exc.message) from None
@@ -79,6 +84,10 @@ def _api_get(path: str, timeout: float, accept: str = "application/vnd.github+js
     try:
         return http_request(f"{_API}{path}", timeout=timeout, headers=headers)
     except urllib.error.HTTPError as exc:
+        if exc.code == 401:
+            raise ReachError(
+                NEED_SETUP, "GitHub API credentials are missing or invalid; check the configured token"
+            ) from None
         if exc.code == 404:
             raise ReachError(NOT_FOUND, "GitHub API returned HTTP 404") from None
         if exc.code == 429 or (exc.code == 403 and (
