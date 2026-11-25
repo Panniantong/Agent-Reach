@@ -2,7 +2,7 @@
 import re
 from urllib.parse import urlsplit
 
-from agent_reach.runtime.result import BAD_INPUT, ReachError
+from agent_reach.runtime.result import BAD_INPUT, UPSTREAM_BROKEN, ReachError
 from agent_reach.utils.url import host_matches
 
 from ._opencli_site import OpenCLISiteChannel
@@ -36,7 +36,15 @@ class LinkedInChannel(OpenCLISiteChannel):
     def _read(self, *, target, timeout):
         if not host_matches(str(target), "linkedin.com"):
             raise ReachError(BAD_INPUT, "Expected a linkedin.com job URL")
-        return self._opencli(["job-detail", self._job_url(str(target))], timeout)[:1]
+        url = self._job_url(str(target))
+        items = self._opencli(["job-detail", url], timeout)[:1]
+        landed = str(items[0].get("url") or "") if items else ""
+        if landed and urlsplit(landed).path.rstrip("/") != urlsplit(url).path:
+            # LinkedIn can redirect a job link to /jobs/search/?currentJobId=<id>; the
+            # reader then returns the first card on that page, which is another posting.
+            raise ReachError(UPSTREAM_BROKEN, f"LinkedIn opened {landed} instead of the job page, "
+                             "so the details would belong to a different posting")
+        return items
 
     @staticmethod
     def _job_url(target: str) -> str:
