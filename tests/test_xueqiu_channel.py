@@ -10,6 +10,7 @@ offline. Follow-up to #331 — extends dedicated channel coverage after rss
 """
 
 
+import json
 
 import pytest
 
@@ -93,6 +94,36 @@ def test_strip_html_removes_tags_and_decodes_entities():
 
 
 
+
+
+@pytest.mark.parametrize("encoded_post", ["null", "[]", '"text"', "1", "true"])
+def test_hot_posts_preserves_valid_posts_after_non_object_json(monkeypatch, encoded_post):
+    valid_post = {
+        "id": 42,
+        "title": "Valid",
+        "text": "<p>Hello &amp; goodbye</p>",
+        "target": "/42",
+        "user": {"screen_name": "alice"},
+    }
+    monkeypatch.setattr("agent_reach.channels.xueqiu._prepare_community_session", lambda: None)
+    monkeypatch.setattr(
+        "agent_reach.channels.xueqiu._xq_json",
+        lambda url: {
+            "list": [
+                {"data": encoded_post},
+                {"data": json.dumps(valid_post)},
+            ]
+        },
+    )
+
+    out = run_action(XueqiuChannel(), "hot_posts", {"limit": 2}, only_backend="xueqiu-api")
+
+    assert out["ok"] is True
+    assert [item["raw"]["id"] for item in out["items"]] == [0, 42]
+    assert out["items"][1]["title"] == "Valid"
+    assert out["items"][1]["text"] == "Hello & goodbye"
+    assert out["items"][1]["author"] == "alice"
+    assert out["items"][1]["url"] == "https://xueqiu.com/42"
 
 
 # --- get_hot_stocks: ranking + code/symbol fallback ---
