@@ -7,7 +7,7 @@ import json
 import os
 import re
 import urllib.error
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from agent_reach.runtime.result import (
     BAD_INPUT,
@@ -23,9 +23,8 @@ from agent_reach.runtime.run import CommandFailed, http_request, run_cmd
 from .base import Action, Channel, Param
 
 _API = "https://api.github.com"
-_TARGET_RE = re.compile(
-    r"^(?:https?://(?:www\.)?github\.com/)?([\w.-]+)/([\w.-]+?)(?:\.git)?"
-    r"(?:/(?:issues|pull)/(\d+))?/?(?:[?#].*)?$"
+_TARGET_PATH_RE = re.compile(
+    r"^([\w.-]+)/([\w.-]+?)(?:\.git)?(?:/(?:issues|pull)/(\d+))?/?$"
 )
 _README_MAX_CHARS = 50_000
 
@@ -40,8 +39,33 @@ _GH_READ_ONLY_ENV = {
 
 
 def _parse_target(target: str):
-    """owner/repo, a repo link, or an issue/PR link → (owner, repo, number|None)."""
-    m = _TARGET_RE.match(str(target).strip())
+    """Parse a repo, repository URL, or issue/PR URL into its GitHub API parts.
+
+    @param target Repository shorthand or a GitHub URL.
+    @returns The owner, repository, and optional issue or pull request number.
+    """
+    value = str(target).strip()
+    if "://" in value:
+        try:
+            parsed = urlsplit(value)
+            port = parsed.port
+        except ValueError:
+            parsed = None
+            port = None
+        if (
+            parsed is None
+            or parsed.scheme not in {"http", "https"}
+            or parsed.hostname not in {"github.com", "www.github.com"}
+            or parsed.username is not None
+            or parsed.password is not None
+            or (port is not None and port != (443 if parsed.scheme == "https" else 80))
+        ):
+            raise ReachError(BAD_INPUT, "target must be owner/repo or a github.com repo/issue/PR link")
+        path = parsed.path.lstrip("/")
+    else:
+        path = value.split("#", 1)[0].split("?", 1)[0]
+
+    m = _TARGET_PATH_RE.fullmatch(path)
     if not m:
         raise ReachError(BAD_INPUT, "target must be owner/repo or a github.com repo/issue/PR link")
     owner, repo, number = m.groups()
@@ -132,9 +156,19 @@ class GitHubChannel(Channel):
     )
 
     def can_handle(self, url: str) -> bool:
-        from agent_reach.utils.url import host_matches
+        """Claim only GitHub URLs supported by the repository reader.
 
-        return host_matches(url, "github.com")
+        @param url URL to check for GitHub repository, issue, or pull request support.
+        @returns True when the GitHub reader can parse the URL.
+        """
+        value = str(url).strip()
+        if not value.lower().startswith(("http://", "https://")):
+            return False
+        try:
+            _parse_target(value)
+        except ReachError:
+            return False
+        return True
 
     # ── unified entry backends ──
 
