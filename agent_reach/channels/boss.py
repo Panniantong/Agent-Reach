@@ -98,7 +98,11 @@ class BossChannel(Channel):
             code = str(err.get("code", "")).upper()
             message = str(err.get("message", "boss-agent-cli failed"))[:300]
             if code in {"PLATFORM_BLOCKED", "ACCOUNT_RISK", "ENVIRONMENT_RISK", "CAPTCHA_REQUIRED"} or any(
-                word in message for word in ("code 36", "code 37", "环境异常", "环境存在异常", "验证码", "安全验证", "风控")
+                word in message for word in (
+                    "code 32", "code 35", "code 36", "code 37",
+                    "环境异常", "环境存在异常", "异常行为", "禁止使用",
+                    "验证码", "安全验证", "风控", "ip地址存在异常",
+                )
             ):
                 raise ReachError(PLATFORM_BLOCKED, message)
             if code in {"RATE_LIMITED", "RATE_LIMIT"}:
@@ -132,7 +136,19 @@ class BossChannel(Channel):
 
     def _opencli_search(self, *, query, city, limit, timeout):
         from agent_reach.backends.opencli import opencli_call, opencli_items
-        rows = opencli_call("boss", ["search", query, "--city", city or "全国", "--limit", str(limit)], timeout=timeout)
+        try:
+            rows = opencli_call("boss", ["search", query, "--city", city or "全国", "--limit", str(limit)], timeout=timeout)
+        except ReachError as exc:
+            low = exc.message.lower()
+            if "did not expose its job-list response" in low or any(
+                w in low for w in ("verify.html", "security.html", "异常行为", "禁止使用", "风控")
+            ):
+                raise ReachError(
+                    PLATFORM_BLOCKED,
+                    f"BOSS search intercepted by platform protection: {exc.message}",
+                    hint="Open BOSS in the browser to complete verification if required. Do not retry in a loop.",
+                ) from None
+            raise
         return opencli_items(rows)[:limit]
 
 
