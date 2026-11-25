@@ -122,7 +122,8 @@ def _get_json(url: str, config=None) -> Any:
 
 
 def _strip_html(text: str) -> str:
-    """Remove HTML tags and decode character references once."""
+    """Preserve HTML line breaks as spaces, remove tags, and decode entities once."""
+    text = re.sub(r"<br(?=[\s/>])[^>]*>", " ", text, flags=re.IGNORECASE)
     text = re.sub(r"<[^>]+>", "", text)
     return html.unescape(text).replace("\xa0", " ").strip()
 
