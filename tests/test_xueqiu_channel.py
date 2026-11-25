@@ -39,6 +39,48 @@ def test_quote_routes_bare_920_symbol_to_beijing_exchange(monkeypatch):
     assert out["items"][0]["raw"]["symbol"] == "BJ920008"
 
 
+@pytest.mark.parametrize("symbol", ["SH６００５１９", "６００５１９", "HK７", "７"])
+def test_quote_rejects_non_ascii_digits_before_request(monkeypatch, symbol):
+    requests = []
+
+    def fake_http_request(url, timeout):
+        requests.append(url)
+        return b'v_none="";'
+
+    monkeypatch.setattr("agent_reach.channels.xueqiu.http_request", fake_http_request)
+
+    out = run_action(XueqiuChannel(), "quote", {"symbol": symbol}, only_backend="tencent")
+
+    assert out["ok"] is False
+    assert out["error"]["code"] == "BAD_INPUT"
+    assert requests == []
+
+
+@pytest.mark.parametrize("symbol,code,expected", [
+    ("SH600519", "sh600519", "SH600519"),
+    ("600519", "sh600519", "SH600519"),
+    ("HK700", "hk00700", "00700"),
+    ("700", "hk00700", "00700"),
+])
+def test_quote_accepts_ascii_digit_symbols(monkeypatch, symbol, code, expected):
+    requests = []
+
+    def fake_http_request(url, timeout):
+        requests.append(url)
+        fields = ["1", "Stock", code[2:], "12.34", "12.00", "12.10"]
+        fields += [""] * 24
+        fields += ["20261116150000", "0.34", "2.83", "12.50", "11.90"]
+        return (f'v_{code}="' + "~".join(fields) + '";').encode("gbk")
+
+    monkeypatch.setattr("agent_reach.channels.xueqiu.http_request", fake_http_request)
+
+    out = run_action(XueqiuChannel(), "quote", {"symbol": symbol}, only_backend="tencent")
+
+    assert out["ok"] is True
+    assert requests == [f"https://qt.gtimg.cn/q={code}"]
+    assert out["items"][0]["raw"]["symbol"] == expected
+
+
 # --- can_handle ---
 
 def test_can_handle_matches_xueqiu_hosts():
