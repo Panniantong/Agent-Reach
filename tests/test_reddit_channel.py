@@ -26,6 +26,59 @@ def test_can_handle_rejects_non_reddit():
         assert channel.can_handle(url) is False, url
 
 
+@pytest.mark.parametrize(
+    "target",
+    [
+        "https://www.reddit.com/r/python/",
+        "https://old.reddit.com/r/python/new/",
+        "https://www.reddit.com/user/spez",
+        "https://www.reddit.com/comments/abc123/../../../user/spez",
+        "https://www.reddit.com/r/python/comments/abc123/../../",
+        "https://www.reddit.com/comments/abc123/%2e%2e/%2e%2e/user/spez",
+        "https://www.reddit.com/comments/abc123/..\\..\\user\\spez",
+        "https://redd.it/",
+        "帖子",
+    ],
+)
+def test_read_rejects_non_post_targets_before_opencli(monkeypatch, target):
+    from agent_reach.channels import reddit
+    from agent_reach.runtime.dispatch import run_action
+    from agent_reach.runtime.result import BAD_INPUT
+
+    request = Mock(return_value={"ok": True, "data": [{"title": "Not a post", "text": "Wrong target"}]})
+    monkeypatch.setattr(reddit, "opencli_call", request)
+
+    result = run_action(RedditChannel(), "read", {"target": target}, only_backend="opencli")
+
+    assert result["ok"] is False
+    assert result["error"]["code"] == BAD_INPUT
+    request.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "abc123",
+        "ABC123",
+        "https://www.reddit.com/r/python/comments/abc123/a_title/?utm_source=share",
+        "https://old.reddit.com/comments/abc123/a_title/",
+        "https://redd.it/abc123",
+    ],
+)
+def test_read_accepts_post_links_and_ids(monkeypatch, target):
+    from agent_reach.channels import reddit
+    from agent_reach.runtime.dispatch import run_action
+
+    request = Mock(return_value={"ok": True, "data": [{"title": "A post", "text": "Body"}]})
+    monkeypatch.setattr(reddit, "opencli_call", request)
+
+    result = run_action(RedditChannel(), "read", {"target": target}, only_backend="opencli")
+
+    assert result["ok"] is True
+    assert result["items"][0]["title"] == "A post"
+    assert request.call_args.args[1] == ["read", target, "--limit", "20"]
+
+
 def test_unconfigured_browser_is_prepared_without_assuming_login(monkeypatch):
     from agent_reach.runtime import browser, session_reuse
     launch = Mock()

@@ -7,6 +7,9 @@ establish a site-wide login requirement. These actions use managed browser
 sessions; request authentication only when the selected path requires it.
 """
 
+import re
+from urllib.parse import unquote, urlsplit
+
 from agent_reach.backends.opencli import opencli_call, opencli_items
 from agent_reach.runtime.result import BAD_INPUT, UPSTREAM_BROKEN, ReachError
 
@@ -15,6 +18,9 @@ from .base import Action, Channel, Param
 _REDDIT_LOGIN_HINT = (
     "Ask the user to log in to reddit.com in the Agent Reach dedicated browser. Never log in on their behalf."
 )
+_POST_ID_RE = re.compile(r"[0-9a-z]+", re.ASCII | re.IGNORECASE)
+_POST_PATH_RE = re.compile(r"/(?:r/[^/]+/)?comments/[0-9a-z]+(?:/|$)", re.ASCII | re.IGNORECASE)
+_SHORT_POST_PATH_RE = re.compile(r"/[0-9a-z]+/?", re.ASCII | re.IGNORECASE)
 
 
 def _reddit(args, timeout: float) -> list:
@@ -82,7 +88,19 @@ class RedditChannel(Channel):
 
     def _opencli_read(self, *, target: str, timeout: float) -> list:
         t = str(target).strip()
-        if not (self.can_handle(t) or t.isalnum()):
+        is_post_url = False
+        if self.can_handle(t):
+            parsed = urlsplit(t)
+            decoded_path = unquote(parsed.path)
+            if "\\" not in decoded_path and all(
+                segment not in {".", ".."} for segment in decoded_path.split("/")
+            ):
+                host = (parsed.hostname or "").lower().rstrip(".")
+                if host == "redd.it" or host.endswith(".redd.it"):
+                    is_post_url = _SHORT_POST_PATH_RE.fullmatch(parsed.path) is not None
+                else:
+                    is_post_url = _POST_PATH_RE.match(parsed.path) is not None
+        if _POST_ID_RE.fullmatch(t) is None and not is_post_url:
             raise ReachError(BAD_INPUT, "target must be a reddit.com post link or post id")
         items = _reddit(["read", t, "--limit", "20"], timeout)
         post, comments = items[0], items[1:]
