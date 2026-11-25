@@ -67,7 +67,13 @@ def ensure_no_symlink_path(path: str | Path, label: str = "路径") -> Path:
 
 
 def make_private_dir(path: str | Path) -> Path:
-    """Create a directory restricted to the current user where supported."""
+    """Create a directory restricted to the current user where supported.
+
+    Tightening an existing directory is hardening, not a precondition: a
+    sandbox that refuses ``chmod`` leaves the directory usable, so a refused
+    chmod degrades to a warning instead of failing every command that opens a
+    config (#684).
+    """
     target = ensure_no_symlink_path(path, "私密目录")
     target.mkdir(mode=0o700, parents=True, exist_ok=True)
     ensure_no_symlink_path(target, "私密目录")
@@ -77,14 +83,38 @@ def make_private_dir(path: str | Path) -> Path:
             | getattr(os, "O_DIRECTORY", 0)
             | getattr(os, "O_NOFOLLOW", 0)
         )
-        dir_fd = os.open(target, flags)
+        try:
+            dir_fd = os.open(target, flags)
+        except PermissionError:
+            _warn_private_dir_mode(target, "无法打开目录检查权限")
+            return target
         try:
             ensure_no_symlink_path(target, "私密目录")
-            if hasattr(os, "fchmod"):
+            if not hasattr(os, "fchmod"):
+                return target
+            # Already owner-only: nothing to tighten, so never call chmod.
+            if stat.S_IMODE(os.fstat(dir_fd).st_mode) == 0o700:
+                return target
+            try:
                 os.fchmod(dir_fd, 0o700)
+            except PermissionError:
+                _warn_private_dir_mode(target, "无法收紧权限")
         finally:
             os.close(dir_fd)
     return target
+
+
+def _warn_private_dir_mode(target: Path, reason: str) -> None:
+    """Report a chmod the environment refused, without failing the command."""
+    try:
+        mode = oct(stat.S_IMODE(target.stat().st_mode))
+    except OSError:
+        mode = "unknown"
+    print(
+        f"警告：{reason}，{target} 保持现有权限 {mode}",
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def _replace(src: Path, dst: Path) -> None:
@@ -126,8 +156,13 @@ def atomic_write_private_text(
     )
     tmp_path = Path(tmp_name)
     try:
+        # mkstemp already creates the file 0600; the fchmod only re-tightens it,
+        # so a sandbox that refuses chmod must not lose the write (#684).
         if sys.platform != "win32" and hasattr(os, "fchmod"):
-            os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
+            try:
+                os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
+            except PermissionError:
+                pass
         handle = os.fdopen(fd, "w", encoding=encoding)
         fd = -1
         with handle:
