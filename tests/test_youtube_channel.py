@@ -11,7 +11,10 @@ channel coverage after rss (#360), github (#361), web (#363),
 reddit (#364), xueqiu (#365) and v2ex (#366).
 """
 
+import json
 from pathlib import Path
+
+import pytest
 
 from agent_reach.channels.youtube import YouTubeChannel
 
@@ -109,3 +112,42 @@ def test_ytdlp_uses_system_trust_store_when_ssl_cert_file_is_set(monkeypatch):
     monkeypatch.setenv("SSL_CERT_FILE", "/etc/ssl/corp-bundle.pem")
     argv = youtube._ytdlp_argv("--version")
     assert argv[argv.index("--compat-options") + 1] == "no-certifi"
+
+
+@pytest.mark.parametrize(
+    ("tracks", "manual", "expected"),
+    [
+        ({"en": "translated words", "ar-orig": "الكلام الأصلي"}, (), "ar-orig"),
+        ({"zh-Hans": "手动字幕", "ar-orig": "الكلام الأصلي"}, ("zh-Hans",), "zh-Hans"),
+    ],
+    ids=("original-over-translation", "manual-over-original"),
+)
+def test_subtitle_track_priority(monkeypatch, tmp_path, tracks, manual, expected):
+    from agent_reach.channels import youtube
+    from agent_reach.runtime.dispatch import run_action
+
+    def fake_ytdlp(args, timeout, cwd=None):
+        requested = args[args.index("--sub-langs") + 1].split(",")
+        selected = tracks if ".*-orig" in requested else [code for code in requested if code in tracks]
+        for code in selected:
+            Path(cwd, f"H0OuQdDeIJ4.{code}.vtt").write_text(
+                f"WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n{tracks[code]}\n",
+                encoding="utf-8",
+            )
+        manual_json = json.dumps({code: [] for code in manual}) if manual else "NA"
+        output = {"%(title)s": "Video", "%(subtitles)j": manual_json}
+        return "\n".join(output[args[index + 1]] for index, arg in enumerate(args) if arg == "--print") + "\n"
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(youtube, "_run_ytdlp", fake_ytdlp)
+
+    out = run_action(
+        YouTubeChannel(),
+        "subtitle",
+        {"target": "H0OuQdDeIJ4"},
+        only_backend="yt-dlp",
+    )
+
+    assert out["ok"] is True
+    assert out["items"][0]["raw"]["lang"] == expected
+    assert out["items"][0]["text"] == tracks[expected]
