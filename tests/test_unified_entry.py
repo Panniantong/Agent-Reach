@@ -2,6 +2,7 @@
 """Unified entry: backend fallback, error selection, JSON contract, routing, parsers."""
 
 import json
+import os
 import time
 import urllib.error
 
@@ -221,6 +222,38 @@ def test_channels_lists_usage_for_agents(capsys, fake_cli):
     action = out["channels"][0]["actions"][0]
     assert action["usage"] == "agent-reach fake search <query> [--limit LIMIT]"
     assert action["backends"] == ["first", "second"]
+
+
+@pytest.mark.parametrize("variable", ["HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy"])
+def test_existing_proxy_environment_wins_over_saved_config(capsys, monkeypatch, variable):
+    from agent_reach.config import Config
+
+    names = ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy")
+    for name in names:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv(variable, "http://shell.test:8081")
+    before = {name: os.environ.get(name) for name in names}
+    Config().set("proxy", "http://saved.test:8080")
+
+    code, out = _run(capsys, ["version"])
+
+    assert code == 0 and out["ok"] is True
+    assert {name: os.environ.get(name) for name in names} == before
+
+
+def test_saved_proxy_applies_without_shell_proxy(capsys, monkeypatch):
+    from agent_reach.config import Config
+
+    names = ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy")
+    for name in names:
+        monkeypatch.delenv(name, raising=False)
+    Config().set("proxy", "http://saved.test:8080")
+
+    code, out = _run(capsys, ["version"])
+
+    assert code == 0 and out["ok"] is True
+    assert os.environ["HTTPS_PROXY"] == "http://saved.test:8080"
+    assert os.environ["HTTP_PROXY"] == "http://saved.test:8080"
 
 
 def test_check_passes_when_any_backend_works(capsys, fake_cli):
