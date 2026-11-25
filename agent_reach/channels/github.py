@@ -61,7 +61,7 @@ def _gh_get(path: str, timeout: float, accept: str = "application/vnd.github+jso
             raise ReachError(NOT_FOUND, exc.message) from None
         if "gh auth login" in err or "authentication" in err:
             raise ReachError(NEED_SETUP, "gh has no usable credentials; try the public GitHub API") from None
-        if "rate limit" in err:
+        if "rate limit" in err or "http 429" in err:
             raise ReachError(RATE_LIMITED, exc.message) from None
         raise
     return out.encode("utf-8")
