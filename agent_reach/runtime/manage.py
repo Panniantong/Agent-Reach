@@ -1013,6 +1013,7 @@ def uninstall(dry_run: bool = False) -> dict:
 
 CONFIG_KEYS = {"groq-key": "groq_api_key", "openai-key": "openai_api_key", "proxy": "proxy", "github-token": "github_token",
                "browser-port": "browser_port",
+               "transcript-api-key": "transcript_api_key", "transcript-api-provider": "transcript_api_provider",
 }
 
 
