@@ -39,6 +39,54 @@ def test_quote_routes_bare_920_symbol_to_beijing_exchange(monkeypatch):
     assert out["items"][0]["raw"]["symbol"] == "BJ920008"
 
 
+def test_quote_preserves_us_share_class_for_both_backends(monkeypatch):
+    def fake_http_request(url, timeout):
+        assert url == "https://qt.gtimg.cn/q=usBRK.B"
+        fields = ["1", "伯克希尔B", "BRK.B.N", "570.89", "572.33", "562.07"]
+        fields += [""] * 24
+        fields += ["20261106160341", "-1.44", "-0.25", "575.12", "559.61"]
+        return ("v_usBRK.B=\"" + "~".join(fields) + "\";").encode("gbk")
+
+    requested = []
+
+    def fake_get_json(url):
+        requested.append(url)
+        if "symbol=BRK.B&" in url:
+            return {"data": {"quote": {
+                "symbol": "BRK.B", "name": "伯克希尔-哈撒韦B", "current": 570.89, "percent": -0.25,
+            }}}
+        return {"data": {"quote": None}}
+
+    monkeypatch.setattr("agent_reach.channels.xueqiu.http_request", fake_http_request)
+    monkeypatch.setattr("agent_reach.channels.xueqiu._get_json", fake_get_json)
+
+    tencent = run_action(XueqiuChannel(), "quote", {"symbol": "BRK.B"}, only_backend="tencent")
+    xueqiu = run_action(XueqiuChannel(), "quote", {"symbol": "BRK.B"}, only_backend="xueqiu-api")
+
+    assert requested == ["https://stock.xueqiu.com/v5/stock/quote.json?symbol=BRK.B&extend=detail"]
+    assert tencent["ok"] is True
+    assert xueqiu["ok"] is True, xueqiu
+    for out in (tencent, xueqiu):
+        assert out["items"][0]["url"] == "https://xueqiu.com/S/BRK.B"
+        assert out["items"][0]["raw"]["symbol"] == "BRK.B"
+    assert tencent["items"][0]["title"] == "伯克希尔B (BRK.B)"
+
+
+def test_search_preserves_us_share_class(monkeypatch):
+    def fake_http_request(url, timeout):
+        assert url == "https://smartbox.gtimg.cn/s3/?v=2&q=BRK.B&t=all"
+        return 'v_usBRK.B="us~BRK.B~伯克希尔b~~GP";'.encode()
+
+    monkeypatch.setattr("agent_reach.channels.xueqiu.http_request", fake_http_request)
+
+    out = run_action(XueqiuChannel(), "search", {"query": "BRK.B"}, only_backend="tencent")
+
+    assert out["ok"] is True
+    assert out["items"][0]["title"] == "伯克希尔b (BRK.B)"
+    assert out["items"][0]["url"] == "https://xueqiu.com/S/BRK.B"
+    assert out["items"][0]["raw"]["symbol"] == "BRK.B"
+
+
 # --- can_handle ---
 
 def test_can_handle_matches_xueqiu_hosts():
