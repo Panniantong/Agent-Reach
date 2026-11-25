@@ -231,8 +231,12 @@ class V2EXChannel(Channel):
         topic = data[0] if isinstance(data, list) and data else data
         if not isinstance(topic, dict) or not topic.get("id"):
             raise ReachError(NOT_FOUND, f"V2EX topic not found: {topic_id}")
-        replies = _get_json(_v2ex_url("/api/replies/show.json", topic_id=topic_id, page=1))
-        replies = replies if isinstance(replies, list) else []
+        try:
+            replies = _get_json(_v2ex_url("/api/replies/show.json", topic_id=topic_id, page=1))
+        except (OSError, ValueError, RuntimeError, http.client.HTTPException):
+            replies = []
+        else:
+            replies = replies if isinstance(replies, list) else []
         lines = [topic.get("content") or ""]
         for r in replies:
             who = (r.get("member") or {}).get("username", "")
