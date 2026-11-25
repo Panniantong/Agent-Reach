@@ -72,7 +72,7 @@ CLI agents such as Claude Code, Codex, Hermes Agent and OpenClaw come with web s
 
 - **Features that need a login**: searching XiaoHongShu notes, checking an X account's latest posts, reading job details, and more.
 - **What's inside video**: YouTube and Bilibili subtitles, plus speech-to-text for YouTube videos and Xiaoyuzhou podcasts.
-- **Chinese platforms**: Bilibili, XiaoHongShu, V2EX and Xueqiu, which general search covers poorly.
+- **Chinese platforms**: Bilibili, XiaoHongShu, Kuaishou, V2EX and Xueqiu, which general search covers poorly.
 - **Clean structured data**: Xueqiu quotes, V2EX topics and replies, GitHub repos and issues, already cleaned up.
 
 Agent Reach installs and tests the tools behind these platforms for you, so your agent can use them with one command:
@@ -101,6 +101,7 @@ This table reflects the current release.
 | web | default | web search, page reading (fallback) | nothing |
 | v2ex | default | hot topics, nodes, topics with replies, users | nothing |
 | bilibili | default | search, video info, trending, subtitles | nothing; subtitles need a login (QR scan) |
+| kuaishou | experimental | search, trending, video details, video downloads, first-page user videos | dedicated browser; some content may need a login or verification |
 | reddit | optional | search posts, read text/comments, browse a subreddit | login |
 | linkedin | optional | search jobs, read job details | public jobs need nothing; in-site search needs a login |
 | xiaohongshu | optional | search notes, read text, view comments | login |
