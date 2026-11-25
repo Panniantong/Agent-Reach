@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """Tests for Agent Reach config module."""
 
+import errno
+import os
+import stat
+
 import pytest
 
 from agent_reach.config import Config, ConfigReadOnlyError, ConfigSecurityError
@@ -14,6 +18,65 @@ def tmp_config(tmp_path):
 
 
 class TestConfig:
+    @pytest.mark.parametrize("failure_stage", ("fchmod", "fdopen"))
+    def test_save_closes_unowned_temp_fd_on_setup_failure(
+        self, tmp_path, monkeypatch, failure_stage
+    ):
+        import agent_reach.config as config_module
+
+        if failure_stage == "fchmod" and not hasattr(os, "fchmod"):
+            pytest.skip("file descriptor permissions are not supported")
+        if failure_stage == "fchmod" and os.name == "nt":
+            pytest.skip("Windows does not set POSIX file permissions")
+
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("setting: original\n", encoding="utf-8")
+        config = Config(config_path=config_file)
+        previous = config_file.read_bytes()
+        created = []
+        real_mkstemp = config_module.tempfile.mkstemp
+
+        def record_mkstemp(*args, **kwargs):
+            fd, name = real_mkstemp(*args, **kwargs)
+            created.append(fd)
+            return fd, name
+
+        monkeypatch.setattr(config_module.tempfile, "mkstemp", record_mkstemp)
+        if failure_stage == "fchmod":
+            real_fchmod = os.fchmod
+
+            def deny_file_fchmod(fd, mode):
+                if stat.S_ISREG(os.fstat(fd).st_mode):
+                    raise PermissionError("simulated permission setup failure")
+                return real_fchmod(fd, mode)
+
+            monkeypatch.setattr(config_module.os, "fchmod", deny_file_fchmod)
+        else:
+
+            def fail_fdopen(*args, **kwargs):
+                raise OSError("simulated stream setup failure")
+
+            monkeypatch.setattr(config_module.os, "fdopen", fail_fdopen)
+
+        try:
+            with pytest.raises(OSError, match="simulated"):
+                config.set("setting", "replacement")
+
+            assert len(created) == 1
+            assert config_file.read_bytes() == previous
+            assert config.get("setting") == "original"
+            assert list(tmp_path.glob(".config.yaml.*.tmp")) == []
+            with pytest.raises(OSError) as error:
+                os.fstat(created[0])
+            assert error.value.errno == errno.EBADF
+        finally:
+            # Keep the failing pre-fix reproduction from leaking a descriptor.
+            for fd in created:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+
     def test_init_is_read_only_on_disk_until_first_save(self, tmp_path):
         config_file = tmp_path / "subdir" / "config.yaml"
         Config(config_path=config_file)
