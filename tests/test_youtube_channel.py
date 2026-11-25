@@ -66,6 +66,52 @@ def test_can_handle_matches_youtube_hosts():
 
 
 
+# --- playlist links ---
+#
+# A link opened from a playlist or a Mix looks like watch?v=<id>&list=<playlist>.
+# Without --no-playlist yt-dlp extracts every entry of the playlist, so `read`
+# would return another video's metadata and `subtitle` another video's captions.
+
+PLAYLIST_LINK = "https://www.youtube.com/watch?v=jNQXAC9IVRw&list=PLAYLIST1"
+
+
+def test_read_of_a_playlist_link_asks_ytdlp_for_the_single_video(monkeypatch):
+    import json
+
+    import agent_reach.channels.youtube as yt
+
+    seen = {}
+
+    def fake_run(argv, **kwargs):
+        seen["argv"] = argv
+        return json.dumps({"id": "jNQXAC9IVRw", "title": "Me at the zoo",
+                           "webpage_url": "https://www.youtube.com/watch?v=jNQXAC9IVRw"})
+
+    monkeypatch.setattr(yt, "run_cmd", fake_run)
+    items = YouTubeChannel()._ytdlp_read(target=PLAYLIST_LINK, timeout=30)
+
+    assert items[0]["title"] == "Me at the zoo"
+    assert "--no-playlist" in seen["argv"]
+
+
+def test_subtitle_of_a_playlist_link_asks_ytdlp_for_the_single_video(monkeypatch):
+    import agent_reach.channels.youtube as yt
+
+    seen = {}
+
+    def fake_run(argv, **kwargs):
+        seen["argv"] = argv
+        Path(kwargs["cwd"], "jNQXAC9IVRw.en.vtt").write_text(
+            "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nzoo words\n", encoding="utf-8")
+        return "Me at the zoo\n"
+
+    monkeypatch.setattr(yt, "run_cmd", fake_run)
+    items = YouTubeChannel()._ytdlp_subtitle(target=PLAYLIST_LINK, lang="en", timeout=30)
+
+    assert items[0]["text"] == "zoo words"
+    assert "--no-playlist" in seen["argv"]
+
+
 def test_constraints_pin_ytdlp_to_current_stable_release():
     constraints = Path(__file__).parents[1] / "constraints.txt"
     pin = next(

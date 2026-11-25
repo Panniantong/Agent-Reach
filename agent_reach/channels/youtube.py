@@ -161,7 +161,7 @@ class YouTubeChannel(Channel):
     # ── unified entry backends ──
 
     def _ytdlp_read(self, *, target: str, timeout: float) -> list:
-        out = _run_ytdlp(["--dump-json", "--skip-download", _video_url(target)], timeout)
+        out = _run_ytdlp(["--dump-json", "--skip-download", "--no-playlist", _video_url(target)], timeout)
         info = json.loads(out.splitlines()[-1])
         return [
             make_item(
@@ -199,7 +199,7 @@ class YouTubeChannel(Channel):
         with private_temporary_directory(prefix="agent-reach-subs-") as tmp:
             out = _run_ytdlp(
                 [
-                    "--skip-download", "--no-simulate",
+                    "--skip-download", "--no-simulate", "--no-playlist",
                     "--write-subs", "--write-auto-subs",
                     "--sub-langs", ",".join(wanted), "--sub-format", "vtt",
                     "--print", "%(title)s",
