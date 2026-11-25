@@ -6,6 +6,7 @@ from unittest.mock import Mock
 import pytest
 
 from agent_reach.channels.linkedin import LinkedInChannel
+from agent_reach.channels.reddit import RedditChannel
 from agent_reach.channels.web import WebChannel
 from agent_reach.runtime import cli, manage, state, tools
 from agent_reach.runtime.dispatch import run_action
@@ -114,6 +115,45 @@ def test_shells_and_login_pages_are_not_successful_read_results(monkeypatch, tit
     out = run_action(LinkedInChannel(), "read", {"target": URL})
     assert not out["ok"] and out["error"]["code"] == "NEED_LOGIN"
     assert any(a["result"] == "INSUFFICIENT_CONTENT" for a in out["meta"]["attempts"])
+
+
+@pytest.mark.parametrize("added,backend", [(False, None), (True, None), (False, "public-web")])
+@pytest.mark.parametrize("heading", ["You've", "# You’ve"])
+def test_reddit_network_block_page_is_not_successful_content(monkeypatch, capsys, added, backend, heading):
+    url = "https://www.reddit.com/r/Python/comments/abc123/example/"
+    text = (f"{heading} been blocked by network security.\n\n"
+            "To continue, log in to your Reddit account or use your developer token.\n\n"
+            "If you think you've been blocked by mistake, file a ticket below.")
+    monkeypatch.setattr(WebChannel, "_jina_read", lambda self, **k: [make_item(title="Reddit", url=url, text=text)])
+    site = Mock(side_effect=ReachError("UPSTREAM_BROKEN", "Reddit JSON returned HTTP 403"))
+    monkeypatch.setattr(RedditChannel, "_opencli_read", site)
+    if added:
+        data = state.load()
+        data["channels"]["reddit"] = {"added_at": state.now()}
+        state.save(data)
+    args = ["reddit", "read", url]
+    if backend:
+        args.extend(["--backend", backend])
+    assert cli.main(args) == 1
+    out = json.loads(capsys.readouterr().out)
+    assert not out["ok"] and out["items"] == []
+    assert out["error"]["code"] == "UPSTREAM_BROKEN"
+    assert any(a["result"] == "INSUFFICIENT_CONTENT" for a in out["meta"]["attempts"])
+    assert site.call_count == (0 if backend else 1)
+    assert not state.load().get("cooldowns", {}).get("reddit")
+
+
+@pytest.mark.parametrize("text", [
+    "I get 'You've been blocked by network security.' How can I read this post?",
+    "You've been blocked by network security.\n\nThis is the error I am asking about, not the post content.",
+    "Reddit showed this message:\nYou've been blocked by network security.\n\n"
+    "To continue, log in to your Reddit account or use your developer token.",
+])
+def test_reddit_posts_discussing_network_blocks_are_still_readable(monkeypatch, text):
+    url = "https://www.reddit.com/r/Python/comments/abc123/example/"
+    monkeypatch.setattr(WebChannel, "_jina_read", lambda self, **k: [make_item(title="Reddit help", url=url, text=text)])
+    out = run_action(RedditChannel(), "read", {"target": url}, only_backend="public-web")
+    assert out["ok"] and out["items"][0]["text"] == text
 
 
 def test_confirmed_destination_cooldown_blocks_every_path(public_search):

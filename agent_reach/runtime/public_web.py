@@ -37,6 +37,11 @@ def _readable(item: dict) -> bool:
     title = str(item.get("title") or "").strip()
     if not text or (len(text) < 80 and text.casefold() == title.casefold()):
         return False
+    # Match the block page's opening and instructions, not posts mentioning it.
+    reddit_block = (r"(?:#{1,6}\s*)?you['’]ve been blocked by network security\.\s+"
+                    r"to continue,\s+log in to your reddit account or use your developer token\b")
+    if re.match(reddit_block, text, re.I):
+        return False
     wall = r"log\s*in|sign\s*in|join\s+(?:now|linkedin)|登录|登入|注册|just a moment|prove your humanity|access denied|security verification|安全验证|验证码"
     if re.fullmatch(rf"(?:{wall})(?:\s*[-|·:].*)?", title, re.I):
         return False
