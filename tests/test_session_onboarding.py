@@ -70,6 +70,8 @@ def test_automatic_reuse_copies_only_the_requested_site_and_reuses_cache(monkeyp
     from agent_reach.backends import opencli
     from agent_reach.runtime import session_reuse
     monkeypatch.setattr(browser, 'ensure_running', lambda: None)
+    monkeypatch.setattr(browser, 'ensure_session_restored', lambda: 'launch-1')
+    monkeypatch.setattr(browser, '_save_session_unlocked', lambda: None)
     monkeypatch.setattr(browser, 'connected_contexts', lambda: ['daily', 'owned'])
     monkeypatch.setattr(browser, 'bound_context', lambda: 'owned')
     export = Mock(return_value=[{'name':'sid','value':'test','domain':'.xiaohongshu.com','expirationDate':9999999999,'sameSite':'lax'},
@@ -114,7 +116,8 @@ def test_explicit_import_can_refresh_a_saved_snapshot(monkeypatch):
     source = Mock(return_value=(incoming, 'daily'))
     call = Mock(return_value={})
     monkeypatch.setattr(browser, 'ensure_running', lambda: None)
-    monkeypatch.setattr(browser, 'save_session', lambda: None)
+    monkeypatch.setattr(browser, 'ensure_session_restored', lambda: 'launch-1')
+    monkeypatch.setattr(browser, '_save_session_unlocked', lambda: None)
     monkeypatch.setattr(session_reuse, '_source_cookies', source)
     monkeypatch.setattr(cdp, 'call', call)
 
@@ -201,7 +204,8 @@ def test_missing_bridge_is_not_recorded_as_an_empty_site_session(monkeypatch):
 def test_site_snapshot_expires_destination_only_cookies_and_preserves_other_sites(monkeypatch):
     from agent_reach.runtime import session_reuse
     monkeypatch.setattr(browser,'ensure_running',lambda:None)
-    monkeypatch.setattr(browser,'save_session',lambda:None)
+    monkeypatch.setattr(browser,'ensure_session_restored',lambda:'launch-1')
+    monkeypatch.setattr(browser,'_save_session_unlocked',lambda:None)
     incoming=[{'name':'sid','value':'chosen','domain':'.xiaohongshu.com','path':'/'}]
     monkeypatch.setattr(session_reuse,'_source_cookies',lambda *a:(incoming,'daily'))
     jar=[{'name':'old_account','value':'stale','domain':'.xiaohongshu.com','path':'/'},
@@ -225,7 +229,8 @@ def test_site_snapshot_expires_destination_only_cookies_and_preserves_other_site
 def test_site_import_failure_restores_previous_site_and_retains_saved_snapshot(monkeypatch):
     from agent_reach.runtime import session_reuse
     monkeypatch.setattr(browser,'ensure_running',lambda:None)
-    monkeypatch.setattr(browser,'save_session',lambda:pytest.fail('saved a failed import'))
+    monkeypatch.setattr(browser,'ensure_session_restored',lambda:'launch-1')
+    monkeypatch.setattr(browser,'_save_session_unlocked',lambda:pytest.fail('saved a failed import'))
     monkeypatch.setattr(session_reuse,'_source_cookies',lambda *a:([{'name':'new','value':'incoming','domain':'.xiaohongshu.com'}],'daily'))
     calls=[]
     def call(method,params=None):
@@ -328,3 +333,31 @@ def test_xueqiu_syncs_reused_browser_login_only_for_community_actions(monkeypatc
     ch._xq_hot_posts(limit=2,timeout=2)
     reuse.assert_called_once_with('xueqiu')
     sync.assert_called_once_with()
+
+
+def test_import_on_an_unrestored_launch_replaces_the_old_account_instead_of_mixing(monkeypatch):
+    from agent_reach.runtime import bridge, session_reuse
+    browser.browser_root().mkdir(parents=True, exist_ok=True)
+    (browser.browser_root()/'session.json').write_text(json.dumps({'cookies':[
+        {'name':'sid','value':'A','domain':'.xiaohongshu.com','path':'/','expires':-1},
+        {'name':'a1','value':'A-only','domain':'.xiaohongshu.com','path':'/','expires':-1}]}))
+    jar=[]  # this launch's restore was skipped: the saved account is not in the browser yet
+    def call(method,params=None,**kwargs):
+        if method=='Storage.getCookies':
+            return {'cookies':[dict(c) for c in jar]}
+        if method=='Storage.setCookies':
+            for c in params['cookies']:
+                jar[:]=[j for j in jar if (j['name'],j['domain'])!=(c['name'],c['domain'])]
+                if c.get('expires')!=1:
+                    jar.append(dict(c))
+        return {}
+    monkeypatch.setattr(cdp,'call',call)
+    monkeypatch.setattr(cdp,'_json',lambda path:{'webSocketDebuggerUrl':'ws://127.0.0.1:9222/devtools/browser/launch-1'})
+    monkeypatch.setattr(browser,'ensure_running',lambda:None)
+    monkeypatch.setattr(bridge,'require_running',lambda:None)
+    incoming=[{'name':'sid','value':'B','domain':'.xiaohongshu.com','path':'/'}]
+    monkeypatch.setattr(session_reuse,'_source_cookies',lambda *a:(incoming,'daily'))
+    session_reuse.prepare('xiaohongshu',force=True)
+    assert [(c['name'],c['value']) for c in jar]==[('sid','B')]
+    saved=json.loads((browser.browser_root()/'session.json').read_text())['cookies']
+    assert [(c['name'],c['value']) for c in saved]==[('sid','B')]

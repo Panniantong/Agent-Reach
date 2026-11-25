@@ -217,8 +217,9 @@ def try_lock(fd: int) -> bool:
 
 
 @contextlib.contextmanager
-def _locked(path: Path, wait: float) -> Iterator[None]:
-    """Hold an exclusive lock on `path`; ReachError after `wait` seconds."""
+def _locked(path: Path, wait: float,
+            busy: str = "another Agent Reach process is still starting the browser") -> Iterator[None]:
+    """Hold an exclusive lock on `path`; ReachError(`busy`) after `wait` seconds."""
     fd = _open_lock(path)
     try:
         deadline = time.monotonic() + wait
@@ -226,7 +227,7 @@ def _locked(path: Path, wait: float) -> Iterator[None]:
             if time.monotonic() >= deadline:
                 from .result import UPSTREAM_BROKEN, ReachError
 
-                raise ReachError(UPSTREAM_BROKEN, "another Agent Reach process is still starting the browser")
+                raise ReachError(UPSTREAM_BROKEN, busy)
             time.sleep(0.2)
         yield
     finally:
@@ -670,29 +671,74 @@ def _require_owned() -> None:
                  f"`agent-reach configure browser-port <port>` (current {CDP_PORT}).")
 
 
+def session_lock():
+    """Serializes snapshot reads/writes, restores and site login changes across processes."""
+    return _locked(browser_root() / "session.lock", wait=5.0,
+                   busy="another Agent Reach process is still saving or changing the browser session")
+
+
 def save_session() -> None:
     """Serialize snapshot reads/writes with logout so an old snapshot cannot revive it."""
-    with _locked(browser_root() / "session.lock", wait=5.0):
+    with session_lock():
         _save_session_unlocked()
+
+
+_reported_unrestored = False
 
 
 def _save_session_unlocked() -> None:
     from . import cdp
+    from .result import ReachError
+    # A launch whose saved login was never put back (CDP answered too slowly
+    # when the watcher started it) holds an empty cookie jar; saving it would
+    # replace the snapshot and lose every login. Restore first, else keep it.
+    try:
+        launch = ensure_session_restored()
+    except ReachError:
+        launch = None
+    if launch is None:
+        global _reported_unrestored
+        if not _reported_unrestored:  # once per process; the watcher retries every 2 s
+            _reported_unrestored = True
+            print("agent-reach: saved browser session not restored yet; snapshot kept", file=sys.stderr, flush=True)
+        return
     result = cdp.call("Storage.getCookies")
-    if result is not None:
+    # The browser may have restarted meanwhile; never save another launch's jar.
+    if result is not None and _launch_id() == launch:
         atomic_write_private_text(browser_root() / "session.json", json.dumps(result))
 
 
-def restore_session() -> None:
+def _launch_id() -> Optional[str]:
+    """This browser launch's identity: the id in its CDP browser URL, new on every start."""
     from . import cdp
+    info = cdp._json("/json/version")
+    url = str(info.get("webSocketDebuggerUrl") or "") if isinstance(info, dict) else ""
+    return url.rsplit("/", 1)[-1] or None
+
+
+def ensure_session_restored() -> Optional[str]:
+    """The running launch's id once it has had the saved session put back (restoring it now if
+    not), else None. Call with `session_lock()` held."""
+    launch = _launch_id()
+    if launch is None or (launch != _load_state().get("restored_launch") and not restore_session()):
+        return None
+    return launch
+
+
+def restore_session() -> bool:
+    """Put saved cookies the running browser lacks back; True once this launch has them."""
+    from . import cdp
+    launch = _launch_id()
+    if launch is None:
+        return False
     try:
         text = read_small_text_no_follow(browser_root() / "session.json", max_bytes=2 * 1024 * 1024)
         rows = json.loads(text or "{}").get("cookies", [])
     except (OSError, ValueError, PrivatePathError):
-        return
+        rows = []
     existing = cdp.call("Storage.getCookies")
     if existing is None:
-        return
+        return False
     keys = {(c["name"], c["domain"], c.get("path", "/")) for c in existing.get("cookies", [])}
     allowed = {"name", "value", "domain", "path", "secure", "httpOnly", "sameSite", "expires"}
     missing = [{k: v for k, v in row.items() if k in allowed} for row in rows
@@ -703,7 +749,8 @@ def restore_session() -> None:
     if missing and cdp.call("Storage.setCookies", {"cookies": missing}) is None:
         from .result import UPSTREAM_BROKEN, ReachError
         raise ReachError(UPSTREAM_BROKEN, "Saved login could not be restored; the saved session was retained")
-    update_state(restored_cookies=len(missing))
+    update_state(restored_cookies=len(missing), restored_launch=launch)
+    return True
 
 
 def clear_site(domains: List[str]) -> int:
@@ -721,13 +768,16 @@ def _clear_site(domains: List[str]) -> int:
         return 0
 
     ensure_running()
-    with _locked(browser_root() / "session.lock", wait=5.0):
+    with session_lock():
         return _clear_running_site(domains)
 
 
 def _clear_running_site(domains: List[str]) -> int:
     from . import cdp
     from .result import UPSTREAM_BROKEN, ReachError
+    # Restore before clearing, so the save below cannot bring the site back.
+    if ensure_session_restored() is None:
+        raise ReachError(UPSTREAM_BROKEN, "Could not inspect site data; login cleanup is incomplete")
     # Stop the removed site's open pages from refreshing its login in memory.
     targets = cdp._json("/json/list")
     cookies = cdp.call("Storage.getCookies")
