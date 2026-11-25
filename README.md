@@ -102,6 +102,7 @@ agent-reach read https://www.v2ex.com/t/123   # 按链接自动选渠道
 | youtube | 默认 | 视频信息、搜索、字幕、语音转文字 | 无；转文字需要 Groq 或 OpenAI Key |
 | web | 默认 | 网页搜索、网页阅读（保底） | 无 |
 | xiaohongshu | 可选 | 搜笔记、读正文、看评论 | 登录 |
+| zhihu | 可选 | 搜索、热榜、问题回答摘要、单个回答正文和评论 | 站内访问按需登录；专栏全文用网页工具尝试 |
 | xueqiu | 可选 | 实时行情、搜股票、热帖、热股 | 行情不用登录；热帖、热股要登录 |
 | boss | 可选 | 搜职位和 JD | 登录 |
 | xiaoyuzhou | 可选 | 播客转文字 | Groq Key |
