@@ -46,6 +46,20 @@ class TestConfig:
         tmp_config.set("my_key", "from_config")
         assert tmp_config.get("my_key") == "from_config"
 
+    def test_empty_config_value_falls_back_to_env(self, tmp_path, monkeypatch):
+        # `groq_api_key:` with nothing after it loads as None. It must not
+        # hide a key the user exported in the environment.
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("groq_api_key:\n", encoding="utf-8")
+        monkeypatch.setenv("GROQ_API_KEY", "gsk_from_env")
+        assert Config(config_path=config_file).get("groq_api_key") == "gsk_from_env"
+
+    def test_empty_config_value_returns_default(self, tmp_path, monkeypatch):
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("proxy:\n", encoding="utf-8")
+        monkeypatch.delenv("PROXY", raising=False)
+        assert Config(config_path=config_file).get("proxy", "fallback") == "fallback"
+
     def test_save_and_load(self, tmp_config):
         tmp_config.set("key1", "value1")
         tmp_config.set("key2", 42)
