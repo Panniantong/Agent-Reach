@@ -677,6 +677,30 @@ def test_opencli_message_and_help_reach_the_agent_unchanged():
     login = _opencli_error("ok: false\nerror:\n  code: AUTH_REQUIRED\n  message: Not logged into x.com\n"
                            "  help: Log in in your Chrome.\n", "reach login steps")
     assert login.message == "Not logged into x.com" and login.hint == "reach login steps"  # Reach's own browser
+    attach = _opencli_error(
+        "ok: false\nerror:\n  code: COMMAND_EXEC\n  message: 'attach failed: Cannot attach to this target.'\n",
+        "reach login steps",
+    )
+    assert attach.code == "UPSTREAM_BROKEN"
+    assert attach.message == "attach failed: Cannot attach to this target."
+    assert "browser stop" in attach.hint
+
+
+def test_windows_xiaohongshu_prepares_an_attachable_tab_before_opencli(monkeypatch):
+    from agent_reach.backends import opencli
+    from agent_reach.runtime import browser, browser_binding, cdp, run
+
+    monkeypatch.setattr(opencli.sys, "platform", "win32")
+    order = []
+    monkeypatch.setattr(browser_binding, "environment", lambda site: order.append(("env", site)) or {"OPENCLI_PROFILE": "owned"})
+    monkeypatch.setattr(cdp, "ensure_attachable_page", lambda: order.append("tab") or {"id": "tab"})
+    monkeypatch.setattr(run, "run_cmd", lambda argv, timeout, env: order.append(("cmd", argv[1])) or "[]")
+    monkeypatch.setattr(browser, "save_session", lambda: order.append("save"))
+    assert opencli.opencli_call("xiaohongshu", ["search", "coffee", "--limit", "1"], timeout=5) == []
+    assert order == [("env", "xiaohongshu"), "tab", ("cmd", "xiaohongshu"), "save"]
+    monkeypatch.setattr(opencli.sys, "platform", "linux")
+    monkeypatch.setattr(cdp, "ensure_attachable_page", lambda: pytest.fail("other sites do not preflight a tab"))
+    assert opencli.opencli_call("twitter", ["search", "q"], timeout=5) == []
 
 
 

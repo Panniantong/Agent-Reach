@@ -258,6 +258,216 @@ def test_cloak_manual_login_uses_the_same_profile_with_a_window(home, monkeypatc
     context.pages[0].goto.assert_not_called() # restoration precedes navigation in the watcher
 
 
+def test_attachable_page_skips_windows_toolbar_devtools_and_extensions():
+    toolbar = {"type": "page", "id": "bar", "url": "chrome://webui-toolbar.top-chrome/",
+               "webSocketDebuggerUrl": "ws://127.0.0.1/bar"}
+    side = {"type": "other", "id": "side", "url": "chrome-untrusted://side-panel.top-chrome/"}
+    worker = {"type": "service_worker", "id": "sw", "url": "chrome-extension://abc/bg.js"}
+    devtools = {"type": "page", "id": "dt", "url": "devtools://devtools/bundled/inspector.html"}
+    blank = {"type": "page", "id": "blank", "url": "about:blank"}
+    note = {"type": "page", "id": "note", "url": "https://www.xiaohongshu.com/explore"}
+    assert not cdp.is_attachable_page(toolbar)
+    assert not cdp.is_attachable_page(side)
+    assert not cdp.is_attachable_page(worker)
+    assert not cdp.is_attachable_page(devtools)
+    assert cdp.pick_attachable_page([toolbar, side, worker, devtools, blank, note]) is note
+    assert cdp.pick_attachable_page([toolbar, blank]) is blank
+    assert cdp.pick_attachable_page([toolbar, worker]) is None
+
+
+def test_page_cdp_call_does_not_attach_to_a_toolbar(monkeypatch):
+    toolbar = [{"type": "page", "id": "bar", "url": "chrome://webui-toolbar.top-chrome/",
+                "webSocketDebuggerUrl": "ws://127.0.0.1:9/devtools/page/bar"}]
+    monkeypatch.setattr(cdp, "_json", lambda path: toolbar if path == "/json/list" else {})
+    monkeypatch.setattr(cdp.socket, "create_connection", lambda *a, **k: pytest.fail("attached to toolbar"))
+    assert cdp.call("Runtime.evaluate", page=True) is None
+
+
+def test_explicit_target_still_reaches_the_extension_worker(monkeypatch):
+    worker = {"type": "service_worker", "id": "sw", "url": "chrome-extension://abc/bg.js",
+              "webSocketDebuggerUrl": "ws://127.0.0.1:9/devtools/page/sw"}
+    seen = {}
+
+    def connect(*_args, **_kwargs):
+        seen["yes"] = True
+        raise OSError("down")
+
+    monkeypatch.setattr(cdp, "_json", lambda path: [worker])
+    monkeypatch.setattr(cdp.socket, "create_connection", connect)
+    assert cdp.call("Runtime.evaluate", target_id="sw") is None
+    assert seen["yes"]
+
+
+def test_ensure_attachable_page_reuses_an_http_tab(monkeypatch):
+    note = {"type": "page", "id": "note", "url": "https://www.xiaohongshu.com/explore"}
+    monkeypatch.setattr(cdp, "_json", lambda path: [note])
+    monkeypatch.setattr(cdp, "_open_page", lambda url: pytest.fail(url))
+    assert cdp.ensure_attachable_page() is note
+
+
+def test_ensure_attachable_page_opens_a_tab_when_only_the_toolbar_is_listed(monkeypatch):
+    lists = [
+        [{"type": "page", "id": "bar", "url": "chrome://webui-toolbar.top-chrome/"}],
+        [{"type": "page", "id": "blank", "url": "about:blank"}],
+    ]
+    monkeypatch.setattr(cdp, "_json", lambda path: lists.pop(0) if path == "/json/list" else {"Browser": "1"})
+    opened = {}
+    monkeypatch.setattr(cdp, "_open_page", lambda url: opened.setdefault("url", url) or {"type": "page", "url": url, "id": "new"})
+    page = cdp.ensure_attachable_page()
+    assert opened["url"] == "about:blank"
+    assert page["id"] == "blank"
+
+
+def test_ensure_attachable_page_explains_a_dead_debugger_and_a_restricted_browser(monkeypatch):
+    from agent_reach.runtime.result import ReachError
+
+    monkeypatch.setattr(cdp, "_open_page", lambda url: None)
+    monkeypatch.setattr(cdp, "_json", lambda path: None)
+    with pytest.raises(ReachError, match="debugger endpoint") as missing:
+        cdp.ensure_attachable_page()
+    assert "browser stop" in missing.value.hint
+    monkeypatch.setattr(cdp, "_json", lambda path: [] if path == "/json/list" else {"Browser": "1"})
+    with pytest.raises(ReachError, match="could not find a browser tab") as restricted:
+        cdp.ensure_attachable_page()
+    assert "login xiaohongshu" in restricted.value.hint
+
+
+def _cloak_modules(binary: str):
+    import types
+
+    seen = {}
+
+    def build_args(stealth, extra, **kwargs):
+        assert stealth is True
+        assert kwargs["locale"] == "zh-CN"
+        seen["headless"] = kwargs["headless"]
+        seen["extension_paths"] = kwargs["extension_paths"]
+        return ["--from-cloak", *list(extra)]
+
+    def persistent_seed_args(profile, stealth, args):
+        assert stealth is True and profile
+        return ["--fingerprint=42", *args]
+
+    cloak = types.ModuleType("cloakbrowser")
+    cloak.__path__ = []
+    cloak.build_args = build_args
+    cloak.ensure_binary = lambda: binary
+    cloak.seen = seen
+    config = types.ModuleType("cloakbrowser.config")
+    config.persistent_seed_args = persistent_seed_args
+    return cloak, config
+
+
+def test_windows_cloak_launch_does_not_hold_a_playwright_debugger(home, monkeypatch):
+    import sys
+
+    from agent_reach.runtime import browser_watcher
+
+    binary = str(home / "chrome.exe")
+    cloak, config = _cloak_modules(binary)
+    monkeypatch.setattr(browser_watcher.sys, "platform", "win32")
+    monkeypatch.setitem(sys.modules, "cloakbrowser", cloak)
+    monkeypatch.setitem(sys.modules, "cloakbrowser.config", config)
+    monkeypatch.setattr(browser, "is_running", lambda: True)
+    monkeypatch.setattr(browser_watcher, "windows_hidden_kwargs", lambda: {"creationflags": 123})
+    captured = {}
+
+    class Proc:
+        pid = 7
+
+        def poll(self):
+            return None
+
+        def wait(self, timeout=None):
+            return 0
+
+        def terminate(self):
+            return None
+
+        def kill(self):
+            return None
+
+    def popen(argv, **kwargs):
+        captured["argv"] = argv
+        captured["kwargs"] = kwargs
+        return Proc()
+
+    monkeypatch.setattr(browser_watcher.subprocess, "Popen", popen)
+    monkeypatch.setenv("REACH_BROWSER_PROXY", "http://user:p%40ss@127.0.0.1:7890")
+    owned = browser_watcher._launch_cloak("about:blank", headless=False)
+    argv = captured["argv"]
+    assert argv[0] == binary
+    assert f"--user-data-dir={browser.profile_dir()}" in argv
+    assert "--remote-debugging-pipe" not in " ".join(argv)
+    assert "--headless=new" not in argv
+    assert "--fingerprint=42" in argv
+    assert f"--remote-debugging-port={browser.CDP_PORT}" in argv
+    assert "--proxy-server=http://user:p%40ss@127.0.0.1:7890" in argv
+    assert "--proxy-bypass-list=localhost,127.0.0.1,[::1]" in argv
+    assert cloak.seen["extension_paths"] == [str(browser.extension_dir())]
+    assert cloak.seen["headless"] is False
+    assert captured["kwargs"]["creationflags"] == 123
+    assert owned.pages[0] is owned
+
+    monkeypatch.delenv("REACH_BROWSER_PROXY", raising=False)
+    headless_argv = browser_watcher.cloak_direct_argv(headless=True, proxy=None)
+    assert "--headless=new" in headless_argv
+    assert "--remote-debugging-pipe" not in headless_argv
+
+
+def test_windows_cloak_launch_reports_a_missing_debugger_port(home, monkeypatch):
+    import sys
+
+    from agent_reach.runtime import browser_watcher
+
+    cloak, config = _cloak_modules(str(home / "chrome.exe"))
+    monkeypatch.setattr(browser_watcher.sys, "platform", "win32")
+    monkeypatch.setitem(sys.modules, "cloakbrowser", cloak)
+    monkeypatch.setitem(sys.modules, "cloakbrowser.config", config)
+    monkeypatch.setattr(browser, "wait_for", lambda *a, **k: False)
+    monkeypatch.setattr(browser_watcher, "windows_hidden_kwargs", lambda: {})
+
+    class Proc:
+        pid = 9
+
+        def __init__(self, argv):
+            self.args = argv
+            self.returncode = None
+            self.stopped = False
+
+        def poll(self):
+            if self.args and self.args[0] == "taskkill":
+                return 0
+            return 0 if self.stopped else None
+
+        def terminate(self):
+            self.stopped = True
+
+        def wait(self, timeout=None):
+            self.returncode = 0
+            return 0
+
+        def kill(self):
+            self.stopped = True
+
+        def communicate(self, input=None, timeout=None):
+            self.returncode = 0
+            self.stopped = True
+            return (b"", b"")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            self.returncode = 0
+            self.stopped = True
+            return False
+
+    monkeypatch.setattr(browser_watcher.subprocess, "Popen", lambda argv, **kwargs: Proc(argv))
+    with pytest.raises(RuntimeError, match="debugging port"):
+        browser_watcher._launch_cloak("about:blank")
+
+
 def test_restore_failure_preserves_the_original_snapshot(home, monkeypatch):
     from agent_reach.runtime.result import ReachError
     browser.browser_root().mkdir(parents=True)

@@ -6,6 +6,7 @@ extension + local daemon. Agent Reach uses one shared, Reach-owned browser profi
 """
 
 import json
+import sys
 
 OPENCLI_EXTENSION_ID = "ildkmabpimmkaediidaifkhjpohdnifk"
 OPENCLI_EXTENSION_URL = (
@@ -53,6 +54,16 @@ def _opencli_error(text: str, login_hint: str):
             "AUTH" in code or "LOGIN" in code or any(w in low for w in login_words)):
         # Upstream would send the user to their own Chrome; Reach logs in in its own browser.
         return ReachError(NEED_LOGIN, message, hint=login_hint or None)
+    if "cannot attach to this target" in low:
+        return ReachError(
+            UPSTREAM_BROKEN, message,
+            hint=upstream_hint or (
+                "Chrome refused to attach the debugger to this tab. On Windows that usually means "
+                "another debugger already owns the tab, or the only target is restricted (toolbar, "
+                "extension, or DevTools). Run `agent-reach browser stop`, then retry. If headless "
+                "attach still fails, run `agent-reach login` for this channel and retry in that window."
+            ),
+        )
     return ReachError(UPSTREAM_BROKEN, message, hint=upstream_hint)
 
 
@@ -62,6 +73,12 @@ def opencli_call(site: str, args, *, timeout: float, login_hint: str = ""):
     from agent_reach.runtime.run import CommandFailed, run_cmd
 
     env = environment(site)
+    if site == "xiaohongshu" and sys.platform == "win32":
+        # OpenCLI 1.8.x drives Xiaohongshu through chrome.debugger.attach. Do not
+        # hand it a Windows toolbar/DevTools target; that fails every read.
+        from agent_reach.runtime.cdp import ensure_attachable_page
+
+        ensure_attachable_page()
     argv = ["opencli", site, *args, "-f", "json"]
     try:
         out = run_cmd(argv, timeout=timeout, env=env)
