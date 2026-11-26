@@ -1012,7 +1012,7 @@ def uninstall(dry_run: bool = False) -> dict:
 # ── configure ──
 
 CONFIG_KEYS = {"groq-key": "groq_api_key", "openai-key": "openai_api_key", "proxy": "proxy", "github-token": "github_token",
-               "browser-port": "browser_port",
+               "browser-port": "browser_port", "session-reuse": "session_reuse",
 }
 
 
@@ -1030,5 +1030,9 @@ def configure(key: str, value: str) -> dict:
 
         if browser.watcher_running():  # our browser on the old port; it reopens on the new one when next used
             browser.stop()
+    if key == "session-reuse":
+        value = value.strip().lower()
+        if value not in ("on", "off"):
+            raise ReachError(BAD_INPUT, "session-reuse must be on or off")
     Config().set(CONFIG_KEYS[key], int(value) if key == "browser-port" else value)
     return {"key": key, "saved": True}

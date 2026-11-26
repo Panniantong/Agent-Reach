@@ -86,7 +86,7 @@ agent-reach read https://www.v2ex.com/t/123   # 按链接自动选渠道
 ### ✅ 在你用之前，你可能想知道
 
 - **适用于哪些 Agent？** 一切 Agent 都能用。
-- **会碰我的浏览器和账号吗？** 要登录的平台用 Agent Reach 自己的专用浏览器，在后台运行、不弹窗。第一次用某个网站时，会把你 Chrome 里这个网站的登录复制一份过去，原浏览器不变，不读密码库。复制过来的通常是主账号，建议换成小号，做法见下面的"安全性"。详见[会话配置](agent_reach/skill/references/sessions.md)。
+- **会碰我的浏览器和账号吗？** 要登录的平台用 Agent Reach 自己的专用浏览器，在后台运行、不弹窗。第一次用某个网站时，会把你 Chrome 里这个网站的登录复制一份过去，原浏览器不变，不读密码库。不想让它读本机浏览器登录，一条命令全局关掉：`agent-reach configure session-reuse off`。复制过来的通常是主账号，建议换成小号，做法见下面的"安全性"。详见[会话配置](agent_reach/skill/references/sessions.md)。
 
 ---
 

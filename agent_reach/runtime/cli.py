@@ -65,7 +65,7 @@ For the user:
   agent-reach doctor [--text]             status of every channel and installed tool versions (no network)
   agent-reach check [channel] [--text]    live-test channels; --search tests search/jobs only
   agent-reach update [--check]            upgrade Agent Reach, every added channel's tools and the skill
-  agent-reach configure <key> [value]     groq-key | openai-key | proxy | github-token | browser-port
+  agent-reach configure <key> [value]     groq-key | openai-key | proxy | github-token | browser-port | session-reuse
   agent-reach uninstall [--dry-run]       remove everything Agent Reach installed
 """
 
@@ -107,12 +107,19 @@ _SHOW_NOTICE = True
 
 def _emit(payload: dict) -> int:
     if _SHOW_NOTICE:
+        from . import session_reuse
         from .update_notice import notice
 
+        reuse = session_reuse.take_notice()
         info = notice()
-        if info:
+        if reuse or info:
             meta = payload.get("meta")
-            payload["meta"] = {**(meta if isinstance(meta, dict) else {}), "update": info}
+            merged = dict(meta) if isinstance(meta, dict) else {}
+            if reuse:
+                merged["session_reuse"] = reuse
+            if info:
+                merged["update"] = info
+            payload["meta"] = merged
     output = json.dumps(payload, ensure_ascii=False)
     try:
         output.encode(getattr(sys.stdout, "encoding", None) or "utf-8")
