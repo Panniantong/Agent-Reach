@@ -143,6 +143,7 @@ def browser_login_next(ch) -> str:
 def run_checks(names: Optional[List[str]] = None, timeout: float = 60.0, search_only: bool = False) -> dict:
     """Live-test the added channels (or the named ones); persist results in state."""
     from .dispatch import run_action
+    from .public_web import BACKEND as PUBLIC_WEB
 
     selected = _channels()
     if names:
@@ -156,14 +157,23 @@ def run_checks(names: Optional[List[str]] = None, timeout: float = 60.0, search_
     import math
     if not math.isfinite(timeout) or timeout <= 0:
         raise ReachError(BAD_INPUT, "timeout must be finite and positive")
-    results = []
+    results: List[dict] = []
     for ch in selected:
         for action in ch.actions:
             if action.live_test is None or (search_only and action.name not in {"search", "jobs"}):
                 continue
             # Search acceptance exercises the same route as an agent command, once.
-            backends = [(None, None)] if search_only else action.backends
+            backends: List[tuple] = [(None, None)] if search_only else list(action.backends)
+            # When every site backend fails, an agent command still falls back to the
+            # public web (dispatch.run_action), so check tests that route last instead
+            # of reporting a working action as broken.
+            fallback = bool(action.public_web) and not search_only
+            if fallback:
+                backends.append((PUBLIC_WEB, None))
             for label, _ in backends:
+                if fallback and label == PUBLIC_WEB and any(
+                        r["passed"] for r in results if r["channel"] == ch.name and r["action"] == action.name):
+                    break
                 out = run_action(ch, action.name, dict(action.live_test), timeout=timeout, only_backend=label)
                 label = out.get("backend") or label or (out["meta"]["attempts"][-1]["backend"] if out["meta"]["attempts"] else None)
                 passed = bool(out["ok"] and out["items"])
