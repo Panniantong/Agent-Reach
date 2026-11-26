@@ -90,6 +90,7 @@ jobs:
               "agent_reach/skill/SKILL.md",
               "agent_reach/skill/SKILL_en.md",
               "agent_reach/skill/references/sessions.md",
+              "agent_reach/skill/references/sessions_en.md",
               "agent_reach/skill/references/maintenance.md",
               "agent_reach/skill/references/capabilities.md",
           ):
