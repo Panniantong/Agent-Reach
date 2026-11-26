@@ -13,6 +13,7 @@ import urllib.request
 
 from agent_reach.runtime.result import (
     BAD_INPUT,
+    NOT_FOUND,
     RATE_LIMITED,
     UPSTREAM_BROKEN,
     ReachError,
@@ -27,6 +28,7 @@ _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 _MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 _ANTIBOT_SCAN_BYTES = 4096
 _EXA_MCP = "https://mcp.exa.ai/mcp"
+_JINA_TARGET_STATUS_RE = re.compile(r"^Warning: Target URL returned error (\d{3})\b", re.M)
 _EXA_HEADER_RE = re.compile(r"^(Title|URL|Published|Author):\s*(.*)$")
 _EXA_LIMIT_RE = re.compile(
     r"\b429\b|rate[ _-]?limit|too many requests|\bquota\b|"
@@ -138,6 +140,13 @@ def _parse_exa_text(text: str) -> list:
     return items
 
 
+def _jina_target_status(body: str):
+    """Return the HTTP status Jina says the target answered with, if it warns about one."""
+    header = body.split("Markdown Content:", 1)[0]
+    match = _JINA_TARGET_STATUS_RE.search(header)
+    return int(match.group(1)) if match else None
+
+
 def _parse_jina(url: str, body: str) -> dict:
     title = re.search(r"^Title:\s*(.*)$", body, re.M)
     published = re.search(r"^Published Time:\s*(.*)$", body, re.M)
@@ -227,4 +236,9 @@ class WebChannel(Channel):
             body = self.read(url, timeout=timeout)
         except RuntimeError as exc:
             raise ReachError(UPSTREAM_BROKEN, str(exc)) from None
+        status = _jina_target_status(body)
+        if status in (404, 410):
+            # Jina still returns the site's not-found page as content; don't
+            # hand that back as the page the agent asked for.
+            raise ReachError(NOT_FOUND, f"the page answered HTTP {status}")
         return [_parse_jina(url, body)]

@@ -16,7 +16,7 @@ import pytest
 
 from agent_reach.channels.web import _UA, WebChannel
 from agent_reach.runtime.dispatch import run_action
-from agent_reach.runtime.result import BAD_INPUT, RATE_LIMITED, UPSTREAM_BROKEN
+from agent_reach.runtime.result import BAD_INPUT, NOT_FOUND, RATE_LIMITED, UPSTREAM_BROKEN
 
 _MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 
@@ -311,3 +311,50 @@ def test_antibot_detection_has_a_fixed_scan_window():
 
     with patch("urllib.request.urlopen", return_value=_resp(body.encode("utf-8"))):
         assert channel.read("https://example.com/long-article") == body
+
+
+# --- read: target status reported by Jina ---
+
+_JINA_404 = (
+    "Title: Welcome to Python.org\n\n"
+    "URL Source: https://www.python.org/missing/\n\n"
+    "Warning: Target URL returned error 404: Not Found\n\n"
+    "Markdown Content:\n"
+    "**Notice:** This page displays a fallback.\n"
+)
+
+
+@pytest.mark.parametrize("status", [404, 410])
+def test_read_action_reports_missing_target_as_not_found(status):
+    body = _JINA_404.replace("404: Not Found", f"{status}: Gone")
+    with patch("urllib.request.urlopen", return_value=_resp(body.encode("utf-8"))), patch(
+        "agent_reach.channels.web.http_request"
+    ) as exa:
+        out = run_action(WebChannel(), "read", {"target": "https://www.python.org/missing/"})
+    assert out["ok"] is False
+    assert out["error"]["code"] == NOT_FOUND
+    assert str(status) in out["error"]["message"]
+    exa.assert_not_called()
+
+
+def test_read_action_keeps_pages_with_other_warnings():
+    body = _JINA_404.replace(
+        "Warning: Target URL returned error 404: Not Found",
+        "Warning: This page contains iframe that are currently hidden",
+    )
+    with patch("urllib.request.urlopen", return_value=_resp(body.encode("utf-8"))):
+        out = run_action(WebChannel(), "read", {"target": "https://www.python.org/missing/"})
+    assert out["ok"] is True
+    assert out["items"][0]["title"] == "Welcome to Python.org"
+
+
+def test_read_action_ignores_status_warnings_inside_page_content():
+    body = (
+        "Title: Debugging Jina\n\n"
+        "URL Source: https://example.com/post\n\n"
+        "Markdown Content:\n"
+        "Warning: Target URL returned error 404: Not Found\n"
+    )
+    with patch("urllib.request.urlopen", return_value=_resp(body.encode("utf-8"))):
+        out = run_action(WebChannel(), "read", {"target": "https://example.com/post"})
+    assert out["ok"] is True
