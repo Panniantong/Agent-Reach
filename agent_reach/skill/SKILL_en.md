@@ -58,7 +58,7 @@ On `PLATFORM_BLOCKED`, `RATE_LIMITED`, `NEED_LOGIN` or `BUSY`, stop this attempt
 
 All browser channels share one dedicated browser (CloakBrowser preferred, falling back to installed Chrome). It runs headless by default, closes after 10 idle minutes and reopens on the next call. Calls may run in parallel, including from subagents: up to 2 per platform and 4 in total run at once, the rest wait in line, and two searches on the same platform start at least 10 seconds apart.
 
-The first time a site is used, if the user's Chrome is connected to the OpenCLI extension, that site's login is copied once into the dedicated browser and reused afterwards; only that site is copied and the source browser is untouched. Only when the login has expired or there is no source to copy from does the user run `agent-reach login <channel>` and log in themselves. Refreshing, choosing a source and logging out are in [Sessions](references/sessions.md): read it when the user wants to log in, log out or switch accounts, or on `NEED_LOGIN`.
+The first time a site is used, if the user's Chrome is connected to the OpenCLI extension, that site's login is copied once into the dedicated browser and reused afterwards; only that site is copied and the source browser is untouched. Only when the login has expired or there is no source to copy from does the user run `agent-reach login <channel>` and log in themselves. Refreshing, choosing a source and logging out are in [Sessions](references/sessions_en.md): read it when the user wants to log in, log out or switch accounts, or on `NEED_LOGIN`.
 
 ## Platform notes
 

@@ -670,13 +670,21 @@ def test_hermes_default_home_matches_hermes_per_platform(monkeypatch, platform):
 
 
 def test_skill_one_real_copy_linked_only_for_present_ais(env):
+    """Ensure the canonical skill tree includes both session guides.
+
+    Args:
+        env: Isolated Agent Reach home fixture.
+
+    Returns:
+        None.
+    """
     home = home_dir()
     for d in (".claude", ".codex", ".openclaw"):
         (home / d).mkdir()
     result = manage.place_skill()
     real = home / ".agents" / "skills" / "agent-reach"
     assert (real / "SKILL.md").is_file()
-    for name in ("sessions.md", "maintenance.md"):
+    for name in ("sessions.md", "sessions_en.md", "maintenance.md"):
         assert (real / "references" / name).is_file()
     for link in (home / ".claude" / "skills" / "agent-reach", home / ".openclaw" / "skills" / "agent-reach"):
         assert link.is_symlink() and os.path.realpath(link) == os.path.realpath(real)
@@ -703,6 +711,15 @@ def test_skill_replaces_our_old_copy_but_not_a_foreign_one(env):
 
 
 def test_skill_falls_back_to_a_copy_without_symlink_rights(env, monkeypatch):
+    """Ensure copied skills include the English session guide.
+
+    Args:
+        env: Isolated Agent Reach home fixture.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
     home = home_dir()
     (home / ".claude").mkdir()
 
@@ -713,7 +730,7 @@ def test_skill_falls_back_to_a_copy_without_symlink_rights(env, monkeypatch):
     result = manage.place_skill()
     copy = home / ".claude" / "skills" / "agent-reach"
     assert not copy.is_symlink() and (copy / "SKILL.md").is_file()
-    for name in ("sessions.md", "maintenance.md", "capabilities.md"):
+    for name in ("sessions.md", "sessions_en.md", "maintenance.md", "capabilities.md"):
         assert (copy / "references" / name).read_text(encoding="utf-8") == (
             manage.skill_dir() / "references" / name).read_text(encoding="utf-8")
     assert result["copies"] == [str(copy)] and result["links"] == []
