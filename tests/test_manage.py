@@ -366,6 +366,37 @@ def test_update_from_a_non_uv_install_moves_itself_to_uv(env, monkeypatch, tmp_p
     assert "log in to x" in out["user_actions"]
 
 
+def _failed_upgrade(monkeypatch, stderr):
+    monkeypatch.setattr(manage, "update_check", lambda: {"current": "2.0.0", "latest": "2.0.1",
+                                                         "update_available": True})
+    monkeypatch.setattr(manage, "install_method", lambda: "uv")
+    monkeypatch.setattr(manage.tools, "resolve", lambda c: "/fake/uv" if c == "uv" else None)
+
+    class Failed:
+        returncode, stdout = 2, ""
+
+    Failed.stderr = stderr
+    monkeypatch.setattr(manage.subprocess, "run", lambda cmd, **kw: Failed())
+    with pytest.raises(ReachError) as err:
+        manage.update()
+    return err.value
+
+
+def test_update_failure_keeps_the_manual_command_hint(env, monkeypatch):
+    err = _failed_upgrade(monkeypatch, "error: network unreachable")
+    assert err.code == "UPSTREAM_BROKEN" and err.hint.startswith("Run manually: uv tool install --force")
+
+
+def test_update_inside_a_packaged_windows_app_points_to_a_normal_terminal(env, monkeypatch, tmp_path):
+    copy = tmp_path / "Packages" / "App_123" / "LocalCache" / "Roaming" / "uv" / "tools" / "agent-reach"
+    copy.mkdir(parents=True)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    err = _failed_upgrade(monkeypatch, "error: failed to remove directory `Lib`: The object manager "
+                                       "encountered a reparse point while retrieving an object. (os error 4395)")
+    assert err.code == "NEED_SETUP"  # not retryable: the same command fails again from this shell
+    assert "normal terminal" in err.hint and str(copy) in err.hint and "Run manually" not in err.hint
+
+
 def test_migration_suggests_channels_from_the_old_config(env):
     (state.root()).mkdir(parents=True, exist_ok=True)
     (state.root() / "config.yaml").write_text("twitter_auth_token: t\nxueqiu_cookie: c\n")
