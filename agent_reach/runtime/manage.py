@@ -477,13 +477,21 @@ def _remove(path: Path) -> None:
 
 def _write_real_copy(text: str) -> Path:
     real = skill_dir()
+    if real.is_symlink():
+        resolved = Path(os.path.realpath(real))
+        if _is_our_copy(resolved):
+            # A skill manager (skillshare, GNU stow, a dotfiles repo) links this path to its own folder.
+            # Refresh our files there; leave them unrecorded so uninstall never deletes inside that folder.
+            _write_copy(resolved, text, record=False)
+            return real
     if (real / "SKILL.md").exists() and not _is_our_copy(real):
-        raise ReachError(BAD_INPUT, "A different skill already occupies the Reach instruction path; left untouched")
+        raise ReachError(BAD_INPUT, "A different skill already occupies the Reach instruction path; left untouched",
+                         hint=f"Move or rename the other skill at {real}, then run setup again.")
     _write_copy(real, text)
     return real
 
 
-def _write_copy(target: Path, text: str) -> None:
+def _write_copy(target: Path, text: str, record: bool = True) -> None:
     from importlib.resources import files
 
     from agent_reach.utils.paths import atomic_write_private_text, ensure_no_symlink_path
@@ -498,7 +506,8 @@ def _write_copy(target: Path, text: str) -> None:
         if source.is_file() and source.name.endswith(".md"):
             atomic_write_private_text(references / source.name, source.read_text("utf-8"))
             written.append(str(references / source.name))
-    state.mutate(lambda data: data["skill"].setdefault("files", {}).update({str(target): written}))
+    if record:
+        state.mutate(lambda data: data["skill"].setdefault("files", {}).update({str(target): written}))
 
 
 def _link_into(skills_dir: Path, text: str) -> tuple:

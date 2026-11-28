@@ -702,6 +702,37 @@ def test_skill_replaces_our_old_copy_but_not_a_foreign_one(env):
     assert native_old.exists() and result["removed_old_copies"] == [], "unrecorded files are retained"
 
 
+def test_skill_path_linked_by_a_skill_manager_is_refreshed_in_place(env, tmp_path):
+    home = home_dir()
+    (home / ".claude").mkdir()
+    managed = tmp_path / "manager" / "skills" / "agent-reach"
+    _seed_our_copy(managed)
+    real = home / ".agents" / "skills" / "agent-reach"
+    real.parent.mkdir(parents=True)
+    real.symlink_to(managed, target_is_directory=True)
+    claude_link = home / ".claude" / "skills" / "agent-reach"
+    claude_link.parent.mkdir(parents=True)
+    claude_link.symlink_to(managed, target_is_directory=True)
+    result = manage.place_skill()
+    assert real.is_symlink() and claude_link.is_symlink(), "the manager's links stay in place"
+    assert "description: old" not in (managed / "SKILL.md").read_text(encoding="utf-8"), "refreshed in place"
+    assert (managed / "references" / "sessions.md").is_file()
+    assert result["installed"] and result["not_linked"] == []
+    assert str(managed) not in state.load()["skill"].get("files", {}), "uninstall never deletes the manager's folder"
+
+
+def test_skill_path_linked_to_a_foreign_skill_is_left_alone(env, tmp_path):
+    foreign = tmp_path / "manager" / "skills" / "agent-reach"
+    foreign.mkdir(parents=True)
+    (foreign / "SKILL.md").write_text("---\nname: someone-else\n---\n")
+    real = home_dir() / ".agents" / "skills" / "agent-reach"
+    real.parent.mkdir(parents=True)
+    real.symlink_to(foreign, target_is_directory=True)
+    with pytest.raises(ReachError) as caught:
+        manage.place_skill()
+    assert caught.value.code == "BAD_INPUT" and "someone-else" in (foreign / "SKILL.md").read_text(encoding="utf-8")
+
+
 def test_skill_falls_back_to_a_copy_without_symlink_rights(env, monkeypatch):
     home = home_dir()
     (home / ".claude").mkdir()
