@@ -361,6 +361,15 @@ def can_load_extension() -> bool:
     return _load_state().get("backend") == "cloakbrowser" or sys.platform != "win32"
 
 
+def loads_extension_over_cdp() -> bool:
+    """System Chrome on Windows has no pipe path; it installs the unpacked copy over CDP instead.
+
+    Chrome dropped `--load-extension`, so `_launch` asks the browser it just
+    opened to load `extension_dir()` and no longer needs the Web Store click.
+    """
+    return sys.platform == "win32" and not can_load_extension()
+
+
 def chrome_argv(exe: str, url: str, *, pipe: bool, headless: bool = True) -> List[str]:
     argv = [
         exe,
@@ -388,6 +397,40 @@ def extension_version() -> Optional[str]:
         return json.loads((extension_dir() / "manifest.json").read_text("utf-8")).get("version")
     except (OSError, ValueError):
         return None
+
+
+def load_extension_over_cdp(timeout: float = 20.0) -> Optional[str]:
+    """Install the unpacked OpenCLI extension into the browser that just opened.
+
+    The pipe launch loads the same folder through the browser's own file
+    descriptors; a Windows system Chrome has none, and Chrome no longer reads
+    `--load-extension`, so this call is its only way in. It has to wait for the
+    debugging port to answer, hence the retry. Returns the extension id, or
+    None when Chrome refused (a browser older than the CDP support) or there is
+    no copy on disk, so the caller can still offer the Web Store page.
+    """
+    if not extension_version() or not is_running():
+        return None
+    from . import cdp
+
+    deadline = time.monotonic() + timeout
+    while True:
+        result = cdp.call("Extensions.loadUnpacked", {"path": str(extension_dir())}) or {}
+        if result.get("id") or time.monotonic() >= deadline:
+            return result.get("id") or None
+        time.sleep(0.5)
+
+
+def _prepare_disk_extension() -> bool:
+    """Windows fallback: keep the unpacked copy on disk so `_launch` can install it over CDP."""
+    from .result import ReachError
+
+    if not loads_extension_over_cdp():
+        return False
+    if not extension_version():
+        with contextlib.suppress(ReachError):  # offline: the Web Store page is still an option
+            refresh_extension()
+    return bool(extension_version())
 
 
 def refresh_extension(*, upgrade: bool = False) -> dict:
@@ -467,7 +510,9 @@ def _launch(url: str, *, headless: bool = True) -> None:
     """Start the dedicated browser. Caller holds start_lock().
 
     The watcher launches Cloak through its public SDK on every OS. System
-    Chrome fallback uses pipe loading on POSIX and Web Store loading on Windows.
+    Chrome fallback uses pipe loading on POSIX and the same unpacked copy over
+    CDP on Windows, so the Web Store click is only needed when Chrome refuses
+    that install.
     """
     from agent_reach.config import Config
 
@@ -484,10 +529,17 @@ def _launch(url: str, *, headless: bool = True) -> None:
         ledger.remember_path(browser_root() / name, "browser lifecycle")
     update_state(started_at=time.time(), headless=headless)
     if not can_load_extension():
+        if loads_extension_over_cdp() and not extension_version():
+            with contextlib.suppress(ReachError):
+                refresh_extension()  # offline: open without it; the OpenCLI wait reports the problem
         subprocess.Popen(chrome_argv(exe, url, pipe=False, headless=headless), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL, **_detach_kwargs())
         if not wait_for(is_running, START_WAIT):
             raise ReachError(UPSTREAM_BROKEN, f"the Agent Reach browser did not open within {START_WAIT:.0f}s")
+        if loads_extension_over_cdp():
+            # Recorded like the pipe launch does, and cleared when Chrome refused,
+            # which is what sends `setup` to the Web Store page.
+            update_state(extension_id=load_extension_over_cdp())
         _spawn_watcher()
         return
     if not extension_version():
@@ -605,7 +657,7 @@ def ensure_running(context: Optional[str] = None) -> None:
                 return
             if not is_running():
                 raise ReachError(UPSTREAM_BROKEN, "The dedicated browser closed during startup")
-            automatic = can_load_extension()
+            automatic = can_load_extension() or loads_extension_over_cdp()
         if automatic:
             # setup owns its own lock; never recurse while holding start_lock.
             setup()
@@ -845,17 +897,19 @@ def bind() -> dict:
 def setup(*, retry_cloak: bool = False, headless: bool = True) -> dict:
     """Make the dedicated browser ready with the OpenCLI extension loaded and bound; returns status().
 
-    macOS/Linux: fully automatic. Windows: opens the Web Store page and waits for the user's click.
+    macOS/Linux: fully automatic. Windows: installs the unpacked extension over
+    CDP; the Web Store page is opened only when Chrome refuses that.
     Needs `opencli` installed (binding reads `opencli profile list`).
     """
     from .clock import off_the_clock
 
+    store = False
     with off_the_clock():
         if retry_cloak:
             ensure_chrome(retry_cloak=True)
         else:
             ensure_chrome()
-        if not can_load_extension() and not bound_context():
+        if not can_load_extension() and not bound_context() and not _prepare_disk_extension():
             return _setup_from_store()
         if can_load_extension():
             refresh_extension()
@@ -882,13 +936,18 @@ def setup(*, retry_cloak: bool = False, headless: bool = True) -> dict:
                 return bind()["status"] == "ready"
 
             if not wait_for(connected, _remaining_start_wait(), interval=0.5):
-                from .result import UPSTREAM_BROKEN, ReachError
+                if loads_extension_over_cdp() and not _load_state().get("extension_id"):
+                    store = True  # Chrome refused the CDP install; the click is the only way left
+                else:
+                    from .result import UPSTREAM_BROKEN, ReachError
 
-                raise ReachError(
-                    UPSTREAM_BROKEN, "the OpenCLI extension did not connect to OpenCLI in the Agent Reach browser",
-                    hint=f"Details: {watcher_log_path()}. Check `opencli profile list` works.",
-                )
+                    raise ReachError(
+                        UPSTREAM_BROKEN, "the OpenCLI extension did not connect to OpenCLI in the Agent Reach browser",
+                        hint=f"Details: {watcher_log_path()}. Check `opencli profile list` works.",
+                    )
         touch()
+        if store:
+            return _setup_from_store()  # outside start_lock: it opens a window and waits for the user
         return status()
 
 
@@ -940,8 +999,10 @@ def status() -> dict:
 def setup_problems() -> List[str]:
     """What blocks browser-login channels right now (offline checks only).
 
-    macOS/Linux set the browser up by themselves on first use, so nothing blocks there.
+    macOS/Linux, and Windows once the unpacked copy is on disk, set the browser
+    up by themselves on first use, so nothing blocks there.
     """
     if not can_load_extension() and not bound_context():
-        return ["Agent Reach browser not set up: run `agent-reach browser setup`"]
+        if not (loads_extension_over_cdp() and extension_version()):
+            return ["Agent Reach browser not set up: run `agent-reach browser setup`"]
     return []
